@@ -1,0 +1,473 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="An object describing the configuration of a `Regex`."><title>Config in regex_automata::meta - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="regex_automata" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc struct"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../regex_automata/index.html">regex_automata</a><span class="version">0.4.7</span></h2></div><h2 class="location"><a href="#">Config</a></h2><div class="sidebar-elems"><section><h3><a href="#implementations">Methods</a></h3><ul class="block method"><li><a href="#method.auto_prefilter">auto_prefilter</a></li><li><a href="#method.backtrack">backtrack</a></li><li><a href="#method.byte_classes">byte_classes</a></li><li><a href="#method.dfa">dfa</a></li><li><a href="#method.dfa_size_limit">dfa_size_limit</a></li><li><a href="#method.dfa_state_limit">dfa_state_limit</a></li><li><a href="#method.get_auto_prefilter">get_auto_prefilter</a></li><li><a href="#method.get_backtrack">get_backtrack</a></li><li><a href="#method.get_byte_classes">get_byte_classes</a></li><li><a href="#method.get_dfa">get_dfa</a></li><li><a href="#method.get_dfa_size_limit">get_dfa_size_limit</a></li><li><a href="#method.get_dfa_state_limit">get_dfa_state_limit</a></li><li><a href="#method.get_hybrid">get_hybrid</a></li><li><a href="#method.get_hybrid_cache_capacity">get_hybrid_cache_capacity</a></li><li><a href="#method.get_line_terminator">get_line_terminator</a></li><li><a href="#method.get_match_kind">get_match_kind</a></li><li><a href="#method.get_nfa_size_limit">get_nfa_size_limit</a></li><li><a href="#method.get_onepass">get_onepass</a></li><li><a href="#method.get_onepass_size_limit">get_onepass_size_limit</a></li><li><a href="#method.get_prefilter">get_prefilter</a></li><li><a href="#method.get_utf8_empty">get_utf8_empty</a></li><li><a href="#method.get_which_captures">get_which_captures</a></li><li><a href="#method.hybrid">hybrid</a></li><li><a href="#method.hybrid_cache_capacity">hybrid_cache_capacity</a></li><li><a href="#method.line_terminator">line_terminator</a></li><li><a href="#method.match_kind">match_kind</a></li><li><a href="#method.new">new</a></li><li><a href="#method.nfa_size_limit">nfa_size_limit</a></li><li><a href="#method.onepass">onepass</a></li><li><a href="#method.onepass_size_limit">onepass_size_limit</a></li><li><a href="#method.prefilter">prefilter</a></li><li><a href="#method.utf8_empty">utf8_empty</a></li><li><a href="#method.which_captures">which_captures</a></li></ul><h3><a href="#trait-implementations">Trait Implementations</a></h3><ul class="block trait-implementation"><li><a href="#impl-Clone-for-Config">Clone</a></li><li><a href="#impl-Debug-for-Config">Debug</a></li><li><a href="#impl-Default-for-Config">Default</a></li></ul><h3><a href="#synthetic-implementations">Auto Trait Implementations</a></h3><ul class="block synthetic-implementation"><li><a href="#impl-Freeze-for-Config">Freeze</a></li><li><a href="#impl-RefUnwindSafe-for-Config">RefUnwindSafe</a></li><li><a href="#impl-Send-for-Config">Send</a></li><li><a href="#impl-Sync-for-Config">Sync</a></li><li><a href="#impl-Unpin-for-Config">Unpin</a></li><li><a href="#impl-UnwindSafe-for-Config">UnwindSafe</a></li></ul><h3><a href="#blanket-implementations">Blanket Implementations</a></h3><ul class="block blanket-implementation"><li><a href="#impl-Any-for-T">Any</a></li><li><a href="#impl-Borrow%3CT%3E-for-T">Borrow&lt;T&gt;</a></li><li><a href="#impl-BorrowMut%3CT%3E-for-T">BorrowMut&lt;T&gt;</a></li><li><a href="#impl-CloneToUninit-for-T">CloneToUninit</a></li><li><a href="#impl-From%3CT%3E-for-T">From&lt;T&gt;</a></li><li><a href="#impl-Into%3CU%3E-for-T">Into&lt;U&gt;</a></li><li><a href="#impl-ToOwned-for-T">ToOwned</a></li><li><a href="#impl-TryFrom%3CU%3E-for-T">TryFrom&lt;U&gt;</a></li><li><a href="#impl-TryInto%3CU%3E-for-T">TryInto&lt;U&gt;</a></li></ul></section><h2><a href="index.html">In regex_automata::meta</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Struct <a href="../index.html">regex_automata</a>::<wbr><a href="index.html">meta</a>::<wbr><a class="struct" href="#">Config</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/regex_automata/meta/regex.rs.html#2428-2452">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub struct Config { <span class="comment">/* private fields */</span> }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>An object describing the configuration of a <code>Regex</code>.</p>
+<p>This configuration only includes options for the
+non-syntax behavior of a <code>Regex</code>, and can be applied via the
+<a href="struct.Builder.html#method.configure" title="method regex_automata::meta::Builder::configure"><code>Builder::configure</code></a> method. For configuring the syntax options, see
+<a href="../util/syntax/struct.Config.html" title="struct regex_automata::util::syntax::Config"><code>util::syntax::Config</code></a>.</p>
+<h2 id="example-lower-the-nfa-size-limit"><a class="doc-anchor" href="#example-lower-the-nfa-size-limit">§</a>Example: lower the NFA size limit</h2>
+<p>In some cases, the default size limit might be too big. The size limit can
+be lowered, which will prevent large regex patterns from compiling.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::meta::Regex;
+
+<span class="kw">let </span>result = Regex::builder()
+    .configure(Regex::config().nfa_size_limit(<span class="prelude-val">Some</span>(<span class="number">20 </span>* (<span class="number">1</span>&lt;&lt;<span class="number">10</span>))))
+    <span class="comment">// Not even 20KB is enough to build a single large Unicode class!
+    </span>.build(<span class="string">r"\pL"</span>);
+<span class="macro">assert!</span>(result.is_err());
+</code></pre></div>
+</div></details><h2 id="implementations" class="section-header">Implementations<a href="#implementations" class="anchor">§</a></h2><div id="implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-Config" class="impl"><a class="src rightside" href="../../src/regex_automata/meta/regex.rs.html#2454-3235">source</a><a href="#impl-Config" class="anchor">§</a><h3 class="code-header">impl <a class="struct" href="struct.Config.html" title="struct regex_automata::meta::Config">Config</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.new" class="method"><a class="src rightside" href="../../src/regex_automata/meta/regex.rs.html#2456-2458">source</a><h4 class="code-header">pub fn <a href="#method.new" class="fn">new</a>() -&gt; <a class="struct" href="struct.Config.html" title="struct regex_automata::meta::Config">Config</a></h4></section></summary><div class="docblock"><p>Create a new configuration object for a <code>Regex</code>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.match_kind" class="method"><a class="src rightside" href="../../src/regex_automata/meta/regex.rs.html#2490-2492">source</a><h4 class="code-header">pub fn <a href="#method.match_kind" class="fn">match_kind</a>(self, kind: <a class="enum" href="../enum.MatchKind.html" title="enum regex_automata::MatchKind">MatchKind</a>) -&gt; <a class="struct" href="struct.Config.html" title="struct regex_automata::meta::Config">Config</a></h4></section></summary><div class="docblock"><p>Set the match semantics for a <code>Regex</code>.</p>
+<p>The default value is <a href="../enum.MatchKind.html#variant.LeftmostFirst" title="variant regex_automata::MatchKind::LeftmostFirst"><code>MatchKind::LeftmostFirst</code></a>.</p>
+<h5 id="example"><a class="doc-anchor" href="#example">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{meta::Regex, Match, MatchKind};
+
+<span class="comment">// By default, leftmost-first semantics are used, which
+// disambiguates matches at the same position by selecting
+// the one that corresponds earlier in the pattern.
+</span><span class="kw">let </span>re = Regex::new(<span class="string">"sam|samwise"</span>)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Match::must(<span class="number">0</span>, <span class="number">0</span>..<span class="number">3</span>)), re.find(<span class="string">"samwise"</span>));
+
+<span class="comment">// But with 'all' semantics, match priority is ignored
+// and all match states are included. When coupled with
+// a leftmost search, the search will report the last
+// possible match.
+</span><span class="kw">let </span>re = Regex::builder()
+    .configure(Regex::config().match_kind(MatchKind::All))
+    .build(<span class="string">"sam|samwise"</span>)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Match::must(<span class="number">0</span>, <span class="number">0</span>..<span class="number">7</span>)), re.find(<span class="string">"samwise"</span>));
+<span class="comment">// Beware that this can lead to skipping matches!
+// Usually 'all' is used for anchored reverse searches
+// only, or for overlapping searches.
+</span><span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Match::must(<span class="number">0</span>, <span class="number">4</span>..<span class="number">11</span>)), re.find(<span class="string">"sam samwise"</span>));
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.utf8_empty" class="method"><a class="src rightside" href="../../src/regex_automata/meta/regex.rs.html#2531-2533">source</a><h4 class="code-header">pub fn <a href="#method.utf8_empty" class="fn">utf8_empty</a>(self, yes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>) -&gt; <a class="struct" href="struct.Config.html" title="struct regex_automata::meta::Config">Config</a></h4></section></summary><div class="docblock"><p>Toggles whether empty matches are permitted to occur between the code
+units of a UTF-8 encoded codepoint.</p>
+<p>This should generally be enabled when search a <code>&amp;str</code> or anything that
+you otherwise know is valid UTF-8. It should be disabled in all other
+cases. Namely, if the haystack is not valid UTF-8 and this is enabled,
+then behavior is unspecified.</p>
+<p>By default, this is enabled.</p>
+<h5 id="example-1"><a class="doc-anchor" href="#example-1">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{meta::Regex, Match};
+
+<span class="kw">let </span>re = Regex::new(<span class="string">""</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>got: Vec&lt;Match&gt; = re.find_iter(<span class="string">"☃"</span>).collect();
+<span class="comment">// Matches only occur at the beginning and end of the snowman.
+</span><span class="macro">assert_eq!</span>(got, <span class="macro">vec!</span>[
+    Match::must(<span class="number">0</span>, <span class="number">0</span>..<span class="number">0</span>),
+    Match::must(<span class="number">0</span>, <span class="number">3</span>..<span class="number">3</span>),
+]);
+
+<span class="kw">let </span>re = Regex::builder()
+    .configure(Regex::config().utf8_empty(<span class="bool-val">false</span>))
+    .build(<span class="string">""</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>got: Vec&lt;Match&gt; = re.find_iter(<span class="string">"☃"</span>).collect();
+<span class="comment">// Matches now occur at every position!
+</span><span class="macro">assert_eq!</span>(got, <span class="macro">vec!</span>[
+    Match::must(<span class="number">0</span>, <span class="number">0</span>..<span class="number">0</span>),
+    Match::must(<span class="number">0</span>, <span class="number">1</span>..<span class="number">1</span>),
+    Match::must(<span class="number">0</span>, <span class="number">2</span>..<span class="number">2</span>),
+    Match::must(<span class="number">0</span>, <span class="number">3</span>..<span class="number">3</span>),
+]);
+
+<span class="prelude-val">Ok</span>::&lt;(), Box&lt;<span class="kw">dyn </span>std::error::Error&gt;&gt;(())</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.auto_prefilter" class="method"><a class="src rightside" href="../../src/regex_automata/meta/regex.rs.html#2558-2560">source</a><h4 class="code-header">pub fn <a href="#method.auto_prefilter" class="fn">auto_prefilter</a>(self, yes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>) -&gt; <a class="struct" href="struct.Config.html" title="struct regex_automata::meta::Config">Config</a></h4></section></summary><div class="docblock"><p>Toggles whether automatic prefilter support is enabled.</p>
+<p>If this is disabled and <a href="struct.Config.html#method.prefilter" title="method regex_automata::meta::Config::prefilter"><code>Config::prefilter</code></a> is not set, then the
+meta regex engine will not use any prefilters. This can sometimes
+be beneficial in cases where you know (or have measured) that the
+prefilter leads to overall worse search performance.</p>
+<p>By default, this is enabled.</p>
+<h5 id="example-2"><a class="doc-anchor" href="#example-2">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{meta::Regex, Match};
+
+<span class="kw">let </span>re = Regex::builder()
+    .configure(Regex::config().auto_prefilter(<span class="bool-val">false</span>))
+    .build(<span class="string">r"Bruce \w+"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>hay = <span class="string">"Hello Bruce Springsteen!"</span>;
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Match::must(<span class="number">0</span>, <span class="number">6</span>..<span class="number">23</span>)), re.find(hay));
+
+<span class="prelude-val">Ok</span>::&lt;(), Box&lt;<span class="kw">dyn </span>std::error::Error&gt;&gt;(())</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.prefilter" class="method"><a class="src rightside" href="../../src/regex_automata/meta/regex.rs.html#2627-2629">source</a><h4 class="code-header">pub fn <a href="#method.prefilter" class="fn">prefilter</a>(self, pre: <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../util/prefilter/struct.Prefilter.html" title="struct regex_automata::util::prefilter::Prefilter">Prefilter</a>&gt;) -&gt; <a class="struct" href="struct.Config.html" title="struct regex_automata::meta::Config">Config</a></h4></section></summary><div class="docblock"><p>Overrides and sets the prefilter to use inside a <code>Regex</code>.</p>
+<p>This permits one to forcefully set a prefilter in cases where the
+caller knows better than whatever the automatic prefilter logic is
+capable of.</p>
+<p>By default, this is set to <code>None</code> and an automatic prefilter will be
+used if one could be built. (Assuming <a href="struct.Config.html#method.auto_prefilter" title="method regex_automata::meta::Config::auto_prefilter"><code>Config::auto_prefilter</code></a> is
+enabled, which it is by default.)</p>
+<h5 id="example-3"><a class="doc-anchor" href="#example-3">§</a>Example</h5>
+<p>This example shows how to set your own prefilter. In the case of a
+pattern like <code>Bruce \w+</code>, the automatic prefilter is likely to be
+constructed in a way that it will look for occurrences of <code>Bruce </code>.
+In most cases, this is the best choice. But in some cases, it may be
+the case that running <code>memchr</code> on <code>B</code> is the best choice. One can
+achieve that behavior by overriding the automatic prefilter logic
+and providing a prefilter that just matches <code>B</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    meta::Regex,
+    util::prefilter::Prefilter,
+    Match, MatchKind,
+};
+
+<span class="kw">let </span>pre = Prefilter::new(MatchKind::LeftmostFirst, <span class="kw-2">&amp;</span>[<span class="string">"B"</span>])
+    .expect(<span class="string">"a prefilter"</span>);
+<span class="kw">let </span>re = Regex::builder()
+    .configure(Regex::config().prefilter(<span class="prelude-val">Some</span>(pre)))
+    .build(<span class="string">r"Bruce \w+"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>hay = <span class="string">"Hello Bruce Springsteen!"</span>;
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Match::must(<span class="number">0</span>, <span class="number">6</span>..<span class="number">23</span>)), re.find(hay));
+</code></pre></div>
+<h5 id="example-incorrect-prefilters-can-lead-to-incorrect-results"><a class="doc-anchor" href="#example-incorrect-prefilters-can-lead-to-incorrect-results">§</a>Example: incorrect prefilters can lead to incorrect results!</h5>
+<p>Be warned that setting an incorrect prefilter can lead to missed
+matches. So if you use this option, ensure your prefilter can <em>never</em>
+report false negatives. (A false positive is, on the other hand, quite
+okay and generally unavoidable.)</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    meta::Regex,
+    util::prefilter::Prefilter,
+    Match, MatchKind,
+};
+
+<span class="kw">let </span>pre = Prefilter::new(MatchKind::LeftmostFirst, <span class="kw-2">&amp;</span>[<span class="string">"Z"</span>])
+    .expect(<span class="string">"a prefilter"</span>);
+<span class="kw">let </span>re = Regex::builder()
+    .configure(Regex::config().prefilter(<span class="prelude-val">Some</span>(pre)))
+    .build(<span class="string">r"Bruce \w+"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>hay = <span class="string">"Hello Bruce Springsteen!"</span>;
+<span class="comment">// Oops! No match found, but there should be one!
+</span><span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, re.find(hay));
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.which_captures" class="method"><a class="src rightside" href="../../src/regex_automata/meta/regex.rs.html#2697-2700">source</a><h4 class="code-header">pub fn <a href="#method.which_captures" class="fn">which_captures</a>(self, which_captures: <a class="enum" href="../nfa/thompson/enum.WhichCaptures.html" title="enum regex_automata::nfa::thompson::WhichCaptures">WhichCaptures</a>) -&gt; <a class="struct" href="struct.Config.html" title="struct regex_automata::meta::Config">Config</a></h4></section></summary><div class="docblock"><p>Configures what kinds of groups are compiled as “capturing” in the
+underlying regex engine.</p>
+<p>This is set to <a href="../nfa/thompson/enum.WhichCaptures.html#variant.All" title="variant regex_automata::nfa::thompson::WhichCaptures::All"><code>WhichCaptures::All</code></a> by default. Callers may wish to
+use <a href="../nfa/thompson/enum.WhichCaptures.html#variant.Implicit" title="variant regex_automata::nfa::thompson::WhichCaptures::Implicit"><code>WhichCaptures::Implicit</code></a> in cases where one wants avoid the
+overhead of capture states for explicit groups.</p>
+<p>Note that another approach to avoiding the overhead of capture groups
+is by using non-capturing groups in the regex pattern. That is,
+<code>(?:a)</code> instead of <code>(a)</code>. This option is useful when you can’t control
+the concrete syntax but know that you don’t need the underlying capture
+states. For example, using <code>WhichCaptures::Implicit</code> will behave as if
+all explicit capturing groups in the pattern were non-capturing.</p>
+<p>Setting this to <code>WhichCaptures::None</code> is usually not the right thing to
+do. When no capture states are compiled, some regex engines (such as
+the <code>PikeVM</code>) won’t be able to report match offsets. This will manifest
+as no match being found.</p>
+<h5 id="example-4"><a class="doc-anchor" href="#example-4">§</a>Example</h5>
+<p>This example demonstrates how the results of capture groups can change
+based on this option. First we show the default (all capture groups in
+the pattern are capturing):</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{meta::Regex, Match, Span};
+
+<span class="kw">let </span>re = Regex::new(<span class="string">r"foo([0-9]+)bar"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>hay = <span class="string">"foo123bar"</span>;
+
+<span class="kw">let </span><span class="kw-2">mut </span>caps = re.create_captures();
+re.captures(hay, <span class="kw-2">&amp;mut </span>caps);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Span::from(<span class="number">0</span>..<span class="number">9</span>)), caps.get_group(<span class="number">0</span>));
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Span::from(<span class="number">3</span>..<span class="number">6</span>)), caps.get_group(<span class="number">1</span>));
+
+<span class="prelude-val">Ok</span>::&lt;(), Box&lt;<span class="kw">dyn </span>std::error::Error&gt;&gt;(())</code></pre></div>
+<p>And now we show the behavior when we only include implicit capture
+groups. In this case, we can only find the overall match span, but the
+spans of any other explicit group don’t exist because they are treated
+as non-capturing. (In effect, when <code>WhichCaptures::Implicit</code> is used,
+there is no real point in using <a href="struct.Regex.html#method.captures" title="method regex_automata::meta::Regex::captures"><code>Regex::captures</code></a> since it will never
+be able to report more information than <a href="struct.Regex.html#method.find" title="method regex_automata::meta::Regex::find"><code>Regex::find</code></a>.)</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    meta::Regex,
+    nfa::thompson::WhichCaptures,
+    Match,
+    Span,
+};
+
+<span class="kw">let </span>re = Regex::builder()
+    .configure(Regex::config().which_captures(WhichCaptures::Implicit))
+    .build(<span class="string">r"foo([0-9]+)bar"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>hay = <span class="string">"foo123bar"</span>;
+
+<span class="kw">let </span><span class="kw-2">mut </span>caps = re.create_captures();
+re.captures(hay, <span class="kw-2">&amp;mut </span>caps);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Span::from(<span class="number">0</span>..<span class="number">9</span>)), caps.get_group(<span class="number">0</span>));
+<span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, caps.get_group(<span class="number">1</span>));
+
+<span class="prelude-val">Ok</span>::&lt;(), Box&lt;<span class="kw">dyn </span>std::error::Error&gt;&gt;(())</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.nfa_size_limit" class="method"><a class="src rightside" href="../../src/regex_automata/meta/regex.rs.html#2752-2754">source</a><h4 class="code-header">pub fn <a href="#method.nfa_size_limit" class="fn">nfa_size_limit</a>(self, limit: <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>&gt;) -&gt; <a class="struct" href="struct.Config.html" title="struct regex_automata::meta::Config">Config</a></h4></section></summary><div class="docblock"><p>Sets the size limit, in bytes, to enforce on the construction of every
+NFA build by the meta regex engine.</p>
+<p>Setting it to <code>None</code> disables the limit. This is not recommended if
+you’re compiling untrusted patterns.</p>
+<p>Note that this limit is applied to <em>each</em> NFA built, and if any of
+them exceed the limit, then construction will fail. This limit does
+<em>not</em> correspond to the total memory used by all NFAs in the meta regex
+engine.</p>
+<p>This defaults to some reasonable number that permits most reasonable
+patterns.</p>
+<h5 id="example-5"><a class="doc-anchor" href="#example-5">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::meta::Regex;
+
+<span class="kw">let </span>result = Regex::builder()
+    .configure(Regex::config().nfa_size_limit(<span class="prelude-val">Some</span>(<span class="number">20 </span>* (<span class="number">1</span>&lt;&lt;<span class="number">10</span>))))
+    <span class="comment">// Not even 20KB is enough to build a single large Unicode class!
+    </span>.build(<span class="string">r"\pL"</span>);
+<span class="macro">assert!</span>(result.is_err());
+
+<span class="comment">// But notice that building such a regex with the exact same limit
+// can succeed depending on other aspects of the configuration. For
+// example, a single *forward* NFA will (at time of writing) fit into
+// the 20KB limit, but a *reverse* NFA of the same pattern will not.
+// So if one configures a meta regex such that a reverse NFA is never
+// needed and thus never built, then the 20KB limit will be enough for
+// a pattern like \pL!
+</span><span class="kw">let </span>result = Regex::builder()
+    .configure(Regex::config()
+        .nfa_size_limit(<span class="prelude-val">Some</span>(<span class="number">20 </span>* (<span class="number">1</span>&lt;&lt;<span class="number">10</span>)))
+        <span class="comment">// The DFAs are the only thing that (currently) need a reverse
+        // NFA. So if both are disabled, the meta regex engine will
+        // skip building the reverse NFA. Note that this isn't an API
+        // guarantee. A future semver compatible version may introduce
+        // new use cases for a reverse NFA.
+        </span>.hybrid(<span class="bool-val">false</span>)
+        .dfa(<span class="bool-val">false</span>)
+    )
+    <span class="comment">// Not even 20KB is enough to build a single large Unicode class!
+    </span>.build(<span class="string">r"\pL"</span>);
+<span class="macro">assert!</span>(result.is_ok());
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.onepass_size_limit" class="method"><a class="src rightside" href="../../src/regex_automata/meta/regex.rs.html#2784-2786">source</a><h4 class="code-header">pub fn <a href="#method.onepass_size_limit" class="fn">onepass_size_limit</a>(self, limit: <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>&gt;) -&gt; <a class="struct" href="struct.Config.html" title="struct regex_automata::meta::Config">Config</a></h4></section></summary><div class="docblock"><p>Sets the size limit, in bytes, for the one-pass DFA.</p>
+<p>Setting it to <code>None</code> disables the limit. Disabling the limit is
+strongly discouraged when compiling untrusted patterns. Even if the
+patterns are trusted, it still may not be a good idea, since a one-pass
+DFA can use a lot of memory. With that said, as the size of a regex
+increases, the likelihood of it being one-pass likely decreases.</p>
+<p>This defaults to some reasonable number that permits most reasonable
+one-pass patterns.</p>
+<h5 id="example-6"><a class="doc-anchor" href="#example-6">§</a>Example</h5>
+<p>This shows how to set the one-pass DFA size limit. Note that since
+a one-pass DFA is an optional component of the meta regex engine,
+this size limit only impacts what is built internally and will never
+determine whether a <code>Regex</code> itself fails to build.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::meta::Regex;
+
+<span class="kw">let </span>result = Regex::builder()
+    .configure(Regex::config().onepass_size_limit(<span class="prelude-val">Some</span>(<span class="number">2 </span>* (<span class="number">1</span>&lt;&lt;<span class="number">20</span>))))
+    .build(<span class="string">r"\pL{5}"</span>);
+<span class="macro">assert!</span>(result.is_ok());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.hybrid_cache_capacity" class="method"><a class="src rightside" href="../../src/regex_automata/meta/regex.rs.html#2826-2828">source</a><h4 class="code-header">pub fn <a href="#method.hybrid_cache_capacity" class="fn">hybrid_cache_capacity</a>(self, limit: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="struct" href="struct.Config.html" title="struct regex_automata::meta::Config">Config</a></h4></section></summary><div class="docblock"><p>Set the cache capacity, in bytes, for the lazy DFA.</p>
+<p>The cache capacity of the lazy DFA determines approximately how much
+heap memory it is allowed to use to store its state transitions. The
+state transitions are computed at search time, and if the cache fills
+up it, it is cleared. At this point, any previously generated state
+transitions are lost and are re-generated if they’re needed again.</p>
+<p>This sort of cache filling and clearing works quite well <em>so long as
+cache clearing happens infrequently</em>. If it happens too often, then the
+meta regex engine will stop using the lazy DFA and switch over to a
+different regex engine.</p>
+<p>In cases where the cache is cleared too often, it may be possible to
+give the cache more space and reduce (or eliminate) how often it is
+cleared. Similarly, sometimes a regex is so big that the lazy DFA isn’t
+used at all if its cache capacity isn’t big enough.</p>
+<p>The capacity set here is a <em>limit</em> on how much memory is used. The
+actual memory used is only allocated as it’s needed.</p>
+<p>Determining the right value for this is a little tricky and will likely
+required some profiling. Enabling the <code>logging</code> feature and setting the
+log level to <code>trace</code> will also tell you how often the cache is being
+cleared.</p>
+<h5 id="example-7"><a class="doc-anchor" href="#example-7">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::meta::Regex;
+
+<span class="kw">let </span>result = Regex::builder()
+    .configure(Regex::config().hybrid_cache_capacity(<span class="number">20 </span>* (<span class="number">1</span>&lt;&lt;<span class="number">20</span>)))
+    .build(<span class="string">r"\pL{5}"</span>);
+<span class="macro">assert!</span>(result.is_ok());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.dfa_size_limit" class="method"><a class="src rightside" href="../../src/regex_automata/meta/regex.rs.html#2875-2877">source</a><h4 class="code-header">pub fn <a href="#method.dfa_size_limit" class="fn">dfa_size_limit</a>(self, limit: <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>&gt;) -&gt; <a class="struct" href="struct.Config.html" title="struct regex_automata::meta::Config">Config</a></h4></section></summary><div class="docblock"><p>Sets the size limit, in bytes, for heap memory used for a fully
+compiled DFA.</p>
+<p><strong>NOTE:</strong> If you increase this, you’ll likely also need to increase
+<a href="struct.Config.html#method.dfa_state_limit" title="method regex_automata::meta::Config::dfa_state_limit"><code>Config::dfa_state_limit</code></a>.</p>
+<p>In contrast to the lazy DFA, building a full DFA requires computing
+all of its state transitions up front. This can be a very expensive
+process, and runs in worst case <code>2^n</code> time and space (where <code>n</code> is
+proportional to the size of the regex). However, a full DFA unlocks
+some additional optimization opportunities.</p>
+<p>Because full DFAs can be so expensive, the default limits for them are
+incredibly small. Generally speaking, if your regex is moderately big
+or if you’re using Unicode features (<code>\w</code> is Unicode-aware by default
+for example), then you can expect that the meta regex engine won’t even
+attempt to build a DFA for it.</p>
+<p>If this and <a href="struct.Config.html#method.dfa_state_limit" title="method regex_automata::meta::Config::dfa_state_limit"><code>Config::dfa_state_limit</code></a> are set to <code>None</code>, then the
+meta regex will not use any sort of limits when deciding whether to
+build a DFA. This in turn makes construction of a <code>Regex</code> take
+worst case exponential time and space. Even short patterns can result
+in huge space blow ups. So it is strongly recommended to keep some kind
+of limit set!</p>
+<p>The default is set to a small number that permits some simple regexes
+to get compiled into DFAs in reasonable time.</p>
+<h5 id="example-8"><a class="doc-anchor" href="#example-8">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::meta::Regex;
+
+<span class="kw">let </span>result = Regex::builder()
+    <span class="comment">// 100MB is much bigger than the default.
+    </span>.configure(Regex::config()
+        .dfa_size_limit(<span class="prelude-val">Some</span>(<span class="number">100 </span>* (<span class="number">1</span>&lt;&lt;<span class="number">20</span>)))
+        <span class="comment">// We don't care about size too much here, so just
+        // remove the NFA state limit altogether.
+        </span>.dfa_state_limit(<span class="prelude-val">None</span>))
+    .build(<span class="string">r"\pL{5}"</span>);
+<span class="macro">assert!</span>(result.is_ok());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.dfa_state_limit" class="method"><a class="src rightside" href="../../src/regex_automata/meta/regex.rs.html#2907-2909">source</a><h4 class="code-header">pub fn <a href="#method.dfa_state_limit" class="fn">dfa_state_limit</a>(self, limit: <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>&gt;) -&gt; <a class="struct" href="struct.Config.html" title="struct regex_automata::meta::Config">Config</a></h4></section></summary><div class="docblock"><p>Sets a limit on the total number of NFA states, beyond which, a full
+DFA is not attempted to be compiled.</p>
+<p>This limit works in concert with <a href="struct.Config.html#method.dfa_size_limit" title="method regex_automata::meta::Config::dfa_size_limit"><code>Config::dfa_size_limit</code></a>. Namely,
+where as <code>Config::dfa_size_limit</code> is applied by attempting to construct
+a DFA, this limit is used to avoid the attempt in the first place. This
+is useful to avoid hefty initialization costs associated with building
+a DFA for cases where it is obvious the DFA will ultimately be too big.</p>
+<p>By default, this is set to a very small number.</p>
+<h5 id="example-9"><a class="doc-anchor" href="#example-9">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::meta::Regex;
+
+<span class="kw">let </span>result = Regex::builder()
+    .configure(Regex::config()
+        <span class="comment">// Sometimes the default state limit rejects DFAs even
+        // if they would fit in the size limit. Here, we disable
+        // the check on the number of NFA states and just rely on
+        // the size limit.
+        </span>.dfa_state_limit(<span class="prelude-val">None</span>))
+    .build(<span class="string">r"(?-u)\w{30}"</span>);
+<span class="macro">assert!</span>(result.is_ok());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.byte_classes" class="method"><a class="src rightside" href="../../src/regex_automata/meta/regex.rs.html#2938-2940">source</a><h4 class="code-header">pub fn <a href="#method.byte_classes" class="fn">byte_classes</a>(self, yes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>) -&gt; <a class="struct" href="struct.Config.html" title="struct regex_automata::meta::Config">Config</a></h4></section></summary><div class="docblock"><p>Whether to attempt to shrink the size of the alphabet for the regex
+pattern or not. When enabled, the alphabet is shrunk into a set of
+equivalence classes, where every byte in the same equivalence class
+cannot discriminate between a match or non-match.</p>
+<p><strong>WARNING:</strong> This is only useful for debugging DFAs. Disabling this
+does not yield any speed advantages. Indeed, disabling it can result
+in much higher memory usage. Disabling byte classes is useful for
+debugging the actual generated transitions because it lets one see the
+transitions defined on actual bytes instead of the equivalence classes.</p>
+<p>This option is enabled by default and should never be disabled unless
+one is debugging the meta regex engine’s internals.</p>
+<h5 id="example-10"><a class="doc-anchor" href="#example-10">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{meta::Regex, Match};
+
+<span class="kw">let </span>re = Regex::builder()
+    .configure(Regex::config().byte_classes(<span class="bool-val">false</span>))
+    .build(<span class="string">r"[a-z]+"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>hay = <span class="string">"!!quux!!"</span>;
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Match::must(<span class="number">0</span>, <span class="number">2</span>..<span class="number">6</span>)), re.find(hay));
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.line_terminator" class="method"><a class="src rightside" href="../../src/regex_automata/meta/regex.rs.html#2972-2974">source</a><h4 class="code-header">pub fn <a href="#method.line_terminator" class="fn">line_terminator</a>(self, byte: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>) -&gt; <a class="struct" href="struct.Config.html" title="struct regex_automata::meta::Config">Config</a></h4></section></summary><div class="docblock"><p>Set the line terminator to be used by the <code>^</code> and <code>$</code> anchors in
+multi-line mode.</p>
+<p>This option has no effect when CRLF mode is enabled. That is,
+regardless of this setting, <code>(?Rm:^)</code> and <code>(?Rm:$)</code> will always treat
+<code>\r</code> and <code>\n</code> as line terminators (and will never match between a <code>\r</code>
+and a <code>\n</code>).</p>
+<p>By default, <code>\n</code> is the line terminator.</p>
+<p><strong>Warning</strong>: This does not change the behavior of <code>.</code>. To do that,
+you’ll need to configure the syntax option
+<a href="../util/syntax/struct.Config.html#method.line_terminator" title="method regex_automata::util::syntax::Config::line_terminator"><code>syntax::Config::line_terminator</code></a>
+in addition to this. Otherwise, <code>.</code> will continue to match any
+character other than <code>\n</code>.</p>
+<h5 id="example-11"><a class="doc-anchor" href="#example-11">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{meta::Regex, util::syntax, Match};
+
+<span class="kw">let </span>re = Regex::builder()
+    .syntax(syntax::Config::new().multi_line(<span class="bool-val">true</span>))
+    .configure(Regex::config().line_terminator(<span class="string">b'\x00'</span>))
+    .build(<span class="string">r"^foo$"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>hay = <span class="string">"\x00foo\x00"</span>;
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Match::must(<span class="number">0</span>, <span class="number">1</span>..<span class="number">4</span>)), re.find(hay));
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.hybrid" class="method"><a class="src rightside" href="../../src/regex_automata/meta/regex.rs.html#2986-2988">source</a><h4 class="code-header">pub fn <a href="#method.hybrid" class="fn">hybrid</a>(self, yes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>) -&gt; <a class="struct" href="struct.Config.html" title="struct regex_automata::meta::Config">Config</a></h4></section></summary><div class="docblock"><p>Toggle whether the hybrid NFA/DFA (also known as the “lazy DFA”) should
+be available for use by the meta regex engine.</p>
+<p>Enabling this does not necessarily mean that the lazy DFA will
+definitely be used. It just means that it will be <em>available</em> for use
+if the meta regex engine thinks it will be useful.</p>
+<p>When the <code>hybrid</code> crate feature is enabled, then this is enabled by
+default. Otherwise, if the crate feature is disabled, then this is
+always disabled, regardless of its setting by the caller.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.dfa" class="method"><a class="src rightside" href="../../src/regex_automata/meta/regex.rs.html#3000-3002">source</a><h4 class="code-header">pub fn <a href="#method.dfa" class="fn">dfa</a>(self, yes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>) -&gt; <a class="struct" href="struct.Config.html" title="struct regex_automata::meta::Config">Config</a></h4></section></summary><div class="docblock"><p>Toggle whether a fully compiled DFA should be available for use by the
+meta regex engine.</p>
+<p>Enabling this does not necessarily mean that a DFA will definitely be
+used. It just means that it will be <em>available</em> for use if the meta
+regex engine thinks it will be useful.</p>
+<p>When the <code>dfa-build</code> crate feature is enabled, then this is enabled by
+default. Otherwise, if the crate feature is disabled, then this is
+always disabled, regardless of its setting by the caller.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.onepass" class="method"><a class="src rightside" href="../../src/regex_automata/meta/regex.rs.html#3016-3018">source</a><h4 class="code-header">pub fn <a href="#method.onepass" class="fn">onepass</a>(self, yes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>) -&gt; <a class="struct" href="struct.Config.html" title="struct regex_automata::meta::Config">Config</a></h4></section></summary><div class="docblock"><p>Toggle whether a one-pass DFA should be available for use by the meta
+regex engine.</p>
+<p>Enabling this does not necessarily mean that a one-pass DFA will
+definitely be used. It just means that it will be <em>available</em> for
+use if the meta regex engine thinks it will be useful. (Indeed, a
+one-pass DFA can only be used when the regex is one-pass. See the
+<a href="../dfa/onepass/index.html" title="mod regex_automata::dfa::onepass"><code>dfa::onepass</code></a> module for more details.)</p>
+<p>When the <code>dfa-onepass</code> crate feature is enabled, then this is enabled
+by default. Otherwise, if the crate feature is disabled, then this is
+always disabled, regardless of its setting by the caller.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.backtrack" class="method"><a class="src rightside" href="../../src/regex_automata/meta/regex.rs.html#3030-3032">source</a><h4 class="code-header">pub fn <a href="#method.backtrack" class="fn">backtrack</a>(self, yes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>) -&gt; <a class="struct" href="struct.Config.html" title="struct regex_automata::meta::Config">Config</a></h4></section></summary><div class="docblock"><p>Toggle whether a bounded backtracking regex engine should be available
+for use by the meta regex engine.</p>
+<p>Enabling this does not necessarily mean that a bounded backtracker will
+definitely be used. It just means that it will be <em>available</em> for use
+if the meta regex engine thinks it will be useful.</p>
+<p>When the <code>nfa-backtrack</code> crate feature is enabled, then this is enabled
+by default. Otherwise, if the crate feature is disabled, then this is
+always disabled, regardless of its setting by the caller.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_match_kind" class="method"><a class="src rightside" href="../../src/regex_automata/meta/regex.rs.html#3038-3040">source</a><h4 class="code-header">pub fn <a href="#method.get_match_kind" class="fn">get_match_kind</a>(&amp;self) -&gt; <a class="enum" href="../enum.MatchKind.html" title="enum regex_automata::MatchKind">MatchKind</a></h4></section></summary><div class="docblock"><p>Returns the match kind on this configuration, as set by
+<a href="struct.Config.html#method.match_kind" title="method regex_automata::meta::Config::match_kind"><code>Config::match_kind</code></a>.</p>
+<p>If it was not explicitly set, then a default value is returned.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_utf8_empty" class="method"><a class="src rightside" href="../../src/regex_automata/meta/regex.rs.html#3046-3048">source</a><h4 class="code-header">pub fn <a href="#method.get_utf8_empty" class="fn">get_utf8_empty</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns whether empty matches must fall on valid UTF-8 boundaries, as
+set by <a href="struct.Config.html#method.utf8_empty" title="method regex_automata::meta::Config::utf8_empty"><code>Config::utf8_empty</code></a>.</p>
+<p>If it was not explicitly set, then a default value is returned.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_auto_prefilter" class="method"><a class="src rightside" href="../../src/regex_automata/meta/regex.rs.html#3054-3056">source</a><h4 class="code-header">pub fn <a href="#method.get_auto_prefilter" class="fn">get_auto_prefilter</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns whether automatic prefilters are enabled, as set by
+<a href="struct.Config.html#method.auto_prefilter" title="method regex_automata::meta::Config::auto_prefilter"><code>Config::auto_prefilter</code></a>.</p>
+<p>If it was not explicitly set, then a default value is returned.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_prefilter" class="method"><a class="src rightside" href="../../src/regex_automata/meta/regex.rs.html#3062-3064">source</a><h4 class="code-header">pub fn <a href="#method.get_prefilter" class="fn">get_prefilter</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;<a class="struct" href="../util/prefilter/struct.Prefilter.html" title="struct regex_automata::util::prefilter::Prefilter">Prefilter</a>&gt;</h4></section></summary><div class="docblock"><p>Returns a manually set prefilter, if one was set by
+<a href="struct.Config.html#method.prefilter" title="method regex_automata::meta::Config::prefilter"><code>Config::prefilter</code></a>.</p>
+<p>If it was not explicitly set, then a default value is returned.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_which_captures" class="method"><a class="src rightside" href="../../src/regex_automata/meta/regex.rs.html#3070-3072">source</a><h4 class="code-header">pub fn <a href="#method.get_which_captures" class="fn">get_which_captures</a>(&amp;self) -&gt; <a class="enum" href="../nfa/thompson/enum.WhichCaptures.html" title="enum regex_automata::nfa::thompson::WhichCaptures">WhichCaptures</a></h4></section></summary><div class="docblock"><p>Returns the capture configuration, as set by
+<a href="struct.Config.html#method.which_captures" title="method regex_automata::meta::Config::which_captures"><code>Config::which_captures</code></a>.</p>
+<p>If it was not explicitly set, then a default value is returned.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_nfa_size_limit" class="method"><a class="src rightside" href="../../src/regex_automata/meta/regex.rs.html#3077-3079">source</a><h4 class="code-header">pub fn <a href="#method.get_nfa_size_limit" class="fn">get_nfa_size_limit</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>&gt;</h4></section></summary><div class="docblock"><p>Returns NFA size limit, as set by <a href="struct.Config.html#method.nfa_size_limit" title="method regex_automata::meta::Config::nfa_size_limit"><code>Config::nfa_size_limit</code></a>.</p>
+<p>If it was not explicitly set, then a default value is returned.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_onepass_size_limit" class="method"><a class="src rightside" href="../../src/regex_automata/meta/regex.rs.html#3085-3087">source</a><h4 class="code-header">pub fn <a href="#method.get_onepass_size_limit" class="fn">get_onepass_size_limit</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>&gt;</h4></section></summary><div class="docblock"><p>Returns one-pass DFA size limit, as set by
+<a href="struct.Config.html#method.onepass_size_limit" title="method regex_automata::meta::Config::onepass_size_limit"><code>Config::onepass_size_limit</code></a>.</p>
+<p>If it was not explicitly set, then a default value is returned.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_hybrid_cache_capacity" class="method"><a class="src rightside" href="../../src/regex_automata/meta/regex.rs.html#3093-3095">source</a><h4 class="code-header">pub fn <a href="#method.get_hybrid_cache_capacity" class="fn">get_hybrid_cache_capacity</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a></h4></section></summary><div class="docblock"><p>Returns hybrid NFA/DFA cache capacity, as set by
+<a href="struct.Config.html#method.hybrid_cache_capacity" title="method regex_automata::meta::Config::hybrid_cache_capacity"><code>Config::hybrid_cache_capacity</code></a>.</p>
+<p>If it was not explicitly set, then a default value is returned.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_dfa_size_limit" class="method"><a class="src rightside" href="../../src/regex_automata/meta/regex.rs.html#3100-3120">source</a><h4 class="code-header">pub fn <a href="#method.get_dfa_size_limit" class="fn">get_dfa_size_limit</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>&gt;</h4></section></summary><div class="docblock"><p>Returns DFA size limit, as set by <a href="struct.Config.html#method.dfa_size_limit" title="method regex_automata::meta::Config::dfa_size_limit"><code>Config::dfa_size_limit</code></a>.</p>
+<p>If it was not explicitly set, then a default value is returned.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_dfa_state_limit" class="method"><a class="src rightside" href="../../src/regex_automata/meta/regex.rs.html#3126-3129">source</a><h4 class="code-header">pub fn <a href="#method.get_dfa_state_limit" class="fn">get_dfa_state_limit</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>&gt;</h4></section></summary><div class="docblock"><p>Returns DFA size limit in terms of the number of states in the NFA, as
+set by <a href="struct.Config.html#method.dfa_state_limit" title="method regex_automata::meta::Config::dfa_state_limit"><code>Config::dfa_state_limit</code></a>.</p>
+<p>If it was not explicitly set, then a default value is returned.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_byte_classes" class="method"><a class="src rightside" href="../../src/regex_automata/meta/regex.rs.html#3135-3137">source</a><h4 class="code-header">pub fn <a href="#method.get_byte_classes" class="fn">get_byte_classes</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns whether byte classes are enabled, as set by
+<a href="struct.Config.html#method.byte_classes" title="method regex_automata::meta::Config::byte_classes"><code>Config::byte_classes</code></a>.</p>
+<p>If it was not explicitly set, then a default value is returned.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_line_terminator" class="method"><a class="src rightside" href="../../src/regex_automata/meta/regex.rs.html#3143-3145">source</a><h4 class="code-header">pub fn <a href="#method.get_line_terminator" class="fn">get_line_terminator</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a></h4></section></summary><div class="docblock"><p>Returns the line terminator for this configuration, as set by
+<a href="struct.Config.html#method.line_terminator" title="method regex_automata::meta::Config::line_terminator"><code>Config::line_terminator</code></a>.</p>
+<p>If it was not explicitly set, then a default value is returned.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_hybrid" class="method"><a class="src rightside" href="../../src/regex_automata/meta/regex.rs.html#3151-3160">source</a><h4 class="code-header">pub fn <a href="#method.get_hybrid" class="fn">get_hybrid</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns whether the hybrid NFA/DFA regex engine may be used, as set by
+<a href="struct.Config.html#method.hybrid" title="method regex_automata::meta::Config::hybrid"><code>Config::hybrid</code></a>.</p>
+<p>If it was not explicitly set, then a default value is returned.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_dfa" class="method"><a class="src rightside" href="../../src/regex_automata/meta/regex.rs.html#3166-3175">source</a><h4 class="code-header">pub fn <a href="#method.get_dfa" class="fn">get_dfa</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns whether the DFA regex engine may be used, as set by
+<a href="struct.Config.html#method.dfa" title="method regex_automata::meta::Config::dfa"><code>Config::dfa</code></a>.</p>
+<p>If it was not explicitly set, then a default value is returned.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_onepass" class="method"><a class="src rightside" href="../../src/regex_automata/meta/regex.rs.html#3181-3190">source</a><h4 class="code-header">pub fn <a href="#method.get_onepass" class="fn">get_onepass</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns whether the one-pass DFA regex engine may be used, as set by
+<a href="struct.Config.html#method.onepass" title="method regex_automata::meta::Config::onepass"><code>Config::onepass</code></a>.</p>
+<p>If it was not explicitly set, then a default value is returned.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_backtrack" class="method"><a class="src rightside" href="../../src/regex_automata/meta/regex.rs.html#3196-3205">source</a><h4 class="code-header">pub fn <a href="#method.get_backtrack" class="fn">get_backtrack</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns whether the bounded backtracking regex engine may be used, as
+set by <a href="struct.Config.html#method.backtrack" title="method regex_automata::meta::Config::backtrack"><code>Config::backtrack</code></a>.</p>
+<p>If it was not explicitly set, then a default value is returned.</p>
+</div></details></div></details></div><h2 id="trait-implementations" class="section-header">Trait Implementations<a href="#trait-implementations" class="anchor">§</a></h2><div id="trait-implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-Clone-for-Config" class="impl"><a class="src rightside" href="../../src/regex_automata/meta/regex.rs.html#2427">source</a><a href="#impl-Clone-for-Config" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a> for <a class="struct" href="struct.Config.html" title="struct regex_automata::meta::Config">Config</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.clone" class="method trait-impl"><a class="src rightside" href="../../src/regex_automata/meta/regex.rs.html#2427">source</a><a href="#method.clone" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#tymethod.clone" class="fn">clone</a>(&amp;self) -&gt; <a class="struct" href="struct.Config.html" title="struct regex_automata::meta::Config">Config</a></h4></section></summary><div class='docblock'>Returns a copy of the value. <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#tymethod.clone">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.clone_from" class="method trait-impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#172">source</a></span><a href="#method.clone_from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#method.clone_from" class="fn">clone_from</a>(&amp;mut self, source: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;Self</a>)</h4></section></summary><div class='docblock'>Performs copy-assignment from <code>source</code>. <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#method.clone_from">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Debug-for-Config" class="impl"><a class="src rightside" href="../../src/regex_automata/meta/regex.rs.html#2427">source</a><a href="#impl-Debug-for-Config" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html" title="trait core::fmt::Debug">Debug</a> for <a class="struct" href="struct.Config.html" title="struct regex_automata::meta::Config">Config</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.fmt" class="method trait-impl"><a class="src rightside" href="../../src/regex_automata/meta/regex.rs.html#2427">source</a><a href="#method.fmt" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html#tymethod.fmt" class="fn">fmt</a>(&amp;self, f: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/fmt/struct.Formatter.html" title="struct core::fmt::Formatter">Formatter</a>&lt;'_&gt;) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a></h4></section></summary><div class='docblock'>Formats the value using the given formatter. <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html#tymethod.fmt">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Default-for-Config" class="impl"><a class="src rightside" href="../../src/regex_automata/meta/regex.rs.html#2427">source</a><a href="#impl-Default-for-Config" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/default/trait.Default.html" title="trait core::default::Default">Default</a> for <a class="struct" href="struct.Config.html" title="struct regex_automata::meta::Config">Config</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.default" class="method trait-impl"><a class="src rightside" href="../../src/regex_automata/meta/regex.rs.html#2427">source</a><a href="#method.default" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/default/trait.Default.html#tymethod.default" class="fn">default</a>() -&gt; <a class="struct" href="struct.Config.html" title="struct regex_automata::meta::Config">Config</a></h4></section></summary><div class='docblock'>Returns the “default value” for a type. <a href="https://doc.rust-lang.org/1.81.0/core/default/trait.Default.html#tymethod.default">Read more</a></div></details></div></details></div><h2 id="synthetic-implementations" class="section-header">Auto Trait Implementations<a href="#synthetic-implementations" class="anchor">§</a></h2><div id="synthetic-implementations-list"><section id="impl-Freeze-for-Config" class="impl"><a href="#impl-Freeze-for-Config" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Freeze.html" title="trait core::marker::Freeze">Freeze</a> for <a class="struct" href="struct.Config.html" title="struct regex_automata::meta::Config">Config</a></h3></section><section id="impl-RefUnwindSafe-for-Config" class="impl"><a href="#impl-RefUnwindSafe-for-Config" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/panic/unwind_safe/trait.RefUnwindSafe.html" title="trait core::panic::unwind_safe::RefUnwindSafe">RefUnwindSafe</a> for <a class="struct" href="struct.Config.html" title="struct regex_automata::meta::Config">Config</a></h3></section><section id="impl-Send-for-Config" class="impl"><a href="#impl-Send-for-Config" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> for <a class="struct" href="struct.Config.html" title="struct regex_automata::meta::Config">Config</a></h3></section><section id="impl-Sync-for-Config" class="impl"><a href="#impl-Sync-for-Config" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> for <a class="struct" href="struct.Config.html" title="struct regex_automata::meta::Config">Config</a></h3></section><section id="impl-Unpin-for-Config" class="impl"><a href="#impl-Unpin-for-Config" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a> for <a class="struct" href="struct.Config.html" title="struct regex_automata::meta::Config">Config</a></h3></section><section id="impl-UnwindSafe-for-Config" class="impl"><a href="#impl-UnwindSafe-for-Config" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/panic/unwind_safe/trait.UnwindSafe.html" title="trait core::panic::unwind_safe::UnwindSafe">UnwindSafe</a> for <a class="struct" href="struct.Config.html" title="struct regex_automata::meta::Config">Config</a></h3></section></div><h2 id="blanket-implementations" class="section-header">Blanket Implementations<a href="#blanket-implementations" class="anchor">§</a></h2><div id="blanket-implementations-list"><details class="toggle implementors-toggle"><summary><section id="impl-Any-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#140">source</a><a href="#impl-Any-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html" title="trait core::any::Any">Any</a> for T<div class="where">where
+    T: 'static + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.type_id" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#141">source</a><a href="#method.type_id" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html#tymethod.type_id" class="fn">type_id</a>(&amp;self) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/any/struct.TypeId.html" title="struct core::any::TypeId">TypeId</a></h4></section></summary><div class='docblock'>Gets the <code>TypeId</code> of <code>self</code>. <a href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html#tymethod.type_id">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Borrow%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#209">source</a><a href="#impl-Borrow%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html" title="trait core::borrow::Borrow">Borrow</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#211">source</a><a href="#method.borrow" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html#tymethod.borrow" class="fn">borrow</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a></h4></section></summary><div class='docblock'>Immutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html#tymethod.borrow">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-BorrowMut%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#217">source</a><a href="#impl-BorrowMut%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html" title="trait core::borrow::BorrowMut">BorrowMut</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow_mut" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#218">source</a><a href="#method.borrow_mut" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut" class="fn">borrow_mut</a>(&amp;mut self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a></h4></section></summary><div class='docblock'>Mutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-CloneToUninit-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#271">source</a><a href="#impl-CloneToUninit-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.CloneToUninit.html" title="trait core::clone::CloneToUninit">CloneToUninit</a> for T<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.clone_to_uninit" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#272">source</a><a href="#method.clone_to_uninit" class="anchor">§</a><h4 class="code-header">default unsafe fn <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.CloneToUninit.html#tymethod.clone_to_uninit" class="fn">clone_to_uninit</a>(&amp;self, dst: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.pointer.html">*mut T</a>)</h4></section></summary><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>clone_to_uninit</code>)</span></div></span><div class='docblock'>Performs copy-assignment from <code>self</code> to <code>dst</code>. <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.CloneToUninit.html#tymethod.clone_to_uninit">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-From%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#765">source</a><a href="#impl-From%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for T</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#768">source</a><a href="#method.from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html#tymethod.from" class="fn">from</a>(t: T) -&gt; T</h4></section></summary><div class="docblock"><p>Returns the argument unchanged.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Into%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#748-750">source</a><a href="#impl-Into%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#758">source</a><a href="#method.into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html#tymethod.into" class="fn">into</a>(self) -&gt; U</h4></section></summary><div class="docblock"><p>Calls <code>U::from(self)</code>.</p>
+<p>That is, this conversion is whatever the implementation of
+<code><a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for U</code> chooses to do.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-ToOwned-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#83-85">source</a><a href="#impl-ToOwned-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html" title="trait alloc::borrow::ToOwned">ToOwned</a> for T<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Owned" class="associatedtype trait-impl"><a href="#associatedtype.Owned" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#associatedtype.Owned" class="associatedtype">Owned</a> = T</h4></section></summary><div class='docblock'>The resulting type after obtaining ownership.</div></details><details class="toggle method-toggle" open><summary><section id="method.to_owned" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#88">source</a><a href="#method.to_owned" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#tymethod.to_owned" class="fn">to_owned</a>(&amp;self) -&gt; T</h4></section></summary><div class='docblock'>Creates owned data from borrowed data, usually by cloning. <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#tymethod.to_owned">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.clone_into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#92">source</a><a href="#method.clone_into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#method.clone_into" class="fn">clone_into</a>(&amp;self, target: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a>)</h4></section></summary><div class='docblock'>Uses borrowed data to replace owned data, usually by cloning. <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#method.clone_into">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryFrom%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#805-807">source</a><a href="#impl-TryFrom%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error" class="associatedtype trait-impl"><a href="#associatedtype.Error" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" class="associatedtype">Error</a> = <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/convert/enum.Infallible.html" title="enum core::convert::Infallible">Infallible</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#812">source</a><a href="#method.try_from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#tymethod.try_from" class="fn">try_from</a>(value: U) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, &lt;T as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryInto%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#790-792">source</a><a href="#impl-TryInto%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html" title="trait core::convert::TryInto">TryInto</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error-1" class="associatedtype trait-impl"><a href="#associatedtype.Error-1" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html#associatedtype.Error" class="associatedtype">Error</a> = &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#797">source</a><a href="#method.try_into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html#tymethod.try_into" class="fn">try_into</a>(self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;U, &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details></div></section></div></main></body></html>

@@ -1,0 +1,78 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="winnow, making parsing a breeze"><title>winnow - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="winnow" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../winnow/index.html">winnow</a><span class="version">0.6.20</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li><li><a href="#traits">Traits</a></li><li><a href="#functions">Functions</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">winnow</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/winnow/lib.rs.html#1-164">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><blockquote>
+<p>winnow, making parsing a breeze</p>
+</blockquote>
+<p><code>winnow</code> is a parser combinator library</p>
+<p>Quick links:</p>
+<ul>
+<li><a href="combinator/index.html" title="mod winnow::combinator">List of combinators</a></li>
+<li>[Tutorial][_tutorial::chapter_0]</li>
+<li>[Special Topics][_topic]</li>
+<li><a href="https://github.com/winnow-rs/winnow/discussions">Discussions</a></li>
+<li><a href="https://github.com/winnow-rs/winnow/blob/v0.6.20/CHANGELOG.md">CHANGELOG</a> (includes major version migration
+guides)</li>
+</ul>
+<h3 id="aspirations"><a class="doc-anchor" href="#aspirations">§</a>Aspirations</h3>
+<p><code>winnow</code> aims to be your “do everything” parser, much like people treat regular expressions.</p>
+<p>In roughly priority order:</p>
+<ol>
+<li>Support writing parser declaratively while not getting in the way of imperative-style
+parsing when needed, working as an open-ended toolbox rather than a close-ended framework.</li>
+<li>Flexible enough to be used for any application, including parsing binary data, strings, or
+separate lexing and parsing phases</li>
+<li>Zero-cost abstractions, making it easy to write high performance parsers</li>
+<li>Easy to use, making it trivial for one-off uses</li>
+</ol>
+<p>In addition:</p>
+<ul>
+<li>Resilient maintainership, including
+<ul>
+<li>Willing to break compatibility rather than batching up breaking changes in large releases</li>
+<li>Leverage feature flags to keep one active branch</li>
+</ul>
+</li>
+<li>We will support the last 6 months of rust releases (MSRV, currently 1.64.0)</li>
+</ul>
+<p>See also [Special Topic: Why winnow?][crate::_topic::why]</p>
+<h3 id="example"><a class="doc-anchor" href="#example">§</a>Example</h3>
+<p>Run</p>
+<div class="example-wrap"><pre class="language-console"><code>$ cargo add winnow
+</code></pre></div>
+<p>Then use it to parse:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>winnow::combinator::seq;
+<span class="kw">use </span>winnow::prelude::<span class="kw-2">*</span>;
+<span class="kw">use </span>winnow::token::take_while;
+
+<span class="attr">#[derive(Debug, Eq, PartialEq)]
+</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>Color {
+    <span class="kw">pub</span>(<span class="kw">crate</span>) red: u8,
+    <span class="kw">pub</span>(<span class="kw">crate</span>) green: u8,
+    <span class="kw">pub</span>(<span class="kw">crate</span>) blue: u8,
+}
+
+<span class="kw">impl </span>std::str::FromStr <span class="kw">for </span>Color {
+    <span class="comment">// The error must be owned
+    </span><span class="kw">type </span><span class="prelude-val">Err </span>= String;
+
+    <span class="kw">fn </span>from_str(s: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Err&gt; {
+        hex_color.parse(s).map_err(|e| e.to_string())
+    }
+}
+
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>hex_color(input: <span class="kw-2">&amp;mut &amp;</span>str) -&gt; PResult&lt;Color&gt; {
+    <span class="macro">seq!</span>(Color {
+        <span class="kw">_</span>: <span class="string">'#'</span>,
+        red: hex_primary,
+        green: hex_primary,
+        blue: hex_primary
+    })
+    .parse_next(input)
+}
+
+<span class="kw">fn </span>hex_primary(input: <span class="kw-2">&amp;mut &amp;</span>str) -&gt; PResult&lt;u8&gt; {
+    take_while(<span class="number">2</span>, |c: char| c.is_ascii_hexdigit())
+        .try_map(|input| u8::from_str_radix(input, <span class="number">16</span>))
+        .parse_next(input)
+}</code></pre></div>
+<p>See also the [Tutorial][_tutorial::chapter_0] and [Special Topics][_topic]</p>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.IResult"><code>pub use error::<a class="type" href="error/type.IResult.html" title="type winnow::error::IResult">IResult</a>;</code></div></li><li><div class="item-name" id="reexport.PResult"><code>pub use error::<a class="type" href="error/type.PResult.html" title="type winnow::error::PResult">PResult</a>;</code></div></li><li><div class="item-name" id="reexport.BStr"><code>pub use stream::<a class="struct" href="stream/struct.BStr.html" title="struct winnow::stream::BStr">BStr</a>;</code></div></li><li><div class="item-name" id="reexport.Bytes"><code>pub use stream::<a class="struct" href="stream/struct.Bytes.html" title="struct winnow::stream::Bytes">Bytes</a>;</code></div></li><li><div class="item-name" id="reexport.Located"><code>pub use stream::<a class="struct" href="stream/struct.Located.html" title="struct winnow::stream::Located">Located</a>;</code></div></li><li><div class="item-name" id="reexport.Partial"><code>pub use stream::<a class="struct" href="stream/struct.Partial.html" title="struct winnow::stream::Partial">Partial</a>;</code></div></li><li><div class="item-name" id="reexport.Stateful"><code>pub use stream::<a class="struct" href="stream/struct.Stateful.html" title="struct winnow::stream::Stateful">Stateful</a>;</code></div></li><li><div class="item-name" id="reexport.Str"><code>pub use stream::<a class="type" href="stream/type.Str.html" title="type winnow::stream::Str">Str</a>;</code></div></li></ul><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="ascii/index.html" title="mod winnow::ascii">ascii</a></div><div class="desc docblock-short">Character specific parsers and combinators</div></li><li><div class="item-name"><a class="mod" href="binary/index.html" title="mod winnow::binary">binary</a></div><div class="desc docblock-short">Parsers recognizing numbers</div></li><li><div class="item-name"><a class="mod" href="combinator/index.html" title="mod winnow::combinator">combinator</a></div><div class="desc docblock-short">List of parsers and combinators</div></li><li><div class="item-name"><a class="mod" href="error/index.html" title="mod winnow::error">error</a></div><div class="desc docblock-short">Error management</div></li><li><div class="item-name"><a class="mod" href="prelude/index.html" title="mod winnow::prelude">prelude</a></div><div class="desc docblock-short">Core concepts available for glob import</div></li><li><div class="item-name"><a class="mod" href="stream/index.html" title="mod winnow::stream">stream</a></div><div class="desc docblock-short">Stream capability for combinators to parse</div></li><li><div class="item-name"><a class="mod" href="token/index.html" title="mod winnow::token">token</a></div><div class="desc docblock-short">Parsers extracting tokens from the stream</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.Parser.html" title="trait winnow::Parser">Parser</a></div><div class="desc docblock-short">Core trait for parsing</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.unpeek.html" title="fn winnow::unpeek">unpeek</a></div><div class="desc docblock-short">Convert a <a href="trait.Parser.html#method.parse_peek" title="method winnow::Parser::parse_peek"><code>Parser::parse_peek</code></a> style parse function to be a <a href="trait.Parser.html" title="trait winnow::Parser"><code>Parser</code></a></div></li></ul></section></div></main></body></html>

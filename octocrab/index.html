@@ -1,0 +1,144 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Octocrab: A modern, extensible GitHub API client."><title>octocrab - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="octocrab" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../octocrab/index.html">octocrab</a><span class="version">0.42.1</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#traits">Traits</a></li><li><a href="#functions">Functions</a></li><li><a href="#types">Type Aliases</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">octocrab</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/octocrab/lib.rs.html#1-1847">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="octocrab-a-modern-extensible-github-api-client"><a class="doc-anchor" href="#octocrab-a-modern-extensible-github-api-client">§</a>Octocrab: A modern, extensible GitHub API client.</h2>
+<p>Octocrab is an third party GitHub API client, allowing you to easily build
+your own GitHub integrations or bots. <code>octocrab</code> comes with two primary
+set of APIs for communicating with GitHub, a high level strongly typed
+semantic API, and a lower level HTTP API for extending behaviour.</p>
+<h3 id="semantic-api"><a class="doc-anchor" href="#semantic-api">§</a>Semantic API</h3>
+<p>The semantic API provides strong typing around GitHub’s API, as well as a
+set of <a href="models/index.html" title="mod octocrab::models"><code>models</code></a> that maps to GitHub’s types. Currently the following
+modules are available.</p>
+<ul>
+<li><a href="activity/index.html" title="mod octocrab::activity"><code>activity</code></a> GitHub Activity</li>
+<li><a href="actions/index.html" title="mod octocrab::actions"><code>actions</code></a> GitHub Actions</li>
+<li><a href="apps/index.html" title="mod octocrab::apps"><code>apps</code></a> GitHub Apps</li>
+<li><a href="current/index.html" title="mod octocrab::current"><code>current</code></a> Information about the current user.</li>
+<li><a href="gitignore/index.html" title="mod octocrab::gitignore"><code>gitignore</code></a> Gitignore templates</li>
+<li><a href="struct.Octocrab.html#method.graphql" title="method octocrab::Octocrab::graphql"><code>Octocrab::graphql</code></a> GraphQL.</li>
+<li><a href="issues/index.html" title="mod octocrab::issues"><code>issues</code></a> Issues and related items, e.g. comments, labels, etc.</li>
+<li><a href="licenses/index.html" title="mod octocrab::licenses"><code>licenses</code></a> License Metadata.</li>
+<li><a href="markdown/index.html" title="mod octocrab::markdown"><code>markdown</code></a> Rendering Markdown with GitHub</li>
+<li><a href="orgs/index.html" title="mod octocrab::orgs"><code>orgs</code></a> GitHub Organisations</li>
+<li><a href="projects/index.html" title="mod octocrab::projects"><code>projects</code></a> GitHub Projects</li>
+<li><a href="pulls/index.html" title="mod octocrab::pulls"><code>pulls</code></a> Pull Requests</li>
+<li><a href="repos/index.html" title="mod octocrab::repos"><code>repos</code></a> Repositories</li>
+<li><a href="repos/forks/index.html" title="mod octocrab::repos::forks"><code>repos::forks</code></a> Repositories</li>
+<li><a href="repos/releases/index.html" title="mod octocrab::repos::releases"><code>repos::releases</code></a> Repositories</li>
+<li><a href="search/index.html" title="mod octocrab::search"><code>search</code></a> Using GitHub’s search.</li>
+<li><a href="teams/index.html" title="mod octocrab::teams"><code>teams</code></a> Teams</li>
+<li>[<code>users</code>] Users</li>
+</ul>
+<h5 id="getting-a-pull-request"><a class="doc-anchor" href="#getting-a-pull-request">§</a>Getting a Pull Request</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// Get pull request #404 from `octocrab/repo`.
+</span><span class="kw">let </span>pr = octocrab::instance().pulls(<span class="string">"octocrab"</span>, <span class="string">"repo"</span>).get(<span class="number">404</span>).<span class="kw">await</span><span class="question-mark">?</span>;</code></pre></div>
+<p>All methods with multiple optional parameters are built as <code>Builder</code>
+structs, allowing you to easily specify parameters.</p>
+<h5 id="listing-issues"><a class="doc-anchor" href="#listing-issues">§</a>Listing issues</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>octocrab::{models, params};
+
+<span class="kw">let </span>octocrab = octocrab::instance();
+<span class="comment">// Returns the first page of all issues.
+</span><span class="kw">let </span><span class="kw-2">mut </span>page = octocrab.issues(<span class="string">"octocrab"</span>, <span class="string">"repo"</span>)
+    .list()
+    <span class="comment">// Optional Parameters
+    </span>.creator(<span class="string">"octocrab"</span>)
+    .state(params::State::All)
+    .per_page(<span class="number">50</span>)
+    .send()
+    .<span class="kw">await</span><span class="question-mark">?</span>;
+
+<span class="comment">// Go through every page of issues. Warning: There's no rate limiting so
+// be careful.
+</span><span class="kw">let </span>results = octocrab.all_pages::&lt;models::issues::Issue&gt;(page).<span class="kw">await</span><span class="question-mark">?</span>;
+</code></pre></div>
+<h3 id="http-api"><a class="doc-anchor" href="#http-api">§</a>HTTP API</h3>
+<p>The typed API currently doesn’t cover all of GitHub’s API at this time, and
+even if it did GitHub is in active development and this library will
+likely always be somewhat behind GitHub at some points in time. However that
+shouldn’t mean that in order to use those features that you have to now fork
+or replace <code>octocrab</code> with your own solution.</p>
+<p>Instead <code>octocrab</code> exposes a suite of HTTP methods allowing you to easily
+extend <code>Octocrab</code>’s existing behaviour. Using these HTTP methods allows you
+to keep using the same authentication and configuration, while having
+control over the request and response. There is a method for each HTTP
+method <code>get</code>, <code>post</code>, <code>patch</code>, <code>put</code>, <code>delete</code>, all of which accept a
+relative route and a optional body.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>user: octocrab::models::Author = octocrab::instance()
+    .get(<span class="string">"/user"</span>, <span class="prelude-val">None</span>::&lt;<span class="kw-2">&amp;</span>()&gt;)
+    .<span class="kw">await</span><span class="question-mark">?</span>;</code></pre></div>
+<p>Each of the HTTP methods expects a body, formats the URL with the base
+URL, and errors if GitHub doesn’t return a successful status, but this isn’t
+always desired when working with GitHub’s API, sometimes you need to check
+the response status or headers. As such there are companion methods <code>_get</code>,
+<code>_post</code>, etc. that perform no additional pre or post-processing to
+the request.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>octocrab = octocrab::instance();
+<span class="kw">let </span>response = octocrab
+    ._get(<span class="string">"https://api.github.com/organizations"</span>)
+    .<span class="kw">await</span><span class="question-mark">?</span>;
+
+<span class="comment">// You can also use `Uri::builder().authority("&lt;my custom base&gt;").path_and_query("&lt;my custom path&gt;")` if you want to customize the base uri and path.
+</span><span class="kw">let </span>response =  octocrab
+    ._get(Uri::builder().path_and_query(<span class="string">"/organizations"</span>).build().expect(<span class="string">"valid uri"</span>))
+    .<span class="kw">await</span><span class="question-mark">?</span>;</code></pre></div>
+<p>You can use the those HTTP methods to easily create your own extensions to
+<code>Octocrab</code>’s typed API. (Requires <code>async_trait</code>).</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>octocrab::{Octocrab, Page, <span class="prelude-ty">Result</span>, models};
+
+<span class="attr">#[async_trait::async_trait]
+</span><span class="kw">trait </span>OrganisationExt {
+  <span class="kw">async fn </span>list_every_organisation(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Page&lt;models::orgs::Organization&gt;&gt;;
+}
+
+<span class="attr">#[async_trait::async_trait]
+</span><span class="kw">impl </span>OrganisationExt <span class="kw">for </span>Octocrab {
+  <span class="kw">async fn </span>list_every_organisation(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Page&lt;models::orgs::Organization&gt;&gt; {
+    <span class="self">self</span>.get(<span class="string">"organizations"</span>, <span class="prelude-val">None</span>::&lt;<span class="kw-2">&amp;</span>()&gt;).<span class="kw">await
+  </span>}
+}</code></pre></div>
+<p>You can also easily access new properties that aren’t available in the
+current models using <code>serde</code>.</p>
+<h3 id="static-api"><a class="doc-anchor" href="#static-api">§</a>Static API</h3>
+<p><code>octocrab</code> also provides a statically reference count version of its API,
+allowing you to easily plug it into existing systems without worrying
+about having to integrate and pass around the client.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// Initialises the static instance with your configuration and returns an
+// instance of the client.
+</span>tokio_test::block_on(<span class="kw">async </span>{
+octocrab::initialise(Octocrab::default());
+<span class="comment">// Gets a instance of `Octocrab` from the static API. If you call this
+// without first calling `octocrab::initialise` a default client will be
+// initialised and returned instead.
+</span>octocrab::instance();</code></pre></div>
+<h3 id="github-webhook-application-support"><a class="doc-anchor" href="#github-webhook-application-support">§</a>GitHub webhook application support</h3>
+<p><code>octocrab</code> provides <a href="models/webhook_events/index.html" title="mod octocrab::models::webhook_events">deserializable datatypes</a>
+for the payloads received by a GitHub application <a href="https://docs.github.com/en/apps/creating-github-apps/writing-code-for-a-github-app/building-a-github-app-that-responds-to-webhook-events">responding to
+webhooks</a>.
+This allows you to write a typesafe application using Rust with
+pattern-matching/enum-dispatch to respond to events.</p>
+<p><strong>Note</strong>: Webhook support in <code>octocrab</code> is still beta, not all known webhook events are
+strongly typed.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// request_from_github is the HTTP request your webhook handler received
+</span><span class="kw">let </span>(parts, body) = request_from_github.into_parts();
+<span class="kw">let </span>header = parts.headers.get(<span class="string">"X-GitHub-Event"</span>).unwrap().to_str().unwrap();
+
+<span class="kw">let </span>event = WebhookEvent::try_from_header_and_body(header, <span class="kw-2">&amp;</span>body).unwrap();
+<span class="comment">// Now you can match on event type and call any specific handling logic
+</span><span class="kw">match </span>event.kind {
+    WebhookEventType::Ping =&gt; <span class="macro">info!</span>(<span class="string">"Received a ping"</span>),
+    WebhookEventType::PullRequest =&gt; <span class="macro">info!</span>(<span class="string">"Received a pull request event"</span>),
+    <span class="comment">// ...
+    </span><span class="kw">_ </span>=&gt; <span class="macro">warn!</span>(<span class="string">"Ignored event"</span>),
+};</code></pre></div>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="actions/index.html" title="mod octocrab::actions">actions</a></div><div class="desc docblock-short">GitHub Actions</div></li><li><div class="item-name"><a class="mod" href="activity/index.html" title="mod octocrab::activity">activity</a></div><div class="desc docblock-short">Github Activity API</div></li><li><div class="item-name"><a class="mod" href="apps/index.html" title="mod octocrab::apps">apps</a></div></li><li><div class="item-name"><a class="mod" href="auth/index.html" title="mod octocrab::auth">auth</a></div><div class="desc docblock-short">Authentication related types and functions.</div></li><li><div class="item-name"><a class="mod" href="checks/index.html" title="mod octocrab::checks">checks</a></div></li><li><div class="item-name"><a class="mod" href="commits/index.html" title="mod octocrab::commits">commits</a></div><div class="desc docblock-short">The commit API.</div></li><li><div class="item-name"><a class="mod" href="current/index.html" title="mod octocrab::current">current</a></div><div class="desc docblock-short">Get data about the currently authenticated user.</div></li><li><div class="item-name"><a class="mod" href="etag/index.html" title="mod octocrab::etag">etag</a></div><div class="desc docblock-short">Types for handling etags.</div></li><li><div class="item-name"><a class="mod" href="events/index.html" title="mod octocrab::events">events</a></div><div class="desc docblock-short">GitHub Events</div></li><li><div class="item-name"><a class="mod" href="gists/index.html" title="mod octocrab::gists">gists</a></div><div class="desc docblock-short">The gist API</div></li><li><div class="item-name"><a class="mod" href="gitignore/index.html" title="mod octocrab::gitignore">gitignore</a></div><div class="desc docblock-short">The gitignore API</div></li><li><div class="item-name"><a class="mod" href="hooks/index.html" title="mod octocrab::hooks">hooks</a></div><div class="desc docblock-short">The hooks API.</div></li><li><div class="item-name"><a class="mod" href="issues/index.html" title="mod octocrab::issues">issues</a></div><div class="desc docblock-short">The issue API.</div></li><li><div class="item-name"><a class="mod" href="licenses/index.html" title="mod octocrab::licenses">licenses</a></div><div class="desc docblock-short">Metadata about popular open source licenses and information about a
+project’s license file.</div></li><li><div class="item-name"><a class="mod" href="markdown/index.html" title="mod octocrab::markdown">markdown</a></div><div class="desc docblock-short">The markdown API</div></li><li><div class="item-name"><a class="mod" href="models/index.html" title="mod octocrab::models">models</a></div><div class="desc docblock-short">Serde mappings from GitHub’s JSON to structs.</div></li><li><div class="item-name"><a class="mod" href="orgs/index.html" title="mod octocrab::orgs">orgs</a></div><div class="desc docblock-short">The Organization API.</div></li><li><div class="item-name"><a class="mod" href="params/index.html" title="mod octocrab::params">params</a></div><div class="desc docblock-short">Common GitHub Parameter Types</div></li><li><div class="item-name"><a class="mod" href="projects/index.html" title="mod octocrab::projects">projects</a></div><div class="desc docblock-short">The Projects API.</div></li><li><div class="item-name"><a class="mod" href="pulls/index.html" title="mod octocrab::pulls">pulls</a></div><div class="desc docblock-short">The pull request API.</div></li><li><div class="item-name"><a class="mod" href="ratelimit/index.html" title="mod octocrab::ratelimit">ratelimit</a></div><div class="desc docblock-short">Github RateLimit API</div></li><li><div class="item-name"><a class="mod" href="repos/index.html" title="mod octocrab::repos">repos</a></div><div class="desc docblock-short">The repositories API.</div></li><li><div class="item-name"><a class="mod" href="search/index.html" title="mod octocrab::search">search</a></div><div class="desc docblock-short">Using GitHub’s search.</div></li><li><div class="item-name"><a class="mod" href="service/index.html" title="mod octocrab::service">service</a></div></li><li><div class="item-name"><a class="mod" href="teams/index.html" title="mod octocrab::teams">teams</a></div><div class="desc docblock-short">The Teams API</div></li><li><div class="item-name"><a class="mod" href="workflows/index.html" title="mod octocrab::workflows">workflows</a></div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.CachedToken.html" title="struct octocrab::CachedToken">CachedToken</a></div><div class="desc docblock-short">A cached API access token (which may be None)</div></li><li><div class="item-name"><a class="struct" href="struct.DefaultOctocrabBuilderConfig.html" title="struct octocrab::DefaultOctocrabBuilderConfig">DefaultOctocrabBuilderConfig</a></div></li><li><div class="item-name"><a class="struct" href="struct.GitHubError.html" title="struct octocrab::GitHubError">GitHubError</a></div><div class="desc docblock-short">An error returned from GitHub’s API.</div></li><li><div class="item-name"><a class="struct" href="struct.LayerReady.html" title="struct octocrab::LayerReady">LayerReady</a></div></li><li><div class="item-name"><a class="struct" href="struct.NoAuth.html" title="struct octocrab::NoAuth">NoAuth</a></div></li><li><div class="item-name"><a class="struct" href="struct.NoConfig.html" title="struct octocrab::NoConfig">NoConfig</a></div></li><li><div class="item-name"><a class="struct" href="struct.NoSvc.html" title="struct octocrab::NoSvc">NoSvc</a></div></li><li><div class="item-name"><a class="struct" href="struct.NotLayerReady.html" title="struct octocrab::NotLayerReady">NotLayerReady</a></div></li><li><div class="item-name"><a class="struct" href="struct.Octocrab.html" title="struct octocrab::Octocrab">Octocrab</a></div><div class="desc docblock-short">The GitHub API client.</div></li><li><div class="item-name"><a class="struct" href="struct.OctocrabBuilder.html" title="struct octocrab::OctocrabBuilder">OctocrabBuilder</a></div><div class="desc docblock-short">A builder struct for <code>Octocrab</code>, allowing you to configure the client, such
+as using GitHub previews, the github instance, authentication, etc.</div></li><li><div class="item-name"><a class="struct" href="struct.Page.html" title="struct octocrab::Page">Page</a></div><div class="desc docblock-short">A Page of GitHub results, with links to the next and previous page.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.AuthState.html" title="enum octocrab::AuthState">AuthState</a></div><div class="desc docblock-short">State used for authenticate to Github</div></li><li><div class="item-name"><a class="enum" href="enum.Error.html" title="enum octocrab::Error">Error</a></div><div class="desc docblock-short">An error that could have occurred while using <a href="struct.Octocrab.html" title="struct octocrab::Octocrab"><code>crate::Octocrab</code></a>.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.FromResponse.html" title="trait octocrab::FromResponse">FromResponse</a></div><div class="desc docblock-short">A trait for mapping from a <code>http::Response</code> to an another type.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.format_media_type.html" title="fn octocrab::format_media_type">format_media_type</a></div><div class="desc docblock-short">Formats a media type from it’s name into the full value for the
+<code>Accept</code> header.</div></li><li><div class="item-name"><a class="fn" href="fn.format_preview.html" title="fn octocrab::format_preview">format_preview</a></div><div class="desc docblock-short">Formats a GitHub preview from it’s name into the full value for the
+<code>Accept</code> header.</div></li><li><div class="item-name"><a class="fn" href="fn.initialise.html" title="fn octocrab::initialise">initialise</a></div><div class="desc docblock-short">Initialises the static instance using the configuration set by
+<code>builder</code>.</div></li><li><div class="item-name"><a class="fn" href="fn.instance.html" title="fn octocrab::instance">instance</a></div><div class="desc docblock-short">Returns a new instance of <a href="struct.Octocrab.html" title="struct octocrab::Octocrab"><code>Octocrab</code></a>. If it hasn’t been previously
+initialised it returns a default instance with no authentication set.</div></li><li><div class="item-name"><a class="fn" href="fn.map_github_error.html" title="fn octocrab::map_github_error">map_github_error</a></div><div class="desc docblock-short">Maps a GitHub error response into and <code>Err()</code> variant if the status is
+not a success.</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.OctocrabService.html" title="type octocrab::OctocrabService">OctocrabService</a></div></li><li><div class="item-name"><a class="type" href="type.Result.html" title="type octocrab::Result">Result</a></div><div class="desc docblock-short">A convenience type with a default error type of <a href="enum.Error.html" title="enum octocrab::Error"><code>Error</code></a>.</div></li></ul></section></div></main></body></html>

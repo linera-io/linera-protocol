@@ -1,0 +1,3 @@
+(function() {var implementors = {
+"linera_alloy_transport_http":[["impl <a class=\"trait\" href=\"linera_alloy_transport/connect/trait.TransportConnect.html\" title=\"trait linera_alloy_transport::connect::TransportConnect\">TransportConnect</a> for <a class=\"type\" href=\"linera_alloy_transport_http/type.ReqwestConnect.html\" title=\"type linera_alloy_transport_http::ReqwestConnect\">ReqwestConnect</a>"]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

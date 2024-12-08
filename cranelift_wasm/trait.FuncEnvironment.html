@@ -1,0 +1,741 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Environment affecting the translation of a single WebAssembly function."><title>FuncEnvironment in cranelift_wasm - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="cranelift_wasm" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../cranelift_wasm/index.html">cranelift_wasm</a><span class="version">0.112.1</span></h2></div><h2 class="location"><a href="#">FuncEnvironment</a></h2><div class="sidebar-elems"><section><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.func_ref_result_needs_stack_map">func_ref_result_needs_stack_map</a></li><li><a href="#tymethod.heaps">heaps</a></li><li><a href="#tymethod.make_direct_func">make_direct_func</a></li><li><a href="#tymethod.make_global">make_global</a></li><li><a href="#tymethod.make_heap">make_heap</a></li><li><a href="#tymethod.make_indirect_sig">make_indirect_sig</a></li><li><a href="#tymethod.param_needs_stack_map">param_needs_stack_map</a></li><li><a href="#tymethod.sig_ref_result_needs_stack_map">sig_ref_result_needs_stack_map</a></li><li><a href="#tymethod.translate_atomic_notify">translate_atomic_notify</a></li><li><a href="#tymethod.translate_atomic_wait">translate_atomic_wait</a></li><li><a href="#tymethod.translate_call_indirect">translate_call_indirect</a></li><li><a href="#tymethod.translate_call_ref">translate_call_ref</a></li><li><a href="#tymethod.translate_custom_global_get">translate_custom_global_get</a></li><li><a href="#tymethod.translate_custom_global_set">translate_custom_global_set</a></li><li><a href="#tymethod.translate_data_drop">translate_data_drop</a></li><li><a href="#tymethod.translate_elem_drop">translate_elem_drop</a></li><li><a href="#tymethod.translate_i31_get_s">translate_i31_get_s</a></li><li><a href="#tymethod.translate_i31_get_u">translate_i31_get_u</a></li><li><a href="#tymethod.translate_memory_copy">translate_memory_copy</a></li><li><a href="#tymethod.translate_memory_fill">translate_memory_fill</a></li><li><a href="#tymethod.translate_memory_grow">translate_memory_grow</a></li><li><a href="#tymethod.translate_memory_init">translate_memory_init</a></li><li><a href="#tymethod.translate_memory_size">translate_memory_size</a></li><li><a href="#tymethod.translate_ref_func">translate_ref_func</a></li><li><a href="#tymethod.translate_ref_i31">translate_ref_i31</a></li><li><a href="#tymethod.translate_ref_is_null">translate_ref_is_null</a></li><li><a href="#tymethod.translate_ref_null">translate_ref_null</a></li><li><a href="#tymethod.translate_return_call_indirect">translate_return_call_indirect</a></li><li><a href="#tymethod.translate_return_call_ref">translate_return_call_ref</a></li><li><a href="#tymethod.translate_table_copy">translate_table_copy</a></li><li><a href="#tymethod.translate_table_fill">translate_table_fill</a></li><li><a href="#tymethod.translate_table_get">translate_table_get</a></li><li><a href="#tymethod.translate_table_grow">translate_table_grow</a></li><li><a href="#tymethod.translate_table_init">translate_table_init</a></li><li><a href="#tymethod.translate_table_set">translate_table_set</a></li><li><a href="#tymethod.translate_table_size">translate_table_size</a></li></ul><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.after_locals">after_locals</a></li><li><a href="#method.after_translate_function">after_translate_function</a></li><li><a href="#method.after_translate_operator">after_translate_operator</a></li><li><a href="#method.before_load">before_load</a></li><li><a href="#method.before_memory_grow">before_memory_grow</a></li><li><a href="#method.before_store">before_store</a></li><li><a href="#method.before_translate_function">before_translate_function</a></li><li><a href="#method.before_translate_operator">before_translate_operator</a></li><li><a href="#method.before_unconditionally_trapping_memory_access">before_unconditionally_trapping_memory_access</a></li><li><a href="#method.handle_before_return">handle_before_return</a></li><li><a href="#method.has_native_fma">has_native_fma</a></li><li><a href="#method.is_wasm_parameter">is_wasm_parameter</a></li><li><a href="#method.is_wasm_return">is_wasm_return</a></li><li><a href="#method.is_x86">is_x86</a></li><li><a href="#method.relaxed_simd_deterministic">relaxed_simd_deterministic</a></li><li><a href="#method.translate_call">translate_call</a></li><li><a href="#method.translate_loop_header">translate_loop_header</a></li><li><a href="#method.translate_return_call">translate_return_call</a></li><li><a href="#method.update_global">update_global</a></li><li><a href="#method.use_x86_blendv_for_relaxed_laneselect">use_x86_blendv_for_relaxed_laneselect</a></li><li><a href="#method.use_x86_pmaddubsw_for_dot">use_x86_pmaddubsw_for_dot</a></li><li><a href="#method.use_x86_pmulhrsw_for_relaxed_q15mul">use_x86_pmulhrsw_for_relaxed_q15mul</a></li><li><a href="#method.use_x86_pshufb_for_relaxed_swizzle">use_x86_pshufb_for_relaxed_swizzle</a></li></ul><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In crate cranelift_wasm</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="index.html">cranelift_wasm</a>::<wbr><a class="trait" href="#">FuncEnvironment</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/cranelift_wasm/environ/spec.rs.html#82-660">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub trait FuncEnvironment: <a class="trait" href="trait.TargetEnvironment.html" title="trait cranelift_wasm::TargetEnvironment">TargetEnvironment</a> {
+<details class="toggle type-contents-toggle"><summary class="hideme"><span>Show 59 methods</span></summary>    // Required methods
+    fn <a href="#tymethod.param_needs_stack_map" class="fn">param_needs_stack_map</a>(&amp;self, signature: &amp;<a class="struct" href="../cranelift_codegen/ir/extfunc/struct.Signature.html" title="struct cranelift_codegen::ir::extfunc::Signature">Signature</a>, index: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.sig_ref_result_needs_stack_map" class="fn">sig_ref_result_needs_stack_map</a>(
+        &amp;self,
+        sig_ref: <a class="struct" href="../cranelift_codegen/ir/entities/struct.SigRef.html" title="struct cranelift_codegen::ir::entities::SigRef">SigRef</a>,
+        index: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>,
+    ) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.func_ref_result_needs_stack_map" class="fn">func_ref_result_needs_stack_map</a>(
+        &amp;self,
+        func: &amp;<a class="struct" href="../cranelift_codegen/ir/function/struct.Function.html" title="struct cranelift_codegen::ir::function::Function">Function</a>,
+        func_ref: <a class="struct" href="../cranelift_codegen/ir/entities/struct.FuncRef.html" title="struct cranelift_codegen::ir::entities::FuncRef">FuncRef</a>,
+        index: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>,
+    ) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.make_global" class="fn">make_global</a>(
+        &amp;mut self,
+        func: &amp;mut <a class="struct" href="../cranelift_codegen/ir/function/struct.Function.html" title="struct cranelift_codegen::ir::function::Function">Function</a>,
+        index: <a class="struct" href="struct.GlobalIndex.html" title="struct cranelift_wasm::GlobalIndex">GlobalIndex</a>,
+    ) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="enum" href="enum.GlobalVariable.html" title="enum cranelift_wasm::GlobalVariable">GlobalVariable</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.heaps" class="fn">heaps</a>(&amp;self) -&gt; &amp;<a class="struct" href="../cranelift_entity/primary/struct.PrimaryMap.html" title="struct cranelift_entity::primary::PrimaryMap">PrimaryMap</a>&lt;<a class="struct" href="struct.Heap.html" title="struct cranelift_wasm::Heap">Heap</a>, <a class="struct" href="struct.HeapData.html" title="struct cranelift_wasm::HeapData">HeapData</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.make_heap" class="fn">make_heap</a>(
+        &amp;mut self,
+        func: &amp;mut <a class="struct" href="../cranelift_codegen/ir/function/struct.Function.html" title="struct cranelift_codegen::ir::function::Function">Function</a>,
+        index: <a class="struct" href="struct.MemoryIndex.html" title="struct cranelift_wasm::MemoryIndex">MemoryIndex</a>,
+    ) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="struct" href="struct.Heap.html" title="struct cranelift_wasm::Heap">Heap</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.make_indirect_sig" class="fn">make_indirect_sig</a>(
+        &amp;mut self,
+        func: &amp;mut <a class="struct" href="../cranelift_codegen/ir/function/struct.Function.html" title="struct cranelift_codegen::ir::function::Function">Function</a>,
+        index: <a class="struct" href="struct.TypeIndex.html" title="struct cranelift_wasm::TypeIndex">TypeIndex</a>,
+    ) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="struct" href="../cranelift_codegen/ir/entities/struct.SigRef.html" title="struct cranelift_codegen::ir::entities::SigRef">SigRef</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.make_direct_func" class="fn">make_direct_func</a>(
+        &amp;mut self,
+        func: &amp;mut <a class="struct" href="../cranelift_codegen/ir/function/struct.Function.html" title="struct cranelift_codegen::ir::function::Function">Function</a>,
+        index: <a class="struct" href="struct.FuncIndex.html" title="struct cranelift_wasm::FuncIndex">FuncIndex</a>,
+    ) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="struct" href="../cranelift_codegen/ir/entities/struct.FuncRef.html" title="struct cranelift_codegen::ir::entities::FuncRef">FuncRef</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.translate_call_indirect" class="fn">translate_call_indirect</a>(
+        &amp;mut self,
+        builder: &amp;mut <a class="struct" href="struct.FunctionBuilder.html" title="struct cranelift_wasm::FunctionBuilder">FunctionBuilder</a>&lt;'_&gt;,
+        table_index: <a class="struct" href="struct.TableIndex.html" title="struct cranelift_wasm::TableIndex">TableIndex</a>,
+        sig_index: <a class="struct" href="struct.TypeIndex.html" title="struct cranelift_wasm::TypeIndex">TypeIndex</a>,
+        sig_ref: <a class="struct" href="../cranelift_codegen/ir/entities/struct.SigRef.html" title="struct cranelift_codegen::ir::entities::SigRef">SigRef</a>,
+        callee: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+        call_args: &amp;[<a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>],
+    ) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../cranelift_codegen/ir/entities/struct.Inst.html" title="struct cranelift_codegen::ir::entities::Inst">Inst</a>&gt;&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.translate_return_call_indirect" class="fn">translate_return_call_indirect</a>(
+        &amp;mut self,
+        builder: &amp;mut <a class="struct" href="struct.FunctionBuilder.html" title="struct cranelift_wasm::FunctionBuilder">FunctionBuilder</a>&lt;'_&gt;,
+        table_index: <a class="struct" href="struct.TableIndex.html" title="struct cranelift_wasm::TableIndex">TableIndex</a>,
+        sig_index: <a class="struct" href="struct.TypeIndex.html" title="struct cranelift_wasm::TypeIndex">TypeIndex</a>,
+        sig_ref: <a class="struct" href="../cranelift_codegen/ir/entities/struct.SigRef.html" title="struct cranelift_codegen::ir::entities::SigRef">SigRef</a>,
+        callee: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+        call_args: &amp;[<a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>],
+    ) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.translate_return_call_ref" class="fn">translate_return_call_ref</a>(
+        &amp;mut self,
+        builder: &amp;mut <a class="struct" href="struct.FunctionBuilder.html" title="struct cranelift_wasm::FunctionBuilder">FunctionBuilder</a>&lt;'_&gt;,
+        sig_ref: <a class="struct" href="../cranelift_codegen/ir/entities/struct.SigRef.html" title="struct cranelift_codegen::ir::entities::SigRef">SigRef</a>,
+        callee: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+        call_args: &amp;[<a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>],
+    ) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.translate_call_ref" class="fn">translate_call_ref</a>(
+        &amp;mut self,
+        builder: &amp;mut <a class="struct" href="struct.FunctionBuilder.html" title="struct cranelift_wasm::FunctionBuilder">FunctionBuilder</a>&lt;'_&gt;,
+        sig_ref: <a class="struct" href="../cranelift_codegen/ir/entities/struct.SigRef.html" title="struct cranelift_codegen::ir::entities::SigRef">SigRef</a>,
+        callee: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+        call_args: &amp;[<a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>],
+    ) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="struct" href="../cranelift_codegen/ir/entities/struct.Inst.html" title="struct cranelift_codegen::ir::entities::Inst">Inst</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.translate_memory_grow" class="fn">translate_memory_grow</a>(
+        &amp;mut self,
+        pos: <a class="struct" href="../cranelift_codegen/cursor/struct.FuncCursor.html" title="struct cranelift_codegen::cursor::FuncCursor">FuncCursor</a>&lt;'_&gt;,
+        index: <a class="struct" href="struct.MemoryIndex.html" title="struct cranelift_wasm::MemoryIndex">MemoryIndex</a>,
+        heap: <a class="struct" href="struct.Heap.html" title="struct cranelift_wasm::Heap">Heap</a>,
+        val: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+    ) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.translate_memory_size" class="fn">translate_memory_size</a>(
+        &amp;mut self,
+        pos: <a class="struct" href="../cranelift_codegen/cursor/struct.FuncCursor.html" title="struct cranelift_codegen::cursor::FuncCursor">FuncCursor</a>&lt;'_&gt;,
+        index: <a class="struct" href="struct.MemoryIndex.html" title="struct cranelift_wasm::MemoryIndex">MemoryIndex</a>,
+        heap: <a class="struct" href="struct.Heap.html" title="struct cranelift_wasm::Heap">Heap</a>,
+    ) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.translate_memory_copy" class="fn">translate_memory_copy</a>(
+        &amp;mut self,
+        pos: <a class="struct" href="../cranelift_codegen/cursor/struct.FuncCursor.html" title="struct cranelift_codegen::cursor::FuncCursor">FuncCursor</a>&lt;'_&gt;,
+        src_index: <a class="struct" href="struct.MemoryIndex.html" title="struct cranelift_wasm::MemoryIndex">MemoryIndex</a>,
+        src_heap: <a class="struct" href="struct.Heap.html" title="struct cranelift_wasm::Heap">Heap</a>,
+        dst_index: <a class="struct" href="struct.MemoryIndex.html" title="struct cranelift_wasm::MemoryIndex">MemoryIndex</a>,
+        dst_heap: <a class="struct" href="struct.Heap.html" title="struct cranelift_wasm::Heap">Heap</a>,
+        dst: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+        src: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+        len: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+    ) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.translate_memory_fill" class="fn">translate_memory_fill</a>(
+        &amp;mut self,
+        pos: <a class="struct" href="../cranelift_codegen/cursor/struct.FuncCursor.html" title="struct cranelift_codegen::cursor::FuncCursor">FuncCursor</a>&lt;'_&gt;,
+        index: <a class="struct" href="struct.MemoryIndex.html" title="struct cranelift_wasm::MemoryIndex">MemoryIndex</a>,
+        heap: <a class="struct" href="struct.Heap.html" title="struct cranelift_wasm::Heap">Heap</a>,
+        dst: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+        val: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+        len: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+    ) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.translate_memory_init" class="fn">translate_memory_init</a>(
+        &amp;mut self,
+        pos: <a class="struct" href="../cranelift_codegen/cursor/struct.FuncCursor.html" title="struct cranelift_codegen::cursor::FuncCursor">FuncCursor</a>&lt;'_&gt;,
+        index: <a class="struct" href="struct.MemoryIndex.html" title="struct cranelift_wasm::MemoryIndex">MemoryIndex</a>,
+        heap: <a class="struct" href="struct.Heap.html" title="struct cranelift_wasm::Heap">Heap</a>,
+        seg_index: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>,
+        dst: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+        src: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+        len: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+    ) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.translate_data_drop" class="fn">translate_data_drop</a>(
+        &amp;mut self,
+        pos: <a class="struct" href="../cranelift_codegen/cursor/struct.FuncCursor.html" title="struct cranelift_codegen::cursor::FuncCursor">FuncCursor</a>&lt;'_&gt;,
+        seg_index: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>,
+    ) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.translate_table_size" class="fn">translate_table_size</a>(
+        &amp;mut self,
+        pos: <a class="struct" href="../cranelift_codegen/cursor/struct.FuncCursor.html" title="struct cranelift_codegen::cursor::FuncCursor">FuncCursor</a>&lt;'_&gt;,
+        index: <a class="struct" href="struct.TableIndex.html" title="struct cranelift_wasm::TableIndex">TableIndex</a>,
+    ) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.translate_table_grow" class="fn">translate_table_grow</a>(
+        &amp;mut self,
+        pos: <a class="struct" href="../cranelift_codegen/cursor/struct.FuncCursor.html" title="struct cranelift_codegen::cursor::FuncCursor">FuncCursor</a>&lt;'_&gt;,
+        table_index: <a class="struct" href="struct.TableIndex.html" title="struct cranelift_wasm::TableIndex">TableIndex</a>,
+        delta: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+        init_value: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+    ) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.translate_table_get" class="fn">translate_table_get</a>(
+        &amp;mut self,
+        builder: &amp;mut <a class="struct" href="struct.FunctionBuilder.html" title="struct cranelift_wasm::FunctionBuilder">FunctionBuilder</a>&lt;'_&gt;,
+        table_index: <a class="struct" href="struct.TableIndex.html" title="struct cranelift_wasm::TableIndex">TableIndex</a>,
+        index: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+    ) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.translate_table_set" class="fn">translate_table_set</a>(
+        &amp;mut self,
+        builder: &amp;mut <a class="struct" href="struct.FunctionBuilder.html" title="struct cranelift_wasm::FunctionBuilder">FunctionBuilder</a>&lt;'_&gt;,
+        table_index: <a class="struct" href="struct.TableIndex.html" title="struct cranelift_wasm::TableIndex">TableIndex</a>,
+        value: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+        index: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+    ) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.translate_table_copy" class="fn">translate_table_copy</a>(
+        &amp;mut self,
+        pos: <a class="struct" href="../cranelift_codegen/cursor/struct.FuncCursor.html" title="struct cranelift_codegen::cursor::FuncCursor">FuncCursor</a>&lt;'_&gt;,
+        dst_table_index: <a class="struct" href="struct.TableIndex.html" title="struct cranelift_wasm::TableIndex">TableIndex</a>,
+        src_table_index: <a class="struct" href="struct.TableIndex.html" title="struct cranelift_wasm::TableIndex">TableIndex</a>,
+        dst: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+        src: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+        len: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+    ) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.translate_table_fill" class="fn">translate_table_fill</a>(
+        &amp;mut self,
+        pos: <a class="struct" href="../cranelift_codegen/cursor/struct.FuncCursor.html" title="struct cranelift_codegen::cursor::FuncCursor">FuncCursor</a>&lt;'_&gt;,
+        table_index: <a class="struct" href="struct.TableIndex.html" title="struct cranelift_wasm::TableIndex">TableIndex</a>,
+        dst: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+        val: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+        len: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+    ) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.translate_table_init" class="fn">translate_table_init</a>(
+        &amp;mut self,
+        pos: <a class="struct" href="../cranelift_codegen/cursor/struct.FuncCursor.html" title="struct cranelift_codegen::cursor::FuncCursor">FuncCursor</a>&lt;'_&gt;,
+        seg_index: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>,
+        table_index: <a class="struct" href="struct.TableIndex.html" title="struct cranelift_wasm::TableIndex">TableIndex</a>,
+        dst: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+        src: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+        len: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+    ) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.translate_elem_drop" class="fn">translate_elem_drop</a>(
+        &amp;mut self,
+        pos: <a class="struct" href="../cranelift_codegen/cursor/struct.FuncCursor.html" title="struct cranelift_codegen::cursor::FuncCursor">FuncCursor</a>&lt;'_&gt;,
+        seg_index: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>,
+    ) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.translate_ref_null" class="fn">translate_ref_null</a>(
+        &amp;mut self,
+        pos: <a class="struct" href="../cranelift_codegen/cursor/struct.FuncCursor.html" title="struct cranelift_codegen::cursor::FuncCursor">FuncCursor</a>&lt;'_&gt;,
+        ty: <a class="enum" href="enum.WasmHeapType.html" title="enum cranelift_wasm::WasmHeapType">WasmHeapType</a>,
+    ) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.translate_ref_is_null" class="fn">translate_ref_is_null</a>(
+        &amp;mut self,
+        pos: <a class="struct" href="../cranelift_codegen/cursor/struct.FuncCursor.html" title="struct cranelift_codegen::cursor::FuncCursor">FuncCursor</a>&lt;'_&gt;,
+        value: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+    ) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.translate_ref_func" class="fn">translate_ref_func</a>(
+        &amp;mut self,
+        pos: <a class="struct" href="../cranelift_codegen/cursor/struct.FuncCursor.html" title="struct cranelift_codegen::cursor::FuncCursor">FuncCursor</a>&lt;'_&gt;,
+        func_index: <a class="struct" href="struct.FuncIndex.html" title="struct cranelift_wasm::FuncIndex">FuncIndex</a>,
+    ) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.translate_custom_global_get" class="fn">translate_custom_global_get</a>(
+        &amp;mut self,
+        builder: &amp;mut <a class="struct" href="struct.FunctionBuilder.html" title="struct cranelift_wasm::FunctionBuilder">FunctionBuilder</a>&lt;'_&gt;,
+        global_index: <a class="struct" href="struct.GlobalIndex.html" title="struct cranelift_wasm::GlobalIndex">GlobalIndex</a>,
+    ) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.translate_custom_global_set" class="fn">translate_custom_global_set</a>(
+        &amp;mut self,
+        builder: &amp;mut <a class="struct" href="struct.FunctionBuilder.html" title="struct cranelift_wasm::FunctionBuilder">FunctionBuilder</a>&lt;'_&gt;,
+        global_index: <a class="struct" href="struct.GlobalIndex.html" title="struct cranelift_wasm::GlobalIndex">GlobalIndex</a>,
+        val: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+    ) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.translate_atomic_wait" class="fn">translate_atomic_wait</a>(
+        &amp;mut self,
+        pos: <a class="struct" href="../cranelift_codegen/cursor/struct.FuncCursor.html" title="struct cranelift_codegen::cursor::FuncCursor">FuncCursor</a>&lt;'_&gt;,
+        index: <a class="struct" href="struct.MemoryIndex.html" title="struct cranelift_wasm::MemoryIndex">MemoryIndex</a>,
+        heap: <a class="struct" href="struct.Heap.html" title="struct cranelift_wasm::Heap">Heap</a>,
+        addr: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+        expected: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+        timeout: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+    ) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.translate_atomic_notify" class="fn">translate_atomic_notify</a>(
+        &amp;mut self,
+        pos: <a class="struct" href="../cranelift_codegen/cursor/struct.FuncCursor.html" title="struct cranelift_codegen::cursor::FuncCursor">FuncCursor</a>&lt;'_&gt;,
+        index: <a class="struct" href="struct.MemoryIndex.html" title="struct cranelift_wasm::MemoryIndex">MemoryIndex</a>,
+        heap: <a class="struct" href="struct.Heap.html" title="struct cranelift_wasm::Heap">Heap</a>,
+        addr: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+        count: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+    ) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.translate_ref_i31" class="fn">translate_ref_i31</a>(
+        &amp;mut self,
+        pos: <a class="struct" href="../cranelift_codegen/cursor/struct.FuncCursor.html" title="struct cranelift_codegen::cursor::FuncCursor">FuncCursor</a>&lt;'_&gt;,
+        val: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+    ) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.translate_i31_get_s" class="fn">translate_i31_get_s</a>(
+        &amp;mut self,
+        pos: <a class="struct" href="../cranelift_codegen/cursor/struct.FuncCursor.html" title="struct cranelift_codegen::cursor::FuncCursor">FuncCursor</a>&lt;'_&gt;,
+        i31ref: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+    ) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.translate_i31_get_u" class="fn">translate_i31_get_u</a>(
+        &amp;mut self,
+        pos: <a class="struct" href="../cranelift_codegen/cursor/struct.FuncCursor.html" title="struct cranelift_codegen::cursor::FuncCursor">FuncCursor</a>&lt;'_&gt;,
+        i31ref: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+    ) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>&gt;;
+
+    // Provided methods
+    fn <a href="#method.is_wasm_parameter" class="fn">is_wasm_parameter</a>(&amp;self, signature: &amp;<a class="struct" href="../cranelift_codegen/ir/extfunc/struct.Signature.html" title="struct cranelift_codegen::ir::extfunc::Signature">Signature</a>, index: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.is_wasm_return" class="fn">is_wasm_return</a>(&amp;self, signature: &amp;<a class="struct" href="../cranelift_codegen/ir/extfunc/struct.Signature.html" title="struct cranelift_codegen::ir::extfunc::Signature">Signature</a>, index: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.after_locals" class="fn">after_locals</a>(&amp;mut self, num_locals_defined: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.translate_call" class="fn">translate_call</a>(
+        &amp;mut self,
+        builder: &amp;mut <a class="struct" href="struct.FunctionBuilder.html" title="struct cranelift_wasm::FunctionBuilder">FunctionBuilder</a>&lt;'_&gt;,
+        _callee_index: <a class="struct" href="struct.FuncIndex.html" title="struct cranelift_wasm::FuncIndex">FuncIndex</a>,
+        callee: <a class="struct" href="../cranelift_codegen/ir/entities/struct.FuncRef.html" title="struct cranelift_codegen::ir::entities::FuncRef">FuncRef</a>,
+        call_args: &amp;[<a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>],
+    ) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="struct" href="../cranelift_codegen/ir/entities/struct.Inst.html" title="struct cranelift_codegen::ir::entities::Inst">Inst</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.translate_return_call" class="fn">translate_return_call</a>(
+        &amp;mut self,
+        builder: &amp;mut <a class="struct" href="struct.FunctionBuilder.html" title="struct cranelift_wasm::FunctionBuilder">FunctionBuilder</a>&lt;'_&gt;,
+        _callee_index: <a class="struct" href="struct.FuncIndex.html" title="struct cranelift_wasm::FuncIndex">FuncIndex</a>,
+        callee: <a class="struct" href="../cranelift_codegen/ir/entities/struct.FuncRef.html" title="struct cranelift_codegen::ir::entities::FuncRef">FuncRef</a>,
+        call_args: &amp;[<a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>],
+    ) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.translate_loop_header" class="fn">translate_loop_header</a>(
+        &amp;mut self,
+        _builder: &amp;mut <a class="struct" href="struct.FunctionBuilder.html" title="struct cranelift_wasm::FunctionBuilder">FunctionBuilder</a>&lt;'_&gt;,
+    ) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.before_translate_operator" class="fn">before_translate_operator</a>(
+        &amp;mut self,
+        _op: &amp;<a class="enum" href="wasmparser/enum.Operator.html" title="enum cranelift_wasm::wasmparser::Operator">Operator</a>&lt;'_&gt;,
+        _builder: &amp;mut <a class="struct" href="struct.FunctionBuilder.html" title="struct cranelift_wasm::FunctionBuilder">FunctionBuilder</a>&lt;'_&gt;,
+        _state: &amp;<a class="struct" href="struct.FuncTranslationState.html" title="struct cranelift_wasm::FuncTranslationState">FuncTranslationState</a>,
+    ) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.after_translate_operator" class="fn">after_translate_operator</a>(
+        &amp;mut self,
+        _op: &amp;<a class="enum" href="wasmparser/enum.Operator.html" title="enum cranelift_wasm::wasmparser::Operator">Operator</a>&lt;'_&gt;,
+        _builder: &amp;mut <a class="struct" href="struct.FunctionBuilder.html" title="struct cranelift_wasm::FunctionBuilder">FunctionBuilder</a>&lt;'_&gt;,
+        _state: &amp;<a class="struct" href="struct.FuncTranslationState.html" title="struct cranelift_wasm::FuncTranslationState">FuncTranslationState</a>,
+    ) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.before_unconditionally_trapping_memory_access" class="fn">before_unconditionally_trapping_memory_access</a>(
+        &amp;mut self,
+        _builder: &amp;mut <a class="struct" href="struct.FunctionBuilder.html" title="struct cranelift_wasm::FunctionBuilder">FunctionBuilder</a>&lt;'_&gt;,
+    ) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.before_translate_function" class="fn">before_translate_function</a>(
+        &amp;mut self,
+        _builder: &amp;mut <a class="struct" href="struct.FunctionBuilder.html" title="struct cranelift_wasm::FunctionBuilder">FunctionBuilder</a>&lt;'_&gt;,
+        _state: &amp;<a class="struct" href="struct.FuncTranslationState.html" title="struct cranelift_wasm::FuncTranslationState">FuncTranslationState</a>,
+    ) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.after_translate_function" class="fn">after_translate_function</a>(
+        &amp;mut self,
+        _builder: &amp;mut <a class="struct" href="struct.FunctionBuilder.html" title="struct cranelift_wasm::FunctionBuilder">FunctionBuilder</a>&lt;'_&gt;,
+        _state: &amp;<a class="struct" href="struct.FuncTranslationState.html" title="struct cranelift_wasm::FuncTranslationState">FuncTranslationState</a>,
+    ) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.relaxed_simd_deterministic" class="fn">relaxed_simd_deterministic</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.has_native_fma" class="fn">has_native_fma</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.is_x86" class="fn">is_x86</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.use_x86_blendv_for_relaxed_laneselect" class="fn">use_x86_blendv_for_relaxed_laneselect</a>(&amp;self, ty: <a class="struct" href="../cranelift_codegen/ir/types/struct.Type.html" title="struct cranelift_codegen::ir::types::Type">Type</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.use_x86_pshufb_for_relaxed_swizzle" class="fn">use_x86_pshufb_for_relaxed_swizzle</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.use_x86_pmulhrsw_for_relaxed_q15mul" class="fn">use_x86_pmulhrsw_for_relaxed_q15mul</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.use_x86_pmaddubsw_for_dot" class="fn">use_x86_pmaddubsw_for_dot</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.handle_before_return" class="fn">handle_before_return</a>(
+        &amp;mut self,
+        _retvals: &amp;[<a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>],
+        _builder: &amp;mut <a class="struct" href="struct.FunctionBuilder.html" title="struct cranelift_wasm::FunctionBuilder">FunctionBuilder</a>&lt;'_&gt;,
+    ) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.before_load" class="fn">before_load</a>(
+        &amp;mut self,
+        _builder: &amp;mut <a class="struct" href="struct.FunctionBuilder.html" title="struct cranelift_wasm::FunctionBuilder">FunctionBuilder</a>&lt;'_&gt;,
+        _val_size: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>,
+        _addr: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+        _offset: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>,
+    ) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.before_store" class="fn">before_store</a>(
+        &amp;mut self,
+        _builder: &amp;mut <a class="struct" href="struct.FunctionBuilder.html" title="struct cranelift_wasm::FunctionBuilder">FunctionBuilder</a>&lt;'_&gt;,
+        _val_size: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>,
+        _addr: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+        _offset: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>,
+    ) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.update_global" class="fn">update_global</a>(
+        &amp;mut self,
+        _builder: &amp;mut <a class="struct" href="struct.FunctionBuilder.html" title="struct cranelift_wasm::FunctionBuilder">FunctionBuilder</a>&lt;'_&gt;,
+        _global_index: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>,
+        _value: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+    ) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.before_memory_grow" class="fn">before_memory_grow</a>(
+        &amp;mut self,
+        _builder: &amp;mut <a class="struct" href="struct.FunctionBuilder.html" title="struct cranelift_wasm::FunctionBuilder">FunctionBuilder</a>&lt;'_&gt;,
+        _num_bytes: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+        _mem_index: <a class="struct" href="struct.MemoryIndex.html" title="struct cranelift_wasm::MemoryIndex">MemoryIndex</a>,
+    ) { ... }
+</details>}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Environment affecting the translation of a single WebAssembly function.</p>
+<p>A <code>FuncEnvironment</code> trait object is required to translate a WebAssembly function to Cranelift
+IR. The function environment provides information about the WebAssembly module as well as the
+runtime environment.</p>
+</div></details><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.param_needs_stack_map" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#90">source</a><h4 class="code-header">fn <a href="#tymethod.param_needs_stack_map" class="fn">param_needs_stack_map</a>(&amp;self, signature: &amp;<a class="struct" href="../cranelift_codegen/ir/extfunc/struct.Signature.html" title="struct cranelift_codegen::ir::extfunc::Signature">Signature</a>, index: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Does the given parameter require inclusion in stack maps?</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.sig_ref_result_needs_stack_map" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#93">source</a><h4 class="code-header">fn <a href="#tymethod.sig_ref_result_needs_stack_map" class="fn">sig_ref_result_needs_stack_map</a>(&amp;self, sig_ref: <a class="struct" href="../cranelift_codegen/ir/entities/struct.SigRef.html" title="struct cranelift_codegen::ir::entities::SigRef">SigRef</a>, index: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Does the given result require inclusion in stack maps?</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.func_ref_result_needs_stack_map" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#96-101">source</a><h4 class="code-header">fn <a href="#tymethod.func_ref_result_needs_stack_map" class="fn">func_ref_result_needs_stack_map</a>(
+    &amp;self,
+    func: &amp;<a class="struct" href="../cranelift_codegen/ir/function/struct.Function.html" title="struct cranelift_codegen::ir::function::Function">Function</a>,
+    func_ref: <a class="struct" href="../cranelift_codegen/ir/entities/struct.FuncRef.html" title="struct cranelift_codegen::ir::entities::FuncRef">FuncRef</a>,
+    index: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>,
+) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Does the given result require inclusion in stack maps?</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.make_global" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#122-126">source</a><h4 class="code-header">fn <a href="#tymethod.make_global" class="fn">make_global</a>(
+    &amp;mut self,
+    func: &amp;mut <a class="struct" href="../cranelift_codegen/ir/function/struct.Function.html" title="struct cranelift_codegen::ir::function::Function">Function</a>,
+    index: <a class="struct" href="struct.GlobalIndex.html" title="struct cranelift_wasm::GlobalIndex">GlobalIndex</a>,
+) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="enum" href="enum.GlobalVariable.html" title="enum cranelift_wasm::GlobalVariable">GlobalVariable</a>&gt;</h4></section></summary><div class="docblock"><p>Set up the necessary preamble definitions in <code>func</code> to access the global variable
+identified by <code>index</code>.</p>
+<p>The index space covers both imported globals and globals defined by the module.</p>
+<p>Return the global variable reference that should be used to access the global and the
+WebAssembly type of the global.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.heaps" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#135">source</a><h4 class="code-header">fn <a href="#tymethod.heaps" class="fn">heaps</a>(&amp;self) -&gt; &amp;<a class="struct" href="../cranelift_entity/primary/struct.PrimaryMap.html" title="struct cranelift_entity::primary::PrimaryMap">PrimaryMap</a>&lt;<a class="struct" href="struct.Heap.html" title="struct cranelift_wasm::Heap">Heap</a>, <a class="struct" href="struct.HeapData.html" title="struct cranelift_wasm::HeapData">HeapData</a>&gt;</h4></section></summary><div class="docblock"><p>Get the heaps for this function environment.</p>
+<p>The returned map should provide heap format details (encoded in
+<code>HeapData</code>) for each <code>Heap</code> that was previously returned by
+<code>make_heap()</code>. The translator will first call make_heap for each Wasm
+memory, and then later when translating code, will invoke <code>heaps()</code> to
+learn how to access the environment’s implementation of each memory.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.make_heap" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#141">source</a><h4 class="code-header">fn <a href="#tymethod.make_heap" class="fn">make_heap</a>(
+    &amp;mut self,
+    func: &amp;mut <a class="struct" href="../cranelift_codegen/ir/function/struct.Function.html" title="struct cranelift_codegen::ir::function::Function">Function</a>,
+    index: <a class="struct" href="struct.MemoryIndex.html" title="struct cranelift_wasm::MemoryIndex">MemoryIndex</a>,
+) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="struct" href="struct.Heap.html" title="struct cranelift_wasm::Heap">Heap</a>&gt;</h4></section></summary><div class="docblock"><p>Set up the necessary preamble definitions in <code>func</code> to access the linear memory identified
+by <code>index</code>.</p>
+<p>The index space covers both imported and locally declared memories.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.make_indirect_sig" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#152-156">source</a><h4 class="code-header">fn <a href="#tymethod.make_indirect_sig" class="fn">make_indirect_sig</a>(
+    &amp;mut self,
+    func: &amp;mut <a class="struct" href="../cranelift_codegen/ir/function/struct.Function.html" title="struct cranelift_codegen::ir::function::Function">Function</a>,
+    index: <a class="struct" href="struct.TypeIndex.html" title="struct cranelift_wasm::TypeIndex">TypeIndex</a>,
+) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="struct" href="../cranelift_codegen/ir/entities/struct.SigRef.html" title="struct cranelift_codegen::ir::entities::SigRef">SigRef</a>&gt;</h4></section></summary><div class="docblock"><p>Set up a signature definition in the preamble of <code>func</code> that can be used for an indirect
+call with signature <code>index</code>.</p>
+<p>The signature may contain additional arguments needed for an indirect call, but the
+arguments marked as <code>ArgumentPurpose::Normal</code> must correspond to the WebAssembly signature
+arguments.</p>
+<p>The signature will only be used for indirect calls, even if the module has direct function
+calls with the same WebAssembly type.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.make_direct_func" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#169-173">source</a><h4 class="code-header">fn <a href="#tymethod.make_direct_func" class="fn">make_direct_func</a>(
+    &amp;mut self,
+    func: &amp;mut <a class="struct" href="../cranelift_codegen/ir/function/struct.Function.html" title="struct cranelift_codegen::ir::function::Function">Function</a>,
+    index: <a class="struct" href="struct.FuncIndex.html" title="struct cranelift_wasm::FuncIndex">FuncIndex</a>,
+) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="struct" href="../cranelift_codegen/ir/entities/struct.FuncRef.html" title="struct cranelift_codegen::ir::entities::FuncRef">FuncRef</a>&gt;</h4></section></summary><div class="docblock"><p>Set up an external function definition in the preamble of <code>func</code> that can be used to
+directly call the function <code>index</code>.</p>
+<p>The index space covers both imported functions and functions defined in the current module.</p>
+<p>The function’s signature may contain additional arguments needed for a direct call, but the
+arguments marked as <code>ArgumentPurpose::Normal</code> must correspond to the WebAssembly signature
+arguments.</p>
+<p>The function’s signature will only be used for direct calls, even if the module has
+indirect calls with the same WebAssembly type.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.translate_call_indirect" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#203-211">source</a><h4 class="code-header">fn <a href="#tymethod.translate_call_indirect" class="fn">translate_call_indirect</a>(
+    &amp;mut self,
+    builder: &amp;mut <a class="struct" href="struct.FunctionBuilder.html" title="struct cranelift_wasm::FunctionBuilder">FunctionBuilder</a>&lt;'_&gt;,
+    table_index: <a class="struct" href="struct.TableIndex.html" title="struct cranelift_wasm::TableIndex">TableIndex</a>,
+    sig_index: <a class="struct" href="struct.TypeIndex.html" title="struct cranelift_wasm::TypeIndex">TypeIndex</a>,
+    sig_ref: <a class="struct" href="../cranelift_codegen/ir/entities/struct.SigRef.html" title="struct cranelift_codegen::ir::entities::SigRef">SigRef</a>,
+    callee: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+    call_args: &amp;[<a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>],
+) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../cranelift_codegen/ir/entities/struct.Inst.html" title="struct cranelift_codegen::ir::entities::Inst">Inst</a>&gt;&gt;</h4></section></summary><div class="docblock"><p>Translate a <code>call_indirect</code> WebAssembly instruction at <code>pos</code>.</p>
+<p>Insert instructions at <code>pos</code> for an indirect call to the function <code>callee</code> in the table
+<code>table_index</code> with WebAssembly signature <code>sig_index</code>. The <code>callee</code> value will have type
+<code>i32</code>.</p>
+<p>The signature <code>sig_ref</code> was previously created by <code>make_indirect_sig()</code>.</p>
+<p>Return the call instruction whose results are the WebAssembly return values.
+Returns <code>None</code> if this statically traps instead of creating a call
+instruction.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.translate_return_call_indirect" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#242-250">source</a><h4 class="code-header">fn <a href="#tymethod.translate_return_call_indirect" class="fn">translate_return_call_indirect</a>(
+    &amp;mut self,
+    builder: &amp;mut <a class="struct" href="struct.FunctionBuilder.html" title="struct cranelift_wasm::FunctionBuilder">FunctionBuilder</a>&lt;'_&gt;,
+    table_index: <a class="struct" href="struct.TableIndex.html" title="struct cranelift_wasm::TableIndex">TableIndex</a>,
+    sig_index: <a class="struct" href="struct.TypeIndex.html" title="struct cranelift_wasm::TypeIndex">TypeIndex</a>,
+    sig_ref: <a class="struct" href="../cranelift_codegen/ir/entities/struct.SigRef.html" title="struct cranelift_codegen::ir::entities::SigRef">SigRef</a>,
+    callee: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+    call_args: &amp;[<a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>],
+) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Translate a <code>return_call_indirect</code> WebAssembly instruction at the
+builder’s current position.</p>
+<p>Insert instructions at the builder’s current position for an indirect
+tail call to the function <code>callee</code> in the table <code>table_index</code> with
+WebAssembly signature <code>sig_index</code>. The <code>callee</code> value will have type
+<code>i32</code>.</p>
+<p>The signature <code>sig_ref</code> was previously created by <code>make_indirect_sig()</code>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.translate_return_call_ref" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#261-267">source</a><h4 class="code-header">fn <a href="#tymethod.translate_return_call_ref" class="fn">translate_return_call_ref</a>(
+    &amp;mut self,
+    builder: &amp;mut <a class="struct" href="struct.FunctionBuilder.html" title="struct cranelift_wasm::FunctionBuilder">FunctionBuilder</a>&lt;'_&gt;,
+    sig_ref: <a class="struct" href="../cranelift_codegen/ir/entities/struct.SigRef.html" title="struct cranelift_codegen::ir::entities::SigRef">SigRef</a>,
+    callee: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+    call_args: &amp;[<a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>],
+) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Translate a <code>return_call_ref</code> WebAssembly instruction at the builder’s
+given position.</p>
+<p>Insert instructions at the builder’s current position for an indirect
+tail call to the function <code>callee</code>. The <code>callee</code> value will be a Wasm
+funcref that may need to be translated to a native function address
+depending on your implementation of this trait.</p>
+<p>The signature <code>sig_ref</code> was previously created by <code>make_indirect_sig()</code>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.translate_call_ref" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#280-286">source</a><h4 class="code-header">fn <a href="#tymethod.translate_call_ref" class="fn">translate_call_ref</a>(
+    &amp;mut self,
+    builder: &amp;mut <a class="struct" href="struct.FunctionBuilder.html" title="struct cranelift_wasm::FunctionBuilder">FunctionBuilder</a>&lt;'_&gt;,
+    sig_ref: <a class="struct" href="../cranelift_codegen/ir/entities/struct.SigRef.html" title="struct cranelift_codegen::ir::entities::SigRef">SigRef</a>,
+    callee: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+    call_args: &amp;[<a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>],
+) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="struct" href="../cranelift_codegen/ir/entities/struct.Inst.html" title="struct cranelift_codegen::ir::entities::Inst">Inst</a>&gt;</h4></section></summary><div class="docblock"><p>Translate a <code>call_ref</code> WebAssembly instruction at the builder’s current
+position.</p>
+<p>Insert instructions at the builder’s current position for an indirect
+call to the function <code>callee</code>. The <code>callee</code> value will be a Wasm funcref
+that may need to be translated to a native function address depending on
+your implementation of this trait.</p>
+<p>The signature <code>sig_ref</code> was previously created by <code>make_indirect_sig()</code>.</p>
+<p>Return the call instruction whose results are the WebAssembly return values.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.translate_memory_grow" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#296-302">source</a><h4 class="code-header">fn <a href="#tymethod.translate_memory_grow" class="fn">translate_memory_grow</a>(
+    &amp;mut self,
+    pos: <a class="struct" href="../cranelift_codegen/cursor/struct.FuncCursor.html" title="struct cranelift_codegen::cursor::FuncCursor">FuncCursor</a>&lt;'_&gt;,
+    index: <a class="struct" href="struct.MemoryIndex.html" title="struct cranelift_wasm::MemoryIndex">MemoryIndex</a>,
+    heap: <a class="struct" href="struct.Heap.html" title="struct cranelift_wasm::Heap">Heap</a>,
+    val: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>&gt;</h4></section></summary><div class="docblock"><p>Translate a <code>memory.grow</code> WebAssembly instruction.</p>
+<p>The <code>index</code> provided identifies the linear memory to grow, and <code>heap</code> is the heap reference
+returned by <code>make_heap</code> for the same index.</p>
+<p>The <code>val</code> value is the requested memory size in pages.</p>
+<p>Returns the old size (in pages) of the memory.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.translate_memory_size" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#310-315">source</a><h4 class="code-header">fn <a href="#tymethod.translate_memory_size" class="fn">translate_memory_size</a>(
+    &amp;mut self,
+    pos: <a class="struct" href="../cranelift_codegen/cursor/struct.FuncCursor.html" title="struct cranelift_codegen::cursor::FuncCursor">FuncCursor</a>&lt;'_&gt;,
+    index: <a class="struct" href="struct.MemoryIndex.html" title="struct cranelift_wasm::MemoryIndex">MemoryIndex</a>,
+    heap: <a class="struct" href="struct.Heap.html" title="struct cranelift_wasm::Heap">Heap</a>,
+) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>&gt;</h4></section></summary><div class="docblock"><p>Translates a <code>memory.size</code> WebAssembly instruction.</p>
+<p>The <code>index</code> provided identifies the linear memory to query, and <code>heap</code> is the heap reference
+returned by <code>make_heap</code> for the same index.</p>
+<p>Returns the size in pages of the memory.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.translate_memory_copy" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#321-331">source</a><h4 class="code-header">fn <a href="#tymethod.translate_memory_copy" class="fn">translate_memory_copy</a>(
+    &amp;mut self,
+    pos: <a class="struct" href="../cranelift_codegen/cursor/struct.FuncCursor.html" title="struct cranelift_codegen::cursor::FuncCursor">FuncCursor</a>&lt;'_&gt;,
+    src_index: <a class="struct" href="struct.MemoryIndex.html" title="struct cranelift_wasm::MemoryIndex">MemoryIndex</a>,
+    src_heap: <a class="struct" href="struct.Heap.html" title="struct cranelift_wasm::Heap">Heap</a>,
+    dst_index: <a class="struct" href="struct.MemoryIndex.html" title="struct cranelift_wasm::MemoryIndex">MemoryIndex</a>,
+    dst_heap: <a class="struct" href="struct.Heap.html" title="struct cranelift_wasm::Heap">Heap</a>,
+    dst: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+    src: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+    len: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Translate a <code>memory.copy</code> WebAssembly instruction.</p>
+<p>The <code>index</code> provided identifies the linear memory to query, and <code>heap</code> is the heap reference
+returned by <code>make_heap</code> for the same index.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.translate_memory_fill" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#337-345">source</a><h4 class="code-header">fn <a href="#tymethod.translate_memory_fill" class="fn">translate_memory_fill</a>(
+    &amp;mut self,
+    pos: <a class="struct" href="../cranelift_codegen/cursor/struct.FuncCursor.html" title="struct cranelift_codegen::cursor::FuncCursor">FuncCursor</a>&lt;'_&gt;,
+    index: <a class="struct" href="struct.MemoryIndex.html" title="struct cranelift_wasm::MemoryIndex">MemoryIndex</a>,
+    heap: <a class="struct" href="struct.Heap.html" title="struct cranelift_wasm::Heap">Heap</a>,
+    dst: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+    val: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+    len: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Translate a <code>memory.fill</code> WebAssembly instruction.</p>
+<p>The <code>index</code> provided identifies the linear memory to query, and <code>heap</code> is the heap reference
+returned by <code>make_heap</code> for the same index.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.translate_memory_init" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#352-361">source</a><h4 class="code-header">fn <a href="#tymethod.translate_memory_init" class="fn">translate_memory_init</a>(
+    &amp;mut self,
+    pos: <a class="struct" href="../cranelift_codegen/cursor/struct.FuncCursor.html" title="struct cranelift_codegen::cursor::FuncCursor">FuncCursor</a>&lt;'_&gt;,
+    index: <a class="struct" href="struct.MemoryIndex.html" title="struct cranelift_wasm::MemoryIndex">MemoryIndex</a>,
+    heap: <a class="struct" href="struct.Heap.html" title="struct cranelift_wasm::Heap">Heap</a>,
+    seg_index: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>,
+    dst: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+    src: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+    len: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Translate a <code>memory.init</code> WebAssembly instruction.</p>
+<p>The <code>index</code> provided identifies the linear memory to query, and <code>heap</code> is the heap reference
+returned by <code>make_heap</code> for the same index. <code>seg_index</code> is the index of the segment to copy
+from.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.translate_data_drop" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#364">source</a><h4 class="code-header">fn <a href="#tymethod.translate_data_drop" class="fn">translate_data_drop</a>(
+    &amp;mut self,
+    pos: <a class="struct" href="../cranelift_codegen/cursor/struct.FuncCursor.html" title="struct cranelift_codegen::cursor::FuncCursor">FuncCursor</a>&lt;'_&gt;,
+    seg_index: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>,
+) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Translate a <code>data.drop</code> WebAssembly instruction.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.translate_table_size" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#367-368">source</a><h4 class="code-header">fn <a href="#tymethod.translate_table_size" class="fn">translate_table_size</a>(
+    &amp;mut self,
+    pos: <a class="struct" href="../cranelift_codegen/cursor/struct.FuncCursor.html" title="struct cranelift_codegen::cursor::FuncCursor">FuncCursor</a>&lt;'_&gt;,
+    index: <a class="struct" href="struct.TableIndex.html" title="struct cranelift_wasm::TableIndex">TableIndex</a>,
+) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>&gt;</h4></section></summary><div class="docblock"><p>Translate a <code>table.size</code> WebAssembly instruction.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.translate_table_grow" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#371-377">source</a><h4 class="code-header">fn <a href="#tymethod.translate_table_grow" class="fn">translate_table_grow</a>(
+    &amp;mut self,
+    pos: <a class="struct" href="../cranelift_codegen/cursor/struct.FuncCursor.html" title="struct cranelift_codegen::cursor::FuncCursor">FuncCursor</a>&lt;'_&gt;,
+    table_index: <a class="struct" href="struct.TableIndex.html" title="struct cranelift_wasm::TableIndex">TableIndex</a>,
+    delta: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+    init_value: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>&gt;</h4></section></summary><div class="docblock"><p>Translate a <code>table.grow</code> WebAssembly instruction.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.translate_table_get" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#380-385">source</a><h4 class="code-header">fn <a href="#tymethod.translate_table_get" class="fn">translate_table_get</a>(
+    &amp;mut self,
+    builder: &amp;mut <a class="struct" href="struct.FunctionBuilder.html" title="struct cranelift_wasm::FunctionBuilder">FunctionBuilder</a>&lt;'_&gt;,
+    table_index: <a class="struct" href="struct.TableIndex.html" title="struct cranelift_wasm::TableIndex">TableIndex</a>,
+    index: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>&gt;</h4></section></summary><div class="docblock"><p>Translate a <code>table.get</code> WebAssembly instruction.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.translate_table_set" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#388-394">source</a><h4 class="code-header">fn <a href="#tymethod.translate_table_set" class="fn">translate_table_set</a>(
+    &amp;mut self,
+    builder: &amp;mut <a class="struct" href="struct.FunctionBuilder.html" title="struct cranelift_wasm::FunctionBuilder">FunctionBuilder</a>&lt;'_&gt;,
+    table_index: <a class="struct" href="struct.TableIndex.html" title="struct cranelift_wasm::TableIndex">TableIndex</a>,
+    value: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+    index: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Translate a <code>table.set</code> WebAssembly instruction.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.translate_table_copy" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#397-405">source</a><h4 class="code-header">fn <a href="#tymethod.translate_table_copy" class="fn">translate_table_copy</a>(
+    &amp;mut self,
+    pos: <a class="struct" href="../cranelift_codegen/cursor/struct.FuncCursor.html" title="struct cranelift_codegen::cursor::FuncCursor">FuncCursor</a>&lt;'_&gt;,
+    dst_table_index: <a class="struct" href="struct.TableIndex.html" title="struct cranelift_wasm::TableIndex">TableIndex</a>,
+    src_table_index: <a class="struct" href="struct.TableIndex.html" title="struct cranelift_wasm::TableIndex">TableIndex</a>,
+    dst: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+    src: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+    len: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Translate a <code>table.copy</code> WebAssembly instruction.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.translate_table_fill" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#408-415">source</a><h4 class="code-header">fn <a href="#tymethod.translate_table_fill" class="fn">translate_table_fill</a>(
+    &amp;mut self,
+    pos: <a class="struct" href="../cranelift_codegen/cursor/struct.FuncCursor.html" title="struct cranelift_codegen::cursor::FuncCursor">FuncCursor</a>&lt;'_&gt;,
+    table_index: <a class="struct" href="struct.TableIndex.html" title="struct cranelift_wasm::TableIndex">TableIndex</a>,
+    dst: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+    val: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+    len: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Translate a <code>table.fill</code> WebAssembly instruction.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.translate_table_init" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#418-426">source</a><h4 class="code-header">fn <a href="#tymethod.translate_table_init" class="fn">translate_table_init</a>(
+    &amp;mut self,
+    pos: <a class="struct" href="../cranelift_codegen/cursor/struct.FuncCursor.html" title="struct cranelift_codegen::cursor::FuncCursor">FuncCursor</a>&lt;'_&gt;,
+    seg_index: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>,
+    table_index: <a class="struct" href="struct.TableIndex.html" title="struct cranelift_wasm::TableIndex">TableIndex</a>,
+    dst: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+    src: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+    len: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Translate a <code>table.init</code> WebAssembly instruction.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.translate_elem_drop" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#429">source</a><h4 class="code-header">fn <a href="#tymethod.translate_elem_drop" class="fn">translate_elem_drop</a>(
+    &amp;mut self,
+    pos: <a class="struct" href="../cranelift_codegen/cursor/struct.FuncCursor.html" title="struct cranelift_codegen::cursor::FuncCursor">FuncCursor</a>&lt;'_&gt;,
+    seg_index: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>,
+) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Translate a <code>elem.drop</code> WebAssembly instruction.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.translate_ref_null" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#432">source</a><h4 class="code-header">fn <a href="#tymethod.translate_ref_null" class="fn">translate_ref_null</a>(
+    &amp;mut self,
+    pos: <a class="struct" href="../cranelift_codegen/cursor/struct.FuncCursor.html" title="struct cranelift_codegen::cursor::FuncCursor">FuncCursor</a>&lt;'_&gt;,
+    ty: <a class="enum" href="enum.WasmHeapType.html" title="enum cranelift_wasm::WasmHeapType">WasmHeapType</a>,
+) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>&gt;</h4></section></summary><div class="docblock"><p>Translate a <code>ref.null T</code> WebAssembly instruction.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.translate_ref_is_null" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#435-436">source</a><h4 class="code-header">fn <a href="#tymethod.translate_ref_is_null" class="fn">translate_ref_is_null</a>(
+    &amp;mut self,
+    pos: <a class="struct" href="../cranelift_codegen/cursor/struct.FuncCursor.html" title="struct cranelift_codegen::cursor::FuncCursor">FuncCursor</a>&lt;'_&gt;,
+    value: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>&gt;</h4></section></summary><div class="docblock"><p>Translate a <code>ref.is_null</code> WebAssembly instruction.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.translate_ref_func" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#439-443">source</a><h4 class="code-header">fn <a href="#tymethod.translate_ref_func" class="fn">translate_ref_func</a>(
+    &amp;mut self,
+    pos: <a class="struct" href="../cranelift_codegen/cursor/struct.FuncCursor.html" title="struct cranelift_codegen::cursor::FuncCursor">FuncCursor</a>&lt;'_&gt;,
+    func_index: <a class="struct" href="struct.FuncIndex.html" title="struct cranelift_wasm::FuncIndex">FuncIndex</a>,
+) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>&gt;</h4></section></summary><div class="docblock"><p>Translate a <code>ref.func</code> WebAssembly instruction.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.translate_custom_global_get" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#447-451">source</a><h4 class="code-header">fn <a href="#tymethod.translate_custom_global_get" class="fn">translate_custom_global_get</a>(
+    &amp;mut self,
+    builder: &amp;mut <a class="struct" href="struct.FunctionBuilder.html" title="struct cranelift_wasm::FunctionBuilder">FunctionBuilder</a>&lt;'_&gt;,
+    global_index: <a class="struct" href="struct.GlobalIndex.html" title="struct cranelift_wasm::GlobalIndex">GlobalIndex</a>,
+) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>&gt;</h4></section></summary><div class="docblock"><p>Translate a <code>global.get</code> WebAssembly instruction at <code>pos</code> for a global
+that is custom.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.translate_custom_global_set" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#455-460">source</a><h4 class="code-header">fn <a href="#tymethod.translate_custom_global_set" class="fn">translate_custom_global_set</a>(
+    &amp;mut self,
+    builder: &amp;mut <a class="struct" href="struct.FunctionBuilder.html" title="struct cranelift_wasm::FunctionBuilder">FunctionBuilder</a>&lt;'_&gt;,
+    global_index: <a class="struct" href="struct.GlobalIndex.html" title="struct cranelift_wasm::GlobalIndex">GlobalIndex</a>,
+    val: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Translate a <code>global.set</code> WebAssembly instruction at <code>pos</code> for a global
+that is custom.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.translate_atomic_wait" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#473-481">source</a><h4 class="code-header">fn <a href="#tymethod.translate_atomic_wait" class="fn">translate_atomic_wait</a>(
+    &amp;mut self,
+    pos: <a class="struct" href="../cranelift_codegen/cursor/struct.FuncCursor.html" title="struct cranelift_codegen::cursor::FuncCursor">FuncCursor</a>&lt;'_&gt;,
+    index: <a class="struct" href="struct.MemoryIndex.html" title="struct cranelift_wasm::MemoryIndex">MemoryIndex</a>,
+    heap: <a class="struct" href="struct.Heap.html" title="struct cranelift_wasm::Heap">Heap</a>,
+    addr: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+    expected: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+    timeout: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>&gt;</h4></section></summary><div class="docblock"><p>Translate an <code>i32.atomic.wait</code> or <code>i64.atomic.wait</code> WebAssembly instruction.
+The <code>index</code> provided identifies the linear memory containing the value
+to wait on, and <code>heap</code> is the heap reference returned by <code>make_heap</code>
+for the same index.  Whether the waited-on value is 32- or 64-bit can be
+determined by examining the type of <code>expected</code>, which must be only I32 or I64.</p>
+<p>Note that the <code>addr</code> here is the host linear memory address rather
+than a relative wasm linear memory address. The type of this value is
+the same as the host’s pointer.</p>
+<p>Returns an i32, which is negative if the helper call failed.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.translate_atomic_notify" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#493-500">source</a><h4 class="code-header">fn <a href="#tymethod.translate_atomic_notify" class="fn">translate_atomic_notify</a>(
+    &amp;mut self,
+    pos: <a class="struct" href="../cranelift_codegen/cursor/struct.FuncCursor.html" title="struct cranelift_codegen::cursor::FuncCursor">FuncCursor</a>&lt;'_&gt;,
+    index: <a class="struct" href="struct.MemoryIndex.html" title="struct cranelift_wasm::MemoryIndex">MemoryIndex</a>,
+    heap: <a class="struct" href="struct.Heap.html" title="struct cranelift_wasm::Heap">Heap</a>,
+    addr: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+    count: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>&gt;</h4></section></summary><div class="docblock"><p>Translate an <code>atomic.notify</code> WebAssembly instruction.
+The <code>index</code> provided identifies the linear memory containing the value
+to wait on, and <code>heap</code> is the heap reference returned by <code>make_heap</code>
+for the same index.</p>
+<p>Note that the <code>addr</code> here is the host linear memory address rather
+than a relative wasm linear memory address. The type of this value is
+the same as the host’s pointer.</p>
+<p>Returns an i64, which is negative if the helper call failed.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.translate_ref_i31" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#503">source</a><h4 class="code-header">fn <a href="#tymethod.translate_ref_i31" class="fn">translate_ref_i31</a>(
+    &amp;mut self,
+    pos: <a class="struct" href="../cranelift_codegen/cursor/struct.FuncCursor.html" title="struct cranelift_codegen::cursor::FuncCursor">FuncCursor</a>&lt;'_&gt;,
+    val: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>&gt;</h4></section></summary><div class="docblock"><p>Translate an <code>i32</code> value into an <code>i31ref</code>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.translate_i31_get_s" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#506">source</a><h4 class="code-header">fn <a href="#tymethod.translate_i31_get_s" class="fn">translate_i31_get_s</a>(
+    &amp;mut self,
+    pos: <a class="struct" href="../cranelift_codegen/cursor/struct.FuncCursor.html" title="struct cranelift_codegen::cursor::FuncCursor">FuncCursor</a>&lt;'_&gt;,
+    i31ref: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>&gt;</h4></section></summary><div class="docblock"><p>Sign-extend an <code>i31ref</code> into an <code>i32</code>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.translate_i31_get_u" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#509">source</a><h4 class="code-header">fn <a href="#tymethod.translate_i31_get_u" class="fn">translate_i31_get_u</a>(
+    &amp;mut self,
+    pos: <a class="struct" href="../cranelift_codegen/cursor/struct.FuncCursor.html" title="struct cranelift_codegen::cursor::FuncCursor">FuncCursor</a>&lt;'_&gt;,
+    i31ref: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>&gt;</h4></section></summary><div class="docblock"><p>Zero-extend an <code>i31ref</code> into an <code>i32</code>.</p>
+</div></details></div><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.is_wasm_parameter" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#85-87">source</a><h4 class="code-header">fn <a href="#method.is_wasm_parameter" class="fn">is_wasm_parameter</a>(&amp;self, signature: &amp;<a class="struct" href="../cranelift_codegen/ir/extfunc/struct.Signature.html" title="struct cranelift_codegen::ir::extfunc::Signature">Signature</a>, index: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Is the given parameter of the given function a wasm-level parameter, as opposed to a hidden
+parameter added for use by the implementation?</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.is_wasm_return" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#105-107">source</a><h4 class="code-header">fn <a href="#method.is_wasm_return" class="fn">is_wasm_return</a>(&amp;self, signature: &amp;<a class="struct" href="../cranelift_codegen/ir/extfunc/struct.Signature.html" title="struct cranelift_codegen::ir::extfunc::Signature">Signature</a>, index: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Is the given return of the given function a wasm-level parameter, as
+opposed to a hidden parameter added for use by the implementation?</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.after_locals" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#111-113">source</a><h4 class="code-header">fn <a href="#method.after_locals" class="fn">after_locals</a>(&amp;mut self, num_locals_defined: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>)</h4></section></summary><div class="docblock"><p>Called after the locals for a function have been parsed, and the number
+of variables defined by this function is provided.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.translate_call" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#182-190">source</a><h4 class="code-header">fn <a href="#method.translate_call" class="fn">translate_call</a>(
+    &amp;mut self,
+    builder: &amp;mut <a class="struct" href="struct.FunctionBuilder.html" title="struct cranelift_wasm::FunctionBuilder">FunctionBuilder</a>&lt;'_&gt;,
+    _callee_index: <a class="struct" href="struct.FuncIndex.html" title="struct cranelift_wasm::FuncIndex">FuncIndex</a>,
+    callee: <a class="struct" href="../cranelift_codegen/ir/entities/struct.FuncRef.html" title="struct cranelift_codegen::ir::entities::FuncRef">FuncRef</a>,
+    call_args: &amp;[<a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>],
+) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="struct" href="../cranelift_codegen/ir/entities/struct.Inst.html" title="struct cranelift_codegen::ir::entities::Inst">Inst</a>&gt;</h4></section></summary><div class="docblock"><p>Translate a <code>call</code> WebAssembly instruction at <code>pos</code>.</p>
+<p>Insert instructions at <code>pos</code> for a direct call to the function <code>callee_index</code>.</p>
+<p>The function reference <code>callee</code> was previously created by <code>make_direct_func()</code>.</p>
+<p>Return the call instruction whose results are the WebAssembly return values.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.translate_return_call" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#222-231">source</a><h4 class="code-header">fn <a href="#method.translate_return_call" class="fn">translate_return_call</a>(
+    &amp;mut self,
+    builder: &amp;mut <a class="struct" href="struct.FunctionBuilder.html" title="struct cranelift_wasm::FunctionBuilder">FunctionBuilder</a>&lt;'_&gt;,
+    _callee_index: <a class="struct" href="struct.FuncIndex.html" title="struct cranelift_wasm::FuncIndex">FuncIndex</a>,
+    callee: <a class="struct" href="../cranelift_codegen/ir/entities/struct.FuncRef.html" title="struct cranelift_codegen::ir::entities::FuncRef">FuncRef</a>,
+    call_args: &amp;[<a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>],
+) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Translate a <code>return_call</code> WebAssembly instruction at the builder’s
+current position.</p>
+<p>Insert instructions at the builder’s current position for a direct tail
+call to the function <code>callee_index</code>.</p>
+<p>The function reference <code>callee</code> was previously created by <code>make_direct_func()</code>.</p>
+<p>Return the call instruction whose results are the WebAssembly return values.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.translate_loop_header" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#515-518">source</a><h4 class="code-header">fn <a href="#method.translate_loop_header" class="fn">translate_loop_header</a>(
+    &amp;mut self,
+    _builder: &amp;mut <a class="struct" href="struct.FunctionBuilder.html" title="struct cranelift_wasm::FunctionBuilder">FunctionBuilder</a>&lt;'_&gt;,
+) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Emit code at the beginning of every wasm loop.</p>
+<p>This can be used to insert explicit interrupt or safepoint checking at
+the beginnings of loops.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.before_translate_operator" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#522-529">source</a><h4 class="code-header">fn <a href="#method.before_translate_operator" class="fn">before_translate_operator</a>(
+    &amp;mut self,
+    _op: &amp;<a class="enum" href="wasmparser/enum.Operator.html" title="enum cranelift_wasm::wasmparser::Operator">Operator</a>&lt;'_&gt;,
+    _builder: &amp;mut <a class="struct" href="struct.FunctionBuilder.html" title="struct cranelift_wasm::FunctionBuilder">FunctionBuilder</a>&lt;'_&gt;,
+    _state: &amp;<a class="struct" href="struct.FuncTranslationState.html" title="struct cranelift_wasm::FuncTranslationState">FuncTranslationState</a>,
+) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Optional callback for the <code>FunctionEnvironment</code> performing this translation to maintain
+internal state or prepare custom state for the operator to translate</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.after_translate_operator" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#533-540">source</a><h4 class="code-header">fn <a href="#method.after_translate_operator" class="fn">after_translate_operator</a>(
+    &amp;mut self,
+    _op: &amp;<a class="enum" href="wasmparser/enum.Operator.html" title="enum cranelift_wasm::wasmparser::Operator">Operator</a>&lt;'_&gt;,
+    _builder: &amp;mut <a class="struct" href="struct.FunctionBuilder.html" title="struct cranelift_wasm::FunctionBuilder">FunctionBuilder</a>&lt;'_&gt;,
+    _state: &amp;<a class="struct" href="struct.FuncTranslationState.html" title="struct cranelift_wasm::FuncTranslationState">FuncTranslationState</a>,
+) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Optional callback for the <code>FunctionEnvironment</code> performing this translation to maintain
+internal state or finalize custom state for the operator that was translated</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.before_unconditionally_trapping_memory_access" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#547-552">source</a><h4 class="code-header">fn <a href="#method.before_unconditionally_trapping_memory_access" class="fn">before_unconditionally_trapping_memory_access</a>(
+    &amp;mut self,
+    _builder: &amp;mut <a class="struct" href="struct.FunctionBuilder.html" title="struct cranelift_wasm::FunctionBuilder">FunctionBuilder</a>&lt;'_&gt;,
+) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Optional callback for the <code>FuncEnvironment</code> performing this translation
+to maintain, prepare, or finalize custom, internal state when we
+statically determine that a Wasm memory access will unconditionally
+trap, rendering the rest of the block unreachable. Called just before
+the unconditional trap is emitted.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.before_translate_function" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#556-562">source</a><h4 class="code-header">fn <a href="#method.before_translate_function" class="fn">before_translate_function</a>(
+    &amp;mut self,
+    _builder: &amp;mut <a class="struct" href="struct.FunctionBuilder.html" title="struct cranelift_wasm::FunctionBuilder">FunctionBuilder</a>&lt;'_&gt;,
+    _state: &amp;<a class="struct" href="struct.FuncTranslationState.html" title="struct cranelift_wasm::FuncTranslationState">FuncTranslationState</a>,
+) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Optional callback for the <code>FunctionEnvironment</code> performing this translation to perform work
+before the function body is translated.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.after_translate_function" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#566-572">source</a><h4 class="code-header">fn <a href="#method.after_translate_function" class="fn">after_translate_function</a>(
+    &amp;mut self,
+    _builder: &amp;mut <a class="struct" href="struct.FunctionBuilder.html" title="struct cranelift_wasm::FunctionBuilder">FunctionBuilder</a>&lt;'_&gt;,
+    _state: &amp;<a class="struct" href="struct.FuncTranslationState.html" title="struct cranelift_wasm::FuncTranslationState">FuncTranslationState</a>,
+) -&gt; <a class="type" href="type.WasmResult.html" title="type cranelift_wasm::WasmResult">WasmResult</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Optional callback for the <code>FunctionEnvironment</code> performing this translation to perform work
+after the function body is translated.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.relaxed_simd_deterministic" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#577-579">source</a><h4 class="code-header">fn <a href="#method.relaxed_simd_deterministic" class="fn">relaxed_simd_deterministic</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Whether or not to force relaxed simd instructions to have deterministic
+lowerings meaning they will produce the same results across all hosts,
+regardless of the cost to performance.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.has_native_fma" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#585-587">source</a><h4 class="code-header">fn <a href="#method.has_native_fma" class="fn">has_native_fma</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Whether or not the target being translated for has a native fma
+instruction. If it does not then when relaxed simd isn’t deterministic
+the translation of the <code>f32x4.relaxed_fma</code> instruction, for example,
+will do a multiplication and then an add instead of the fused version.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.is_x86" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#591-593">source</a><h4 class="code-header">fn <a href="#method.is_x86" class="fn">is_x86</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns whether this is an x86 target, which may alter lowerings of
+relaxed simd instructions.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.use_x86_blendv_for_relaxed_laneselect" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#597-600">source</a><h4 class="code-header">fn <a href="#method.use_x86_blendv_for_relaxed_laneselect" class="fn">use_x86_blendv_for_relaxed_laneselect</a>(&amp;self, ty: <a class="struct" href="../cranelift_codegen/ir/types/struct.Type.html" title="struct cranelift_codegen::ir::types::Type">Type</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns whether the CLIF <code>x86_blendv</code> instruction should be used for the
+relaxed simd <code>*.relaxed_laneselect</code> instruction for the specified type.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.use_x86_pshufb_for_relaxed_swizzle" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#604-606">source</a><h4 class="code-header">fn <a href="#method.use_x86_pshufb_for_relaxed_swizzle" class="fn">use_x86_pshufb_for_relaxed_swizzle</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns whether the CLIF <code>x86_pshufb</code> instruction should be used for the
+<code>i8x16.relaxed_swizzle</code> instruction.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.use_x86_pmulhrsw_for_relaxed_q15mul" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#610-612">source</a><h4 class="code-header">fn <a href="#method.use_x86_pmulhrsw_for_relaxed_q15mul" class="fn">use_x86_pmulhrsw_for_relaxed_q15mul</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns whether the CLIF <code>x86_pmulhrsw</code> instruction should be used for
+the <code>i8x16.relaxed_q15mulr_s</code> instruction.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.use_x86_pmaddubsw_for_dot" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#616-618">source</a><h4 class="code-header">fn <a href="#method.use_x86_pmaddubsw_for_dot" class="fn">use_x86_pmaddubsw_for_dot</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns whether the CLIF <code>x86_pmaddubsw</code> instruction should be used for
+the relaxed-simd dot-product instructions instruction.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.handle_before_return" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#621">source</a><h4 class="code-header">fn <a href="#method.handle_before_return" class="fn">handle_before_return</a>(
+    &amp;mut self,
+    _retvals: &amp;[<a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>],
+    _builder: &amp;mut <a class="struct" href="struct.FunctionBuilder.html" title="struct cranelift_wasm::FunctionBuilder">FunctionBuilder</a>&lt;'_&gt;,
+)</h4></section></summary><div class="docblock"><p>Inserts code before a function return.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.before_load" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#624-631">source</a><h4 class="code-header">fn <a href="#method.before_load" class="fn">before_load</a>(
+    &amp;mut self,
+    _builder: &amp;mut <a class="struct" href="struct.FunctionBuilder.html" title="struct cranelift_wasm::FunctionBuilder">FunctionBuilder</a>&lt;'_&gt;,
+    _val_size: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>,
+    _addr: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+    _offset: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>,
+)</h4></section></summary><div class="docblock"><p>Inserts code before a load.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.before_store" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#634-641">source</a><h4 class="code-header">fn <a href="#method.before_store" class="fn">before_store</a>(
+    &amp;mut self,
+    _builder: &amp;mut <a class="struct" href="struct.FunctionBuilder.html" title="struct cranelift_wasm::FunctionBuilder">FunctionBuilder</a>&lt;'_&gt;,
+    _val_size: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>,
+    _addr: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+    _offset: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>,
+)</h4></section></summary><div class="docblock"><p>Inserts code before a store.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.update_global" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#644-650">source</a><h4 class="code-header">fn <a href="#method.update_global" class="fn">update_global</a>(
+    &amp;mut self,
+    _builder: &amp;mut <a class="struct" href="struct.FunctionBuilder.html" title="struct cranelift_wasm::FunctionBuilder">FunctionBuilder</a>&lt;'_&gt;,
+    _global_index: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>,
+    _value: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+)</h4></section></summary><div class="docblock"><p>Inserts code before updating a global.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.before_memory_grow" class="method"><a class="src rightside" href="../src/cranelift_wasm/environ/spec.rs.html#653-659">source</a><h4 class="code-header">fn <a href="#method.before_memory_grow" class="fn">before_memory_grow</a>(
+    &amp;mut self,
+    _builder: &amp;mut <a class="struct" href="struct.FunctionBuilder.html" title="struct cranelift_wasm::FunctionBuilder">FunctionBuilder</a>&lt;'_&gt;,
+    _num_bytes: <a class="struct" href="../cranelift_codegen/ir/entities/struct.Value.html" title="struct cranelift_codegen::ir::entities::Value">Value</a>,
+    _mem_index: <a class="struct" href="struct.MemoryIndex.html" title="struct cranelift_wasm::MemoryIndex">MemoryIndex</a>,
+)</h4></section></summary><div class="docblock"><p>Inserts code before memory.grow.</p>
+</div></details></div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"></div><script src="../trait.impl/cranelift_wasm/environ/spec/trait.FuncEnvironment.js" async></script></section></div></main></body></html>

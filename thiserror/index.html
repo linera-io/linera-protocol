@@ -1,0 +1,175 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="github crates-io docs-rs"><title>thiserror - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="thiserror" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../thiserror/index.html">thiserror</a><span class="version">1.0.65</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#derives">Derive Macros</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">thiserror</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/thiserror/lib.rs.html#1-290">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><a href="https://github.com/dtolnay/thiserror"><img src="https://img.shields.io/badge/github-8da0cb?style=for-the-badge&amp;labelColor=555555&amp;logo=github" alt="github" /></a> <a href="https://crates.io/crates/thiserror"><img src="https://img.shields.io/badge/crates.io-fc8d62?style=for-the-badge&amp;labelColor=555555&amp;logo=rust" alt="crates-io" /></a> <a href="https://docs.rs/thiserror"><img src="https://img.shields.io/badge/docs.rs-66c2a5?style=for-the-badge&amp;labelColor=555555&amp;logo=docs.rs" alt="docs-rs" /></a></p>
+<br>
+<p>This library provides a convenient derive macro for the standard library’s
+<a href="https://doc.rust-lang.org/std/error/trait.Error.html"><code>std::error::Error</code></a> trait.</p>
+<br>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>thiserror::Error;
+
+<span class="attr">#[derive(Error, Debug)]
+</span><span class="kw">pub enum </span>DataStoreError {
+    <span class="attr">#[error(<span class="string">"data store disconnected"</span>)]
+    </span>Disconnect(<span class="attr">#[from] </span>io::Error),
+    <span class="attr">#[error(<span class="string">"the data for key `{0}` is not available"</span>)]
+    </span>Redaction(String),
+    <span class="attr">#[error(<span class="string">"invalid header (expected {expected:?}, found {found:?})"</span>)]
+    </span>InvalidHeader {
+        expected: String,
+        found: String,
+    },
+    <span class="attr">#[error(<span class="string">"unknown data store error"</span>)]
+    </span>Unknown,
+}</code></pre></div>
+<br>
+<h2 id="details"><a class="doc-anchor" href="#details">§</a>Details</h2>
+<ul>
+<li>
+<p>Thiserror deliberately does not appear in your public API. You get the
+same thing as if you had written an implementation of <code>std::error::Error</code>
+by hand, and switching from handwritten impls to thiserror or vice versa
+is not a breaking change.</p>
+</li>
+<li>
+<p>Errors may be enums, structs with named fields, tuple structs, or unit
+structs.</p>
+</li>
+<li>
+<p>A <code>Display</code> impl is generated for your error if you provide
+<code>#[error("...")]</code> messages on the struct or each variant of your enum, as
+shown above in the example.</p>
+<p>The messages support a shorthand for interpolating fields from the error.</p>
+<ul>
+<li><code>#[error("{var}")]</code> ⟶ <code>write!("{}", self.var)</code></li>
+<li><code>#[error("{0}")]</code> ⟶ <code>write!("{}", self.0)</code></li>
+<li><code>#[error("{var:?}")]</code> ⟶ <code>write!("{:?}", self.var)</code></li>
+<li><code>#[error("{0:?}")]</code> ⟶ <code>write!("{:?}", self.0)</code></li>
+</ul>
+<p>These shorthands can be used together with any additional format args,
+which may be arbitrary expressions. For example:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Error, Debug)]
+</span><span class="kw">pub enum </span>Error {
+    <span class="attr">#[error(<span class="string">"invalid rdo_lookahead_frames {0} (expected &lt; {})"</span>, i32::MAX)]
+    </span>InvalidLookahead(u32),
+}</code></pre></div>
+<p>If one of the additional expression arguments needs to refer to a field of
+the struct or enum, then refer to named fields as <code>.var</code> and tuple fields
+as <code>.0</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Error, Debug)]
+</span><span class="kw">pub enum </span>Error {
+    <span class="attr">#[error(<span class="string">"first letter must be lowercase but was {:?}"</span>, first_char(.<span class="number">0</span>))]
+    </span>WrongCase(String),
+    <span class="attr">#[error(<span class="string">"invalid index {idx}, expected at least {} and at most {}"</span>, .limits.lo, .limits.hi)]
+    </span>OutOfBounds { idx: usize, limits: Limits },
+}</code></pre></div>
+</li>
+<li>
+<p>A <code>From</code> impl is generated for each variant that contains a <code>#[from]</code>
+attribute.</p>
+<p>The variant using <code>#[from]</code> must not contain any other fields beyond the
+source error (and possibly a backtrace — see below). Usually
+<code>#[from]</code> fields are unnamed, but <code>#[from]</code> is allowed on a named field
+too.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Error, Debug)]
+</span><span class="kw">pub enum </span>MyError {
+    Io(<span class="attr">#[from] </span>io::Error),
+    Glob(<span class="attr">#[from] </span>globset::Error),
+}</code></pre></div>
+</li>
+<li>
+<p>The Error trait’s <code>source()</code> method is implemented to return whichever
+field has a <code>#[source]</code> attribute or is named <code>source</code>, if any. This is
+for identifying the underlying lower level error that caused your error.</p>
+<p>The <code>#[from]</code> attribute always implies that the same field is <code>#[source]</code>,
+so you don’t ever need to specify both attributes.</p>
+<p>Any error type that implements <code>std::error::Error</code> or dereferences to <code>dyn std::error::Error</code> will work as a source.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Error, Debug)]
+</span><span class="kw">pub struct </span>MyError {
+    msg: String,
+    <span class="attr">#[source]  </span><span class="comment">// optional if field name is `source`
+    </span>source: anyhow::Error,
+}</code></pre></div>
+</li>
+<li>
+<p>The Error trait’s <code>provide()</code> method is implemented to provide whichever
+field has a type named <code>Backtrace</code>, if any, as a
+<code>std::backtrace::Backtrace</code>. Using <code>Backtrace</code> in errors requires a
+nightly compiler with Rust version 1.73 or newer.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::backtrace::Backtrace;
+
+<span class="attr">#[derive(Error, Debug)]
+</span><span class="kw">pub struct </span>MyError {
+    msg: String,
+    backtrace: Backtrace,  <span class="comment">// automatically detected
+</span>}</code></pre></div>
+</li>
+<li>
+<p>If a field is both a source (named <code>source</code>, or has <code>#[source]</code> or
+<code>#[from]</code> attribute) <em>and</em> is marked <code>#[backtrace]</code>, then the Error
+trait’s <code>provide()</code> method is forwarded to the source’s <code>provide</code> so that
+both layers of the error share the same backtrace. The <code>#[backtrace]</code>
+attribute requires a nightly compiler with Rust version 1.73 or newer.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Error, Debug)]
+</span><span class="kw">pub enum </span>MyError {
+    Io {
+        <span class="attr">#[backtrace]
+        </span>source: io::Error,
+    },
+}</code></pre></div>
+</li>
+<li>
+<p>For variants that use <code>#[from]</code> and also contain a <code>Backtrace</code> field, a
+backtrace is captured from within the <code>From</code> impl.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Error, Debug)]
+</span><span class="kw">pub enum </span>MyError {
+    Io {
+        <span class="attr">#[from]
+        </span>source: io::Error,
+        backtrace: Backtrace,
+    },
+}</code></pre></div>
+</li>
+<li>
+<p>Errors may use <code>error(transparent)</code> to forward the source and Display
+methods straight through to an underlying error without adding an
+additional message. This would be appropriate for enums that need an
+“anything else” variant.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Error, Debug)]
+</span><span class="kw">pub enum </span>MyError {
+    ...
+
+    <span class="attr">#[error(transparent)]
+    </span>Other(<span class="attr">#[from] </span>anyhow::Error),  <span class="comment">// source and Display delegate to anyhow::Error
+</span>}</code></pre></div>
+<p>Another use case is hiding implementation details of an error
+representation behind an opaque error type, so that the representation is
+able to evolve without breaking the crate’s public API.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// PublicError is public, but opaque and easy to keep compatible.
+</span><span class="attr">#[derive(Error, Debug)]
+#[error(transparent)]
+</span><span class="kw">pub struct </span>PublicError(<span class="attr">#[from] </span>ErrorRepr);
+
+<span class="kw">impl </span>PublicError {
+    <span class="comment">// Accessors for anything we do want to expose publicly.
+</span>}
+
+<span class="comment">// Private and free to change across minor version of the crate.
+</span><span class="attr">#[derive(Error, Debug)]
+</span><span class="kw">enum </span>ErrorRepr {
+    ...
+}</code></pre></div>
+</li>
+<li>
+<p>See also the <a href="https://github.com/dtolnay/anyhow"><code>anyhow</code></a> library for a convenient single error type to use
+in application code.</p>
+</li>
+</ul>
+</div></details><h2 id="derives" class="section-header">Derive Macros<a href="#derives" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="derive" href="derive.Error.html" title="derive thiserror::Error">Error</a></div></li></ul></section></div></main></body></html>

@@ -1,0 +1,180 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Overview"><title>corosensei - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="corosensei" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../corosensei/index.html">corosensei</a><span class="version">0.1.4</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#functions">Functions</a></li><li><a href="#types">Type Aliases</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">corosensei</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/corosensei/lib.rs.html#1-245">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h3 id="overview"><a class="doc-anchor" href="#overview">§</a>Overview</h3>
+<p>This crate provides a safe and efficient abstraction for context switching between different stacks, in the form of <a href="https://en.wikipedia.org/wiki/Coroutine">coroutines</a>. A coroutine is a function that can be paused and resumed, yielding values to the caller. A coroutine can suspend itself from any point in its call stack. In addition to receiving yielded values from a coroutine, you can also pass data into the coroutine each time it is resumed.</p>
+<h3 id="example"><a class="doc-anchor" href="#example">§</a>Example</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>corosensei::{Coroutine, CoroutineResult};
+
+<span class="kw">fn </span>main() {
+    <span class="macro">println!</span>(<span class="string">"[main] creating coroutine"</span>);
+
+    <span class="kw">let </span><span class="kw-2">mut </span>coroutine = Coroutine::new(|yielder, input| {
+        <span class="macro">println!</span>(<span class="string">"[coroutine] coroutine started with input {}"</span>, input);
+        <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..<span class="number">5 </span>{
+            <span class="macro">println!</span>(<span class="string">"[coroutine] yielding {}"</span>, i);
+            <span class="kw">let </span>input = yielder.suspend(i);
+            <span class="macro">println!</span>(<span class="string">"[coroutine] got {} from parent"</span>, input)
+        }
+        <span class="macro">println!</span>(<span class="string">"[coroutine] exiting coroutine"</span>);
+    });
+
+    <span class="kw">let </span><span class="kw-2">mut </span>counter = <span class="number">100</span>;
+    <span class="kw">loop </span>{
+        <span class="macro">println!</span>(<span class="string">"[main] resuming coroutine with argument {}"</span>, counter);
+        <span class="kw">match </span>coroutine.resume(counter) {
+            CoroutineResult::Yield(i) =&gt; <span class="macro">println!</span>(<span class="string">"[main] got {:?} from coroutine"</span>, i),
+            CoroutineResult::Return(()) =&gt; <span class="kw">break</span>,
+        }
+
+        counter += <span class="number">1</span>;
+    }
+
+    <span class="macro">println!</span>(<span class="string">"[main] exiting"</span>);
+}</code></pre></div>
+<h5 id="output"><a class="doc-anchor" href="#output">§</a>Output</h5><div class="example-wrap"><pre class="language-text"><code>[main] creating coroutine
+[main] resuming coroutine with argument 100
+[coroutine] coroutine started with input 100
+[coroutine] yielding 0
+[main] got 0 from coroutine
+[main] resuming coroutine with argument 101
+[coroutine] got 101 from parent
+[coroutine] yielding 1
+[main] got 1 from coroutine
+[main] resuming coroutine with argument 102
+[coroutine] got 102 from parent
+[coroutine] yielding 2
+[main] got 2 from coroutine
+[main] resuming coroutine with argument 103
+[coroutine] got 103 from parent
+[coroutine] yielding 3
+[main] got 3 from coroutine
+[main] resuming coroutine with argument 104
+[coroutine] got 104 from parent
+[coroutine] yielding 4
+[main] got 4 from coroutine
+[main] resuming coroutine with argument 105
+[coroutine] got 105 from parent
+[coroutine] exiting coroutine
+[main] exiting
+</code></pre></div><h3 id="supported-targets"><a class="doc-anchor" href="#supported-targets">§</a>Supported targets</h3>
+<p>This crate currently supports the following targets:</p>
+<div><table><thead><tr><th></th><th>ELF (Linux, BSD, bare metal, etc)</th><th>Darwin (macOS, iOS, etc)</th><th>Windows</th></tr></thead><tbody>
+<tr><td>x86_64</td><td>✅</td><td>✅</td><td>✅</td></tr>
+<tr><td>x86</td><td>✅</td><td>✅</td><td>⚠️*</td></tr>
+<tr><td>AArch64</td><td>✅</td><td>✅</td><td>❌</td></tr>
+<tr><td>ARM</td><td>✅</td><td>❌</td><td>❌</td></tr>
+<tr><td>RISC-V</td><td>✅</td><td>❌</td><td>❌</td></tr>
+<tr><td>LoongArch64</td><td>✅</td><td>❌</td><td>❌</td></tr>
+</tbody></table>
+</div>
+<p><em>* Linked backtraces are not supported on x86 Windows.</em></p>
+<p>Feel free to open an issue if your target is not supported yet.</p>
+<h3 id="features"><a class="doc-anchor" href="#features">§</a>Features</h3><h5 id="panic-propagation"><a class="doc-anchor" href="#panic-propagation">§</a>Panic propagation</h5>
+<p>If a panic occurs in a coroutine then the panic will unwind through the coroutine stack and then continue to unwind out of the caller which last resumed it. Once this has happened, the coroutine is considered complete and can no longer be resumed.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::panic::{catch_unwind, AssertUnwindSafe};
+
+<span class="kw">use </span>corosensei::Coroutine;
+
+<span class="kw">fn </span>main() {
+    <span class="macro">println!</span>(<span class="string">"[main] creating coroutine"</span>);
+
+    <span class="kw">let </span><span class="kw-2">mut </span>coroutine = Coroutine::new(|yielder, ()| {
+        <span class="macro">println!</span>(<span class="string">"[coroutine] yielding 42"</span>);
+        yielder.suspend(<span class="number">42</span>);
+
+        <span class="macro">println!</span>(<span class="string">"[coroutine] panicking"</span>);
+        <span class="macro">panic!</span>(<span class="string">"foobar"</span>);
+    });
+
+    <span class="macro">println!</span>(<span class="string">"[main] resuming coroutine"</span>);
+    <span class="kw">let </span>result = catch_unwind(AssertUnwindSafe(|| coroutine.resume(())));
+    <span class="macro">println!</span>(
+        <span class="string">"[main] got value {} from coroutine"</span>,
+        result.unwrap().as_yield().unwrap()
+    );
+
+    <span class="macro">println!</span>(<span class="string">"[main] resuming coroutine"</span>);
+    <span class="kw">let </span>result = catch_unwind(AssertUnwindSafe(|| coroutine.resume(())));
+    <span class="macro">println!</span>(
+        <span class="string">"[main] caught panic \"{}\" from coroutine"</span>,
+        result.unwrap_err().downcast_ref::&lt;<span class="kw-2">&amp;</span><span class="lifetime">'static </span>str&gt;().unwrap()
+    );
+
+    <span class="macro">println!</span>(<span class="string">"[main] exiting"</span>);
+}</code></pre></div>
+<div class="example-wrap"><pre class="language-text"><code>[main] creating coroutine
+[main] resuming coroutine
+[coroutine] yielding 42
+[main] got value 42 from coroutine
+[main] resuming coroutine
+[coroutine] panicking
+thread &#39;main&#39; panicked at &#39;foobar&#39;, examples/panic.rs:13:9
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+[main] caught panic &quot;foobar&quot; from coroutine
+[main] exiting
+</code></pre></div><h5 id="linked-backtraces"><a class="doc-anchor" href="#linked-backtraces">§</a>Linked backtraces</h5>
+<p>Backtraces taken from within a coroutine will continue into the parent stack from the point where they were the coroutine was last resumed from. This is a significant help towards debugging issues with code in coroutines.</p>
+<p>Notice how the backtrace in this example shows that the coroutine was last resumed from <code>sub_function</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>backtrace::Backtrace;
+<span class="kw">use </span>corosensei::Coroutine;
+
+<span class="attr">#[inline(never)]
+</span><span class="kw">fn </span>sub_function(coroutine: <span class="kw-2">&amp;mut </span>Coroutine&lt;(), (), ()&gt;) {
+    coroutine.resume(());
+}
+
+<span class="kw">fn </span>main() {
+    <span class="kw">let </span><span class="kw-2">mut </span>coroutine = Coroutine::new(<span class="kw">move </span>|<span class="kw">_</span>, ()| {
+        <span class="kw">let </span>trace = Backtrace::new();
+        <span class="macro">println!</span>(<span class="string">"{:?}"</span>, trace);
+    });
+
+    sub_function(<span class="kw-2">&amp;mut </span>coroutine);
+}</code></pre></div>
+<div class="example-wrap"><pre class="language-text"><code>   0: backtrace::main::{{closure}}
+             at examples/backtrace.rs:11:21
+      corosensei::coroutine::ScopedCoroutine&lt;Input,Yield,Return,Stack&gt;::with_stack::coroutine_func::{{closure}}
+             at src/coroutine.rs:174:62
+      corosensei::unwind::catch_unwind_at_root
+             at src/unwind.rs:43:16
+   1: corosensei::coroutine::ScopedCoroutine&lt;Input,Yield,Return,Stack&gt;::with_stack::coroutine_func
+             at src/coroutine.rs:174:30
+   2: stack_init_trampoline
+   3: corosensei::arch::x86_64::switch_and_link
+             at src/arch/x86_64.rs:302:5
+      corosensei::coroutine::ScopedCoroutine&lt;Input,Yield,Return,Stack&gt;::resume_inner
+             at src/coroutine.rs:256:13
+      corosensei::coroutine::ScopedCoroutine&lt;Input,Yield,Return,Stack&gt;::resume
+             at src/coroutine.rs:235:19
+      backtrace::sub_function
+             at examples/backtrace.rs:6:5
+   4: backtrace::main
+             at examples/backtrace.rs:15:5
+</code></pre></div>
+<p>Linked backtraces use the platform’s standard unwinding metadata and work with debuggers, profilers and many other tools.</p>
+<h5 id="cleanup-on-drop"><a class="doc-anchor" href="#cleanup-on-drop">§</a>Cleanup on drop</h5>
+<p>If a coroutine is dropped while it is suspended then the coroutine’s stack will be safely unwound using the same mechanism as panics, which will drop any local variables on the stack. This is necessary to maintain a safe API: the coroutine’s stack cannot be freed or reused while there are still live objects on it.</p>
+<p>If this cleanup is not desired then a coroutine can forcibly be marked as completed using the unsafe <code>force_reset</code> function.</p>
+<h5 id="trap-handling"><a class="doc-anchor" href="#trap-handling">§</a>Trap handling</h5>
+<p>For advanced use cases, this crate provides the ability to recover from traps (e.g. segmentation fault, stack overflow) that occur in a coroutine. This API is unsafe and should be used from within a signal/exception handler: it will help set up the return from the signal/exception handler so that the coroutine will exit immediately with the given return value and return control to its parent.</p>
+<p>This is particularly useful for running JIT-compiled code with a fixed stack limit: stack overflows can be caught by a signal/exception handler and easily recovered from.</p>
+<h3 id="cargo-features"><a class="doc-anchor" href="#cargo-features">§</a>Cargo features</h3>
+<p>This crate is compatible with <code>#![no_std]</code> when all Cargo features are disabled.</p>
+<p>The following Cargo feature flags are available on this crate:</p>
+<h5 id="default-stack-enabled-by-default"><a class="doc-anchor" href="#default-stack-enabled-by-default">§</a><code>default-stack</code> (Enabled by default)</h5>
+<p>This feature provides a <code>DefaultStack</code> implementation which can be used by the <code>Coroutine</code> type. This stack is allocated with a guard page using OS APIs and requires <code>std</code>.</p>
+<p>If this feature is disabled then you must implement your own stack type which implements the <code>Stack</code> trait.</p>
+<h5 id="unwind-enabled-by-default"><a class="doc-anchor" href="#unwind-enabled-by-default">§</a><code>unwind</code> (Enabled by default)</h5>
+<p>This feature adds support for:</p>
+<ul>
+<li>unwinding panics in a coroutine back out to its caller.</li>
+<li>forcibly unwinding a suspended coroutine via <code>force_unwind</code> or when the coroutine is dropped.</li>
+</ul>
+<p>Note that if a coroutine is dropped while suspended (i.e. it has been resumed at least once but has not returned yet) when this feature is disabled then the program will abort.</p>
+<p>Requires <code>std</code>.</p>
+<h5 id="asm-unwind"><a class="doc-anchor" href="#asm-unwind">§</a><code>asm-unwind</code></h5>
+<p>This feature uses the <code>asm_unwind</code> nightly feature to allow panics to unwind directly through the inline assembly used in this crate, which can improve performance since it doesn’t need to be passed across stack boundaries as a <code>Result</code>.</p>
+<p>Implies <code>unwind</code>.</p>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="stack/index.html" title="mod corosensei::stack">stack</a></div><div class="desc docblock-short">Details about stacks used by coroutines.</div></li><li><div class="item-name"><a class="mod" href="trap/index.html" title="mod corosensei::trap">trap</a></div><div class="desc docblock-short">Utilities for working with <a href="struct.ScopedCoroutine.html#method.trap_handler" title="method corosensei::ScopedCoroutine::trap_handler"><code>ScopedCoroutine::trap_handler</code></a>.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.ScopedCoroutine.html" title="struct corosensei::ScopedCoroutine">ScopedCoroutine</a></div><div class="desc docblock-short">A coroutine wraps a closure and allows suspending its execution more than
+once, returning a value each time.</div></li><li><div class="item-name"><a class="struct" href="struct.Yielder.html" title="struct corosensei::Yielder">Yielder</a></div><div class="desc docblock-short"><code>Yielder</code> is an interface provided to a coroutine which allows it to suspend
+itself and pass values in and out of the coroutine.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.CoroutineResult.html" title="enum corosensei::CoroutineResult">CoroutineResult</a></div><div class="desc docblock-short">Value returned from resuming a coroutine.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.on_stack.html" title="fn corosensei::on_stack">on_stack</a></div><div class="desc docblock-short">Executes some code on the given stack.</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.Coroutine.html" title="type corosensei::Coroutine">Coroutine</a></div><div class="desc docblock-short">Alias for a <a href="struct.ScopedCoroutine.html" title="struct corosensei::ScopedCoroutine"><code>ScopedCoroutine</code></a> with a <code>'static</code> lifetime.</div></li></ul></section></div></main></body></html>

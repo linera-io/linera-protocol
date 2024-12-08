@@ -1,0 +1,42 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Check that the preconditions of an unsafe function are followed. The check is enabled at runtime if debug assertions are enabled when the caller is monomorphized. In const-eval/Miri checks implemented with this macro for language UB are always ignored."><title>assert_unsafe_precondition in wasmtime_environ::__core - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="wasmtime_environ" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../wasmtime_environ/index.html">wasmtime_environ</a><span class="version">25.0.1</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In wasmtime_environ::__core</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="../index.html">wasmtime_environ</a>::<wbr><a href="index.html">__core</a>::<wbr><a class="macro" href="#">assert_unsafe_precondition</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/ub_checks.rs.html#51">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><span class="macro">macro_rules!</span> assert_unsafe_precondition {
+    (
+        <span class="macro-nonterminal">$kind</span>:ident, <span class="macro-nonterminal">$message</span>:expr, ($(<span class="macro-nonterminal">$name</span>:ident : <span class="macro-nonterminal">$ty</span>:ty = <span class="macro-nonterminal">$arg</span>:expr),*
+        $(,)<span class="question-mark">?</span>) =&gt; <span class="macro-nonterminal">$e</span>:expr $(,)<span class="question-mark">?
+    </span>) =&gt; { ... };
+}</pre><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>ub_checks</code>)</span></div></span><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Check that the preconditions of an unsafe function are followed. The check is enabled at
+runtime if debug assertions are enabled when the caller is monomorphized. In const-eval/Miri
+checks implemented with this macro for language UB are always ignored.</p>
+<p>This macro should be called as
+<code>assert_unsafe_precondition!(check_{library,lang}_ub, "message", (ident: type = expr, ident: type = expr) =&gt; check_expr)</code>
+where each <code>expr</code> will be evaluated and passed in as function argument <code>ident: type</code>. Then all
+those arguments are passed to a function with the body <code>check_expr</code>.
+Pick <code>check_language_ub</code> when this is guarding a violation of language UB, i.e., immediate UB
+according to the Rust Abstract Machine. Pick <code>check_library_ub</code> when this is guarding a violation
+of a documented library precondition that does not <em>immediately</em> lead to language UB.</p>
+<p>If <code>check_library_ub</code> is used but the check is actually guarding language UB, the check will
+slow down const-eval/Miri and we’ll get the panic message instead of the interpreter’s nice
+diagnostic, but our ability to detect UB is unchanged.
+But if <code>check_language_ub</code> is used when the check is actually for library UB, the check is
+omitted in const-eval/Miri and thus if we eventually execute language UB which relies on the
+library UB, the backtrace Miri reports may be far removed from original cause.</p>
+<p>These checks are behind a condition which is evaluated at codegen time, not expansion time like
+<a href="macro.debug_assert.html" title="macro wasmtime_environ::__core::debug_assert"><code>debug_assert</code></a>. This means that a standard library built with optimizations and debug
+assertions disabled will have these checks optimized out of its monomorphizations, but if a
+caller of the standard library has debug assertions enabled and monomorphizes an expansion of
+this macro, that monomorphization will contain the check.</p>
+<p>Since these checks cannot be optimized out in MIR, some care must be taken in both call and
+implementation to mitigate their compile-time overhead. Calls to this macro always expand to
+this structure:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">if </span>::core::intrinsics::check_language_ub() {
+    precondition_check(args)
+}</code></pre></div>
+<p>where <code>precondition_check</code> is monomorphic with the attributes <code>#[rustc_nounwind]</code>, <code>#[inline]</code> and
+<code>#[rustc_no_mir_inline]</code>. This combination of attributes ensures that the actual check logic is
+compiled only once and generates a minimal amount of IR because the check cannot be inlined in
+MIR, but <em>can</em> be inlined and fully optimized by a codegen backend.</p>
+<p>Callers should avoid introducing any other <code>let</code> bindings or any code outside this macro in
+order to call it. Since the precompiled standard library is built with full debuginfo and these
+variables cannot be optimized out in MIR, an innocent-looking <code>let</code> can produce enough
+debuginfo to have a measurable compile-time impact on debug builds.</p>
+</div></details></section></div></main></body></html>

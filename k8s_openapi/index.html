@@ -1,0 +1,167 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Bindings for the Kubernetes client API, generated from the OpenAPI spec."><title>k8s_openapi - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="k8s_openapi" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../k8s_openapi/index.html">k8s_openapi</a><span class="version">0.21.1</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li><li><a href="#macros">Macros</a></li><li><a href="#structs">Structs</a></li><li><a href="#traits">Traits</a></li><li><a href="#functions">Functions</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">k8s_openapi</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/k8s_openapi/lib.rs.html#1-269">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Bindings for the Kubernetes client API, generated from the OpenAPI spec.</p>
+<p>Each supported version of Kubernetes is represented by a feature name (like <code>v1_9</code>). Only one such feature can be enabled at a time.</p>
+<p>These docs have been generated with the <code>v1_28</code> feature enabled. To see docs for one of the other supported versions, please generate the docs locally with <code>cargo doc --features 'v1_&lt;&gt;'</code></p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2><h3 id="resources"><a class="doc-anchor" href="#resources">§</a>Resources</h3>
+<p>This example creates an instance of <a href="api/core/v1/struct.PodSpec.html" title="struct k8s_openapi::api::core::v1::PodSpec"><code>api::core::v1::PodSpec</code></a> with no other properties set, and pretty-prints it.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>k8s_openapi::api::core::v1 <span class="kw">as </span>api;
+
+<span class="kw">fn </span>main() {
+    <span class="kw">let </span>pod_spec: api::PodSpec = Default::default();
+    <span class="macro">println!</span>(<span class="string">"{pod_spec:#?}"</span>);
+}</code></pre></div>
+<h2 id="crate-features"><a class="doc-anchor" href="#crate-features">§</a>Crate features</h2>
+<p>This crate contains several <code>v1_*</code> features. Enabling one of the <code>v1_*</code> features selects which version of the Kubernetes API server this crate should target.
+For example, enabling the <code>v1_23</code> feature means the crate will only contain the API exposed by Kubernetes 1.23. It will not expose API
+that were removed in 1.23 or earlier, nor any API added in 1.24 or later.</p>
+<p>One and only one of the <code>v1_*</code> features must be enabled at the same time, otherwise the crate will not compile. This ensures that all crates in the crate graph
+use the same types. If it was possible for one library crate to use <code>api::core::v1::Pod</code> corresponding to v1.50 and another to use the type
+corresponding to v1.51, an application would not be able to use the same <code>Pod</code> value with both.</p>
+<p>Thus, it is recommended that only application crates must enable one of the <code>v1_*</code> features, corresponding to the version of Kubernetes
+that the application wants to support.</p>
+<div class="example-wrap"><pre class="language-toml"><code># For application crates
+
+[dependencies]
+k8s-openapi = { version = &quot;...&quot;, features = [&quot;v1_50&quot;] }
+</code></pre></div>
+<p>If you’re writing a library crate, your crate <em>must not</em> enable any features of <code>k8s-openapi</code> directly. The choice of which feature to enable
+must be left to any application crates that use your library. This ensures that all <code>k8s-openapi</code>-using dependencies in that application crate’s dependency graph
+use the same set of <code>k8s-openapi</code> types and are interoperable.</p>
+<p>If your library crate has tests or examples, you should also add a dev-dependency on <code>k8s-openapi</code> in addition to the direct dependency,
+and enable a version feature only for that dev-dependency.</p>
+<div class="example-wrap"><pre class="language-toml"><code># For library crates
+
+[dependencies]
+k8s-openapi = &quot;...&quot;
+
+[dev-dependencies]
+k8s-openapi = { version = &quot;...&quot;, features = [&quot;v1_50&quot;] }
+</code></pre></div>
+<p>However, commands like <code>cargo check</code> and <code>cargo doc</code> do not build dev dependencies, so they will not enable the feature and will fail to build. There are two ways
+you can resolve this:</p>
+<ol>
+<li>
+<p>Add a feature to your library that enables one of the k8s-openapi <code>v1_*</code> features, and then remember to enable this feature when running such commands.</p>
+<div class="example-wrap"><pre class="language-toml"><code>[features]
+__check = [&quot;k8s-openapi/v1_50&quot;]
+</code></pre></div><div class="example-wrap"><pre class="language-sh"><code>$ cargo check --features __check
+</code></pre></div></li>
+<li>
+<p>Define the <code>K8S_OPENAPI_ENABLED_VERSION</code> env var when running such commands:</p>
+<div class="example-wrap"><pre class="language-sh"><code>$ K8S_OPENAPI_ENABLED_VERSION=1.50 cargo check
+</code></pre></div></li>
+</ol>
+<h2 id="conditional-compilation"><a class="doc-anchor" href="#conditional-compilation">§</a>Conditional compilation</h2>
+<p>As the previous section explained, library crates must not enable any version features in their <code>k8s-openapi</code> dependency. However, your library crate may
+need to know about which version gets selected eventually.</p>
+<p>For example:</p>
+<ol>
+<li>
+<p>Your crate creates a <code>PodSpec</code> and wants to set the <code>host_users</code> field. This field is only available in Kubernetes 1.25+,
+so you want your crate to fail to compile if a lower feature was enabled.</p>
+</li>
+<li>
+<p>Your crate creates a <code>PodSpec</code> and wants to set the <code>host_users</code> field, but it’s okay to not set it when compiling for older versions.</p>
+</li>
+</ol>
+<p>There are two ways for your crate to determine which feature of <code>k8s-openapi</code> is enabled:</p>
+<ol>
+<li>
+<p>The <code>k8s-openapi</code> crate exports <a href="#macros"><code>k8s_if_*</code> macros,</a> which either expand to their contents or don’t. See the docs of the macros for more details.</p>
+<p>With these macros, the two cases above would be solved like this:</p>
+<ul>
+<li>
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="comment">// The compile_error!() is only emitted if 1.24 or lower is selected.
+</span><span class="macro">k8s_openapi::k8s_if_le_1_24!</span> {
+    <span class="macro">compile_error!</span>(<span class="string">"This crate requires the v1_25 (or higher) feature to be enabled on the k8s-openapi crate."</span>);
+}
+
+...
+
+<span class="kw">let </span>pod_spec = k8s_openapi::api::core::v1::PodSpec {
+    host_users: ...,
+    ...
+};</code></pre></div>
+</li>
+<li>
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">let </span><span class="kw-2">mut </span>pod_spec = k8s_openapi::api::core::v1::PodSpec {
+    ...
+};
+
+<span class="macro">k8s_openapi::k8s_if_ge_1_25!</span> {
+    pod_spec.host_users = ...;
+}</code></pre></div>
+</li>
+</ul>
+</li>
+<li>
+<p>The <code>k8s-openapi</code> crate emits the selected version number as metadata that your crate can read in a build script
+from the <code>DEP_K8S_OPENAPI_*_VERSION</code> env var.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// Your crate's build.rs
+
+</span><span class="kw">fn </span>main() {
+    <span class="kw">let </span>k8s_openapi_version: u32 =
+        std::env::vars_os()
+        .find_map(|(key, value)| {
+            <span class="kw">let </span>key = key.into_string().ok()<span class="question-mark">?</span>;
+            <span class="kw">if </span>key.starts_with(<span class="string">"DEP_K8S_OPENAPI_"</span>) &amp;&amp; key.ends_with(<span class="string">"_VERSION"</span>) {
+                <span class="kw">let </span>value = value.into_string().ok()<span class="question-mark">?</span>;
+                <span class="prelude-val">Some</span>(value)
+            }
+            <span class="kw">else </span>{
+                <span class="prelude-val">None
+            </span>}
+        }).expect(<span class="string">"DEP_K8S_OPENAPI_*_VERSION must have been set by k8s-openapi"</span>)
+        .parse().expect(<span class="string">"DEP_K8S_OPENAPI_*_VERSION is malformed"</span>);
+
+    <span class="comment">// k8s_openapi_version has the format 0x00_MM_NN_00.
+    //
+    // - MM is the major version.
+    // - NN is the minor version.
+    //
+    // Thus, if the v1_25 feature was enabled, k8s_openapi_version would be 0x00_01_19_00
+
+    // The build script can now do arbitrary things with the information.
+    // For example, it could define custom cfgs:
+    </span><span class="kw">if </span>k8s_openapi_version &gt;= <span class="number">0x00_01_19_00 </span>{
+        <span class="macro">println!</span>(<span class="string">r#"cargo:rustc-cfg=k8s_pod_spec_supports_host_users"#</span>);
+    }
+
+    <span class="comment">// or emit new source code files under OUT_DIR, or anything else a build script can do.
+</span>}</code></pre></div>
+<p>With these cfgs, the two cases above would be solved like this:</p>
+<ul>
+<li>
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="comment">// The compile_error!() is only emitted if 1.24 or lower is selected.
+</span><span class="attr">#[cfg(not(k8s_pod_spec_supports_host_users))]
+</span><span class="macro">compile_error!</span>(<span class="string">"This crate requires the v1_25 (or higher) feature to be enabled on the k8s-openapi crate."</span>);
+
+...
+
+<span class="kw">let </span>pod_spec = k8s_openapi::api::core::v1::PodSpec {
+    host_users: ...,
+    ...
+};</code></pre></div>
+</li>
+<li>
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">let </span>pod_spec = k8s_openapi::api::core::v1::PodSpec {
+    <span class="attr">#[cfg(not(k8s_pod_spec_supports_host_users))]
+    </span>host_users: ...,
+    ...
+};</code></pre></div>
+</li>
+</ul>
+</li>
+</ol>
+<p>Note that both approaches require your crate to have a direct dependency on the <code>k8s-openapi</code> crate. Neither approach is available if your crate
+only has a transitive dependency on the <code>k8s-openapi</code> crate.</p>
+<p>The macros approach is easier to use since it doesn’t require a build script.</p>
+<p>The build script method lets you emit arbitrary cfgs, emit arbitrary source code, and generally gives you more options, at the cost of needing a build script.
+<code>cfg()</code>s can be used in places where macros cannot, such as how the second example above shows it being used on a single field in a struct literal.</p>
+<h2 id="custom-resource-definitions"><a class="doc-anchor" href="#custom-resource-definitions">§</a>Custom resource definitions</h2>
+<p>The <a href="https://crates.io/crates/k8s-openapi-derive"><code>k8s-openapi-derive</code> crate</a> provides a custom derive for generating clientsets
+for custom resources. See that crate’s docs for more information.</p>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.chrono"><code>pub use <a class="mod" href="../chrono/index.html" title="mod chrono">chrono</a>;</code></div></li><li><div class="item-name" id="reexport.serde"><code>pub use <a class="mod" href="../serde/index.html" title="mod serde">serde</a>;</code></div></li><li><div class="item-name" id="reexport.serde_json"><code>pub use <a class="mod" href="../serde_json/index.html" title="mod serde_json">serde_json</a>;</code></div></li><li><div class="item-name" id="reexport.serde_value"><code>pub use <a class="mod" href="../serde_value/index.html" title="mod serde_value">serde_value</a>;</code></div></li></ul><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="api/index.html" title="mod k8s_openapi::api">api</a></div></li><li><div class="item-name"><a class="mod" href="apiextensions_apiserver/index.html" title="mod k8s_openapi::apiextensions_apiserver">apiextensions_apiserver</a></div></li><li><div class="item-name"><a class="mod" href="apimachinery/index.html" title="mod k8s_openapi::apimachinery">apimachinery</a></div></li><li><div class="item-name"><a class="mod" href="kube_aggregator/index.html" title="mod k8s_openapi::kube_aggregator">kube_aggregator</a></div></li><li><div class="item-name"><a class="mod" href="merge_strategies/index.html" title="mod k8s_openapi::merge_strategies">merge_strategies</a></div><div class="desc docblock-short">Strategies for merging collections.</div></li></ul><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="macro" href="macro.k8s_if_1_24.html" title="macro k8s_openapi::k8s_if_1_24">k8s_if_1_24</a></div><div class="desc docblock-short">This macro evaluates to its contents if the <code>v1_24</code> feature is enabled, otherwise it evaluates to nothing.</div></li><li><div class="item-name"><a class="macro" href="macro.k8s_if_1_25.html" title="macro k8s_openapi::k8s_if_1_25">k8s_if_1_25</a></div><div class="desc docblock-short">This macro evaluates to its contents if the <code>v1_25</code> feature is enabled, otherwise it evaluates to nothing.</div></li><li><div class="item-name"><a class="macro" href="macro.k8s_if_1_26.html" title="macro k8s_openapi::k8s_if_1_26">k8s_if_1_26</a></div><div class="desc docblock-short">This macro evaluates to its contents if the <code>v1_26</code> feature is enabled, otherwise it evaluates to nothing.</div></li><li><div class="item-name"><a class="macro" href="macro.k8s_if_1_27.html" title="macro k8s_openapi::k8s_if_1_27">k8s_if_1_27</a></div><div class="desc docblock-short">This macro evaluates to its contents if the <code>v1_27</code> feature is enabled, otherwise it evaluates to nothing.</div></li><li><div class="item-name"><a class="macro" href="macro.k8s_if_1_28.html" title="macro k8s_openapi::k8s_if_1_28">k8s_if_1_28</a></div><div class="desc docblock-short">This macro evaluates to its contents if the <code>v1_28</code> feature is enabled, otherwise it evaluates to nothing.</div></li><li><div class="item-name"><a class="macro" href="macro.k8s_if_1_29.html" title="macro k8s_openapi::k8s_if_1_29">k8s_if_1_29</a></div><div class="desc docblock-short">This macro evaluates to its contents if the <code>v1_29</code> feature is enabled, otherwise it evaluates to nothing.</div></li><li><div class="item-name"><a class="macro" href="macro.k8s_if_ge_1_24.html" title="macro k8s_openapi::k8s_if_ge_1_24">k8s_if_ge_1_24</a></div><div class="desc docblock-short">This macro evaluates to its contents if the <code>v1_24</code> or higher feature is enabled, otherwise it evaluates to nothing.</div></li><li><div class="item-name"><a class="macro" href="macro.k8s_if_ge_1_25.html" title="macro k8s_openapi::k8s_if_ge_1_25">k8s_if_ge_1_25</a></div><div class="desc docblock-short">This macro evaluates to its contents if the <code>v1_25</code> or higher feature is enabled, otherwise it evaluates to nothing.</div></li><li><div class="item-name"><a class="macro" href="macro.k8s_if_ge_1_26.html" title="macro k8s_openapi::k8s_if_ge_1_26">k8s_if_ge_1_26</a></div><div class="desc docblock-short">This macro evaluates to its contents if the <code>v1_26</code> or higher feature is enabled, otherwise it evaluates to nothing.</div></li><li><div class="item-name"><a class="macro" href="macro.k8s_if_ge_1_27.html" title="macro k8s_openapi::k8s_if_ge_1_27">k8s_if_ge_1_27</a></div><div class="desc docblock-short">This macro evaluates to its contents if the <code>v1_27</code> or higher feature is enabled, otherwise it evaluates to nothing.</div></li><li><div class="item-name"><a class="macro" href="macro.k8s_if_ge_1_28.html" title="macro k8s_openapi::k8s_if_ge_1_28">k8s_if_ge_1_28</a></div><div class="desc docblock-short">This macro evaluates to its contents if the <code>v1_28</code> or higher feature is enabled, otherwise it evaluates to nothing.</div></li><li><div class="item-name"><a class="macro" href="macro.k8s_if_ge_1_29.html" title="macro k8s_openapi::k8s_if_ge_1_29">k8s_if_ge_1_29</a></div><div class="desc docblock-short">This macro evaluates to its contents if the <code>v1_29</code> or higher feature is enabled, otherwise it evaluates to nothing.</div></li><li><div class="item-name"><a class="macro" href="macro.k8s_if_le_1_24.html" title="macro k8s_openapi::k8s_if_le_1_24">k8s_if_le_1_24</a></div><div class="desc docblock-short">This macro evaluates to its contents if the <code>v1_24</code> or lower feature is enabled, otherwise it evaluates to nothing.</div></li><li><div class="item-name"><a class="macro" href="macro.k8s_if_le_1_25.html" title="macro k8s_openapi::k8s_if_le_1_25">k8s_if_le_1_25</a></div><div class="desc docblock-short">This macro evaluates to its contents if the <code>v1_25</code> or lower feature is enabled, otherwise it evaluates to nothing.</div></li><li><div class="item-name"><a class="macro" href="macro.k8s_if_le_1_26.html" title="macro k8s_openapi::k8s_if_le_1_26">k8s_if_le_1_26</a></div><div class="desc docblock-short">This macro evaluates to its contents if the <code>v1_26</code> or lower feature is enabled, otherwise it evaluates to nothing.</div></li><li><div class="item-name"><a class="macro" href="macro.k8s_if_le_1_27.html" title="macro k8s_openapi::k8s_if_le_1_27">k8s_if_le_1_27</a></div><div class="desc docblock-short">This macro evaluates to its contents if the <code>v1_27</code> or lower feature is enabled, otherwise it evaluates to nothing.</div></li><li><div class="item-name"><a class="macro" href="macro.k8s_if_le_1_28.html" title="macro k8s_openapi::k8s_if_le_1_28">k8s_if_le_1_28</a></div><div class="desc docblock-short">This macro evaluates to its contents if the <code>v1_28</code> or lower feature is enabled, otherwise it evaluates to nothing.</div></li><li><div class="item-name"><a class="macro" href="macro.k8s_if_le_1_29.html" title="macro k8s_openapi::k8s_if_le_1_29">k8s_if_le_1_29</a></div><div class="desc docblock-short">This macro evaluates to its contents if the <code>v1_29</code> or lower feature is enabled, otherwise it evaluates to nothing.</div></li><li><div class="item-name"><a class="macro" href="macro.k8s_match.html" title="macro k8s_openapi::k8s_match">k8s_match</a></div><div class="desc docblock-short">A macro that emits a <code>match</code> expr with the given test expression and arms.
+The match arms can be annotated with the other conditional compilation macros in this crate so that they’re only emitted
+if the predicate is true.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.ByteString.html" title="struct k8s_openapi::ByteString">ByteString</a></div><div class="desc docblock-short">A wrapper around a list of bytes.</div></li><li><div class="item-name"><a class="struct" href="struct.ClusterResourceScope.html" title="struct k8s_openapi::ClusterResourceScope">ClusterResourceScope</a></div><div class="desc docblock-short">Indicates that a <a href="trait.Resource.html" title="trait k8s_openapi::Resource"><code>Resource</code></a> is cluster-scoped.</div></li><li><div class="item-name"><a class="struct" href="struct.List.html" title="struct k8s_openapi::List">List</a></div><div class="desc docblock-short">List is a list of resources.</div></li><li><div class="item-name"><a class="struct" href="struct.NamespaceResourceScope.html" title="struct k8s_openapi::NamespaceResourceScope">NamespaceResourceScope</a></div><div class="desc docblock-short">Indicates that a <a href="trait.Resource.html" title="trait k8s_openapi::Resource"><code>Resource</code></a> is namespace-scoped.</div></li><li><div class="item-name"><a class="struct" href="struct.SubResourceScope.html" title="struct k8s_openapi::SubResourceScope">SubResourceScope</a></div><div class="desc docblock-short">Indicates that a <a href="trait.Resource.html" title="trait k8s_openapi::Resource"><code>Resource</code></a> is neither cluster-scoped nor namespace-scoped.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.DeepMerge.html" title="trait k8s_openapi::DeepMerge">DeepMerge</a></div><div class="desc docblock-short">A trait applies to types that support deep merging.</div></li><li><div class="item-name"><a class="trait" href="trait.ListableResource.html" title="trait k8s_openapi::ListableResource">ListableResource</a></div><div class="desc docblock-short">A trait applied to all Kubernetes resources that can be part of a corresponding list.</div></li><li><div class="item-name"><a class="trait" href="trait.Metadata.html" title="trait k8s_openapi::Metadata">Metadata</a></div><div class="desc docblock-short">A trait applied to all Kubernetes resources that have metadata.</div></li><li><div class="item-name"><a class="trait" href="trait.Resource.html" title="trait k8s_openapi::Resource">Resource</a></div><div class="desc docblock-short">A trait applied to all Kubernetes resources.</div></li><li><div class="item-name"><a class="trait" href="trait.ResourceScope.html" title="trait k8s_openapi::ResourceScope">ResourceScope</a></div><div class="desc docblock-short">The scope of a <a href="trait.Resource.html" title="trait k8s_openapi::Resource"><code>Resource</code></a>.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.api_version.html" title="fn k8s_openapi::api_version">api_version</a></div><div class="desc docblock-short">Extracts the API version of the given resource value.</div></li><li><div class="item-name"><a class="fn" href="fn.group.html" title="fn k8s_openapi::group">group</a></div><div class="desc docblock-short">Extracts the group of the given resource value.</div></li><li><div class="item-name"><a class="fn" href="fn.kind.html" title="fn k8s_openapi::kind">kind</a></div><div class="desc docblock-short">Extracts the kind of the given resource value.</div></li><li><div class="item-name"><a class="fn" href="fn.version.html" title="fn k8s_openapi::version">version</a></div><div class="desc docblock-short">Extracts the version of the given resource value.</div></li></ul></section></div></main></body></html>

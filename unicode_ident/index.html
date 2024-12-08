@@ -1,0 +1,175 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="github crates-io docs-rs"><title>unicode_ident - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="unicode_ident" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../unicode_ident/index.html">unicode_ident</a><span class="version">1.0.13</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#functions">Functions</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">unicode_ident</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/unicode_ident/lib.rs.html#1-269">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><a href="https://github.com/dtolnay/unicode-ident"><img src="https://img.shields.io/badge/github-8da0cb?style=for-the-badge&amp;labelColor=555555&amp;logo=github" alt="github" /></a> <a href="https://crates.io/crates/unicode-ident"><img src="https://img.shields.io/badge/crates.io-fc8d62?style=for-the-badge&amp;labelColor=555555&amp;logo=rust" alt="crates-io" /></a> <a href="https://docs.rs/unicode-ident"><img src="https://img.shields.io/badge/docs.rs-66c2a5?style=for-the-badge&amp;labelColor=555555&amp;logo=docs.rs" alt="docs-rs" /></a></p>
+<br>
+<p>Implementation of <a href="https://www.unicode.org/reports/tr31/">Unicode Standard Annex #31</a> for determining which
+<code>char</code> values are valid in programming language identifiers.</p>
+<p>This crate is a better optimized implementation of the older <code>unicode-xid</code>
+crate. This crate uses less static storage, and is able to classify both
+ASCII and non-ASCII codepoints with better performance, 2–10×
+faster than <code>unicode-xid</code>.</p>
+<br>
+<h3 id="comparison-of-performance"><a class="doc-anchor" href="#comparison-of-performance">§</a>Comparison of performance</h3>
+<p>The following table shows a comparison between five Unicode identifier
+implementations.</p>
+<ul>
+<li><code>unicode-ident</code> is this crate;</li>
+<li><a href="https://github.com/unicode-rs/unicode-xid"><code>unicode-xid</code></a> is a widely used crate run by the “unicode-rs” org;</li>
+<li><code>ucd-trie</code> and <code>fst</code> are two data structures supported by the
+<a href="https://github.com/BurntSushi/ucd-generate"><code>ucd-generate</code></a> tool;</li>
+<li><a href="https://github.com/RoaringBitmap/roaring-rs"><code>roaring</code></a> is a Rust implementation of Roaring bitmap.</li>
+</ul>
+<p>The <em>static storage</em> column shows the total size of <code>static</code> tables that the
+crate bakes into your binary, measured in 1000s of bytes.</p>
+<p>The remaining columns show the <strong>cost per call</strong> to evaluate whether a
+single <code>char</code> has the XID_Start or XID_Continue Unicode property,
+comparing across different ratios of ASCII to non-ASCII codepoints in the
+input data.</p>
+<div><table><thead><tr><th></th><th>static storage</th><th>0% nonascii</th><th>1%</th><th>10%</th><th>100% nonascii</th></tr></thead><tbody>
+<tr><td><strong><code>unicode-ident</code></strong></td><td>10.4 K</td><td>0.96 ns</td><td>0.95 ns</td><td>1.09 ns</td><td>1.55 ns</td></tr>
+<tr><td><strong><code>unicode-xid</code></strong></td><td>11.8 K</td><td>1.88 ns</td><td>2.14 ns</td><td>3.48 ns</td><td>15.63 ns</td></tr>
+<tr><td><strong><code>ucd-trie</code></strong></td><td>10.3 K</td><td>1.29 ns</td><td>1.28 ns</td><td>1.36 ns</td><td>2.15 ns</td></tr>
+<tr><td><strong><code>fst</code></strong></td><td>144 K</td><td>55.1 ns</td><td>54.9 ns</td><td>53.2 ns</td><td>28.5 ns</td></tr>
+<tr><td><strong><code>roaring</code></strong></td><td>66.1 K</td><td>2.78 ns</td><td>3.09 ns</td><td>3.37 ns</td><td>4.70 ns</td></tr>
+</tbody></table>
+</div>
+<p>Source code for the benchmark is provided in the <em>bench</em> directory of this
+repo and may be repeated by running <code>cargo criterion</code>.</p>
+<br>
+<h3 id="comparison-of-data-structures"><a class="doc-anchor" href="#comparison-of-data-structures">§</a>Comparison of data structures</h3><h5 id="unicode-xid"><a class="doc-anchor" href="#unicode-xid">§</a>unicode-xid</h5>
+<p>They use a sorted array of character ranges, and do a binary search to look
+up whether a given character lands inside one of those ranges.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">static </span>XID_Continue_table: [(char, char); <span class="number">763</span>] = [
+    (<span class="string">'\u{30}'</span>, <span class="string">'\u{39}'</span>),  <span class="comment">// 0-9
+    </span>(<span class="string">'\u{41}'</span>, <span class="string">'\u{5a}'</span>),  <span class="comment">// A-Z
+    </span>…
+    (<span class="string">'\u{e0100}'</span>, <span class="string">'\u{e01ef}'</span>),
+];</code></pre></div>
+<p>The static storage used by this data structure scales with the number of
+contiguous ranges of identifier codepoints in Unicode. Every table entry
+consumes 8 bytes, because it consists of a pair of 32-bit <code>char</code> values.</p>
+<p>In some ranges of the Unicode codepoint space, this is quite a sparse
+representation – there are some ranges where tens of thousands of
+adjacent codepoints are all valid identifier characters. In other places,
+the representation is quite inefficient. A characater like <code>µ</code> (U+00B5)
+which is surrounded by non-identifier codepoints consumes 64 bits in the
+table, while it would be just 1 bit in a dense bitmap.</p>
+<p>On a system with 64-byte cache lines, binary searching the table touches 7
+cache lines on average. Each cache line fits only 8 table entries.
+Additionally, the branching performed during the binary search is probably
+mostly unpredictable to the branch predictor.</p>
+<p>Overall, the crate ends up being about 10× slower on non-ASCII input
+compared to the fastest crate.</p>
+<p>A potential improvement would be to pack the table entries more compactly.
+Rust’s <code>char</code> type is a 21-bit integer padded to 32 bits, which means every
+table entry is holding 22 bits of wasted space, adding up to 3.9 K. They
+could instead fit every table entry into 6 bytes, leaving out some of the
+padding, for a 25% improvement in space used. With some cleverness it may be
+possible to fit in 5 bytes or even 4 bytes by storing a low char and an
+extent, instead of low char and high char. I don’t expect that performance
+would improve much but this could be the most efficient for space across all
+the libraries, needing only about 7 K to store.</p>
+<h5 id="ucd-trie"><a class="doc-anchor" href="#ucd-trie">§</a>ucd-trie</h5>
+<p>Their data structure is a compressed trie set specifically tailored for
+Unicode codepoints. The design is credited to Raph Levien in
+<a href="https://github.com/rust-lang/rust/pull/33098">rust-lang/rust#33098</a>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">pub struct </span>TrieSet {
+    tree1_level1: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>[u64; <span class="number">32</span>],
+    tree2_level1: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>[u8; <span class="number">992</span>],
+    tree2_level2: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>[u64],
+    tree3_level1: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>[u8; <span class="number">256</span>],
+    tree3_level2: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>[u8],
+    tree3_level3: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>[u64],
+}</code></pre></div>
+<p>It represents codepoint sets using a trie to achieve prefix compression. The
+final states of the trie are embedded in leaves or “chunks”, where each
+chunk is a 64-bit integer. Each bit position of the integer corresponds to
+whether a particular codepoint is in the set or not. These chunks are not
+just a compact representation of the final states of the trie, but are also
+a form of suffix compression. In particular, if multiple ranges of 64
+contiguous codepoints have the same Unicode properties, then they all map to
+the same chunk in the final level of the trie.</p>
+<p>Being tailored for Unicode codepoints, this trie is partitioned into three
+disjoint sets: tree1, tree2, tree3. The first set corresponds to codepoints
+[0, 0x800), the second [0x800, 0x10000) and the third [0x10000,
+0x110000). These partitions conveniently correspond to the space of 1 or 2
+byte UTF-8 encoded codepoints, 3 byte UTF-8 encoded codepoints and 4 byte
+UTF-8 encoded codepoints, respectively.</p>
+<p>Lookups in this data structure are significantly more efficient than binary
+search. A lookup touches either 1, 2, or 3 cache lines based on which of the
+trie partitions is being accessed.</p>
+<p>One possible performance improvement would be for this crate to expose a way
+to query based on a UTF-8 encoded string, returning the Unicode property
+corresponding to the first character in the string. Without such an API, the
+caller is required to tokenize their UTF-8 encoded input data into <code>char</code>,
+hand the <code>char</code> into <code>ucd-trie</code>, only for <code>ucd-trie</code> to undo that work by
+converting back into the variable-length representation for trie traversal.</p>
+<h5 id="fst"><a class="doc-anchor" href="#fst">§</a>fst</h5>
+<p>Uses a <a href="https://github.com/BurntSushi/fst">finite state transducer</a>. This representation is built into
+<a href="https://github.com/BurntSushi/ucd-generate">ucd-generate</a> but I am not aware of any advantage over the <code>ucd-trie</code>
+representation. In particular <code>ucd-trie</code> is optimized for storing Unicode
+properties while <code>fst</code> is not.</p>
+<p>As far as I can tell, the main thing that causes <code>fst</code> to have large size
+and slow lookups for this use case relative to <code>ucd-trie</code> is that it does
+not specialize for the fact that only 21 of the 32 bits in a <code>char</code> are
+meaningful. There are some dense arrays in the structure with large ranges
+that could never possibly be used.</p>
+<h5 id="roaring"><a class="doc-anchor" href="#roaring">§</a>roaring</h5>
+<p>This crate is a pure-Rust implementation of <a href="https://roaringbitmap.org/about/">Roaring Bitmap</a>, a data
+structure designed for storing sets of 32-bit unsigned integers.</p>
+<p>Roaring bitmaps are compressed bitmaps which tend to outperform conventional
+compressed bitmaps such as WAH, EWAH or Concise. In some instances, they can
+be hundreds of times faster and they often offer significantly better
+compression.</p>
+<p>In this use case the performance was reasonably competitive but still
+substantially slower than the Unicode-optimized crates. Meanwhile the
+compression was significantly worse, requiring 6× as much storage for
+the data structure.</p>
+<p>I also benchmarked the <a href="https://crates.io/crates/croaring"><code>croaring</code></a> crate which is an FFI wrapper around the
+C reference implementation of Roaring Bitmap. This crate was consistently
+about 15% slower than pure-Rust <code>roaring</code>, which could just be FFI overhead.
+I did not investigate further.</p>
+<h5 id="unicode-ident"><a class="doc-anchor" href="#unicode-ident">§</a>unicode-ident</h5>
+<p>This crate is most similar to the <code>ucd-trie</code> library, in that it’s based on
+bitmaps stored in the leafs of a trie representation, achieving both prefix
+compression and suffix compression.</p>
+<p>The key differences are:</p>
+<ul>
+<li>Uses a single 2-level trie, rather than 3 disjoint partitions of different
+depth each.</li>
+<li>Uses significantly larger chunks: 512 bits rather than 64 bits.</li>
+<li>Compresses the XID_Start and XID_Continue properties together
+simultaneously, rather than duplicating identical trie leaf chunks across
+the two.</li>
+</ul>
+<p>The following diagram show the XID_Start and XID_Continue Unicode boolean
+properties in uncompressed form, in row-major order:</p>
+<table>
+<tr><th>XID_Start</th><th>XID_Continue</th></tr>
+<tr>
+<td><img alt="XID_Start bitmap" width="256" src="https://user-images.githubusercontent.com/1940490/168647353-c6eeb922-afec-49b2-9ef5-c03e9d1e0760.png"></td>
+<td><img alt="XID_Continue bitmap" width="256" src="https://user-images.githubusercontent.com/1940490/168647367-f447cca7-2362-4d7d-8cd7-d21c011d329b.png"></td>
+</tr>
+</table>
+<p>Uncompressed, these would take 140 K to store, which is beyond what would be
+reasonable. However, as you can see there is a large degree of similarity
+between the two bitmaps and across the rows, which lends well to
+compression.</p>
+<p>This crate stores one 512-bit “row” of the above bitmaps in the leaf level
+of a trie, and a single additional level to index into the leafs. It turns
+out there are 124 unique 512-bit chunks across the two bitmaps so 7 bits are
+sufficient to index them.</p>
+<p>The chunk size of 512 bits is selected as the size that minimizes the total
+size of the data structure. A smaller chunk, like 256 or 128 bits, would
+achieve better deduplication but require a larger index. A larger chunk
+would increase redundancy in the leaf bitmaps. 512 bit chunks are the
+optimum for total size of the index plus leaf bitmaps.</p>
+<p>In fact since there are only 124 unique chunks, we can use an 8-bit index
+with a spare bit to index at the half-chunk level. This achieves an
+additional 8.5% compression by eliminating redundancies between the second
+half of any chunk and the first half of any other chunk. Note that this is
+not the same as using chunks which are half the size, because it does not
+necessitate raising the size of the trie’s first level.</p>
+<p>In contrast to binary search or the <code>ucd-trie</code> crate, performing lookups in
+this data structure is straight-line code with no need for branching.</p>
+</div></details><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.is_xid_continue.html" title="fn unicode_ident::is_xid_continue">is_xid_continue</a></div></li><li><div class="item-name"><a class="fn" href="fn.is_xid_start.html" title="fn unicode_ident::is_xid_start">is_xid_start</a></div></li></ul></section></div></main></body></html>

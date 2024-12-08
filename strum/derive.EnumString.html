@@ -1,0 +1,78 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Converts strings to enum variants based on their name."><title>EnumString in strum - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="strum" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc derive"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../strum/index.html">strum</a><span class="version">0.26.3</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Derive Macro <a href="index.html">strum</a>::<wbr><a class="derive" href="#">EnumString</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>#[derive(EnumString)]
+{
+    <span class="comment">// Attributes available to this derive:</span>
+    #[strum]
+}
+</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Converts strings to enum variants based on their name.</p>
+<p>auto-derives <code>std::str::FromStr</code> on the enum (for Rust 1.34 and above, <code>std::convert::TryFrom&lt;&amp;str&gt;</code>
+will be derived as well). Each variant of the enum will match on it’s own name.
+This can be overridden using <code>serialize="DifferentName"</code> or <code>to_string="DifferentName"</code>
+on the attribute as shown below.
+Multiple deserializations can be added to the same variant. If the variant contains additional data,
+they will be set to their default values upon deserialization.</p>
+<p>The <code>default</code> attribute can be applied to a tuple variant with a single data parameter. When a match isn’t
+found, the given variant will be returned and the input string will be captured in the parameter.</p>
+<p>Note that the implementation of <code>FromStr</code> by default only matches on the name of the
+variant. There is an option to match on different case conversions through the
+<code>#[strum(serialize_all = "snake_case")]</code> type attribute.</p>
+<p>See the <a href="https://docs.rs/strum/latest/strum/additional_attributes/index.html">Additional Attributes</a>
+Section for more information on using this feature.</p>
+<p>If you have a large enum, you may want to consider using the <code>use_phf</code> attribute here. It leverages
+perfect hash functions to parse much quicker than a standard <code>match</code>. (MSRV 1.46)</p>
+<h2 id="example-howto-use-enumstring"><a class="doc-anchor" href="#example-howto-use-enumstring">§</a>Example howto use <code>EnumString</code></h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::str::FromStr;
+<span class="kw">use </span>strum_macros::EnumString;
+
+<span class="attr">#[derive(Debug, PartialEq, EnumString)]
+</span><span class="kw">enum </span>Color {
+    Red,
+    <span class="comment">// The Default value will be inserted into range if we match "Green".
+    </span>Green {
+        range: usize,
+    },
+
+    <span class="comment">// We can match on multiple different patterns.
+    </span><span class="attr">#[strum(serialize = <span class="string">"blue"</span>, serialize = <span class="string">"b"</span>)]
+    </span>Blue(usize),
+
+    <span class="comment">// Notice that we can disable certain variants from being found
+    </span><span class="attr">#[strum(disabled)]
+    </span>Yellow,
+
+    <span class="comment">// We can make the comparison case insensitive (however Unicode is not supported at the moment)
+    </span><span class="attr">#[strum(ascii_case_insensitive)]
+    </span>Black,
+}
+
+<span class="comment">/*
+//The generated code will look like:
+impl std::str::FromStr for Color {
+    type Err = ::strum::ParseError;
+
+    fn from_str(s: &amp;str) -&gt; ::core::result::Result&lt;Color, Self::Err&gt; {
+        match s {
+            "Red" =&gt; ::core::result::Result::Ok(Color::Red),
+            "Green" =&gt; ::core::result::Result::Ok(Color::Green { range:Default::default() }),
+            "blue" =&gt; ::core::result::Result::Ok(Color::Blue(Default::default())),
+            "b" =&gt; ::core::result::Result::Ok(Color::Blue(Default::default())),
+            s if s.eq_ignore_ascii_case("Black") =&gt; ::core::result::Result::Ok(Color::Black),
+            _ =&gt; ::core::result::Result::Err(::strum::ParseError::VariantNotFound),
+        }
+    }
+}
+*/
+
+// simple from string
+</span><span class="kw">let </span>color_variant = Color::from_str(<span class="string">"Red"</span>).unwrap();
+<span class="macro">assert_eq!</span>(Color::Red, color_variant);
+<span class="comment">// short version works too
+</span><span class="kw">let </span>color_variant = Color::from_str(<span class="string">"b"</span>).unwrap();
+<span class="macro">assert_eq!</span>(Color::Blue(<span class="number">0</span>), color_variant);
+<span class="comment">// was disabled for parsing = returns parse-error
+</span><span class="kw">let </span>color_variant = Color::from_str(<span class="string">"Yellow"</span>);
+<span class="macro">assert!</span>(color_variant.is_err());
+<span class="comment">// however the variant is still normally usable
+</span><span class="macro">println!</span>(<span class="string">"{:?}"</span>, Color::Yellow);
+<span class="kw">let </span>color_variant = Color::from_str(<span class="string">"bLACk"</span>).unwrap();
+<span class="macro">assert_eq!</span>(Color::Black, color_variant);</code></pre></div>
+</div></details></section></div></main></body></html>

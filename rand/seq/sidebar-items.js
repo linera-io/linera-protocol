@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["index"],"struct":["SliceChooseIter"],"trait":["IteratorRandom","SliceRandom"]};

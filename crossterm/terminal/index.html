@@ -1,0 +1,66 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A module to work with the terminal."><title>crossterm::terminal - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="crossterm" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../crossterm/index.html">crossterm</a><span class="version">0.27.0</span></h2></div><h2 class="location"><a href="#">Module terminal</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#functions">Functions</a></li></ul></section><h2><a href="../index.html">In crate crossterm</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">crossterm</a>::<wbr><a class="mod" href="#">terminal</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/crossterm/terminal.rs.html#1-568">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A module to work with the terminal.</p>
+<h2 id="terminal"><a class="doc-anchor" href="#terminal">§</a>Terminal</h2>
+<p>The <code>terminal</code> module provides functionality to work with the terminal.</p>
+<p>This documentation does not contain a lot of examples. The reason is that it’s fairly
+obvious how to use this crate. Although, we do provide
+<a href="https://github.com/crossterm-rs/crossterm/tree/master/examples">examples</a> repository
+to demonstrate the capabilities.</p>
+<p>Most terminal actions can be performed with commands.
+Please have a look at <a href="../index.html#command-api">command documentation</a> for a more detailed documentation.</p>
+<h3 id="screen-buffer"><a class="doc-anchor" href="#screen-buffer">§</a>Screen Buffer</h3>
+<p>A screen buffer is a two-dimensional array of character
+and color data which is displayed in a terminal screen.</p>
+<p>The terminal has several of those buffers and is able to switch between them.
+The default screen in which you work is called the ‘main screen’.
+The other screens are called the ‘alternative screen’.</p>
+<p>It is important to understand that crossterm does not yet support creating screens,
+or switch between more than two buffers, and only offers the ability to change
+between the ‘alternate’ and ‘main screen’.</p>
+<h4 id="alternate-screen"><a class="doc-anchor" href="#alternate-screen">§</a>Alternate Screen</h4>
+<p>By default, you will be working on the main screen.
+There is also another screen called the ‘alternative’ screen.
+This screen is slightly different from the main screen.
+For example, it has the exact dimensions of the terminal window,
+without any scroll-back area.</p>
+<p>Crossterm offers the possibility to switch to the ‘alternative’ screen,
+make some modifications, and move back to the ‘main’ screen again.
+The main screen will stay intact and will have the original data as we performed all
+operations on the alternative screen.</p>
+<p>An good example of this is Vim.
+When it is launched from bash, a whole new buffer is used to modify a file.
+Then, when the modification is finished, it closes again and continues on the main screen.</p>
+<h4 id="raw-mode"><a class="doc-anchor" href="#raw-mode">§</a>Raw Mode</h4>
+<p>By default, the terminal functions in a certain way.
+For example, it will move the cursor to the beginning of the next line when the input hits the end of a line.
+Or that the backspace is interpreted for character removal.</p>
+<p>Sometimes these default modes are irrelevant,
+and in this case, we can turn them off.
+This is what happens when you enable raw modes.</p>
+<p>Those modes will be set when enabling raw modes:</p>
+<ul>
+<li>Input will not be forwarded to screen</li>
+<li>Input will not be processed on enter press</li>
+<li>Input will not be line buffered (input sent byte-by-byte to input buffer)</li>
+<li>Special keys like backspace and CTRL+C will not be processed by terminal driver</li>
+<li>New line character will not be processed therefore <code>println!</code> can’t be used, use <code>write!</code> instead</li>
+</ul>
+<p>Raw mode can be enabled/disabled with the <a href="fn.enable_raw_mode.html" title="fn crossterm::terminal::enable_raw_mode">enable_raw_mode</a> and <a href="fn.disable_raw_mode.html" title="fn crossterm::terminal::disable_raw_mode">disable_raw_mode</a> functions.</p>
+<h3 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io::{<span class="self">self</span>, Write};
+<span class="kw">use </span>crossterm::{execute, terminal::{ScrollUp, SetSize, size}};
+
+<span class="kw">fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span>(cols, rows) = size()<span class="question-mark">?</span>;
+    <span class="comment">// Resize terminal and scroll up.
+    </span><span class="macro">execute!</span>(
+        io::stdout(),
+        SetSize(<span class="number">10</span>, <span class="number">10</span>),
+        ScrollUp(<span class="number">5</span>)
+    )<span class="question-mark">?</span>;
+
+    <span class="comment">// Be a good citizen, cleanup
+    </span><span class="macro">execute!</span>(io::stdout(), SetSize(cols, rows))<span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<p>For manual execution control check out <a href="../macro.queue.html">crossterm::queue</a>.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.BeginSynchronizedUpdate.html" title="struct crossterm::terminal::BeginSynchronizedUpdate">BeginSynchronizedUpdate</a></div><div class="desc docblock-short">A command that instructs the terminal emulator to begin a synchronized frame.</div></li><li><div class="item-name"><a class="struct" href="struct.Clear.html" title="struct crossterm::terminal::Clear">Clear</a></div><div class="desc docblock-short">A command that clears the terminal screen buffer.</div></li><li><div class="item-name"><a class="struct" href="struct.DisableLineWrap.html" title="struct crossterm::terminal::DisableLineWrap">DisableLineWrap</a></div><div class="desc docblock-short">Disables line wrapping.</div></li><li><div class="item-name"><a class="struct" href="struct.EnableLineWrap.html" title="struct crossterm::terminal::EnableLineWrap">EnableLineWrap</a></div><div class="desc docblock-short">Enable line wrapping.</div></li><li><div class="item-name"><a class="struct" href="struct.EndSynchronizedUpdate.html" title="struct crossterm::terminal::EndSynchronizedUpdate">EndSynchronizedUpdate</a></div><div class="desc docblock-short">A command that instructs the terminal to end a synchronized frame.</div></li><li><div class="item-name"><a class="struct" href="struct.EnterAlternateScreen.html" title="struct crossterm::terminal::EnterAlternateScreen">EnterAlternateScreen</a></div><div class="desc docblock-short">A command that switches to alternate screen.</div></li><li><div class="item-name"><a class="struct" href="struct.LeaveAlternateScreen.html" title="struct crossterm::terminal::LeaveAlternateScreen">LeaveAlternateScreen</a></div><div class="desc docblock-short">A command that switches back to the main screen.</div></li><li><div class="item-name"><a class="struct" href="struct.ScrollDown.html" title="struct crossterm::terminal::ScrollDown">ScrollDown</a></div><div class="desc docblock-short">A command that scrolls the terminal screen a given number of rows down.</div></li><li><div class="item-name"><a class="struct" href="struct.ScrollUp.html" title="struct crossterm::terminal::ScrollUp">ScrollUp</a></div><div class="desc docblock-short">A command that scrolls the terminal screen a given number of rows up.</div></li><li><div class="item-name"><a class="struct" href="struct.SetSize.html" title="struct crossterm::terminal::SetSize">SetSize</a></div><div class="desc docblock-short">A command that sets the terminal buffer size <code>(columns, rows)</code>.</div></li><li><div class="item-name"><a class="struct" href="struct.SetTitle.html" title="struct crossterm::terminal::SetTitle">SetTitle</a></div><div class="desc docblock-short">A command that sets the terminal title</div></li><li><div class="item-name"><a class="struct" href="struct.WindowSize.html" title="struct crossterm::terminal::WindowSize">WindowSize</a></div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.ClearType.html" title="enum crossterm::terminal::ClearType">ClearType</a></div><div class="desc docblock-short">Different ways to clear the terminal buffer.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.disable_raw_mode.html" title="fn crossterm::terminal::disable_raw_mode">disable_raw_mode</a></div><div class="desc docblock-short">Disables raw mode.</div></li><li><div class="item-name"><a class="fn" href="fn.enable_raw_mode.html" title="fn crossterm::terminal::enable_raw_mode">enable_raw_mode</a></div><div class="desc docblock-short">Enables raw mode.</div></li><li><div class="item-name"><a class="fn" href="fn.is_raw_mode_enabled.html" title="fn crossterm::terminal::is_raw_mode_enabled">is_raw_mode_enabled</a></div><div class="desc docblock-short">Tells whether the raw mode is enabled.</div></li><li><div class="item-name"><a class="fn" href="fn.size.html" title="fn crossterm::terminal::size">size</a></div><div class="desc docblock-short">Returns the terminal size <code>(columns, rows)</code>.</div></li><li><div class="item-name"><a class="fn" href="fn.window_size.html" title="fn crossterm::terminal::window_size">window_size</a></div><div class="desc docblock-short">Returns the terminal size <code>[WindowSize]</code>.</div></li></ul></section></div></main></body></html>

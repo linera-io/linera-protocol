@@ -1,0 +1,232 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="The Tokio runtime."><title>Runtime in tokio::runtime - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="tokio" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc struct"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../tokio/index.html">tokio</a><span class="version">1.40.0</span></h2></div><h2 class="location"><a href="#">Runtime</a></h2><div class="sidebar-elems"><section><h3><a href="#implementations">Methods</a></h3><ul class="block method"><li><a href="#method.block_on">block_on</a></li><li><a href="#method.enter">enter</a></li><li><a href="#method.handle">handle</a></li><li><a href="#method.metrics">metrics</a></li><li><a href="#method.new">new</a></li><li><a href="#method.shutdown_background">shutdown_background</a></li><li><a href="#method.shutdown_timeout">shutdown_timeout</a></li><li><a href="#method.spawn">spawn</a></li><li><a href="#method.spawn_blocking">spawn_blocking</a></li></ul><h3><a href="#trait-implementations">Trait Implementations</a></h3><ul class="block trait-implementation"><li><a href="#impl-Debug-for-Runtime">Debug</a></li><li><a href="#impl-Drop-for-Runtime">Drop</a></li><li><a href="#impl-RefUnwindSafe-for-Runtime">RefUnwindSafe</a></li><li><a href="#impl-UnwindSafe-for-Runtime">UnwindSafe</a></li></ul><h3><a href="#synthetic-implementations">Auto Trait Implementations</a></h3><ul class="block synthetic-implementation"><li><a href="#impl-Freeze-for-Runtime">!Freeze</a></li><li><a href="#impl-Send-for-Runtime">Send</a></li><li><a href="#impl-Sync-for-Runtime">Sync</a></li><li><a href="#impl-Unpin-for-Runtime">Unpin</a></li></ul><h3><a href="#blanket-implementations">Blanket Implementations</a></h3><ul class="block blanket-implementation"><li><a href="#impl-Any-for-T">Any</a></li><li><a href="#impl-Borrow%3CT%3E-for-T">Borrow&lt;T&gt;</a></li><li><a href="#impl-BorrowMut%3CT%3E-for-T">BorrowMut&lt;T&gt;</a></li><li><a href="#impl-From%3CT%3E-for-T">From&lt;T&gt;</a></li><li><a href="#impl-Into%3CU%3E-for-T">Into&lt;U&gt;</a></li><li><a href="#impl-TryFrom%3CU%3E-for-T">TryFrom&lt;U&gt;</a></li><li><a href="#impl-TryInto%3CU%3E-for-T">TryInto&lt;U&gt;</a></li></ul></section><h2><a href="index.html">In tokio::runtime</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Struct <a href="../index.html">tokio</a>::<wbr><a href="index.html">runtime</a>::<wbr><a class="struct" href="#">Runtime</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/tokio/runtime/runtime.rs.html#97-106">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub struct Runtime { <span class="comment">/* private fields */</span> }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>The Tokio runtime.</p>
+<p>The runtime provides an I/O driver, task scheduler, <a href="../time/index.html" title="mod tokio::time">timer</a>, and
+blocking pool, necessary for running asynchronous tasks.</p>
+<p>Instances of <code>Runtime</code> can be created using <a href="struct.Runtime.html#method.new" title="associated function tokio::runtime::Runtime::new"><code>new</code></a>, or <a href="struct.Builder.html" title="struct tokio::runtime::Builder"><code>Builder</code></a>.
+However, most users will use the <a href="../attr.main.html" title="attr tokio::main"><code>#[tokio::main]</code></a> annotation on
+their entry point instead.</p>
+<p>See <a href="index.html">module level</a> documentation for more details.</p>
+<h2 id="shutdown"><a class="doc-anchor" href="#shutdown">§</a>Shutdown</h2>
+<p>Shutting down the runtime is done by dropping the value, or calling
+<a href="struct.Runtime.html#method.shutdown_background" title="method tokio::runtime::Runtime::shutdown_background"><code>shutdown_background</code></a> or <a href="struct.Runtime.html#method.shutdown_timeout" title="method tokio::runtime::Runtime::shutdown_timeout"><code>shutdown_timeout</code></a>.</p>
+<p>Tasks spawned through <a href="struct.Runtime.html#method.spawn" title="method tokio::runtime::Runtime::spawn"><code>Runtime::spawn</code></a> keep running until they yield.
+Then they are dropped. They are not <em>guaranteed</em> to run to completion, but
+<em>might</em> do so if they do not yield until completion.</p>
+<p>Blocking functions spawned through <a href="struct.Runtime.html#method.spawn_blocking" title="method tokio::runtime::Runtime::spawn_blocking"><code>Runtime::spawn_blocking</code></a> keep running
+until they return.</p>
+<p>The thread initiating the shutdown blocks until all spawned work has been
+stopped. This can take an indefinite amount of time. The <code>Drop</code>
+implementation waits forever for this.</p>
+<p>The <a href="struct.Runtime.html#method.shutdown_background" title="method tokio::runtime::Runtime::shutdown_background"><code>shutdown_background</code></a> and <a href="struct.Runtime.html#method.shutdown_timeout" title="method tokio::runtime::Runtime::shutdown_timeout"><code>shutdown_timeout</code></a> methods can be used if
+waiting forever is undesired. When the timeout is reached, spawned work that
+did not stop in time and threads running it are leaked. The work continues
+to run until one of the stopping conditions is fulfilled, but the thread
+initiating the shutdown is unblocked.</p>
+<p>Once the runtime has been dropped, any outstanding I/O resources bound to
+it will no longer function. Calling any method on them will result in an
+error.</p>
+<h2 id="sharing"><a class="doc-anchor" href="#sharing">§</a>Sharing</h2>
+<p>There are several ways to establish shared access to a Tokio runtime:</p>
+<ul>
+<li>Using an <code><a href="https://doc.rust-lang.org/1.81.0/alloc/sync/struct.Arc.html" title="struct alloc::sync::Arc">Arc</a>&lt;Runtime&gt;</code>.</li>
+<li>Using a <a href="struct.Handle.html" title="struct tokio::runtime::Handle"><code>Handle</code></a>.</li>
+<li>Entering the runtime context.</li>
+</ul>
+<p>Using an <code><a href="https://doc.rust-lang.org/1.81.0/alloc/sync/struct.Arc.html" title="struct alloc::sync::Arc">Arc</a>&lt;Runtime&gt;</code> or <a href="struct.Handle.html" title="struct tokio::runtime::Handle"><code>Handle</code></a> allows you to do various
+things with the runtime such as spawning new tasks or entering the runtime
+context. Both types can be cloned to create a new handle that allows access
+to the same runtime. By passing clones into different tasks or threads, you
+will be able to access the runtime from those tasks or threads.</p>
+<p>The difference between <code><a href="https://doc.rust-lang.org/1.81.0/alloc/sync/struct.Arc.html" title="struct alloc::sync::Arc">Arc</a>&lt;Runtime&gt;</code> and <a href="struct.Handle.html" title="struct tokio::runtime::Handle"><code>Handle</code></a> is that
+an <code><a href="https://doc.rust-lang.org/1.81.0/alloc/sync/struct.Arc.html" title="struct alloc::sync::Arc">Arc</a>&lt;Runtime&gt;</code> will prevent the runtime from shutting down,
+whereas a <a href="struct.Handle.html" title="struct tokio::runtime::Handle"><code>Handle</code></a> does not prevent that. This is because shutdown of the
+runtime happens when the destructor of the <code>Runtime</code> object runs.</p>
+<p>Calls to <a href="struct.Runtime.html#method.shutdown_background" title="method tokio::runtime::Runtime::shutdown_background"><code>shutdown_background</code></a> and <a href="struct.Runtime.html#method.shutdown_timeout" title="method tokio::runtime::Runtime::shutdown_timeout"><code>shutdown_timeout</code></a> require exclusive
+ownership of the <code>Runtime</code> type. When using an <code><a href="https://doc.rust-lang.org/1.81.0/alloc/sync/struct.Arc.html" title="struct alloc::sync::Arc">Arc</a>&lt;Runtime&gt;</code>,
+this can be achieved via <a href="https://doc.rust-lang.org/1.81.0/alloc/sync/struct.Arc.html#method.try_unwrap" title="associated function alloc::sync::Arc::try_unwrap"><code>Arc::try_unwrap</code></a> when only one strong count
+reference is left over.</p>
+<p>The runtime context is entered using the <a href="struct.Runtime.html#method.enter" title="method tokio::runtime::Runtime::enter"><code>Runtime::enter</code></a> or
+<a href="struct.Handle.html#method.enter" title="method tokio::runtime::Handle::enter"><code>Handle::enter</code></a> methods, which use a thread-local variable to store the
+current runtime. Whenever you are inside the runtime context, methods such
+as <a href="../task/fn.spawn.html" title="fn tokio::task::spawn"><code>tokio::spawn</code></a> will use the runtime whose context you are inside.</p>
+</div></details><h2 id="implementations" class="section-header">Implementations<a href="#implementations" class="anchor">§</a></h2><div id="implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-Runtime" class="impl"><a class="src rightside" href="../../src/tokio/runtime/runtime.rs.html#138-478">source</a><a href="#impl-Runtime" class="anchor">§</a><h3 class="code-header">impl <a class="struct" href="struct.Runtime.html" title="struct tokio::runtime::Runtime">Runtime</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.new" class="method"><a class="src rightside" href="../../src/tokio/runtime/runtime.rs.html#181-183">source</a><h4 class="code-header">pub fn <a href="#method.new" class="fn">new</a>() -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="struct" href="struct.Runtime.html" title="struct tokio::runtime::Runtime">Runtime</a>&gt;</h4></section></summary><div class="docblock"><p>Creates a new runtime instance with default configuration values.</p>
+<p>This results in the multi threaded scheduler, I/O driver, and time driver being
+initialized.</p>
+<p>Most applications will not need to call this function directly. Instead,
+they will use the  <a href="../attr.main.html"><code>#[tokio::main]</code> attribute</a>. When a more complex
+configuration is necessary, the <a href="struct.Builder.html" title="struct tokio::runtime::Builder">runtime builder</a> may be used.</p>
+<p>See <a href="index.html">module level</a> documentation for more details.</p>
+<h5 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h5>
+<p>Creating a new <code>Runtime</code> with default configuration values.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::runtime::Runtime;
+
+<span class="kw">let </span>rt = Runtime::new()
+    .unwrap();
+
+<span class="comment">// Use the runtime...</span></code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.handle" class="method"><a class="src rightside" href="../../src/tokio/runtime/runtime.rs.html#205-207">source</a><h4 class="code-header">pub fn <a href="#method.handle" class="fn">handle</a>(&amp;self) -&gt; &amp;<a class="struct" href="struct.Handle.html" title="struct tokio::runtime::Handle">Handle</a></h4></section></summary><div class="docblock"><p>Returns a handle to the runtime’s spawner.</p>
+<p>The returned handle can be used to spawn tasks that run on this runtime, and can
+be cloned to allow moving the <code>Handle</code> to other threads.</p>
+<p>Calling <a href="struct.Handle.html#method.block_on" title="method tokio::runtime::Handle::block_on"><code>Handle::block_on</code></a> on a handle to a <code>current_thread</code> runtime is error-prone.
+Refer to the documentation of <a href="struct.Handle.html#method.block_on" title="method tokio::runtime::Handle::block_on"><code>Handle::block_on</code></a> for more.</p>
+<h5 id="examples-1"><a class="doc-anchor" href="#examples-1">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::runtime::Runtime;
+
+<span class="kw">let </span>rt = Runtime::new()
+    .unwrap();
+
+<span class="kw">let </span>handle = rt.handle();
+
+<span class="comment">// Use the handle...</span></code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.spawn" class="method"><a class="src rightside" href="../../src/tokio/runtime/runtime.rs.html#239-249">source</a><h4 class="code-header">pub fn <a href="#method.spawn" class="fn">spawn</a>&lt;F&gt;(&amp;self, future: F) -&gt; <a class="struct" href="../task/struct.JoinHandle.html" title="struct tokio::task::JoinHandle">JoinHandle</a>&lt;F::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html#associatedtype.Output" title="type core::future::future::Future::Output">Output</a>&gt; <a href="#" class="tooltip" data-notable-ty="JoinHandle&lt;F::Output&gt;">ⓘ</a><div class="where">where
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'static,
+    F::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html#associatedtype.Output" title="type core::future::future::Future::Output">Output</a>: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'static,</div></h4></section></summary><div class="docblock"><p>Spawns a future onto the Tokio runtime.</p>
+<p>This spawns the given future onto the runtime’s executor, usually a
+thread pool. The thread pool is then responsible for polling the future
+until it completes.</p>
+<p>The provided future will start running in the background immediately
+when <code>spawn</code> is called, even if you don’t await the returned
+<code>JoinHandle</code>.</p>
+<p>See <a href="index.html">module level</a> documentation for more details.</p>
+<h5 id="examples-2"><a class="doc-anchor" href="#examples-2">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::runtime::Runtime;
+
+<span class="comment">// Create the runtime
+</span><span class="kw">let </span>rt = Runtime::new().unwrap();
+
+<span class="comment">// Spawn a future onto the runtime
+</span>rt.spawn(<span class="kw">async </span>{
+    <span class="macro">println!</span>(<span class="string">"now running on a worker thread"</span>);
+});</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.spawn_blocking" class="method"><a class="src rightside" href="../../src/tokio/runtime/runtime.rs.html#269-275">source</a><h4 class="code-header">pub fn <a href="#method.spawn_blocking" class="fn">spawn_blocking</a>&lt;F, R&gt;(&amp;self, func: F) -&gt; <a class="struct" href="../task/struct.JoinHandle.html" title="struct tokio::task::JoinHandle">JoinHandle</a>&lt;R&gt; <a href="#" class="tooltip" data-notable-ty="JoinHandle&lt;R&gt;">ⓘ</a><div class="where">where
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnOnce.html" title="trait core::ops::function::FnOnce">FnOnce</a>() -&gt; R + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'static,
+    R: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'static,</div></h4></section></summary><div class="docblock"><p>Runs the provided function on an executor dedicated to blocking operations.</p>
+<h5 id="examples-3"><a class="doc-anchor" href="#examples-3">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::runtime::Runtime;
+
+<span class="comment">// Create the runtime
+</span><span class="kw">let </span>rt = Runtime::new().unwrap();
+
+<span class="comment">// Spawn a blocking function onto the runtime
+</span>rt.spawn_blocking(|| {
+    <span class="macro">println!</span>(<span class="string">"now running on a worker thread"</span>);
+});</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.block_on" class="method"><a class="src rightside" href="../../src/tokio/runtime/runtime.rs.html#331-337">source</a><h4 class="code-header">pub fn <a href="#method.block_on" class="fn">block_on</a>&lt;F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&gt;(&amp;self, future: F) -&gt; F::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html#associatedtype.Output" title="type core::future::future::Future::Output">Output</a></h4></section></summary><div class="docblock"><p>Runs a future to completion on the Tokio runtime. This is the
+runtime’s entry point.</p>
+<p>This runs the given future on the current thread, blocking until it is
+complete, and yielding its resolved result. Any tasks or timers
+which the future spawns internally will be executed on the runtime.</p>
+<h5 id="non-worker-future"><a class="doc-anchor" href="#non-worker-future">§</a>Non-worker future</h5>
+<p>Note that the future required by this function does not run as a
+worker. The expectation is that other tasks are spawned by the future here.
+Awaiting on other futures from the future provided here will not
+perform as fast as those spawned as workers.</p>
+<h5 id="multi-thread-scheduler"><a class="doc-anchor" href="#multi-thread-scheduler">§</a>Multi thread scheduler</h5>
+<p>When the multi thread scheduler is used this will allow futures
+to run within the io driver and timer context of the overall runtime.</p>
+<p>Any spawned tasks will continue running after <code>block_on</code> returns.</p>
+<h5 id="current-thread-scheduler"><a class="doc-anchor" href="#current-thread-scheduler">§</a>Current thread scheduler</h5>
+<p>When the current thread scheduler is enabled <code>block_on</code>
+can be called concurrently from multiple threads. The first call
+will take ownership of the io and timer drivers. This means
+other threads which do not own the drivers will hook into that one.
+When the first <code>block_on</code> completes, other threads will be able to
+“steal” the driver to allow continued execution of their futures.</p>
+<p>Any spawned tasks will be suspended after <code>block_on</code> returns. Calling
+<code>block_on</code> again will resume previously spawned tasks.</p>
+<h5 id="panics"><a class="doc-anchor" href="#panics">§</a>Panics</h5>
+<p>This function panics if the provided future panics, or if called within an
+asynchronous execution context.</p>
+<h5 id="examples-4"><a class="doc-anchor" href="#examples-4">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::runtime::Runtime;
+
+<span class="comment">// Create the runtime
+</span><span class="kw">let </span>rt  = Runtime::new().unwrap();
+
+<span class="comment">// Execute the future, blocking the current thread until completion
+</span>rt.block_on(<span class="kw">async </span>{
+    <span class="macro">println!</span>(<span class="string">"hello"</span>);
+});</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.enter" class="method"><a class="src rightside" href="../../src/tokio/runtime/runtime.rs.html#405-407">source</a><h4 class="code-header">pub fn <a href="#method.enter" class="fn">enter</a>(&amp;self) -&gt; <a class="struct" href="struct.EnterGuard.html" title="struct tokio::runtime::EnterGuard">EnterGuard</a>&lt;'_&gt;</h4></section></summary><div class="docblock"><p>Enters the runtime context.</p>
+<p>This allows you to construct types that must have an executor
+available on creation such as <a href="../time/struct.Sleep.html" title="struct tokio::time::Sleep"><code>Sleep</code></a> or <a href="../net/struct.TcpStream.html" title="struct tokio::net::TcpStream"><code>TcpStream</code></a>. It will
+also allow you to call methods such as <a href="../task/fn.spawn.html" title="fn tokio::task::spawn"><code>tokio::spawn</code></a>.</p>
+<h5 id="example"><a class="doc-anchor" href="#example">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::runtime::Runtime;
+<span class="kw">use </span>tokio::task::JoinHandle;
+
+<span class="kw">fn </span>function_that_spawns(msg: String) -&gt; JoinHandle&lt;()&gt; {
+    <span class="comment">// Had we not used `rt.enter` below, this would panic.
+    </span>tokio::spawn(<span class="kw">async move </span>{
+        <span class="macro">println!</span>(<span class="string">"{}"</span>, msg);
+    })
+}
+
+<span class="kw">fn </span>main() {
+    <span class="kw">let </span>rt = Runtime::new().unwrap();
+
+    <span class="kw">let </span>s = <span class="string">"Hello World!"</span>.to_string();
+
+    <span class="comment">// By entering the context, we tie `tokio::spawn` to this executor.
+    </span><span class="kw">let </span>_guard = rt.enter();
+    <span class="kw">let </span>handle = function_that_spawns(s);
+
+    <span class="comment">// Wait for the task before we end the test.
+    </span>rt.block_on(handle).unwrap();
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.shutdown_timeout" class="method"><a class="src rightside" href="../../src/tokio/runtime/runtime.rs.html#435-439">source</a><h4 class="code-header">pub fn <a href="#method.shutdown_timeout" class="fn">shutdown_timeout</a>(self, duration: <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/time/struct.Duration.html" title="struct core::time::Duration">Duration</a>)</h4></section></summary><div class="docblock"><p>Shuts down the runtime, waiting for at most <code>duration</code> for all spawned
+work to stop.</p>
+<p>See the <a href="struct.Runtime.html#shutdown" title="struct tokio::runtime::Runtime">struct level documentation</a> for more details.</p>
+<h5 id="examples-5"><a class="doc-anchor" href="#examples-5">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::runtime::Runtime;
+<span class="kw">use </span>tokio::task;
+
+<span class="kw">use </span>std::thread;
+<span class="kw">use </span>std::time::Duration;
+
+<span class="kw">fn </span>main() {
+   <span class="kw">let </span>runtime = Runtime::new().unwrap();
+
+   runtime.block_on(<span class="kw">async move </span>{
+       task::spawn_blocking(<span class="kw">move </span>|| {
+           thread::sleep(Duration::from_secs(<span class="number">10_000</span>));
+       });
+   });
+
+   runtime.shutdown_timeout(Duration::from_millis(<span class="number">100</span>));
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.shutdown_background" class="method"><a class="src rightside" href="../../src/tokio/runtime/runtime.rs.html#469-471">source</a><h4 class="code-header">pub fn <a href="#method.shutdown_background" class="fn">shutdown_background</a>(self)</h4></section></summary><div class="docblock"><p>Shuts down the runtime, without waiting for any spawned work to stop.</p>
+<p>This can be useful if you want to drop a runtime from within another runtime.
+Normally, dropping a runtime will block indefinitely for spawned blocking tasks
+to complete, which would normally not be permitted within an asynchronous context.
+By calling <code>shutdown_background()</code>, you can drop the runtime from such a context.</p>
+<p>Note however, that because we do not wait for any blocking tasks to complete, this
+may result in a resource leak (in that any blocking tasks are still running until they
+return.</p>
+<p>See the <a href="struct.Runtime.html#shutdown" title="struct tokio::runtime::Runtime">struct level documentation</a> for more details.</p>
+<p>This function is equivalent to calling <code>shutdown_timeout(Duration::from_nanos(0))</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::runtime::Runtime;
+
+<span class="kw">fn </span>main() {
+   <span class="kw">let </span>runtime = Runtime::new().unwrap();
+
+   runtime.block_on(<span class="kw">async move </span>{
+       <span class="kw">let </span>inner_runtime = Runtime::new().unwrap();
+       <span class="comment">// ...
+       </span>inner_runtime.shutdown_background();
+   });
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.metrics" class="method"><a class="src rightside" href="../../src/tokio/runtime/runtime.rs.html#475-477">source</a><h4 class="code-header">pub fn <a href="#method.metrics" class="fn">metrics</a>(&amp;self) -&gt; <a class="struct" href="struct.RuntimeMetrics.html" title="struct tokio::runtime::RuntimeMetrics">RuntimeMetrics</a></h4></section></summary><div class="docblock"><p>Returns a view that lets you get information about how the runtime
+is performing.</p>
+</div></details></div></details></div><h2 id="trait-implementations" class="section-header">Trait Implementations<a href="#trait-implementations" class="anchor">§</a></h2><div id="trait-implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-Debug-for-Runtime" class="impl"><a class="src rightside" href="../../src/tokio/runtime/runtime.rs.html#96">source</a><a href="#impl-Debug-for-Runtime" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html" title="trait core::fmt::Debug">Debug</a> for <a class="struct" href="struct.Runtime.html" title="struct tokio::runtime::Runtime">Runtime</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.fmt" class="method trait-impl"><a class="src rightside" href="../../src/tokio/runtime/runtime.rs.html#96">source</a><a href="#method.fmt" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html#tymethod.fmt" class="fn">fmt</a>(&amp;self, f: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/fmt/struct.Formatter.html" title="struct core::fmt::Formatter">Formatter</a>&lt;'_&gt;) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a></h4></section></summary><div class='docblock'>Formats the value using the given formatter. <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html#tymethod.fmt">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Drop-for-Runtime" class="impl"><a class="src rightside" href="../../src/tokio/runtime/runtime.rs.html#481-504">source</a><a href="#impl-Drop-for-Runtime" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/drop/trait.Drop.html" title="trait core::ops::drop::Drop">Drop</a> for <a class="struct" href="struct.Runtime.html" title="struct tokio::runtime::Runtime">Runtime</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.drop" class="method trait-impl"><a class="src rightside" href="../../src/tokio/runtime/runtime.rs.html#482-503">source</a><a href="#method.drop" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/ops/drop/trait.Drop.html#tymethod.drop" class="fn">drop</a>(&amp;mut self)</h4></section></summary><div class='docblock'>Executes the destructor for this type. <a href="https://doc.rust-lang.org/1.81.0/core/ops/drop/trait.Drop.html#tymethod.drop">Read more</a></div></details></div></details><section id="impl-RefUnwindSafe-for-Runtime" class="impl"><a class="src rightside" href="../../src/tokio/runtime/runtime.rs.html#508">source</a><a href="#impl-RefUnwindSafe-for-Runtime" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/panic/unwind_safe/trait.RefUnwindSafe.html" title="trait core::panic::unwind_safe::RefUnwindSafe">RefUnwindSafe</a> for <a class="struct" href="struct.Runtime.html" title="struct tokio::runtime::Runtime">Runtime</a></h3></section><section id="impl-UnwindSafe-for-Runtime" class="impl"><a class="src rightside" href="../../src/tokio/runtime/runtime.rs.html#506">source</a><a href="#impl-UnwindSafe-for-Runtime" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/panic/unwind_safe/trait.UnwindSafe.html" title="trait core::panic::unwind_safe::UnwindSafe">UnwindSafe</a> for <a class="struct" href="struct.Runtime.html" title="struct tokio::runtime::Runtime">Runtime</a></h3></section></div><h2 id="synthetic-implementations" class="section-header">Auto Trait Implementations<a href="#synthetic-implementations" class="anchor">§</a></h2><div id="synthetic-implementations-list"><section id="impl-Freeze-for-Runtime" class="impl"><a href="#impl-Freeze-for-Runtime" class="anchor">§</a><h3 class="code-header">impl !<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Freeze.html" title="trait core::marker::Freeze">Freeze</a> for <a class="struct" href="struct.Runtime.html" title="struct tokio::runtime::Runtime">Runtime</a></h3></section><section id="impl-Send-for-Runtime" class="impl"><a href="#impl-Send-for-Runtime" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> for <a class="struct" href="struct.Runtime.html" title="struct tokio::runtime::Runtime">Runtime</a></h3></section><section id="impl-Sync-for-Runtime" class="impl"><a href="#impl-Sync-for-Runtime" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> for <a class="struct" href="struct.Runtime.html" title="struct tokio::runtime::Runtime">Runtime</a></h3></section><section id="impl-Unpin-for-Runtime" class="impl"><a href="#impl-Unpin-for-Runtime" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a> for <a class="struct" href="struct.Runtime.html" title="struct tokio::runtime::Runtime">Runtime</a></h3></section></div><h2 id="blanket-implementations" class="section-header">Blanket Implementations<a href="#blanket-implementations" class="anchor">§</a></h2><div id="blanket-implementations-list"><details class="toggle implementors-toggle"><summary><section id="impl-Any-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#140">source</a><a href="#impl-Any-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html" title="trait core::any::Any">Any</a> for T<div class="where">where
+    T: 'static + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.type_id" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#141">source</a><a href="#method.type_id" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html#tymethod.type_id" class="fn">type_id</a>(&amp;self) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/any/struct.TypeId.html" title="struct core::any::TypeId">TypeId</a></h4></section></summary><div class='docblock'>Gets the <code>TypeId</code> of <code>self</code>. <a href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html#tymethod.type_id">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Borrow%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#209">source</a><a href="#impl-Borrow%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html" title="trait core::borrow::Borrow">Borrow</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#211">source</a><a href="#method.borrow" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html#tymethod.borrow" class="fn">borrow</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a></h4></section></summary><div class='docblock'>Immutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html#tymethod.borrow">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-BorrowMut%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#217">source</a><a href="#impl-BorrowMut%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html" title="trait core::borrow::BorrowMut">BorrowMut</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow_mut" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#218">source</a><a href="#method.borrow_mut" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut" class="fn">borrow_mut</a>(&amp;mut self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a></h4></section></summary><div class='docblock'>Mutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-From%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#765">source</a><a href="#impl-From%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for T</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#768">source</a><a href="#method.from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html#tymethod.from" class="fn">from</a>(t: T) -&gt; T</h4></section></summary><div class="docblock"><p>Returns the argument unchanged.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Into%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#748-750">source</a><a href="#impl-Into%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#758">source</a><a href="#method.into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html#tymethod.into" class="fn">into</a>(self) -&gt; U</h4></section></summary><div class="docblock"><p>Calls <code>U::from(self)</code>.</p>
+<p>That is, this conversion is whatever the implementation of
+<code><a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for U</code> chooses to do.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryFrom%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#805-807">source</a><a href="#impl-TryFrom%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error" class="associatedtype trait-impl"><a href="#associatedtype.Error" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" class="associatedtype">Error</a> = <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/convert/enum.Infallible.html" title="enum core::convert::Infallible">Infallible</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#812">source</a><a href="#method.try_from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#tymethod.try_from" class="fn">try_from</a>(value: U) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, &lt;T as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryInto%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#790-792">source</a><a href="#impl-TryInto%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html" title="trait core::convert::TryInto">TryInto</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error-1" class="associatedtype trait-impl"><a href="#associatedtype.Error-1" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html#associatedtype.Error" class="associatedtype">Error</a> = &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#797">source</a><a href="#method.try_into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html#tymethod.try_into" class="fn">try_into</a>(self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;U, &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details></div><script type="text/json" id="notable-traits-data">{"JoinHandle<F::Output>":"<h3>Notable traits for <code><a class=\"struct\" href=\"../task/struct.JoinHandle.html\" title=\"struct tokio::task::JoinHandle\">JoinHandle</a>&lt;T&gt;</code></h3><pre><code><div class=\"where\">impl&lt;T&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html\" title=\"trait core::future::future::Future\">Future</a> for <a class=\"struct\" href=\"../task/struct.JoinHandle.html\" title=\"struct tokio::task::JoinHandle\">JoinHandle</a>&lt;T&gt;</div><div class=\"where\">    type <a href=\"https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html#associatedtype.Output\" class=\"associatedtype\">Output</a> = <a class=\"enum\" href=\"https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html\" title=\"enum core::result::Result\">Result</a>&lt;T, <a class=\"struct\" href=\"../task/struct.JoinError.html\" title=\"struct tokio::task::JoinError\">JoinError</a>&gt;;</div>","JoinHandle<R>":"<h3>Notable traits for <code><a class=\"struct\" href=\"../task/struct.JoinHandle.html\" title=\"struct tokio::task::JoinHandle\">JoinHandle</a>&lt;T&gt;</code></h3><pre><code><div class=\"where\">impl&lt;T&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html\" title=\"trait core::future::future::Future\">Future</a> for <a class=\"struct\" href=\"../task/struct.JoinHandle.html\" title=\"struct tokio::task::JoinHandle\">JoinHandle</a>&lt;T&gt;</div><div class=\"where\">    type <a href=\"https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html#associatedtype.Output\" class=\"associatedtype\">Output</a> = <a class=\"enum\" href=\"https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html\" title=\"enum core::result::Result\">Result</a>&lt;T, <a class=\"struct\" href=\"../task/struct.JoinError.html\" title=\"struct tokio::task::JoinError\">JoinError</a>&gt;;</div>"}</script></section></div></main></body></html>

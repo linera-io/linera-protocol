@@ -1,0 +1,242 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="The Tokio runtime."><title>tokio::runtime - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="tokio" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../tokio/index.html">tokio</a><span class="version">1.40.0</span></h2></div><h2 class="location"><a href="#">Module runtime</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li></ul></section><h2><a href="../index.html">In crate tokio</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">tokio</a>::<wbr><a class="mod" href="#">runtime</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/tokio/runtime/mod.rs.html#1-417">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>The Tokio runtime.</p>
+<p>Unlike other Rust programs, asynchronous applications require runtime
+support. In particular, the following runtime services are necessary:</p>
+<ul>
+<li>An <strong>I/O event loop</strong>, called the driver, which drives I/O resources and
+dispatches I/O events to tasks that depend on them.</li>
+<li>A <strong>scheduler</strong> to execute <a href="../task/index.html" title="mod tokio::task">tasks</a> that use these I/O resources.</li>
+<li>A <strong>timer</strong> for scheduling work to run after a set period of time.</li>
+</ul>
+<p>Tokio’s <a href="struct.Runtime.html" title="struct tokio::runtime::Runtime"><code>Runtime</code></a> bundles all of these services as a single type, allowing
+them to be started, shut down, and configured together. However, often it is
+not required to configure a <a href="struct.Runtime.html" title="struct tokio::runtime::Runtime"><code>Runtime</code></a> manually, and a user may just use the
+<a href="../attr.main.html"><code>tokio::main</code></a> attribute macro, which creates a <a href="struct.Runtime.html" title="struct tokio::runtime::Runtime"><code>Runtime</code></a> under the hood.</p>
+<h2 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h2>
+<p>When no fine tuning is required, the <a href="../attr.main.html"><code>tokio::main</code></a> attribute macro can be
+used.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::net::TcpListener;
+<span class="kw">use </span>tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() -&gt; <span class="prelude-ty">Result</span>&lt;(), Box&lt;<span class="kw">dyn </span>std::error::Error&gt;&gt; {
+    <span class="kw">let </span>listener = TcpListener::bind(<span class="string">"127.0.0.1:8080"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="kw">loop </span>{
+        <span class="kw">let </span>(<span class="kw-2">mut </span>socket, <span class="kw">_</span>) = listener.accept().<span class="kw">await</span><span class="question-mark">?</span>;
+
+        tokio::spawn(<span class="kw">async move </span>{
+            <span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0</span>; <span class="number">1024</span>];
+
+            <span class="comment">// In a loop, read data from the socket and write the data back.
+            </span><span class="kw">loop </span>{
+                <span class="kw">let </span>n = <span class="kw">match </span>socket.read(<span class="kw-2">&amp;mut </span>buf).<span class="kw">await </span>{
+                    <span class="comment">// socket closed
+                    </span><span class="prelude-val">Ok</span>(n) <span class="kw">if </span>n == <span class="number">0 </span>=&gt; <span class="kw">return</span>,
+                    <span class="prelude-val">Ok</span>(n) =&gt; n,
+                    <span class="prelude-val">Err</span>(e) =&gt; {
+                        <span class="macro">println!</span>(<span class="string">"failed to read from socket; err = {:?}"</span>, e);
+                        <span class="kw">return</span>;
+                    }
+                };
+
+                <span class="comment">// Write the data back
+                </span><span class="kw">if let </span><span class="prelude-val">Err</span>(e) = socket.write_all(<span class="kw-2">&amp;</span>buf[<span class="number">0</span>..n]).<span class="kw">await </span>{
+                    <span class="macro">println!</span>(<span class="string">"failed to write to socket; err = {:?}"</span>, e);
+                    <span class="kw">return</span>;
+                }
+            }
+        });
+    }
+}</code></pre></div>
+<p>From within the context of the runtime, additional tasks are spawned using
+the <a href="../task/fn.spawn.html" title="fn tokio::task::spawn"><code>tokio::spawn</code></a> function. Futures spawned using this function will be
+executed on the same thread pool used by the <a href="struct.Runtime.html" title="struct tokio::runtime::Runtime"><code>Runtime</code></a>.</p>
+<p>A <a href="struct.Runtime.html" title="struct tokio::runtime::Runtime"><code>Runtime</code></a> instance can also be used directly.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::net::TcpListener;
+<span class="kw">use </span>tokio::io::{AsyncReadExt, AsyncWriteExt};
+<span class="kw">use </span>tokio::runtime::Runtime;
+
+<span class="kw">fn </span>main() -&gt; <span class="prelude-ty">Result</span>&lt;(), Box&lt;<span class="kw">dyn </span>std::error::Error&gt;&gt; {
+    <span class="comment">// Create the runtime
+    </span><span class="kw">let </span>rt  = Runtime::new()<span class="question-mark">?</span>;
+
+    <span class="comment">// Spawn the root task
+    </span>rt.block_on(<span class="kw">async </span>{
+        <span class="kw">let </span>listener = TcpListener::bind(<span class="string">"127.0.0.1:8080"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="kw">loop </span>{
+            <span class="kw">let </span>(<span class="kw-2">mut </span>socket, <span class="kw">_</span>) = listener.accept().<span class="kw">await</span><span class="question-mark">?</span>;
+
+            tokio::spawn(<span class="kw">async move </span>{
+                <span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0</span>; <span class="number">1024</span>];
+
+                <span class="comment">// In a loop, read data from the socket and write the data back.
+                </span><span class="kw">loop </span>{
+                    <span class="kw">let </span>n = <span class="kw">match </span>socket.read(<span class="kw-2">&amp;mut </span>buf).<span class="kw">await </span>{
+                        <span class="comment">// socket closed
+                        </span><span class="prelude-val">Ok</span>(n) <span class="kw">if </span>n == <span class="number">0 </span>=&gt; <span class="kw">return</span>,
+                        <span class="prelude-val">Ok</span>(n) =&gt; n,
+                        <span class="prelude-val">Err</span>(e) =&gt; {
+                            <span class="macro">println!</span>(<span class="string">"failed to read from socket; err = {:?}"</span>, e);
+                            <span class="kw">return</span>;
+                        }
+                    };
+
+                    <span class="comment">// Write the data back
+                    </span><span class="kw">if let </span><span class="prelude-val">Err</span>(e) = socket.write_all(<span class="kw-2">&amp;</span>buf[<span class="number">0</span>..n]).<span class="kw">await </span>{
+                        <span class="macro">println!</span>(<span class="string">"failed to write to socket; err = {:?}"</span>, e);
+                        <span class="kw">return</span>;
+                    }
+                }
+            });
+        }
+    })
+}</code></pre></div>
+<h3 id="runtime-configurations"><a class="doc-anchor" href="#runtime-configurations">§</a>Runtime Configurations</h3>
+<p>Tokio provides multiple task scheduling strategies, suitable for different
+applications. The <a href="struct.Builder.html" title="struct tokio::runtime::Builder">runtime builder</a> or <code>#[tokio::main]</code> attribute may be
+used to select which scheduler to use.</p>
+<h5 id="multi-thread-scheduler"><a class="doc-anchor" href="#multi-thread-scheduler">§</a>Multi-Thread Scheduler</h5>
+<p>The multi-thread scheduler executes futures on a <em>thread pool</em>, using a
+work-stealing strategy. By default, it will start a worker thread for each
+CPU core available on the system. This tends to be the ideal configuration
+for most applications. The multi-thread scheduler requires the <code>rt-multi-thread</code>
+feature flag, and is selected by default:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::runtime;
+
+<span class="kw">let </span>threaded_rt = runtime::Runtime::new()<span class="question-mark">?</span>;</code></pre></div>
+<p>Most applications should use the multi-thread scheduler, except in some
+niche use-cases, such as when running only a single thread is required.</p>
+<h5 id="current-thread-scheduler"><a class="doc-anchor" href="#current-thread-scheduler">§</a>Current-Thread Scheduler</h5>
+<p>The current-thread scheduler provides a <em>single-threaded</em> future executor.
+All tasks will be created and executed on the current thread. This requires
+the <code>rt</code> feature flag.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::runtime;
+
+<span class="kw">let </span>rt = runtime::Builder::new_current_thread()
+    .build()<span class="question-mark">?</span>;</code></pre></div>
+<h5 id="resource-drivers"><a class="doc-anchor" href="#resource-drivers">§</a>Resource drivers</h5>
+<p>When configuring a runtime by hand, no resource drivers are enabled by
+default. In this case, attempting to use networking types or time types will
+fail. In order to enable these types, the resource drivers must be enabled.
+This is done with <a href="struct.Builder.html#method.enable_io" title="method tokio::runtime::Builder::enable_io"><code>Builder::enable_io</code></a> and <a href="struct.Builder.html#method.enable_time" title="method tokio::runtime::Builder::enable_time"><code>Builder::enable_time</code></a>. As a
+shorthand, <a href="struct.Builder.html#method.enable_all" title="method tokio::runtime::Builder::enable_all"><code>Builder::enable_all</code></a> enables both resource drivers.</p>
+<h3 id="lifetime-of-spawned-threads"><a class="doc-anchor" href="#lifetime-of-spawned-threads">§</a>Lifetime of spawned threads</h3>
+<p>The runtime may spawn threads depending on its configuration and usage. The
+multi-thread scheduler spawns threads to schedule tasks and for <code>spawn_blocking</code>
+calls.</p>
+<p>While the <code>Runtime</code> is active, threads may shut down after periods of being
+idle. Once <code>Runtime</code> is dropped, all runtime threads have usually been
+terminated, but in the presence of unstoppable spawned work are not
+guaranteed to have been terminated. See the
+<a href="struct.Runtime.html#shutdown" title="struct tokio::runtime::Runtime">struct level documentation</a> for more details.</p>
+<h2 id="detailed-runtime-behavior"><a class="doc-anchor" href="#detailed-runtime-behavior">§</a>Detailed runtime behavior</h2>
+<p>This section gives more details into how the Tokio runtime will schedule
+tasks for execution.</p>
+<p>At its most basic level, a runtime has a collection of tasks that need to be
+scheduled. It will repeatedly remove a task from that collection and
+schedule it (by calling <a href="https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html#tymethod.poll" title="method core::future::future::Future::poll"><code>poll</code></a>). When the collection is empty, the thread
+will go to sleep until a task is added to the collection.</p>
+<p>However, the above is not sufficient to guarantee a well-behaved runtime.
+For example, the runtime might have a single task that is always ready to be
+scheduled, and schedule that task every time. This is a problem because it
+starves other tasks by not scheduling them. To solve this, Tokio provides
+the following fairness guarantee:</p>
+<blockquote>
+<p>If the total number of tasks does not grow without bound, and no task is
+<a href="https://ryhl.io/blog/async-what-is-blocking/">blocking the thread</a>, then it is guaranteed that tasks are scheduled
+fairly.</p>
+</blockquote>
+<p>Or, more formally:</p>
+<blockquote>
+<p>Under the following two assumptions:</p>
+<ul>
+<li>There is some number <code>MAX_TASKS</code> such that the total number of tasks on
+the runtime at any specific point in time never exceeds <code>MAX_TASKS</code>.</li>
+<li>There is some number <code>MAX_SCHEDULE</code> such that calling <a href="https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html#tymethod.poll" title="method core::future::future::Future::poll"><code>poll</code></a> on any
+task spawned on the runtime returns within <code>MAX_SCHEDULE</code> time units.</li>
+</ul>
+<p>Then, there is some number <code>MAX_DELAY</code> such that when a task is woken, it
+will be scheduled by the runtime within <code>MAX_DELAY</code> time units.</p>
+</blockquote>
+<p>(Here, <code>MAX_TASKS</code> and <code>MAX_SCHEDULE</code> can be any number and the user of
+the runtime may choose them. The <code>MAX_DELAY</code> number is controlled by the
+runtime, and depends on the value of <code>MAX_TASKS</code> and <code>MAX_SCHEDULE</code>.)</p>
+<p>Other than the above fairness guarantee, there is no guarantee about the
+order in which tasks are scheduled. There is also no guarantee that the
+runtime is equally fair to all tasks. For example, if the runtime has two
+tasks A and B that are both ready, then the runtime may schedule A five
+times before it schedules B. This is the case even if A yields using
+<a href="../task/fn.yield_now.html" title="fn tokio::task::yield_now"><code>yield_now</code></a>. All that is guaranteed is that it will schedule B eventually.</p>
+<p>Normally, tasks are scheduled only if they have been woken by calling
+<a href="https://doc.rust-lang.org/1.81.0/core/task/wake/struct.Waker.html#method.wake" title="method core::task::wake::Waker::wake"><code>wake</code></a> on their waker. However, this is not guaranteed, and Tokio may
+schedule tasks that have not been woken under some circumstances. This is
+called a spurious wakeup.</p>
+<h3 id="io-and-timers"><a class="doc-anchor" href="#io-and-timers">§</a>IO and timers</h3>
+<p>Beyond just scheduling tasks, the runtime must also manage IO resources and
+timers. It does this by periodically checking whether there are any IO
+resources or timers that are ready, and waking the relevant task so that
+it will be scheduled.</p>
+<p>These checks are performed periodically between scheduling tasks. Under the
+same assumptions as the previous fairness guarantee, Tokio guarantees that
+it will wake tasks with an IO or timer event within some maximum number of
+time units.</p>
+<h3 id="current-thread-runtime-behavior-at-the-time-of-writing"><a class="doc-anchor" href="#current-thread-runtime-behavior-at-the-time-of-writing">§</a>Current thread runtime (behavior at the time of writing)</h3>
+<p>This section describes how the <a href="struct.Builder.html#method.new_current_thread" title="associated function tokio::runtime::Builder::new_current_thread">current thread runtime</a> behaves today. This
+behavior may change in future versions of Tokio.</p>
+<p>The current thread runtime maintains two FIFO queues of tasks that are ready
+to be scheduled: the global queue and the local queue. The runtime will prefer
+to choose the next task to schedule from the local queue, and will only pick a
+task from the global queue if the local queue is empty, or if it has picked
+a task from the local queue 31 times in a row. The number 31 can be
+changed using the <a href="struct.Builder.html#method.global_queue_interval" title="method tokio::runtime::Builder::global_queue_interval"><code>global_queue_interval</code></a> setting.</p>
+<p>The runtime will check for new IO or timer events whenever there are no
+tasks ready to be scheduled, or when it has scheduled 61 tasks in a row. The
+number 61 may be changed using the <a href="struct.Builder.html#method.event_interval" title="method tokio::runtime::Builder::event_interval"><code>event_interval</code></a> setting.</p>
+<p>When a task is woken from within a task running on the runtime, then the
+woken task is added directly to the local queue. Otherwise, the task is
+added to the global queue. The current thread runtime does not use <a href="struct.Builder.html#structfield.disable_lifo_slot" title="field tokio::runtime::Builder::disable_lifo_slot">the lifo
+slot optimization</a>.</p>
+<h3 id="multi-threaded-runtime-behavior-at-the-time-of-writing"><a class="doc-anchor" href="#multi-threaded-runtime-behavior-at-the-time-of-writing">§</a>Multi threaded runtime (behavior at the time of writing)</h3>
+<p>This section describes how the <a href="struct.Builder.html#method.new_multi_thread" title="associated function tokio::runtime::Builder::new_multi_thread">multi thread runtime</a> behaves today. This
+behavior may change in future versions of Tokio.</p>
+<p>A multi thread runtime has a fixed number of worker threads, which are all
+created on startup. The multi thread runtime maintains one global queue, and
+a local queue for each worker thread. The local queue of a worker thread can
+fit at most 256 tasks. If more than 256 tasks are added to the local queue,
+then half of them are moved to the global queue to make space.</p>
+<p>The runtime will prefer to choose the next task to schedule from the local
+queue, and will only pick a task from the global queue if the local queue is
+empty, or if it has picked a task from the local queue
+<a href="struct.Builder.html#method.global_queue_interval" title="method tokio::runtime::Builder::global_queue_interval"><code>global_queue_interval</code></a> times in a row. If the value of
+<a href="struct.Builder.html#method.global_queue_interval" title="method tokio::runtime::Builder::global_queue_interval"><code>global_queue_interval</code></a> is not explicitly set using the runtime builder,
+then the runtime will dynamically compute it using a heuristic that targets
+10ms intervals between each check of the global queue (based on the
+<a href="crate::runtime::RuntimeMetrics::worker_mean_poll_time"><code>worker_mean_poll_time</code></a> metric).</p>
+<p>If both the local queue and global queue is empty, then the worker thread
+will attempt to steal tasks from the local queue of another worker thread.
+Stealing is done by moving half of the tasks in one local queue to another
+local queue.</p>
+<p>The runtime will check for new IO or timer events whenever there are no
+tasks ready to be scheduled, or when it has scheduled 61 tasks in a row. The
+number 61 may be changed using the <a href="struct.Builder.html#method.event_interval" title="method tokio::runtime::Builder::event_interval"><code>event_interval</code></a> setting.</p>
+<p>The multi thread runtime uses <a href="struct.Builder.html#structfield.disable_lifo_slot" title="field tokio::runtime::Builder::disable_lifo_slot">the lifo slot optimization</a>: Whenever a task
+wakes up another task, the other task is added to the worker thread’s lifo
+slot instead of being added to a queue. If there was already a task in the
+lifo slot when this happened, then the lifo slot is replaced, and the task
+that used to be in the lifo slot is placed in the thread’s local queue.
+When the runtime finishes scheduling a task, it will schedule the task in
+the lifo slot immediately, if any. When the lifo slot is used, the <a href="../task/index.html#cooperative-scheduling" title="mod tokio::task">coop
+budget</a> is not reset. Furthermore, if a worker thread uses the lifo slot
+three times in a row, it is temporarily disabled until the worker thread has
+scheduled a task that didn’t come from the lifo slot. The lifo slot can be
+disabled using the <a href="struct.Builder.html#structfield.disable_lifo_slot" title="field tokio::runtime::Builder::disable_lifo_slot"><code>disable_lifo_slot</code></a> setting. The lifo slot is separate
+from the local queue, so other worker threads cannot steal the task in the
+lifo slot.</p>
+<p>When a task is woken from a thread that is not a worker thread, then the
+task is placed in the global queue.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Builder.html" title="struct tokio::runtime::Builder">Builder</a></div><div class="desc docblock-short">Builds Tokio Runtime with custom configuration values.</div></li><li><div class="item-name"><a class="struct" href="struct.EnterGuard.html" title="struct tokio::runtime::EnterGuard">EnterGuard</a></div><div class="desc docblock-short">Runtime context guard.</div></li><li><div class="item-name"><a class="struct" href="struct.Handle.html" title="struct tokio::runtime::Handle">Handle</a></div><div class="desc docblock-short">Handle to the runtime.</div></li><li><div class="item-name"><a class="struct" href="struct.Runtime.html" title="struct tokio::runtime::Runtime">Runtime</a></div><div class="desc docblock-short">The Tokio runtime.</div></li><li><div class="item-name"><a class="struct" href="struct.RuntimeMetrics.html" title="struct tokio::runtime::RuntimeMetrics">RuntimeMetrics</a></div><div class="desc docblock-short">Handle to the runtime’s metrics.</div></li><li><div class="item-name"><a class="struct" href="struct.TryCurrentError.html" title="struct tokio::runtime::TryCurrentError">TryCurrentError</a></div><div class="desc docblock-short">Error returned by <code>try_current</code> when no Runtime has been started</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.RuntimeFlavor.html" title="enum tokio::runtime::RuntimeFlavor">RuntimeFlavor</a></div><div class="desc docblock-short">The flavor of a <code>Runtime</code>.</div></li></ul></section></div></main></body></html>

@@ -1,0 +1,96 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A trait for types that can behave as a dynamic (mutable) URI template expansion context."><title>DynamicContext in iri_string::template::context - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="iri_string" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../iri_string/index.html">iri_string</a><span class="version">0.7.7</span></h2></div><h2 class="location"><a href="#">DynamicContext</a></h2><div class="sidebar-elems"><section><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.visit_dynamic">visit_dynamic</a></li></ul><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.on_expansion_end">on_expansion_end</a></li><li><a href="#method.on_expansion_start">on_expansion_start</a></li></ul><h3><a href="#object-safety">Object Safety</a></h3><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In iri_string::template::context</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="../../index.html">iri_string</a>::<wbr><a href="../index.html">template</a>::<wbr><a href="index.html">context</a>::<wbr><a class="trait" href="#">DynamicContext</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/iri_string/template/context.rs.html#168-190">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub trait DynamicContext: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a> {
+    // Required method
+    fn <a href="#tymethod.visit_dynamic" class="fn">visit_dynamic</a>&lt;V: <a class="trait" href="trait.Visitor.html" title="trait iri_string::template::context::Visitor">Visitor</a>&gt;(&amp;mut self, visitor: V) -&gt; V::<a class="associatedtype" href="trait.Visitor.html#associatedtype.Result" title="type iri_string::template::context::Visitor::Result">Result</a>;
+
+    // Provided methods
+    fn <a href="#method.on_expansion_start" class="fn">on_expansion_start</a>(&amp;mut self) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.on_expansion_end" class="fn">on_expansion_end</a>(&amp;mut self) { ... }
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A trait for types that can behave as a dynamic (mutable) URI template expansion context.</p>
+<p>This type is for use with <a href="../struct.UriTemplateStr.html#method.expand_dynamic" title="method iri_string::template::UriTemplateStr::expand_dynamic"><code>UriTemplateStr::expand_dynamic</code></a> method and its
+family.</p>
+<p>Note that “dynamic” here does not mean that the value of variables can
+change during a template expansion. The value should be fixed and consistent
+during each expansion, but the context is allowed to mutate itself if it
+does not break this rule.</p>
+<h2 id="exmaples"><a class="doc-anchor" href="#exmaples">§</a>Exmaples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>iri_string::template::UriTemplateStr;
+<span class="kw">use </span>iri_string::template::context::{DynamicContext, Visitor, VisitPurpose};
+<span class="kw">use </span>iri_string::spec::UriSpec;
+
+<span class="kw">struct </span>MyContext&lt;<span class="lifetime">'a</span>&gt; {
+    <span class="doccomment">/// Target path.
+    </span>target: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>str,
+    <span class="doccomment">/// Username.
+    </span>username: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">'a </span>str&gt;,
+    <span class="doccomment">/// A flag to remember whether the URI template
+    /// attempted to use `username` variable.
+    </span>username_visited: bool,
+}
+
+<span class="kw">impl </span>DynamicContext <span class="kw">for </span>MyContext&lt;<span class="lifetime">'_</span>&gt; {
+    <span class="kw">fn </span>on_expansion_start(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+        <span class="comment">// Reset the state.
+        </span><span class="self">self</span>.username_visited = <span class="bool-val">false</span>;
+    }
+    <span class="kw">fn </span>visit_dynamic&lt;V: Visitor&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, visitor: V) -&gt; V::Result {
+        <span class="kw">match </span>visitor.var_name().as_str() {
+            <span class="string">"target" </span>=&gt; visitor.visit_string(<span class="self">self</span>.target),
+            <span class="string">"username" </span>=&gt; {
+                <span class="kw">if </span>visitor.purpose() == VisitPurpose::Expand {
+                    <span class="comment">// The variable `username` is being used
+                    // on the template expansion.
+                    // Don't care whether `username` is defined or not.
+                    </span><span class="self">self</span>.username_visited = <span class="bool-val">true</span>;
+                }
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(username) = <span class="kw-2">&amp;</span><span class="self">self</span>.username {
+                    visitor.visit_string(username)
+                } <span class="kw">else </span>{
+                    visitor.visit_undefined()
+                }
+            }
+            <span class="kw">_ </span>=&gt; visitor.visit_undefined(),
+        }
+    }
+}
+
+<span class="kw">let </span><span class="kw-2">mut </span>context = MyContext {
+    target: <span class="string">"/posts/1"</span>,
+    username: <span class="prelude-val">Some</span>(<span class="string">"the_admin"</span>),
+    username_visited: <span class="bool-val">false</span>,
+};
+<span class="kw">let </span><span class="kw-2">mut </span>buf = String::new();
+
+<span class="comment">// No access to the variable `username`.
+</span><span class="kw">let </span>template1 = UriTemplateStr::new(<span class="string">"{+target}"</span>)<span class="question-mark">?</span>;
+template1.expand_dynamic::&lt;UriSpec, <span class="kw">_</span>, <span class="kw">_</span>&gt;(<span class="kw-2">&amp;mut </span>buf, <span class="kw-2">&amp;mut </span>context)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(buf, <span class="string">"/posts/1"</span>);
+<span class="macro">assert!</span>(!context.username_visited);
+
+buf.clear();
+<span class="comment">// Will access to the variable `username`.
+</span><span class="kw">let </span>template2 = UriTemplateStr::new(<span class="string">"{+target}{?username}"</span>)<span class="question-mark">?</span>;
+template2.expand_dynamic::&lt;UriSpec, <span class="kw">_</span>, <span class="kw">_</span>&gt;(<span class="kw-2">&amp;mut </span>buf, <span class="kw-2">&amp;mut </span>context)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(buf, <span class="string">"/posts/1?username=the_admin"</span>);
+<span class="macro">assert!</span>(context.username_visited);
+
+buf.clear();
+context.username = <span class="prelude-val">None</span>;
+<span class="comment">// Will access to the variable `username` but it is undefined.
+</span>template2.expand_dynamic::&lt;UriSpec, <span class="kw">_</span>, <span class="kw">_</span>&gt;(<span class="kw-2">&amp;mut </span>buf, <span class="kw-2">&amp;mut </span>context)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(buf, <span class="string">"/posts/1"</span>);
+<span class="macro">assert!</span>(
+    context.username_visited,
+    <span class="string">"`MyContext` can know and remember whether `visit_dynamic()` is called
+     for `username`, even if its value is undefined"
+</span>);</code></pre></div>
+</div></details><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.visit_dynamic" class="method"><a class="src rightside" href="../../../src/iri_string/template/context.rs.html#181">source</a><h4 class="code-header">fn <a href="#tymethod.visit_dynamic" class="fn">visit_dynamic</a>&lt;V: <a class="trait" href="trait.Visitor.html" title="trait iri_string::template::context::Visitor">Visitor</a>&gt;(&amp;mut self, visitor: V) -&gt; V::<a class="associatedtype" href="trait.Visitor.html#associatedtype.Result" title="type iri_string::template::context::Visitor::Result">Result</a></h4></section></summary><div class="docblock"><p>Visits a variable.</p>
+<p>To get variable name, use <a href="trait.Visitor.html#tymethod.var_name" title="method iri_string::template::context::Visitor::var_name"><code>Visitor::var_name()</code></a>.</p>
+<h5 id="restriction"><a class="doc-anchor" href="#restriction">§</a>Restriction</h5>
+<p>The visit results should be consistent and unchanged between the last
+time <a href="trait.DynamicContext.html#method.on_expansion_start"><code>on_expansion_start</code></a> was called and
+the next time <a href="trait.DynamicContext.html#method.on_expansion_end"><code>on_expansion_end</code></a> will be
+called. If this condition is violated, template expansion will produce
+wrong result or may panic at worst.</p>
+</div></details></div><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.on_expansion_start" class="method"><a class="src rightside" href="../../../src/iri_string/template/context.rs.html#185">source</a><h4 class="code-header">fn <a href="#method.on_expansion_start" class="fn">on_expansion_start</a>(&amp;mut self)</h4></section></summary><div class="docblock"><p>A callback that is called before the expansion of a URI template.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.on_expansion_end" class="method"><a class="src rightside" href="../../../src/iri_string/template/context.rs.html#189">source</a><h4 class="code-header">fn <a href="#method.on_expansion_end" class="fn">on_expansion_end</a>(&amp;mut self)</h4></section></summary><div class="docblock"><p>A callback that is called after the expansion of a URI template.</p>
+</div></details></div><h2 id="object-safety" class="section-header">Object Safety<a href="#object-safety" class="anchor">§</a></h2><div class="object-safety-info">This trait is <b>not</b> <a href="https://doc.rust-lang.org/1.81.0/reference/items/traits.html#object-safety">object safe</a>.</div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><section id="impl-DynamicContext-for-C" class="impl"><a class="src rightside" href="../../../src/iri_string/template/context.rs.html#192-197">source</a><a href="#impl-DynamicContext-for-C" class="anchor">§</a><h3 class="code-header">impl&lt;C: <a class="trait" href="trait.Context.html" title="trait iri_string::template::context::Context">Context</a>&gt; <a class="trait" href="trait.DynamicContext.html" title="trait iri_string::template::context::DynamicContext">DynamicContext</a> for C</h3></section></div><script src="../../../trait.impl/iri_string/template/context/trait.DynamicContext.js" async></script></section></div></main></body></html>

@@ -1,0 +1,58 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Crate for interacting with the Kubernetes API"><title>kube_client - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="kube_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../kube_client/index.html">kube_client</a><span class="version">0.88.1</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#traits">Traits</a></li><li><a href="#types">Type Aliases</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">kube_client</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/kube_client/lib.rs.html#1-762">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Crate for interacting with the Kubernetes API</p>
+<p>This crate includes the tools for manipulating Kubernetes resources as
+well as keeping track of those resources as they change over time</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<p>The following example will create a <a href="../k8s_openapi/v1_28/api/core/v1/pod/struct.Pod.html" title="struct k8s_openapi::v1_28::api::core::v1::pod::Pod"><code>Pod</code></a>
+and then watch for it to become available using a manual <a href="struct.Api.html#method.watch" title="method kube_client::Api::watch"><code>Api::watch</code></a> call.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>futures::{StreamExt, TryStreamExt};
+<span class="kw">use </span>kube_client::api::{Api, ResourceExt, ListParams, PatchParams, Patch};
+<span class="kw">use </span>kube_client::Client;
+<span class="kw">use </span>k8s_openapi::api::core::v1::Pod;
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() -&gt; <span class="prelude-ty">Result</span>&lt;(), Box&lt;<span class="kw">dyn </span>std::error::Error&gt;&gt; {
+    <span class="comment">// Read the environment to find config for kube client.
+    // Note that this tries an in-cluster configuration first,
+    // then falls back on a kubeconfig file.
+    </span><span class="kw">let </span>client = Client::try_default().<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="comment">// Interact with pods in the configured namespace with the typed interface from k8s-openapi
+    </span><span class="kw">let </span>pods: Api&lt;Pod&gt; = Api::default_namespaced(client);
+
+    <span class="comment">// Create a Pod (cheating here with json, but it has to validate against the type):
+    </span><span class="kw">let </span>patch: Pod = serde_json::from_value(<span class="macro">serde_json::json!</span>({
+        <span class="string">"apiVersion"</span>: <span class="string">"v1"</span>,
+        <span class="string">"kind"</span>: <span class="string">"Pod"</span>,
+        <span class="string">"metadata"</span>: {
+            <span class="string">"name"</span>: <span class="string">"my-pod"
+        </span>},
+        <span class="string">"spec"</span>: {
+            <span class="string">"containers"</span>: [
+                {
+                    <span class="string">"name"</span>: <span class="string">"my-container"</span>,
+                    <span class="string">"image"</span>: <span class="string">"myregistry.azurecr.io/hello-world:v1"</span>,
+                },
+            ],
+        }
+    }))<span class="question-mark">?</span>;
+
+    <span class="comment">// Apply the Pod via server-side apply
+    </span><span class="kw">let </span>params = PatchParams::apply(<span class="string">"myapp"</span>);
+    <span class="kw">let </span>result = pods.patch(<span class="string">"my-pod"</span>, <span class="kw-2">&amp;</span>params, <span class="kw-2">&amp;</span>Patch::Apply(<span class="kw-2">&amp;</span>patch)).<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="comment">// List pods in the configured namespace
+    </span><span class="kw">for </span>p <span class="kw">in </span>pods.list(<span class="kw-2">&amp;</span>ListParams::default()).<span class="kw">await</span><span class="question-mark">? </span>{
+        <span class="macro">println!</span>(<span class="string">"found pod {}"</span>, p.name_any());
+    }
+
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<p>For more details, see:</p>
+<ul>
+<li><a href="client/index.html" title="mod kube_client::client"><code>Client</code></a> for the extensible Kubernetes client</li>
+<li><a href="config/index.html" title="mod kube_client::config"><code>Config</code></a> for the Kubernetes config abstraction</li>
+<li><a href="struct.Api.html" title="struct kube_client::Api"><code>Api</code></a> for the generic api methods available on Kubernetes resources</li>
+<li><a href="https://docs.rs/k8s-openapi/*/k8s_openapi/">k8s-openapi</a> for how to create typed kubernetes objects directly</li>
+</ul>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.core"><code>pub use <a class="mod" href="../kube_core/index.html" title="mod kube_core">kube_core</a> as core;</code></div></li></ul><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="api/index.html" title="mod kube_client::api">api</a></div><div class="desc docblock-short">API helpers for structured interaction with the Kubernetes API</div></li><li><div class="item-name"><a class="mod" href="client/index.html" title="mod kube_client::client">client</a></div><div class="desc docblock-short">A basic API client for interacting with the Kubernetes API</div></li><li><div class="item-name"><a class="mod" href="config/index.html" title="mod kube_client::config">config</a></div><div class="desc docblock-short">Kubernetes configuration objects from <code>~/.kube/config</code>, <code>$KUBECONFIG</code>, or the <a href="https://kubernetes.io/docs/tasks/access-application-cluster/access-cluster/#accessing-the-api-from-a-pod">cluster environment</a>.</div></li><li><div class="item-name"><a class="mod" href="discovery/index.html" title="mod kube_client::discovery">discovery</a></div><div class="desc docblock-short">High-level utilities for runtime API discovery.</div></li><li><div class="item-name"><a class="mod" href="error/index.html" title="mod kube_client::error">error</a></div><div class="desc docblock-short">Error handling in <a href="index.html" title="mod kube_client"><code>kube</code></a></div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Api.html" title="struct kube_client::Api">Api</a></div><div class="desc docblock-short">The generic Api abstraction</div></li><li><div class="item-name"><a class="struct" href="struct.Client.html" title="struct kube_client::Client">Client</a></div><div class="desc docblock-short">Client for connecting with a Kubernetes cluster.</div></li><li><div class="item-name"><a class="struct" href="struct.Config.html" title="struct kube_client::Config">Config</a></div><div class="desc docblock-short">Configuration object detailing things like cluster URL, default namespace, root certificates, and timeouts.</div></li><li><div class="item-name"><a class="struct" href="struct.Discovery.html" title="struct kube_client::Discovery">Discovery</a></div><div class="desc docblock-short">A caching client for running API discovery against the Kubernetes API.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.Error.html" title="enum kube_client::Error">Error</a></div><div class="desc docblock-short">Possible errors when working with <a href="index.html" title="mod kube_client"><code>kube</code></a></div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.CustomResourceExt.html" title="trait kube_client::CustomResourceExt">CustomResourceExt</a></div><div class="desc docblock-short">Extension trait that is implemented by kube-derive</div></li><li><div class="item-name"><a class="trait" href="trait.Resource.html" title="trait kube_client::Resource">Resource</a></div><div class="desc docblock-short">An accessor trait for a kubernetes Resource.</div></li><li><div class="item-name"><a class="trait" href="trait.ResourceExt.html" title="trait kube_client::ResourceExt">ResourceExt</a></div><div class="desc docblock-short">Helper methods for resources.</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.Result.html" title="type kube_client::Result">Result</a></div><div class="desc docblock-short">Convient alias for <code>Result&lt;T, Error&gt;</code></div></li></ul></section></div></main></body></html>

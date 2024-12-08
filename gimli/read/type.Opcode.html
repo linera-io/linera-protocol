@@ -1,0 +1,125 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Deprecated. `Opcode` has been renamed to `LineInstruction`."><title>Opcode in gimli::read - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="gimli" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc type"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../gimli/index.html">gimli</a><span class="version">0.31.0</span></h2></div><h2 class="location"><a href="#">Opcode</a></h2><div class="sidebar-elems"><section><h3><a href="#aliased-type">Aliased type</a></h3><h3><a href="#variants">Variants</a></h3><ul class="block variant"><li><a href="#variant.AdvanceLine">AdvanceLine</a></li><li><a href="#variant.AdvancePc">AdvancePc</a></li><li><a href="#variant.ConstAddPc">ConstAddPc</a></li><li><a href="#variant.Copy">Copy</a></li><li><a href="#variant.DefineFile">DefineFile</a></li><li><a href="#variant.EndSequence">EndSequence</a></li><li><a href="#variant.FixedAddPc">FixedAddPc</a></li><li><a href="#variant.NegateStatement">NegateStatement</a></li><li><a href="#variant.SetAddress">SetAddress</a></li><li><a href="#variant.SetBasicBlock">SetBasicBlock</a></li><li><a href="#variant.SetColumn">SetColumn</a></li><li><a href="#variant.SetDiscriminator">SetDiscriminator</a></li><li><a href="#variant.SetEpilogueBegin">SetEpilogueBegin</a></li><li><a href="#variant.SetFile">SetFile</a></li><li><a href="#variant.SetIsa">SetIsa</a></li><li><a href="#variant.SetPrologueEnd">SetPrologueEnd</a></li><li><a href="#variant.Special">Special</a></li><li><a href="#variant.UnknownExtended">UnknownExtended</a></li><li><a href="#variant.UnknownStandard0">UnknownStandard0</a></li><li><a href="#variant.UnknownStandard1">UnknownStandard1</a></li><li><a href="#variant.UnknownStandardN">UnknownStandardN</a></li></ul></section><h2><a href="index.html">In gimli::read</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Type Alias <a href="../index.html">gimli</a>::<wbr><a href="index.html">read</a>::<wbr><a class="type" href="#">Opcode</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/gimli/read/line.rs.html#263">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub type Opcode&lt;R&gt; = <a class="enum" href="enum.LineInstruction.html" title="enum gimli::read::LineInstruction">LineInstruction</a>&lt;R, &lt;R as <a class="trait" href="trait.Reader.html" title="trait gimli::read::Reader">Reader</a>&gt;::<a class="associatedtype" href="trait.Reader.html#associatedtype.Offset" title="type gimli::read::Reader::Offset">Offset</a>&gt;;</code></pre><span class="item-info"><div class="stab deprecated"><span class="emoji">👎</span><span>Deprecated: Opcode has been renamed to LineInstruction, use that instead.</span></div></span><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Deprecated. <code>Opcode</code> has been renamed to <code>LineInstruction</code>.</p>
+</div></details><h2 id="aliased-type" class="section-header">Aliased Type<a href="#aliased-type" class="anchor">§</a></h2><pre class="rust item-decl"><code>enum Opcode&lt;R&gt; {
+<details class="toggle type-contents-toggle"><summary class="hideme"><span>Show 21 variants</span></summary>    Special(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u8.html">u8</a>),
+    Copy,
+    AdvancePc(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u64.html">u64</a>),
+    AdvanceLine(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.i64.html">i64</a>),
+    SetFile(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u64.html">u64</a>),
+    SetColumn(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u64.html">u64</a>),
+    NegateStatement,
+    SetBasicBlock,
+    ConstAddPc,
+    FixedAddPc(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u16.html">u16</a>),
+    SetPrologueEnd,
+    SetEpilogueBegin,
+    SetIsa(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u64.html">u64</a>),
+    UnknownStandard0(<a class="struct" href="../constants/struct.DwLns.html" title="struct gimli::constants::DwLns">DwLns</a>),
+    UnknownStandard1(<a class="struct" href="../constants/struct.DwLns.html" title="struct gimli::constants::DwLns">DwLns</a>, <a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u64.html">u64</a>),
+    UnknownStandardN(<a class="struct" href="../constants/struct.DwLns.html" title="struct gimli::constants::DwLns">DwLns</a>, R),
+    EndSequence,
+    SetAddress(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u64.html">u64</a>),
+    DefineFile(<a class="struct" href="struct.FileEntry.html" title="struct gimli::read::FileEntry">FileEntry</a>&lt;R&gt;),
+    SetDiscriminator(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u64.html">u64</a>),
+    UnknownExtended(<a class="struct" href="../constants/struct.DwLne.html" title="struct gimli::constants::DwLne">DwLne</a>, R),
+</details>}</code></pre><h2 id="variants" class="variants section-header">Variants<a href="#variants" class="anchor">§</a></h2><div class="variants"><section id="variant.Special" class="variant"><a href="#variant.Special" class="anchor">§</a><h3 class="code-header">Special(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u8.html">u8</a>)</h3></section><div class="docblock"><blockquote>
+<h6 id="6251-special-opcodes"><a class="doc-anchor" href="#6251-special-opcodes">§</a>6.2.5.1 Special Opcodes</h6>
+<p>Each ubyte special opcode has the following effect on the state machine:</p>
+<ol>
+<li>
+<p>Add a signed integer to the line register.</p>
+</li>
+<li>
+<p>Modify the operation pointer by incrementing the address and
+op_index registers as described below.</p>
+</li>
+<li>
+<p>Append a row to the matrix using the current values of the state
+machine registers.</p>
+</li>
+<li>
+<p>Set the basic_block register to “false.”</p>
+</li>
+<li>
+<p>Set the prologue_end register to “false.”</p>
+</li>
+<li>
+<p>Set the epilogue_begin register to “false.”</p>
+</li>
+<li>
+<p>Set the discriminator register to 0.</p>
+</li>
+</ol>
+<p>All of the special opcodes do those same seven things; they differ from
+one another only in what values they add to the line, address and
+op_index registers.</p>
+</blockquote>
+</div><section id="variant.Copy" class="variant"><a href="#variant.Copy" class="anchor">§</a><h3 class="code-header">Copy</h3></section><div class="docblock"><p>“<a href="enum.LineInstruction.html#variant.Copy" title="variant gimli::read::LineInstruction::Copy"><code>LineInstruction::Copy</code></a> appends a row to the matrix using the current
+values of the state machine registers. Then it sets the discriminator
+register to 0, and sets the basic_block, prologue_end and epilogue_begin
+registers to “false.””</p>
+</div><section id="variant.AdvancePc" class="variant"><a href="#variant.AdvancePc" class="anchor">§</a><h3 class="code-header">AdvancePc(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u64.html">u64</a>)</h3></section><div class="docblock"><p>“The DW_LNS_advance_pc opcode takes a single unsigned LEB128 operand as
+the operation advance and modifies the address and op_index registers
+[the same as <code>LineInstruction::Special</code>]”</p>
+</div><section id="variant.AdvanceLine" class="variant"><a href="#variant.AdvanceLine" class="anchor">§</a><h3 class="code-header">AdvanceLine(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.i64.html">i64</a>)</h3></section><div class="docblock"><p>“The DW_LNS_advance_line opcode takes a single signed LEB128 operand and
+adds that value to the line register of the state machine.”</p>
+</div><section id="variant.SetFile" class="variant"><a href="#variant.SetFile" class="anchor">§</a><h3 class="code-header">SetFile(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u64.html">u64</a>)</h3></section><div class="docblock"><p>“The DW_LNS_set_file opcode takes a single unsigned LEB128 operand and
+stores it in the file register of the state machine.”</p>
+</div><section id="variant.SetColumn" class="variant"><a href="#variant.SetColumn" class="anchor">§</a><h3 class="code-header">SetColumn(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u64.html">u64</a>)</h3></section><div class="docblock"><p>“The DW_LNS_set_column opcode takes a single unsigned LEB128 operand and
+stores it in the column register of the state machine.”</p>
+</div><section id="variant.NegateStatement" class="variant"><a href="#variant.NegateStatement" class="anchor">§</a><h3 class="code-header">NegateStatement</h3></section><div class="docblock"><p>“The DW_LNS_negate_stmt opcode takes no operands. It sets the is_stmt
+register of the state machine to the logical negation of its current
+value.”</p>
+</div><section id="variant.SetBasicBlock" class="variant"><a href="#variant.SetBasicBlock" class="anchor">§</a><h3 class="code-header">SetBasicBlock</h3></section><div class="docblock"><p>“The DW_LNS_set_basic_block opcode takes no operands. It sets the
+basic_block register of the state machine to “true.””</p>
+</div><section id="variant.ConstAddPc" class="variant"><a href="#variant.ConstAddPc" class="anchor">§</a><h3 class="code-header">ConstAddPc</h3></section><div class="docblock"><blockquote>
+<p>The DW_LNS_const_add_pc opcode takes no operands. It advances the
+address and op_index registers by the increments corresponding to
+special opcode 255.</p>
+<p>When the line number program needs to advance the address by a small
+amount, it can use a single special opcode, which occupies a single
+byte. When it needs to advance the address by up to twice the range of
+the last special opcode, it can use DW_LNS_const_add_pc followed by a
+special opcode, for a total of two bytes. Only if it needs to advance
+the address by more than twice that range will it need to use both
+DW_LNS_advance_pc and a special opcode, requiring three or more bytes.</p>
+</blockquote>
+</div><section id="variant.FixedAddPc" class="variant"><a href="#variant.FixedAddPc" class="anchor">§</a><h3 class="code-header">FixedAddPc(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u16.html">u16</a>)</h3></section><div class="docblock"><blockquote>
+<p>The DW_LNS_fixed_advance_pc opcode takes a single uhalf (unencoded)
+operand and adds it to the address register of the state machine and
+sets the op_index register to 0. This is the only standard opcode whose
+operand is not a variable length number. It also does not multiply the
+operand by the minimum_instruction_length field of the header.</p>
+</blockquote>
+</div><section id="variant.SetPrologueEnd" class="variant"><a href="#variant.SetPrologueEnd" class="anchor">§</a><h3 class="code-header">SetPrologueEnd</h3></section><div class="docblock"><p>“<a href="enum.LineInstruction.html#variant.SetPrologueEnd" title="variant gimli::read::LineInstruction::SetPrologueEnd"><code>LineInstruction::SetPrologueEnd</code></a> sets the prologue_end register to “true”.”</p>
+</div><section id="variant.SetEpilogueBegin" class="variant"><a href="#variant.SetEpilogueBegin" class="anchor">§</a><h3 class="code-header">SetEpilogueBegin</h3></section><div class="docblock"><p>“<a href="enum.LineInstruction.html#variant.SetEpilogueBegin" title="variant gimli::read::LineInstruction::SetEpilogueBegin"><code>LineInstruction::SetEpilogueBegin</code></a> sets the epilogue_begin register to
+“true”.”</p>
+</div><section id="variant.SetIsa" class="variant"><a href="#variant.SetIsa" class="anchor">§</a><h3 class="code-header">SetIsa(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u64.html">u64</a>)</h3></section><div class="docblock"><p>“The DW_LNS_set_isa opcode takes a single unsigned LEB128 operand and
+stores that value in the isa register of the state machine.”</p>
+</div><section id="variant.UnknownStandard0" class="variant"><a href="#variant.UnknownStandard0" class="anchor">§</a><h3 class="code-header">UnknownStandard0(<a class="struct" href="../constants/struct.DwLns.html" title="struct gimli::constants::DwLns">DwLns</a>)</h3></section><div class="docblock"><p>An unknown standard opcode with zero operands.</p>
+</div><section id="variant.UnknownStandard1" class="variant"><a href="#variant.UnknownStandard1" class="anchor">§</a><h3 class="code-header">UnknownStandard1(<a class="struct" href="../constants/struct.DwLns.html" title="struct gimli::constants::DwLns">DwLns</a>, <a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u64.html">u64</a>)</h3></section><div class="docblock"><p>An unknown standard opcode with one operand.</p>
+</div><section id="variant.UnknownStandardN" class="variant"><a href="#variant.UnknownStandardN" class="anchor">§</a><h3 class="code-header">UnknownStandardN(<a class="struct" href="../constants/struct.DwLns.html" title="struct gimli::constants::DwLns">DwLns</a>, R)</h3></section><div class="docblock"><p>An unknown standard opcode with multiple operands.</p>
+</div><section id="variant.EndSequence" class="variant"><a href="#variant.EndSequence" class="anchor">§</a><h3 class="code-header">EndSequence</h3></section><div class="docblock"><blockquote>
+<p><a href="enum.LineInstruction.html#variant.EndSequence" title="variant gimli::read::LineInstruction::EndSequence"><code>LineInstruction::EndSequence</code></a> sets the end_sequence register of the state
+machine to “true” and appends a row to the matrix using the current
+values of the state-machine registers. Then it resets the registers to
+the initial values specified above (see Section 6.2.2). Every line
+number program sequence must end with a DW_LNE_end_sequence instruction
+which creates a row whose address is that of the byte after the last
+target machine instruction of the sequence.</p>
+</blockquote>
+</div><section id="variant.SetAddress" class="variant"><a href="#variant.SetAddress" class="anchor">§</a><h3 class="code-header">SetAddress(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u64.html">u64</a>)</h3></section><div class="docblock"><blockquote>
+<p>The DW_LNE_set_address opcode takes a single relocatable address as an
+operand. The size of the operand is the size of an address on the target
+machine. It sets the address register to the value given by the
+relocatable address and sets the op_index register to 0.</p>
+<p>All of the other line number program opcodes that affect the address
+register add a delta to it. This instruction stores a relocatable value
+into it instead.</p>
+</blockquote>
+</div><section id="variant.DefineFile" class="variant"><a href="#variant.DefineFile" class="anchor">§</a><h3 class="code-header">DefineFile(<a class="struct" href="struct.FileEntry.html" title="struct gimli::read::FileEntry">FileEntry</a>&lt;R&gt;)</h3></section><div class="docblock"><p>Defines a new source file in the line number program and appends it to
+the line number program header’s list of source files.</p>
+</div><section id="variant.SetDiscriminator" class="variant"><a href="#variant.SetDiscriminator" class="anchor">§</a><h3 class="code-header">SetDiscriminator(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u64.html">u64</a>)</h3></section><div class="docblock"><p>“The DW_LNE_set_discriminator opcode takes a single parameter, an
+unsigned LEB128 integer. It sets the discriminator register to the new
+value.”</p>
+</div><section id="variant.UnknownExtended" class="variant"><a href="#variant.UnknownExtended" class="anchor">§</a><h3 class="code-header">UnknownExtended(<a class="struct" href="../constants/struct.DwLne.html" title="struct gimli::constants::DwLne">DwLne</a>, R)</h3></section><div class="docblock"><p>An unknown extended opcode and the slice of its unparsed operands.</p>
+</div></div><script src="../../type.impl/gimli/read/enum.LineInstruction.js" data-self-path="gimli::read::line::Opcode" async></script></section></div></main></body></html>

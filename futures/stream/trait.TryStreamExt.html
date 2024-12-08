@@ -1,0 +1,751 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Adapters specific to `Result`-returning streams"><title>TryStreamExt in futures::stream - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="futures" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../futures/index.html">futures</a><span class="version">0.3.30</span></h2></div><h2 class="location"><a href="#">TryStreamExt</a></h2><div class="sidebar-elems"><section><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.and_then">and_then</a></li><li><a href="#method.err_into">err_into</a></li><li><a href="#method.inspect_err">inspect_err</a></li><li><a href="#method.inspect_ok">inspect_ok</a></li><li><a href="#method.into_async_read">into_async_read</a></li><li><a href="#method.into_stream">into_stream</a></li><li><a href="#method.map_err">map_err</a></li><li><a href="#method.map_ok">map_ok</a></li><li><a href="#method.or_else">or_else</a></li><li><a href="#method.try_all">try_all</a></li><li><a href="#method.try_any">try_any</a></li><li><a href="#method.try_buffer_unordered">try_buffer_unordered</a></li><li><a href="#method.try_buffered">try_buffered</a></li><li><a href="#method.try_chunks">try_chunks</a></li><li><a href="#method.try_collect">try_collect</a></li><li><a href="#method.try_concat">try_concat</a></li><li><a href="#method.try_filter">try_filter</a></li><li><a href="#method.try_filter_map">try_filter_map</a></li><li><a href="#method.try_flatten">try_flatten</a></li><li><a href="#method.try_flatten_unordered">try_flatten_unordered</a></li><li><a href="#method.try_fold">try_fold</a></li><li><a href="#method.try_for_each">try_for_each</a></li><li><a href="#method.try_for_each_concurrent">try_for_each_concurrent</a></li><li><a href="#method.try_next">try_next</a></li><li><a href="#method.try_poll_next_unpin">try_poll_next_unpin</a></li><li><a href="#method.try_ready_chunks">try_ready_chunks</a></li><li><a href="#method.try_skip_while">try_skip_while</a></li><li><a href="#method.try_take_while">try_take_while</a></li></ul><h3><a href="#object-safety">Object Safety</a></h3><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In futures::stream</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="../index.html">futures</a>::<wbr><a href="index.html">stream</a>::<wbr><a class="trait" href="#">TryStreamExt</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/futures_util/stream/try_stream/mod.rs.html#180">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub trait TryStreamExt: <a class="trait" href="trait.TryStream.html" title="trait futures::stream::TryStream">TryStream</a> {
+<details class="toggle type-contents-toggle"><summary class="hideme"><span>Show 28 methods</span></summary>    // Provided methods
+    fn <a href="#method.err_into" class="fn">err_into</a>&lt;E&gt;(self) -&gt; <a class="struct" href="struct.ErrInto.html" title="struct futures::stream::ErrInto">ErrInto</a>&lt;Self, E&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+             Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Error" title="type futures::stream::TryStream::Error">Error</a>: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;E&gt;</span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.map_ok" class="fn">map_ok</a>&lt;T, F&gt;(self, f: F) -&gt; <a class="struct" href="struct.MapOk.html" title="struct futures::stream::MapOk">MapOk</a>&lt;Self, F&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+             F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Ok" title="type futures::stream::TryStream::Ok">Ok</a>) -&gt; T</span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.map_err" class="fn">map_err</a>&lt;E, F&gt;(self, f: F) -&gt; <a class="struct" href="struct.MapErr.html" title="struct futures::stream::MapErr">MapErr</a>&lt;Self, F&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+             F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Error" title="type futures::stream::TryStream::Error">Error</a>) -&gt; E</span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.and_then" class="fn">and_then</a>&lt;Fut, F&gt;(self, f: F) -&gt; <a class="struct" href="struct.AndThen.html" title="struct futures::stream::AndThen">AndThen</a>&lt;Self, Fut, F&gt;
+       <span class="where">where F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Ok" title="type futures::stream::TryStream::Ok">Ok</a>) -&gt; Fut,
+             Fut: <a class="trait" href="../future/trait.TryFuture.html" title="trait futures::future::TryFuture">TryFuture</a>&lt;Error = Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Error" title="type futures::stream::TryStream::Error">Error</a>&gt;,
+             Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.or_else" class="fn">or_else</a>&lt;Fut, F&gt;(self, f: F) -&gt; <a class="struct" href="struct.OrElse.html" title="struct futures::stream::OrElse">OrElse</a>&lt;Self, Fut, F&gt;
+       <span class="where">where F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Error" title="type futures::stream::TryStream::Error">Error</a>) -&gt; Fut,
+             Fut: <a class="trait" href="../future/trait.TryFuture.html" title="trait futures::future::TryFuture">TryFuture</a>&lt;Ok = Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Ok" title="type futures::stream::TryStream::Ok">Ok</a>&gt;,
+             Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.inspect_ok" class="fn">inspect_ok</a>&lt;F&gt;(self, f: F) -&gt; <a class="struct" href="struct.InspectOk.html" title="struct futures::stream::InspectOk">InspectOk</a>&lt;Self, F&gt;
+       <span class="where">where F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(&amp;Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Ok" title="type futures::stream::TryStream::Ok">Ok</a>),
+             Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.inspect_err" class="fn">inspect_err</a>&lt;F&gt;(self, f: F) -&gt; <a class="struct" href="struct.InspectErr.html" title="struct futures::stream::InspectErr">InspectErr</a>&lt;Self, F&gt;
+       <span class="where">where F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(&amp;Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Error" title="type futures::stream::TryStream::Error">Error</a>),
+             Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.into_stream" class="fn">into_stream</a>(self) -&gt; <a class="struct" href="struct.IntoStream.html" title="struct futures::stream::IntoStream">IntoStream</a>&lt;Self&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.try_next" class="fn">try_next</a>(&amp;mut self) -&gt; <a class="struct" href="struct.TryNext.html" title="struct futures::stream::TryNext">TryNext</a>&lt;'_, Self&gt; <a href="#" class="tooltip" data-notable-ty="TryNext&lt;&#39;_, Self&gt;">ⓘ</a>
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.try_for_each" class="fn">try_for_each</a>&lt;Fut, F&gt;(self, f: F) -&gt; <a class="struct" href="struct.TryForEach.html" title="struct futures::stream::TryForEach">TryForEach</a>&lt;Self, Fut, F&gt; <a href="#" class="tooltip" data-notable-ty="TryForEach&lt;Self, Fut, F&gt;">ⓘ</a>
+       <span class="where">where F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Ok" title="type futures::stream::TryStream::Ok">Ok</a>) -&gt; Fut,
+             Fut: <a class="trait" href="../future/trait.TryFuture.html" title="trait futures::future::TryFuture">TryFuture</a>&lt;Ok = <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, Error = Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Error" title="type futures::stream::TryStream::Error">Error</a>&gt;,
+             Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.try_skip_while" class="fn">try_skip_while</a>&lt;Fut, F&gt;(self, f: F) -&gt; <a class="struct" href="struct.TrySkipWhile.html" title="struct futures::stream::TrySkipWhile">TrySkipWhile</a>&lt;Self, Fut, F&gt;
+       <span class="where">where F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(&amp;Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Ok" title="type futures::stream::TryStream::Ok">Ok</a>) -&gt; Fut,
+             Fut: <a class="trait" href="../future/trait.TryFuture.html" title="trait futures::future::TryFuture">TryFuture</a>&lt;Ok = <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>, Error = Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Error" title="type futures::stream::TryStream::Error">Error</a>&gt;,
+             Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.try_take_while" class="fn">try_take_while</a>&lt;Fut, F&gt;(self, f: F) -&gt; <a class="struct" href="struct.TryTakeWhile.html" title="struct futures::stream::TryTakeWhile">TryTakeWhile</a>&lt;Self, Fut, F&gt;
+       <span class="where">where F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(&amp;Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Ok" title="type futures::stream::TryStream::Ok">Ok</a>) -&gt; Fut,
+             Fut: <a class="trait" href="../future/trait.TryFuture.html" title="trait futures::future::TryFuture">TryFuture</a>&lt;Ok = <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>, Error = Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Error" title="type futures::stream::TryStream::Error">Error</a>&gt;,
+             Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.try_for_each_concurrent" class="fn">try_for_each_concurrent</a>&lt;Fut, F&gt;(
+        self,
+        limit: impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>&gt;&gt;,
+        f: F,
+    ) -&gt; <a class="struct" href="struct.TryForEachConcurrent.html" title="struct futures::stream::TryForEachConcurrent">TryForEachConcurrent</a>&lt;Self, Fut, F&gt; <a href="#" class="tooltip" data-notable-ty="TryForEachConcurrent&lt;Self, Fut, F&gt;">ⓘ</a>
+       <span class="where">where F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Ok" title="type futures::stream::TryStream::Ok">Ok</a>) -&gt; Fut,
+             Fut: <a class="trait" href="../future/trait.Future.html" title="trait futures::future::Future">Future</a>&lt;Output = <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Error" title="type futures::stream::TryStream::Error">Error</a>&gt;&gt;,
+             Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.try_collect" class="fn">try_collect</a>&lt;C&gt;(self) -&gt; <a class="struct" href="struct.TryCollect.html" title="struct futures::stream::TryCollect">TryCollect</a>&lt;Self, C&gt; <a href="#" class="tooltip" data-notable-ty="TryCollect&lt;Self, C&gt;">ⓘ</a>
+       <span class="where">where C: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/default/trait.Default.html" title="trait core::default::Default">Default</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/iter/traits/collect/trait.Extend.html" title="trait core::iter::traits::collect::Extend">Extend</a>&lt;Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Ok" title="type futures::stream::TryStream::Ok">Ok</a>&gt;,
+             Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.try_chunks" class="fn">try_chunks</a>(self, capacity: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="struct" href="struct.TryChunks.html" title="struct futures::stream::TryChunks">TryChunks</a>&lt;Self&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.try_ready_chunks" class="fn">try_ready_chunks</a>(self, capacity: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="struct" href="struct.TryReadyChunks.html" title="struct futures::stream::TryReadyChunks">TryReadyChunks</a>&lt;Self&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.try_filter" class="fn">try_filter</a>&lt;Fut, F&gt;(self, f: F) -&gt; <a class="struct" href="struct.TryFilter.html" title="struct futures::stream::TryFilter">TryFilter</a>&lt;Self, Fut, F&gt;
+       <span class="where">where Fut: <a class="trait" href="../future/trait.Future.html" title="trait futures::future::Future">Future</a>&lt;Output = <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>&gt;,
+             F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(&amp;Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Ok" title="type futures::stream::TryStream::Ok">Ok</a>) -&gt; Fut,
+             Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.try_filter_map" class="fn">try_filter_map</a>&lt;Fut, F, T&gt;(self, f: F) -&gt; <a class="struct" href="struct.TryFilterMap.html" title="struct futures::stream::TryFilterMap">TryFilterMap</a>&lt;Self, Fut, F&gt;
+       <span class="where">where Fut: <a class="trait" href="../future/trait.TryFuture.html" title="trait futures::future::TryFuture">TryFuture</a>&lt;Ok = <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;T&gt;, Error = Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Error" title="type futures::stream::TryStream::Error">Error</a>&gt;,
+             F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Ok" title="type futures::stream::TryStream::Ok">Ok</a>) -&gt; Fut,
+             Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.try_flatten_unordered" class="fn">try_flatten_unordered</a>(
+        self,
+        limit: impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>&gt;&gt;,
+    ) -&gt; <a class="struct" href="struct.TryFlattenUnordered.html" title="struct futures::stream::TryFlattenUnordered">TryFlattenUnordered</a>&lt;Self&gt;
+       <span class="where">where Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Ok" title="type futures::stream::TryStream::Ok">Ok</a>: <a class="trait" href="trait.TryStream.html" title="trait futures::stream::TryStream">TryStream</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a>,
+             &lt;Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Ok" title="type futures::stream::TryStream::Ok">Ok</a> as <a class="trait" href="trait.TryStream.html" title="trait futures::stream::TryStream">TryStream</a>&gt;::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Error" title="type futures::stream::TryStream::Error">Error</a>: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Error" title="type futures::stream::TryStream::Error">Error</a>&gt;,
+             Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.try_flatten" class="fn">try_flatten</a>(self) -&gt; <a class="struct" href="struct.TryFlatten.html" title="struct futures::stream::TryFlatten">TryFlatten</a>&lt;Self&gt;
+       <span class="where">where Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Ok" title="type futures::stream::TryStream::Ok">Ok</a>: <a class="trait" href="trait.TryStream.html" title="trait futures::stream::TryStream">TryStream</a>,
+             &lt;Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Ok" title="type futures::stream::TryStream::Ok">Ok</a> as <a class="trait" href="trait.TryStream.html" title="trait futures::stream::TryStream">TryStream</a>&gt;::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Error" title="type futures::stream::TryStream::Error">Error</a>: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Error" title="type futures::stream::TryStream::Error">Error</a>&gt;,
+             Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.try_fold" class="fn">try_fold</a>&lt;T, Fut, F&gt;(self, init: T, f: F) -&gt; <a class="struct" href="struct.TryFold.html" title="struct futures::stream::TryFold">TryFold</a>&lt;Self, Fut, T, F&gt; <a href="#" class="tooltip" data-notable-ty="TryFold&lt;Self, Fut, T, F&gt;">ⓘ</a>
+       <span class="where">where F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(T, Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Ok" title="type futures::stream::TryStream::Ok">Ok</a>) -&gt; Fut,
+             Fut: <a class="trait" href="../future/trait.TryFuture.html" title="trait futures::future::TryFuture">TryFuture</a>&lt;Ok = T, Error = Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Error" title="type futures::stream::TryStream::Error">Error</a>&gt;,
+             Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.try_concat" class="fn">try_concat</a>(self) -&gt; <a class="struct" href="struct.TryConcat.html" title="struct futures::stream::TryConcat">TryConcat</a>&lt;Self&gt; <a href="#" class="tooltip" data-notable-ty="TryConcat&lt;Self&gt;">ⓘ</a>
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+             Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Ok" title="type futures::stream::TryStream::Ok">Ok</a>: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/iter/traits/collect/trait.Extend.html" title="trait core::iter::traits::collect::Extend">Extend</a>&lt;&lt;Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Ok" title="type futures::stream::TryStream::Ok">Ok</a> as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/iter/traits/collect/trait.IntoIterator.html" title="trait core::iter::traits::collect::IntoIterator">IntoIterator</a>&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/iter/traits/collect/trait.IntoIterator.html#associatedtype.Item" title="type core::iter::traits::collect::IntoIterator::Item">Item</a>&gt; + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/iter/traits/collect/trait.IntoIterator.html" title="trait core::iter::traits::collect::IntoIterator">IntoIterator</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/default/trait.Default.html" title="trait core::default::Default">Default</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.try_buffer_unordered" class="fn">try_buffer_unordered</a>(self, n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="struct" href="struct.TryBufferUnordered.html" title="struct futures::stream::TryBufferUnordered">TryBufferUnordered</a>&lt;Self&gt;
+       <span class="where">where Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Ok" title="type futures::stream::TryStream::Ok">Ok</a>: <a class="trait" href="../future/trait.TryFuture.html" title="trait futures::future::TryFuture">TryFuture</a>&lt;Error = Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Error" title="type futures::stream::TryStream::Error">Error</a>&gt;,
+             Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.try_buffered" class="fn">try_buffered</a>(self, n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="struct" href="struct.TryBuffered.html" title="struct futures::stream::TryBuffered">TryBuffered</a>&lt;Self&gt;
+       <span class="where">where Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Ok" title="type futures::stream::TryStream::Ok">Ok</a>: <a class="trait" href="../future/trait.TryFuture.html" title="trait futures::future::TryFuture">TryFuture</a>&lt;Error = Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Error" title="type futures::stream::TryStream::Error">Error</a>&gt;,
+             Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.try_poll_next_unpin" class="fn">try_poll_next_unpin</a>(
+        &amp;mut self,
+        cx: &amp;mut <a class="struct" href="../task/struct.Context.html" title="struct futures::task::Context">Context</a>&lt;'_&gt;,
+    ) -&gt; <a class="enum" href="../task/enum.Poll.html" title="enum futures::task::Poll">Poll</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Ok" title="type futures::stream::TryStream::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Error" title="type futures::stream::TryStream::Error">Error</a>&gt;&gt;&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.into_async_read" class="fn">into_async_read</a>(self) -&gt; <a class="struct" href="struct.IntoAsyncRead.html" title="struct futures::stream::IntoAsyncRead">IntoAsyncRead</a>&lt;Self&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a> + <a class="trait" href="trait.TryStreamExt.html" title="trait futures::stream::TryStreamExt">TryStreamExt</a>&lt;Error = <a class="struct" href="../io/struct.Error.html" title="struct futures::io::Error">Error</a>&gt;,
+             Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Ok" title="type futures::stream::TryStream::Ok">Ok</a>: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]&gt;</span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.try_all" class="fn">try_all</a>&lt;Fut, F&gt;(self, f: F) -&gt; <a class="struct" href="struct.TryAll.html" title="struct futures::stream::TryAll">TryAll</a>&lt;Self, Fut, F&gt; <a href="#" class="tooltip" data-notable-ty="TryAll&lt;Self, Fut, F&gt;">ⓘ</a>
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+             F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Ok" title="type futures::stream::TryStream::Ok">Ok</a>) -&gt; Fut,
+             Fut: <a class="trait" href="../future/trait.Future.html" title="trait futures::future::Future">Future</a>&lt;Output = <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>&gt;</span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.try_any" class="fn">try_any</a>&lt;Fut, F&gt;(self, f: F) -&gt; <a class="struct" href="struct.TryAny.html" title="struct futures::stream::TryAny">TryAny</a>&lt;Self, Fut, F&gt; <a href="#" class="tooltip" data-notable-ty="TryAny&lt;Self, Fut, F&gt;">ⓘ</a>
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+             F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Ok" title="type futures::stream::TryStream::Ok">Ok</a>) -&gt; Fut,
+             Fut: <a class="trait" href="../future/trait.Future.html" title="trait futures::future::Future">Future</a>&lt;Output = <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>&gt;</span> { ... }
+</details>}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Adapters specific to <code>Result</code>-returning streams</p>
+</div></details><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.err_into" class="method"><a class="src rightside" href="../../src/futures_util/stream/try_stream/mod.rs.html#198-201">source</a><h4 class="code-header">fn <a href="#method.err_into" class="fn">err_into</a>&lt;E&gt;(self) -&gt; <a class="struct" href="struct.ErrInto.html" title="struct futures::stream::ErrInto">ErrInto</a>&lt;Self, E&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+    Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Error" title="type futures::stream::TryStream::Error">Error</a>: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;E&gt;,</div></h4></section></summary><div class="docblock"><p>Wraps the current stream in a new stream which converts the error type
+into the one provided.</p>
+<h5 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>futures::stream::{<span class="self">self</span>, TryStreamExt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>stream =
+    stream::iter(<span class="macro">vec!</span>[<span class="prelude-val">Ok</span>(()), <span class="prelude-val">Err</span>(<span class="number">5i32</span>)])
+        .err_into::&lt;i64&gt;();
+
+<span class="macro">assert_eq!</span>(stream.try_next().<span class="kw">await</span>, <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(())));
+<span class="macro">assert_eq!</span>(stream.try_next().<span class="kw">await</span>, <span class="prelude-val">Err</span>(<span class="number">5i64</span>));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.map_ok" class="method"><a class="src rightside" href="../../src/futures_util/stream/try_stream/mod.rs.html#223-226">source</a><h4 class="code-header">fn <a href="#method.map_ok" class="fn">map_ok</a>&lt;T, F&gt;(self, f: F) -&gt; <a class="struct" href="struct.MapOk.html" title="struct futures::stream::MapOk">MapOk</a>&lt;Self, F&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Ok" title="type futures::stream::TryStream::Ok">Ok</a>) -&gt; T,</div></h4></section></summary><div class="docblock"><p>Wraps the current stream in a new stream which maps the success value
+using the provided closure.</p>
+<h5 id="examples-1"><a class="doc-anchor" href="#examples-1">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>futures::stream::{<span class="self">self</span>, TryStreamExt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>stream =
+    stream::iter(<span class="macro">vec!</span>[<span class="prelude-val">Ok</span>(<span class="number">5</span>), <span class="prelude-val">Err</span>(<span class="number">0</span>)])
+        .map_ok(|x| x + <span class="number">2</span>);
+
+<span class="macro">assert_eq!</span>(stream.try_next().<span class="kw">await</span>, <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(<span class="number">7</span>)));
+<span class="macro">assert_eq!</span>(stream.try_next().<span class="kw">await</span>, <span class="prelude-val">Err</span>(<span class="number">0</span>));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.map_err" class="method"><a class="src rightside" href="../../src/futures_util/stream/try_stream/mod.rs.html#248-251">source</a><h4 class="code-header">fn <a href="#method.map_err" class="fn">map_err</a>&lt;E, F&gt;(self, f: F) -&gt; <a class="struct" href="struct.MapErr.html" title="struct futures::stream::MapErr">MapErr</a>&lt;Self, F&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Error" title="type futures::stream::TryStream::Error">Error</a>) -&gt; E,</div></h4></section></summary><div class="docblock"><p>Wraps the current stream in a new stream which maps the error value
+using the provided closure.</p>
+<h5 id="examples-2"><a class="doc-anchor" href="#examples-2">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>futures::stream::{<span class="self">self</span>, TryStreamExt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>stream =
+    stream::iter(<span class="macro">vec!</span>[<span class="prelude-val">Ok</span>(<span class="number">5</span>), <span class="prelude-val">Err</span>(<span class="number">0</span>)])
+        .map_err(|x| x + <span class="number">2</span>);
+
+<span class="macro">assert_eq!</span>(stream.try_next().<span class="kw">await</span>, <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(<span class="number">5</span>)));
+<span class="macro">assert_eq!</span>(stream.try_next().<span class="kw">await</span>, <span class="prelude-val">Err</span>(<span class="number">2</span>));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.and_then" class="method"><a class="src rightside" href="../../src/futures_util/stream/try_stream/mod.rs.html#294-298">source</a><h4 class="code-header">fn <a href="#method.and_then" class="fn">and_then</a>&lt;Fut, F&gt;(self, f: F) -&gt; <a class="struct" href="struct.AndThen.html" title="struct futures::stream::AndThen">AndThen</a>&lt;Self, Fut, F&gt;<div class="where">where
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Ok" title="type futures::stream::TryStream::Ok">Ok</a>) -&gt; Fut,
+    Fut: <a class="trait" href="../future/trait.TryFuture.html" title="trait futures::future::TryFuture">TryFuture</a>&lt;Error = Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Error" title="type futures::stream::TryStream::Error">Error</a>&gt;,
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Chain on a computation for when a value is ready, passing the successful
+results to the provided closure <code>f</code>.</p>
+<p>This function can be used to run a unit of work when the next successful
+value on a stream is ready. The closure provided will be yielded a value
+when ready, and the returned future will then be run to completion to
+produce the next value on this stream.</p>
+<p>Any errors produced by this stream will not be passed to the closure,
+and will be passed through.</p>
+<p>The returned value of the closure must implement the <code>TryFuture</code> trait
+and can represent some more work to be done before the composed stream
+is finished.</p>
+<p>Note that this function consumes the receiving stream and returns a
+wrapped version of it.</p>
+<p>To process the entire stream and return a single future representing
+success or error, use <code>try_for_each</code> instead.</p>
+<h5 id="examples-3"><a class="doc-anchor" href="#examples-3">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>futures::channel::mpsc;
+<span class="kw">use </span>futures::future;
+<span class="kw">use </span>futures::stream::TryStreamExt;
+
+<span class="kw">let </span>(_tx, rx) = mpsc::channel::&lt;<span class="prelude-ty">Result</span>&lt;i32, ()&gt;&gt;(<span class="number">1</span>);
+
+<span class="kw">let </span>rx = rx.and_then(|result| {
+    future::ok(<span class="kw">if </span>result % <span class="number">2 </span>== <span class="number">0 </span>{
+        <span class="prelude-val">Some</span>(result)
+    } <span class="kw">else </span>{
+        <span class="prelude-val">None
+    </span>})
+});</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.or_else" class="method"><a class="src rightside" href="../../src/futures_util/stream/try_stream/mod.rs.html#320-324">source</a><h4 class="code-header">fn <a href="#method.or_else" class="fn">or_else</a>&lt;Fut, F&gt;(self, f: F) -&gt; <a class="struct" href="struct.OrElse.html" title="struct futures::stream::OrElse">OrElse</a>&lt;Self, Fut, F&gt;<div class="where">where
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Error" title="type futures::stream::TryStream::Error">Error</a>) -&gt; Fut,
+    Fut: <a class="trait" href="../future/trait.TryFuture.html" title="trait futures::future::TryFuture">TryFuture</a>&lt;Ok = Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Ok" title="type futures::stream::TryStream::Ok">Ok</a>&gt;,
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Chain on a computation for when an error happens, passing the
+erroneous result to the provided closure <code>f</code>.</p>
+<p>This function can be used to run a unit of work and attempt to recover from
+an error if one happens. The closure provided will be yielded an error
+when one appears, and the returned future will then be run to completion
+to produce the next value on this stream.</p>
+<p>Any successful values produced by this stream will not be passed to the
+closure, and will be passed through.</p>
+<p>The returned value of the closure must implement the <a href="../future/trait.TryFuture.html" title="trait futures::future::TryFuture"><code>TryFuture</code></a> trait
+and can represent some more work to be done before the composed stream
+is finished.</p>
+<p>Note that this function consumes the receiving stream and returns a
+wrapped version of it.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.inspect_ok" class="method"><a class="src rightside" href="../../src/futures_util/stream/try_stream/mod.rs.html#335-338">source</a><h4 class="code-header">fn <a href="#method.inspect_ok" class="fn">inspect_ok</a>&lt;F&gt;(self, f: F) -&gt; <a class="struct" href="struct.InspectOk.html" title="struct futures::stream::InspectOk">InspectOk</a>&lt;Self, F&gt;<div class="where">where
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(&amp;Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Ok" title="type futures::stream::TryStream::Ok">Ok</a>),
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Do something with the success value of this stream, afterwards passing
+it on.</p>
+<p>This is similar to the <code>StreamExt::inspect</code> method where it allows
+easily inspecting the success value as it passes through the stream, for
+example to debug what’s going on.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.inspect_err" class="method"><a class="src rightside" href="../../src/futures_util/stream/try_stream/mod.rs.html#348-351">source</a><h4 class="code-header">fn <a href="#method.inspect_err" class="fn">inspect_err</a>&lt;F&gt;(self, f: F) -&gt; <a class="struct" href="struct.InspectErr.html" title="struct futures::stream::InspectErr">InspectErr</a>&lt;Self, F&gt;<div class="where">where
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(&amp;Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Error" title="type futures::stream::TryStream::Error">Error</a>),
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Do something with the error value of this stream, afterwards passing it on.</p>
+<p>This is similar to the <code>StreamExt::inspect</code> method where it allows
+easily inspecting the error value as it passes through the stream, for
+example to debug what’s going on.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.into_stream" class="method"><a class="src rightside" href="../../src/futures_util/stream/try_stream/mod.rs.html#377-379">source</a><h4 class="code-header">fn <a href="#method.into_stream" class="fn">into_stream</a>(self) -&gt; <a class="struct" href="struct.IntoStream.html" title="struct futures::stream::IntoStream">IntoStream</a>&lt;Self&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Wraps a <a href="trait.TryStream.html" title="trait futures::stream::TryStream"><code>TryStream</code></a> into a type that implements
+<a href="trait.Stream.html" title="trait futures::stream::Stream"><code>Stream</code></a></p>
+<p><a href="trait.TryStream.html" title="trait futures::stream::TryStream"><code>TryStream</code></a>s currently do not implement the
+<a href="trait.Stream.html" title="trait futures::stream::Stream"><code>Stream</code></a> trait because of limitations
+of the compiler.</p>
+<h5 id="examples-4"><a class="doc-anchor" href="#examples-4">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>futures::stream::{Stream, TryStream, TryStreamExt};
+
+<span class="kw">fn </span>make_try_stream() -&gt; <span class="kw">impl </span>TryStream&lt;<span class="prelude-val">Ok </span>= T, Error = E&gt; { <span class="comment">// ... }
+</span><span class="kw">fn </span>take_stream(stream: <span class="kw">impl </span>Stream&lt;Item = <span class="prelude-ty">Result</span>&lt;T, E&gt;&gt;) { <span class="comment">/* ... */ </span>}
+
+take_stream(make_try_stream().into_stream());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_next" class="method"><a class="src rightside" href="../../src/futures_util/stream/try_stream/mod.rs.html#404-406">source</a><h4 class="code-header">fn <a href="#method.try_next" class="fn">try_next</a>(&amp;mut self) -&gt; <a class="struct" href="struct.TryNext.html" title="struct futures::stream::TryNext">TryNext</a>&lt;'_, Self&gt; <a href="#" class="tooltip" data-notable-ty="TryNext&lt;&#39;_, Self&gt;">ⓘ</a><div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a>,</div></h4></section></summary><div class="docblock"><p>Creates a future that attempts to resolve the next item in the stream.
+If an error is encountered before the next item, the error is returned
+instead.</p>
+<p>This is similar to the <code>Stream::next</code> combinator, but returns a
+<code>Result&lt;Option&lt;T&gt;, E&gt;</code> rather than an <code>Option&lt;Result&lt;T, E&gt;&gt;</code>, making
+for easy use with the <code>?</code> operator.</p>
+<h5 id="examples-5"><a class="doc-anchor" href="#examples-5">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>futures::stream::{<span class="self">self</span>, TryStreamExt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>stream = stream::iter(<span class="macro">vec!</span>[<span class="prelude-val">Ok</span>(()), <span class="prelude-val">Err</span>(())]);
+
+<span class="macro">assert_eq!</span>(stream.try_next().<span class="kw">await</span>, <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(())));
+<span class="macro">assert_eq!</span>(stream.try_next().<span class="kw">await</span>, <span class="prelude-val">Err</span>(()));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_for_each" class="method"><a class="src rightside" href="../../src/futures_util/stream/try_stream/mod.rs.html#444-448">source</a><h4 class="code-header">fn <a href="#method.try_for_each" class="fn">try_for_each</a>&lt;Fut, F&gt;(self, f: F) -&gt; <a class="struct" href="struct.TryForEach.html" title="struct futures::stream::TryForEach">TryForEach</a>&lt;Self, Fut, F&gt; <a href="#" class="tooltip" data-notable-ty="TryForEach&lt;Self, Fut, F&gt;">ⓘ</a><div class="where">where
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Ok" title="type futures::stream::TryStream::Ok">Ok</a>) -&gt; Fut,
+    Fut: <a class="trait" href="../future/trait.TryFuture.html" title="trait futures::future::TryFuture">TryFuture</a>&lt;Ok = <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, Error = Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Error" title="type futures::stream::TryStream::Error">Error</a>&gt;,
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Attempts to run this stream to completion, executing the provided
+asynchronous closure for each element on the stream.</p>
+<p>The provided closure will be called for each item this stream produces,
+yielding a future. That future will then be executed to completion
+before moving on to the next item.</p>
+<p>The returned value is a <a href="../future/trait.Future.html" title="trait futures::future::Future"><code>Future</code></a> where the
+<a href="../future/trait.Future.html#associatedtype.Output" title="associated type futures::future::Future::Output"><code>Output</code></a> type is
+<code>Result&lt;(), Self::Error&gt;</code>. If any of the intermediate
+futures or the stream returns an error, this future will return
+immediately with an error.</p>
+<h5 id="examples-6"><a class="doc-anchor" href="#examples-6">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>futures::future;
+<span class="kw">use </span>futures::stream::{<span class="self">self</span>, TryStreamExt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>x = <span class="number">0i32</span>;
+
+{
+    <span class="kw">let </span>fut = stream::repeat(<span class="prelude-val">Ok</span>(<span class="number">1</span>)).try_for_each(|item| {
+        x += item;
+        future::ready(<span class="kw">if </span>x == <span class="number">3 </span>{ <span class="prelude-val">Err</span>(()) } <span class="kw">else </span>{ <span class="prelude-val">Ok</span>(()) })
+    });
+    <span class="macro">assert_eq!</span>(fut.<span class="kw">await</span>, <span class="prelude-val">Err</span>(()));
+}
+
+<span class="macro">assert_eq!</span>(x, <span class="number">3</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_skip_while" class="method"><a class="src rightside" href="../../src/futures_util/stream/try_stream/mod.rs.html#474-478">source</a><h4 class="code-header">fn <a href="#method.try_skip_while" class="fn">try_skip_while</a>&lt;Fut, F&gt;(self, f: F) -&gt; <a class="struct" href="struct.TrySkipWhile.html" title="struct futures::stream::TrySkipWhile">TrySkipWhile</a>&lt;Self, Fut, F&gt;<div class="where">where
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(&amp;Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Ok" title="type futures::stream::TryStream::Ok">Ok</a>) -&gt; Fut,
+    Fut: <a class="trait" href="../future/trait.TryFuture.html" title="trait futures::future::TryFuture">TryFuture</a>&lt;Ok = <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>, Error = Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Error" title="type futures::stream::TryStream::Error">Error</a>&gt;,
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Skip elements on this stream while the provided asynchronous predicate
+resolves to <code>true</code>.</p>
+<p>This function is similar to
+<a href="trait.StreamExt.html#method.skip_while" title="method futures::stream::StreamExt::skip_while"><code>StreamExt::skip_while</code></a> but exits
+early if an error occurs.</p>
+<h5 id="examples-7"><a class="doc-anchor" href="#examples-7">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>futures::future;
+<span class="kw">use </span>futures::stream::{<span class="self">self</span>, TryStreamExt};
+
+<span class="kw">let </span>stream = stream::iter(<span class="macro">vec!</span>[<span class="prelude-val">Ok</span>::&lt;i32, i32&gt;(<span class="number">1</span>), <span class="prelude-val">Ok</span>(<span class="number">3</span>), <span class="prelude-val">Ok</span>(<span class="number">2</span>)]);
+<span class="kw">let </span>stream = stream.try_skip_while(|x| future::ready(<span class="prelude-val">Ok</span>(<span class="kw-2">*</span>x &lt; <span class="number">3</span>)));
+
+<span class="kw">let </span>output: <span class="prelude-ty">Result</span>&lt;Vec&lt;i32&gt;, i32&gt; = stream.try_collect().<span class="kw">await</span>;
+<span class="macro">assert_eq!</span>(output, <span class="prelude-val">Ok</span>(<span class="macro">vec!</span>[<span class="number">3</span>, <span class="number">2</span>]));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_take_while" class="method"><a class="src rightside" href="../../src/futures_util/stream/try_stream/mod.rs.html#504-508">source</a><h4 class="code-header">fn <a href="#method.try_take_while" class="fn">try_take_while</a>&lt;Fut, F&gt;(self, f: F) -&gt; <a class="struct" href="struct.TryTakeWhile.html" title="struct futures::stream::TryTakeWhile">TryTakeWhile</a>&lt;Self, Fut, F&gt;<div class="where">where
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(&amp;Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Ok" title="type futures::stream::TryStream::Ok">Ok</a>) -&gt; Fut,
+    Fut: <a class="trait" href="../future/trait.TryFuture.html" title="trait futures::future::TryFuture">TryFuture</a>&lt;Ok = <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>, Error = Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Error" title="type futures::stream::TryStream::Error">Error</a>&gt;,
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Take elements on this stream while the provided asynchronous predicate
+resolves to <code>true</code>.</p>
+<p>This function is similar to
+<a href="trait.StreamExt.html#method.take_while" title="method futures::stream::StreamExt::take_while"><code>StreamExt::take_while</code></a> but exits
+early if an error occurs.</p>
+<h5 id="examples-8"><a class="doc-anchor" href="#examples-8">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>futures::future;
+<span class="kw">use </span>futures::stream::{<span class="self">self</span>, TryStreamExt};
+
+<span class="kw">let </span>stream = stream::iter(<span class="macro">vec!</span>[<span class="prelude-val">Ok</span>::&lt;i32, i32&gt;(<span class="number">1</span>), <span class="prelude-val">Ok</span>(<span class="number">2</span>), <span class="prelude-val">Ok</span>(<span class="number">3</span>), <span class="prelude-val">Ok</span>(<span class="number">2</span>)]);
+<span class="kw">let </span>stream = stream.try_take_while(|x| future::ready(<span class="prelude-val">Ok</span>(<span class="kw-2">*</span>x &lt; <span class="number">3</span>)));
+
+<span class="kw">let </span>output: <span class="prelude-ty">Result</span>&lt;Vec&lt;i32&gt;, i32&gt; = stream.try_collect().<span class="kw">await</span>;
+<span class="macro">assert_eq!</span>(output, <span class="prelude-val">Ok</span>(<span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">2</span>]));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_for_each_concurrent" class="method"><a class="src rightside" href="../../src/futures_util/stream/try_stream/mod.rs.html#556-564">source</a><h4 class="code-header">fn <a href="#method.try_for_each_concurrent" class="fn">try_for_each_concurrent</a>&lt;Fut, F&gt;(
+    self,
+    limit: impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>&gt;&gt;,
+    f: F,
+) -&gt; <a class="struct" href="struct.TryForEachConcurrent.html" title="struct futures::stream::TryForEachConcurrent">TryForEachConcurrent</a>&lt;Self, Fut, F&gt; <a href="#" class="tooltip" data-notable-ty="TryForEachConcurrent&lt;Self, Fut, F&gt;">ⓘ</a><div class="where">where
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Ok" title="type futures::stream::TryStream::Ok">Ok</a>) -&gt; Fut,
+    Fut: <a class="trait" href="../future/trait.Future.html" title="trait futures::future::Future">Future</a>&lt;Output = <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Error" title="type futures::stream::TryStream::Error">Error</a>&gt;&gt;,
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Attempts to run this stream to completion, executing the provided asynchronous
+closure for each element on the stream concurrently as elements become
+available, exiting as soon as an error occurs.</p>
+<p>This is similar to
+<a href="trait.StreamExt.html#method.for_each_concurrent" title="method futures::stream::StreamExt::for_each_concurrent"><code>StreamExt::for_each_concurrent</code></a>,
+but will resolve to an error immediately if the underlying stream or the provided
+closure return an error.</p>
+<p>This method is only available when the <code>std</code> or <code>alloc</code> feature of this
+library is activated, and it is activated by default.</p>
+<h5 id="examples-9"><a class="doc-anchor" href="#examples-9">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>futures::channel::oneshot;
+<span class="kw">use </span>futures::stream::{<span class="self">self</span>, StreamExt, TryStreamExt};
+
+<span class="kw">let </span>(tx1, rx1) = oneshot::channel();
+<span class="kw">let </span>(tx2, rx2) = oneshot::channel();
+<span class="kw">let </span>(_tx3, rx3) = oneshot::channel();
+
+<span class="kw">let </span>stream = stream::iter(<span class="macro">vec!</span>[rx1, rx2, rx3]);
+<span class="kw">let </span>fut = stream.map(<span class="prelude-val">Ok</span>).try_for_each_concurrent(
+    <span class="comment">/* limit */ </span><span class="number">2</span>,
+    |rx| <span class="kw">async move </span>{
+        <span class="kw">let </span>res: <span class="prelude-ty">Result</span>&lt;(), oneshot::Canceled&gt; = rx.<span class="kw">await</span>;
+        res
+    }
+);
+
+tx1.send(()).unwrap();
+<span class="comment">// Drop the second sender so that `rx2` resolves to `Canceled`.
+</span>drop(tx2);
+
+<span class="comment">// The final result is an error because the second future
+// resulted in an error.
+</span><span class="macro">assert_eq!</span>(<span class="prelude-val">Err</span>(oneshot::Canceled), fut.<span class="kw">await</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_collect" class="method"><a class="src rightside" href="../../src/futures_util/stream/try_stream/mod.rs.html#603-605">source</a><h4 class="code-header">fn <a href="#method.try_collect" class="fn">try_collect</a>&lt;C&gt;(self) -&gt; <a class="struct" href="struct.TryCollect.html" title="struct futures::stream::TryCollect">TryCollect</a>&lt;Self, C&gt; <a href="#" class="tooltip" data-notable-ty="TryCollect&lt;Self, C&gt;">ⓘ</a><div class="where">where
+    C: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/default/trait.Default.html" title="trait core::default::Default">Default</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/iter/traits/collect/trait.Extend.html" title="trait core::iter::traits::collect::Extend">Extend</a>&lt;Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Ok" title="type futures::stream::TryStream::Ok">Ok</a>&gt;,
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Attempt to transform a stream into a collection,
+returning a future representing the result of that computation.</p>
+<p>This combinator will collect all successful results of this stream and
+collect them into the specified collection type. If an error happens then all
+collected elements will be dropped and the error will be returned.</p>
+<p>The returned future will be resolved when the stream terminates.</p>
+<h5 id="examples-10"><a class="doc-anchor" href="#examples-10">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>futures::channel::mpsc;
+<span class="kw">use </span>futures::stream::TryStreamExt;
+<span class="kw">use </span>std::thread;
+
+<span class="kw">let </span>(tx, rx) = mpsc::unbounded();
+
+thread::spawn(<span class="kw">move </span>|| {
+    <span class="kw">for </span>i <span class="kw">in </span><span class="number">1</span>..=<span class="number">5 </span>{
+        tx.unbounded_send(<span class="prelude-val">Ok</span>(i)).unwrap();
+    }
+    tx.unbounded_send(<span class="prelude-val">Err</span>(<span class="number">6</span>)).unwrap();
+});
+
+<span class="kw">let </span>output: <span class="prelude-ty">Result</span>&lt;Vec&lt;i32&gt;, i32&gt; = rx.try_collect().<span class="kw">await</span>;
+<span class="macro">assert_eq!</span>(output, <span class="prelude-val">Err</span>(<span class="number">6</span>));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_chunks" class="method"><a class="src rightside" href="../../src/futures_util/stream/try_stream/mod.rs.html#648-650">source</a><h4 class="code-header">fn <a href="#method.try_chunks" class="fn">try_chunks</a>(self, capacity: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="struct" href="struct.TryChunks.html" title="struct futures::stream::TryChunks">TryChunks</a>&lt;Self&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>An adaptor for chunking up successful items of the stream inside a vector.</p>
+<p>This combinator will attempt to pull successful items from this stream and buffer
+them into a local vector. At most <code>capacity</code> items will get buffered
+before they’re yielded from the returned stream.</p>
+<p>Note that the vectors returned from this iterator may not always have
+<code>capacity</code> elements. If the underlying stream ended and only a partial
+vector was created, it’ll be returned. Additionally if an error happens
+from the underlying stream then the currently buffered items will be
+yielded.</p>
+<p>This method is only available when the <code>std</code> or <code>alloc</code> feature of this
+library is activated, and it is activated by default.</p>
+<p>This function is similar to
+<a href="trait.StreamExt.html#method.chunks" title="method futures::stream::StreamExt::chunks"><code>StreamExt::chunks</code></a> but exits
+early if an error occurs.</p>
+<h5 id="examples-11"><a class="doc-anchor" href="#examples-11">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>futures::stream::{<span class="self">self</span>, TryChunksError, TryStreamExt};
+
+<span class="kw">let </span>stream = stream::iter(<span class="macro">vec!</span>[<span class="prelude-val">Ok</span>::&lt;i32, i32&gt;(<span class="number">1</span>), <span class="prelude-val">Ok</span>(<span class="number">2</span>), <span class="prelude-val">Ok</span>(<span class="number">3</span>), <span class="prelude-val">Err</span>(<span class="number">4</span>), <span class="prelude-val">Ok</span>(<span class="number">5</span>), <span class="prelude-val">Ok</span>(<span class="number">6</span>)]);
+<span class="kw">let </span><span class="kw-2">mut </span>stream = stream.try_chunks(<span class="number">2</span>);
+
+<span class="macro">assert_eq!</span>(stream.try_next().<span class="kw">await</span>, <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(<span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">2</span>])));
+<span class="macro">assert_eq!</span>(stream.try_next().<span class="kw">await</span>, <span class="prelude-val">Err</span>(TryChunksError(<span class="macro">vec!</span>[<span class="number">3</span>], <span class="number">4</span>)));
+<span class="macro">assert_eq!</span>(stream.try_next().<span class="kw">await</span>, <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(<span class="macro">vec!</span>[<span class="number">5</span>, <span class="number">6</span>])));</code></pre></div>
+<h5 id="panics"><a class="doc-anchor" href="#panics">§</a>Panics</h5>
+<p>This method will panic if <code>capacity</code> is zero.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_ready_chunks" class="method"><a class="src rightside" href="../../src/futures_util/stream/try_stream/mod.rs.html#697-699">source</a><h4 class="code-header">fn <a href="#method.try_ready_chunks" class="fn">try_ready_chunks</a>(self, capacity: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="struct" href="struct.TryReadyChunks.html" title="struct futures::stream::TryReadyChunks">TryReadyChunks</a>&lt;Self&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>An adaptor for chunking up successful, ready items of the stream inside a vector.</p>
+<p>This combinator will attempt to pull successful items from this stream and buffer
+them into a local vector. At most <code>capacity</code> items will get buffered
+before they’re yielded from the returned stream. If the underlying stream
+returns <code>Poll::Pending</code>, and the collected chunk is not empty, it will
+be immidiatly returned.</p>
+<p>Note that the vectors returned from this iterator may not always have
+<code>capacity</code> elements. If the underlying stream ended and only a partial
+vector was created, it’ll be returned. Additionally if an error happens
+from the underlying stream then the currently buffered items will be
+yielded.</p>
+<p>This method is only available when the <code>std</code> or <code>alloc</code> feature of this
+library is activated, and it is activated by default.</p>
+<p>This function is similar to
+<a href="trait.StreamExt.html#method.ready_chunks" title="method futures::stream::StreamExt::ready_chunks"><code>StreamExt::ready_chunks</code></a> but exits
+early if an error occurs.</p>
+<h5 id="examples-12"><a class="doc-anchor" href="#examples-12">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>futures::stream::{<span class="self">self</span>, TryReadyChunksError, TryStreamExt};
+
+<span class="kw">let </span>stream = stream::iter(<span class="macro">vec!</span>[<span class="prelude-val">Ok</span>::&lt;i32, i32&gt;(<span class="number">1</span>), <span class="prelude-val">Ok</span>(<span class="number">2</span>), <span class="prelude-val">Ok</span>(<span class="number">3</span>), <span class="prelude-val">Err</span>(<span class="number">4</span>), <span class="prelude-val">Ok</span>(<span class="number">5</span>), <span class="prelude-val">Ok</span>(<span class="number">6</span>)]);
+<span class="kw">let </span><span class="kw-2">mut </span>stream = stream.try_ready_chunks(<span class="number">2</span>);
+
+<span class="macro">assert_eq!</span>(stream.try_next().<span class="kw">await</span>, <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(<span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">2</span>])));
+<span class="macro">assert_eq!</span>(stream.try_next().<span class="kw">await</span>, <span class="prelude-val">Err</span>(TryReadyChunksError(<span class="macro">vec!</span>[<span class="number">3</span>], <span class="number">4</span>)));
+<span class="macro">assert_eq!</span>(stream.try_next().<span class="kw">await</span>, <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(<span class="macro">vec!</span>[<span class="number">5</span>, <span class="number">6</span>])));</code></pre></div>
+<h5 id="panics-1"><a class="doc-anchor" href="#panics-1">§</a>Panics</h5>
+<p>This method will panic if <code>capacity</code> is zero.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_filter" class="method"><a class="src rightside" href="../../src/futures_util/stream/try_stream/mod.rs.html#736-740">source</a><h4 class="code-header">fn <a href="#method.try_filter" class="fn">try_filter</a>&lt;Fut, F&gt;(self, f: F) -&gt; <a class="struct" href="struct.TryFilter.html" title="struct futures::stream::TryFilter">TryFilter</a>&lt;Self, Fut, F&gt;<div class="where">where
+    Fut: <a class="trait" href="../future/trait.Future.html" title="trait futures::future::Future">Future</a>&lt;Output = <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>&gt;,
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(&amp;Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Ok" title="type futures::stream::TryStream::Ok">Ok</a>) -&gt; Fut,
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Attempt to filter the values produced by this stream according to the
+provided asynchronous closure.</p>
+<p>As values of this stream are made available, the provided predicate <code>f</code>
+will be run on them. If the predicate returns a <code>Future</code> which resolves
+to <code>true</code>, then the stream will yield the value, but if the predicate
+return a <code>Future</code> which resolves to <code>false</code>, then the value will be
+discarded and the next value will be produced.</p>
+<p>All errors are passed through without filtering in this combinator.</p>
+<p>Note that this function consumes the stream passed into it and returns a
+wrapped version of it, similar to the existing <code>filter</code> methods in
+the standard library.</p>
+<h5 id="examples-13"><a class="doc-anchor" href="#examples-13">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>futures::future;
+<span class="kw">use </span>futures::stream::{<span class="self">self</span>, StreamExt, TryStreamExt};
+
+<span class="kw">let </span>stream = stream::iter(<span class="macro">vec!</span>[<span class="prelude-val">Ok</span>(<span class="number">1i32</span>), <span class="prelude-val">Ok</span>(<span class="number">2i32</span>), <span class="prelude-val">Ok</span>(<span class="number">3i32</span>), <span class="prelude-val">Err</span>(<span class="string">"error"</span>)]);
+<span class="kw">let </span><span class="kw-2">mut </span>evens = stream.try_filter(|x| {
+    future::ready(x % <span class="number">2 </span>== <span class="number">0</span>)
+});
+
+<span class="macro">assert_eq!</span>(evens.next().<span class="kw">await</span>, <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(<span class="number">2</span>)));
+<span class="macro">assert_eq!</span>(evens.next().<span class="kw">await</span>, <span class="prelude-val">Some</span>(<span class="prelude-val">Err</span>(<span class="string">"error"</span>)));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_filter_map" class="method"><a class="src rightside" href="../../src/futures_util/stream/try_stream/mod.rs.html#777-781">source</a><h4 class="code-header">fn <a href="#method.try_filter_map" class="fn">try_filter_map</a>&lt;Fut, F, T&gt;(self, f: F) -&gt; <a class="struct" href="struct.TryFilterMap.html" title="struct futures::stream::TryFilterMap">TryFilterMap</a>&lt;Self, Fut, F&gt;<div class="where">where
+    Fut: <a class="trait" href="../future/trait.TryFuture.html" title="trait futures::future::TryFuture">TryFuture</a>&lt;Ok = <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;T&gt;, Error = Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Error" title="type futures::stream::TryStream::Error">Error</a>&gt;,
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Ok" title="type futures::stream::TryStream::Ok">Ok</a>) -&gt; Fut,
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Attempt to filter the values produced by this stream while
+simultaneously mapping them to a different type according to the
+provided asynchronous closure.</p>
+<p>As values of this stream are made available, the provided function will
+be run on them. If the future returned by the predicate <code>f</code> resolves to
+<a href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html#variant.Some" title="variant core::option::Option::Some"><code>Some(item)</code></a> then the stream will yield the value <code>item</code>, but if
+it resolves to <a href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html#variant.None" title="variant core::option::Option::None"><code>None</code></a> then the next value will be produced.</p>
+<p>All errors are passed through without filtering in this combinator.</p>
+<p>Note that this function consumes the stream passed into it and returns a
+wrapped version of it, similar to the existing <code>filter_map</code> methods in
+the standard library.</p>
+<h5 id="examples-14"><a class="doc-anchor" href="#examples-14">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>futures::stream::{<span class="self">self</span>, StreamExt, TryStreamExt};
+<span class="kw">use </span>futures::pin_mut;
+
+<span class="kw">let </span>stream = stream::iter(<span class="macro">vec!</span>[<span class="prelude-val">Ok</span>(<span class="number">1i32</span>), <span class="prelude-val">Ok</span>(<span class="number">6i32</span>), <span class="prelude-val">Err</span>(<span class="string">"error"</span>)]);
+<span class="kw">let </span>halves = stream.try_filter_map(|x| <span class="kw">async move </span>{
+    <span class="kw">let </span>ret = <span class="kw">if </span>x % <span class="number">2 </span>== <span class="number">0 </span>{ <span class="prelude-val">Some</span>(x / <span class="number">2</span>) } <span class="kw">else </span>{ <span class="prelude-val">None </span>};
+    <span class="prelude-val">Ok</span>(ret)
+});
+
+<span class="macro">pin_mut!</span>(halves);
+<span class="macro">assert_eq!</span>(halves.next().<span class="kw">await</span>, <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(<span class="number">3</span>)));
+<span class="macro">assert_eq!</span>(halves.next().<span class="kw">await</span>, <span class="prelude-val">Some</span>(<span class="prelude-val">Err</span>(<span class="string">"error"</span>)));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_flatten_unordered" class="method"><a class="src rightside" href="../../src/futures_util/stream/try_stream/mod.rs.html#832-836">source</a><h4 class="code-header">fn <a href="#method.try_flatten_unordered" class="fn">try_flatten_unordered</a>(
+    self,
+    limit: impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>&gt;&gt;,
+) -&gt; <a class="struct" href="struct.TryFlattenUnordered.html" title="struct futures::stream::TryFlattenUnordered">TryFlattenUnordered</a>&lt;Self&gt;<div class="where">where
+    Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Ok" title="type futures::stream::TryStream::Ok">Ok</a>: <a class="trait" href="trait.TryStream.html" title="trait futures::stream::TryStream">TryStream</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a>,
+    &lt;Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Ok" title="type futures::stream::TryStream::Ok">Ok</a> as <a class="trait" href="trait.TryStream.html" title="trait futures::stream::TryStream">TryStream</a>&gt;::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Error" title="type futures::stream::TryStream::Error">Error</a>: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Error" title="type futures::stream::TryStream::Error">Error</a>&gt;,
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Flattens a stream of streams into just one continuous stream. Produced streams
+will be polled concurrently and any errors will be passed through without looking at them.
+If the underlying base stream returns an error, it will be <strong>immediately</strong> propagated.</p>
+<p>The only argument is an optional limit on the number of concurrently
+polled streams. If this limit is not <code>None</code>, no more than <code>limit</code> streams
+will be polled at the same time. The <code>limit</code> argument is of type
+<code>Into&lt;Option&lt;usize&gt;&gt;</code>, and so can be provided as either <code>None</code>,
+<code>Some(10)</code>, or just <code>10</code>. Note: a limit of zero is interpreted as
+no limit at all, and will have the same result as passing in <code>None</code>.</p>
+<h5 id="examples-15"><a class="doc-anchor" href="#examples-15">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>futures::channel::mpsc;
+<span class="kw">use </span>futures::stream::{StreamExt, TryStreamExt};
+<span class="kw">use </span>std::thread;
+
+<span class="kw">let </span>(tx1, rx1) = mpsc::unbounded();
+<span class="kw">let </span>(tx2, rx2) = mpsc::unbounded();
+<span class="kw">let </span>(tx3, rx3) = mpsc::unbounded();
+
+thread::spawn(<span class="kw">move </span>|| {
+    tx1.unbounded_send(<span class="prelude-val">Ok</span>(<span class="number">1</span>)).unwrap();
+});
+thread::spawn(<span class="kw">move </span>|| {
+    tx2.unbounded_send(<span class="prelude-val">Ok</span>(<span class="number">2</span>)).unwrap();
+    tx2.unbounded_send(<span class="prelude-val">Err</span>(<span class="number">3</span>)).unwrap();
+    tx2.unbounded_send(<span class="prelude-val">Ok</span>(<span class="number">4</span>)).unwrap();
+});
+thread::spawn(<span class="kw">move </span>|| {
+    tx3.unbounded_send(<span class="prelude-val">Ok</span>(rx1)).unwrap();
+    tx3.unbounded_send(<span class="prelude-val">Ok</span>(rx2)).unwrap();
+    tx3.unbounded_send(<span class="prelude-val">Err</span>(<span class="number">5</span>)).unwrap();
+});
+
+<span class="kw">let </span>stream = rx3.try_flatten_unordered(<span class="prelude-val">None</span>);
+<span class="kw">let </span><span class="kw-2">mut </span>values: Vec&lt;<span class="kw">_</span>&gt; = stream.collect().<span class="kw">await</span>;
+values.sort();
+
+<span class="macro">assert_eq!</span>(values, <span class="macro">vec!</span>[<span class="prelude-val">Ok</span>(<span class="number">1</span>), <span class="prelude-val">Ok</span>(<span class="number">2</span>), <span class="prelude-val">Ok</span>(<span class="number">4</span>), <span class="prelude-val">Err</span>(<span class="number">3</span>), <span class="prelude-val">Err</span>(<span class="number">5</span>)]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_flatten" class="method"><a class="src rightside" href="../../src/futures_util/stream/try_stream/mod.rs.html#885-889">source</a><h4 class="code-header">fn <a href="#method.try_flatten" class="fn">try_flatten</a>(self) -&gt; <a class="struct" href="struct.TryFlatten.html" title="struct futures::stream::TryFlatten">TryFlatten</a>&lt;Self&gt;<div class="where">where
+    Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Ok" title="type futures::stream::TryStream::Ok">Ok</a>: <a class="trait" href="trait.TryStream.html" title="trait futures::stream::TryStream">TryStream</a>,
+    &lt;Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Ok" title="type futures::stream::TryStream::Ok">Ok</a> as <a class="trait" href="trait.TryStream.html" title="trait futures::stream::TryStream">TryStream</a>&gt;::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Error" title="type futures::stream::TryStream::Error">Error</a>: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Error" title="type futures::stream::TryStream::Error">Error</a>&gt;,
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Flattens a stream of streams into just one continuous stream.</p>
+<p>If this stream’s elements are themselves streams then this combinator
+will flatten out the entire stream to one long chain of elements. Any
+errors are passed through without looking at them, but otherwise each
+individual stream will get exhausted before moving on to the next.</p>
+<h5 id="examples-16"><a class="doc-anchor" href="#examples-16">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>futures::channel::mpsc;
+<span class="kw">use </span>futures::stream::{StreamExt, TryStreamExt};
+<span class="kw">use </span>std::thread;
+
+<span class="kw">let </span>(tx1, rx1) = mpsc::unbounded();
+<span class="kw">let </span>(tx2, rx2) = mpsc::unbounded();
+<span class="kw">let </span>(tx3, rx3) = mpsc::unbounded();
+
+thread::spawn(<span class="kw">move </span>|| {
+    tx1.unbounded_send(<span class="prelude-val">Ok</span>(<span class="number">1</span>)).unwrap();
+});
+thread::spawn(<span class="kw">move </span>|| {
+    tx2.unbounded_send(<span class="prelude-val">Ok</span>(<span class="number">2</span>)).unwrap();
+    tx2.unbounded_send(<span class="prelude-val">Err</span>(<span class="number">3</span>)).unwrap();
+    tx2.unbounded_send(<span class="prelude-val">Ok</span>(<span class="number">4</span>)).unwrap();
+});
+thread::spawn(<span class="kw">move </span>|| {
+    tx3.unbounded_send(<span class="prelude-val">Ok</span>(rx1)).unwrap();
+    tx3.unbounded_send(<span class="prelude-val">Ok</span>(rx2)).unwrap();
+    tx3.unbounded_send(<span class="prelude-val">Err</span>(<span class="number">5</span>)).unwrap();
+});
+
+<span class="kw">let </span><span class="kw-2">mut </span>stream = rx3.try_flatten();
+<span class="macro">assert_eq!</span>(stream.next().<span class="kw">await</span>, <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(<span class="number">1</span>)));
+<span class="macro">assert_eq!</span>(stream.next().<span class="kw">await</span>, <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(<span class="number">2</span>)));
+<span class="macro">assert_eq!</span>(stream.next().<span class="kw">await</span>, <span class="prelude-val">Some</span>(<span class="prelude-val">Err</span>(<span class="number">3</span>)));
+<span class="macro">assert_eq!</span>(stream.next().<span class="kw">await</span>, <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(<span class="number">4</span>)));
+<span class="macro">assert_eq!</span>(stream.next().<span class="kw">await</span>, <span class="prelude-val">Some</span>(<span class="prelude-val">Err</span>(<span class="number">5</span>)));
+<span class="macro">assert_eq!</span>(stream.next().<span class="kw">await</span>, <span class="prelude-val">None</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_fold" class="method"><a class="src rightside" href="../../src/futures_util/stream/try_stream/mod.rs.html#924-928">source</a><h4 class="code-header">fn <a href="#method.try_fold" class="fn">try_fold</a>&lt;T, Fut, F&gt;(self, init: T, f: F) -&gt; <a class="struct" href="struct.TryFold.html" title="struct futures::stream::TryFold">TryFold</a>&lt;Self, Fut, T, F&gt; <a href="#" class="tooltip" data-notable-ty="TryFold&lt;Self, Fut, T, F&gt;">ⓘ</a><div class="where">where
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(T, Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Ok" title="type futures::stream::TryStream::Ok">Ok</a>) -&gt; Fut,
+    Fut: <a class="trait" href="../future/trait.TryFuture.html" title="trait futures::future::TryFuture">TryFuture</a>&lt;Ok = T, Error = Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Error" title="type futures::stream::TryStream::Error">Error</a>&gt;,
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Attempt to execute an accumulating asynchronous computation over a
+stream, collecting all the values into one final result.</p>
+<p>This combinator will accumulate all values returned by this stream
+according to the closure provided. The initial state is also provided to
+this method and then is returned again by each execution of the closure.
+Once the entire stream has been exhausted the returned future will
+resolve to this value.</p>
+<p>This method is similar to <a href="trait.StreamExt.html#method.fold" title="method futures::stream::StreamExt::fold"><code>fold</code></a>, but will
+exit early if an error is encountered in either the stream or the
+provided closure.</p>
+<h5 id="examples-17"><a class="doc-anchor" href="#examples-17">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>futures::stream::{<span class="self">self</span>, TryStreamExt};
+
+<span class="kw">let </span>number_stream = stream::iter(<span class="macro">vec!</span>[<span class="prelude-val">Ok</span>::&lt;i32, i32&gt;(<span class="number">1</span>), <span class="prelude-val">Ok</span>(<span class="number">2</span>)]);
+<span class="kw">let </span>sum = number_stream.try_fold(<span class="number">0</span>, |acc, x| <span class="kw">async move </span>{ <span class="prelude-val">Ok</span>(acc + x) });
+<span class="macro">assert_eq!</span>(sum.<span class="kw">await</span>, <span class="prelude-val">Ok</span>(<span class="number">3</span>));
+
+<span class="kw">let </span>number_stream_with_err = stream::iter(<span class="macro">vec!</span>[<span class="prelude-val">Ok</span>::&lt;i32, i32&gt;(<span class="number">1</span>), <span class="prelude-val">Err</span>(<span class="number">2</span>), <span class="prelude-val">Ok</span>(<span class="number">1</span>)]);
+<span class="kw">let </span>sum = number_stream_with_err.try_fold(<span class="number">0</span>, |acc, x| <span class="kw">async move </span>{ <span class="prelude-val">Ok</span>(acc + x) });
+<span class="macro">assert_eq!</span>(sum.<span class="kw">await</span>, <span class="prelude-val">Err</span>(<span class="number">2</span>));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_concat" class="method"><a class="src rightside" href="../../src/futures_util/stream/try_stream/mod.rs.html#967-970">source</a><h4 class="code-header">fn <a href="#method.try_concat" class="fn">try_concat</a>(self) -&gt; <a class="struct" href="struct.TryConcat.html" title="struct futures::stream::TryConcat">TryConcat</a>&lt;Self&gt; <a href="#" class="tooltip" data-notable-ty="TryConcat&lt;Self&gt;">ⓘ</a><div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+    Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Ok" title="type futures::stream::TryStream::Ok">Ok</a>: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/iter/traits/collect/trait.Extend.html" title="trait core::iter::traits::collect::Extend">Extend</a>&lt;&lt;Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Ok" title="type futures::stream::TryStream::Ok">Ok</a> as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/iter/traits/collect/trait.IntoIterator.html" title="trait core::iter::traits::collect::IntoIterator">IntoIterator</a>&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/iter/traits/collect/trait.IntoIterator.html#associatedtype.Item" title="type core::iter::traits::collect::IntoIterator::Item">Item</a>&gt; + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/iter/traits/collect/trait.IntoIterator.html" title="trait core::iter::traits::collect::IntoIterator">IntoIterator</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/default/trait.Default.html" title="trait core::default::Default">Default</a>,</div></h4></section></summary><div class="docblock"><p>Attempt to concatenate all items of a stream into a single
+extendable destination, returning a future representing the end result.</p>
+<p>This combinator will extend the first item with the contents of all
+the subsequent successful results of the stream. If the stream is empty,
+the default value will be returned.</p>
+<p>Works with all collections that implement the <a href="https://doc.rust-lang.org/1.81.0/core/iter/traits/collect/trait.Extend.html" title="trait core::iter::traits::collect::Extend"><code>Extend</code></a> trait.</p>
+<p>This method is similar to <a href="trait.StreamExt.html#method.concat" title="method futures::stream::StreamExt::concat"><code>concat</code></a>, but will
+exit early if an error is encountered in the stream.</p>
+<h5 id="examples-18"><a class="doc-anchor" href="#examples-18">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>futures::channel::mpsc;
+<span class="kw">use </span>futures::stream::TryStreamExt;
+<span class="kw">use </span>std::thread;
+
+<span class="kw">let </span>(tx, rx) = mpsc::unbounded::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;i32&gt;, ()&gt;&gt;();
+
+thread::spawn(<span class="kw">move </span>|| {
+    <span class="kw">for </span>i <span class="kw">in </span>(<span class="number">0</span>..<span class="number">3</span>).rev() {
+        <span class="kw">let </span>n = i * <span class="number">3</span>;
+        tx.unbounded_send(<span class="prelude-val">Ok</span>(<span class="macro">vec!</span>[n + <span class="number">1</span>, n + <span class="number">2</span>, n + <span class="number">3</span>])).unwrap();
+    }
+});
+
+<span class="kw">let </span>result = rx.try_concat().<span class="kw">await</span>;
+
+<span class="macro">assert_eq!</span>(result, <span class="prelude-val">Ok</span>(<span class="macro">vec!</span>[<span class="number">7</span>, <span class="number">8</span>, <span class="number">9</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>]));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_buffer_unordered" class="method"><a class="src rightside" href="../../src/futures_util/stream/try_stream/mod.rs.html#1034-1037">source</a><h4 class="code-header">fn <a href="#method.try_buffer_unordered" class="fn">try_buffer_unordered</a>(self, n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="struct" href="struct.TryBufferUnordered.html" title="struct futures::stream::TryBufferUnordered">TryBufferUnordered</a>&lt;Self&gt;<div class="where">where
+    Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Ok" title="type futures::stream::TryStream::Ok">Ok</a>: <a class="trait" href="../future/trait.TryFuture.html" title="trait futures::future::TryFuture">TryFuture</a>&lt;Error = Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Error" title="type futures::stream::TryStream::Error">Error</a>&gt;,
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Attempt to execute several futures from a stream concurrently (unordered).</p>
+<p>This stream’s <code>Ok</code> type must be a <a href="../future/trait.TryFuture.html" title="trait futures::future::TryFuture"><code>TryFuture</code></a> with an <code>Error</code> type
+that matches the stream’s <code>Error</code> type.</p>
+<p>This adaptor will buffer up to <code>n</code> futures and then return their
+outputs in the order in which they complete. If the underlying stream
+returns an error, it will be immediately propagated.</p>
+<p>The returned stream will be a stream of results, each containing either
+an error or a future’s output. An error can be produced either by the
+underlying stream itself or by one of the futures it yielded.</p>
+<p>This method is only available when the <code>std</code> or <code>alloc</code> feature of this
+library is activated, and it is activated by default.</p>
+<h5 id="examples-19"><a class="doc-anchor" href="#examples-19">§</a>Examples</h5>
+<p>Results are returned in the order of completion:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>futures::channel::oneshot;
+<span class="kw">use </span>futures::stream::{<span class="self">self</span>, StreamExt, TryStreamExt};
+
+<span class="kw">let </span>(send_one, recv_one) = oneshot::channel();
+<span class="kw">let </span>(send_two, recv_two) = oneshot::channel();
+
+<span class="kw">let </span>stream_of_futures = stream::iter(<span class="macro">vec!</span>[<span class="prelude-val">Ok</span>(recv_one), <span class="prelude-val">Ok</span>(recv_two)]);
+
+<span class="kw">let </span><span class="kw-2">mut </span>buffered = stream_of_futures.try_buffer_unordered(<span class="number">10</span>);
+
+send_two.send(<span class="number">2i32</span>)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(buffered.next().<span class="kw">await</span>, <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(<span class="number">2i32</span>)));
+
+send_one.send(<span class="number">1i32</span>)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(buffered.next().<span class="kw">await</span>, <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(<span class="number">1i32</span>)));
+
+<span class="macro">assert_eq!</span>(buffered.next().<span class="kw">await</span>, <span class="prelude-val">None</span>);</code></pre></div>
+<p>Errors from the underlying stream itself are propagated:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>futures::channel::mpsc;
+<span class="kw">use </span>futures::stream::{StreamExt, TryStreamExt};
+
+<span class="kw">let </span>(sink, stream_of_futures) = mpsc::unbounded();
+<span class="kw">let </span><span class="kw-2">mut </span>buffered = stream_of_futures.try_buffer_unordered(<span class="number">10</span>);
+
+sink.unbounded_send(<span class="prelude-val">Ok</span>(<span class="kw">async </span>{ <span class="prelude-val">Ok</span>(<span class="number">7i32</span>) }))<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(buffered.next().<span class="kw">await</span>, <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(<span class="number">7i32</span>)));
+
+sink.unbounded_send(<span class="prelude-val">Err</span>(<span class="string">"error in the stream"</span>))<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(buffered.next().<span class="kw">await</span>, <span class="prelude-val">Some</span>(<span class="prelude-val">Err</span>(<span class="string">"error in the stream"</span>)));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_buffered" class="method"><a class="src rightside" href="../../src/futures_util/stream/try_stream/mod.rs.html#1110-1113">source</a><h4 class="code-header">fn <a href="#method.try_buffered" class="fn">try_buffered</a>(self, n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="struct" href="struct.TryBuffered.html" title="struct futures::stream::TryBuffered">TryBuffered</a>&lt;Self&gt;<div class="where">where
+    Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Ok" title="type futures::stream::TryStream::Ok">Ok</a>: <a class="trait" href="../future/trait.TryFuture.html" title="trait futures::future::TryFuture">TryFuture</a>&lt;Error = Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Error" title="type futures::stream::TryStream::Error">Error</a>&gt;,
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Attempt to execute several futures from a stream concurrently.</p>
+<p>This stream’s <code>Ok</code> type must be a <a href="../future/trait.TryFuture.html" title="trait futures::future::TryFuture"><code>TryFuture</code></a> with an <code>Error</code> type
+that matches the stream’s <code>Error</code> type.</p>
+<p>This adaptor will buffer up to <code>n</code> futures and then return their
+outputs in the same order as the underlying stream. If the underlying stream returns an error, it will
+be immediately propagated.</p>
+<p>The returned stream will be a stream of results, each containing either
+an error or a future’s output. An error can be produced either by the
+underlying stream itself or by one of the futures it yielded.</p>
+<p>This method is only available when the <code>std</code> or <code>alloc</code> feature of this
+library is activated, and it is activated by default.</p>
+<h5 id="examples-20"><a class="doc-anchor" href="#examples-20">§</a>Examples</h5>
+<p>Results are returned in the order of addition:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>futures::channel::oneshot;
+<span class="kw">use </span>futures::future::lazy;
+<span class="kw">use </span>futures::stream::{<span class="self">self</span>, StreamExt, TryStreamExt};
+
+<span class="kw">let </span>(send_one, recv_one) = oneshot::channel();
+<span class="kw">let </span>(send_two, recv_two) = oneshot::channel();
+
+<span class="kw">let </span><span class="kw-2">mut </span>buffered = lazy(<span class="kw">move </span>|cx| {
+    <span class="kw">let </span>stream_of_futures = stream::iter(<span class="macro">vec!</span>[<span class="prelude-val">Ok</span>(recv_one), <span class="prelude-val">Ok</span>(recv_two)]);
+
+    <span class="kw">let </span><span class="kw-2">mut </span>buffered = stream_of_futures.try_buffered(<span class="number">10</span>);
+
+    <span class="macro">assert!</span>(buffered.try_poll_next_unpin(cx).is_pending());
+
+    send_two.send(<span class="number">2i32</span>)<span class="question-mark">?</span>;
+    <span class="macro">assert!</span>(buffered.try_poll_next_unpin(cx).is_pending());
+    <span class="prelude-val">Ok</span>::&lt;<span class="kw">_</span>, i32&gt;(buffered)
+}).<span class="kw">await</span><span class="question-mark">?</span>;
+
+send_one.send(<span class="number">1i32</span>)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(buffered.next().<span class="kw">await</span>, <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(<span class="number">1i32</span>)));
+<span class="macro">assert_eq!</span>(buffered.next().<span class="kw">await</span>, <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(<span class="number">2i32</span>)));
+
+<span class="macro">assert_eq!</span>(buffered.next().<span class="kw">await</span>, <span class="prelude-val">None</span>);</code></pre></div>
+<p>Errors from the underlying stream itself are propagated:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>futures::channel::mpsc;
+<span class="kw">use </span>futures::stream::{StreamExt, TryStreamExt};
+
+<span class="kw">let </span>(sink, stream_of_futures) = mpsc::unbounded();
+<span class="kw">let </span><span class="kw-2">mut </span>buffered = stream_of_futures.try_buffered(<span class="number">10</span>);
+
+sink.unbounded_send(<span class="prelude-val">Ok</span>(<span class="kw">async </span>{ <span class="prelude-val">Ok</span>(<span class="number">7i32</span>) }))<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(buffered.next().<span class="kw">await</span>, <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(<span class="number">7i32</span>)));
+
+sink.unbounded_send(<span class="prelude-val">Err</span>(<span class="string">"error in the stream"</span>))<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(buffered.next().<span class="kw">await</span>, <span class="prelude-val">Some</span>(<span class="prelude-val">Err</span>(<span class="string">"error in the stream"</span>)));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_poll_next_unpin" class="method"><a class="src rightside" href="../../src/futures_util/stream/try_stream/mod.rs.html#1124-1129">source</a><h4 class="code-header">fn <a href="#method.try_poll_next_unpin" class="fn">try_poll_next_unpin</a>(
+    &amp;mut self,
+    cx: &amp;mut <a class="struct" href="../task/struct.Context.html" title="struct futures::task::Context">Context</a>&lt;'_&gt;,
+) -&gt; <a class="enum" href="../task/enum.Poll.html" title="enum futures::task::Poll">Poll</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Ok" title="type futures::stream::TryStream::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Error" title="type futures::stream::TryStream::Error">Error</a>&gt;&gt;&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a>,</div></h4></section></summary><div class="docblock"><p>A convenience method for calling <a href="trait.TryStream.html#tymethod.try_poll_next" title="method futures::stream::TryStream::try_poll_next"><code>TryStream::try_poll_next</code></a> on <a href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin"><code>Unpin</code></a>
+stream types.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.into_async_read" class="method"><a class="src rightside" href="../../src/futures_util/stream/try_stream/mod.rs.html#1186-1189">source</a><h4 class="code-header">fn <a href="#method.into_async_read" class="fn">into_async_read</a>(self) -&gt; <a class="struct" href="struct.IntoAsyncRead.html" title="struct futures::stream::IntoAsyncRead">IntoAsyncRead</a>&lt;Self&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a> + <a class="trait" href="trait.TryStreamExt.html" title="trait futures::stream::TryStreamExt">TryStreamExt</a>&lt;Error = <a class="struct" href="../io/struct.Error.html" title="struct futures::io::Error">Error</a>&gt;,
+    Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Ok" title="type futures::stream::TryStream::Ok">Ok</a>: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]&gt;,</div></h4></section></summary><div class="docblock"><p>Adapter that converts this stream into an <a href="../io/trait.AsyncBufRead.html" title="trait futures::io::AsyncBufRead"><code>AsyncBufRead</code></a>.</p>
+<p>This method is only available when the <code>std</code> feature of this
+library is activated, and it is activated by default.</p>
+<h5 id="examples-21"><a class="doc-anchor" href="#examples-21">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>futures::stream::{<span class="self">self</span>, TryStreamExt};
+<span class="kw">use </span>futures::io::AsyncReadExt;
+
+<span class="kw">let </span>stream = stream::iter([<span class="prelude-val">Ok</span>(<span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>]), <span class="prelude-val">Ok</span>(<span class="macro">vec!</span>[<span class="number">4</span>, <span class="number">5</span>])]);
+<span class="kw">let </span><span class="kw-2">mut </span>reader = stream.into_async_read();
+
+<span class="kw">let </span><span class="kw-2">mut </span>buf = Vec::new();
+reader.read_to_end(<span class="kw-2">&amp;mut </span>buf).<span class="kw">await</span>.unwrap();
+<span class="macro">assert_eq!</span>(buf, [<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_all" class="method"><a class="src rightside" href="../../src/futures_util/stream/try_stream/mod.rs.html#1214-1218">source</a><h4 class="code-header">fn <a href="#method.try_all" class="fn">try_all</a>&lt;Fut, F&gt;(self, f: F) -&gt; <a class="struct" href="struct.TryAll.html" title="struct futures::stream::TryAll">TryAll</a>&lt;Self, Fut, F&gt; <a href="#" class="tooltip" data-notable-ty="TryAll&lt;Self, Fut, F&gt;">ⓘ</a><div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Ok" title="type futures::stream::TryStream::Ok">Ok</a>) -&gt; Fut,
+    Fut: <a class="trait" href="../future/trait.Future.html" title="trait futures::future::Future">Future</a>&lt;Output = <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>&gt;,</div></h4></section></summary><div class="docblock"><p>Attempt to execute a predicate over an asynchronous stream and evaluate if all items
+satisfy the predicate. Exits early if an <code>Err</code> is encountered or if an <code>Ok</code> item is found
+that does not satisfy the predicate.</p>
+<h5 id="examples-22"><a class="doc-anchor" href="#examples-22">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>futures::stream::{<span class="self">self</span>, StreamExt, TryStreamExt};
+<span class="kw">use </span>std::convert::Infallible;
+
+<span class="kw">let </span>number_stream = stream::iter(<span class="number">1</span>..<span class="number">10</span>).map(<span class="prelude-val">Ok</span>::&lt;<span class="kw">_</span>, Infallible&gt;);
+<span class="kw">let </span>positive = number_stream.try_all(|i| <span class="kw">async move </span>{ i &gt; <span class="number">0 </span>});
+<span class="macro">assert_eq!</span>(positive.<span class="kw">await</span>, <span class="prelude-val">Ok</span>(<span class="bool-val">true</span>));
+
+<span class="kw">let </span>stream_with_errors = stream::iter([<span class="prelude-val">Ok</span>(<span class="number">1</span>), <span class="prelude-val">Err</span>(<span class="string">"err"</span>), <span class="prelude-val">Ok</span>(<span class="number">3</span>)]);
+<span class="kw">let </span>positive = stream_with_errors.try_all(|i| <span class="kw">async move </span>{ i &gt; <span class="number">0 </span>});
+<span class="macro">assert_eq!</span>(positive.<span class="kw">await</span>, <span class="prelude-val">Err</span>(<span class="string">"err"</span>));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_any" class="method"><a class="src rightside" href="../../src/futures_util/stream/try_stream/mod.rs.html#1243-1247">source</a><h4 class="code-header">fn <a href="#method.try_any" class="fn">try_any</a>&lt;Fut, F&gt;(self, f: F) -&gt; <a class="struct" href="struct.TryAny.html" title="struct futures::stream::TryAny">TryAny</a>&lt;Self, Fut, F&gt; <a href="#" class="tooltip" data-notable-ty="TryAny&lt;Self, Fut, F&gt;">ⓘ</a><div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(Self::<a class="associatedtype" href="trait.TryStream.html#associatedtype.Ok" title="type futures::stream::TryStream::Ok">Ok</a>) -&gt; Fut,
+    Fut: <a class="trait" href="../future/trait.Future.html" title="trait futures::future::Future">Future</a>&lt;Output = <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>&gt;,</div></h4></section></summary><div class="docblock"><p>Attempt to execute a predicate over an asynchronous stream and evaluate if any items
+satisfy the predicate. Exits early if an <code>Err</code> is encountered or if an <code>Ok</code> item is found
+that satisfies the predicate.</p>
+<h5 id="examples-23"><a class="doc-anchor" href="#examples-23">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>futures::stream::{<span class="self">self</span>, StreamExt, TryStreamExt};
+<span class="kw">use </span>std::convert::Infallible;
+
+<span class="kw">let </span>number_stream = stream::iter(<span class="number">0</span>..<span class="number">10</span>).map(<span class="prelude-val">Ok</span>::&lt;<span class="kw">_</span>, Infallible&gt;);
+<span class="kw">let </span>contain_three = number_stream.try_any(|i| <span class="kw">async move </span>{ i == <span class="number">3 </span>});
+<span class="macro">assert_eq!</span>(contain_three.<span class="kw">await</span>, <span class="prelude-val">Ok</span>(<span class="bool-val">true</span>));
+
+<span class="kw">let </span>stream_with_errors = stream::iter([<span class="prelude-val">Ok</span>(<span class="number">1</span>), <span class="prelude-val">Err</span>(<span class="string">"err"</span>), <span class="prelude-val">Ok</span>(<span class="number">3</span>)]);
+<span class="kw">let </span>contain_three = stream_with_errors.try_any(|i| <span class="kw">async move </span>{ i == <span class="number">3 </span>});
+<span class="macro">assert_eq!</span>(contain_three.<span class="kw">await</span>, <span class="prelude-val">Err</span>(<span class="string">"err"</span>));</code></pre></div>
+</div></details></div><h2 id="object-safety" class="section-header">Object Safety<a href="#object-safety" class="anchor">§</a></h2><div class="object-safety-info">This trait is <b>not</b> <a href="https://doc.rust-lang.org/1.81.0/reference/items/traits.html#object-safety">object safe</a>.</div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><section id="impl-TryStreamExt-for-S" class="impl"><a class="src rightside" href="../../src/futures_util/stream/try_stream/mod.rs.html#177">source</a><a href="#impl-TryStreamExt-for-S" class="anchor">§</a><h3 class="code-header">impl&lt;S&gt; <a class="trait" href="trait.TryStreamExt.html" title="trait futures::stream::TryStreamExt">TryStreamExt</a> for S<div class="where">where
+    S: <a class="trait" href="trait.TryStream.html" title="trait futures::stream::TryStream">TryStream</a> + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></div><script src="../../trait.impl/futures_util/stream/try_stream/trait.TryStreamExt.js" async></script><script type="text/json" id="notable-traits-data">{"TryAll<Self, Fut, F>":"<h3>Notable traits for <code><a class=\"struct\" href=\"struct.TryAll.html\" title=\"struct futures::stream::TryAll\">TryAll</a>&lt;St, Fut, F&gt;</code></h3><pre><code><div class=\"where\">impl&lt;St, Fut, F&gt; <a class=\"trait\" href=\"../future/trait.Future.html\" title=\"trait futures::future::Future\">Future</a> for <a class=\"struct\" href=\"struct.TryAll.html\" title=\"struct futures::stream::TryAll\">TryAll</a>&lt;St, Fut, F&gt;<div class=\"where\">where\n    St: <a class=\"trait\" href=\"trait.TryStream.html\" title=\"trait futures::stream::TryStream\">TryStream</a>,\n    F: <a class=\"trait\" href=\"https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html\" title=\"trait core::ops::function::FnMut\">FnMut</a>(&lt;St as <a class=\"trait\" href=\"trait.TryStream.html\" title=\"trait futures::stream::TryStream\">TryStream</a>&gt;::<a class=\"associatedtype\" href=\"trait.TryStream.html#associatedtype.Ok\" title=\"type futures::stream::TryStream::Ok\">Ok</a>) -&gt; Fut,\n    Fut: <a class=\"trait\" href=\"../future/trait.Future.html\" title=\"trait futures::future::Future\">Future</a>&lt;Output = <a class=\"primitive\" href=\"https://doc.rust-lang.org/1.81.0/std/primitive.bool.html\">bool</a>&gt;,</div></div><div class=\"where\">    type <a href=\"../future/trait.Future.html#associatedtype.Output\" class=\"associatedtype\">Output</a> = <a class=\"enum\" href=\"https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html\" title=\"enum core::result::Result\">Result</a>&lt;<a class=\"primitive\" href=\"https://doc.rust-lang.org/1.81.0/std/primitive.bool.html\">bool</a>, &lt;St as <a class=\"trait\" href=\"trait.TryStream.html\" title=\"trait futures::stream::TryStream\">TryStream</a>&gt;::<a class=\"associatedtype\" href=\"trait.TryStream.html#associatedtype.Error\" title=\"type futures::stream::TryStream::Error\">Error</a>&gt;;</div>","TryAny<Self, Fut, F>":"<h3>Notable traits for <code><a class=\"struct\" href=\"struct.TryAny.html\" title=\"struct futures::stream::TryAny\">TryAny</a>&lt;St, Fut, F&gt;</code></h3><pre><code><div class=\"where\">impl&lt;St, Fut, F&gt; <a class=\"trait\" href=\"../future/trait.Future.html\" title=\"trait futures::future::Future\">Future</a> for <a class=\"struct\" href=\"struct.TryAny.html\" title=\"struct futures::stream::TryAny\">TryAny</a>&lt;St, Fut, F&gt;<div class=\"where\">where\n    St: <a class=\"trait\" href=\"trait.TryStream.html\" title=\"trait futures::stream::TryStream\">TryStream</a>,\n    F: <a class=\"trait\" href=\"https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html\" title=\"trait core::ops::function::FnMut\">FnMut</a>(&lt;St as <a class=\"trait\" href=\"trait.TryStream.html\" title=\"trait futures::stream::TryStream\">TryStream</a>&gt;::<a class=\"associatedtype\" href=\"trait.TryStream.html#associatedtype.Ok\" title=\"type futures::stream::TryStream::Ok\">Ok</a>) -&gt; Fut,\n    Fut: <a class=\"trait\" href=\"../future/trait.Future.html\" title=\"trait futures::future::Future\">Future</a>&lt;Output = <a class=\"primitive\" href=\"https://doc.rust-lang.org/1.81.0/std/primitive.bool.html\">bool</a>&gt;,</div></div><div class=\"where\">    type <a href=\"../future/trait.Future.html#associatedtype.Output\" class=\"associatedtype\">Output</a> = <a class=\"enum\" href=\"https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html\" title=\"enum core::result::Result\">Result</a>&lt;<a class=\"primitive\" href=\"https://doc.rust-lang.org/1.81.0/std/primitive.bool.html\">bool</a>, &lt;St as <a class=\"trait\" href=\"trait.TryStream.html\" title=\"trait futures::stream::TryStream\">TryStream</a>&gt;::<a class=\"associatedtype\" href=\"trait.TryStream.html#associatedtype.Error\" title=\"type futures::stream::TryStream::Error\">Error</a>&gt;;</div>","TryCollect<Self, C>":"<h3>Notable traits for <code><a class=\"struct\" href=\"struct.TryCollect.html\" title=\"struct futures::stream::TryCollect\">TryCollect</a>&lt;St, C&gt;</code></h3><pre><code><div class=\"where\">impl&lt;St, C&gt; <a class=\"trait\" href=\"../future/trait.Future.html\" title=\"trait futures::future::Future\">Future</a> for <a class=\"struct\" href=\"struct.TryCollect.html\" title=\"struct futures::stream::TryCollect\">TryCollect</a>&lt;St, C&gt;<div class=\"where\">where\n    St: <a class=\"trait\" href=\"trait.TryStream.html\" title=\"trait futures::stream::TryStream\">TryStream</a>,\n    C: <a class=\"trait\" href=\"https://doc.rust-lang.org/1.81.0/core/default/trait.Default.html\" title=\"trait core::default::Default\">Default</a> + <a class=\"trait\" href=\"https://doc.rust-lang.org/1.81.0/core/iter/traits/collect/trait.Extend.html\" title=\"trait core::iter::traits::collect::Extend\">Extend</a>&lt;&lt;St as <a class=\"trait\" href=\"trait.TryStream.html\" title=\"trait futures::stream::TryStream\">TryStream</a>&gt;::<a class=\"associatedtype\" href=\"trait.TryStream.html#associatedtype.Ok\" title=\"type futures::stream::TryStream::Ok\">Ok</a>&gt;,</div></div><div class=\"where\">    type <a href=\"../future/trait.Future.html#associatedtype.Output\" class=\"associatedtype\">Output</a> = <a class=\"enum\" href=\"https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html\" title=\"enum core::result::Result\">Result</a>&lt;C, &lt;St as <a class=\"trait\" href=\"trait.TryStream.html\" title=\"trait futures::stream::TryStream\">TryStream</a>&gt;::<a class=\"associatedtype\" href=\"trait.TryStream.html#associatedtype.Error\" title=\"type futures::stream::TryStream::Error\">Error</a>&gt;;</div>","TryConcat<Self>":"<h3>Notable traits for <code><a class=\"struct\" href=\"struct.TryConcat.html\" title=\"struct futures::stream::TryConcat\">TryConcat</a>&lt;St&gt;</code></h3><pre><code><div class=\"where\">impl&lt;St&gt; <a class=\"trait\" href=\"../future/trait.Future.html\" title=\"trait futures::future::Future\">Future</a> for <a class=\"struct\" href=\"struct.TryConcat.html\" title=\"struct futures::stream::TryConcat\">TryConcat</a>&lt;St&gt;<div class=\"where\">where\n    St: <a class=\"trait\" href=\"trait.TryStream.html\" title=\"trait futures::stream::TryStream\">TryStream</a>,\n    &lt;St as <a class=\"trait\" href=\"trait.TryStream.html\" title=\"trait futures::stream::TryStream\">TryStream</a>&gt;::<a class=\"associatedtype\" href=\"trait.TryStream.html#associatedtype.Ok\" title=\"type futures::stream::TryStream::Ok\">Ok</a>: <a class=\"trait\" href=\"https://doc.rust-lang.org/1.81.0/core/iter/traits/collect/trait.Extend.html\" title=\"trait core::iter::traits::collect::Extend\">Extend</a>&lt;&lt;&lt;St as <a class=\"trait\" href=\"trait.TryStream.html\" title=\"trait futures::stream::TryStream\">TryStream</a>&gt;::<a class=\"associatedtype\" href=\"trait.TryStream.html#associatedtype.Ok\" title=\"type futures::stream::TryStream::Ok\">Ok</a> as <a class=\"trait\" href=\"https://doc.rust-lang.org/1.81.0/core/iter/traits/collect/trait.IntoIterator.html\" title=\"trait core::iter::traits::collect::IntoIterator\">IntoIterator</a>&gt;::<a class=\"associatedtype\" href=\"https://doc.rust-lang.org/1.81.0/core/iter/traits/collect/trait.IntoIterator.html#associatedtype.Item\" title=\"type core::iter::traits::collect::IntoIterator::Item\">Item</a>&gt; + <a class=\"trait\" href=\"https://doc.rust-lang.org/1.81.0/core/iter/traits/collect/trait.IntoIterator.html\" title=\"trait core::iter::traits::collect::IntoIterator\">IntoIterator</a> + <a class=\"trait\" href=\"https://doc.rust-lang.org/1.81.0/core/default/trait.Default.html\" title=\"trait core::default::Default\">Default</a>,</div></div><div class=\"where\">    type <a href=\"../future/trait.Future.html#associatedtype.Output\" class=\"associatedtype\">Output</a> = <a class=\"enum\" href=\"https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html\" title=\"enum core::result::Result\">Result</a>&lt;&lt;St as <a class=\"trait\" href=\"trait.TryStream.html\" title=\"trait futures::stream::TryStream\">TryStream</a>&gt;::<a class=\"associatedtype\" href=\"trait.TryStream.html#associatedtype.Ok\" title=\"type futures::stream::TryStream::Ok\">Ok</a>, &lt;St as <a class=\"trait\" href=\"trait.TryStream.html\" title=\"trait futures::stream::TryStream\">TryStream</a>&gt;::<a class=\"associatedtype\" href=\"trait.TryStream.html#associatedtype.Error\" title=\"type futures::stream::TryStream::Error\">Error</a>&gt;;</div>","TryFold<Self, Fut, T, F>":"<h3>Notable traits for <code><a class=\"struct\" href=\"struct.TryFold.html\" title=\"struct futures::stream::TryFold\">TryFold</a>&lt;St, Fut, T, F&gt;</code></h3><pre><code><div class=\"where\">impl&lt;St, Fut, T, F&gt; <a class=\"trait\" href=\"../future/trait.Future.html\" title=\"trait futures::future::Future\">Future</a> for <a class=\"struct\" href=\"struct.TryFold.html\" title=\"struct futures::stream::TryFold\">TryFold</a>&lt;St, Fut, T, F&gt;<div class=\"where\">where\n    St: <a class=\"trait\" href=\"trait.TryStream.html\" title=\"trait futures::stream::TryStream\">TryStream</a>,\n    F: <a class=\"trait\" href=\"https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html\" title=\"trait core::ops::function::FnMut\">FnMut</a>(T, &lt;St as <a class=\"trait\" href=\"trait.TryStream.html\" title=\"trait futures::stream::TryStream\">TryStream</a>&gt;::<a class=\"associatedtype\" href=\"trait.TryStream.html#associatedtype.Ok\" title=\"type futures::stream::TryStream::Ok\">Ok</a>) -&gt; Fut,\n    Fut: <a class=\"trait\" href=\"../future/trait.TryFuture.html\" title=\"trait futures::future::TryFuture\">TryFuture</a>&lt;Ok = T, Error = &lt;St as <a class=\"trait\" href=\"trait.TryStream.html\" title=\"trait futures::stream::TryStream\">TryStream</a>&gt;::<a class=\"associatedtype\" href=\"trait.TryStream.html#associatedtype.Error\" title=\"type futures::stream::TryStream::Error\">Error</a>&gt;,</div></div><div class=\"where\">    type <a href=\"../future/trait.Future.html#associatedtype.Output\" class=\"associatedtype\">Output</a> = <a class=\"enum\" href=\"https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html\" title=\"enum core::result::Result\">Result</a>&lt;T, &lt;St as <a class=\"trait\" href=\"trait.TryStream.html\" title=\"trait futures::stream::TryStream\">TryStream</a>&gt;::<a class=\"associatedtype\" href=\"trait.TryStream.html#associatedtype.Error\" title=\"type futures::stream::TryStream::Error\">Error</a>&gt;;</div>","TryForEach<Self, Fut, F>":"<h3>Notable traits for <code><a class=\"struct\" href=\"struct.TryForEach.html\" title=\"struct futures::stream::TryForEach\">TryForEach</a>&lt;St, Fut, F&gt;</code></h3><pre><code><div class=\"where\">impl&lt;St, Fut, F&gt; <a class=\"trait\" href=\"../future/trait.Future.html\" title=\"trait futures::future::Future\">Future</a> for <a class=\"struct\" href=\"struct.TryForEach.html\" title=\"struct futures::stream::TryForEach\">TryForEach</a>&lt;St, Fut, F&gt;<div class=\"where\">where\n    St: <a class=\"trait\" href=\"trait.TryStream.html\" title=\"trait futures::stream::TryStream\">TryStream</a>,\n    F: <a class=\"trait\" href=\"https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html\" title=\"trait core::ops::function::FnMut\">FnMut</a>(&lt;St as <a class=\"trait\" href=\"trait.TryStream.html\" title=\"trait futures::stream::TryStream\">TryStream</a>&gt;::<a class=\"associatedtype\" href=\"trait.TryStream.html#associatedtype.Ok\" title=\"type futures::stream::TryStream::Ok\">Ok</a>) -&gt; Fut,\n    Fut: <a class=\"trait\" href=\"../future/trait.TryFuture.html\" title=\"trait futures::future::TryFuture\">TryFuture</a>&lt;Ok = <a class=\"primitive\" href=\"https://doc.rust-lang.org/1.81.0/std/primitive.unit.html\">()</a>, Error = &lt;St as <a class=\"trait\" href=\"trait.TryStream.html\" title=\"trait futures::stream::TryStream\">TryStream</a>&gt;::<a class=\"associatedtype\" href=\"trait.TryStream.html#associatedtype.Error\" title=\"type futures::stream::TryStream::Error\">Error</a>&gt;,</div></div><div class=\"where\">    type <a href=\"../future/trait.Future.html#associatedtype.Output\" class=\"associatedtype\">Output</a> = <a class=\"enum\" href=\"https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html\" title=\"enum core::result::Result\">Result</a>&lt;<a class=\"primitive\" href=\"https://doc.rust-lang.org/1.81.0/std/primitive.unit.html\">()</a>, &lt;St as <a class=\"trait\" href=\"trait.TryStream.html\" title=\"trait futures::stream::TryStream\">TryStream</a>&gt;::<a class=\"associatedtype\" href=\"trait.TryStream.html#associatedtype.Error\" title=\"type futures::stream::TryStream::Error\">Error</a>&gt;;</div>","TryForEachConcurrent<Self, Fut, F>":"<h3>Notable traits for <code><a class=\"struct\" href=\"struct.TryForEachConcurrent.html\" title=\"struct futures::stream::TryForEachConcurrent\">TryForEachConcurrent</a>&lt;St, Fut, F&gt;</code></h3><pre><code><div class=\"where\">impl&lt;St, Fut, F&gt; <a class=\"trait\" href=\"../future/trait.Future.html\" title=\"trait futures::future::Future\">Future</a> for <a class=\"struct\" href=\"struct.TryForEachConcurrent.html\" title=\"struct futures::stream::TryForEachConcurrent\">TryForEachConcurrent</a>&lt;St, Fut, F&gt;<div class=\"where\">where\n    St: <a class=\"trait\" href=\"trait.TryStream.html\" title=\"trait futures::stream::TryStream\">TryStream</a>,\n    F: <a class=\"trait\" href=\"https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html\" title=\"trait core::ops::function::FnMut\">FnMut</a>(&lt;St as <a class=\"trait\" href=\"trait.TryStream.html\" title=\"trait futures::stream::TryStream\">TryStream</a>&gt;::<a class=\"associatedtype\" href=\"trait.TryStream.html#associatedtype.Ok\" title=\"type futures::stream::TryStream::Ok\">Ok</a>) -&gt; Fut,\n    Fut: <a class=\"trait\" href=\"../future/trait.Future.html\" title=\"trait futures::future::Future\">Future</a>&lt;Output = <a class=\"enum\" href=\"https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html\" title=\"enum core::result::Result\">Result</a>&lt;<a class=\"primitive\" href=\"https://doc.rust-lang.org/1.81.0/std/primitive.unit.html\">()</a>, &lt;St as <a class=\"trait\" href=\"trait.TryStream.html\" title=\"trait futures::stream::TryStream\">TryStream</a>&gt;::<a class=\"associatedtype\" href=\"trait.TryStream.html#associatedtype.Error\" title=\"type futures::stream::TryStream::Error\">Error</a>&gt;&gt;,</div></div><div class=\"where\">    type <a href=\"../future/trait.Future.html#associatedtype.Output\" class=\"associatedtype\">Output</a> = <a class=\"enum\" href=\"https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html\" title=\"enum core::result::Result\">Result</a>&lt;<a class=\"primitive\" href=\"https://doc.rust-lang.org/1.81.0/std/primitive.unit.html\">()</a>, &lt;St as <a class=\"trait\" href=\"trait.TryStream.html\" title=\"trait futures::stream::TryStream\">TryStream</a>&gt;::<a class=\"associatedtype\" href=\"trait.TryStream.html#associatedtype.Error\" title=\"type futures::stream::TryStream::Error\">Error</a>&gt;;</div>","TryNext<'_, Self>":"<h3>Notable traits for <code><a class=\"struct\" href=\"struct.TryNext.html\" title=\"struct futures::stream::TryNext\">TryNext</a>&lt;'_, St&gt;</code></h3><pre><code><div class=\"where\">impl&lt;St&gt; <a class=\"trait\" href=\"../future/trait.Future.html\" title=\"trait futures::future::Future\">Future</a> for <a class=\"struct\" href=\"struct.TryNext.html\" title=\"struct futures::stream::TryNext\">TryNext</a>&lt;'_, St&gt;<div class=\"where\">where\n    St: <a class=\"trait\" href=\"trait.TryStream.html\" title=\"trait futures::stream::TryStream\">TryStream</a> + <a class=\"trait\" href=\"https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html\" title=\"trait core::marker::Unpin\">Unpin</a> + ?<a class=\"trait\" href=\"https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html\" title=\"trait core::marker::Sized\">Sized</a>,</div></div><div class=\"where\">    type <a href=\"../future/trait.Future.html#associatedtype.Output\" class=\"associatedtype\">Output</a> = <a class=\"enum\" href=\"https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html\" title=\"enum core::result::Result\">Result</a>&lt;<a class=\"enum\" href=\"https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html\" title=\"enum core::option::Option\">Option</a>&lt;&lt;St as <a class=\"trait\" href=\"trait.TryStream.html\" title=\"trait futures::stream::TryStream\">TryStream</a>&gt;::<a class=\"associatedtype\" href=\"trait.TryStream.html#associatedtype.Ok\" title=\"type futures::stream::TryStream::Ok\">Ok</a>&gt;, &lt;St as <a class=\"trait\" href=\"trait.TryStream.html\" title=\"trait futures::stream::TryStream\">TryStream</a>&gt;::<a class=\"associatedtype\" href=\"trait.TryStream.html#associatedtype.Error\" title=\"type futures::stream::TryStream::Error\">Error</a>&gt;;</div>"}</script></section></div></main></body></html>

@@ -1,0 +1,52 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Converts enum variants to `&amp;&#x27;a str`, where `&#x27;a` is the lifetime of the input enum reference."><title>AsRefStr in strum - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="strum" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc derive"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../strum/index.html">strum</a><span class="version">0.26.3</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Derive Macro <a href="index.html">strum</a>::<wbr><a class="derive" href="#">AsRefStr</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>#[derive(AsRefStr)]
+{
+    <span class="comment">// Attributes available to this derive:</span>
+    #[strum]
+}
+</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Converts enum variants to <code>&amp;'a str</code>, where <code>'a</code> is the lifetime of the input enum reference.</p>
+<p>Implements <code>AsRef&lt;str&gt;</code> on your enum using the same rules as
+<code>Display</code> for determining what string is returned. The difference is that <code>as_ref()</code> returns
+a <code>&amp;str</code> instead of a <code>String</code> so you don’t allocate any additional memory with each call.</p>
+<p>If you require a <code>&amp;'static str</code>, you can use
+<a href="derive.IntoStaticStr.html" title="derive strum::IntoStaticStr"><code>strum::IntoStaticStr</code></a> instead.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// You need to bring the AsRef trait into scope to use it
+</span><span class="kw">use </span>std::convert::AsRef;
+<span class="kw">use </span>strum_macros::AsRefStr;
+
+<span class="attr">#[derive(AsRefStr, Debug)]
+</span><span class="kw">enum </span>Color {
+    <span class="attr">#[strum(serialize = <span class="string">"redred"</span>)]
+    </span>Red,
+    Green {
+        range: usize,
+    },
+    Blue(usize),
+    Yellow,
+}
+
+<span class="comment">// uses the serialize string for Display
+</span><span class="kw">let </span>red = Color::Red;
+<span class="macro">assert_eq!</span>(<span class="string">"redred"</span>, red.as_ref());
+<span class="comment">// by default the variants Name
+</span><span class="kw">let </span>yellow = Color::Yellow;
+<span class="macro">assert_eq!</span>(<span class="string">"Yellow"</span>, yellow.as_ref());
+<span class="comment">// or for string formatting
+</span><span class="macro">println!</span>(
+    <span class="string">"blue: {} green: {}"</span>,
+    Color::Blue(<span class="number">10</span>).as_ref(),
+    Color::Green { range: <span class="number">42 </span>}.as_ref()
+);
+
+<span class="comment">// With prefix on all variants
+</span><span class="attr">#[derive(AsRefStr, Debug)]
+#[strum(prefix = <span class="string">"/"</span>)]
+</span><span class="kw">enum </span>ColorWithPrefix {
+    <span class="attr">#[strum(serialize = <span class="string">"redred"</span>)]
+    </span>Red,
+    Green,
+}
+
+<span class="macro">assert_eq!</span>(<span class="string">"/redred"</span>, ColorWithPrefix::Red.as_ref());
+<span class="macro">assert_eq!</span>(<span class="string">"/Green"</span>, ColorWithPrefix::Green.as_ref());</code></pre></div>
+</div></details></section></div></main></body></html>

@@ -1,0 +1,131 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="`async fn(HttpRequest) -&gt; Result&lt;HttpResponse, Error&gt;`"><title>tower_http - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="tower_http" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../tower_http/index.html">tower_http</a><span class="version">0.6.1</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#enums">Enums</a></li><li><a href="#types">Type Aliases</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">tower_http</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/tower_http/lib.rs.html#1-377">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><code>async fn(HttpRequest) -&gt; Result&lt;HttpResponse, Error&gt;</code></p>
+<h2 id="overview"><a class="doc-anchor" href="#overview">§</a>Overview</h2>
+<p>tower-http is a library that provides HTTP-specific middleware and utilities built on top of
+<a href="https://crates.io/crates/tower">tower</a>.</p>
+<p>All middleware uses the <a href="https://crates.io/crates/http">http</a> and <a href="https://crates.io/crates/http-body">http-body</a> crates as the HTTP abstractions. That means
+they’re compatible with any library or framework that also uses those crates, such as
+<a href="https://crates.io/crates/hyper">hyper</a>, <a href="https://crates.io/crates/tonic">tonic</a>, and <a href="https://crates.io/crates/warp">warp</a>.</p>
+<h2 id="example-server"><a class="doc-anchor" href="#example-server">§</a>Example server</h2>
+<p>This example shows how to apply middleware from tower-http to a <a href="https://docs.rs/tower/latest/tower/trait.Service.html"><code>Service</code></a> and then run
+that service using <a href="https://crates.io/crates/hyper">hyper</a>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tower_http::{
+    add_extension::AddExtensionLayer,
+    compression::CompressionLayer,
+    propagate_header::PropagateHeaderLayer,
+    sensitive_headers::SetSensitiveRequestHeadersLayer,
+    set_header::SetResponseHeaderLayer,
+    trace::TraceLayer,
+    validate_request::ValidateRequestHeaderLayer,
+};
+<span class="kw">use </span>tower::{ServiceBuilder, service_fn, BoxError};
+<span class="kw">use </span>http::{Request, Response, header::{HeaderName, CONTENT_TYPE, AUTHORIZATION}};
+<span class="kw">use </span>std::{sync::Arc, net::SocketAddr, convert::Infallible, iter::once};
+<span class="kw">use </span>bytes::Bytes;
+<span class="kw">use </span>http_body_util::Full;
+
+<span class="comment">// Our request handler. This is where we would implement the application logic
+// for responding to HTTP requests...
+</span><span class="kw">async fn </span>handler(request: Request&lt;Full&lt;Bytes&gt;&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;Response&lt;Full&lt;Bytes&gt;&gt;, BoxError&gt; {
+    <span class="comment">// ...
+</span>}
+
+<span class="comment">// Shared state across all request handlers --- in this case, a pool of database connections.
+</span><span class="kw">struct </span>State {
+    pool: DatabaseConnectionPool,
+}
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
+    <span class="comment">// Construct the shared state.
+    </span><span class="kw">let </span>state = State {
+        pool: DatabaseConnectionPool::new(),
+    };
+
+    <span class="comment">// Use tower's `ServiceBuilder` API to build a stack of tower middleware
+    // wrapping our request handler.
+    </span><span class="kw">let </span>service = ServiceBuilder::new()
+        <span class="comment">// Mark the `Authorization` request header as sensitive so it doesn't show in logs
+        </span>.layer(SetSensitiveRequestHeadersLayer::new(once(AUTHORIZATION)))
+        <span class="comment">// High level logging of requests and responses
+        </span>.layer(TraceLayer::new_for_http())
+        <span class="comment">// Share an `Arc&lt;State&gt;` with all requests
+        </span>.layer(AddExtensionLayer::new(Arc::new(state)))
+        <span class="comment">// Compress responses
+        </span>.layer(CompressionLayer::new())
+        <span class="comment">// Propagate `X-Request-Id`s from requests to responses
+        </span>.layer(PropagateHeaderLayer::new(HeaderName::from_static(<span class="string">"x-request-id"</span>)))
+        <span class="comment">// If the response has a known size set the `Content-Length` header
+        </span>.layer(SetResponseHeaderLayer::overriding(CONTENT_TYPE, content_length_from_response))
+        <span class="comment">// Authorize requests using a token
+        </span>.layer(ValidateRequestHeaderLayer::bearer(<span class="string">"passwordlol"</span>))
+        <span class="comment">// Accept only application/json, application/* and */* in a request's ACCEPT header
+        </span>.layer(ValidateRequestHeaderLayer::accept(<span class="string">"application/json"</span>))
+        <span class="comment">// Wrap a `Service` in our middleware stack
+        </span>.service_fn(handler);
+}</code></pre></div>
+<p>Keep in mind that while this example uses <a href="https://crates.io/crates/hyper">hyper</a>, tower-http supports any HTTP
+client/server implementation that uses the <a href="https://crates.io/crates/http">http</a> and <a href="https://crates.io/crates/http-body">http-body</a> crates.</p>
+<h2 id="example-client"><a class="doc-anchor" href="#example-client">§</a>Example client</h2>
+<p>tower-http middleware can also be applied to HTTP clients:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tower_http::{
+    decompression::DecompressionLayer,
+    set_header::SetRequestHeaderLayer,
+    trace::TraceLayer,
+    classify::StatusInRangeAsFailures,
+};
+<span class="kw">use </span>tower::{ServiceBuilder, Service, ServiceExt};
+<span class="kw">use </span>hyper_util::{rt::TokioExecutor, client::legacy::Client};
+<span class="kw">use </span>http_body_util::Full;
+<span class="kw">use </span>bytes::Bytes;
+<span class="kw">use </span>http::{Request, HeaderValue, header::USER_AGENT};
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
+<span class="kw">let </span>client = Client::builder(TokioExecutor::new()).build_http();
+    <span class="kw">let </span><span class="kw-2">mut </span>client = ServiceBuilder::new()
+        <span class="comment">// Add tracing and consider server errors and client
+        // errors as failures.
+        </span>.layer(TraceLayer::new(
+            StatusInRangeAsFailures::new(<span class="number">400</span>..=<span class="number">599</span>).into_make_classifier()
+        ))
+        <span class="comment">// Set a `User-Agent` header on all requests.
+        </span>.layer(SetRequestHeaderLayer::overriding(
+            USER_AGENT,
+            HeaderValue::from_static(<span class="string">"tower-http demo"</span>)
+        ))
+        <span class="comment">// Decompress response bodies
+        </span>.layer(DecompressionLayer::new())
+        <span class="comment">// Wrap a `Client` in our middleware stack.
+        // This is possible because `Client` implements
+        // `tower::Service`.
+        </span>.service(client);
+
+    <span class="comment">// Make a request
+    </span><span class="kw">let </span>request = Request::builder()
+        .uri(<span class="string">"http://example.com"</span>)
+        .body(Full::&lt;Bytes&gt;::default())
+        .unwrap();
+
+    <span class="kw">let </span>response = client
+        .ready()
+        .<span class="kw">await
+        </span>.unwrap()
+        .call(request)
+        .<span class="kw">await
+        </span>.unwrap();
+}</code></pre></div>
+<h2 id="feature-flags"><a class="doc-anchor" href="#feature-flags">§</a>Feature Flags</h2>
+<p>All middleware are disabled by default and can be enabled using <a href="https://doc.rust-lang.org/cargo/reference/features.html">cargo features</a>.</p>
+<p>For example, to enable the <a href="trace/struct.Trace.html" title="struct tower_http::trace::Trace"><code>Trace</code></a> middleware, add the “trace” feature flag in
+your <code>Cargo.toml</code>:</p>
+<div class="example-wrap"><pre class="language-toml"><code>tower-http = { version = &quot;0.1&quot;, features = [&quot;trace&quot;] }
+</code></pre></div>
+<p>You can use <code>"full"</code> to enable everything:</p>
+<div class="example-wrap"><pre class="language-toml"><code>tower-http = { version = &quot;0.1&quot;, features = [&quot;full&quot;] }
+</code></pre></div><h2 id="getting-help"><a class="doc-anchor" href="#getting-help">§</a>Getting Help</h2>
+<p>If you’re new to tower its <a href="https://github.com/tower-rs/tower/tree/master/guides">guides</a> might help. In the tower-http repo we also have a <a href="https://github.com/tower-rs/tower-http/tree/master/examples">number
+of examples</a> showing how to put everything together. You’re also welcome to ask in
+the <a href="https://discord.gg/tokio"><code>#tower</code> Discord channel</a> or open an <a href="https://github.com/tower-rs/tower-http/issues/new">issue</a> with your question.</p>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="classify/index.html" title="mod tower_http::classify">classify</a></div><div class="desc docblock-short">Tools for classifying responses as either success or failure.</div></li><li><div class="item-name"><a class="mod" href="follow_redirect/index.html" title="mod tower_http::follow_redirect">follow_redirect</a></div><div class="desc docblock-short">Middleware for following redirections.</div></li><li><div class="item-name"><a class="mod" href="map_response_body/index.html" title="mod tower_http::map_response_body">map_response_body</a></div><div class="desc docblock-short">Apply a transformation to the response body.</div></li><li><div class="item-name"><a class="mod" href="services/index.html" title="mod tower_http::services">services</a></div><div class="desc docblock-short"><a href="https://docs.rs/tower/latest/tower/trait.Service.html"><code>Service</code></a>s that return responses without wrapping other <a href="https://docs.rs/tower/latest/tower/trait.Service.html"><code>Service</code></a>s.</div></li><li><div class="item-name"><a class="mod" href="trace/index.html" title="mod tower_http::trace">trace</a></div><div class="desc docblock-short">Middleware that adds high level <a href="https://crates.io/crates/tracing">tracing</a> to a <a href="../tower_service/trait.Service.html" title="trait tower_service::Service"><code>Service</code></a>.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.LatencyUnit.html" title="enum tower_http::LatencyUnit">LatencyUnit</a></div><div class="desc docblock-short">The latency unit used to report latencies by middleware.</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.BoxError.html" title="type tower_http::BoxError">BoxError</a></div><div class="desc docblock-short">Alias for a type-erased error type.</div></li></ul></section></div></main></body></html>

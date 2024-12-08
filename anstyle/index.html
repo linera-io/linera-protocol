@@ -1,0 +1,47 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="ANSI Text Styling"><title>anstyle - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="anstyle" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../anstyle/index.html">anstyle</a><span class="version">1.0.8</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">anstyle</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/anstyle/lib.rs.html#1-64">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>ANSI Text Styling</p>
+<p><em>A portmanteau of “ansi style”</em></p>
+<p><code>anstyle</code> provides core types describing <a href="https://en.wikipedia.org/wiki/ANSI_escape_code">ANSI styling escape
+codes</a> for interoperability
+between crates.</p>
+<p>Example use cases:</p>
+<ul>
+<li>An argument parser allowing callers to define the colors used in the help-output without
+putting the text formatting crate in the public API</li>
+<li>A style description parser that can work with any text formatting crate</li>
+</ul>
+<p>Priorities:</p>
+<ol>
+<li>API stability</li>
+<li>Low compile-time and binary-size overhead</li>
+<li><code>const</code> friendly API for callers to statically define their stylesheet</li>
+</ol>
+<p>For integration with text styling crate, see:</p>
+<ul>
+<li><a href="https://docs.rs/anstyle-ansi-term">anstyle-ansi-term</a></li>
+<li><a href="https://docs.rs/anstyle-crossterm">anstyle-crossterm</a></li>
+<li><a href="https://docs.rs/anstyle-owo-colors">anstyle-owo-colors</a></li>
+<li><a href="https://docs.rs/anstyle-termcolor">anstyle-termcolor</a></li>
+<li><a href="https://docs.rs/anstyle-yansi">anstyle-yansi</a></li>
+</ul>
+<p>User-styling parsers:</p>
+<ul>
+<li><a href="https://docs.rs/anstyle-git">anstyle-git</a>: Parse Git style descriptions</li>
+<li><a href="https://docs.rs/anstyle-ls">anstyle-ls</a>: Parse <code>LS_COLORS</code> style descriptions</li>
+</ul>
+<p>Convert to other formats</p>
+<ul>
+<li><a href="https://docs.rs/anstream">anstream</a>: A simple cross platform library for writing colored text to a terminal</li>
+<li><a href="https://docs.rs/anstyle-roff">anstyle-roff</a>: For converting to ROFF</li>
+<li><a href="https://docs.rs/anstyle-syntect">anstyle-syntect</a>: For working with syntax highlighting</li>
+</ul>
+<p>Utilities</p>
+<ul>
+<li><a href="https://docs.rs/anstyle-lossy">anstyle-lossy</a>: Convert between <code>anstyle::Color</code> types</li>
+<li><a href="https://docs.rs/anstyle-parse">anstyle-parse</a>: Parsing ANSI Style Escapes</li>
+<li><a href="https://docs.rs/anstyle-wincon">anstyle-wincon</a>: Styling legacy Microsoft terminals</li>
+</ul>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>The core type is <a href="struct.Style.html" title="struct anstyle::Style"><code>Style</code></a>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>style = anstyle::Style::new().bold();</code></pre></div>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Ansi256Color.html" title="struct anstyle::Ansi256Color">Ansi256Color</a></div><div class="desc docblock-short">256 (8-bit) color support</div></li><li><div class="item-name"><a class="struct" href="struct.EffectIter.html" title="struct anstyle::EffectIter">EffectIter</a></div><div class="desc docblock-short">Enumerate each enabled value in <a href="struct.Effects.html" title="struct anstyle::Effects"><code>Effects</code></a></div></li><li><div class="item-name"><a class="struct" href="struct.Effects.html" title="struct anstyle::Effects">Effects</a></div><div class="desc docblock-short">A set of text effects</div></li><li><div class="item-name"><a class="struct" href="struct.Reset.html" title="struct anstyle::Reset">Reset</a></div><div class="desc docblock-short">Reset terminal formatting</div></li><li><div class="item-name"><a class="struct" href="struct.RgbColor.html" title="struct anstyle::RgbColor">RgbColor</a></div><div class="desc docblock-short">24-bit ANSI RGB color codes</div></li><li><div class="item-name"><a class="struct" href="struct.Style.html" title="struct anstyle::Style">Style</a></div><div class="desc docblock-short">ANSI Text styling</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.AnsiColor.html" title="enum anstyle::AnsiColor">AnsiColor</a></div><div class="desc docblock-short">Available 4-bit ANSI color palette codes</div></li><li><div class="item-name"><a class="enum" href="enum.Color.html" title="enum anstyle::Color">Color</a></div><div class="desc docblock-short">Any ANSI color code scheme</div></li></ul></section></div></main></body></html>

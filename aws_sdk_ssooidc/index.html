@@ -1,0 +1,67 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="IAM Identity Center OpenID Connect (OIDC) is a web service that enables a client (such as CLI or a native application) to register with IAM Identity Center. The service also enables the client to fetch the user’s access token upon successful authentication and authorization with IAM Identity Center."><title>aws_sdk_ssooidc - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="aws_sdk_ssooidc" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../aws_sdk_ssooidc/index.html">aws_sdk_ssooidc</a><span class="version">1.44.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">aws_sdk_ssooidc</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/aws_sdk_ssooidc/lib.rs.html#1-163">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>IAM Identity Center OpenID Connect (OIDC) is a web service that enables a client (such as CLI or a native application) to register with IAM Identity Center. The service also enables the client to fetch the user’s access token upon successful authentication and authorization with IAM Identity Center.</p>
+<p><strong>Considerations for Using This Guide</strong></p>
+<p>Before you begin using this guide, we recommend that you first review the following important information about how the IAM Identity Center OIDC service works.</p>
+<ul>
+<li>The IAM Identity Center OIDC service currently implements only the portions of the OAuth 2.0 Device Authorization Grant standard (<a href="https://tools.ietf.org/html/rfc8628">https://tools.ietf.org/html/rfc8628</a>) that are necessary to enable single sign-on authentication with the CLI.</li>
+<li>With older versions of the CLI, the service only emits OIDC access tokens, so to obtain a new token, users must explicitly re-authenticate. To access the OIDC flow that supports token refresh and doesn’t require re-authentication, update to the latest CLI version (1.27.10 for CLI V1 and 2.9.0 for CLI V2) with support for OIDC token refresh and configurable IAM Identity Center session durations. For more information, see <a href="https://docs.aws.amazon.com/singlesignon/latest/userguide/configure-user-session.html">Configure Amazon Web Services access portal session duration</a>.</li>
+<li>The access tokens provided by this service grant access to all Amazon Web Services account entitlements assigned to an IAM Identity Center user, not just a particular application.</li>
+<li>The documentation in this guide does not describe the mechanism to convert the access token into Amazon Web Services Auth (“sigv4”) credentials for use with IAM-protected Amazon Web Services service endpoints. For more information, see <a href="https://docs.aws.amazon.com/singlesignon/latest/PortalAPIReference/API_GetRoleCredentials.html">GetRoleCredentials</a> in the <em>IAM Identity Center Portal API Reference Guide</em>.</li>
+</ul>
+<p>For general information about IAM Identity Center, see <a href="https://docs.aws.amazon.com/singlesignon/latest/userguide/what-is.html">What is IAM Identity Center?</a> in the <em>IAM Identity Center User Guide</em>.</p>
+<h3 id="getting-started"><a class="doc-anchor" href="#getting-started">§</a>Getting Started</h3>
+<blockquote>
+<p>Examples are available for many services and operations, check out the
+<a href="https://github.com/awslabs/aws-sdk-rust/tree/main/examples">examples folder in GitHub</a>.</p>
+</blockquote>
+<p>The SDK provides one crate per AWS service. You must add <a href="https://crates.io/crates/tokio">Tokio</a>
+as a dependency within your Rust project to execute asynchronous code. To add <code>aws-sdk-ssooidc</code> to
+your project, add the following to your <strong>Cargo.toml</strong> file:</p>
+<div class="example-wrap"><pre class="language-toml"><code>[dependencies]
+aws-config = { version = &quot;1.1.7&quot;, features = [&quot;behavior-version-latest&quot;] }
+aws-sdk-ssooidc = &quot;1.44.0&quot;
+tokio = { version = &quot;1&quot;, features = [&quot;full&quot;] }
+</code></pre></div>
+<p>Then in code, a client can be created with the following:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aws_sdk_ssooidc <span class="kw">as </span>ssooidc;
+
+<span class="attr">#[::tokio::main]
+</span><span class="kw">async fn </span>main() -&gt; <span class="prelude-ty">Result</span>&lt;(), ssooidc::Error&gt; {
+    <span class="kw">let </span>config = aws_config::load_from_env().<span class="kw">await</span>;
+    <span class="kw">let </span>client = aws_sdk_ssooidc::Client::new(<span class="kw-2">&amp;</span>config);
+
+    <span class="comment">// ... make some calls with the client
+
+    </span><span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<p>See the <a href="https://docs.rs/aws-sdk-ssooidc/latest/aws_sdk_ssooidc/client/struct.Client.html">client documentation</a>
+for information on what calls can be made, and the inputs and outputs for each of those calls.</p>
+<h3 id="using-the-sdk"><a class="doc-anchor" href="#using-the-sdk">§</a>Using the SDK</h3>
+<p>Until the SDK is released, we will be adding information about using the SDK to the
+<a href="https://docs.aws.amazon.com/sdk-for-rust/latest/dg/welcome.html">Developer Guide</a>. Feel free to suggest
+additional sections for the guide by opening an issue and describing what you are trying to do.</p>
+<h3 id="getting-help"><a class="doc-anchor" href="#getting-help">§</a>Getting Help</h3>
+<ul>
+<li><a href="https://github.com/awslabs/aws-sdk-rust/discussions">GitHub discussions</a> - For ideas, RFCs &amp; general questions</li>
+<li><a href="https://github.com/awslabs/aws-sdk-rust/issues/new/choose">GitHub issues</a> - For bug reports &amp; feature requests</li>
+<li><a href="https://awslabs.github.io/aws-sdk-rust/">Generated Docs (latest version)</a></li>
+<li><a href="https://github.com/awslabs/aws-sdk-rust/tree/main/examples">Usage examples</a></li>
+</ul>
+<h2 id="crate-organization"><a class="doc-anchor" href="#crate-organization">§</a>Crate Organization</h2>
+<p>The entry point for most customers will be <a href="struct.Client.html" title="struct aws_sdk_ssooidc::Client"><code>Client</code></a>, which exposes one method for each API
+offered by AWS SSO OIDC. The return value of each of these methods is a “fluent builder”,
+where the different inputs for that API are added by builder-style function call chaining,
+followed by calling <code>send()</code> to get a <a href="https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html" title="trait core::future::future::Future"><code>Future</code></a> that will result in
+either a successful output or a <a href="error/type.SdkError.html" title="type aws_sdk_ssooidc::error::SdkError"><code>SdkError</code></a>.</p>
+<p>Some of these API inputs may be structs or enums to provide more complex structured information.
+There are some simpler types for
+representing data such as date times or binary blobs that live in <a href="primitives/index.html" title="mod aws_sdk_ssooidc::primitives"><code>primitives</code></a>.</p>
+<p>All types required to configure a client via the <a href="struct.Config.html" title="struct aws_sdk_ssooidc::Config"><code>Config</code></a> struct live
+in <a href="config/index.html" title="mod aws_sdk_ssooidc::config"><code>config</code></a>.</p>
+<p>The <a href="operation/index.html" title="mod aws_sdk_ssooidc::operation"><code>operation</code></a> module has a submodule for every API, and in each submodule
+is the input, output, and error type for that API, as well as builders to construct each of those.</p>
+<p>There is a top-level <a href="enum.Error.html" title="enum aws_sdk_ssooidc::Error"><code>Error</code></a> type that encompasses all the errors that the
+client can return. Any other error type can be converted to this <code>Error</code> type via the
+<a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From"><code>From</code></a> trait.</p>
+<p>The other modules within this crate are not required for normal usage.</p>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="client/index.html" title="mod aws_sdk_ssooidc::client">client</a></div><div class="desc docblock-short">Client for calling AWS SSO OIDC.</div></li><li><div class="item-name"><a class="mod" href="config/index.html" title="mod aws_sdk_ssooidc::config">config</a></div><div class="desc docblock-short">Configuration for AWS SSO OIDC.</div></li><li><div class="item-name"><a class="mod" href="error/index.html" title="mod aws_sdk_ssooidc::error">error</a></div><div class="desc docblock-short">Common errors and error handling utilities.</div></li><li><div class="item-name"><a class="mod" href="meta/index.html" title="mod aws_sdk_ssooidc::meta">meta</a></div><div class="desc docblock-short">Information about this crate.</div></li><li><div class="item-name"><a class="mod" href="operation/index.html" title="mod aws_sdk_ssooidc::operation">operation</a></div><div class="desc docblock-short">All operations that this crate can perform.</div></li><li><div class="item-name"><a class="mod" href="primitives/index.html" title="mod aws_sdk_ssooidc::primitives">primitives</a></div><div class="desc docblock-short">Primitives such as <code>Blob</code> or <code>DateTime</code> used by other types.</div></li><li><div class="item-name"><a class="mod" href="types/index.html" title="mod aws_sdk_ssooidc::types">types</a></div><div class="desc docblock-short">Data structures used by operation inputs/outputs.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Client.html" title="struct aws_sdk_ssooidc::Client">Client</a></div><div class="desc docblock-short">Client for AWS SSO OIDC</div></li><li><div class="item-name"><a class="struct" href="struct.Config.html" title="struct aws_sdk_ssooidc::Config">Config</a></div><div class="desc docblock-short">Configuration for a aws_sdk_ssooidc service client.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.Error.html" title="enum aws_sdk_ssooidc::Error">Error</a></div><div class="desc docblock-short">All possible error types for this service.</div></li></ul></section></div></main></body></html>

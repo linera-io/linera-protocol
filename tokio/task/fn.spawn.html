@@ -1,0 +1,125 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Spawns a new asynchronous task, returning a `JoinHandle` for it."><title>spawn in tokio::task - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="tokio" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../tokio/index.html">tokio</a><span class="version">1.40.0</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In tokio::task</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../index.html">tokio</a>::<wbr><a href="index.html">task</a>::<wbr><a class="fn" href="#">spawn</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/tokio/task/spawn.rs.html#165-177">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn spawn&lt;F&gt;(future: F) -&gt; <a class="struct" href="struct.JoinHandle.html" title="struct tokio::task::JoinHandle">JoinHandle</a>&lt;F::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html#associatedtype.Output" title="type core::future::future::Future::Output">Output</a>&gt; <a href="#" class="tooltip" data-notable-ty="JoinHandle&lt;F::Output&gt;">ⓘ</a><div class="where">where
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'static,
+    F::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html#associatedtype.Output" title="type core::future::future::Future::Output">Output</a>: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'static,</div></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Spawns a new asynchronous task, returning a
+<a href="struct.JoinHandle.html" title="struct tokio::task::JoinHandle"><code>JoinHandle</code></a> for it.</p>
+<p>The provided future will start running in the background immediately
+when <code>spawn</code> is called, even if you don’t await the returned
+<code>JoinHandle</code>.</p>
+<p>Spawning a task enables the task to execute concurrently to other tasks. The
+spawned task may execute on the current thread, or it may be sent to a
+different thread to be executed. The specifics depend on the current
+<a href="../runtime/struct.Runtime.html" title="struct tokio::runtime::Runtime"><code>Runtime</code></a> configuration.</p>
+<p>It is guaranteed that spawn will not synchronously poll the task being spawned.
+This means that calling spawn while holding a lock does not pose a risk of
+deadlocking with the spawned task.</p>
+<p>There is no guarantee that a spawned task will execute to completion.
+When a runtime is shutdown, all outstanding tasks are dropped,
+regardless of the lifecycle of that task.</p>
+<p>This function must be called from the context of a Tokio runtime. Tasks running on
+the Tokio runtime are always inside its context, but you can also enter the context
+using the <a href="../runtime/struct.Runtime.html#method.enter" title="method tokio::runtime::Runtime::enter"><code>Runtime::enter</code></a> method.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>In this example, a server is started and <code>spawn</code> is used to start a new task
+that processes each received connection.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::net::{TcpListener, TcpStream};
+
+<span class="kw">use </span>std::io;
+
+<span class="kw">async fn </span>process(socket: TcpStream) {
+    <span class="comment">// ...
+</span>}
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span>listener = TcpListener::bind(<span class="string">"127.0.0.1:8080"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="kw">loop </span>{
+        <span class="kw">let </span>(socket, <span class="kw">_</span>) = listener.accept().<span class="kw">await</span><span class="question-mark">?</span>;
+
+        tokio::spawn(<span class="kw">async move </span>{
+            <span class="comment">// Process each socket concurrently.
+            </span>process(socket).<span class="kw">await
+        </span>});
+    }
+}</code></pre></div>
+<p>To run multiple tasks in parallel and receive their results, join
+handles can be stored in a vector.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">async fn </span>my_background_op(id: i32) -&gt; String {
+    <span class="kw">let </span>s = <span class="macro">format!</span>(<span class="string">"Starting background task {}."</span>, id);
+    <span class="macro">println!</span>(<span class="string">"{}"</span>, s);
+    s
+}
+
+<span class="kw">let </span>ops = <span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>];
+<span class="kw">let </span><span class="kw-2">mut </span>tasks = Vec::with_capacity(ops.len());
+<span class="kw">for </span>op <span class="kw">in </span>ops {
+    <span class="comment">// This call will make them start running in the background
+    // immediately.
+    </span>tasks.push(tokio::spawn(my_background_op(op)));
+}
+
+<span class="kw">let </span><span class="kw-2">mut </span>outputs = Vec::with_capacity(tasks.len());
+<span class="kw">for </span>task <span class="kw">in </span>tasks {
+    outputs.push(task.<span class="kw">await</span>.unwrap());
+}
+<span class="macro">println!</span>(<span class="string">"{:?}"</span>, outputs);</code></pre></div>
+<p>This example pushes the tasks to <code>outputs</code> in the order they were
+started in. If you do not care about the ordering of the outputs, then
+you can also use a <a href="struct.JoinSet.html" title="struct tokio::task::JoinSet"><code>JoinSet</code></a>.</p>
+<h2 id="panics"><a class="doc-anchor" href="#panics">§</a>Panics</h2>
+<p>Panics if called from <strong>outside</strong> of the Tokio runtime.</p>
+<h2 id="using-send-values-from-a-task"><a class="doc-anchor" href="#using-send-values-from-a-task">§</a>Using <code>!Send</code> values from a task</h2>
+<p>The task supplied to <code>spawn</code> must implement <code>Send</code>. However, it is
+possible to <strong>use</strong> <code>!Send</code> values from the task as long as they only
+exist between calls to <code>.await</code>.</p>
+<p>For example, this will work:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::task;
+
+<span class="kw">use </span>std::rc::Rc;
+
+<span class="kw">fn </span>use_rc(rc: Rc&lt;()&gt;) {
+    <span class="comment">// Do stuff w/ rc
+</span>}
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
+    tokio::spawn(<span class="kw">async </span>{
+        <span class="comment">// Force the `Rc` to stay in a scope with no `.await`
+        </span>{
+            <span class="kw">let </span>rc = Rc::new(());
+            use_rc(rc.clone());
+        }
+
+        task::yield_now().<span class="kw">await</span>;
+    }).<span class="kw">await</span>.unwrap();
+}</code></pre></div>
+<p>This will <strong>not</strong> work:</p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::task;
+
+<span class="kw">use </span>std::rc::Rc;
+
+<span class="kw">fn </span>use_rc(rc: Rc&lt;()&gt;) {
+    <span class="comment">// Do stuff w/ rc
+</span>}
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
+    tokio::spawn(<span class="kw">async </span>{
+        <span class="kw">let </span>rc = Rc::new(());
+
+        task::yield_now().<span class="kw">await</span>;
+
+        use_rc(rc.clone());
+    }).<span class="kw">await</span>.unwrap();
+}</code></pre></div>
+<p>Holding on to a <code>!Send</code> value across calls to <code>.await</code> will result in
+an unfriendly compile error message similar to:</p>
+<div class="example-wrap"><pre class="language-text"><code>`[... some type ...]` cannot be sent between threads safely
+</code></pre></div>
+<p>or:</p>
+<div class="example-wrap"><pre class="language-text"><code>error[E0391]: cycle detected when processing `main`
+</code></pre></div></div></details><script type="text/json" id="notable-traits-data">{"JoinHandle<F::Output>":"<h3>Notable traits for <code><a class=\"struct\" href=\"struct.JoinHandle.html\" title=\"struct tokio::task::JoinHandle\">JoinHandle</a>&lt;T&gt;</code></h3><pre><code><div class=\"where\">impl&lt;T&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html\" title=\"trait core::future::future::Future\">Future</a> for <a class=\"struct\" href=\"struct.JoinHandle.html\" title=\"struct tokio::task::JoinHandle\">JoinHandle</a>&lt;T&gt;</div><div class=\"where\">    type <a href=\"https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html#associatedtype.Output\" class=\"associatedtype\">Output</a> = <a class=\"enum\" href=\"https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html\" title=\"enum core::result::Result\">Result</a>&lt;T, <a class=\"struct\" href=\"struct.JoinError.html\" title=\"struct tokio::task::JoinError\">JoinError</a>&gt;;</div>"}</script></section></div></main></body></html>

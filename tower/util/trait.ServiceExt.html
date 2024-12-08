@@ -1,0 +1,370 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="An extension trait for `Service`s that provides a variety of convenient adapters"><title>ServiceExt in tower::util - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="tower" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../tower/index.html">tower</a><span class="version">0.5.1</span></h2></div><h2 class="location"><a href="#">ServiceExt</a></h2><div class="sidebar-elems"><section><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.and_then">and_then</a></li><li><a href="#method.boxed">boxed</a></li><li><a href="#method.boxed_clone">boxed_clone</a></li><li><a href="#method.call_all">call_all</a></li><li><a href="#method.map_err">map_err</a></li><li><a href="#method.map_future">map_future</a></li><li><a href="#method.map_request">map_request</a></li><li><a href="#method.map_response">map_response</a></li><li><a href="#method.map_result">map_result</a></li><li><a href="#method.oneshot">oneshot</a></li><li><a href="#method.ready">ready</a></li><li><a href="#method.ready_oneshot">ready_oneshot</a></li><li><a href="#method.then">then</a></li></ul><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In tower::util</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="../index.html">tower</a>::<wbr><a href="index.html">util</a>::<wbr><a class="trait" href="#">ServiceExt</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/tower/util/mod.rs.html#67-1039">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub trait ServiceExt&lt;Request&gt;: <a class="trait" href="../trait.Service.html" title="trait tower::Service">Service</a>&lt;Request&gt; {
+<details class="toggle type-contents-toggle"><summary class="hideme"><span>Show 13 methods</span></summary>    // Provided methods
+    fn <a href="#method.ready" class="fn">ready</a>(&amp;mut self) -&gt; <a class="struct" href="struct.Ready.html" title="struct tower::util::Ready">Ready</a>&lt;'_, Self, Request&gt; <a href="#" class="tooltip" data-notable-ty="Ready&lt;&#39;_, Self, Request&gt;">ⓘ</a>
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.ready_oneshot" class="fn">ready_oneshot</a>(self) -&gt; <a class="struct" href="struct.ReadyOneshot.html" title="struct tower::util::ReadyOneshot">ReadyOneshot</a>&lt;Self, Request&gt; <a href="#" class="tooltip" data-notable-ty="ReadyOneshot&lt;Self, Request&gt;">ⓘ</a>
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.oneshot" class="fn">oneshot</a>(self, req: Request) -&gt; <a class="struct" href="struct.Oneshot.html" title="struct tower::util::Oneshot">Oneshot</a>&lt;Self, Request&gt; <a href="#" class="tooltip" data-notable-ty="Oneshot&lt;Self, Request&gt;">ⓘ</a>
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.call_all" class="fn">call_all</a>&lt;S&gt;(self, reqs: S) -&gt; <a class="struct" href="struct.CallAll.html" title="struct tower::util::CallAll">CallAll</a>&lt;Self, S&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+             S: <a class="trait" href="../../futures_core/stream/trait.Stream.html" title="trait futures_core::stream::Stream">Stream</a>&lt;Item = Request&gt;</span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.and_then" class="fn">and_then</a>&lt;F&gt;(self, f: F) -&gt; <a class="struct" href="struct.AndThen.html" title="struct tower::util::AndThen">AndThen</a>&lt;Self, F&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+             F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.map_response" class="fn">map_response</a>&lt;F, Response&gt;(self, f: F) -&gt; <a class="struct" href="struct.MapResponse.html" title="struct tower::util::MapResponse">MapResponse</a>&lt;Self, F&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+             F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnOnce.html" title="trait core::ops::function::FnOnce">FnOnce</a>(Self::<a class="associatedtype" href="../trait.Service.html#associatedtype.Response" title="type tower::Service::Response">Response</a>) -&gt; Response + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.map_err" class="fn">map_err</a>&lt;F, Error&gt;(self, f: F) -&gt; <a class="struct" href="struct.MapErr.html" title="struct tower::util::MapErr">MapErr</a>&lt;Self, F&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+             F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnOnce.html" title="trait core::ops::function::FnOnce">FnOnce</a>(Self::<a class="associatedtype" href="../trait.Service.html#associatedtype.Error" title="type tower::Service::Error">Error</a>) -&gt; Error + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.map_result" class="fn">map_result</a>&lt;F, Response, Error&gt;(self, f: F) -&gt; <a class="struct" href="struct.MapResult.html" title="struct tower::util::MapResult">MapResult</a>&lt;Self, F&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+             Error: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;Self::<a class="associatedtype" href="../trait.Service.html#associatedtype.Error" title="type tower::Service::Error">Error</a>&gt;,
+             F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnOnce.html" title="trait core::ops::function::FnOnce">FnOnce</a>(<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="../trait.Service.html#associatedtype.Response" title="type tower::Service::Response">Response</a>, Self::<a class="associatedtype" href="../trait.Service.html#associatedtype.Error" title="type tower::Service::Error">Error</a>&gt;) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Response, Error&gt; + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.map_request" class="fn">map_request</a>&lt;F, NewRequest&gt;(self, f: F) -&gt; <a class="struct" href="struct.MapRequest.html" title="struct tower::util::MapRequest">MapRequest</a>&lt;Self, F&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+             F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(NewRequest) -&gt; Request</span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.then" class="fn">then</a>&lt;F, Response, Error, Fut&gt;(self, f: F) -&gt; <a class="struct" href="struct.Then.html" title="struct tower::util::Then">Then</a>&lt;Self, F&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+             Error: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;Self::<a class="associatedtype" href="../trait.Service.html#associatedtype.Error" title="type tower::Service::Error">Error</a>&gt;,
+             F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnOnce.html" title="trait core::ops::function::FnOnce">FnOnce</a>(<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="../trait.Service.html#associatedtype.Response" title="type tower::Service::Response">Response</a>, Self::<a class="associatedtype" href="../trait.Service.html#associatedtype.Error" title="type tower::Service::Error">Error</a>&gt;) -&gt; Fut + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,
+             Fut: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Response, Error&gt;&gt;</span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.map_future" class="fn">map_future</a>&lt;F, Fut, Response, Error&gt;(self, f: F) -&gt; <a class="struct" href="struct.MapFuture.html" title="struct tower::util::MapFuture">MapFuture</a>&lt;Self, F&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+             F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(Self::<a class="associatedtype" href="../trait.Service.html#associatedtype.Future" title="type tower::Service::Future">Future</a>) -&gt; Fut,
+             Error: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;Self::<a class="associatedtype" href="../trait.Service.html#associatedtype.Error" title="type tower::Service::Error">Error</a>&gt;,
+             Fut: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Response, Error&gt;&gt;</span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.boxed" class="fn">boxed</a>(self) -&gt; <a class="struct" href="struct.BoxService.html" title="struct tower::util::BoxService">BoxService</a>&lt;Request, Self::<a class="associatedtype" href="../trait.Service.html#associatedtype.Response" title="type tower::Service::Response">Response</a>, Self::<a class="associatedtype" href="../trait.Service.html#associatedtype.Error" title="type tower::Service::Error">Error</a>&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'static,
+             Self::<a class="associatedtype" href="../trait.Service.html#associatedtype.Future" title="type tower::Service::Future">Future</a>: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'static</span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.boxed_clone" class="fn">boxed_clone</a>(
+        self,
+    ) -&gt; <a class="struct" href="struct.BoxCloneService.html" title="struct tower::util::BoxCloneService">BoxCloneService</a>&lt;Request, Self::<a class="associatedtype" href="../trait.Service.html#associatedtype.Response" title="type tower::Service::Response">Response</a>, Self::<a class="associatedtype" href="../trait.Service.html#associatedtype.Error" title="type tower::Service::Error">Error</a>&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'static,
+             Self::<a class="associatedtype" href="../trait.Service.html#associatedtype.Future" title="type tower::Service::Future">Future</a>: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'static</span> { ... }
+</details>}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>An extension trait for <code>Service</code>s that provides a variety of convenient
+adapters</p>
+</div></details><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.ready" class="method"><a class="src rightside" href="../../src/tower/util/mod.rs.html#69-74">source</a><h4 class="code-header">fn <a href="#method.ready" class="fn">ready</a>(&amp;mut self) -&gt; <a class="struct" href="struct.Ready.html" title="struct tower::util::Ready">Ready</a>&lt;'_, Self, Request&gt; <a href="#" class="tooltip" data-notable-ty="Ready&lt;&#39;_, Self, Request&gt;">ⓘ</a><div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Yields a mutable reference to the service when it is ready to accept a request.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.ready_oneshot" class="method"><a class="src rightside" href="../../src/tower/util/mod.rs.html#77-82">source</a><h4 class="code-header">fn <a href="#method.ready_oneshot" class="fn">ready_oneshot</a>(self) -&gt; <a class="struct" href="struct.ReadyOneshot.html" title="struct tower::util::ReadyOneshot">ReadyOneshot</a>&lt;Self, Request&gt; <a href="#" class="tooltip" data-notable-ty="ReadyOneshot&lt;Self, Request&gt;">ⓘ</a><div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Yields the service when it is ready to accept a request.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.oneshot" class="method"><a class="src rightside" href="../../src/tower/util/mod.rs.html#85-90">source</a><h4 class="code-header">fn <a href="#method.oneshot" class="fn">oneshot</a>(self, req: Request) -&gt; <a class="struct" href="struct.Oneshot.html" title="struct tower::util::Oneshot">Oneshot</a>&lt;Self, Request&gt; <a href="#" class="tooltip" data-notable-ty="Oneshot&lt;Self, Request&gt;">ⓘ</a><div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Consume this <code>Service</code>, calling it with the provided request once it is ready.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.call_all" class="method"><a class="src rightside" href="../../src/tower/util/mod.rs.html#100-106">source</a><h4 class="code-header">fn <a href="#method.call_all" class="fn">call_all</a>&lt;S&gt;(self, reqs: S) -&gt; <a class="struct" href="struct.CallAll.html" title="struct tower::util::CallAll">CallAll</a>&lt;Self, S&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+    S: <a class="trait" href="../../futures_core/stream/trait.Stream.html" title="trait futures_core::stream::Stream">Stream</a>&lt;Item = Request&gt;,</div></h4></section></summary><div class="docblock"><p>Process all requests from the given <a href="https://docs.rs/futures/latest/futures/stream/trait.Stream.html"><code>Stream</code></a>, and produce a <a href="https://docs.rs/futures/latest/futures/stream/trait.Stream.html"><code>Stream</code></a> of their responses.</p>
+<p>This is essentially <a href="https://docs.rs/futures/latest/futures/stream/trait.Stream.html"><code>Stream&lt;Item = Request&gt;</code></a> + <code>Self</code> =&gt; <a href="https://docs.rs/futures/latest/futures/stream/trait.Stream.html"><code>Stream&lt;Item = Response&gt;</code></a>. See the documentation for <a href="struct.CallAll.html" title="struct tower::util::CallAll"><code>CallAll</code></a> for
+details.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.and_then" class="method"><a class="src rightside" href="../../src/tower/util/mod.rs.html#168-174">source</a><h4 class="code-header">fn <a href="#method.and_then" class="fn">and_then</a>&lt;F&gt;(self, f: F) -&gt; <a class="struct" href="struct.AndThen.html" title="struct tower::util::AndThen">AndThen</a>&lt;Self, F&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,</div></h4></section></summary><div class="docblock"><p>Executes a new future after this service’s future resolves. This does
+not alter the behaviour of the <a href="../trait.Service.html#tymethod.poll_ready" title="method tower::Service::poll_ready"><code>poll_ready</code></a> method.</p>
+<p>This method can be used to change the <a href="../trait.Service.html#associatedtype.Response" title="associated type tower::Service::Response"><code>Response</code></a> type of the service
+into a different type. You can use this method to chain along a computation once the
+service’s response has been resolved.</p>
+<h5 id="example"><a class="doc-anchor" href="#example">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// A service returning Result&lt;Record, _&gt;
+</span><span class="kw">let </span>service = DatabaseService::new(<span class="string">"127.0.0.1:8080"</span>);
+
+<span class="comment">// Map the response into a new response
+</span><span class="kw">let </span><span class="kw-2">mut </span>new_service = service.and_then(|record: Record| <span class="kw">async move </span>{
+    <span class="kw">let </span>name = record.name;
+    avatar_lookup(name).<span class="kw">await
+</span>});
+
+<span class="comment">// Call the new service
+</span><span class="kw">let </span>id = <span class="number">13</span>;
+<span class="kw">let </span>avatar = new_service.call(id).<span class="kw">await</span>.unwrap();</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.map_response" class="method"><a class="src rightside" href="../../src/tower/util/mod.rs.html#237-243">source</a><h4 class="code-header">fn <a href="#method.map_response" class="fn">map_response</a>&lt;F, Response&gt;(self, f: F) -&gt; <a class="struct" href="struct.MapResponse.html" title="struct tower::util::MapResponse">MapResponse</a>&lt;Self, F&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnOnce.html" title="trait core::ops::function::FnOnce">FnOnce</a>(Self::<a class="associatedtype" href="../trait.Service.html#associatedtype.Response" title="type tower::Service::Response">Response</a>) -&gt; Response + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,</div></h4></section></summary><div class="docblock"><p>Maps this service’s response value to a different value. This does not
+alter the behaviour of the <a href="../trait.Service.html#tymethod.poll_ready" title="method tower::Service::poll_ready"><code>poll_ready</code></a> method.</p>
+<p>This method can be used to change the <a href="../trait.Service.html#associatedtype.Response" title="associated type tower::Service::Response"><code>Response</code></a> type of the service
+into a different type. It is similar to the <a href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html#method.map" title="method core::result::Result::map"><code>Result::map</code></a>
+method. You can use this method to chain along a computation once the
+service’s response has been resolved.</p>
+<h5 id="example-1"><a class="doc-anchor" href="#example-1">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// A service returning Result&lt;Record, _&gt;
+</span><span class="kw">let </span>service = DatabaseService::new(<span class="string">"127.0.0.1:8080"</span>);
+
+<span class="comment">// Map the response into a new response
+</span><span class="kw">let </span><span class="kw-2">mut </span>new_service = service.map_response(|record| record.name);
+
+<span class="comment">// Call the new service
+</span><span class="kw">let </span>id = <span class="number">13</span>;
+<span class="kw">let </span>name = new_service
+    .ready()
+    .<span class="kw">await</span><span class="question-mark">?
+    </span>.call(id)
+    .<span class="kw">await</span><span class="question-mark">?</span>;</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.map_err" class="method"><a class="src rightside" href="../../src/tower/util/mod.rs.html#305-311">source</a><h4 class="code-header">fn <a href="#method.map_err" class="fn">map_err</a>&lt;F, Error&gt;(self, f: F) -&gt; <a class="struct" href="struct.MapErr.html" title="struct tower::util::MapErr">MapErr</a>&lt;Self, F&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnOnce.html" title="trait core::ops::function::FnOnce">FnOnce</a>(Self::<a class="associatedtype" href="../trait.Service.html#associatedtype.Error" title="type tower::Service::Error">Error</a>) -&gt; Error + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,</div></h4></section></summary><div class="docblock"><p>Maps this service’s error value to a different value. This does not
+alter the behaviour of the <a href="../trait.Service.html#tymethod.poll_ready" title="method tower::Service::poll_ready"><code>poll_ready</code></a> method.</p>
+<p>This method can be used to change the <a href="../trait.Service.html#associatedtype.Error" title="associated type tower::Service::Error"><code>Error</code></a> type of the service
+into a different type. It is similar to the <a href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html#method.map_err" title="method core::result::Result::map_err"><code>Result::map_err</code></a> method.</p>
+<h5 id="example-2"><a class="doc-anchor" href="#example-2">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// A service returning Result&lt;_, Error&gt;
+</span><span class="kw">let </span>service = DatabaseService::new(<span class="string">"127.0.0.1:8080"</span>);
+
+<span class="comment">// Map the error to a new error
+</span><span class="kw">let </span><span class="kw-2">mut </span>new_service = service.map_err(|err| err.code);
+
+<span class="comment">// Call the new service
+</span><span class="kw">let </span>id = <span class="number">13</span>;
+<span class="kw">let </span>code = new_service
+    .ready()
+    .<span class="kw">await</span><span class="question-mark">?
+    </span>.call(id)
+    .<span class="kw">await
+    </span>.unwrap_err();</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.map_result" class="method"><a class="src rightside" href="../../src/tower/util/mod.rs.html#534-541">source</a><h4 class="code-header">fn <a href="#method.map_result" class="fn">map_result</a>&lt;F, Response, Error&gt;(self, f: F) -&gt; <a class="struct" href="struct.MapResult.html" title="struct tower::util::MapResult">MapResult</a>&lt;Self, F&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+    Error: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;Self::<a class="associatedtype" href="../trait.Service.html#associatedtype.Error" title="type tower::Service::Error">Error</a>&gt;,
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnOnce.html" title="trait core::ops::function::FnOnce">FnOnce</a>(<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="../trait.Service.html#associatedtype.Response" title="type tower::Service::Response">Response</a>, Self::<a class="associatedtype" href="../trait.Service.html#associatedtype.Error" title="type tower::Service::Error">Error</a>&gt;) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Response, Error&gt; + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,</div></h4></section></summary><div class="docblock"><p>Maps this service’s result type (<code>Result&lt;Self::Response, Self::Error&gt;</code>)
+to a different value, regardless of whether the future succeeds or
+fails.</p>
+<p>This is similar to the <a href="../trait.ServiceExt.html#method.map_response" title="method tower::ServiceExt::map_response"><code>map_response</code></a> and <a href="../trait.ServiceExt.html#method.map_err" title="method tower::ServiceExt::map_err"><code>map_err</code></a> combinators,
+except that the <em>same</em> function is invoked when the service’s future
+completes, whether it completes successfully or fails. This function
+takes the <a href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result"><code>Result</code></a> returned by the service’s future, and returns a
+<a href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result"><code>Result</code></a>.</p>
+<p>Like the standard library’s <a href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html#method.and_then" title="method core::result::Result::and_then"><code>Result::and_then</code></a>, this method can be
+used to implement control flow based on <code>Result</code> values. For example, it
+may be used to implement error recovery, by turning some <a href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html#variant.Err" title="variant core::result::Result::Err"><code>Err</code></a>
+responses from the service into <a href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html#variant.Ok" title="variant core::result::Result::Ok"><code>Ok</code></a> responses. Similarly, some
+successful responses from the service could be rejected, by returning an
+<a href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html#variant.Err" title="variant core::result::Result::Err"><code>Err</code></a> conditionally, depending on the value inside the [<code>Ok</code>.] Finally,
+this method can also be used to implement behaviors that must run when a
+service’s future completes, regardless of whether it succeeded or failed.</p>
+<p>This method can be used to change the <a href="../trait.Service.html#associatedtype.Response" title="associated type tower::Service::Response"><code>Response</code></a> type of the service
+into a different type. It can also be used to change the <a href="../trait.Service.html#associatedtype.Error" title="associated type tower::Service::Error"><code>Error</code></a> type
+of the service. However, because the <a href="../trait.ServiceExt.html#method.map_result" title="method tower::ServiceExt::map_result"><code>map_result</code></a> function is not applied
+to the errors returned by the service’s <a href="../trait.Service.html#tymethod.poll_ready" title="method tower::Service::poll_ready"><code>poll_ready</code></a> method, it must
+be possible to convert the service’s <a href="../trait.Service.html#associatedtype.Error" title="associated type tower::Service::Error"><code>Error</code></a> type into the error type
+returned by the <a href="../trait.ServiceExt.html#method.map_result" title="method tower::ServiceExt::map_result"><code>map_result</code></a> function. This is trivial when the function
+returns the same error type as the service, but in other cases, it can
+be useful to use <a href="../type.BoxError.html" title="type tower::BoxError"><code>BoxError</code></a> to erase differing error types.</p>
+<h5 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h5>
+<p>Recovering from certain errors:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// A service returning Result&lt;Vec&lt;Record&gt;, DbError&gt;
+</span><span class="kw">let </span>service = DatabaseService::new(<span class="string">"127.0.0.1:8080"</span>);
+
+<span class="comment">// If the database returns no records for the query, we just want an empty `Vec`.
+</span><span class="kw">let </span><span class="kw-2">mut </span>new_service = service.map_result(|result| <span class="kw">match </span>result {
+    <span class="comment">// If the error indicates that no records matched the query, return an empty
+    // `Vec` instead.
+    </span><span class="prelude-val">Err</span>(DbError::NoRecordsFound) =&gt; <span class="prelude-val">Ok</span>(Vec::new()),
+    <span class="comment">// Propagate all other responses (`Ok` and `Err`) unchanged
+    </span>x =&gt; x,
+});
+
+<span class="comment">// Call the new service
+</span><span class="kw">let </span>id = <span class="number">13</span>;
+<span class="kw">let </span>name = new_service
+    .ready()
+    .<span class="kw">await</span><span class="question-mark">?
+    </span>.call(id)
+    .<span class="kw">await</span><span class="question-mark">?</span>;</code></pre></div>
+<p>Rejecting some <code>Ok</code> responses:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tower::BoxError;
+
+<span class="comment">// A service returning Result&lt;Record, DbError&gt;
+</span><span class="kw">let </span>service = DatabaseService::new(<span class="string">"127.0.0.1:8080"</span>);
+
+<span class="comment">// If the user is zero years old, return an error.
+</span><span class="kw">let </span><span class="kw-2">mut </span>new_service = service.map_result(|result| {
+   <span class="kw">let </span>record = result<span class="question-mark">?</span>;
+
+   <span class="kw">if </span>record.age == <span class="number">0 </span>{
+        <span class="comment">// Users must have been born to use our app!
+        </span><span class="kw">let </span>app_error = AppError::from(<span class="string">"users cannot be 0 years old!"</span>);
+
+        <span class="comment">// Box the error to erase its type (as it can be an `AppError`
+        // *or* the inner service's `DbError`).
+        </span><span class="kw">return </span><span class="prelude-val">Err</span>(BoxError::from(app_error));
+    }
+
+    <span class="comment">// Otherwise, return the record.
+    </span><span class="prelude-val">Ok</span>(record)
+});
+
+<span class="comment">// Call the new service
+</span><span class="kw">let </span>id = <span class="number">13</span>;
+<span class="kw">let </span>record = new_service
+    .ready()
+    .<span class="kw">await</span><span class="question-mark">?
+    </span>.call(id)
+    .<span class="kw">await</span><span class="question-mark">?</span>;</code></pre></div>
+<p>Performing an action that must be run for both successes and failures:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// A service returning Result&lt;Record, DbError&gt;
+</span><span class="kw">let </span>service = DatabaseService::new(<span class="string">"127.0.0.1:8080"</span>);
+
+<span class="comment">// Print a message whenever a query completes.
+</span><span class="kw">let </span><span class="kw-2">mut </span>new_service = service.map_result(|result| {
+    <span class="macro">println!</span>(<span class="string">"query completed; success={}"</span>, result.is_ok());
+    result
+});
+
+<span class="comment">// Call the new service
+</span><span class="kw">let </span>id = <span class="number">13</span>;
+<span class="kw">let </span>response = new_service
+    .ready()
+    .<span class="kw">await</span><span class="question-mark">?
+    </span>.call(id)
+    .<span class="kw">await</span>;</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.map_request" class="method"><a class="src rightside" href="../../src/tower/util/mod.rs.html#594-600">source</a><h4 class="code-header">fn <a href="#method.map_request" class="fn">map_request</a>&lt;F, NewRequest&gt;(self, f: F) -&gt; <a class="struct" href="struct.MapRequest.html" title="struct tower::util::MapRequest">MapRequest</a>&lt;Self, F&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(NewRequest) -&gt; Request,</div></h4></section></summary><div class="docblock"><p>Composes a function <em>in front of</em> the service.</p>
+<p>This adapter produces a new service that passes each value through the
+given function <code>f</code> before sending it to <code>self</code>.</p>
+<h5 id="example-3"><a class="doc-anchor" href="#example-3">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// A service taking a String as a request
+</span><span class="kw">let </span>service = DatabaseService::new(<span class="string">"127.0.0.1:8080"</span>);
+
+<span class="comment">// Map the request to a new request
+</span><span class="kw">let </span><span class="kw-2">mut </span>new_service = service.map_request(|id: u32| id.to_string());
+
+<span class="comment">// Call the new service
+</span><span class="kw">let </span>id = <span class="number">13</span>;
+<span class="kw">let </span>response = new_service
+    .ready()
+    .<span class="kw">await</span><span class="question-mark">?
+    </span>.call(id)
+    .<span class="kw">await</span>;</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.then" class="method"><a class="src rightside" href="../../src/tower/util/mod.rs.html#859-867">source</a><h4 class="code-header">fn <a href="#method.then" class="fn">then</a>&lt;F, Response, Error, Fut&gt;(self, f: F) -&gt; <a class="struct" href="struct.Then.html" title="struct tower::util::Then">Then</a>&lt;Self, F&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+    Error: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;Self::<a class="associatedtype" href="../trait.Service.html#associatedtype.Error" title="type tower::Service::Error">Error</a>&gt;,
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnOnce.html" title="trait core::ops::function::FnOnce">FnOnce</a>(<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="../trait.Service.html#associatedtype.Response" title="type tower::Service::Response">Response</a>, Self::<a class="associatedtype" href="../trait.Service.html#associatedtype.Error" title="type tower::Service::Error">Error</a>&gt;) -&gt; Fut + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,
+    Fut: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Response, Error&gt;&gt;,</div></h4></section></summary><div class="docblock"><p>Composes an asynchronous function <em>after</em> this service.</p>
+<p>This takes a function or closure returning a future, and returns a new
+<code>Service</code> that chains that function after this service’s <a href="../trait.Service.html#associatedtype.Future" title="associated type tower::Service::Future"><code>Future</code></a>. The
+new <code>Service</code>’s future will consist of this service’s future, followed
+by the future returned by calling the chained function with the future’s
+<a href="https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html#associatedtype.Output" title="associated type core::future::future::Future::Output"><code>Output</code></a> type. The chained function is called regardless of whether
+this service’s future completes with a successful response or with an
+error.</p>
+<p>This method can be thought of as an equivalent to the <a href="https://docs.rs/futures"><code>futures</code>
+crate</a>’s <a href="https://docs.rs/futures/latest/futures/future/trait.FutureExt.html#method.then"><code>FutureExt::then</code></a> combinator, but acting on <code>Service</code>s that
+<em>return</em> futures, rather than on an individual future. Similarly to that
+combinator, <a href="../trait.ServiceExt.html#method.then" title="method tower::ServiceExt::then"><code>ServiceExt::then</code></a> can be used to implement asynchronous
+error recovery, by calling some asynchronous function with errors
+returned by this service. Alternatively, it may also be used to call a
+fallible async function with the successful response of this service.</p>
+<p>This method can be used to change the <a href="../trait.Service.html#associatedtype.Response" title="associated type tower::Service::Response"><code>Response</code></a> type of the service
+into a different type. It can also be used to change the <a href="../trait.Service.html#associatedtype.Error" title="associated type tower::Service::Error"><code>Error</code></a> type
+of the service. However, because the <code>then</code> function is not applied
+to the errors returned by the service’s <a href="../trait.Service.html#tymethod.poll_ready" title="method tower::Service::poll_ready"><code>poll_ready</code></a> method, it must
+be possible to convert the service’s <a href="../trait.Service.html#associatedtype.Error" title="associated type tower::Service::Error"><code>Error</code></a> type into the error type
+returned by the <code>then</code> future. This is trivial when the function
+returns the same error type as the service, but in other cases, it can
+be useful to use <a href="../type.BoxError.html" title="type tower::BoxError"><code>BoxError</code></a> to erase differing error types.</p>
+<h5 id="examples-1"><a class="doc-anchor" href="#examples-1">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// A service returning Result&lt;Record, DbError&gt;
+</span><span class="kw">let </span>service = DatabaseService::new(<span class="string">"127.0.0.1:8080"</span>);
+
+<span class="comment">// An async function that attempts to recover from errors returned by the
+// database.
+</span><span class="kw">async fn </span>recover_from_error(error: DbError) -&gt; <span class="prelude-ty">Result</span>&lt;Record, DbError&gt; {
+    <span class="comment">// ...
+</span>}
+
+<span class="comment">// If the database service returns an error, attempt to recover by
+// calling `recover_from_error`. Otherwise, return the successful response.
+</span><span class="kw">let </span><span class="kw-2">mut </span>new_service = service.then(|result| <span class="kw">async move </span>{
+    <span class="kw">match </span>result {
+        <span class="prelude-val">Ok</span>(record) =&gt; <span class="prelude-val">Ok</span>(record),
+        <span class="prelude-val">Err</span>(e) =&gt; recover_from_error(e).<span class="kw">await</span>,
+    }
+});
+
+<span class="comment">// Call the new service
+</span><span class="kw">let </span>id = <span class="number">13</span>;
+<span class="kw">let </span>record = new_service
+    .ready()
+    .<span class="kw">await</span><span class="question-mark">?
+    </span>.call(id)
+    .<span class="kw">await</span><span class="question-mark">?</span>;</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.map_future" class="method"><a class="src rightside" href="../../src/tower/util/mod.rs.html#933-941">source</a><h4 class="code-header">fn <a href="#method.map_future" class="fn">map_future</a>&lt;F, Fut, Response, Error&gt;(self, f: F) -&gt; <a class="struct" href="struct.MapFuture.html" title="struct tower::util::MapFuture">MapFuture</a>&lt;Self, F&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(Self::<a class="associatedtype" href="../trait.Service.html#associatedtype.Future" title="type tower::Service::Future">Future</a>) -&gt; Fut,
+    Error: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;Self::<a class="associatedtype" href="../trait.Service.html#associatedtype.Error" title="type tower::Service::Error">Error</a>&gt;,
+    Fut: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Response, Error&gt;&gt;,</div></h4></section></summary><div class="docblock"><p>Composes a function that transforms futures produced by the service.</p>
+<p>This takes a function or closure returning a future computed from the future returned by
+the service’s <a href="../trait.Service.html#tymethod.call" title="method tower::Service::call"><code>call</code></a> method, as opposed to the responses produced by the future.</p>
+<h5 id="examples-2"><a class="doc-anchor" href="#examples-2">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::time::Duration;
+<span class="kw">use </span>tokio::time::timeout;
+
+<span class="comment">// A service returning Result&lt;Record, DbError&gt;
+</span><span class="kw">let </span>service = DatabaseService::new(<span class="string">"127.0.0.1:8080"</span>);
+
+<span class="kw">let </span><span class="kw-2">mut </span>new_service = service.map_future(|future| <span class="kw">async move </span>{
+    <span class="kw">let </span>res = timeout(Duration::from_secs(<span class="number">1</span>), future).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>::&lt;<span class="kw">_</span>, BoxError&gt;(res)
+});
+
+<span class="comment">// Call the new service
+</span><span class="kw">let </span>id = <span class="number">13</span>;
+<span class="kw">let </span>record = new_service
+    .ready()
+    .<span class="kw">await</span><span class="question-mark">?
+    </span>.call(id)
+    .<span class="kw">await</span><span class="question-mark">?</span>;</code></pre></div>
+<p>Note that normally you wouldn’t implement timeouts like this and instead use <a href="../timeout/struct.Timeout.html" title="struct tower::timeout::Timeout"><code>Timeout</code></a>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.boxed" class="method"><a class="src rightside" href="../../src/tower/util/mod.rs.html#983-989">source</a><h4 class="code-header">fn <a href="#method.boxed" class="fn">boxed</a>(self) -&gt; <a class="struct" href="struct.BoxService.html" title="struct tower::util::BoxService">BoxService</a>&lt;Request, Self::<a class="associatedtype" href="../trait.Service.html#associatedtype.Response" title="type tower::Service::Response">Response</a>, Self::<a class="associatedtype" href="../trait.Service.html#associatedtype.Error" title="type tower::Service::Error">Error</a>&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'static,
+    Self::<a class="associatedtype" href="../trait.Service.html#associatedtype.Future" title="type tower::Service::Future">Future</a>: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'static,</div></h4></section></summary><div class="docblock"><p>Convert the service into a <a href="../trait.Service.html" title="trait tower::Service"><code>Service</code></a> + <a href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send"><code>Send</code></a> trait object.</p>
+<p>See <a href="struct.BoxService.html" title="struct tower::util::BoxService"><code>BoxService</code></a> for more details.</p>
+<p>If <code>Self</code> implements the <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone"><code>Clone</code></a> trait, the <a href="../trait.ServiceExt.html#method.boxed_clone"><code>boxed_clone</code></a> method
+can be used instead, to produce a boxed service which will also
+implement <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone"><code>Clone</code></a>.</p>
+<h5 id="example-4"><a class="doc-anchor" href="#example-4">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tower::{Service, ServiceExt, BoxError, service_fn, util::BoxService};
+
+<span class="kw">let </span>service = service_fn(|req: Request| <span class="kw">async </span>{
+    <span class="prelude-val">Ok</span>::&lt;<span class="kw">_</span>, BoxError&gt;(Response::new())
+});
+
+<span class="kw">let </span>service: BoxService&lt;Request, Response, BoxError&gt; = service
+    .map_request(|req| {
+        <span class="macro">println!</span>(<span class="string">"received request"</span>);
+        req
+    })
+    .map_response(|res| {
+        <span class="macro">println!</span>(<span class="string">"response produced"</span>);
+        res
+    })
+    .boxed();</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.boxed_clone" class="method"><a class="src rightside" href="../../src/tower/util/mod.rs.html#1032-1038">source</a><h4 class="code-header">fn <a href="#method.boxed_clone" class="fn">boxed_clone</a>(self) -&gt; <a class="struct" href="struct.BoxCloneService.html" title="struct tower::util::BoxCloneService">BoxCloneService</a>&lt;Request, Self::<a class="associatedtype" href="../trait.Service.html#associatedtype.Response" title="type tower::Service::Response">Response</a>, Self::<a class="associatedtype" href="../trait.Service.html#associatedtype.Error" title="type tower::Service::Error">Error</a>&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'static,
+    Self::<a class="associatedtype" href="../trait.Service.html#associatedtype.Future" title="type tower::Service::Future">Future</a>: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'static,</div></h4></section></summary><div class="docblock"><p>Convert the service into a <a href="../trait.Service.html" title="trait tower::Service"><code>Service</code></a> + <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone"><code>Clone</code></a> + <a href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send"><code>Send</code></a> trait object.</p>
+<p>This is similar to the <a href="../trait.ServiceExt.html#method.boxed"><code>boxed</code></a> method, but it requires that <code>Self</code> implement
+<a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone"><code>Clone</code></a>, and the returned boxed service implements <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone"><code>Clone</code></a>.
+See <a href="struct.BoxCloneService.html" title="struct tower::util::BoxCloneService"><code>BoxCloneService</code></a> for more details.</p>
+<h5 id="example-5"><a class="doc-anchor" href="#example-5">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tower::{Service, ServiceExt, BoxError, service_fn, util::BoxCloneService};
+
+<span class="kw">let </span>service = service_fn(|req: Request| <span class="kw">async </span>{
+    <span class="prelude-val">Ok</span>::&lt;<span class="kw">_</span>, BoxError&gt;(Response::new())
+});
+
+<span class="kw">let </span>service: BoxCloneService&lt;Request, Response, BoxError&gt; = service
+    .map_request(|req| {
+        <span class="macro">println!</span>(<span class="string">"received request"</span>);
+        req
+    })
+    .map_response(|res| {
+        <span class="macro">println!</span>(<span class="string">"response produced"</span>);
+        res
+    })
+    .boxed_clone();
+
+<span class="comment">// The boxed service can still be cloned.
+</span>service.clone();</code></pre></div>
+</div></details></div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><section id="impl-ServiceExt%3CRequest%3E-for-T" class="impl"><a class="src rightside" href="../../src/tower/util/mod.rs.html#1041">source</a><a href="#impl-ServiceExt%3CRequest%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, Request&gt; <a class="trait" href="../trait.ServiceExt.html" title="trait tower::ServiceExt">ServiceExt</a>&lt;Request&gt; for T<div class="where">where
+    T: <a class="trait" href="../trait.Service.html" title="trait tower::Service">Service</a>&lt;Request&gt; + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></div><script src="../../trait.impl/tower/util/trait.ServiceExt.js" async></script><script type="text/json" id="notable-traits-data">{"Oneshot<Self, Request>":"<h3>Notable traits for <code><a class=\"struct\" href=\"struct.Oneshot.html\" title=\"struct tower::util::Oneshot\">Oneshot</a>&lt;S, Req&gt;</code></h3><pre><code><div class=\"where\">impl&lt;S, Req&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html\" title=\"trait core::future::future::Future\">Future</a> for <a class=\"struct\" href=\"struct.Oneshot.html\" title=\"struct tower::util::Oneshot\">Oneshot</a>&lt;S, Req&gt;<div class=\"where\">where\n    S: <a class=\"trait\" href=\"../trait.Service.html\" title=\"trait tower::Service\">Service</a>&lt;Req&gt;,</div></div><div class=\"where\">    type <a href=\"https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html#associatedtype.Output\" class=\"associatedtype\">Output</a> = <a class=\"enum\" href=\"https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html\" title=\"enum core::result::Result\">Result</a>&lt;S::<a class=\"associatedtype\" href=\"../trait.Service.html#associatedtype.Response\" title=\"type tower::Service::Response\">Response</a>, S::<a class=\"associatedtype\" href=\"../trait.Service.html#associatedtype.Error\" title=\"type tower::Service::Error\">Error</a>&gt;;</div>","Ready<'_, Self, Request>":"<h3>Notable traits for <code><a class=\"struct\" href=\"struct.Ready.html\" title=\"struct tower::util::Ready\">Ready</a>&lt;'a, T, Request&gt;</code></h3><pre><code><div class=\"where\">impl&lt;'a, T, Request&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html\" title=\"trait core::future::future::Future\">Future</a> for <a class=\"struct\" href=\"struct.Ready.html\" title=\"struct tower::util::Ready\">Ready</a>&lt;'a, T, Request&gt;<div class=\"where\">where\n    T: <a class=\"trait\" href=\"../trait.Service.html\" title=\"trait tower::Service\">Service</a>&lt;Request&gt;,</div></div><div class=\"where\">    type <a href=\"https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html#associatedtype.Output\" class=\"associatedtype\">Output</a> = <a class=\"enum\" href=\"https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html\" title=\"enum core::result::Result\">Result</a>&lt;<a class=\"primitive\" href=\"https://doc.rust-lang.org/1.81.0/std/primitive.reference.html\">&amp;'a mut T</a>, T::<a class=\"associatedtype\" href=\"../trait.Service.html#associatedtype.Error\" title=\"type tower::Service::Error\">Error</a>&gt;;</div>","ReadyOneshot<Self, Request>":"<h3>Notable traits for <code><a class=\"struct\" href=\"struct.ReadyOneshot.html\" title=\"struct tower::util::ReadyOneshot\">ReadyOneshot</a>&lt;T, Request&gt;</code></h3><pre><code><div class=\"where\">impl&lt;T, Request&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html\" title=\"trait core::future::future::Future\">Future</a> for <a class=\"struct\" href=\"struct.ReadyOneshot.html\" title=\"struct tower::util::ReadyOneshot\">ReadyOneshot</a>&lt;T, Request&gt;<div class=\"where\">where\n    T: <a class=\"trait\" href=\"../trait.Service.html\" title=\"trait tower::Service\">Service</a>&lt;Request&gt;,</div></div><div class=\"where\">    type <a href=\"https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html#associatedtype.Output\" class=\"associatedtype\">Output</a> = <a class=\"enum\" href=\"https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html\" title=\"enum core::result::Result\">Result</a>&lt;T, T::<a class=\"associatedtype\" href=\"../trait.Service.html#associatedtype.Error\" title=\"type tower::Service::Error\">Error</a>&gt;;</div>"}</script></section></div></main></body></html>

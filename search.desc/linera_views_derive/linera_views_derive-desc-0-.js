@@ -1,0 +1,1 @@
+searchState.loadedDescShard("linera_views_derive", 0, "The procedural macros for the crate <code>linera-views</code>.")

@@ -1,0 +1,158 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="reqwest"><title>reqwest - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="reqwest" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../reqwest/index.html">reqwest</a><span class="version">0.12.7</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#traits">Traits</a></li><li><a href="#functions">Functions</a></li><li><a href="#types">Type Aliases</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">reqwest</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/reqwest/lib.rs.html#1-377">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="reqwest"><a class="doc-anchor" href="#reqwest">§</a>reqwest</h2>
+<p>The <code>reqwest</code> crate provides a convenient, higher-level HTTP
+<a href="./struct.Client.html"><code>Client</code></a>.</p>
+<p>It handles many of the things that most people just expect an HTTP client
+to do for them.</p>
+<ul>
+<li>Async and <a href="./blocking/index.html">blocking</a> Clients</li>
+<li>Plain bodies, <a href="#json">JSON</a>, <a href="#forms">urlencoded</a>, [multipart]</li>
+<li>Customizable <a href="#redirect-policies">redirect policy</a></li>
+<li>HTTP <a href="#proxies">Proxies</a></li>
+<li>Uses <a href="#tls">TLS</a> by default</li>
+<li>Cookies</li>
+</ul>
+<p>The <a href="./struct.Client.html"><code>reqwest::Client</code></a> is asynchronous. For applications wishing
+to only make a few HTTP requests, the <a href="blocking"><code>reqwest::blocking</code></a> API
+may be more convenient.</p>
+<p>Additional learning resources include:</p>
+<ul>
+<li><a href="https://rust-lang-nursery.github.io/rust-cookbook/web/clients.html">The Rust Cookbook</a></li>
+<li><a href="https://github.com/seanmonstar/reqwest/tree/master/examples">Reqwest Repository Examples</a></li>
+</ul>
+<h3 id="commercial-support"><a class="doc-anchor" href="#commercial-support">§</a>Commercial Support</h3>
+<p>For private advice, support, reviews, access to the maintainer, and the
+like, reach out for <a href="https://seanmonstar.com/sponsor">commercial support</a>.</p>
+<h3 id="making-a-get-request"><a class="doc-anchor" href="#making-a-get-request">§</a>Making a GET request</h3>
+<p>For a single request, you can use the <a href="./fn.get.html"><code>get</code></a> shortcut method.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>body = reqwest::get(<span class="string">"https://www.rust-lang.org"</span>)
+    .<span class="kw">await</span><span class="question-mark">?
+    </span>.text()
+    .<span class="kw">await</span><span class="question-mark">?</span>;
+
+<span class="macro">println!</span>(<span class="string">"body = {body:?}"</span>);</code></pre></div>
+<p><strong>NOTE</strong>: If you plan to perform multiple requests, it is best to create a
+<a href="./struct.Client.html"><code>Client</code></a> and reuse it, taking advantage of keep-alive connection
+pooling.</p>
+<h3 id="making-post-requests-or-setting-request-bodies"><a class="doc-anchor" href="#making-post-requests-or-setting-request-bodies">§</a>Making POST requests (or setting request bodies)</h3>
+<p>There are several ways you can set the body of a request. The basic one is
+by using the <code>body()</code> method of a <a href="./struct.RequestBuilder.html"><code>RequestBuilder</code></a>. This lets you set the
+exact raw bytes of what the body should be. It accepts various types,
+including <code>String</code> and <code>Vec&lt;u8&gt;</code>. If you wish to pass a custom
+type, you can use the <code>reqwest::Body</code> constructors.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>client = reqwest::Client::new();
+<span class="kw">let </span>res = client.post(<span class="string">"http://httpbin.org/post"</span>)
+    .body(<span class="string">"the exact body that is sent"</span>)
+    .send()
+    .<span class="kw">await</span><span class="question-mark">?</span>;</code></pre></div>
+<h4 id="forms"><a class="doc-anchor" href="#forms">§</a>Forms</h4>
+<p>It’s very common to want to send form data in a request body. This can be
+done with any type that can be serialized into form data.</p>
+<p>This can be an array of tuples, or a <code>HashMap</code>, or a custom type that
+implements <a href="http://serde.rs"><code>Serialize</code></a>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// This will POST a body of `foo=bar&amp;baz=quux`
+</span><span class="kw">let </span>params = [(<span class="string">"foo"</span>, <span class="string">"bar"</span>), (<span class="string">"baz"</span>, <span class="string">"quux"</span>)];
+<span class="kw">let </span>client = reqwest::Client::new();
+<span class="kw">let </span>res = client.post(<span class="string">"http://httpbin.org/post"</span>)
+    .form(<span class="kw-2">&amp;</span>params)
+    .send()
+    .<span class="kw">await</span><span class="question-mark">?</span>;</code></pre></div>
+<h4 id="json"><a class="doc-anchor" href="#json">§</a>JSON</h4>
+<p>There is also a <code>json</code> method helper on the <a href="./struct.RequestBuilder.html"><code>RequestBuilder</code></a> that works in
+a similar fashion the <code>form</code> method. It can take any value that can be
+serialized into JSON. The feature <code>json</code> is required.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// This will POST a body of `{"lang":"rust","body":"json"}`
+</span><span class="kw">let </span><span class="kw-2">mut </span>map = HashMap::new();
+map.insert(<span class="string">"lang"</span>, <span class="string">"rust"</span>);
+map.insert(<span class="string">"body"</span>, <span class="string">"json"</span>);
+
+<span class="kw">let </span>client = reqwest::Client::new();
+<span class="kw">let </span>res = client.post(<span class="string">"http://httpbin.org/post"</span>)
+    .json(<span class="kw-2">&amp;</span>map)
+    .send()
+    .<span class="kw">await</span><span class="question-mark">?</span>;</code></pre></div>
+<h3 id="redirect-policies"><a class="doc-anchor" href="#redirect-policies">§</a>Redirect Policies</h3>
+<p>By default, a <code>Client</code> will automatically handle HTTP redirects, having a
+maximum redirect chain of 10 hops. To customize this behavior, a
+<a href="redirect/index.html" title="mod reqwest::redirect"><code>redirect::Policy</code></a> can be used with a <code>ClientBuilder</code>.</p>
+<h3 id="cookies"><a class="doc-anchor" href="#cookies">§</a>Cookies</h3>
+<p>The automatic storing and sending of session cookies can be enabled with
+the [<code>cookie_store</code>][ClientBuilder::cookie_store] method on <code>ClientBuilder</code>.</p>
+<h3 id="proxies"><a class="doc-anchor" href="#proxies">§</a>Proxies</h3>
+<p><strong>NOTE</strong>: System proxies are enabled by default.</p>
+<p>System proxies look in environment variables to set HTTP or HTTPS proxies.</p>
+<p><code>HTTP_PROXY</code> or <code>http_proxy</code> provide HTTP proxies for HTTP connections while
+<code>HTTPS_PROXY</code> or <code>https_proxy</code> provide HTTPS proxies for HTTPS connections.
+<code>ALL_PROXY</code> or <code>all_proxy</code> provide proxies for both HTTP and HTTPS connections.
+If both the all proxy and HTTP or HTTPS proxy variables are set the more specific
+HTTP or HTTPS proxies take precedence.</p>
+<p>These can be overwritten by adding a <a href="struct.Proxy.html" title="struct reqwest::Proxy"><code>Proxy</code></a> to <code>ClientBuilder</code>
+i.e. <code>let proxy = reqwest::Proxy::http("https://secure.example")?;</code>
+or disabled by calling <code>ClientBuilder::no_proxy()</code>.</p>
+<p><code>socks</code> feature is required if you have configured socks proxy like this:</p>
+<div class="example-wrap"><pre class="language-bash"><code>export https_proxy=socks5://127.0.0.1:1086
+</code></pre></div><h3 id="tls"><a class="doc-anchor" href="#tls">§</a>TLS</h3>
+<p>A <code>Client</code> will use transport layer security (TLS) by default to connect to
+HTTPS destinations.</p>
+<ul>
+<li>Additional server certificates can be configured on a <code>ClientBuilder</code>
+with the [<code>Certificate</code>] type.</li>
+<li>Client certificates can be added to a <code>ClientBuilder</code> with the
+[<code>Identity</code>] type.</li>
+<li>Various parts of TLS can also be configured or even disabled on the
+<code>ClientBuilder</code>.</li>
+</ul>
+<p>See more details in the [<code>tls</code>] module.</p>
+<h3 id="wasm"><a class="doc-anchor" href="#wasm">§</a>WASM</h3>
+<p>The Client implementation automatically switches to the WASM one when the target_arch is wasm32,
+the usage is basically the same as the async api. Some of the features are disabled in wasm
+: [<code>tls</code>], [<code>cookie</code>], [<code>blocking</code>].</p>
+<h3 id="optional-features"><a class="doc-anchor" href="#optional-features">§</a>Optional Features</h3>
+<p>The following are a list of <a href="https://doc.rust-lang.org/stable/cargo/reference/manifest.html#the-features-section">Cargo features</a> that can be
+enabled or disabled:</p>
+<ul>
+<li><strong>http2</strong> <em>(enabled by default)</em>: Enables HTTP/2 support.</li>
+<li><strong>default-tls</strong> <em>(enabled by default)</em>: Provides TLS support to connect
+over HTTPS.</li>
+<li><strong>native-tls</strong>: Enables TLS functionality provided by <code>native-tls</code>.</li>
+<li><strong>native-tls-vendored</strong>: Enables the <code>vendored</code> feature of <code>native-tls</code>.</li>
+<li><strong>native-tls-alpn</strong>: Enables the <code>alpn</code> feature of <code>native-tls</code>.</li>
+<li><strong>rustls-tls</strong>: Enables TLS functionality provided by <code>rustls</code>.
+Equivalent to <code>rustls-tls-webpki-roots</code>.</li>
+<li><strong>rustls-tls-manual-roots</strong>: Enables TLS functionality provided by <code>rustls</code>,
+without setting any root certificates. Roots have to be specified manually.</li>
+<li><strong>rustls-tls-webpki-roots</strong>: Enables TLS functionality provided by <code>rustls</code>,
+while using root certificates from the <code>webpki-roots</code> crate.</li>
+<li><strong>rustls-tls-native-roots</strong>: Enables TLS functionality provided by <code>rustls</code>,
+while using root certificates from the <code>rustls-native-certs</code> crate.</li>
+<li><strong>blocking</strong>: Provides the <a href="./blocking/index.html">blocking</a> client API.</li>
+<li><strong>charset</strong> <em>(enabled by default)</em>: Improved support for decoding text.</li>
+<li><strong>cookies</strong>: Provides cookie session support.</li>
+<li><strong>gzip</strong>: Provides response body gzip decompression.</li>
+<li><strong>brotli</strong>: Provides response body brotli decompression.</li>
+<li><strong>zstd</strong>: Provides response body zstd decompression.</li>
+<li><strong>deflate</strong>: Provides response body deflate decompression.</li>
+<li><strong>json</strong>: Provides serialization and deserialization for JSON bodies.</li>
+<li><strong>multipart</strong>: Provides functionality for multipart forms.</li>
+<li><strong>stream</strong>: Adds support for <code>futures::Stream</code>.</li>
+<li><strong>socks</strong>: Provides SOCKS5 proxy support.</li>
+<li><strong>hickory-dns</strong>: Enables a hickory-dns async resolver instead of default
+threadpool using <code>getaddrinfo</code>.</li>
+</ul>
+<h3 id="unstable-features"><a class="doc-anchor" href="#unstable-features">§</a>Unstable Features</h3>
+<p>Some feature flags require additional opt-in by the application, by setting
+a <code>reqwest_unstable</code> flag.</p>
+<ul>
+<li><strong>http3</strong> <em>(unstable)</em>: Enables support for sending HTTP/3 requests.</li>
+</ul>
+<p>These features are unstable, and experimental. Details about them may be
+changed in patch releases.</p>
+<p>You can pass such a flag to the compiler via <code>.cargo/config</code>, or
+environment variables, such as:</p>
+<div class="example-wrap"><pre class="language-notrust"><code>RUSTFLAGS=&quot;--cfg reqwest_unstable&quot; cargo build
+</code></pre></div><h3 id="sponsors"><a class="doc-anchor" href="#sponsors">§</a>Sponsors</h3>
+<p>Support this project by becoming a <a href="https://seanmonstar.com/sponsor">sponsor</a>.</p>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="dns/index.html" title="mod reqwest::dns">dns</a></div><div class="desc docblock-short">DNS resolution</div></li><li><div class="item-name"><a class="mod" href="header/index.html" title="mod reqwest::header">header</a></div><div class="desc docblock-short">HTTP header types</div></li><li><div class="item-name"><a class="mod" href="redirect/index.html" title="mod reqwest::redirect">redirect</a></div><div class="desc docblock-short">Redirect Handling</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Body.html" title="struct reqwest::Body">Body</a></div><div class="desc docblock-short">An asynchronous request body.</div></li><li><div class="item-name"><a class="struct" href="struct.Client.html" title="struct reqwest::Client">Client</a></div><div class="desc docblock-short">An asynchronous <code>Client</code> to make Requests with.</div></li><li><div class="item-name"><a class="struct" href="struct.ClientBuilder.html" title="struct reqwest::ClientBuilder">ClientBuilder</a></div><div class="desc docblock-short">A <code>ClientBuilder</code> can be used to create a <code>Client</code> with custom configuration.</div></li><li><div class="item-name"><a class="struct" href="struct.Error.html" title="struct reqwest::Error">Error</a></div><div class="desc docblock-short">The Errors that may occur when processing a <code>Request</code>.</div></li><li><div class="item-name"><a class="struct" href="struct.Method.html" title="struct reqwest::Method">Method</a></div><div class="desc docblock-short">The Request Method (VERB)</div></li><li><div class="item-name"><a class="struct" href="struct.NoProxy.html" title="struct reqwest::NoProxy">NoProxy</a></div><div class="desc docblock-short">A configuration for filtering out requests that shouldn’t be proxied</div></li><li><div class="item-name"><a class="struct" href="struct.Proxy.html" title="struct reqwest::Proxy">Proxy</a></div><div class="desc docblock-short">Configuration of a proxy that a <code>Client</code> should pass requests to.</div></li><li><div class="item-name"><a class="struct" href="struct.Request.html" title="struct reqwest::Request">Request</a></div><div class="desc docblock-short">A request which can be executed with <code>Client::execute()</code>.</div></li><li><div class="item-name"><a class="struct" href="struct.RequestBuilder.html" title="struct reqwest::RequestBuilder">RequestBuilder</a></div><div class="desc docblock-short">A builder to construct the properties of a <code>Request</code>.</div></li><li><div class="item-name"><a class="struct" href="struct.Response.html" title="struct reqwest::Response">Response</a></div><div class="desc docblock-short">A Response to a submitted <code>Request</code>.</div></li><li><div class="item-name"><a class="struct" href="struct.StatusCode.html" title="struct reqwest::StatusCode">StatusCode</a></div><div class="desc docblock-short">An HTTP status code (<code>status-code</code> in RFC 7230 et al.).</div></li><li><div class="item-name"><a class="struct" href="struct.Upgraded.html" title="struct reqwest::Upgraded">Upgraded</a></div><div class="desc docblock-short">An upgraded HTTP connection.</div></li><li><div class="item-name"><a class="struct" href="struct.Url.html" title="struct reqwest::Url">Url</a></div><div class="desc docblock-short">A parsed URL record.</div></li><li><div class="item-name"><a class="struct" href="struct.Version.html" title="struct reqwest::Version">Version</a></div><div class="desc docblock-short">Represents a version of the HTTP spec.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.IntoUrl.html" title="trait reqwest::IntoUrl">IntoUrl</a></div><div class="desc docblock-short">A trait to try to convert some type into a <code>Url</code>.</div></li><li><div class="item-name"><a class="trait" href="trait.ResponseBuilderExt.html" title="trait reqwest::ResponseBuilderExt">ResponseBuilderExt</a></div><div class="desc docblock-short">Extension trait for http::response::Builder objects</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.get.html" title="fn reqwest::get">get</a></div><div class="desc docblock-short">Shortcut method to quickly make a <code>GET</code> request.</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.Result.html" title="type reqwest::Result">Result</a></div><div class="desc docblock-short">A <code>Result</code> alias where the <code>Err</code> case is <code>reqwest::Error</code>.</div></li></ul></section></div></main></body></html>

@@ -1,0 +1,50 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Create a scope for spawning scoped threads."><title>scope in wasm_thread - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="wasm_thread" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../wasm_thread/index.html">wasm_thread</a><span class="version">0.3.0</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="index.html">wasm_thread</a>::<wbr><a class="fn" href="#">scope</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><span class="since" title="Stable since Rust version 1.63.0">1.63.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/std/thread/scoped.rs.html#135-137">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn scope&lt;'env, F, T&gt;(f: F) -&gt; T<div class="where">where
+    F: for&lt;'scope&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnOnce.html" title="trait core::ops::function::FnOnce">FnOnce</a>(&amp;'scope <a class="struct" href="struct.Scope.html" title="struct wasm_thread::Scope">Scope</a>&lt;'scope, 'env&gt;) -&gt; T,</div></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Create a scope for spawning scoped threads.</p>
+<p>The function passed to <code>scope</code> will be provided a <a href="struct.Scope.html" title="struct wasm_thread::Scope"><code>Scope</code></a> object,
+through which scoped threads can be <a href="struct.Scope.html#method.spawn" title="method wasm_thread::Scope::spawn">spawned</a>.</p>
+<p>Unlike non-scoped threads, scoped threads can borrow non-<code>'static</code> data,
+as the scope guarantees all threads will be joined at the end of the scope.</p>
+<p>All threads spawned within the scope that haven’t been manually joined
+will be automatically joined before this function returns.</p>
+<h2 id="panics"><a class="doc-anchor" href="#panics">§</a>Panics</h2>
+<p>If any of the automatically joined threads panicked, this function will panic.</p>
+<p>If you want to handle panics from spawned threads,
+<a href="struct.ScopedJoinHandle.html#method.join" title="method wasm_thread::ScopedJoinHandle::join"><code>join</code></a> them before the end of the scope.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::thread;
+
+<span class="kw">let </span><span class="kw-2">mut </span>a = <span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>];
+<span class="kw">let </span><span class="kw-2">mut </span>x = <span class="number">0</span>;
+
+thread::scope(|s| {
+    s.spawn(|| {
+        <span class="macro">println!</span>(<span class="string">"hello from the first scoped thread"</span>);
+        <span class="comment">// We can borrow `a` here.
+        </span><span class="macro">dbg!</span>(<span class="kw-2">&amp;</span>a);
+    });
+    s.spawn(|| {
+        <span class="macro">println!</span>(<span class="string">"hello from the second scoped thread"</span>);
+        <span class="comment">// We can even mutably borrow `x` here,
+        // because no other threads are using it.
+        </span>x += a[<span class="number">0</span>] + a[<span class="number">2</span>];
+    });
+    <span class="macro">println!</span>(<span class="string">"hello from the main thread"</span>);
+});
+
+<span class="comment">// After the scope, we can modify and access our variables again:
+</span>a.push(<span class="number">4</span>);
+<span class="macro">assert_eq!</span>(x, a.len());</code></pre></div>
+<h2 id="lifetimes"><a class="doc-anchor" href="#lifetimes">§</a>Lifetimes</h2>
+<p>Scoped threads involve two lifetimes: <code>'scope</code> and <code>'env</code>.</p>
+<p>The <code>'scope</code> lifetime represents the lifetime of the scope itself.
+That is: the time during which new scoped threads may be spawned,
+and also the time during which they might still be running.
+Once this lifetime ends, all scoped threads are joined.
+This lifetime starts within the <code>scope</code> function, before <code>f</code> (the argument to <code>scope</code>) starts.
+It ends after <code>f</code> returns and all scoped threads have been joined, but before <code>scope</code> returns.</p>
+<p>The <code>'env</code> lifetime represents the lifetime of whatever is borrowed by the scoped threads.
+This lifetime must outlast the call to <code>scope</code>, and thus cannot be smaller than <code>'scope</code>.
+It can be as small as the call to <code>scope</code>, meaning that anything that outlives this call,
+such as local variables defined right before the scope, can be borrowed by the scoped threads.</p>
+<p>The <code>'env: 'scope</code> bound is part of the definition of the <code>Scope</code> type.</p>
+</div></details></section></div></main></body></html>

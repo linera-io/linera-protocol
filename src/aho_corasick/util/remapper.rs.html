@@ -1,0 +1,429 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/aho-corasick-1.1.3/src/util/remapper.rs`."><title>remapper.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="aho_corasick" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<a href="#2" id="2">2</a>
+<a href="#3" id="3">3</a>
+<a href="#4" id="4">4</a>
+<a href="#5" id="5">5</a>
+<a href="#6" id="6">6</a>
+<a href="#7" id="7">7</a>
+<a href="#8" id="8">8</a>
+<a href="#9" id="9">9</a>
+<a href="#10" id="10">10</a>
+<a href="#11" id="11">11</a>
+<a href="#12" id="12">12</a>
+<a href="#13" id="13">13</a>
+<a href="#14" id="14">14</a>
+<a href="#15" id="15">15</a>
+<a href="#16" id="16">16</a>
+<a href="#17" id="17">17</a>
+<a href="#18" id="18">18</a>
+<a href="#19" id="19">19</a>
+<a href="#20" id="20">20</a>
+<a href="#21" id="21">21</a>
+<a href="#22" id="22">22</a>
+<a href="#23" id="23">23</a>
+<a href="#24" id="24">24</a>
+<a href="#25" id="25">25</a>
+<a href="#26" id="26">26</a>
+<a href="#27" id="27">27</a>
+<a href="#28" id="28">28</a>
+<a href="#29" id="29">29</a>
+<a href="#30" id="30">30</a>
+<a href="#31" id="31">31</a>
+<a href="#32" id="32">32</a>
+<a href="#33" id="33">33</a>
+<a href="#34" id="34">34</a>
+<a href="#35" id="35">35</a>
+<a href="#36" id="36">36</a>
+<a href="#37" id="37">37</a>
+<a href="#38" id="38">38</a>
+<a href="#39" id="39">39</a>
+<a href="#40" id="40">40</a>
+<a href="#41" id="41">41</a>
+<a href="#42" id="42">42</a>
+<a href="#43" id="43">43</a>
+<a href="#44" id="44">44</a>
+<a href="#45" id="45">45</a>
+<a href="#46" id="46">46</a>
+<a href="#47" id="47">47</a>
+<a href="#48" id="48">48</a>
+<a href="#49" id="49">49</a>
+<a href="#50" id="50">50</a>
+<a href="#51" id="51">51</a>
+<a href="#52" id="52">52</a>
+<a href="#53" id="53">53</a>
+<a href="#54" id="54">54</a>
+<a href="#55" id="55">55</a>
+<a href="#56" id="56">56</a>
+<a href="#57" id="57">57</a>
+<a href="#58" id="58">58</a>
+<a href="#59" id="59">59</a>
+<a href="#60" id="60">60</a>
+<a href="#61" id="61">61</a>
+<a href="#62" id="62">62</a>
+<a href="#63" id="63">63</a>
+<a href="#64" id="64">64</a>
+<a href="#65" id="65">65</a>
+<a href="#66" id="66">66</a>
+<a href="#67" id="67">67</a>
+<a href="#68" id="68">68</a>
+<a href="#69" id="69">69</a>
+<a href="#70" id="70">70</a>
+<a href="#71" id="71">71</a>
+<a href="#72" id="72">72</a>
+<a href="#73" id="73">73</a>
+<a href="#74" id="74">74</a>
+<a href="#75" id="75">75</a>
+<a href="#76" id="76">76</a>
+<a href="#77" id="77">77</a>
+<a href="#78" id="78">78</a>
+<a href="#79" id="79">79</a>
+<a href="#80" id="80">80</a>
+<a href="#81" id="81">81</a>
+<a href="#82" id="82">82</a>
+<a href="#83" id="83">83</a>
+<a href="#84" id="84">84</a>
+<a href="#85" id="85">85</a>
+<a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
+<a href="#88" id="88">88</a>
+<a href="#89" id="89">89</a>
+<a href="#90" id="90">90</a>
+<a href="#91" id="91">91</a>
+<a href="#92" id="92">92</a>
+<a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
+<a href="#160" id="160">160</a>
+<a href="#161" id="161">161</a>
+<a href="#162" id="162">162</a>
+<a href="#163" id="163">163</a>
+<a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
+<a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
+<a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
+<a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a>
+<a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
+<a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a>
+<a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a>
+<a href="#210" id="210">210</a>
+<a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+</pre></div><pre class="rust"><code><span class="kw">use </span>alloc::vec::Vec;
+
+<span class="kw">use crate</span>::{nfa::noncontiguous, util::primitives::StateID};
+
+<span class="doccomment">/// Remappable is a tightly coupled abstraction that facilitates remapping
+/// state identifiers in DFAs.
+///
+/// The main idea behind remapping state IDs is that DFAs often need to check
+/// if a certain state is a "special" state of some kind (like a match state)
+/// during a search. Since this is extremely perf critical code, we want this
+/// check to be as fast as possible. Partitioning state IDs into, for example,
+/// into "non-match" and "match" states means one can tell if a state is a
+/// match state via a simple comparison of the state ID.
+///
+/// The issue is that during the DFA construction process, it's not
+/// particularly easy to partition the states. Instead, the simplest thing is
+/// to often just do a pass over all of the states and shuffle them into their
+/// desired partitionings. To do that, we need a mechanism for swapping states.
+/// Hence, this abstraction.
+///
+/// Normally, for such little code, I would just duplicate it. But this is a
+/// key optimization and the implementation is a bit subtle. So the abstraction
+/// is basically a ham-fisted attempt at DRY. The only place we use this is in
+/// the dense and one-pass DFAs.
+///
+/// See also src/dfa/special.rs for a more detailed explanation of how dense
+/// DFAs are partitioned.
+</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">trait </span>Remappable: core::fmt::Debug {
+    <span class="doccomment">/// Return the total number of states.
+    </span><span class="kw">fn </span>state_len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize;
+
+    <span class="doccomment">/// Swap the states pointed to by the given IDs. The underlying finite
+    /// state machine should be mutated such that all of the transitions in
+    /// `id1` are now in the memory region where the transitions for `id2`
+    /// were, and all of the transitions in `id2` are now in the memory region
+    /// where the transitions for `id1` were.
+    ///
+    /// Essentially, this "moves" `id1` to `id2` and `id2` to `id1`.
+    ///
+    /// It is expected that, after calling this, the underlying state machine
+    /// will be left in an inconsistent state, since any other transitions
+    /// pointing to, e.g., `id1` need to be updated to point to `id2`, since
+    /// that's where `id1` moved to.
+    ///
+    /// In order to "fix" the underlying inconsistent state, a `Remapper`
+    /// should be used to guarantee that `remap` is called at the appropriate
+    /// time.
+    </span><span class="kw">fn </span>swap_states(<span class="kw-2">&amp;mut </span><span class="self">self</span>, id1: StateID, id2: StateID);
+
+    <span class="doccomment">/// This must remap every single state ID in the underlying value according
+    /// to the function given. For example, in a DFA, this should remap every
+    /// transition and every starting state ID.
+    </span><span class="kw">fn </span>remap(<span class="kw-2">&amp;mut </span><span class="self">self</span>, map: <span class="kw">impl </span>Fn(StateID) -&gt; StateID);
+}
+
+<span class="doccomment">/// Remapper is an abstraction the manages the remapping of state IDs in a
+/// finite state machine. This is useful when one wants to shuffle states into
+/// different positions in the machine.
+///
+/// One of the key complexities this manages is the ability to correctly move
+/// one state multiple times.
+///
+/// Once shuffling is complete, `remap` must be called, which will rewrite
+/// all pertinent transitions to updated state IDs. Neglecting to call `remap`
+/// will almost certainly result in a corrupt machine.
+</span><span class="attr">#[derive(Debug)]
+</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>Remapper {
+    <span class="doccomment">/// A map from the index of a state to its pre-multiplied identifier.
+    ///
+    /// When a state is swapped with another, then their corresponding
+    /// locations in this map are also swapped. Thus, its new position will
+    /// still point to its old pre-multiplied StateID.
+    ///
+    /// While there is a bit more to it, this then allows us to rewrite the
+    /// state IDs in a DFA's transition table in a single pass. This is done
+    /// by iterating over every ID in this map, then iterating over each
+    /// transition for the state at that ID and re-mapping the transition from
+    /// `old_id` to `map[dfa.to_index(old_id)]`. That is, we find the position
+    /// in this map where `old_id` *started*, and set it to where it ended up
+    /// after all swaps have been completed.
+    </span>map: Vec&lt;StateID&gt;,
+    <span class="doccomment">/// A way to map indices to state IDs (and back).
+    </span>idx: IndexMapper,
+}
+
+<span class="kw">impl </span>Remapper {
+    <span class="doccomment">/// Create a new remapper from the given remappable implementation. The
+    /// remapper can then be used to swap states. The remappable value given
+    /// here must the same one given to `swap` and `remap`.
+    ///
+    /// The given stride should be the stride of the transition table expressed
+    /// as a power of 2. This stride is used to map between state IDs and state
+    /// indices. If state IDs and state indices are equivalent, then provide
+    /// a `stride2` of `0`, which acts as an identity.
+    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>new(r: <span class="kw-2">&amp;</span><span class="kw">impl </span>Remappable, stride2: usize) -&gt; Remapper {
+        <span class="kw">let </span>idx = IndexMapper { stride2 };
+        <span class="kw">let </span>map = (<span class="number">0</span>..r.state_len()).map(|i| idx.to_state_id(i)).collect();
+        Remapper { map, idx }
+    }
+
+    <span class="doccomment">/// Swap two states. Once this is called, callers must follow through to
+    /// call `remap`, or else it's possible for the underlying remappable
+    /// value to be in a corrupt state.
+    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>swap(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        r: <span class="kw-2">&amp;mut </span><span class="kw">impl </span>Remappable,
+        id1: StateID,
+        id2: StateID,
+    ) {
+        <span class="kw">if </span>id1 == id2 {
+            <span class="kw">return</span>;
+        }
+        r.swap_states(id1, id2);
+        <span class="self">self</span>.map.swap(<span class="self">self</span>.idx.to_index(id1), <span class="self">self</span>.idx.to_index(id2));
+    }
+
+    <span class="doccomment">/// Complete the remapping process by rewriting all state IDs in the
+    /// remappable value according to the swaps performed.
+    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>remap(<span class="kw-2">mut </span><span class="self">self</span>, r: <span class="kw-2">&amp;mut </span><span class="kw">impl </span>Remappable) {
+        <span class="comment">// Update the map to account for states that have been swapped
+        // multiple times. For example, if (A, C) and (C, G) are swapped, then
+        // transitions previously pointing to A should now point to G. But if
+        // we don't update our map, they will erroneously be set to C. All we
+        // do is follow the swaps in our map until we see our original state
+        // ID.
+        //
+        // The intuition here is to think about how changes are made to the
+        // map: only through pairwise swaps. That means that starting at any
+        // given state, it is always possible to find the loop back to that
+        // state by following the swaps represented in the map (which might be
+        // 0 swaps).
+        //
+        // We are also careful to clone the map before starting in order to
+        // freeze it. We use the frozen map to find our loops, since we need to
+        // update our map as well. Without freezing it, our updates could break
+        // the loops referenced above and produce incorrect results.
+        </span><span class="kw">let </span>oldmap = <span class="self">self</span>.map.clone();
+        <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..r.state_len() {
+            <span class="kw">let </span>cur_id = <span class="self">self</span>.idx.to_state_id(i);
+            <span class="kw">let </span><span class="kw-2">mut </span>new_id = oldmap[i];
+            <span class="kw">if </span>cur_id == new_id {
+                <span class="kw">continue</span>;
+            }
+            <span class="kw">loop </span>{
+                <span class="kw">let </span>id = oldmap[<span class="self">self</span>.idx.to_index(new_id)];
+                <span class="kw">if </span>cur_id == id {
+                    <span class="self">self</span>.map[i] = new_id;
+                    <span class="kw">break</span>;
+                }
+                new_id = id;
+            }
+        }
+        r.remap(|sid| <span class="self">self</span>.map[<span class="self">self</span>.idx.to_index(sid)]);
+    }
+}
+
+<span class="doccomment">/// A simple type for mapping between state indices and state IDs.
+///
+/// The reason why this exists is because state IDs are "premultiplied" in a
+/// DFA. That is, in order to get to the transitions for a particular state,
+/// one need only use the state ID as-is, instead of having to multiply it by
+/// transition table's stride.
+///
+/// The downside of this is that it's inconvenient to map between state IDs
+/// using a dense map, e.g., Vec&lt;StateID&gt;. That's because state IDs look like
+/// `0`, `stride`, `2*stride`, `3*stride`, etc., instead of `0`, `1`, `2`, `3`,
+/// etc.
+///
+/// Since our state IDs are premultiplied, we can convert back-and-forth
+/// between IDs and indices by simply unmultiplying the IDs and multiplying the
+/// indices.
+///
+/// Note that for a sparse NFA, state IDs and indices are equivalent. In this
+/// case, we set the stride of the index mapped to be `0`, which acts as an
+/// identity.
+</span><span class="attr">#[derive(Debug)]
+</span><span class="kw">struct </span>IndexMapper {
+    <span class="doccomment">/// The power of 2 corresponding to the stride of the corresponding
+    /// transition table. 'id &gt;&gt; stride2' de-multiplies an ID while 'index &lt;&lt;
+    /// stride2' pre-multiplies an index to an ID.
+    </span>stride2: usize,
+}
+
+<span class="kw">impl </span>IndexMapper {
+    <span class="doccomment">/// Convert a state ID to a state index.
+    </span><span class="kw">fn </span>to_index(<span class="kw-2">&amp;</span><span class="self">self</span>, id: StateID) -&gt; usize {
+        id.as_usize() &gt;&gt; <span class="self">self</span>.stride2
+    }
+
+    <span class="doccomment">/// Convert a state index to a state ID.
+    </span><span class="kw">fn </span>to_state_id(<span class="kw-2">&amp;</span><span class="self">self</span>, index: usize) -&gt; StateID {
+        <span class="comment">// CORRECTNESS: If the given index is not valid, then it is not
+        // required for this to panic or return a valid state ID. We'll "just"
+        // wind up with panics or silent logic errors at some other point. But
+        // this is OK because if Remappable::state_len is correct and so is
+        // 'to_index', then all inputs to 'to_state_id' should be valid indices
+        // and thus transform into valid state IDs.
+        </span>StateID::new_unchecked(index &lt;&lt; <span class="self">self</span>.stride2)
+    }
+}
+
+<span class="kw">impl </span>Remappable <span class="kw">for </span>noncontiguous::NFA {
+    <span class="kw">fn </span>state_len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+        noncontiguous::NFA::states(<span class="self">self</span>).len()
+    }
+
+    <span class="kw">fn </span>swap_states(<span class="kw-2">&amp;mut </span><span class="self">self</span>, id1: StateID, id2: StateID) {
+        noncontiguous::NFA::swap_states(<span class="self">self</span>, id1, id2)
+    }
+
+    <span class="kw">fn </span>remap(<span class="kw-2">&amp;mut </span><span class="self">self</span>, map: <span class="kw">impl </span>Fn(StateID) -&gt; StateID) {
+        noncontiguous::NFA::remap(<span class="self">self</span>, map)
+    }
+}
+</code></pre></div></section></main></body></html>

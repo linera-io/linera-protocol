@@ -1,0 +1,39 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Implements the `SerializeCql` trait for a type, provided that the type already implements the legacy `Value` trait."><title>impl_serialize_cql_via_value in scylla_cql - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="scylla_cql" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../scylla_cql/index.html">scylla_cql</a><span class="version">0.1.0</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="index.html">scylla_cql</a>::<wbr><a class="macro" href="#">impl_serialize_cql_via_value</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/scylla_cql/types/serialize/value.rs.html#931-950">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><span class="macro">macro_rules!</span> impl_serialize_cql_via_value {
+    (<span class="macro-nonterminal">$t</span>:ident$(&lt;$(<span class="macro-nonterminal">$targ</span>:tt $(: <span class="macro-nonterminal">$tbound</span>:tt)<span class="question-mark">?</span>),<span class="kw-2">*</span>&gt;)<span class="question-mark">?</span>) =&gt; { ... };
+}</pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Implements the <a href="types/serialize/value/trait.SerializeCql.html" title="trait scylla_cql::types::serialize::value::SerializeCql"><code>SerializeCql</code></a> trait for a type, provided that the type
+already implements the legacy <a href="frame/value/trait.Value.html" title="trait scylla_cql::frame::value::Value"><code>Value</code></a> trait.</p>
+<h2 id="note"><a class="doc-anchor" href="#note">§</a>Note</h2>
+<p>The translation from one trait to another encounters a performance penalty
+and does not utilize the stronger guarantees of <code>SerializeCql</code>. Before
+resorting to this macro, you should consider other options instead:</p>
+<ul>
+<li>If the impl was generated using the <code>Value</code> procedural macro, you should
+switch to the <code>SerializeCql</code> procedural macro. <em>The new macro behaves
+differently by default, so please read its documentation first!</em></li>
+<li>If the impl was written by hand, it is still preferable to rewrite it
+manually. You have an opportunity to make your serialization logic
+type-safe and potentially improve performance.</li>
+</ul>
+<p>Basically, you should consider using the macro if you have a hand-written
+impl and the moment it is not easy/not desirable to rewrite it.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">struct </span>NoGenerics {}
+<span class="kw">impl </span>Value <span class="kw">for </span>NoGenerics {
+    <span class="kw">fn </span>serialize&lt;<span class="lifetime">'b</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, _buf: <span class="kw-2">&amp;mut </span>Vec&lt;u8&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;(), ValueTooBig&gt; {
+        <span class="prelude-val">Ok</span>(())
+    }
+}
+<span class="macro">impl_serialize_cql_via_value!</span>(NoGenerics);
+
+<span class="comment">// Generic types are also supported. You must specify the bounds if the
+// struct/enum contains any.
+</span><span class="kw">struct </span>WithGenerics&lt;T, U: Clone&gt;(T, U);
+<span class="kw">impl</span>&lt;T: Value, U: Clone + Value&gt; Value <span class="kw">for </span>WithGenerics&lt;T, U&gt; {
+    <span class="kw">fn </span>serialize&lt;<span class="lifetime">'b</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, buf: <span class="kw-2">&amp;mut </span>Vec&lt;u8&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;(), ValueTooBig&gt; {
+        <span class="self">self</span>.<span class="number">0</span>.serialize(buf)<span class="question-mark">?</span>;
+        <span class="self">self</span>.<span class="number">1</span>.clone().serialize(buf)<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(())
+    }
+}
+<span class="macro">impl_serialize_cql_via_value!</span>(WithGenerics&lt;T, U: Clone&gt;);</code></pre></div>
+</div></details></section></div></main></body></html>

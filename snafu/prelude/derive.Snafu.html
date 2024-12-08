@@ -1,0 +1,668 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="The `Snafu` macro is the entrypoint to defining your own error types. It is designed to require little configuration for the recommended and typical usecases while still offering flexibility for unique situations."><title>Snafu in snafu::prelude - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="snafu" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc derive"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../snafu/index.html">snafu</a><span class="version">0.8.5</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In snafu::prelude</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Derive Macro <a href="../index.html">snafu</a>::<wbr><a href="index.html">prelude</a>::<wbr><a class="derive" href="#">Snafu</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/snafu_derive/lib.rs.html#16">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>#[derive(Snafu)]
+{
+    <span class="comment">// Attributes available to this derive:</span>
+    #[snafu]
+}
+</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>The <code>Snafu</code> macro is the entrypoint to defining your own error
+types. It is designed to require little configuration for the
+recommended and typical usecases while still offering flexibility for
+unique situations.</p>
+<ul>
+<li><a href="#controlling-backtraces"><code>backtrace</code></a></li>
+<li><a href="#controlling-context"><code>context</code></a></li>
+<li><a href="#controlling-how-the-snafu-crate-is-resolved"><code>crate_root</code></a></li>
+<li><a href="#controlling-display"><code>display</code></a></li>
+<li><a href="#controlling-implicitly-generated-data"><code>implicit</code></a></li>
+<li><a href="#placing-context-selectors-in-modules"><code>module</code></a></li>
+<li><a href="#providing-data-beyond-the-error-trait"><code>provide</code></a></li>
+<li><a href="#controlling-error-sources"><code>source</code></a></li>
+<li><a href="#delegating-to-the-underlying-error"><code>transparent</code></a></li>
+<li><a href="#controlling-visibility"><code>visibility</code></a></li>
+<li><a href="#controlling-stringly-typed-errors"><code>whatever</code></a></li>
+</ul>
+<h3 id="attribute-cheat-sheet"><a class="doc-anchor" href="#attribute-cheat-sheet">§</a>Attribute cheat sheet</h3>
+<p>Use this as a quick reminder of what each attribute can do and where
+it is valid. Detailed information on each attribute is below.</p>
+<h4 id="enum"><a class="doc-anchor" href="#enum">§</a>Enum</h4><div><table><thead><tr><th>Option (inside <code>#[snafu(...)]</code>)</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>visibility(V)</code></td><td>Sets the default visibility of the generated context selectors to <code>V</code> (e.g. <code>pub</code>)</td></tr>
+<tr><td><code>module</code></td><td>Puts the generated context selectors into a module (module name is the enum name converted to <code>snake_case</code>)</td></tr>
+<tr><td><code>module(N)</code></td><td>Same as above, but with the module named <code>N</code> instead</td></tr>
+<tr><td><code>context(suffix(N))</code></td><td>Changes the default context selector suffix from <code>Snafu</code> to <code>N</code></td></tr>
+<tr><td><code>crate_root(C)</code></td><td>Generated code refers to a crate named <code>C</code> instead of the default <code>snafu</code></td></tr>
+</tbody></table>
+</div><h4 id="enum-variant-or-struct"><a class="doc-anchor" href="#enum-variant-or-struct">§</a>Enum variant or struct</h4><div><table><thead><tr><th>Option (inside <code>#[snafu(...)]</code>)</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>display("{field:?}: {}", foo)</code></td><td>Sets the display implementation for this error variant using <code>format_args!</code> syntax. If this is omitted, the default is `“VariantName”</td></tr>
+<tr><td><code>context(false)</code></td><td>Skips creation of the context selector, implements <code>From</code> for the mandatory source error</td></tr>
+<tr><td><code>context(suffix(N))</code></td><td>Changes the suffix of the generated context selector to <code>N</code></td></tr>
+<tr><td><code>context(suffix(false))</code></td><td>No suffix for the generated context selector</td></tr>
+<tr><td><code>transparent</code></td><td>Delegates <code>Display</code> and <code>Error::source</code> to this error’s source, implies <code>context(false)</code></td></tr>
+<tr><td><code>visibility(v)</code></td><td>Sets the visibility of the generated context selector to <code>v</code> (e.g. <code>pub</code>)</td></tr>
+<tr><td><code>visibility</code></td><td>Resets visibility back to private</td></tr>
+<tr><td><code>provide(flags, type =&gt; expr)</code></td><td>Provides the type using the <code>expr</code> with the optional flags</td></tr>
+<tr><td><code>whatever</code></td><td>Stringly-typed error. Message field must be called <code>message</code>. Source optional, but if present must be of a specific <a href="#controlling-stringly-typed-errors">format</a></td></tr>
+</tbody></table>
+</div><h4 id="context-fields"><a class="doc-anchor" href="#context-fields">§</a>Context fields</h4><div><table><thead><tr><th>Option (inside <code>#[snafu(...)]</code>)</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>source</code></td><td>Marks a field as the source error (even if not called <code>source</code>)</td></tr>
+<tr><td><code>source(from(type, transform))</code></td><td>As above, plus converting from <code>type</code> to the field type by calling <code>transform</code></td></tr>
+<tr><td><code>source(false)</code></td><td>Marks a field that is named <code>source</code> as a regular field</td></tr>
+<tr><td><code>backtrace</code></td><td>Marks a field as backtrace (even if not called <code>backtrace</code>)</td></tr>
+<tr><td><code>backtrace(false)</code></td><td>Marks a field that is named <code>backtrace</code> as a regular field</td></tr>
+<tr><td><code>implicit</code></td><td>Marks a field as implicit (Type needs to implement <a href="../trait.GenerateImplicitData.html" title="trait snafu::GenerateImplicitData"><code>GenerateImplicitData</code></a>)</td></tr>
+<tr><td><code>provide</code></td><td>Marks a field as providing a reference to the type</td></tr>
+</tbody></table>
+</div><h3 id="controlling-display"><a class="doc-anchor" href="#controlling-display">§</a>Controlling <code>Display</code></h3>
+<p>You can specify how the <code>Display</code> trait will be implemented for each
+variant. The argument is a format string and the arguments. All of the
+fields of the variant will be available and you can call methods on
+them, such as <code>filename.display()</code>. As an extension to the current
+format string capabilities, a shorthand is available for named
+arguments that match a field.</p>
+<p><strong>Example</strong></p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Debug, Snafu)]
+</span><span class="kw">enum </span>Error {
+    <span class="attr">#[snafu(display(<span class="string">"{username} may not log in until they pay USD {amount:E}"</span>))]
+    </span>UserMustPayForService { username: String, amount: f32 },
+}
+<span class="kw">fn </span>main() {
+    <span class="macro">assert_eq!</span>(
+        UserMustPayForServiceSnafu {
+            username: <span class="string">"Stefani"</span>,
+            amount: <span class="number">1_000_000.0</span>,
+        }
+        .build()
+        .to_string(),
+        <span class="string">"Stefani may not log in until they pay USD 1E6"</span>,
+    );
+}</code></pre></div>
+<h4 id="the-default-display-implementation"><a class="doc-anchor" href="#the-default-display-implementation">§</a>The default <code>Display</code> implementation</h4>
+<p>It is recommended that you provide a value for <code>snafu(display)</code>, but
+if it is omitted, the summary of the documentation comment will be
+used. If that is not present, the name of the variant will be used.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Debug, Snafu)]
+</span><span class="kw">enum </span>Error {
+    <span class="doccomment">/// No user available.
+    /// You may need to specify one.
+    </span>MissingUser,
+    MissingPassword,
+}
+
+<span class="kw">fn </span>main() {
+    <span class="macro">assert_eq!</span>(
+        MissingUserSnafu.build().to_string(),
+        <span class="string">"No user available. You may need to specify one."</span>,
+    );
+    <span class="macro">assert_eq!</span>(MissingPasswordSnafu.build().to_string(), <span class="string">"MissingPassword"</span>);
+}</code></pre></div>
+<h3 id="controlling-context"><a class="doc-anchor" href="#controlling-context">§</a>Controlling context</h3><h4 id="changing-the-context-selector-suffix"><a class="doc-anchor" href="#changing-the-context-selector-suffix">§</a>Changing the context selector suffix</h4>
+<p>When context selectors are generated, any <code>Error</code> suffix is removed
+and the suffix <code>Snafu</code> is added by default. If you’d prefer a
+different suffix, such as <code>Ctx</code> or <code>Context</code>, you can specify that
+with <code>#[snafu(context(suffix(SomeIdentifier)))]</code>. If you’d like to
+disable the suffix entirely, you can use
+<code>#[snafu(context(suffix(false)))]</code>.</p>
+<p><strong>Example</strong></p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Debug, Snafu)]
+</span><span class="kw">enum </span>Error {
+    UsesTheDefaultSuffixError,
+
+    <span class="attr">#[snafu(context(suffix(Ctx)))]
+    </span>HasAnotherSuffix,
+
+    <span class="attr">#[snafu(context(suffix(<span class="bool-val">false</span>)))]
+    </span>DoesNotHaveASuffix,
+}
+
+<span class="kw">fn </span>my_code() -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
+    UsesTheDefaultSuffixSnafu.fail()<span class="question-mark">?</span>;
+
+    HasAnotherSuffixCtx.fail()<span class="question-mark">?</span>;
+
+    DoesNotHaveASuffix.fail()<span class="question-mark">?</span>;
+
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<p><code>#[snafu(context(suffix))]</code> can be specified on an enum as the default
+suffix for variants of the enum. In that case, if you wish to have one
+variant with a suffix, you will need to express it explicitly with
+<code>#[snafu(context(suffix(SomeIdentifier)))]</code>.</p>
+<h4 id="disabling-the-context-selector"><a class="doc-anchor" href="#disabling-the-context-selector">§</a>Disabling the context selector</h4>
+<p>Sometimes, an underlying error can only occur in exactly one context
+and there’s no additional information that can be provided to the
+caller. In these cases, you can use <code>#[snafu(context(false))]</code> to
+indicate that no context selector should be created. This allows using
+the <code>?</code> operator directly on the underlying error.</p>
+<p>Please think about your end users before making liberal use of this
+feature. Adding context to an error is often what distinguishes an
+actionable error from a frustrating one.</p>
+<p><strong>Example</strong></p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Debug, Snafu)]
+</span><span class="kw">enum </span>Error {
+    <span class="attr">#[snafu(context(<span class="bool-val">false</span>))]
+    </span>NeedsNoIntroduction { source: VeryUniqueError },
+}
+
+<span class="kw">fn </span>my_code() -&gt; <span class="prelude-ty">Result</span>&lt;i32, Error&gt; {
+    <span class="kw">let </span>val = do_something_unique()<span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(val + <span class="number">10</span>)
+}
+
+<span class="kw">fn </span>do_something_unique() -&gt; <span class="prelude-ty">Result</span>&lt;i32, VeryUniqueError&gt; {
+    <span class="comment">// ...
+</span>}</code></pre></div>
+<h4 id="delegating-to-the-underlying-error"><a class="doc-anchor" href="#delegating-to-the-underlying-error">§</a>Delegating to the underlying error</h4>
+<p>When creating a contextful error you might want to reuse it in
+multiple places - composing different error types is idiomatic, after
+all. This can lead to unwanted nesting as both the enum variant and
+the source error are visible in the source chain and in autogenerated
+<code>Display</code> implementations.</p>
+<p>You can use <code>#[snafu(transparent)]</code> to delegate the <code>Display</code> and
+<code>Error::source</code> implementations to the underlying error instead,
+effectively removing the wrapping error variant from the logical error
+chain. That way you get both the maintenance and logical benefits of
+composing errors, without the redundant nesting.</p>
+<p><code>#[snafu(transparent)]</code> implies <code>#[snafu(context(false))]</code>. Because
+<code>#[snafu(transparent)]</code> errors delegate <code>Display</code> to the source error,
+you cannot use <code>#[snafu(display(...))]</code> on them.</p>
+<p><strong>Example</strong></p>
+<p>This example allows adding or removing users from groups. The group ID
+is passed as a raw integer which needs to be validated first.</p>
+<p>Since adding and removing users have distinct error types, there’s
+nothing useful to say in addition to the validation error message, so
+this is a good time to use <code>#[snafu(transparent)]</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>add_to_group(group: u32, user: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;(), AddToGroupError&gt; {
+    <span class="kw">let </span>group = GroupId::validate(group)<span class="question-mark">?</span>;
+    <span class="comment">// ... do useful operation
+    </span><span class="prelude-val">Ok</span>(())
+}
+
+<span class="kw">fn </span>remove_from_group(group: u32, user: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;(), RemoveFromGroupError&gt; {
+    <span class="kw">let </span>group = GroupId::validate(group)<span class="question-mark">?</span>;
+    <span class="comment">// ... do useful operation
+    </span><span class="prelude-val">Ok</span>(())
+}
+
+<span class="attr">#[derive(Debug, Snafu)]
+</span><span class="kw">enum </span>AddToGroupError {
+    <span class="attr">#[snafu(transparent)]
+    </span>Group { source: GroupIdError },
+
+    <span class="comment">// ... other failure conditions
+</span>}
+
+<span class="attr">#[derive(Debug, Snafu)]
+</span><span class="kw">enum </span>RemoveFromGroupError {
+    <span class="attr">#[snafu(transparent)]
+    </span>Group { source: GroupIdError },
+
+    <span class="comment">// ... other failure conditions
+</span>}
+
+<span class="attr">#[derive(Debug)]
+</span><span class="kw">struct </span>GroupId(u32);
+
+<span class="kw">impl </span>GroupId {
+    <span class="kw">fn </span>validate(id: u32) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, GroupIdError&gt; {
+        <span class="comment">// ... perform validation
+    </span>}
+}
+
+<span class="attr">#[derive(Debug, Snafu)]
+#[snafu(display(<span class="string">"Group ID {id} does not exist"</span>))]
+</span><span class="kw">struct </span>GroupIdError { id: u32 };</code></pre></div>
+<h3 id="controlling-visibility"><a class="doc-anchor" href="#controlling-visibility">§</a>Controlling visibility</h3>
+<p>By default, each of the context selectors and their inherent
+methods will be private. It is our opinion that each module should
+have one or more error types that are scoped to that module,
+reducing the need to deal with unrelated errors when matching and
+increasing cohesiveness.</p>
+<p>If you need to access the context selectors from outside of their
+module, you can use the <code>#[snafu(visibility)]</code> attribute. This can
+be applied to the error type as a default visibility or to
+specific context selectors.</p>
+<p>There are multiple forms of the attribute:</p>
+<ul>
+<li>
+<p><code>#[snafu(visibility(X))]</code></p>
+<p><code>X</code> is a normal Rust visibility modifier (<code>pub</code>, <code>pub(crate)</code>,
+<code>pub(in some::path)</code>, etc.).</p>
+</li>
+<li>
+<p><code>#[snafu(visibility)]</code> will reset back to private visibility.</p>
+</li>
+</ul>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Debug, Snafu)]
+#[snafu(visibility(<span class="kw">pub</span>(<span class="kw">crate</span>)))] </span><span class="comment">// Sets the default visibility for these context selectors
+</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">enum </span>Error {
+    IsPubCrate, <span class="comment">// Uses the default
+    </span><span class="attr">#[snafu(visibility)]
+    </span>IsPrivate, <span class="comment">// Will be private
+</span>}</code></pre></div>
+<p>It should be noted that API stability of context selectors is not
+guaranteed. Therefore, exporting them in a crate’s public API
+could cause semver breakage for such crates, should SNAFU internals
+change.</p>
+<h3 id="placing-context-selectors-in-modules"><a class="doc-anchor" href="#placing-context-selectors-in-modules">§</a>Placing context selectors in modules</h3>
+<p>When you have multiple error enums that would generate conflicting
+context selectors, you can choose to place the context selectors into
+a module using <code>snafu(module)</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>snafu::prelude::<span class="kw-2">*</span>;
+
+<span class="attr">#[derive(Debug, Snafu)]
+#[snafu(module)]
+</span><span class="kw">enum </span>ReadError {
+    Opening,
+}
+
+<span class="kw">fn </span>example() -&gt; <span class="prelude-ty">Result</span>&lt;(), ReadError&gt; {
+    read_error::OpeningSnafu.fail()
+}
+
+<span class="attr">#[derive(Debug, Snafu)]
+</span><span class="kw">enum </span>WriteError {
+    Opening, <span class="comment">// Would conflict if `snafu(module)` was not used above.
+</span>}</code></pre></div>
+<p>By default, the module name will be the <code>snake_case</code> equivalent of the
+enum name. You can override the default by providing an argument to
+<code>#[snafu(module(...))]</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>snafu::prelude::<span class="kw-2">*</span>;
+
+<span class="attr">#[derive(Debug, Snafu)]
+#[snafu(module(read))]
+</span><span class="kw">enum </span>ReadError {
+    Opening,
+}
+
+<span class="kw">fn </span>example() -&gt; <span class="prelude-ty">Result</span>&lt;(), ReadError&gt; {
+    read::OpeningSnafu.fail()
+}</code></pre></div>
+<p>As placing the context selectors in a module naturally namespaces
+them, you may wish to combine this option with
+<code>#[snafu(context(suffix(false)))]</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>snafu::prelude::<span class="kw-2">*</span>;
+
+<span class="attr">#[derive(Debug, Snafu)]
+#[snafu(module, context(suffix(<span class="bool-val">false</span>)))]
+</span><span class="kw">enum </span>ReadError {
+    Opening,
+}
+
+<span class="kw">fn </span>example() -&gt; <span class="prelude-ty">Result</span>&lt;(), ReadError&gt; {
+    read_error::Opening.fail()
+}</code></pre></div>
+<p>The generated module starts with <code>use super::*</code>, so any types or
+traits used by the context selectors need to be in scope — complicated
+paths may need to be simplified or made absolute.</p>
+<p>By default, the visibility of the generated module will be private
+while the context selectors inside will be <code>pub(super)</code>. Using
+<a href="#controlling-visibility"><code>#[snafu(visibility)]</code></a> to control the
+visibility will change the visibility of <em>both</em> the module and the
+context selectors.</p>
+<h3 id="controlling-error-sources"><a class="doc-anchor" href="#controlling-error-sources">§</a>Controlling error sources</h3><h4 id="selecting-the-source-field"><a class="doc-anchor" href="#selecting-the-source-field">§</a>Selecting the source field</h4>
+<p>If your error enum variant contains other errors but the field
+cannot be named <code>source</code>, or if it contains a field named <code>source</code>
+which is not actually an error, you can use <code>#[snafu(source)]</code> to
+indicate if a field is an underlying cause or not:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Debug, Snafu)]
+</span><span class="kw">enum </span>Error {
+    SourceIsNotAnError {
+        <span class="attr">#[snafu(source(<span class="bool-val">false</span>))]
+        </span>source: String,
+    },
+
+    CauseIsAnError {
+        <span class="attr">#[snafu(source)]
+        </span>cause: another::Error,
+    },
+}</code></pre></div>
+<h4 id="transforming-the-source"><a class="doc-anchor" href="#transforming-the-source">§</a>Transforming the source</h4>
+<p>If your error type contains an underlying cause that needs to be
+transformed, you can use <code>#[snafu(source(from(...)))]</code>. This takes
+two arguments: the real type and an expression to transform from
+that type to the type held by the error.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Debug, Snafu)]
+</span><span class="kw">enum </span>Error {
+    SourceNeedsToBeBoxed {
+        <span class="attr">#[snafu(source(from(another::Error, Box::new)))]
+        </span>source: Box&lt;another::Error&gt;,
+    },
+}
+
+<span class="attr">#[derive(Debug, Snafu)]
+#[snafu(source(from(Error, Box::new)))]
+</span><span class="kw">struct </span>ApiError(Box&lt;Error&gt;);</code></pre></div>
+<p>Note: If you specify <code>#[snafu(source(from(...)))]</code> then the field
+will be treated as a source, even if it’s not named “source” - in
+other words, <code>#[snafu(source(from(...)))]</code> implies
+<code>#[snafu(source)]</code>.</p>
+<h3 id="controlling-backtraces"><a class="doc-anchor" href="#controlling-backtraces">§</a>Controlling backtraces</h3>
+<p>If your error enum variant contains a backtrace but the field
+cannot be named <code>backtrace</code>, or if it contains a field named
+<code>backtrace</code> which is not actually a backtrace, you can use
+<code>#[snafu(backtrace)]</code> to indicate if a field is actually a
+backtrace or not:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Debug, Snafu)]
+</span><span class="kw">enum </span>Error {
+    BacktraceIsNotABacktrace {
+        <span class="attr">#[snafu(backtrace(<span class="bool-val">false</span>))]
+        </span>backtrace: bool,
+    },
+
+    TraceIsABacktrace {
+        <span class="attr">#[snafu(backtrace)]
+        </span>trace: Backtrace,
+    },
+}</code></pre></div>
+<p>If your error contains other SNAFU errors which can report
+backtraces, you may wish to delegate returning a backtrace to
+those errors. To specify this, use <code>#[snafu(backtrace)]</code> on the
+source field representing the other error:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Debug, Snafu)]
+</span><span class="kw">enum </span>Error {
+    MyError {
+        <span class="attr">#[snafu(backtrace)]
+        </span>source: another::Error,
+    },
+}</code></pre></div>
+<h3 id="providing-data-beyond-the-error-trait"><a class="doc-anchor" href="#providing-data-beyond-the-error-trait">§</a>Providing data beyond the <code>Error</code> trait</h3>
+<p>When the <a href="../guide/feature_flags/index.html#unstable-provider-api" title="mod snafu::guide::feature_flags"><code>unstable-provider-api</code> feature flag</a> is enabled, errors
+will implement the <a href="https://doc.rust-lang.org/1.81.0/core/error/trait.Error.html#method.provide" title="method core::error::Error::provide"><code>Error::provide</code> method</a>. This
+allows arbitrary data to be associated with an error instance,
+expanding the abilities of the receiver of the error:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>snafu::prelude::<span class="kw-2">*</span>;
+
+<span class="attr">#[derive(Debug)]
+</span><span class="kw">struct </span>UserId(u8);
+
+<span class="attr">#[derive(Debug, Snafu)]
+</span><span class="kw">enum </span>ApiError {
+    Login {
+        <span class="attr">#[snafu(provide)]
+        </span>user_id: UserId,
+    },
+
+    Logout {
+        <span class="attr">#[snafu(provide)]
+        </span>user_id: UserId,
+    },
+
+    NetworkUnreachable {
+        source: std::io::Error,
+    },
+}
+
+<span class="kw">let </span>e = LoginSnafu { user_id: UserId(<span class="number">0</span>) }.build();
+<span class="kw">match </span>error::request_ref::&lt;UserId&gt;(<span class="kw-2">&amp;</span>e) {
+    <span class="comment">// Present when ApiError::Login or ApiError::Logout
+    </span><span class="prelude-val">Some</span>(user_id) =&gt; {
+        <span class="macro">println!</span>(<span class="string">"{user_id:?} experienced an error"</span>);
+    }
+    <span class="comment">// Absent when ApiError::NetworkUnreachable
+    </span><span class="prelude-val">None </span>=&gt; {
+        <span class="macro">println!</span>(<span class="string">"An error occurred for an unknown user"</span>);
+    }
+}</code></pre></div>
+<p>This attribute may be used even when the <a href="../guide/feature_flags/index.html#unstable-provider-api" title="mod snafu::guide::feature_flags"><code>unstable-provider-api</code>
+feature flag</a> is not enabled. In that case, the attribute will be
+parsed but no code will be generated, allowing library authors to
+provide data to consumers willing to use nightly without losing
+support for stable Rust.</p>
+<h4 id="automatically-provided-data"><a class="doc-anchor" href="#automatically-provided-data">§</a>Automatically provided data</h4>
+<p>By default, <code>source</code> and <code>backtrace</code> fields are exposed to the
+provider API. Additionally, any data provided by the wrapped error
+will be available on the wrapping error:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>snafu::{prelude::<span class="kw-2">*</span>, IntoError};
+
+<span class="attr">#[derive(Debug)]
+</span><span class="kw">struct </span>UserId(u8);
+
+<span class="attr">#[derive(Debug, Snafu)]
+</span><span class="kw">struct </span>InnerError {
+    <span class="attr">#[snafu(provide)]
+    </span>user_id: UserId,
+    backtrace: snafu::Backtrace,
+}
+
+<span class="attr">#[derive(Debug, Snafu)]
+</span><span class="kw">struct </span>OuterError {
+    source: InnerError,
+}
+
+<span class="kw">let </span>outer = OuterSnafu.into_error(InnerSnafu { user_id: UserId(<span class="number">0</span>) }.build());
+
+<span class="comment">// We can get the source error and downcast it at once
+</span>error::request_ref::&lt;InnerError&gt;(<span class="kw-2">&amp;</span>outer).expect(<span class="string">"Must have a source"</span>);
+
+<span class="comment">// We can get the deepest backtrace
+</span>error::request_ref::&lt;snafu::Backtrace&gt;(<span class="kw-2">&amp;</span>outer).expect(<span class="string">"Must have a backtrace"</span>);
+
+<span class="comment">// We can get arbitrary values from sources as well
+</span>error::request_ref::&lt;UserId&gt;(<span class="kw-2">&amp;</span>outer).expect(<span class="string">"Must have a user id"</span>);</code></pre></div>
+<p>By default, SNAFU will gather the provided data from the source first,
+before providing any data from the current error. This can be
+overridden through the <a href="#providepriority-"><code>priority</code> flag</a>.</p>
+<h4 id="manually-provided-data"><a class="doc-anchor" href="#manually-provided-data">§</a>Manually provided data</h4>
+<p>When used on a field, the <code>#[snafu(provide)]</code> attribute will expose
+that field as a reference, allowing it to be used with
+<a href="https://doc.rust-lang.org/nightly/std/error/fn.request_ref.html"><code>request_ref</code></a>. For more control, the <code>#[snafu(provide)]</code> attribute
+can be placed on the error struct or enum variant. In this location,
+you supply a type and an expression that will generate that type:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>snafu::prelude::<span class="kw-2">*</span>;
+
+<span class="attr">#[derive(Debug, PartialEq)]
+</span><span class="kw">struct </span>HttpCode(u16);
+
+<span class="kw">const </span>HTTP_NOT_FOUND: HttpCode = HttpCode(<span class="number">404</span>);
+
+<span class="attr">#[derive(Debug, Snafu)]
+#[snafu(provide(HttpCode =&gt; HTTP_NOT_FOUND))]
+</span><span class="kw">struct </span>WebserverError;
+
+<span class="kw">let </span>e = WebserverError;
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(HTTP_NOT_FOUND), error::request_value::&lt;HttpCode&gt;(<span class="kw-2">&amp;</span>e));</code></pre></div>
+<p>The expression may access any field of the error as well as <code>self</code>:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>snafu::prelude::<span class="kw-2">*</span>;
+
+<span class="attr">#[derive(Debug, PartialEq)]
+</span><span class="kw">struct </span>Summation(u8);
+
+<span class="attr">#[derive(Debug, Snafu)]
+#[snafu(provide(Summation =&gt; Summation(left_side + right_side)))]
+</span><span class="kw">struct </span>AdditionError {
+    left_side: u8,
+    right_side: u8,
+}
+
+<span class="kw">let </span>e = AdditionSnafu {
+    left_side: <span class="number">1</span>,
+    right_side: <span class="number">2</span>,
+}
+.build();
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Summation(<span class="number">3</span>)), error::request_value::&lt;Summation&gt;(<span class="kw-2">&amp;</span>e));</code></pre></div>
+<h4 id="configuring-how-data-is-provided"><a class="doc-anchor" href="#configuring-how-data-is-provided">§</a>Configuring how data is provided</h4>
+<p>You may also provide a number of optional flags that control how the
+provided data will be exposed. These flags may be combined as required
+and may be provided in any order.</p>
+<h5 id="provideref-"><a class="doc-anchor" href="#provideref-">§</a><code>provide(ref, ...</code></h5>
+<p>Provides the data as a reference instead of as a value. The reference
+must live as long as the error itself.</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>snafu::prelude::<span class="kw-2">*</span>;
+
+<span class="attr">#[derive(Debug, Snafu)]
+#[snafu(provide(<span class="kw-2">ref</span>, str =&gt; name))]
+</span><span class="kw">struct </span>RefFlagExampleError {
+    name: String,
+}
+
+<span class="kw">let </span>e = RefFlagExampleSnafu { name: <span class="string">"alice" </span>}.build();
+
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="string">"alice"</span>), error::request_ref::&lt;str&gt;(<span class="kw-2">&amp;</span>e));</code></pre></div>
+<h5 id="provideopt-"><a class="doc-anchor" href="#provideopt-">§</a><code>provide(opt, ...</code></h5>
+<p>If the data being provided is an <code>Option&lt;T&gt;</code>, the <code>opt</code> flag will
+flatten the data, allowing you to request <code>T</code> instead of <code>Option&lt;T&gt;</code>.</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>snafu::prelude::<span class="kw-2">*</span>;
+
+<span class="attr">#[derive(Debug, Snafu)]
+#[snafu(provide(opt, char =&gt; char::from_u32(<span class="kw-2">*</span>char_code)))]
+</span><span class="kw">struct </span>OptFlagExampleError {
+    char_code: u32,
+}
+
+<span class="kw">let </span>e = OptFlagExampleSnafu { char_code: <span class="string">b'x' </span>}.build();
+
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="string">'x'</span>), error::request_value::&lt;char&gt;(<span class="kw-2">&amp;</span>e));</code></pre></div>
+<h5 id="providepriority-"><a class="doc-anchor" href="#providepriority-">§</a><code>provide(priority, ...</code></h5>
+<p><a href="https://doc.rust-lang.org/nightly/core/error/trait.Error.html#method.provide"><code>Error::provide</code></a> works by types and can only return one piece of
+data for a type. When there are multiple pieces of data for the same
+type, the one that is provided <em>first</em> will be used.</p>
+<p>By default, SNAFU provides data from any source error or
+<a href="#providechain-">chained</a> fields before any data from the current
+error. This means that the <em>deepest</em> matching data is returned.</p>
+<p>Specifying the <code>priority</code> flag will cause that data to take precedence
+over the chained data, resulting in the <em>shallower</em> data being
+returned.</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>snafu::{prelude::<span class="kw-2">*</span>, IntoError};
+
+<span class="attr">#[derive(Debug, PartialEq)]
+</span><span class="kw">struct </span>Fatal(bool);
+
+<span class="attr">#[derive(Debug, Snafu)]
+#[snafu(provide(Fatal =&gt; Fatal(<span class="bool-val">true</span>)))]
+</span><span class="kw">struct </span>InnerError;
+
+<span class="attr">#[derive(Debug, Snafu)]
+#[snafu(provide(priority, Fatal =&gt; Fatal(<span class="bool-val">false</span>)))]
+</span><span class="kw">struct </span>PriorityFlagExampleError {
+    source: InnerError,
+}
+
+<span class="kw">let </span>e = PriorityFlagExampleSnafu.into_error(InnerError);
+
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Fatal(<span class="bool-val">false</span>)), error::request_value::&lt;Fatal&gt;(<span class="kw-2">&amp;</span>e));</code></pre></div>
+<h5 id="providechain-"><a class="doc-anchor" href="#providechain-">§</a><code>provide(chain, ...</code></h5>
+<p>If a member of your error implements <a href="https://doc.rust-lang.org/1.81.0/core/error/trait.Error.html" title="trait core::error::Error"><code>Error</code></a> and you’d like for
+its data to be included when providing data for your error, but it
+isn’t automatically provided because it’s not a source error, you may
+add the <code>chain</code> flag. This flag must always be combined with the
+<a href="#provideref-"><code>ref</code> flag</a>.</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>snafu::prelude::<span class="kw-2">*</span>;
+
+<span class="attr">#[derive(Debug, Snafu)]
+#[snafu(provide(u8 =&gt; <span class="number">1</span>))]
+</span><span class="kw">struct </span>NotTheSourceError;
+
+<span class="attr">#[derive(Debug, Snafu)]
+#[snafu(provide(<span class="kw-2">ref</span>, chain, NotTheSourceError =&gt; data))]
+</span><span class="kw">struct </span>ChainFlagExampleError {
+    data: NotTheSourceError,
+}
+
+<span class="kw">let </span>e = ChainFlagExampleSnafu {
+    data: NotTheSourceError,
+}
+.build();
+
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="number">1</span>), error::request_value::&lt;u8&gt;(<span class="kw-2">&amp;</span>e));</code></pre></div>
+<h4 id="api-stability-concerns"><a class="doc-anchor" href="#api-stability-concerns">§</a>API stability concerns</h4>
+<p>For public errors, it’s a good idea to explicitly state your intended
+stability guarantees around provided values. Some consumers may expect
+that if your error type returns data via the provider API in one
+situation, it will continue to do so in future SemVer-compatible
+releases. However, doing so can greatly hinder your ability to
+refactor your code.</p>
+<p>Stating your guarantees is especially useful for opaque errors, which
+will expose all the provided data from the inner error type.</p>
+<h3 id="controlling-implicitly-generated-data"><a class="doc-anchor" href="#controlling-implicitly-generated-data">§</a>Controlling implicitly generated data</h3>
+<p>Sometimes, you can capture contextual error data without needing any
+arguments. <a href="../struct.Backtrace.html" title="struct snafu::Backtrace">Backtraces</a> are a common example, but other
+global information like the current time or thread ID could also be
+useful. In these cases, you can use <code>#[snafu(implicit)]</code> on a field
+that implements <a href="../trait.GenerateImplicitData.html" title="trait snafu::GenerateImplicitData"><code>GenerateImplicitData</code></a> to remove the need to specify
+that data at error construction time:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>snafu::prelude::<span class="kw-2">*</span>;
+<span class="kw">use </span>std::time::Instant;
+
+<span class="attr">#[derive(Debug, PartialEq)]
+</span><span class="kw">struct </span>Timestamp(Instant);
+
+<span class="kw">impl </span>snafu::GenerateImplicitData <span class="kw">for </span>Timestamp {
+    <span class="kw">fn </span>generate() -&gt; <span class="self">Self </span>{
+        Timestamp(Instant::now())
+    }
+}
+
+<span class="attr">#[derive(Debug, Snafu)]
+</span><span class="kw">struct </span>RequestError {
+    <span class="attr">#[snafu(implicit)]
+    </span>timestamp: Timestamp,
+}
+
+<span class="kw">fn </span>do_request() -&gt; <span class="prelude-ty">Result</span>&lt;(), RequestError&gt; {
+    <span class="comment">// ...
+    </span><span class="macro">ensure!</span>(request_count &lt; <span class="number">3</span>, RequestSnafu);
+
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<p>You can use <code>#[snafu(implicit(false))]</code> if a field is incorrectly
+automatically identified as containing implicit data.</p>
+<h3 id="controlling-stringly-typed-errors"><a class="doc-anchor" href="#controlling-stringly-typed-errors">§</a>Controlling stringly-typed errors</h3>
+<p>This allows your custom error type to behave like the <a href="../struct.Whatever.html" title="struct snafu::Whatever"><code>Whatever</code></a>
+error type. Since it is your type, you can implement additional
+methods or traits. When placed on a struct or enum variant, you will
+be able to use the type with the <a href="macro.whatever.html" title="macro snafu::prelude::whatever"><code>whatever!</code></a> macro as well as
+<code>whatever_context</code> methods, such as <a href="../trait.ResultExt.html#tymethod.whatever_context" title="method snafu::ResultExt::whatever_context"><code>ResultExt::whatever_context</code></a>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Debug, Snafu)]
+</span><span class="kw">enum </span>Error {
+    SpecificError {
+        username: String,
+    },
+
+    <span class="attr">#[snafu(whatever, display(<span class="string">"{message}"</span>))]
+    </span>GenericError {
+        message: String,
+
+        <span class="comment">// Having a `source` is optional, but if it is present, it must
+        // have this specific attribute and type:
+        </span><span class="attr">#[snafu(source(from(Box&lt;<span class="kw">dyn </span>std::error::Error&gt;, <span class="prelude-val">Some</span>)))]
+        </span>source: <span class="prelude-ty">Option</span>&lt;Box&lt;<span class="kw">dyn </span>std::error::Error&gt;&gt;,
+    },
+}</code></pre></div>
+<h3 id="controlling-how-the-snafu-crate-is-resolved"><a class="doc-anchor" href="#controlling-how-the-snafu-crate-is-resolved">§</a>Controlling how the <code>snafu</code> crate is resolved</h3>
+<p>If the <code>snafu</code> crate is not called <code>snafu</code> for some reason, you can
+use <code>#[snafu(crate_root)]</code> to instruct the macro how to find the crate
+root:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>my_custom_naming_of_snafu::Snafu;
+
+<span class="attr">#[derive(Debug, Snafu)]
+#[snafu(crate_root(my_custom_naming_of_snafu))]
+</span><span class="kw">enum </span>Error {
+    SomeFailureMode,
+}
+
+<span class="attr">#[derive(Debug, Snafu)]
+#[snafu(crate_root(my_custom_naming_of_snafu))]
+</span><span class="kw">struct </span>ApiError(Error);</code></pre></div>
+</div></details></section></div></main></body></html>

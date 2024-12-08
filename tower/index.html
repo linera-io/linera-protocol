@@ -1,0 +1,109 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="`async fn(Request) -&gt; Result&lt;Response, Error&gt;`"><title>tower - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="tower" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../tower/index.html">tower</a><span class="version">0.5.1</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#traits">Traits</a></li><li><a href="#functions">Functions</a></li><li><a href="#types">Type Aliases</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">tower</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/tower/lib.rs.html#1-227">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><code>async fn(Request) -&gt; Result&lt;Response, Error&gt;</code></p>
+<h2 id="overview"><a class="doc-anchor" href="#overview">§</a>Overview</h2>
+<p>Tower is a library of modular and reusable components for building
+robust networking clients and servers.</p>
+<p>Tower provides a simple core abstraction, the <a href="trait.Service.html" title="trait tower::Service"><code>Service</code></a> trait, which
+represents an asynchronous function taking a request and returning either a
+response or an error. This abstraction can be used to model both clients and
+servers.</p>
+<p>Generic components, like <a href="timeout/index.html" title="mod tower::timeout"><code>timeout</code></a>, <a href="crate::limit::rate">rate limiting</a>, and <a href="crate::balance">load balancing</a>,
+can be modeled as <a href="trait.Service.html" title="trait tower::Service"><code>Service</code></a>s that wrap some inner service and apply
+additional behavior before or after the inner service is called. This allows
+implementing these components in a protocol-agnostic, composable way. Typically,
+such services are referred to as <em>middleware</em>.</p>
+<p>An additional abstraction, the <a href="trait.Layer.html" title="trait tower::Layer"><code>Layer</code></a> trait, is used to compose
+middleware with <a href="trait.Service.html" title="trait tower::Service"><code>Service</code></a>s. If a <a href="trait.Service.html" title="trait tower::Service"><code>Service</code></a> can be thought of as an
+asynchronous function from a request type to a response type, a <a href="trait.Layer.html" title="trait tower::Layer"><code>Layer</code></a> is
+a function taking a <a href="trait.Service.html" title="trait tower::Service"><code>Service</code></a> of one type and returning a <a href="trait.Service.html" title="trait tower::Service"><code>Service</code></a> of a
+different type. The <a href="struct.ServiceBuilder.html" title="struct tower::ServiceBuilder"><code>ServiceBuilder</code></a> type is used to add middleware to a
+service by composing it with multiple <a href="trait.Layer.html" title="trait tower::Layer"><code>Layer</code></a>s.</p>
+<h3 id="the-tower-ecosystem"><a class="doc-anchor" href="#the-tower-ecosystem">§</a>The Tower Ecosystem</h3>
+<p>Tower is made up of the following crates:</p>
+<ul>
+<li><a href="https://crates.io/crates/tower"><code>tower</code></a> (this crate)</li>
+<li><a href="https://crates.io/crates/tower-service"><code>tower-service</code></a></li>
+<li><a href="https://crates.io/crates/tower-layer"><code>tower-layer</code></a></li>
+<li><a href="https://crates.io/crates/tower-test"><code>tower-test</code></a></li>
+</ul>
+<p>Since the <a href="trait.Service.html" title="trait tower::Service"><code>Service</code></a> and <a href="trait.Layer.html" title="trait tower::Layer"><code>Layer</code></a> traits are important integration points
+for all libraries using Tower, they are kept as stable as possible, and
+breaking changes are made rarely. Therefore, they are defined in separate
+crates, <a href="https://crates.io/crates/tower-service"><code>tower-service</code></a> and <a href="https://crates.io/crates/tower-layer"><code>tower-layer</code></a>. This crate contains
+re-exports of those core traits, implementations of commonly-used
+middleware, and <a href="trait.ServiceExt.html" title="trait tower::ServiceExt">utilities</a> for working with <a href="trait.Service.html" title="trait tower::Service"><code>Service</code></a>s and <a href="trait.Layer.html" title="trait tower::Layer"><code>Layer</code></a>s.
+Finally, the <a href="https://crates.io/crates/tower-test"><code>tower-test</code></a> crate provides tools for testing programs using
+Tower.</p>
+<h2 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h2>
+<p>Tower provides an abstraction layer, and generic implementations of various
+middleware. This means that the <code>tower</code> crate on its own does <em>not</em> provide
+a working implementation of a network client or server. Instead, Tower’s
+<a href="trait.Service.html" title="trait tower::Service"><code>Service</code> trait</a> provides an integration point between
+application code, libraries providing middleware implementations, and
+libraries that implement servers and/or clients for various network
+protocols.</p>
+<p>Depending on your particular use case, you might use Tower in several ways:</p>
+<ul>
+<li>
+<p><strong>Implementing application logic</strong> for a networked program. You might
+use the <a href="trait.Service.html" title="trait tower::Service"><code>Service</code></a> trait to model your application’s behavior, and use
+the middleware <a href="#modules">provided by this crate</a> and by other libraries
+to add functionality to clients and servers provided by one or more
+protocol implementations.</p>
+</li>
+<li>
+<p><strong>Implementing middleware</strong> to add custom behavior to network clients and
+servers in a reusable manner. This might be general-purpose middleware
+(and if it is, please consider releasing your middleware as a library for
+other Tower users!) or application-specific behavior that needs to be
+shared between multiple clients or servers.</p>
+</li>
+<li>
+<p><strong>Implementing a network protocol</strong>. Libraries that implement network
+protocols (such as HTTP) can depend on <code>tower-service</code> to use the
+<a href="trait.Service.html" title="trait tower::Service"><code>Service</code></a> trait as an integration point between the protocol and user
+code. For example, a client for some protocol might implement <a href="trait.Service.html" title="trait tower::Service"><code>Service</code></a>,
+allowing users to add arbitrary Tower middleware to those clients.
+Similarly, a server might be created from a user-provided <a href="trait.Service.html" title="trait tower::Service"><code>Service</code></a>.</p>
+<p>Additionally, when a network protocol requires functionality already
+provided by existing Tower middleware, a protocol implementation might use
+Tower middleware internally, as well as as an integration point.</p>
+</li>
+</ul>
+<h3 id="library-support"><a class="doc-anchor" href="#library-support">§</a>Library Support</h3>
+<p>A number of third-party libraries support Tower and the <a href="trait.Service.html" title="trait tower::Service"><code>Service</code></a> trait.
+The following is an incomplete list of such libraries:</p>
+<ul>
+<li><a href="https://crates.io/crates/hyper"><code>hyper</code></a>: A fast and correct low-level HTTP implementation.</li>
+<li><a href="https://crates.io/crates/tonic"><code>tonic</code></a>: A <a href="https://grpc.io">gRPC-over-HTTP/2</a> implementation built on top of
+<a href="https://crates.io/crates/hyper"><code>hyper</code></a>. See <a href="https://github.com/hyperium/tonic/tree/master/examples/src/tower">here</a> for examples of using <a href="https://crates.io/crates/tonic"><code>tonic</code></a> with
+Tower.</li>
+<li><a href="https://crates.io/crates/warp"><code>warp</code></a>: A lightweight, composable web framework. See
+<a href="https://docs.rs/warp/0.2.5/warp/fn.service.html">here</a> for details on using <a href="https://crates.io/crates/warp"><code>warp</code></a> with Tower.</li>
+<li><a href="https://crates.io/crates/tower-lsp"><code>tower-lsp</code></a>: implementations of the <a href="https://microsoft.github.io/language-server-protocol/">Language
+Server Protocol</a> based on Tower.</li>
+</ul>
+<p>If you’re the maintainer of a crate that supports Tower, we’d love to add
+your crate to this list! Please <a href="https://github.com/tower-rs/tower/compare">open a PR</a> adding a brief description of
+your library!</p>
+<h3 id="getting-started"><a class="doc-anchor" href="#getting-started">§</a>Getting Started</h3>
+<p>If you’re brand new to Tower and want to start with the basics, we recommend you
+check out some of our <a href="https://github.com/tower-rs/tower/tree/master/guides">guides</a>.</p>
+<p>The various middleware implementations provided by this crate are feature
+flagged, so that users can only compile the parts of Tower they need. By
+default, all the optional middleware are disabled.</p>
+<p>To get started using all of Tower’s optional middleware, add this to your
+<code>Cargo.toml</code>:</p>
+<div class="example-wrap"><pre class="language-toml"><code>tower = { version = &quot;0.4&quot;, features = [&quot;full&quot;] }
+</code></pre></div>
+<p>Alternatively, you can only enable some features. For example, to enable
+only the <a href="retry/index.html" title="mod tower::retry"><code>retry</code></a> and <a href="timeout/index.html" title="mod tower::timeout"><code>timeout</code></a> middleware, write:</p>
+<div class="example-wrap"><pre class="language-toml"><code>tower = { version = &quot;0.4&quot;, features = [&quot;retry&quot;, &quot;timeout&quot;] }
+</code></pre></div>
+<p>See <a href="#modules">here</a> for a complete list of all middleware provided by
+Tower.</p>
+<h3 id="supported-rust-versions"><a class="doc-anchor" href="#supported-rust-versions">§</a>Supported Rust Versions</h3>
+<p>Tower will keep a rolling MSRV (minimum supported Rust version) policy of <strong>at
+least</strong> 6 months. When increasing the MSRV, the new Rust version must have been
+released at least six months ago. The current MSRV is 1.64.0.</p>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="buffer/index.html" title="mod tower::buffer">buffer</a></div><div class="desc docblock-short">Middleware that provides a buffered mpsc channel to a service.</div></li><li><div class="item-name"><a class="mod" href="builder/index.html" title="mod tower::builder">builder</a></div><div class="desc docblock-short">Builder types to compose layers and services</div></li><li><div class="item-name"><a class="mod" href="layer/index.html" title="mod tower::layer">layer</a></div><div class="desc docblock-short">A collection of <a href="trait.Layer.html" title="trait tower::Layer"><code>Layer</code></a> based tower services</div></li><li><div class="item-name"><a class="mod" href="make/index.html" title="mod tower::make">make</a></div><div class="desc docblock-short">Trait aliases for Services that produce specific types of Responses.</div></li><li><div class="item-name"><a class="mod" href="retry/index.html" title="mod tower::retry">retry</a></div><div class="desc docblock-short">Middleware for retrying “failed” requests.</div></li><li><div class="item-name"><a class="mod" href="timeout/index.html" title="mod tower::timeout">timeout</a></div><div class="desc docblock-short">Middleware that applies a timeout to requests.</div></li><li><div class="item-name"><a class="mod" href="util/index.html" title="mod tower::util">util</a></div><div class="desc docblock-short">Various utility types and functions that are generally used with Tower.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.ServiceBuilder.html" title="struct tower::ServiceBuilder">ServiceBuilder</a></div><div class="desc docblock-short">Declaratively construct <a href="trait.Service.html" title="trait tower::Service"><code>Service</code></a> values.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.Layer.html" title="trait tower::Layer">Layer</a></div><div class="desc docblock-short">Decorates a <a href="https://docs.rs/tower/*/tower/trait.Service.html"><code>Service</code></a>, transforming either the request or the response.</div></li><li><div class="item-name"><a class="trait" href="trait.MakeService.html" title="trait tower::MakeService">MakeService</a></div><div class="desc docblock-short">Creates new <a href="trait.Service.html" title="trait tower::Service"><code>Service</code></a> values.</div></li><li><div class="item-name"><a class="trait" href="trait.Service.html" title="trait tower::Service">Service</a></div><div class="desc docblock-short">An asynchronous function from a <code>Request</code> to a <code>Response</code>.</div></li><li><div class="item-name"><a class="trait" href="trait.ServiceExt.html" title="trait tower::ServiceExt">ServiceExt</a></div><div class="desc docblock-short">An extension trait for <code>Service</code>s that provides a variety of convenient
+adapters</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.service_fn.html" title="fn tower::service_fn">service_fn</a></div><div class="desc docblock-short">Returns a new <a href="util/struct.ServiceFn.html" title="struct tower::util::ServiceFn"><code>ServiceFn</code></a> with the given closure.</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.BoxError.html" title="type tower::BoxError">BoxError</a></div><div class="desc docblock-short">Alias for a type-erased error type.</div></li></ul></section></div></main></body></html>

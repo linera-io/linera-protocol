@@ -1,0 +1,158 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Re-export types common to POSIX-ish platforms. Unix-specific extensions to `fs::File`."><title>FileExt in rustix::fs - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="rustix" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../rustix/index.html">rustix</a><span class="version">0.38.37</span></h2></div><h2 class="location"><a href="#">FileExt</a></h2><div class="sidebar-elems"><section><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.read_at">read_at</a></li><li><a href="#tymethod.write_at">write_at</a></li></ul><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.read_exact_at">read_exact_at</a></li><li><a href="#method.read_vectored_at">read_vectored_at</a></li><li><a href="#method.write_all_at">write_all_at</a></li><li><a href="#method.write_vectored_at">write_vectored_at</a></li></ul><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In rustix::fs</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="../index.html">rustix</a>::<wbr><a href="index.html">fs</a>::<wbr><a class="trait" href="#">FileExt</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><span class="since" title="Stable since Rust version 1.15.0">1.15.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/std/os/unix/fs.rs.html#26">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub trait FileExt {
+    // Required methods
+    fn <a href="#tymethod.read_at" class="fn">read_at</a>(&amp;self, buf: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], offset: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>, <a class="struct" href="https://doc.rust-lang.org/1.81.0/std/io/error/struct.Error.html" title="struct std::io::error::Error">Error</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.write_at" class="fn">write_at</a>(&amp;self, buf: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], offset: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>, <a class="struct" href="https://doc.rust-lang.org/1.81.0/std/io/error/struct.Error.html" title="struct std::io::error::Error">Error</a>&gt;;
+
+    // Provided methods
+    fn <a href="#method.read_vectored_at" class="fn">read_vectored_at</a>(
+        &amp;self,
+        bufs: &amp;mut [<a class="struct" href="../io/struct.IoSliceMut.html" title="struct rustix::io::IoSliceMut">IoSliceMut</a>&lt;'_&gt;],
+        offset: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>, <a class="struct" href="https://doc.rust-lang.org/1.81.0/std/io/error/struct.Error.html" title="struct std::io::error::Error">Error</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_exact_at" class="fn">read_exact_at</a>(&amp;self, buf: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], offset: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="struct" href="https://doc.rust-lang.org/1.81.0/std/io/error/struct.Error.html" title="struct std::io::error::Error">Error</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.write_vectored_at" class="fn">write_vectored_at</a>(
+        &amp;self,
+        bufs: &amp;[<a class="struct" href="../io/struct.IoSlice.html" title="struct rustix::io::IoSlice">IoSlice</a>&lt;'_&gt;],
+        offset: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>, <a class="struct" href="https://doc.rust-lang.org/1.81.0/std/io/error/struct.Error.html" title="struct std::io::error::Error">Error</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.write_all_at" class="fn">write_all_at</a>(&amp;self, buf: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], offset: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="struct" href="https://doc.rust-lang.org/1.81.0/std/io/error/struct.Error.html" title="struct std::io::error::Error">Error</a>&gt; { ... }
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Re-export types common to POSIX-ish platforms.
+Unix-specific extensions to <a href="https://doc.rust-lang.org/1.81.0/std/fs/struct.File.html" title="struct std::fs::File"><code>fs::File</code></a>.</p>
+</div></details><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.read_at" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.15.0">1.15.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/std/os/unix/fs.rs.html#59">source</a></span><h4 class="code-header">fn <a href="#tymethod.read_at" class="fn">read_at</a>(&amp;self, buf: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], offset: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>, <a class="struct" href="https://doc.rust-lang.org/1.81.0/std/io/error/struct.Error.html" title="struct std::io::error::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Reads a number of bytes starting from a given offset.</p>
+<p>Returns the number of bytes read.</p>
+<p>The offset is relative to the start of the file and thus independent
+from the current cursor.</p>
+<p>The current file cursor is not affected by this function.</p>
+<p>Note that similar to <a href="https://doc.rust-lang.org/1.81.0/std/fs/struct.File.html#method.read" title="method std::fs::File::read"><code>File::read</code></a>, it is not an error to return with a
+short read.</p>
+<h5 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io;
+<span class="kw">use </span>std::fs::File;
+<span class="kw">use </span>std::os::unix::prelude::FileExt;
+
+<span class="kw">fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0u8</span>; <span class="number">8</span>];
+    <span class="kw">let </span>file = File::open(<span class="string">"foo.txt"</span>)<span class="question-mark">?</span>;
+
+    <span class="comment">// We now read 8 bytes from the offset 10.
+    </span><span class="kw">let </span>num_bytes_read = file.read_at(<span class="kw-2">&amp;mut </span>buf, <span class="number">10</span>)<span class="question-mark">?</span>;
+    <span class="macro">println!</span>(<span class="string">"read {num_bytes_read} bytes: {buf:?}"</span>);
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.write_at" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.15.0">1.15.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/std/os/unix/fs.rs.html#195">source</a></span><h4 class="code-header">fn <a href="#tymethod.write_at" class="fn">write_at</a>(&amp;self, buf: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], offset: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>, <a class="struct" href="https://doc.rust-lang.org/1.81.0/std/io/error/struct.Error.html" title="struct std::io::error::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Writes a number of bytes starting from a given offset.</p>
+<p>Returns the number of bytes written.</p>
+<p>The offset is relative to the start of the file and thus independent
+from the current cursor.</p>
+<p>The current file cursor is not affected by this function.</p>
+<p>When writing beyond the end of the file, the file is appropriately
+extended and the intermediate bytes are initialized with the value 0.</p>
+<p>Note that similar to <a href="https://doc.rust-lang.org/1.81.0/std/fs/struct.File.html#method.write" title="method std::fs::File::write"><code>File::write</code></a>, it is not an error to return a
+short write.</p>
+<h5 id="bug"><a class="doc-anchor" href="#bug">§</a>Bug</h5>
+<p>On some systems, <code>write_at</code> utilises <a href="https://man7.org/linux/man-pages/man2/pwrite.2.html"><code>pwrite64</code></a> to write to files.
+However, this syscall has a <a href="https://man7.org/linux/man-pages/man2/pwrite.2.html#BUGS">bug</a> where files opened with the <code>O_APPEND</code>
+flag fail to respect the offset parameter, always appending to the end
+of the file instead.</p>
+<p>It is possible to inadvertently set this flag, like in the example below.
+Therefore, it is important to be vigilant while changing options to mitigate
+unexpected behaviour.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::fs::File;
+<span class="kw">use </span>std::io;
+<span class="kw">use </span>std::os::unix::prelude::FileExt;
+
+<span class="kw">fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="comment">// Open a file with the append option (sets the `O_APPEND` flag)
+    </span><span class="kw">let </span>file = File::options().append(<span class="bool-val">true</span>).open(<span class="string">"foo.txt"</span>)<span class="question-mark">?</span>;
+
+    <span class="comment">// We attempt to write at offset 10; instead appended to EOF
+    </span>file.write_at(<span class="string">b"sushi"</span>, <span class="number">10</span>)<span class="question-mark">?</span>;
+
+    <span class="comment">// foo.txt is 5 bytes long instead of 15
+    </span><span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<h5 id="examples-1"><a class="doc-anchor" href="#examples-1">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::fs::File;
+<span class="kw">use </span>std::io;
+<span class="kw">use </span>std::os::unix::prelude::FileExt;
+
+<span class="kw">fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span>file = File::create(<span class="string">"foo.txt"</span>)<span class="question-mark">?</span>;
+
+    <span class="comment">// We now write at the offset 10.
+    </span>file.write_at(<span class="string">b"sushi"</span>, <span class="number">10</span>)<span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+</div></details></div><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.read_vectored_at" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/std/os/unix/fs.rs.html#67">source</a><h4 class="code-header">fn <a href="#method.read_vectored_at" class="fn">read_vectored_at</a>(
+    &amp;self,
+    bufs: &amp;mut [<a class="struct" href="../io/struct.IoSliceMut.html" title="struct rustix::io::IoSliceMut">IoSliceMut</a>&lt;'_&gt;],
+    offset: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>, <a class="struct" href="https://doc.rust-lang.org/1.81.0/std/io/error/struct.Error.html" title="struct std::io::error::Error">Error</a>&gt;</h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>unix_file_vectored_at</code>)</span></div></span></summary><div class="docblock"><p>Like <code>read_at</code>, except that it reads into a slice of buffers.</p>
+<p>Data is copied to fill each buffer in order, with the final buffer
+written to possibly being only partially filled. This method must behave
+equivalently to a single call to read with concatenated buffers.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_exact_at" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.33.0">1.33.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/std/os/unix/fs.rs.html#117">source</a></span><h4 class="code-header">fn <a href="#method.read_exact_at" class="fn">read_exact_at</a>(&amp;self, buf: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], offset: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="struct" href="https://doc.rust-lang.org/1.81.0/std/io/error/struct.Error.html" title="struct std::io::error::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Reads the exact number of bytes required to fill <code>buf</code> from the given offset.</p>
+<p>The offset is relative to the start of the file and thus independent
+from the current cursor.</p>
+<p>The current file cursor is not affected by this function.</p>
+<p>Similar to <a href="https://doc.rust-lang.org/1.81.0/std/io/trait.Read.html#method.read_exact" title="method std::io::Read::read_exact"><code>io::Read::read_exact</code></a> but uses <a href="trait.FileExt.html#tymethod.read_at" title="method rustix::fs::FileExt::read_at"><code>read_at</code></a> instead of <code>read</code>.</p>
+<h5 id="errors"><a class="doc-anchor" href="#errors">§</a>Errors</h5>
+<p>If this function encounters an error of the kind
+<a href="https://doc.rust-lang.org/1.81.0/std/io/error/enum.ErrorKind.html#variant.Interrupted" title="variant std::io::error::ErrorKind::Interrupted"><code>io::ErrorKind::Interrupted</code></a> then the error is ignored and the operation
+will continue.</p>
+<p>If this function encounters an “end of file” before completely filling
+the buffer, it returns an error of the kind <a href="https://doc.rust-lang.org/1.81.0/std/io/error/enum.ErrorKind.html#variant.UnexpectedEof" title="variant std::io::error::ErrorKind::UnexpectedEof"><code>io::ErrorKind::UnexpectedEof</code></a>.
+The contents of <code>buf</code> are unspecified in this case.</p>
+<p>If any other read error is encountered then this function immediately
+returns. The contents of <code>buf</code> are unspecified in this case.</p>
+<p>If this function returns an error, it is unspecified how many bytes it
+has read, but it will never read more than would be necessary to
+completely fill the buffer.</p>
+<h5 id="examples-2"><a class="doc-anchor" href="#examples-2">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io;
+<span class="kw">use </span>std::fs::File;
+<span class="kw">use </span>std::os::unix::prelude::FileExt;
+
+<span class="kw">fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0u8</span>; <span class="number">8</span>];
+    <span class="kw">let </span>file = File::open(<span class="string">"foo.txt"</span>)<span class="question-mark">?</span>;
+
+    <span class="comment">// We now read exactly 8 bytes from the offset 10.
+    </span>file.read_exact_at(<span class="kw-2">&amp;mut </span>buf, <span class="number">10</span>)<span class="question-mark">?</span>;
+    <span class="macro">println!</span>(<span class="string">"read {} bytes: {:?}"</span>, buf.len(), buf);
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.write_vectored_at" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/std/os/unix/fs.rs.html#203">source</a><h4 class="code-header">fn <a href="#method.write_vectored_at" class="fn">write_vectored_at</a>(
+    &amp;self,
+    bufs: &amp;[<a class="struct" href="../io/struct.IoSlice.html" title="struct rustix::io::IoSlice">IoSlice</a>&lt;'_&gt;],
+    offset: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>, <a class="struct" href="https://doc.rust-lang.org/1.81.0/std/io/error/struct.Error.html" title="struct std::io::error::Error">Error</a>&gt;</h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>unix_file_vectored_at</code>)</span></div></span></summary><div class="docblock"><p>Like <code>write_at</code>, except that it writes from a slice of buffers.</p>
+<p>Data is copied from each buffer in order, with the final buffer read
+from possibly being only partially consumed. This method must behave as
+a call to <code>write_at</code> with the buffers concatenated would.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.write_all_at" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.33.0">1.33.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/std/os/unix/fs.rs.html#244">source</a></span><h4 class="code-header">fn <a href="#method.write_all_at" class="fn">write_all_at</a>(&amp;self, buf: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], offset: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="struct" href="https://doc.rust-lang.org/1.81.0/std/io/error/struct.Error.html" title="struct std::io::error::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Attempts to write an entire buffer starting from a given offset.</p>
+<p>The offset is relative to the start of the file and thus independent
+from the current cursor.</p>
+<p>The current file cursor is not affected by this function.</p>
+<p>This method will continuously call <a href="trait.FileExt.html#tymethod.write_at" title="method rustix::fs::FileExt::write_at"><code>write_at</code></a> until there is no more data
+to be written or an error of non-<a href="https://doc.rust-lang.org/1.81.0/std/io/error/enum.ErrorKind.html#variant.Interrupted" title="variant std::io::error::ErrorKind::Interrupted"><code>io::ErrorKind::Interrupted</code></a> kind is
+returned. This method will not return until the entire buffer has been
+successfully written or such an error occurs. The first error that is
+not of <a href="https://doc.rust-lang.org/1.81.0/std/io/error/enum.ErrorKind.html#variant.Interrupted" title="variant std::io::error::ErrorKind::Interrupted"><code>io::ErrorKind::Interrupted</code></a> kind generated from this method will be
+returned.</p>
+<h5 id="errors-1"><a class="doc-anchor" href="#errors-1">§</a>Errors</h5>
+<p>This function will return the first error of
+non-<a href="https://doc.rust-lang.org/1.81.0/std/io/error/enum.ErrorKind.html#variant.Interrupted" title="variant std::io::error::ErrorKind::Interrupted"><code>io::ErrorKind::Interrupted</code></a> kind that <a href="trait.FileExt.html#tymethod.write_at" title="method rustix::fs::FileExt::write_at"><code>write_at</code></a> returns.</p>
+<h5 id="examples-3"><a class="doc-anchor" href="#examples-3">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::fs::File;
+<span class="kw">use </span>std::io;
+<span class="kw">use </span>std::os::unix::prelude::FileExt;
+
+<span class="kw">fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span>file = File::open(<span class="string">"foo.txt"</span>)<span class="question-mark">?</span>;
+
+    <span class="comment">// We now write at the offset 10.
+    </span>file.write_all_at(<span class="string">b"sushi"</span>, <span class="number">10</span>)<span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+</div></details></div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><section id="impl-FileExt-for-File" class="impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.15.0">1.15.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/std/os/unix/fs.rs.html#263">source</a></span><a href="#impl-FileExt-for-File" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.FileExt.html" title="trait rustix::fs::FileExt">FileExt</a> for <a class="struct" href="https://doc.rust-lang.org/1.81.0/std/fs/struct.File.html" title="struct std::fs::File">File</a></h3></section></div><script src="../../trait.impl/std/os/unix/fs/trait.FileExt.js" data-ignore-extern-crates="std" async></script></section></div></main></body></html>

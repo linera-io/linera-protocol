@@ -1,0 +1,75 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="This crate provides spin-based versions of the primitives in `std::sync` and `std::lazy`. Because synchronization is done through spinning, the primitives are suitable for use in `no_std` environments."><title>spin - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="spin" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../spin/index.html">spin</a><span class="version">0.9.8</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li><li><a href="#types">Type Aliases</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">spin</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/spin/lib.rs.html#1-221">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>This crate provides <a href="https://en.wikipedia.org/wiki/Spinlock">spin-based</a> versions of the
+primitives in <code>std::sync</code> and <code>std::lazy</code>. Because synchronization is done through spinning,
+the primitives are suitable for use in <code>no_std</code> environments.</p>
+<h2 id="features"><a class="doc-anchor" href="#features">§</a>Features</h2>
+<ul>
+<li>
+<p><code>Mutex</code>, <code>RwLock</code>, <code>Once</code>/<code>SyncOnceCell</code>, and <code>SyncLazy</code> equivalents</p>
+</li>
+<li>
+<p>Support for <code>no_std</code> environments</p>
+</li>
+<li>
+<p><a href="https://crates.io/crates/lock_api"><code>lock_api</code></a> compatibility</p>
+</li>
+<li>
+<p>Upgradeable <code>RwLock</code> guards</p>
+</li>
+<li>
+<p>Guards can be sent and shared between threads</p>
+</li>
+<li>
+<p>Guard leaking</p>
+</li>
+<li>
+<p>Ticket locks</p>
+</li>
+<li>
+<p>Different strategies for dealing with contention</p>
+</li>
+</ul>
+<h2 id="relationship-with-stdsync"><a class="doc-anchor" href="#relationship-with-stdsync">§</a>Relationship with <code>std::sync</code></h2>
+<p>While <code>spin</code> is not a drop-in replacement for <code>std::sync</code> (and
+<a href="https://matklad.github.io/2020/01/02/spinlocks-considered-harmful.html">should not be considered as such</a>)
+an effort is made to keep this crate reasonably consistent with <code>std::sync</code>.</p>
+<p>Many of the types defined in this crate have ‘additional capabilities’ when compared to <code>std::sync</code>:</p>
+<ul>
+<li>
+<p>Because spinning does not depend on the thread-driven model of <code>std::sync</code>, guards (<a href="mutex/struct.MutexGuard.html" title="struct spin::mutex::MutexGuard"><code>MutexGuard</code></a>,
+[<code>RwLockReadGuard</code>], [<code>RwLockWriteGuard</code>], etc.) may be sent and shared between threads.</p>
+</li>
+<li>
+<p>[<code>RwLockUpgradableGuard</code>] supports being upgraded into a [<code>RwLockWriteGuard</code>].</p>
+</li>
+<li>
+<p>Guards support <a href="https://doc.rust-lang.org/nomicon/leaking.html">leaking</a>.</p>
+</li>
+<li>
+<p><a href="type.Once.html" title="type spin::Once"><code>Once</code></a> owns the value returned by its <code>call_once</code> initializer.</p>
+</li>
+<li>
+<p>[<code>RwLock</code>] supports counting readers and writers.</p>
+</li>
+</ul>
+<p>Conversely, the types in this crate do not have some of the features <code>std::sync</code> has:</p>
+<ul>
+<li>Locks do not track <a href="https://doc.rust-lang.org/nomicon/poisoning.html">panic poisoning</a>.</li>
+</ul>
+<h3 id="feature-flags"><a class="doc-anchor" href="#feature-flags">§</a>Feature flags</h3>
+<p>The crate comes with a few feature flags that you may wish to use.</p>
+<ul>
+<li>
+<p><code>lock_api</code> enables support for <a href="https://crates.io/crates/lock_api"><code>lock_api</code></a></p>
+</li>
+<li>
+<p><code>ticket_mutex</code> uses a ticket lock for the implementation of <code>Mutex</code></p>
+</li>
+<li>
+<p><code>fair_mutex</code> enables a fairer implementation of <code>Mutex</code> that uses eventual fairness to avoid
+starvation</p>
+</li>
+<li>
+<p><code>std</code> enables support for thread yielding instead of spinning</p>
+</li>
+</ul>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.MutexGuard"><code>pub use mutex::<a class="struct" href="mutex/struct.MutexGuard.html" title="struct spin::mutex::MutexGuard">MutexGuard</a>;</code></div></li><li><div class="item-name" id="reexport.RelaxStrategy"><code>pub use relax::<a class="trait" href="relax/trait.RelaxStrategy.html" title="trait spin::relax::RelaxStrategy">RelaxStrategy</a>;</code></div></li><li><div class="item-name" id="reexport.Spin"><code>pub use relax::<a class="struct" href="relax/struct.Spin.html" title="struct spin::relax::Spin">Spin</a>;</code></div></li></ul><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="mutex/index.html" title="mod spin::mutex">mutex</a></div><div class="desc docblock-short">Locks that have the same behaviour as a mutex.</div></li><li><div class="item-name"><a class="mod" href="once/index.html" title="mod spin::once">once</a></div><div class="desc docblock-short">Synchronization primitives for one-time evaluation.</div></li><li><div class="item-name"><a class="mod" href="relax/index.html" title="mod spin::relax">relax</a></div><div class="desc docblock-short">Strategies that determine the behaviour of locks when encountering contention.</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.Mutex.html" title="type spin::Mutex">Mutex</a></div><div class="desc docblock-short">A primitive that synchronizes the execution of multiple threads. See <a href="mutex/struct.Mutex.html" title="struct spin::mutex::Mutex"><code>mutex::Mutex</code></a> for documentation.</div></li><li><div class="item-name"><a class="type" href="type.Once.html" title="type spin::Once">Once</a></div><div class="desc docblock-short">A primitive that provides lazy one-time initialization. See <a href="once/struct.Once.html" title="struct spin::once::Once"><code>once::Once</code></a> for documentation.</div></li></ul></section></div></main></body></html>

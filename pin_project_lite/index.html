@@ -1,0 +1,79 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A lightweight version of pin-project written with declarative macros."><title>pin_project_lite - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="pin_project_lite" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../pin_project_lite/index.html">pin_project_lite</a><span class="version">0.2.14</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#macros">Macros</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">pin_project_lite</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/pin_project_lite/lib.rs.html#3-1729">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><!-- tidy:crate-doc:start -->
+<p>A lightweight version of <a href="https://github.com/taiki-e/pin-project">pin-project</a> written with declarative macros.</p>
+<h3 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h3>
+<p>Add this to your <code>Cargo.toml</code>:</p>
+<div class="example-wrap"><pre class="language-toml"><code>[dependencies]
+pin-project-lite = &quot;0.2&quot;
+</code></pre></div>
+<p><em>Compiler support: requires rustc 1.37+</em></p>
+<h3 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h3>
+<p><a href="macro.pin_project.html" title="macro pin_project_lite::pin_project"><code>pin_project!</code></a> macro creates a projection type covering all the fields of
+struct.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::pin::Pin;
+
+<span class="kw">use </span>pin_project_lite::pin_project;
+
+<span class="macro">pin_project!</span> {
+    <span class="kw">struct </span>Struct&lt;T, U&gt; {
+        <span class="attr">#[pin]
+        </span>pinned: T,
+        unpinned: U,
+    }
+}
+
+<span class="kw">impl</span>&lt;T, U&gt; Struct&lt;T, U&gt; {
+    <span class="kw">fn </span>method(<span class="self">self</span>: Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;) {
+        <span class="kw">let </span>this = <span class="self">self</span>.project();
+        <span class="kw">let _</span>: Pin&lt;<span class="kw-2">&amp;mut </span>T&gt; = this.pinned; <span class="comment">// Pinned reference to the field
+        </span><span class="kw">let _</span>: <span class="kw-2">&amp;mut </span>U = this.unpinned; <span class="comment">// Normal reference to the field
+    </span>}
+}</code></pre></div>
+<p>To use <a href="macro.pin_project.html" title="macro pin_project_lite::pin_project"><code>pin_project!</code></a> on enums, you need to name the projection type
+returned from the method.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::pin::Pin;
+
+<span class="kw">use </span>pin_project_lite::pin_project;
+
+<span class="macro">pin_project!</span> {
+    <span class="attr">#[project = EnumProj]
+    </span><span class="kw">enum </span>Enum&lt;T, U&gt; {
+        Variant { <span class="attr">#[pin] </span>pinned: T, unpinned: U },
+    }
+}
+
+<span class="kw">impl</span>&lt;T, U&gt; Enum&lt;T, U&gt; {
+    <span class="kw">fn </span>method(<span class="self">self</span>: Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;) {
+        <span class="kw">match </span><span class="self">self</span>.project() {
+            EnumProj::Variant { pinned, unpinned } =&gt; {
+                <span class="kw">let _</span>: Pin&lt;<span class="kw-2">&amp;mut </span>T&gt; = pinned;
+                <span class="kw">let _</span>: <span class="kw-2">&amp;mut </span>U = unpinned;
+            }
+        }
+    }
+}</code></pre></div>
+<h3 id="pin-project-vs-pin-project-lite"><a class="doc-anchor" href="#pin-project-vs-pin-project-lite">§</a><a href="https://github.com/taiki-e/pin-project">pin-project</a> vs pin-project-lite</h3>
+<p>Here are some similarities and differences compared to <a href="https://github.com/taiki-e/pin-project">pin-project</a>.</p>
+<h4 id="similar-safety"><a class="doc-anchor" href="#similar-safety">§</a>Similar: Safety</h4>
+<p>pin-project-lite guarantees safety in much the same way as <a href="https://github.com/taiki-e/pin-project">pin-project</a>.
+Both are completely safe unless you write other unsafe code.</p>
+<h4 id="different-minimal-design"><a class="doc-anchor" href="#different-minimal-design">§</a>Different: Minimal design</h4>
+<p>This library does not tackle as expansive of a range of use cases as
+<a href="https://github.com/taiki-e/pin-project">pin-project</a> does. If your use case is not already covered, please use
+<a href="https://github.com/taiki-e/pin-project">pin-project</a>.</p>
+<h4 id="different-no-proc-macro-related-dependencies"><a class="doc-anchor" href="#different-no-proc-macro-related-dependencies">§</a>Different: No proc-macro related dependencies</h4>
+<p>This is the <strong>only</strong> reason to use this crate. However, <strong>if you already
+have proc-macro related dependencies in your crate’s dependency graph, there
+is no benefit from using this crate.</strong> (Note: There is almost no difference
+in the amount of code generated between <a href="https://github.com/taiki-e/pin-project">pin-project</a> and pin-project-lite.)</p>
+<h4 id="different-no-useful-error-messages"><a class="doc-anchor" href="#different-no-useful-error-messages">§</a>Different: No useful error messages</h4>
+<p>This macro does not handle any invalid input. So error messages are not to
+be useful in most cases. If you do need useful error messages, then upon
+error you can pass the same input to <a href="https://github.com/taiki-e/pin-project">pin-project</a> to receive a helpful
+description of the compile error.</p>
+<h4 id="different-no-support-for-custom-unpin-implementation"><a class="doc-anchor" href="#different-no-support-for-custom-unpin-implementation">§</a>Different: No support for custom Unpin implementation</h4>
+<p>pin-project supports this by <a href="https://docs.rs/pin-project/1/pin_project/attr.pin_project.html#unsafeunpin"><code>UnsafeUnpin</code></a>. (<code>!Unpin</code> is supported by both <a href="https://docs.rs/pin-project/1/pin_project/attr.pin_project.html#unpin">pin-project</a> and <a href="https://docs.rs/pin-project-lite/0.2/pin_project_lite/macro.pin_project.html#unpin">pin-project-lite</a>.)</p>
+<h4 id="different-no-support-for-tuple-structs-and-tuple-variants"><a class="doc-anchor" href="#different-no-support-for-tuple-structs-and-tuple-variants">§</a>Different: No support for tuple structs and tuple variants</h4>
+<p>pin-project supports this.</p>
+<!-- tidy:crate-doc:end --></div></details><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="macro" href="macro.pin_project.html" title="macro pin_project_lite::pin_project">pin_project</a></div><div class="desc docblock-short">A macro that creates a projection type covering all the fields of struct.</div></li></ul></section></div></main></body></html>

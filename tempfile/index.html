@@ -1,0 +1,101 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Temporary files and directories."><title>tempfile - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="tempfile" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="icon" href="https://www.rust-lang.org/favicon.ico"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../tempfile/index.html"><img src="https://www.rust-lang.org/logos/rust-logo-128x128-blk-v2.png" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../tempfile/index.html"><img src="https://www.rust-lang.org/logos/rust-logo-128x128-blk-v2.png" alt="logo"></a><h2><a href="../tempfile/index.html">tempfile</a><span class="version">3.12.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#functions">Functions</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">tempfile</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/tempfile/lib.rs.html#1-689">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Temporary files and directories.</p>
+<ul>
+<li>Use the <a href="fn.tempfile.html"><code>tempfile()</code></a> function for temporary files</li>
+<li>Use the <a href="fn.tempdir.html"><code>tempdir()</code></a> function for temporary directories.</li>
+</ul>
+<h2 id="design"><a class="doc-anchor" href="#design">§</a>Design</h2>
+<p>This crate provides several approaches to creating temporary files and directories.
+<a href="fn.tempfile.html"><code>tempfile()</code></a> relies on the OS to remove the temporary file once the last handle is closed.
+<a href="struct.TempDir.html"><code>TempDir</code></a> and <a href="struct.NamedTempFile.html"><code>NamedTempFile</code></a> both rely on Rust destructors for cleanup.</p>
+<p>When choosing between the temporary file variants, prefer <code>tempfile</code>
+unless you either need to know the file’s path or to be able to persist it.</p>
+<h3 id="resource-leaking"><a class="doc-anchor" href="#resource-leaking">§</a>Resource Leaking</h3>
+<p><code>tempfile</code> will (almost) never fail to cleanup temporary resources. However <code>TempDir</code> and <code>NamedTempFile</code> will
+fail if their destructors don’t run. This is because <code>tempfile</code> relies on the OS to cleanup the
+underlying file, while <code>TempDir</code> and <code>NamedTempFile</code> rely on rust destructors to do so.
+Destructors may fail to run if the process exits through an unhandled signal interrupt (like <code>SIGINT</code>),
+or if the instance is declared statically (like with <a href="https://github.com/rust-lang-nursery/lazy-static.rs/issues/62"><code>lazy_static</code></a>), among other possible
+reasons.</p>
+<h3 id="security"><a class="doc-anchor" href="#security">§</a>Security</h3>
+<p>In the presence of pathological temporary file cleaner, relying on file paths is unsafe because
+a temporary file cleaner could delete the temporary file which an attacker could then replace.</p>
+<p><code>tempfile</code> doesn’t rely on file paths so this isn’t an issue. However, <code>NamedTempFile</code> does
+rely on file paths for <em>some</em> operations. See the security documentation on
+the <code>NamedTempFile</code> type for more information.</p>
+<h3 id="early-drop-pitfall"><a class="doc-anchor" href="#early-drop-pitfall">§</a>Early drop pitfall</h3>
+<p>Because <code>TempDir</code> and <code>NamedTempFile</code> rely on their destructors for cleanup, this can lead
+to an unexpected early removal of the directory/file, usually when working with APIs which are
+generic over <code>AsRef&lt;Path&gt;</code>. Consider the following example:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tempfile::tempdir;
+<span class="kw">use </span>std::process::Command;
+
+<span class="comment">// Create a directory inside of `env::temp_dir()`.
+</span><span class="kw">let </span>temp_dir = tempdir()<span class="question-mark">?</span>;
+
+<span class="comment">// Spawn the `touch` command inside the temporary directory and collect the exit status
+// Note that `temp_dir` is **not** moved into `current_dir`, but passed as a reference
+</span><span class="kw">let </span>exit_status = Command::new(<span class="string">"touch"</span>).arg(<span class="string">"tmp"</span>).current_dir(<span class="kw-2">&amp;</span>temp_dir).status()<span class="question-mark">?</span>;
+<span class="macro">assert!</span>(exit_status.success());
+</code></pre></div>
+<p>This works because a reference to <code>temp_dir</code> is passed to <code>current_dir</code>, resulting in the
+destructor of <code>temp_dir</code> being run after the <code>Command</code> has finished execution. Moving the
+<code>TempDir</code> into the <code>current_dir</code> call would result in the <code>TempDir</code> being converted into
+an internal representation, with the original value being dropped and the directory thus
+being deleted, before the command can be executed.</p>
+<p>The <code>touch</code> command would fail with an <code>No such file or directory</code> error.</p>
+<h3 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h3>
+<p>Create a temporary file and write some data into it:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tempfile::tempfile;
+<span class="kw">use </span>std::io::Write;
+
+<span class="comment">// Create a file inside of `env::temp_dir()`.
+</span><span class="kw">let </span><span class="kw-2">mut </span>file = tempfile()<span class="question-mark">?</span>;
+
+<span class="macro">writeln!</span>(file, <span class="string">"Brian was here. Briefly."</span>)<span class="question-mark">?</span>;</code></pre></div>
+<p>Create a named temporary file and open an independent file handle:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tempfile::NamedTempFile;
+<span class="kw">use </span>std::io::{Write, Read};
+
+<span class="kw">let </span>text = <span class="string">"Brian was here. Briefly."</span>;
+
+<span class="comment">// Create a file inside of `env::temp_dir()`.
+</span><span class="kw">let </span><span class="kw-2">mut </span>file1 = NamedTempFile::new()<span class="question-mark">?</span>;
+
+<span class="comment">// Re-open it.
+</span><span class="kw">let </span><span class="kw-2">mut </span>file2 = file1.reopen()<span class="question-mark">?</span>;
+
+<span class="comment">// Write some test data to the first handle.
+</span>file1.write_all(text.as_bytes())<span class="question-mark">?</span>;
+
+<span class="comment">// Read the test data using the second handle.
+</span><span class="kw">let </span><span class="kw-2">mut </span>buf = String::new();
+file2.read_to_string(<span class="kw-2">&amp;mut </span>buf)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(buf, text);</code></pre></div>
+<p>Create a temporary directory and add a file to it:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tempfile::tempdir;
+<span class="kw">use </span>std::fs::File;
+<span class="kw">use </span>std::io::Write;
+
+<span class="comment">// Create a directory inside of `env::temp_dir()`.
+</span><span class="kw">let </span>dir = tempdir()<span class="question-mark">?</span>;
+
+<span class="kw">let </span>file_path = dir.path().join(<span class="string">"my-temporary-note.txt"</span>);
+<span class="kw">let </span><span class="kw-2">mut </span>file = File::create(file_path)<span class="question-mark">?</span>;
+<span class="macro">writeln!</span>(file, <span class="string">"Brian was here. Briefly."</span>)<span class="question-mark">?</span>;
+
+<span class="comment">// By closing the `TempDir` explicitly, we can check that it has
+// been deleted successfully. If we don't close it explicitly,
+// the directory will still be deleted when `dir` goes out
+// of scope, but we won't know whether deleting the directory
+// succeeded.
+</span>drop(file);
+dir.close()<span class="question-mark">?</span>;</code></pre></div>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="env/index.html" title="mod tempfile::env">env</a></div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Builder.html" title="struct tempfile::Builder">Builder</a></div><div class="desc docblock-short">Create a new temporary file or directory with custom parameters.</div></li><li><div class="item-name"><a class="struct" href="struct.NamedTempFile.html" title="struct tempfile::NamedTempFile">NamedTempFile</a></div><div class="desc docblock-short">A named temporary file.</div></li><li><div class="item-name"><a class="struct" href="struct.PathPersistError.html" title="struct tempfile::PathPersistError">PathPersistError</a></div><div class="desc docblock-short">Error returned when persisting a temporary file path fails.</div></li><li><div class="item-name"><a class="struct" href="struct.PersistError.html" title="struct tempfile::PersistError">PersistError</a></div><div class="desc docblock-short">Error returned when persisting a temporary file fails.</div></li><li><div class="item-name"><a class="struct" href="struct.SpooledTempFile.html" title="struct tempfile::SpooledTempFile">SpooledTempFile</a></div><div class="desc docblock-short">An object that behaves like a regular temporary file, but keeps data in
+memory until it reaches a configured size, at which point the data is
+written to a temporary file on disk, and further operations use the file
+on disk.</div></li><li><div class="item-name"><a class="struct" href="struct.TempDir.html" title="struct tempfile::TempDir">TempDir</a></div><div class="desc docblock-short">A directory in the filesystem that is automatically deleted when
+it goes out of scope.</div></li><li><div class="item-name"><a class="struct" href="struct.TempPath.html" title="struct tempfile::TempPath">TempPath</a></div><div class="desc docblock-short">A path to a named temporary file without an open file handle.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.spooled_tempfile.html" title="fn tempfile::spooled_tempfile">spooled_tempfile</a></div><div class="desc docblock-short">Create a new spooled temporary file.</div></li><li><div class="item-name"><a class="fn" href="fn.tempdir.html" title="fn tempfile::tempdir">tempdir</a></div><div class="desc docblock-short">Create a new temporary directory.</div></li><li><div class="item-name"><a class="fn" href="fn.tempdir_in.html" title="fn tempfile::tempdir_in">tempdir_in</a></div><div class="desc docblock-short">Create a new temporary directory in a specific directory.</div></li><li><div class="item-name"><a class="fn" href="fn.tempfile.html" title="fn tempfile::tempfile">tempfile</a></div><div class="desc docblock-short">Create a new temporary file.</div></li><li><div class="item-name"><a class="fn" href="fn.tempfile_in.html" title="fn tempfile::tempfile_in">tempfile_in</a></div><div class="desc docblock-short">Create a new temporary file in the specified directory.</div></li></ul></section></div></main></body></html>

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["scope"],"struct":["Scope","ScopedJoinHandle","ScopedThreadBuilder"]};

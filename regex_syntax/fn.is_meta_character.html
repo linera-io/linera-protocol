@@ -1,0 +1,33 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Returns true if the given character has significance in a regex."><title>is_meta_character in regex_syntax - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="regex_syntax" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../regex_syntax/index.html">regex_syntax</a><span class="version">0.8.4</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="index.html">regex_syntax</a>::<wbr><a class="fn" href="#">is_meta_character</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/regex_syntax/lib.rs.html#260-266">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn is_meta_character(c: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.char.html">char</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Returns true if the given character has significance in a regex.</p>
+<p>Generally speaking, these are the only characters which <em>must</em> be escaped
+in order to match their literal meaning. For example, to match a literal
+<code>|</code>, one could write <code>\|</code>. Sometimes escaping isn’t always necessary. For
+example, <code>-</code> is treated as a meta character because of its significance
+for writing ranges inside of character classes, but the regex <code>-</code> will
+match a literal <code>-</code> because <code>-</code> has no special meaning outside of character
+classes.</p>
+<p>In order to determine whether a character may be escaped at all, the
+<a href="fn.is_escapeable_character.html" title="fn regex_syntax::is_escapeable_character"><code>is_escapeable_character</code></a> routine should be used. The difference between
+<code>is_meta_character</code> and <code>is_escapeable_character</code> is that the latter will
+return true for some characters that are <em>not</em> meta characters. For
+example, <code>%</code> and <code>\%</code> both match a literal <code>%</code> in all contexts. In other
+words, <code>is_escapeable_character</code> includes “superfluous” escapes.</p>
+<p>Note that the set of characters for which this function returns <code>true</code> or
+<code>false</code> is fixed and won’t change in a semver compatible release. (In this
+case, “semver compatible release” actually refers to the <code>regex</code> crate
+itself, since reducing or expanding the set of meta characters would be a
+breaking change for not just <code>regex-syntax</code> but also <code>regex</code> itself.)</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_syntax::is_meta_character;
+
+<span class="macro">assert!</span>(is_meta_character(<span class="string">'?'</span>));
+<span class="macro">assert!</span>(is_meta_character(<span class="string">'-'</span>));
+<span class="macro">assert!</span>(is_meta_character(<span class="string">'&amp;'</span>));
+<span class="macro">assert!</span>(is_meta_character(<span class="string">'#'</span>));
+
+<span class="macro">assert!</span>(!is_meta_character(<span class="string">'%'</span>));
+<span class="macro">assert!</span>(!is_meta_character(<span class="string">'/'</span>));
+<span class="macro">assert!</span>(!is_meta_character(<span class="string">'!'</span>));
+<span class="macro">assert!</span>(!is_meta_character(<span class="string">'"'</span>));
+<span class="macro">assert!</span>(!is_meta_character(<span class="string">'e'</span>));</code></pre></div>
+</div></details></section></div></main></body></html>

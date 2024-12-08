@@ -1,0 +1,323 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="An encoding as defined in the Encoding Standard."><title>Encoding in encoding_rs - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="encoding_rs" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc struct"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../encoding_rs/index.html">encoding_rs</a><span class="version">0.8.34</span></h2></div><h2 class="location"><a href="#">Encoding</a></h2><div class="sidebar-elems"><section><h3><a href="#implementations">Methods</a></h3><ul class="block method"><li><a href="#method.ascii_valid_up_to">ascii_valid_up_to</a></li><li><a href="#method.can_encode_everything">can_encode_everything</a></li><li><a href="#method.decode">decode</a></li><li><a href="#method.decode_with_bom_removal">decode_with_bom_removal</a></li><li><a href="#method.decode_without_bom_handling">decode_without_bom_handling</a></li><li><a href="#method.decode_without_bom_handling_and_without_replacement">decode_without_bom_handling_and_without_replacement</a></li><li><a href="#method.encode">encode</a></li><li><a href="#method.for_bom">for_bom</a></li><li><a href="#method.for_label">for_label</a></li><li><a href="#method.for_label_no_replacement">for_label_no_replacement</a></li><li><a href="#method.is_ascii_compatible">is_ascii_compatible</a></li><li><a href="#method.is_single_byte">is_single_byte</a></li><li><a href="#method.iso_2022_jp_ascii_valid_up_to">iso_2022_jp_ascii_valid_up_to</a></li><li><a href="#method.name">name</a></li><li><a href="#method.new_decoder">new_decoder</a></li><li><a href="#method.new_decoder_with_bom_removal">new_decoder_with_bom_removal</a></li><li><a href="#method.new_decoder_without_bom_handling">new_decoder_without_bom_handling</a></li><li><a href="#method.new_encoder">new_encoder</a></li><li><a href="#method.output_encoding">output_encoding</a></li><li><a href="#method.utf8_valid_up_to">utf8_valid_up_to</a></li></ul><h3><a href="#trait-implementations">Trait Implementations</a></h3><ul class="block trait-implementation"><li><a href="#impl-Debug-for-Encoding">Debug</a></li><li><a href="#impl-Eq-for-Encoding">Eq</a></li><li><a href="#impl-Hash-for-Encoding">Hash</a></li><li><a href="#impl-PartialEq-for-Encoding">PartialEq</a></li></ul><h3><a href="#synthetic-implementations">Auto Trait Implementations</a></h3><ul class="block synthetic-implementation"><li><a href="#impl-Freeze-for-Encoding">Freeze</a></li><li><a href="#impl-RefUnwindSafe-for-Encoding">RefUnwindSafe</a></li><li><a href="#impl-Send-for-Encoding">Send</a></li><li><a href="#impl-Sync-for-Encoding">Sync</a></li><li><a href="#impl-Unpin-for-Encoding">Unpin</a></li><li><a href="#impl-UnwindSafe-for-Encoding">UnwindSafe</a></li></ul><h3><a href="#blanket-implementations">Blanket Implementations</a></h3><ul class="block blanket-implementation"><li><a href="#impl-Any-for-T">Any</a></li><li><a href="#impl-Borrow%3CT%3E-for-T">Borrow&lt;T&gt;</a></li><li><a href="#impl-BorrowMut%3CT%3E-for-T">BorrowMut&lt;T&gt;</a></li><li><a href="#impl-From%3CT%3E-for-T">From&lt;T&gt;</a></li><li><a href="#impl-Into%3CU%3E-for-T">Into&lt;U&gt;</a></li><li><a href="#impl-TryFrom%3CU%3E-for-T">TryFrom&lt;U&gt;</a></li><li><a href="#impl-TryInto%3CU%3E-for-T">TryInto&lt;U&gt;</a></li></ul></section><h2><a href="index.html">In crate encoding_rs</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Struct <a href="index.html">encoding_rs</a>::<wbr><a class="struct" href="#">Encoding</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/encoding_rs/lib.rs.html#2669-2672">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub struct Encoding { <span class="comment">/* private fields */</span> }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>An encoding as defined in the <a href="https://encoding.spec.whatwg.org/">Encoding Standard</a>.</p>
+<p>An <em>encoding</em> defines a mapping from a <code>u8</code> sequence to a <code>char</code> sequence
+and, in most cases, vice versa. Each encoding has a name, an output
+encoding, and one or more labels.</p>
+<p><em>Labels</em> are ASCII-case-insensitive strings that are used to identify an
+encoding in formats and protocols. The <em>name</em> of the encoding is the
+preferred label in the case appropriate for returning from the
+<a href="https://dom.spec.whatwg.org/#dom-document-characterset"><code>characterSet</code></a> property of the <code>Document</code> DOM interface.</p>
+<p>The <em>output encoding</em> is the encoding used for form submission and URL
+parsing on Web pages in the encoding. This is UTF-8 for the replacement,
+UTF-16LE and UTF-16BE encodings and the encoding itself for other
+encodings.</p>
+<h2 id="streaming-vs-non-streaming"><a class="doc-anchor" href="#streaming-vs-non-streaming">§</a>Streaming vs. Non-Streaming</h2>
+<p>When you have the entire input in a single buffer, you can use the
+methods <a href="#method.decode"><code>decode()</code></a>, <a href="#method.decode"><code>decode_with_bom_removal()</code></a>,
+<a href="#method.decode_without_bom_handling"><code>decode_without_bom_handling()</code></a>,
+<a href="#method.decode_without_bom_handling_and_without_replacement"><code>decode_without_bom_handling_and_without_replacement()</code></a> and
+<a href="#method.encode"><code>encode()</code></a>. (These methods are available to Rust callers only and are
+not available in the C API.) Unlike the rest of the API available to Rust,
+these methods perform heap allocations. You should the <code>Decoder</code> and
+<code>Encoder</code> objects when your input is split into multiple buffers or when
+you want to control the allocation of the output buffers.</p>
+<h2 id="instances"><a class="doc-anchor" href="#instances">§</a>Instances</h2>
+<p>All instances of <code>Encoding</code> are statically allocated and have the <code>'static</code>
+lifetime. There is precisely one unique <code>Encoding</code> instance for each
+encoding defined in the Encoding Standard.</p>
+<p>To obtain a reference to a particular encoding whose identity you know at
+compile time, use a <code>static</code> that refers to encoding. There is a <code>static</code>
+for each encoding. The <code>static</code>s are named in all caps with hyphens
+replaced with underscores (and in C/C++ have <code>_ENCODING</code> appended to the
+name). For example, if you know at compile time that you will want to
+decode using the UTF-8 encoding, use the <code>UTF_8</code> <code>static</code> (<code>UTF_8_ENCODING</code>
+in C/C++).</p>
+<p>Additionally, there are non-reference-typed forms ending with <code>_INIT</code> to
+work around the problem that <code>static</code>s of the type <code>&amp;'static Encoding</code>
+cannot be used to initialize items of an array whose type is
+<code>[&amp;'static Encoding; N]</code>.</p>
+<p>If you don’t know what encoding you need at compile time and need to
+dynamically get an encoding by label, use
+<code>Encoding::<a href="#method.for_label">for_label</a>(<var>label</var>)</code>.</p>
+<p>Instances of <code>Encoding</code> can be compared with <code>==</code> (in both Rust and in
+C/C++).</p>
+</div></details><h2 id="implementations" class="section-header">Implementations<a href="#implementations" class="anchor">§</a></h2><div id="implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-Encoding" class="impl"><a class="src rightside" href="../src/encoding_rs/lib.rs.html#2674-3414">source</a><a href="#impl-Encoding" class="anchor">§</a><h3 class="code-header">impl <a class="struct" href="struct.Encoding.html" title="struct encoding_rs::Encoding">Encoding</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.for_label" class="method"><a class="src rightside" href="../src/encoding_rs/lib.rs.html#2710-2815">source</a><h4 class="code-header">pub fn <a href="#method.for_label" class="fn">for_label</a>(label: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u8.html">u8</a>]) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;'static <a class="struct" href="struct.Encoding.html" title="struct encoding_rs::Encoding">Encoding</a>&gt;</h4></section></summary><div class="docblock"><p>Implements the
+<a href="https://encoding.spec.whatwg.org/#concept-encoding-get"><em>get an encoding</em></a>
+algorithm.</p>
+<p>If, after ASCII-lowercasing and removing leading and trailing
+whitespace, the argument matches a label defined in the Encoding
+Standard, <code>Some(&amp;'static Encoding)</code> representing the corresponding
+encoding is returned. If there is no match, <code>None</code> is returned.</p>
+<p>This is the right method to use if the action upon the method returning
+<code>None</code> is to use a fallback encoding (e.g. <code>WINDOWS_1252</code>) instead.
+When the action upon the method returning <code>None</code> is not to proceed with
+a fallback but to refuse processing, <code>for_label_no_replacement()</code> is more
+appropriate.</p>
+<p>The argument is of type <code>&amp;[u8]</code> instead of <code>&amp;str</code> to save callers
+that are extracting the label from a non-UTF-8 protocol the trouble
+of conversion to UTF-8. (If you have a <code>&amp;str</code>, just call <code>.as_bytes()</code>
+on it.)</p>
+<p>Available via the C wrapper.</p>
+<h5 id="example"><a class="doc-anchor" href="#example">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>encoding_rs::Encoding;
+
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(encoding_rs::UTF_8), Encoding::for_label(<span class="string">b"utf-8"</span>));
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(encoding_rs::UTF_8), Encoding::for_label(<span class="string">b"unicode11utf8"</span>));
+
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(encoding_rs::ISO_8859_2), Encoding::for_label(<span class="string">b"latin2"</span>));
+
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(encoding_rs::UTF_16BE), Encoding::for_label(<span class="string">b"utf-16be"</span>));
+
+<span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, Encoding::for_label(<span class="string">b"unrecognized label"</span>));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.for_label_no_replacement" class="method"><a class="src rightside" href="../src/encoding_rs/lib.rs.html#2832-2843">source</a><h4 class="code-header">pub fn <a href="#method.for_label_no_replacement" class="fn">for_label_no_replacement</a>(label: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u8.html">u8</a>]) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;'static <a class="struct" href="struct.Encoding.html" title="struct encoding_rs::Encoding">Encoding</a>&gt;</h4></section></summary><div class="docblock"><p>This method behaves the same as <code>for_label()</code>, except when <code>for_label()</code>
+would return <code>Some(REPLACEMENT)</code>, this method returns <code>None</code> instead.</p>
+<p>This method is useful in scenarios where a fatal error is required
+upon invalid label, because in those cases the caller typically wishes
+to treat the labels that map to the replacement encoding as fatal
+errors, too.</p>
+<p>It is not OK to use this method when the action upon the method returning
+<code>None</code> is to use a fallback encoding (e.g. <code>WINDOWS_1252</code>). In such a
+case, the <code>for_label()</code> method should be used instead in order to avoid
+unsafe fallback for labels that <code>for_label()</code> maps to <code>Some(REPLACEMENT)</code>.</p>
+<p>Available via the C wrapper.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.for_bom" class="method"><a class="src rightside" href="../src/encoding_rs/lib.rs.html#2857-2867">source</a><h4 class="code-header">pub fn <a href="#method.for_bom" class="fn">for_bom</a>(buffer: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u8.html">u8</a>]) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;(&amp;'static <a class="struct" href="struct.Encoding.html" title="struct encoding_rs::Encoding">Encoding</a>, <a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.usize.html">usize</a>)&gt;</h4></section></summary><div class="docblock"><p>Performs non-incremental BOM sniffing.</p>
+<p>The argument must either be a buffer representing the entire input
+stream (non-streaming case) or a buffer representing at least the first
+three bytes of the input stream (streaming case).</p>
+<p>Returns <code>Some((UTF_8, 3))</code>, <code>Some((UTF_16LE, 2))</code> or
+<code>Some((UTF_16BE, 2))</code> if the argument starts with the UTF-8, UTF-16LE
+or UTF-16BE BOM or <code>None</code> otherwise.</p>
+<p>Available via the C wrapper.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.name" class="method"><a class="src rightside" href="../src/encoding_rs/lib.rs.html#2876-2878">source</a><h4 class="code-header">pub fn <a href="#method.name" class="fn">name</a>(&amp;'static self) -&gt; &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.str.html">str</a></h4></section></summary><div class="docblock"><p>Returns the name of this encoding.</p>
+<p>This name is appropriate to return as-is from the DOM
+<code>document.characterSet</code> property.</p>
+<p>Available via the C wrapper.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.can_encode_everything" class="method"><a class="src rightside" href="../src/encoding_rs/lib.rs.html#2885-2887">source</a><h4 class="code-header">pub fn <a href="#method.can_encode_everything" class="fn">can_encode_everything</a>(&amp;'static self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Checks whether the <em>output encoding</em> of this encoding can encode every
+<code>char</code>. (Only true if the output encoding is UTF-8.)</p>
+<p>Available via the C wrapper.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.is_ascii_compatible" class="method"><a class="src rightside" href="../src/encoding_rs/lib.rs.html#2894-2896">source</a><h4 class="code-header">pub fn <a href="#method.is_ascii_compatible" class="fn">is_ascii_compatible</a>(&amp;'static self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Checks whether the bytes 0x00…0x7F map exclusively to the characters
+U+0000…U+007F and vice versa.</p>
+<p>Available via the C wrapper.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.is_single_byte" class="method"><a class="src rightside" href="../src/encoding_rs/lib.rs.html#2908-2910">source</a><h4 class="code-header">pub fn <a href="#method.is_single_byte" class="fn">is_single_byte</a>(&amp;'static self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Checks whether this encoding maps one byte to one Basic Multilingual
+Plane code point (i.e. byte length equals decoded UTF-16 length) and
+vice versa (for mappable characters).</p>
+<p><code>true</code> iff this encoding is on the list of <a href="https://encoding.spec.whatwg.org/#legacy-single-byte-encodings">Legacy single-byte
+encodings</a>
+in the spec or x-user-defined.</p>
+<p>Available via the C wrapper.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.output_encoding" class="method"><a class="src rightside" href="../src/encoding_rs/lib.rs.html#2928-2934">source</a><h4 class="code-header">pub fn <a href="#method.output_encoding" class="fn">output_encoding</a>(&amp;'static self) -&gt; &amp;'static <a class="struct" href="struct.Encoding.html" title="struct encoding_rs::Encoding">Encoding</a></h4></section></summary><div class="docblock"><p>Returns the <em>output encoding</em> of this encoding. This is UTF-8 for
+UTF-16BE, UTF-16LE, and replacement and the encoding itself otherwise.</p>
+<p><em>Note:</em> The <em>output encoding</em> concept is needed for form submission and
+error handling in the query strings of URLs in the Web Platform.</p>
+<p>Available via the C wrapper.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.decode" class="method"><a class="src rightside" href="../src/encoding_rs/lib.rs.html#2975-2982">source</a><h4 class="code-header">pub fn <a href="#method.decode" class="fn">decode</a>&lt;'a&gt;(
+    &amp;'static self,
+    bytes: &amp;'a [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u8.html">u8</a>],
+) -&gt; (<a class="enum" href="https://doc.rust-lang.org/1.81.0/alloc/borrow/enum.Cow.html" title="enum alloc::borrow::Cow">Cow</a>&lt;'a, <a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.str.html">str</a>&gt;, &amp;'static <a class="struct" href="struct.Encoding.html" title="struct encoding_rs::Encoding">Encoding</a>, <a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.bool.html">bool</a>)</h4></section></summary><div class="docblock"><p>Decode complete input to <code>Cow&lt;'a, str&gt;</code> <em>with BOM sniffing</em> and with
+malformed sequences replaced with the REPLACEMENT CHARACTER when the
+entire input is available as a single buffer (i.e. the end of the
+buffer marks the end of the stream).</p>
+<p>The BOM, if any, does not appear in the output.</p>
+<p>This method implements the (non-streaming version of) the
+<a href="https://encoding.spec.whatwg.org/#decode"><em>decode</em></a> spec concept.</p>
+<p>The second item in the returned tuple is the encoding that was actually
+used (which may differ from this encoding thanks to BOM sniffing).</p>
+<p>The third item in the returned tuple indicates whether there were
+malformed sequences (that were replaced with the REPLACEMENT CHARACTER).</p>
+<p><em>Note:</em> It is wrong to use this when the input buffer represents only
+a segment of the input instead of the whole input. Use <code>new_decoder()</code>
+when decoding segmented input.</p>
+<p>This method performs a one or two heap allocations for the backing
+buffer of the <code>String</code> when unable to borrow. (One allocation if not
+errors and potentially another one in the presence of errors.) The
+first allocation assumes jemalloc and may not be optimal with
+allocators that do not use power-of-two buckets. A borrow is performed
+if decoding UTF-8 and the input is valid UTF-8, if decoding an
+ASCII-compatible encoding and the input is ASCII-only, or when decoding
+ISO-2022-JP and the input is entirely in the ASCII state without state
+transitions.</p>
+<h5 id="panics"><a class="doc-anchor" href="#panics">§</a>Panics</h5>
+<p>If the size calculation for a heap-allocated backing buffer overflows
+<code>usize</code>.</p>
+<p>Available to Rust only and only with the <code>alloc</code> feature enabled (enabled
+by default).</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.decode_with_bom_removal" class="method"><a class="src rightside" href="../src/encoding_rs/lib.rs.html#3022-3033">source</a><h4 class="code-header">pub fn <a href="#method.decode_with_bom_removal" class="fn">decode_with_bom_removal</a>&lt;'a&gt;(
+    &amp;'static self,
+    bytes: &amp;'a [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u8.html">u8</a>],
+) -&gt; (<a class="enum" href="https://doc.rust-lang.org/1.81.0/alloc/borrow/enum.Cow.html" title="enum alloc::borrow::Cow">Cow</a>&lt;'a, <a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.str.html">str</a>&gt;, <a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.bool.html">bool</a>)</h4></section></summary><div class="docblock"><p>Decode complete input to <code>Cow&lt;'a, str&gt;</code> <em>with BOM removal</em> and with
+malformed sequences replaced with the REPLACEMENT CHARACTER when the
+entire input is available as a single buffer (i.e. the end of the
+buffer marks the end of the stream).</p>
+<p>Only an initial byte sequence that is a BOM for this encoding is removed.</p>
+<p>When invoked on <code>UTF_8</code>, this method implements the (non-streaming
+version of) the
+<a href="https://encoding.spec.whatwg.org/#utf-8-decode"><em>UTF-8 decode</em></a> spec
+concept.</p>
+<p>The second item in the returned pair indicates whether there were
+malformed sequences (that were replaced with the REPLACEMENT CHARACTER).</p>
+<p><em>Note:</em> It is wrong to use this when the input buffer represents only
+a segment of the input instead of the whole input. Use
+<code>new_decoder_with_bom_removal()</code> when decoding segmented input.</p>
+<p>This method performs a one or two heap allocations for the backing
+buffer of the <code>String</code> when unable to borrow. (One allocation if not
+errors and potentially another one in the presence of errors.) The
+first allocation assumes jemalloc and may not be optimal with
+allocators that do not use power-of-two buckets. A borrow is performed
+if decoding UTF-8 and the input is valid UTF-8, if decoding an
+ASCII-compatible encoding and the input is ASCII-only, or when decoding
+ISO-2022-JP and the input is entirely in the ASCII state without state
+transitions.</p>
+<h5 id="panics-1"><a class="doc-anchor" href="#panics-1">§</a>Panics</h5>
+<p>If the size calculation for a heap-allocated backing buffer overflows
+<code>usize</code>.</p>
+<p>Available to Rust only and only with the <code>alloc</code> feature enabled (enabled
+by default).</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.decode_without_bom_handling" class="method"><a class="src rightside" href="../src/encoding_rs/lib.rs.html#3070-3133">source</a><h4 class="code-header">pub fn <a href="#method.decode_without_bom_handling" class="fn">decode_without_bom_handling</a>&lt;'a&gt;(
+    &amp;'static self,
+    bytes: &amp;'a [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u8.html">u8</a>],
+) -&gt; (<a class="enum" href="https://doc.rust-lang.org/1.81.0/alloc/borrow/enum.Cow.html" title="enum alloc::borrow::Cow">Cow</a>&lt;'a, <a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.str.html">str</a>&gt;, <a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.bool.html">bool</a>)</h4></section></summary><div class="docblock"><p>Decode complete input to <code>Cow&lt;'a, str&gt;</code> <em>without BOM handling</em> and
+with malformed sequences replaced with the REPLACEMENT CHARACTER when
+the entire input is available as a single buffer (i.e. the end of the
+buffer marks the end of the stream).</p>
+<p>When invoked on <code>UTF_8</code>, this method implements the (non-streaming
+version of) the
+<a href="https://encoding.spec.whatwg.org/#utf-8-decode-without-bom"><em>UTF-8 decode without BOM</em></a>
+spec concept.</p>
+<p>The second item in the returned pair indicates whether there were
+malformed sequences (that were replaced with the REPLACEMENT CHARACTER).</p>
+<p><em>Note:</em> It is wrong to use this when the input buffer represents only
+a segment of the input instead of the whole input. Use
+<code>new_decoder_without_bom_handling()</code> when decoding segmented input.</p>
+<p>This method performs a one or two heap allocations for the backing
+buffer of the <code>String</code> when unable to borrow. (One allocation if not
+errors and potentially another one in the presence of errors.) The
+first allocation assumes jemalloc and may not be optimal with
+allocators that do not use power-of-two buckets. A borrow is performed
+if decoding UTF-8 and the input is valid UTF-8, if decoding an
+ASCII-compatible encoding and the input is ASCII-only, or when decoding
+ISO-2022-JP and the input is entirely in the ASCII state without state
+transitions.</p>
+<h5 id="panics-2"><a class="doc-anchor" href="#panics-2">§</a>Panics</h5>
+<p>If the size calculation for a heap-allocated backing buffer overflows
+<code>usize</code>.</p>
+<p>Available to Rust only and only with the <code>alloc</code> feature enabled (enabled
+by default).</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.decode_without_bom_handling_and_without_replacement" class="method"><a class="src rightside" href="../src/encoding_rs/lib.rs.html#3167-3221">source</a><h4 class="code-header">pub fn <a href="#method.decode_without_bom_handling_and_without_replacement" class="fn">decode_without_bom_handling_and_without_replacement</a>&lt;'a&gt;(
+    &amp;'static self,
+    bytes: &amp;'a [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u8.html">u8</a>],
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.81.0/alloc/borrow/enum.Cow.html" title="enum alloc::borrow::Cow">Cow</a>&lt;'a, <a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.str.html">str</a>&gt;&gt;</h4></section></summary><div class="docblock"><p>Decode complete input to <code>Cow&lt;'a, str&gt;</code> <em>without BOM handling</em> and
+<em>with malformed sequences treated as fatal</em> when the entire input is
+available as a single buffer (i.e. the end of the buffer marks the end
+of the stream).</p>
+<p>When invoked on <code>UTF_8</code>, this method implements the (non-streaming
+version of) the
+<a href="https://encoding.spec.whatwg.org/#utf-8-decode-without-bom-or-fail"><em>UTF-8 decode without BOM or fail</em></a>
+spec concept.</p>
+<p>Returns <code>None</code> if a malformed sequence was encountered and the result
+of the decode as <code>Some(String)</code> otherwise.</p>
+<p><em>Note:</em> It is wrong to use this when the input buffer represents only
+a segment of the input instead of the whole input. Use
+<code>new_decoder_without_bom_handling()</code> when decoding segmented input.</p>
+<p>This method performs a single heap allocation for the backing
+buffer of the <code>String</code> when unable to borrow. A borrow is performed if
+decoding UTF-8 and the input is valid UTF-8, if decoding an
+ASCII-compatible encoding and the input is ASCII-only, or when decoding
+ISO-2022-JP and the input is entirely in the ASCII state without state
+transitions.</p>
+<h5 id="panics-3"><a class="doc-anchor" href="#panics-3">§</a>Panics</h5>
+<p>If the size calculation for a heap-allocated backing buffer overflows
+<code>usize</code>.</p>
+<p>Available to Rust only and only with the <code>alloc</code> feature enabled (enabled
+by default).</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.encode" class="method"><a class="src rightside" href="../src/encoding_rs/lib.rs.html#3265-3318">source</a><h4 class="code-header">pub fn <a href="#method.encode" class="fn">encode</a>&lt;'a&gt;(
+    &amp;'static self,
+    string: &amp;'a <a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.str.html">str</a>,
+) -&gt; (<a class="enum" href="https://doc.rust-lang.org/1.81.0/alloc/borrow/enum.Cow.html" title="enum alloc::borrow::Cow">Cow</a>&lt;'a, [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u8.html">u8</a>]&gt;, &amp;'static <a class="struct" href="struct.Encoding.html" title="struct encoding_rs::Encoding">Encoding</a>, <a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.bool.html">bool</a>)</h4></section></summary><div class="docblock"><p>Encode complete input to <code>Cow&lt;'a, [u8]&gt;</code> using the
+<a href="struct.Encoding.html#method.output_encoding" title="method encoding_rs::Encoding::output_encoding"><em>output encoding</em></a> of this encoding with
+unmappable characters replaced with decimal numeric character references
+when the entire input is available as a single buffer (i.e. the end of
+the buffer marks the end of the stream).</p>
+<p>This method implements the (non-streaming version of) the
+<a href="https://encoding.spec.whatwg.org/#encode"><em>encode</em></a> spec concept. For
+the <a href="https://encoding.spec.whatwg.org/#utf-8-encode"><em>UTF-8 encode</em></a>
+spec concept, it is slightly more efficient to use
+<code><var>string</var>.as_bytes()</code> instead of invoking this
+method on <code>UTF_8</code>.</p>
+<p>The second item in the returned tuple is the encoding that was actually
+used (<em>which may differ from this encoding thanks to some encodings
+having UTF-8 as their output encoding</em>).</p>
+<p>The third item in the returned tuple indicates whether there were
+unmappable characters (that were replaced with HTML numeric character
+references).</p>
+<p><em>Note:</em> It is wrong to use this when the input buffer represents only
+a segment of the input instead of the whole input. Use <code>new_encoder()</code>
+when encoding segmented output.</p>
+<p>When encoding to UTF-8 or when encoding an ASCII-only input to a
+ASCII-compatible encoding, this method returns a borrow of the input
+without a heap allocation. Otherwise, this method performs a single
+heap allocation for the backing buffer of the <code>Vec&lt;u8&gt;</code> if there are no
+unmappable characters and potentially multiple heap allocations if
+there are. These allocations are tuned for jemalloc and may not be
+optimal when using a different allocator that doesn’t use power-of-two
+buckets.</p>
+<h5 id="panics-4"><a class="doc-anchor" href="#panics-4">§</a>Panics</h5>
+<p>If the size calculation for a heap-allocated backing buffer overflows
+<code>usize</code>.</p>
+<p>Available to Rust only and only with the <code>alloc</code> feature enabled (enabled
+by default).</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.new_decoder" class="method"><a class="src rightside" href="../src/encoding_rs/lib.rs.html#3332-3334">source</a><h4 class="code-header">pub fn <a href="#method.new_decoder" class="fn">new_decoder</a>(&amp;'static self) -&gt; <a class="struct" href="struct.Decoder.html" title="struct encoding_rs::Decoder">Decoder</a></h4></section></summary><div class="docblock"><p>Instantiates a new decoder for this encoding with BOM sniffing enabled.</p>
+<p>BOM sniffing may cause the returned decoder to morph into a decoder
+for UTF-8, UTF-16LE or UTF-16BE instead of this encoding. The BOM
+does not appear in the output.</p>
+<p>Available via the C wrapper.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.new_decoder_with_bom_removal" class="method"><a class="src rightside" href="../src/encoding_rs/lib.rs.html#3346-3348">source</a><h4 class="code-header">pub fn <a href="#method.new_decoder_with_bom_removal" class="fn">new_decoder_with_bom_removal</a>(&amp;'static self) -&gt; <a class="struct" href="struct.Decoder.html" title="struct encoding_rs::Decoder">Decoder</a></h4></section></summary><div class="docblock"><p>Instantiates a new decoder for this encoding with BOM removal.</p>
+<p>If the input starts with bytes that are the BOM for this encoding,
+those bytes are removed. However, the decoder never morphs into a
+decoder for another encoding: A BOM for another encoding is treated as
+(potentially malformed) input to the decoding algorithm for this
+encoding.</p>
+<p>Available via the C wrapper.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.new_decoder_without_bom_handling" class="method"><a class="src rightside" href="../src/encoding_rs/lib.rs.html#3362-3364">source</a><h4 class="code-header">pub fn <a href="#method.new_decoder_without_bom_handling" class="fn">new_decoder_without_bom_handling</a>(&amp;'static self) -&gt; <a class="struct" href="struct.Decoder.html" title="struct encoding_rs::Decoder">Decoder</a></h4></section></summary><div class="docblock"><p>Instantiates a new decoder for this encoding with BOM handling disabled.</p>
+<p>If the input starts with bytes that look like a BOM, those bytes are
+not treated as a BOM. (Hence, the decoder never morphs into a decoder
+for another encoding.)</p>
+<p><em>Note:</em> If the caller has performed BOM sniffing on its own but has not
+removed the BOM, the caller should use <code>new_decoder_with_bom_removal()</code>
+instead of this method to cause the BOM to be removed.</p>
+<p>Available via the C wrapper.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.new_encoder" class="method"><a class="src rightside" href="../src/encoding_rs/lib.rs.html#3374-3377">source</a><h4 class="code-header">pub fn <a href="#method.new_encoder" class="fn">new_encoder</a>(&amp;'static self) -&gt; <a class="struct" href="struct.Encoder.html" title="struct encoding_rs::Encoder">Encoder</a></h4></section></summary><div class="docblock"><p>Instantiates a new encoder for the <a href="struct.Encoding.html#method.output_encoding" title="method encoding_rs::Encoding::output_encoding"><em>output encoding</em></a>
+of this encoding.</p>
+<p><em>Note:</em> The output encoding of UTF-16BE, UTF-16LE, and replacement is UTF-8. There
+is no encoder for UTF-16BE, UTF-16LE, and replacement themselves.</p>
+<p>Available via the C wrapper.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.utf8_valid_up_to" class="method"><a class="src rightside" href="../src/encoding_rs/lib.rs.html#3389-3391">source</a><h4 class="code-header">pub fn <a href="#method.utf8_valid_up_to" class="fn">utf8_valid_up_to</a>(bytes: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u8.html">u8</a>]) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.usize.html">usize</a></h4></section></summary><div class="docblock"><p>Validates UTF-8.</p>
+<p>Returns the index of the first byte that makes the input malformed as
+UTF-8 or the length of the slice if the slice is entirely valid.</p>
+<p>This is currently faster than the corresponding standard library
+functionality. If this implementation gets upstreamed to the standard
+library, this method may be removed in the future.</p>
+<p>Available via the C wrapper.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.ascii_valid_up_to" class="method"><a class="src rightside" href="../src/encoding_rs/lib.rs.html#3399-3401">source</a><h4 class="code-header">pub fn <a href="#method.ascii_valid_up_to" class="fn">ascii_valid_up_to</a>(bytes: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u8.html">u8</a>]) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.usize.html">usize</a></h4></section></summary><div class="docblock"><p>Validates ASCII.</p>
+<p>Returns the index of the first byte that makes the input malformed as
+ASCII or the length of the slice if the slice is entirely valid.</p>
+<p>Available via the C wrapper.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.iso_2022_jp_ascii_valid_up_to" class="method"><a class="src rightside" href="../src/encoding_rs/lib.rs.html#3411-3413">source</a><h4 class="code-header">pub fn <a href="#method.iso_2022_jp_ascii_valid_up_to" class="fn">iso_2022_jp_ascii_valid_up_to</a>(bytes: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u8.html">u8</a>]) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.usize.html">usize</a></h4></section></summary><div class="docblock"><p>Validates ISO-2022-JP ASCII-state data.</p>
+<p>Returns the index of the first byte that makes the input not
+representable in the ASCII state of ISO-2022-JP or the length of the
+slice if the slice is entirely representable in the ASCII state of
+ISO-2022-JP.</p>
+<p>Available via the C wrapper.</p>
+</div></details></div></details></div><h2 id="trait-implementations" class="section-header">Trait Implementations<a href="#trait-implementations" class="anchor">§</a></h2><div id="trait-implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-Debug-for-Encoding" class="impl"><a class="src rightside" href="../src/encoding_rs/lib.rs.html#3446-3451">source</a><a href="#impl-Debug-for-Encoding" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html" title="trait core::fmt::Debug">Debug</a> for <a class="struct" href="struct.Encoding.html" title="struct encoding_rs::Encoding">Encoding</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.fmt" class="method trait-impl"><a class="src rightside" href="../src/encoding_rs/lib.rs.html#3448-3450">source</a><a href="#method.fmt" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html#tymethod.fmt" class="fn">fmt</a>(&amp;self, f: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/fmt/struct.Formatter.html" title="struct core::fmt::Formatter">Formatter</a>&lt;'_&gt;) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a></h4></section></summary><div class='docblock'>Formats the value using the given formatter. <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html#tymethod.fmt">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Hash-for-Encoding" class="impl"><a class="src rightside" href="../src/encoding_rs/lib.rs.html#3439-3444">source</a><a href="#impl-Hash-for-Encoding" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/hash/trait.Hash.html" title="trait core::hash::Hash">Hash</a> for <a class="struct" href="struct.Encoding.html" title="struct encoding_rs::Encoding">Encoding</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.hash" class="method trait-impl"><a class="src rightside" href="../src/encoding_rs/lib.rs.html#3441-3443">source</a><a href="#method.hash" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/hash/trait.Hash.html#tymethod.hash" class="fn">hash</a>&lt;H: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/hash/trait.Hasher.html" title="trait core::hash::Hasher">Hasher</a>&gt;(&amp;self, state: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.reference.html">&amp;mut H</a>)</h4></section></summary><div class='docblock'>Feeds this value into the given <a href="https://doc.rust-lang.org/1.81.0/core/hash/trait.Hasher.html" title="trait core::hash::Hasher"><code>Hasher</code></a>. <a href="https://doc.rust-lang.org/1.81.0/core/hash/trait.Hash.html#tymethod.hash">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.hash_slice" class="method trait-impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.3.0">1.3.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/hash/mod.rs.html#238-240">source</a></span><a href="#method.hash_slice" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/hash/trait.Hash.html#method.hash_slice" class="fn">hash_slice</a>&lt;H&gt;(data: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.slice.html">[Self]</a>, state: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.reference.html">&amp;mut H</a>)<div class="where">where
+    H: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/hash/trait.Hasher.html" title="trait core::hash::Hasher">Hasher</a>,
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class='docblock'>Feeds a slice of this type into the given <a href="https://doc.rust-lang.org/1.81.0/core/hash/trait.Hasher.html" title="trait core::hash::Hasher"><code>Hasher</code></a>. <a href="https://doc.rust-lang.org/1.81.0/core/hash/trait.Hash.html#method.hash_slice">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-PartialEq-for-Encoding" class="impl"><a class="src rightside" href="../src/encoding_rs/lib.rs.html#3416-3421">source</a><a href="#impl-PartialEq-for-Encoding" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/cmp/trait.PartialEq.html" title="trait core::cmp::PartialEq">PartialEq</a> for <a class="struct" href="struct.Encoding.html" title="struct encoding_rs::Encoding">Encoding</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.eq" class="method trait-impl"><a class="src rightside" href="../src/encoding_rs/lib.rs.html#3418-3420">source</a><a href="#method.eq" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/cmp/trait.PartialEq.html#tymethod.eq" class="fn">eq</a>(&amp;self, other: &amp;<a class="struct" href="struct.Encoding.html" title="struct encoding_rs::Encoding">Encoding</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.bool.html">bool</a></h4></section></summary><div class='docblock'>This method tests for <code>self</code> and <code>other</code> values to be equal, and is used
+by <code>==</code>.</div></details><details class="toggle method-toggle" open><summary><section id="method.ne" class="method trait-impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/cmp.rs.html#262">source</a></span><a href="#method.ne" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/cmp/trait.PartialEq.html#method.ne" class="fn">ne</a>(&amp;self, other: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.reference.html">&amp;Rhs</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.bool.html">bool</a></h4></section></summary><div class='docblock'>This method tests for <code>!=</code>. The default implementation is almost always
+sufficient, and should not be overridden without very good reason.</div></details></div></details><section id="impl-Eq-for-Encoding" class="impl"><a class="src rightside" href="../src/encoding_rs/lib.rs.html#3423">source</a><a href="#impl-Eq-for-Encoding" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/cmp/trait.Eq.html" title="trait core::cmp::Eq">Eq</a> for <a class="struct" href="struct.Encoding.html" title="struct encoding_rs::Encoding">Encoding</a></h3></section></div><h2 id="synthetic-implementations" class="section-header">Auto Trait Implementations<a href="#synthetic-implementations" class="anchor">§</a></h2><div id="synthetic-implementations-list"><section id="impl-Freeze-for-Encoding" class="impl"><a href="#impl-Freeze-for-Encoding" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Freeze.html" title="trait core::marker::Freeze">Freeze</a> for <a class="struct" href="struct.Encoding.html" title="struct encoding_rs::Encoding">Encoding</a></h3></section><section id="impl-RefUnwindSafe-for-Encoding" class="impl"><a href="#impl-RefUnwindSafe-for-Encoding" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/panic/unwind_safe/trait.RefUnwindSafe.html" title="trait core::panic::unwind_safe::RefUnwindSafe">RefUnwindSafe</a> for <a class="struct" href="struct.Encoding.html" title="struct encoding_rs::Encoding">Encoding</a></h3></section><section id="impl-Send-for-Encoding" class="impl"><a href="#impl-Send-for-Encoding" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> for <a class="struct" href="struct.Encoding.html" title="struct encoding_rs::Encoding">Encoding</a></h3></section><section id="impl-Sync-for-Encoding" class="impl"><a href="#impl-Sync-for-Encoding" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> for <a class="struct" href="struct.Encoding.html" title="struct encoding_rs::Encoding">Encoding</a></h3></section><section id="impl-Unpin-for-Encoding" class="impl"><a href="#impl-Unpin-for-Encoding" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a> for <a class="struct" href="struct.Encoding.html" title="struct encoding_rs::Encoding">Encoding</a></h3></section><section id="impl-UnwindSafe-for-Encoding" class="impl"><a href="#impl-UnwindSafe-for-Encoding" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/panic/unwind_safe/trait.UnwindSafe.html" title="trait core::panic::unwind_safe::UnwindSafe">UnwindSafe</a> for <a class="struct" href="struct.Encoding.html" title="struct encoding_rs::Encoding">Encoding</a></h3></section></div><h2 id="blanket-implementations" class="section-header">Blanket Implementations<a href="#blanket-implementations" class="anchor">§</a></h2><div id="blanket-implementations-list"><details class="toggle implementors-toggle"><summary><section id="impl-Any-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#140">source</a><a href="#impl-Any-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html" title="trait core::any::Any">Any</a> for T<div class="where">where
+    T: 'static + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.type_id" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#141">source</a><a href="#method.type_id" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html#tymethod.type_id" class="fn">type_id</a>(&amp;self) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/any/struct.TypeId.html" title="struct core::any::TypeId">TypeId</a></h4></section></summary><div class='docblock'>Gets the <code>TypeId</code> of <code>self</code>. <a href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html#tymethod.type_id">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Borrow%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#209">source</a><a href="#impl-Borrow%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html" title="trait core::borrow::Borrow">Borrow</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#211">source</a><a href="#method.borrow" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html#tymethod.borrow" class="fn">borrow</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.reference.html">&amp;T</a></h4></section></summary><div class='docblock'>Immutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html#tymethod.borrow">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-BorrowMut%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#217">source</a><a href="#impl-BorrowMut%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html" title="trait core::borrow::BorrowMut">BorrowMut</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow_mut" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#218">source</a><a href="#method.borrow_mut" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut" class="fn">borrow_mut</a>(&amp;mut self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.reference.html">&amp;mut T</a></h4></section></summary><div class='docblock'>Mutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-From%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#765">source</a><a href="#impl-From%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for T</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#768">source</a><a href="#method.from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html#tymethod.from" class="fn">from</a>(t: T) -&gt; T</h4></section></summary><div class="docblock"><p>Returns the argument unchanged.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Into%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#748-750">source</a><a href="#impl-Into%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#758">source</a><a href="#method.into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html#tymethod.into" class="fn">into</a>(self) -&gt; U</h4></section></summary><div class="docblock"><p>Calls <code>U::from(self)</code>.</p>
+<p>That is, this conversion is whatever the implementation of
+<code><a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for U</code> chooses to do.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryFrom%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#805-807">source</a><a href="#impl-TryFrom%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error" class="associatedtype trait-impl"><a href="#associatedtype.Error" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" class="associatedtype">Error</a> = <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/convert/enum.Infallible.html" title="enum core::convert::Infallible">Infallible</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#812">source</a><a href="#method.try_from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#tymethod.try_from" class="fn">try_from</a>(value: U) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, &lt;T as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryInto%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#790-792">source</a><a href="#impl-TryInto%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html" title="trait core::convert::TryInto">TryInto</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error-1" class="associatedtype trait-impl"><a href="#associatedtype.Error-1" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html#associatedtype.Error" class="associatedtype">Error</a> = &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#797">source</a><a href="#method.try_into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html#tymethod.try_into" class="fn">try_into</a>(self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;U, &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details></div></section></div></main></body></html>

@@ -1,0 +1,76 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Pre-allocated storage for a uniform data type."><title>slab - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="slab" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../slab/index.html">slab</a><span class="version">0.4.9</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#structs">Structs</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">slab</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/slab/lib.rs.html#1-1589">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Pre-allocated storage for a uniform data type.</p>
+<p><code>Slab</code> provides pre-allocated storage for a single data type. If many values
+of a single type are being allocated, it can be more efficient to
+pre-allocate the necessary storage. Since the size of the type is uniform,
+memory fragmentation can be avoided. Storing, clearing, and lookup
+operations become very cheap.</p>
+<p>While <code>Slab</code> may look like other Rust collections, it is not intended to be
+used as a general purpose collection. The primary difference between <code>Slab</code>
+and <code>Vec</code> is that <code>Slab</code> returns the key when storing the value.</p>
+<p>It is important to note that keys may be reused. In other words, once a
+value associated with a given key is removed from a slab, that key may be
+returned from future calls to <code>insert</code>.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Basic storing and retrieval.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span><span class="kw-2">mut </span>slab = Slab::new();
+
+<span class="kw">let </span>hello = slab.insert(<span class="string">"hello"</span>);
+<span class="kw">let </span>world = slab.insert(<span class="string">"world"</span>);
+
+<span class="macro">assert_eq!</span>(slab[hello], <span class="string">"hello"</span>);
+<span class="macro">assert_eq!</span>(slab[world], <span class="string">"world"</span>);
+
+slab[world] = <span class="string">"earth"</span>;
+<span class="macro">assert_eq!</span>(slab[world], <span class="string">"earth"</span>);</code></pre></div>
+<p>Sometimes it is useful to be able to associate the key with the value being
+inserted in the slab. This can be done with the <code>vacant_entry</code> API as such:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span><span class="kw-2">mut </span>slab = Slab::new();
+
+<span class="kw">let </span>hello = {
+    <span class="kw">let </span>entry = slab.vacant_entry();
+    <span class="kw">let </span>key = entry.key();
+
+    entry.insert((key, <span class="string">"hello"</span>));
+    key
+};
+
+<span class="macro">assert_eq!</span>(hello, slab[hello].<span class="number">0</span>);
+<span class="macro">assert_eq!</span>(<span class="string">"hello"</span>, slab[hello].<span class="number">1</span>);</code></pre></div>
+<p>It is generally a good idea to specify the desired capacity of a slab at
+creation time. Note that <code>Slab</code> will grow the internal capacity when
+attempting to insert a new value once the existing capacity has been reached.
+To avoid this, add a check.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span><span class="kw-2">mut </span>slab = Slab::with_capacity(<span class="number">1024</span>);
+
+<span class="comment">// ... use the slab
+
+</span><span class="kw">if </span>slab.len() == slab.capacity() {
+    <span class="macro">panic!</span>(<span class="string">"slab full"</span>);
+}
+
+slab.insert(<span class="string">"the slab is not at capacity yet"</span>);</code></pre></div>
+<h2 id="capacity-and-reallocation"><a class="doc-anchor" href="#capacity-and-reallocation">§</a>Capacity and reallocation</h2>
+<p>The capacity of a slab is the amount of space allocated for any future
+values that will be inserted in the slab. This is not to be confused with
+the <em>length</em> of the slab, which specifies the number of actual values
+currently being inserted. If a slab’s length is equal to its capacity, the
+next value inserted into the slab will require growing the slab by
+reallocating.</p>
+<p>For example, a slab with capacity 10 and length 0 would be an empty slab
+with space for 10 more stored values. Storing 10 or fewer elements into the
+slab will not change its capacity or cause reallocation to occur. However,
+if the slab length is increased to 11 (due to another <code>insert</code>), it will
+have to reallocate, which can be slow. For this reason, it is recommended to
+use <a href="struct.Slab.html#with_capacity"><code>Slab::with_capacity</code></a> whenever possible to specify how many values the
+slab is expected to store.</p>
+<h2 id="implementation"><a class="doc-anchor" href="#implementation">§</a>Implementation</h2>
+<p><code>Slab</code> is backed by a <code>Vec</code> of slots. Each slot is either occupied or
+vacant. <code>Slab</code> maintains a stack of vacant slots using a linked list. To
+find a vacant slot, the stack is popped. When a slot is released, it is
+pushed onto the stack.</p>
+<p>If there are no more available slots in the stack, then <code>Vec::reserve(1)</code> is
+called and a new slot is created.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Drain.html" title="struct slab::Drain">Drain</a></div><div class="desc docblock-short">A draining iterator for <code>Slab</code></div></li><li><div class="item-name"><a class="struct" href="struct.IntoIter.html" title="struct slab::IntoIter">IntoIter</a></div><div class="desc docblock-short">A consuming iterator over the values stored in a <code>Slab</code></div></li><li><div class="item-name"><a class="struct" href="struct.Iter.html" title="struct slab::Iter">Iter</a></div><div class="desc docblock-short">An iterator over the values stored in the <code>Slab</code></div></li><li><div class="item-name"><a class="struct" href="struct.IterMut.html" title="struct slab::IterMut">IterMut</a></div><div class="desc docblock-short">A mutable iterator over the values stored in the <code>Slab</code></div></li><li><div class="item-name"><a class="struct" href="struct.Slab.html" title="struct slab::Slab">Slab</a></div><div class="desc docblock-short">Pre-allocated storage for a uniform data type</div></li><li><div class="item-name"><a class="struct" href="struct.VacantEntry.html" title="struct slab::VacantEntry">VacantEntry</a></div><div class="desc docblock-short">A handle to a vacant entry in a <code>Slab</code>.</div></li></ul></section></div></main></body></html>

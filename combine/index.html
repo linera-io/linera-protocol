@@ -1,0 +1,191 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="This crate contains parser combinators, roughly based on the Haskell libraries parsec and attoparsec."><title>combine - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="combine" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../combine/index.html">combine</a><span class="version">3.8.1</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li><li><a href="#macros">Macros</a></li><li><a href="#traits">Traits</a></li><li><a href="#functions">Functions</a></li><li><a href="#types">Type Aliases</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">combine</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/combine/lib.rs.html#1-1202">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>This crate contains parser combinators, roughly based on the Haskell libraries
+<a href="http://hackage.haskell.org/package/parsec">parsec</a> and
+<a href="https://hackage.haskell.org/package/attoparsec">attoparsec</a>.</p>
+<p>A parser in this library can be described as a function which takes some input and if it
+is successful, returns a value together with the remaining input.
+A parser combinator is a function which takes one or more parsers and returns a new parser.
+For instance the <a href="parser/repeat/fn.many.html"><code>many</code></a> parser can be used to convert a parser for single digits into one that
+parses multiple digits. By modeling parsers in this way it becomes easy to compose complex
+parsers in an almost declarative way.</p>
+<h2 id="overview"><a class="doc-anchor" href="#overview">§</a>Overview</h2>
+<p><code>combine</code> limits itself to creating <a href="https://en.wikipedia.org/wiki/LL_parser">LL(1) parsers</a>
+(it is possible to opt-in to LL(k) parsing using the <a href="parser/combinator/fn.attempt.html"><code>attempt</code></a> combinator) which makes the
+parsers easy to reason about in both function and performance while sacrificing
+some generality. In addition to you being able to reason better about the parsers you
+construct <code>combine</code> the library also takes the knowledge of being an LL parser and uses it to
+automatically construct good error messages.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">extern crate </span>combine;
+<span class="kw">use </span>combine::Parser;
+<span class="kw">use </span>combine::stream::state::State;
+<span class="kw">use </span>combine::parser::char::{digit, letter};
+<span class="kw">const </span>MSG: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str = <span class="string">r#"Parse error at line: 1, column: 1
+Unexpected `|`
+Expected `digit` or `letter`
+"#</span>;
+
+<span class="kw">fn </span>main() {
+    <span class="comment">// Wrapping a `&amp;str` with `State` provides automatic line and column tracking. If `State`
+    // was not used the positions would instead only be pointers into the `&amp;str`
+    </span><span class="kw">if let </span><span class="prelude-val">Err</span>(err) = digit().or(letter()).easy_parse(State::new(<span class="string">"|"</span>)) {
+        <span class="macro">assert_eq!</span>(MSG, <span class="macro">format!</span>(<span class="string">"{}"</span>, err));
+    }
+}</code></pre></div>
+<p>This library is currently split into a few core modules:</p>
+<ul>
+<li>
+<p><a href="parser/index.html"><code>parser</code></a> is where you will find all the parsers that combine provides. It contains the core
+<a href="parser/trait.Parser.html"><code>Parser</code></a> trait as well as several submodules such as <code>sequence</code> or <code>choice</code> which each
+contain several parsers aimed at a specific niche.</p>
+</li>
+<li>
+<p><a href="stream/trait.Stream.html"><code>stream</code></a> contains the second most important trait next to <a href="parser/trait.Parser.html"><code>Parser</code></a>. Streams represent the
+data source which is being parsed such as <code>&amp;[u8]</code>, <code>&amp;str</code> or iterators.</p>
+</li>
+<li>
+<p><a href="easy/index.html"><code>easy</code></a> contains combine’s default “easy” error and stream handling. If you use the
+<code>easy_parse</code> method to start your parsing these are the types that are used.</p>
+</li>
+<li>
+<p><a href="error/index.html"><code>error</code></a> contains the types and traits that make up combine’s error handling. Unless you
+need to customize the errors your parsers return you should not need to use this module much.</p>
+</li>
+</ul>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">extern crate </span>combine;
+<span class="kw">use </span>combine::parser::char::{spaces, digit, char};
+<span class="kw">use </span>combine::{many1, sep_by, Parser};
+<span class="kw">use </span>combine::stream::easy;
+
+<span class="kw">fn </span>main() {
+    <span class="comment">//Parse spaces first and use the with method to only keep the result of the next parser
+    </span><span class="kw">let </span>integer = spaces()
+        <span class="comment">//parse a string of digits into an i32
+        </span>.with(many1(digit()).map(|string: String| string.parse::&lt;i32&gt;().unwrap()));
+
+    <span class="comment">//Parse integers separated by commas, skipping whitespace
+    </span><span class="kw">let </span><span class="kw-2">mut </span>integer_list = sep_by(integer, spaces().skip(char(<span class="string">','</span>)));
+
+    <span class="comment">//Call parse with the input to execute the parser
+    </span><span class="kw">let </span>input = <span class="string">"1234, 45,78"</span>;
+    <span class="kw">let </span>result: <span class="prelude-ty">Result</span>&lt;(Vec&lt;i32&gt;, <span class="kw-2">&amp;</span>str), easy::ParseError&lt;<span class="kw-2">&amp;</span>str&gt;&gt; =
+        integer_list.easy_parse(input);
+    <span class="kw">match </span>result {
+        <span class="prelude-val">Ok</span>((value, _remaining_input)) =&gt; <span class="macro">println!</span>(<span class="string">"{:?}"</span>, value),
+        <span class="prelude-val">Err</span>(err) =&gt; <span class="macro">println!</span>(<span class="string">"{}"</span>, err)
+    }
+}</code></pre></div>
+<p>If we need a parser that is mutually recursive or if we want to export a reusable parser the
+<a href="macro.parser.html"><code>parser!</code></a> macro can be used. In effect it makes it possible to return a parser without naming
+the type of the parser (which can be very large due to combine’s trait based approach). While
+it is possible to do avoid naming the type without the macro those solutions require either allocation
+(<code>Box&lt;Parser&lt;Input = I, Output = O, PartialState = P&gt;&gt;</code>) or nightly rust via <code>impl Trait</code>. The
+macro thus threads the needle and makes it possible to have non-allocating, anonymous parsers
+on stable rust.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[macro_use]
+</span><span class="kw">extern crate </span>combine;
+<span class="kw">use </span>combine::parser::char::{char, letter, spaces};
+<span class="kw">use </span>combine::{between, choice, many1, parser, sep_by, Parser};
+<span class="kw">use </span>combine::error::{ParseError, ParseResult};
+<span class="kw">use </span>combine::stream::{Stream, Positioned};
+<span class="kw">use </span>combine::stream::state::State;
+
+<span class="attr">#[derive(Debug, PartialEq)]
+</span><span class="kw">pub enum </span>Expr {
+    Id(String),
+    Array(Vec&lt;Expr&gt;),
+    Pair(Box&lt;Expr&gt;, Box&lt;Expr&gt;)
+}
+
+<span class="comment">// `impl Parser` can be used to create reusable parsers with zero overhead
+</span><span class="kw">fn </span>expr_&lt;I&gt;() -&gt; <span class="kw">impl </span>Parser&lt;Input = I, Output = Expr&gt;
+    <span class="kw">where </span>I: Stream&lt;Item = char&gt;,
+          <span class="comment">// Necessary due to rust-lang/rust#24159
+          </span>I::Error: ParseError&lt;I::Item, I::Range, I::Position&gt;,
+{
+    <span class="kw">let </span>word = many1(letter());
+
+    <span class="comment">// A parser which skips past whitespace.
+    // Since we aren't interested in knowing that our expression parser
+    // could have accepted additional whitespace between the tokens we also silence the error.
+    </span><span class="kw">let </span>skip_spaces = || spaces().silent();
+
+    <span class="comment">//Creates a parser which parses a char and skips any trailing whitespace
+    </span><span class="kw">let </span>lex_char = |c| char(c).skip(skip_spaces());
+
+    <span class="kw">let </span>comma_list = sep_by(expr(), lex_char(<span class="string">','</span>));
+    <span class="kw">let </span>array = between(lex_char(<span class="string">'['</span>), lex_char(<span class="string">']'</span>), comma_list);
+
+    <span class="comment">//We can use tuples to run several parsers in sequence
+    //The resulting type is a tuple containing each parsers output
+    </span><span class="kw">let </span>pair = (lex_char(<span class="string">'('</span>),
+                expr(),
+                lex_char(<span class="string">','</span>),
+                expr(),
+                lex_char(<span class="string">')'</span>))
+                   .map(|t| Expr::Pair(Box::new(t.<span class="number">1</span>), Box::new(t.<span class="number">3</span>)));
+
+    choice((
+        word.map(Expr::Id),
+        array.map(Expr::Array),
+        pair,
+    ))
+        .skip(skip_spaces())
+}
+
+<span class="comment">// As this expression parser needs to be able to call itself recursively `impl Parser` can't
+// be used on its own as that would cause an infinitely large type. We can avoid this by using
+// the `parser!` macro which erases the inner type and the size of that type entirely which
+// lets it be used recursively.
+//
+// (This macro does not use `impl Trait` which means it can be used in rust &lt; 1.26 as well to
+// emulate `impl Parser`)
+</span><span class="macro">parser!</span>{
+    <span class="kw">fn </span>expr[I]()(I) -&gt; Expr
+    <span class="kw">where </span>[I: Stream&lt;Item = char&gt;]
+    {
+        expr_()
+    }
+}
+
+<span class="kw">fn </span>main() {
+    <span class="kw">let </span>result = expr()
+        .parse(<span class="string">"[[], (hello, world), [rust]]"</span>);
+    <span class="kw">let </span>expr = Expr::Array(<span class="macro">vec!</span>[
+          Expr::Array(Vec::new())
+        , Expr::Pair(Box::new(Expr::Id(<span class="string">"hello"</span>.to_string())),
+                     Box::new(Expr::Id(<span class="string">"world"</span>.to_string())))
+        , Expr::Array(<span class="macro">vec!</span>[Expr::Id(<span class="string">"rust"</span>.to_string())])
+    ]);
+    <span class="macro">assert_eq!</span>(result, <span class="prelude-val">Ok</span>((expr, <span class="string">""</span>)));
+}</code></pre></div>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><code>pub extern crate <a class="mod" href="../byteorder/index.html" title="mod byteorder">byteorder</a>;</code></div></li><li><div class="item-name"><code>pub extern crate <a class="mod" href="../either/index.html" title="mod either">either</a>;</code></div></li></ul><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="easy/index.html" title="mod combine::easy">easy</a></div><div class="desc docblock-short">Stream wrapper which provides an informative and easy to use error type.</div></li><li><div class="item-name"><a class="mod" href="error/index.html" title="mod combine::error">error</a></div><div class="desc docblock-short">Error types and traits which define what kind of errors combine parsers may emit</div></li><li><div class="item-name"><a class="mod" href="parser/index.html" title="mod combine::parser">parser</a></div><div class="desc docblock-short">A collection of both concrete parsers as well as parser combinators.</div></li><li><div class="item-name"><a class="mod" href="stream/index.html" title="mod combine::stream">stream</a></div><div class="desc docblock-short">Traits and implementations of arbitrary data streams.</div></li></ul><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="macro" href="macro.choice.html" title="macro combine::choice">choice</a></div><div class="desc docblock-short">Takes a number of parsers and tries to apply them each in order.
+Fails if all the parsers fails or if an applied parser consumes input before failing.</div></li><li><div class="item-name"><a class="macro" href="macro.opaque.html" title="macro combine::opaque">opaque</a></div><div class="desc docblock-short">Convenience macro over <a href="fn.opaque.html"><code>opaque</code></a>.</div></li><li><div class="item-name"><a class="macro" href="macro.parser.html" title="macro combine::parser">parser</a></div><div class="desc docblock-short">Declares a named parser which can easily be reused.</div></li><li><div class="item-name"><a class="macro" href="macro.struct_parser.html" title="macro combine::struct_parser">struct_parser</a></div><div class="desc docblock-short">Sequences multiple parsers and builds a struct out of them.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.ParseError.html" title="trait combine::ParseError">ParseError</a></div><div class="desc docblock-short">Trait which defines a combine parse error.</div></li><li><div class="item-name"><a class="trait" href="trait.Parser.html" title="trait combine::Parser">Parser</a></div><div class="desc docblock-short">By implementing the <code>Parser</code> trait a type says that it can be used to parse an input stream
+into the type <code>Output</code>.</div></li><li><div class="item-name"><a class="trait" href="trait.Positioned.html" title="trait combine::Positioned">Positioned</a></div><div class="desc docblock-short">A type which has a position.</div></li><li><div class="item-name"><a class="trait" href="trait.RangeStream.html" title="trait combine::RangeStream">RangeStream</a></div><div class="desc docblock-short">A <code>RangeStream</code> is an extension of <code>Stream</code> which allows for zero copy parsing.</div></li><li><div class="item-name"><a class="trait" href="trait.RangeStreamOnce.html" title="trait combine::RangeStreamOnce">RangeStreamOnce</a></div><div class="desc docblock-short">A <code>RangeStream</code> is an extension of <code>StreamOnce</code> which allows for zero copy parsing.</div></li><li><div class="item-name"><a class="trait" href="trait.Stream.html" title="trait combine::Stream">Stream</a></div><div class="desc docblock-short">A stream of tokens which can be duplicated</div></li><li><div class="item-name"><a class="trait" href="trait.StreamOnce.html" title="trait combine::StreamOnce">StreamOnce</a></div><div class="desc docblock-short"><code>StreamOnce</code> represents a sequence of items that can be extracted one by one.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.any.html" title="fn combine::any">any</a></div><div class="desc docblock-short">Parses any token.</div></li><li><div class="item-name"><a class="fn" href="fn.attempt.html" title="fn combine::attempt">attempt</a></div><div class="desc docblock-short"><code>attempt(p)</code> behaves as <code>p</code> except it acts as if the parser hadn’t consumed any input if <code>p</code> fails
+after consuming input. (alias for <a href="fn.try.html"><code>try</code></a>)</div></li><li><div class="item-name"><a class="fn" href="fn.between.html" title="fn combine::between">between</a></div><div class="desc docblock-short">Parses <code>open</code> followed by <code>parser</code> followed by <code>close</code>.
+Returns the value of <code>parser</code>.</div></li><li><div class="item-name"><a class="fn" href="fn.chainl1.html" title="fn combine::chainl1">chainl1</a></div><div class="desc docblock-short">Parses <code>p</code> 1 or more times separated by <code>op</code>. The value returned is the one produced by the
+left associative application of the function returned by the parser <code>op</code>.</div></li><li><div class="item-name"><a class="fn" href="fn.chainr1.html" title="fn combine::chainr1">chainr1</a></div><div class="desc docblock-short">Parses <code>p</code> one or more times separated by <code>op</code>. The value returned is the one produced by the
+right associative application of the function returned by <code>op</code>.</div></li><li><div class="item-name"><a class="fn" href="fn.choice.html" title="fn combine::choice">choice</a></div><div class="desc docblock-short">Takes a tuple, a slice or an array of parsers and tries to apply them each in order.
+Fails if all the parsers fails or if an applied parser consumes input before failing.</div></li><li><div class="item-name"><a class="fn" href="fn.count.html" title="fn combine::count">count</a></div><div class="desc docblock-short">Parses <code>parser</code> from zero up to <code>count</code> times.</div></li><li><div class="item-name"><a class="fn" href="fn.count_min_max.html" title="fn combine::count_min_max">count_min_max</a></div><div class="desc docblock-short">Parses <code>parser</code> from <code>min</code> to <code>max</code> times (including <code>min</code> and <code>max</code>).</div></li><li><div class="item-name"><a class="fn" href="fn.env_parser.html" title="fn combine::env_parser">env_parser</a></div><div class="desc docblock-short">Constructs a parser out of an environment and a function which needs the given environment to
+do the parsing. This is commonly useful to allow multiple parsers to share some environment
+while still allowing the parsers to be written in separate functions.</div></li><li><div class="item-name"><a class="fn" href="fn.eof.html" title="fn combine::eof">eof</a></div><div class="desc docblock-short">Succeeds only if the stream is at end of input, fails otherwise.</div></li><li><div class="item-name"><a class="fn" href="fn.from_str.html" title="fn combine::from_str">from_str</a></div><div class="desc docblock-short">Takes a parser that outputs a string like value (<code>&amp;str</code>, <code>String</code>, <code>&amp;[u8]</code> or <code>Vec&lt;u8&gt;</code>) and parses it
+using <code>std::str::FromStr</code>. Errors if the output of <code>parser</code> is not UTF-8 or if
+<code>FromStr::from_str</code> returns an error.</div></li><li><div class="item-name"><a class="fn" href="fn.look_ahead.html" title="fn combine::look_ahead">look_ahead</a></div><div class="desc docblock-short"><code>look_ahead(p)</code> acts as <code>p</code> but doesn’t consume input on success.</div></li><li><div class="item-name"><a class="fn" href="fn.many.html" title="fn combine::many">many</a></div><div class="desc docblock-short">Parses <code>p</code> zero or more times returning a collection with the values from <code>p</code>.</div></li><li><div class="item-name"><a class="fn" href="fn.many1.html" title="fn combine::many1">many1</a></div><div class="desc docblock-short">Parses <code>p</code> one or more times returning a collection with the values from <code>p</code>.</div></li><li><div class="item-name"><a class="fn" href="fn.none_of.html" title="fn combine::none_of">none_of</a></div><div class="desc docblock-short">Extract one token and succeeds if it is not part of <code>tokens</code>.</div></li><li><div class="item-name"><a class="fn" href="fn.not_followed_by.html" title="fn combine::not_followed_by">not_followed_by</a></div><div class="desc docblock-short">Succeeds only if <code>parser</code> fails.
+Never consumes any input.</div></li><li><div class="item-name"><a class="fn" href="fn.one_of.html" title="fn combine::one_of">one_of</a></div><div class="desc docblock-short">Extract one token and succeeds if it is part of <code>tokens</code>.</div></li><li><div class="item-name"><a class="fn" href="fn.optional.html" title="fn combine::optional">optional</a></div><div class="desc docblock-short">Parses <code>parser</code> and outputs <code>Some(value)</code> if it succeeds, <code>None</code> if it fails without
+consuming any input. Fails if <code>parser</code> fails after having consumed some input.</div></li><li><div class="item-name"><a class="fn" href="fn.parser.html" title="fn combine::parser">parser</a></div><div class="desc docblock-short">Wraps a function, turning it into a parser.</div></li><li><div class="item-name"><a class="fn" href="fn.position.html" title="fn combine::position">position</a></div><div class="desc docblock-short">Parser which just returns the current position in the stream.</div></li><li><div class="item-name"><a class="fn" href="fn.satisfy.html" title="fn combine::satisfy">satisfy</a></div><div class="desc docblock-short">Parses a token and succeeds depending on the result of <code>predicate</code>.</div></li><li><div class="item-name"><a class="fn" href="fn.satisfy_map.html" title="fn combine::satisfy_map">satisfy_map</a></div><div class="desc docblock-short">Parses a token and passes it to <code>predicate</code>. If <code>predicate</code> returns <code>Some</code> the parser succeeds
+and returns the value inside the <code>Option</code>. If <code>predicate</code> returns <code>None</code> the parser fails
+without consuming any input.</div></li><li><div class="item-name"><a class="fn" href="fn.sep_by.html" title="fn combine::sep_by">sep_by</a></div><div class="desc docblock-short">Parses <code>parser</code> zero or more time separated by <code>separator</code>, returning a collection with the
+values from <code>p</code>.</div></li><li><div class="item-name"><a class="fn" href="fn.sep_by1.html" title="fn combine::sep_by1">sep_by1</a></div><div class="desc docblock-short">Parses <code>parser</code> one or more time separated by <code>separator</code>, returning a collection with the
+values from <code>p</code>.</div></li><li><div class="item-name"><a class="fn" href="fn.sep_end_by.html" title="fn combine::sep_end_by">sep_end_by</a></div><div class="desc docblock-short">Parses <code>parser</code> zero or more times separated and ended by <code>separator</code>, returning a collection
+with the values from <code>p</code>.</div></li><li><div class="item-name"><a class="fn" href="fn.sep_end_by1.html" title="fn combine::sep_end_by1">sep_end_by1</a></div><div class="desc docblock-short">Parses <code>parser</code> one or more times separated and ended by <code>separator</code>, returning a collection
+with the values from <code>p</code>.</div></li><li><div class="item-name"><a class="fn" href="fn.skip_count.html" title="fn combine::skip_count">skip_count</a></div><div class="desc docblock-short">Parses <code>parser</code> from zero up to <code>count</code> times skipping the output of <code>parser</code>.</div></li><li><div class="item-name"><a class="fn" href="fn.skip_count_min_max.html" title="fn combine::skip_count_min_max">skip_count_min_max</a></div><div class="desc docblock-short">Parses <code>parser</code> from <code>min</code> to <code>max</code> times (including <code>min</code> and <code>max</code>)
+skipping the output of <code>parser</code>.</div></li><li><div class="item-name"><a class="fn" href="fn.skip_many.html" title="fn combine::skip_many">skip_many</a></div><div class="desc docblock-short">Parses <code>p</code> zero or more times ignoring the result.</div></li><li><div class="item-name"><a class="fn" href="fn.skip_many1.html" title="fn combine::skip_many1">skip_many1</a></div><div class="desc docblock-short">Parses <code>p</code> one or more times ignoring the result.</div></li><li><div class="item-name"><a class="fn" href="fn.token.html" title="fn combine::token">token</a></div><div class="desc docblock-short">Parses a character and succeeds if the character is equal to <code>c</code>.</div></li><li><div class="item-name"><a class="fn" href="fn.tokens.html" title="fn combine::tokens">tokens</a></div><div class="desc docblock-short">Parses multiple tokens.</div></li><li><div class="item-name"><a class="fn" href="fn.tokens2.html" title="fn combine::tokens2">tokens2</a></div><div class="desc docblock-short">Parses multiple tokens.</div></li><li><div class="item-name"><a class="fn" href="fn.try.html" title="fn combine::try">try</a><span class="stab deprecated" title="">Deprecated</span></div><div class="desc docblock-short"><code>try(p)</code> behaves as <code>p</code> except it acts as if the parser hadn’t consumed any input if <code>p</code> fails
+after consuming input.</div></li><li><div class="item-name"><a class="fn" href="fn.unexpected.html" title="fn combine::unexpected">unexpected</a></div><div class="desc docblock-short">Always fails with <code>message</code> as an unexpected error.
+Never consumes any input.</div></li><li><div class="item-name"><a class="fn" href="fn.unexpected_any.html" title="fn combine::unexpected_any">unexpected_any</a></div><div class="desc docblock-short">Always fails with <code>message</code> as an unexpected error.
+Never consumes any input.</div></li><li><div class="item-name"><a class="fn" href="fn.value.html" title="fn combine::value">value</a></div><div class="desc docblock-short">Always returns the value <code>v</code> without consuming any input.</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.ConsumedResult.html" title="type combine::ConsumedResult">ConsumedResult</a></div><div class="desc docblock-short">A <code>Result</code> type which has the consumed status flattened into the result.
+Conversions to and from <code>std::result::Result</code> can be done using <code>result.into()</code> or
+<code>From::from(result)</code></div></li><li><div class="item-name"><a class="type" href="type.ParseResult.html" title="type combine::ParseResult">ParseResult</a></div><div class="desc docblock-short">A type alias over the specific <code>Result</code> type used by parsers to indicate whether they were
+successful or not.
+<code>O</code> is the type that is output on success.
+<code>I</code> is the specific stream type used in the parser.</div></li></ul></section></div></main></body></html>

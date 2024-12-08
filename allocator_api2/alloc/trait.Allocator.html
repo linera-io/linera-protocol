@@ -1,0 +1,224 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="An implementation of `Allocator` can allocate, grow, shrink, and deallocate arbitrary blocks of data described via `Layout`."><title>Allocator in allocator_api2::alloc - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="allocator_api2" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../allocator_api2/index.html">allocator_api2</a><span class="version">0.2.18</span></h2></div><h2 class="location"><a href="#">Allocator</a></h2><div class="sidebar-elems"><section><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.allocate">allocate</a></li><li><a href="#tymethod.deallocate">deallocate</a></li></ul><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.allocate_zeroed">allocate_zeroed</a></li><li><a href="#method.by_ref">by_ref</a></li><li><a href="#method.grow">grow</a></li><li><a href="#method.grow_zeroed">grow_zeroed</a></li><li><a href="#method.shrink">shrink</a></li></ul><h3><a href="#foreign-impls">Implementations on Foreign Types</a></h3><ul class="block"><li><a href="#impl-Allocator-for-%26A">&amp;A</a></li></ul><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In allocator_api2::alloc</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="../index.html">allocator_api2</a>::<wbr><a href="index.html">alloc</a>::<wbr><a class="trait" href="#">Allocator</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/allocator_api2/stable/alloc/mod.rs.html#101-362">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub unsafe trait Allocator {
+    // Required methods
+    fn <a href="#tymethod.allocate" class="fn">allocate</a>(&amp;self, layout: <a class="struct" href="struct.Layout.html" title="struct allocator_api2::alloc::Layout">Layout</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/core/ptr/non_null/struct.NonNull.html" title="struct core::ptr::non_null::NonNull">NonNull</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u8.html">u8</a>]&gt;, <a class="struct" href="struct.AllocError.html" title="struct allocator_api2::alloc::AllocError">AllocError</a>&gt;;
+<span class="item-spacer"></span>    unsafe fn <a href="#tymethod.deallocate" class="fn">deallocate</a>(&amp;self, ptr: <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/ptr/non_null/struct.NonNull.html" title="struct core::ptr::non_null::NonNull">NonNull</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u8.html">u8</a>&gt;, layout: <a class="struct" href="struct.Layout.html" title="struct allocator_api2::alloc::Layout">Layout</a>);
+
+    // Provided methods
+    fn <a href="#method.allocate_zeroed" class="fn">allocate_zeroed</a>(
+        &amp;self,
+        layout: <a class="struct" href="struct.Layout.html" title="struct allocator_api2::alloc::Layout">Layout</a>,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/core/ptr/non_null/struct.NonNull.html" title="struct core::ptr::non_null::NonNull">NonNull</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u8.html">u8</a>]&gt;, <a class="struct" href="struct.AllocError.html" title="struct allocator_api2::alloc::AllocError">AllocError</a>&gt; { ... }
+<span class="item-spacer"></span>    unsafe fn <a href="#method.grow" class="fn">grow</a>(
+        &amp;self,
+        ptr: <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/ptr/non_null/struct.NonNull.html" title="struct core::ptr::non_null::NonNull">NonNull</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u8.html">u8</a>&gt;,
+        old_layout: <a class="struct" href="struct.Layout.html" title="struct allocator_api2::alloc::Layout">Layout</a>,
+        new_layout: <a class="struct" href="struct.Layout.html" title="struct allocator_api2::alloc::Layout">Layout</a>,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/core/ptr/non_null/struct.NonNull.html" title="struct core::ptr::non_null::NonNull">NonNull</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u8.html">u8</a>]&gt;, <a class="struct" href="struct.AllocError.html" title="struct allocator_api2::alloc::AllocError">AllocError</a>&gt; { ... }
+<span class="item-spacer"></span>    unsafe fn <a href="#method.grow_zeroed" class="fn">grow_zeroed</a>(
+        &amp;self,
+        ptr: <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/ptr/non_null/struct.NonNull.html" title="struct core::ptr::non_null::NonNull">NonNull</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u8.html">u8</a>&gt;,
+        old_layout: <a class="struct" href="struct.Layout.html" title="struct allocator_api2::alloc::Layout">Layout</a>,
+        new_layout: <a class="struct" href="struct.Layout.html" title="struct allocator_api2::alloc::Layout">Layout</a>,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/core/ptr/non_null/struct.NonNull.html" title="struct core::ptr::non_null::NonNull">NonNull</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u8.html">u8</a>]&gt;, <a class="struct" href="struct.AllocError.html" title="struct allocator_api2::alloc::AllocError">AllocError</a>&gt; { ... }
+<span class="item-spacer"></span>    unsafe fn <a href="#method.shrink" class="fn">shrink</a>(
+        &amp;self,
+        ptr: <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/ptr/non_null/struct.NonNull.html" title="struct core::ptr::non_null::NonNull">NonNull</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u8.html">u8</a>&gt;,
+        old_layout: <a class="struct" href="struct.Layout.html" title="struct allocator_api2::alloc::Layout">Layout</a>,
+        new_layout: <a class="struct" href="struct.Layout.html" title="struct allocator_api2::alloc::Layout">Layout</a>,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/core/ptr/non_null/struct.NonNull.html" title="struct core::ptr::non_null::NonNull">NonNull</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u8.html">u8</a>]&gt;, <a class="struct" href="struct.AllocError.html" title="struct allocator_api2::alloc::AllocError">AllocError</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.by_ref" class="fn">by_ref</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.reference.html">&amp;Self</a>
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>An implementation of <code>Allocator</code> can allocate, grow, shrink, and deallocate arbitrary blocks of
+data described via <a href="struct.Layout.html" title="struct allocator_api2::alloc::Layout"><code>Layout</code></a>.</p>
+<p><code>Allocator</code> is designed to be implemented on ZSTs, references, or smart pointers because having
+an allocator like <code>MyAlloc([u8; N])</code> cannot be moved, without updating the pointers to the
+allocated memory.</p>
+<p>Unlike <a href="trait.GlobalAlloc.html" title="trait allocator_api2::alloc::GlobalAlloc"><code>GlobalAlloc</code></a>, zero-sized allocations are allowed in <code>Allocator</code>. If an underlying
+allocator does not support this (like jemalloc) or return a null pointer (such as
+<code>libc::malloc</code>), this must be caught by the implementation.</p>
+<h4 id="currently-allocated-memory"><a class="doc-anchor" href="#currently-allocated-memory">§</a>Currently allocated memory</h4>
+<p>Some of the methods require that a memory block be <em>currently allocated</em> via an allocator. This
+means that:</p>
+<ul>
+<li>
+<p>the starting address for that memory block was previously returned by <a href="trait.Allocator.html#tymethod.allocate" title="method allocator_api2::alloc::Allocator::allocate"><code>allocate</code></a>, <a href="trait.Allocator.html#method.grow" title="method allocator_api2::alloc::Allocator::grow"><code>grow</code></a>, or
+<a href="trait.Allocator.html#method.shrink" title="method allocator_api2::alloc::Allocator::shrink"><code>shrink</code></a>, and</p>
+</li>
+<li>
+<p>the memory block has not been subsequently deallocated, where blocks are either deallocated
+directly by being passed to <a href="trait.Allocator.html#tymethod.deallocate" title="method allocator_api2::alloc::Allocator::deallocate"><code>deallocate</code></a> or were changed by being passed to <a href="trait.Allocator.html#method.grow" title="method allocator_api2::alloc::Allocator::grow"><code>grow</code></a> or
+<a href="trait.Allocator.html#method.shrink" title="method allocator_api2::alloc::Allocator::shrink"><code>shrink</code></a> that returns <code>Ok</code>. If <code>grow</code> or <code>shrink</code> have returned <code>Err</code>, the passed pointer
+remains valid.</p>
+</li>
+</ul>
+<h4 id="memory-fitting"><a class="doc-anchor" href="#memory-fitting">§</a>Memory fitting</h4>
+<p>Some of the methods require that a layout <em>fit</em> a memory block. What it means for a layout to
+“fit” a memory block means (or equivalently, for a memory block to “fit” a layout) is that the
+following conditions must hold:</p>
+<ul>
+<li>
+<p>The block must be allocated with the same alignment as <a href="struct.Layout.html#method.align" title="method allocator_api2::alloc::Layout::align"><code>layout.align()</code></a>, and</p>
+</li>
+<li>
+<p>The provided <a href="struct.Layout.html#method.size" title="method allocator_api2::alloc::Layout::size"><code>layout.size()</code></a> must fall in the range <code>min ..= max</code>, where:</p>
+<ul>
+<li><code>min</code> is the size of the layout most recently used to allocate the block, and</li>
+<li><code>max</code> is the latest actual size returned from <a href="trait.Allocator.html#tymethod.allocate" title="method allocator_api2::alloc::Allocator::allocate"><code>allocate</code></a>, <a href="trait.Allocator.html#method.grow" title="method allocator_api2::alloc::Allocator::grow"><code>grow</code></a>, or <a href="trait.Allocator.html#method.shrink" title="method allocator_api2::alloc::Allocator::shrink"><code>shrink</code></a>.</li>
+</ul>
+</li>
+</ul>
+<h2 id="safety"><a class="doc-anchor" href="#safety">§</a>Safety</h2>
+<ul>
+<li>
+<p>Memory blocks returned from an allocator must point to valid memory and retain their validity
+until the instance and all of its clones are dropped,</p>
+</li>
+<li>
+<p>cloning or moving the allocator must not invalidate memory blocks returned from this
+allocator. A cloned allocator must behave like the same allocator, and</p>
+</li>
+<li>
+<p>any pointer to a memory block which is <a href="#currently-allocated-memory"><em>currently allocated</em></a> may be passed to any other
+method of the allocator.</p>
+</li>
+</ul>
+</div></details><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.allocate" class="method"><a class="src rightside" href="../../src/allocator_api2/stable/alloc/mod.rs.html#122">source</a><h4 class="code-header">fn <a href="#tymethod.allocate" class="fn">allocate</a>(&amp;self, layout: <a class="struct" href="struct.Layout.html" title="struct allocator_api2::alloc::Layout">Layout</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/core/ptr/non_null/struct.NonNull.html" title="struct core::ptr::non_null::NonNull">NonNull</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u8.html">u8</a>]&gt;, <a class="struct" href="struct.AllocError.html" title="struct allocator_api2::alloc::AllocError">AllocError</a>&gt;</h4></section></summary><div class="docblock"><p>Attempts to allocate a block of memory.</p>
+<p>On success, returns a <a href="https://doc.rust-lang.org/1.81.0/core/ptr/non_null/struct.NonNull.html" title="struct core::ptr::non_null::NonNull"><code>NonNull&lt;[u8]&gt;</code></a> meeting the size and alignment guarantees of <code>layout</code>.</p>
+<p>The returned block may have a larger size than specified by <code>layout.size()</code>, and may or may
+not have its contents initialized.</p>
+<h5 id="errors"><a class="doc-anchor" href="#errors">§</a>Errors</h5>
+<p>Returning <code>Err</code> indicates that either memory is exhausted or <code>layout</code> does not meet
+allocator’s size or alignment constraints.</p>
+<p>Implementations are encouraged to return <code>Err</code> on memory exhaustion rather than panicking or
+aborting, but this is not a strict requirement. (Specifically: it is <em>legal</em> to implement
+this trait atop an underlying native allocation library that aborts on memory exhaustion.)</p>
+<p>Clients wishing to abort computation in response to an allocation error are encouraged to
+call the <a href="../../alloc/alloc/fn.handle_alloc_error.html"><code>handle_alloc_error</code></a> function, rather than directly invoking <code>panic!</code> or similar.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.deallocate" class="method"><a class="src rightside" href="../../src/allocator_api2/stable/alloc/mod.rs.html#156">source</a><h4 class="code-header">unsafe fn <a href="#tymethod.deallocate" class="fn">deallocate</a>(&amp;self, ptr: <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/ptr/non_null/struct.NonNull.html" title="struct core::ptr::non_null::NonNull">NonNull</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u8.html">u8</a>&gt;, layout: <a class="struct" href="struct.Layout.html" title="struct allocator_api2::alloc::Layout">Layout</a>)</h4></section></summary><div class="docblock"><p>Deallocates the memory referenced by <code>ptr</code>.</p>
+<h5 id="safety-1"><a class="doc-anchor" href="#safety-1">§</a>Safety</h5>
+<ul>
+<li><code>ptr</code> must denote a block of memory <a href="#currently-allocated-memory"><em>currently allocated</em></a> via this allocator, and</li>
+<li><code>layout</code> must <a href="#memory-fitting"><em>fit</em></a> that block of memory.</li>
+</ul>
+</div></details></div><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.allocate_zeroed" class="method"><a class="src rightside" href="../../src/allocator_api2/stable/alloc/mod.rs.html#140-145">source</a><h4 class="code-header">fn <a href="#method.allocate_zeroed" class="fn">allocate_zeroed</a>(&amp;self, layout: <a class="struct" href="struct.Layout.html" title="struct allocator_api2::alloc::Layout">Layout</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/core/ptr/non_null/struct.NonNull.html" title="struct core::ptr::non_null::NonNull">NonNull</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u8.html">u8</a>]&gt;, <a class="struct" href="struct.AllocError.html" title="struct allocator_api2::alloc::AllocError">AllocError</a>&gt;</h4></section></summary><div class="docblock"><p>Behaves like <code>allocate</code>, but also ensures that the returned memory is zero-initialized.</p>
+<h5 id="errors-1"><a class="doc-anchor" href="#errors-1">§</a>Errors</h5>
+<p>Returning <code>Err</code> indicates that either memory is exhausted or <code>layout</code> does not meet
+allocator’s size or alignment constraints.</p>
+<p>Implementations are encouraged to return <code>Err</code> on memory exhaustion rather than panicking or
+aborting, but this is not a strict requirement. (Specifically: it is <em>legal</em> to implement
+this trait atop an underlying native allocation library that aborts on memory exhaustion.)</p>
+<p>Clients wishing to abort computation in response to an allocation error are encouraged to
+call the <a href="../../alloc/alloc/fn.handle_alloc_error.html"><code>handle_alloc_error</code></a> function, rather than directly invoking <code>panic!</code> or similar.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.grow" class="method"><a class="src rightside" href="../../src/allocator_api2/stable/alloc/mod.rs.html#197-221">source</a><h4 class="code-header">unsafe fn <a href="#method.grow" class="fn">grow</a>(
+    &amp;self,
+    ptr: <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/ptr/non_null/struct.NonNull.html" title="struct core::ptr::non_null::NonNull">NonNull</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u8.html">u8</a>&gt;,
+    old_layout: <a class="struct" href="struct.Layout.html" title="struct allocator_api2::alloc::Layout">Layout</a>,
+    new_layout: <a class="struct" href="struct.Layout.html" title="struct allocator_api2::alloc::Layout">Layout</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/core/ptr/non_null/struct.NonNull.html" title="struct core::ptr::non_null::NonNull">NonNull</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u8.html">u8</a>]&gt;, <a class="struct" href="struct.AllocError.html" title="struct allocator_api2::alloc::AllocError">AllocError</a>&gt;</h4></section></summary><div class="docblock"><p>Attempts to extend the memory block.</p>
+<p>Returns a new <a href="https://doc.rust-lang.org/1.81.0/core/ptr/non_null/struct.NonNull.html" title="struct core::ptr::non_null::NonNull"><code>NonNull&lt;[u8]&gt;</code></a> containing a pointer and the actual size of the allocated
+memory. The pointer is suitable for holding data described by <code>new_layout</code>. To accomplish
+this, the allocator may extend the allocation referenced by <code>ptr</code> to fit the new layout.</p>
+<p>If this returns <code>Ok</code>, then ownership of the memory block referenced by <code>ptr</code> has been
+transferred to this allocator. Any access to the old <code>ptr</code> is Undefined Behavior, even if the
+allocation was grown in-place. The newly returned pointer is the only valid pointer
+for accessing this memory now.</p>
+<p>If this method returns <code>Err</code>, then ownership of the memory block has not been transferred to
+this allocator, and the contents of the memory block are unaltered.</p>
+<h5 id="safety-2"><a class="doc-anchor" href="#safety-2">§</a>Safety</h5>
+<ul>
+<li><code>ptr</code> must denote a block of memory <a href="#currently-allocated-memory"><em>currently allocated</em></a> via this allocator.</li>
+<li><code>old_layout</code> must <a href="#memory-fitting"><em>fit</em></a> that block of memory (The <code>new_layout</code> argument need not fit it.).</li>
+<li><code>new_layout.size()</code> must be greater than or equal to <code>old_layout.size()</code>.</li>
+</ul>
+<p>Note that <code>new_layout.align()</code> need not be the same as <code>old_layout.align()</code>.</p>
+<h5 id="errors-2"><a class="doc-anchor" href="#errors-2">§</a>Errors</h5>
+<p>Returns <code>Err</code> if the new layout does not meet the allocator’s size and alignment
+constraints of the allocator, or if growing otherwise fails.</p>
+<p>Implementations are encouraged to return <code>Err</code> on memory exhaustion rather than panicking or
+aborting, but this is not a strict requirement. (Specifically: it is <em>legal</em> to implement
+this trait atop an underlying native allocation library that aborts on memory exhaustion.)</p>
+<p>Clients wishing to abort computation in response to an allocation error are encouraged to
+call the <a href="../../alloc/alloc/fn.handle_alloc_error.html"><code>handle_alloc_error</code></a> function, rather than directly invoking <code>panic!</code> or similar.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.grow_zeroed" class="method"><a class="src rightside" href="../../src/allocator_api2/stable/alloc/mod.rs.html#261-285">source</a><h4 class="code-header">unsafe fn <a href="#method.grow_zeroed" class="fn">grow_zeroed</a>(
+    &amp;self,
+    ptr: <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/ptr/non_null/struct.NonNull.html" title="struct core::ptr::non_null::NonNull">NonNull</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u8.html">u8</a>&gt;,
+    old_layout: <a class="struct" href="struct.Layout.html" title="struct allocator_api2::alloc::Layout">Layout</a>,
+    new_layout: <a class="struct" href="struct.Layout.html" title="struct allocator_api2::alloc::Layout">Layout</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/core/ptr/non_null/struct.NonNull.html" title="struct core::ptr::non_null::NonNull">NonNull</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u8.html">u8</a>]&gt;, <a class="struct" href="struct.AllocError.html" title="struct allocator_api2::alloc::AllocError">AllocError</a>&gt;</h4></section></summary><div class="docblock"><p>Behaves like <code>grow</code>, but also ensures that the new contents are set to zero before being
+returned.</p>
+<p>The memory block will contain the following contents after a successful call to
+<code>grow_zeroed</code>:</p>
+<ul>
+<li>Bytes <code>0..old_layout.size()</code> are preserved from the original allocation.</li>
+<li>Bytes <code>old_layout.size()..old_size</code> will either be preserved or zeroed, depending on
+the allocator implementation. <code>old_size</code> refers to the size of the memory block prior
+to the <code>grow_zeroed</code> call, which may be larger than the size that was originally
+requested when it was allocated.</li>
+<li>Bytes <code>old_size..new_size</code> are zeroed. <code>new_size</code> refers to the size of the memory
+block returned by the <code>grow_zeroed</code> call.</li>
+</ul>
+<h5 id="safety-3"><a class="doc-anchor" href="#safety-3">§</a>Safety</h5>
+<ul>
+<li><code>ptr</code> must denote a block of memory <a href="#currently-allocated-memory"><em>currently allocated</em></a> via this allocator.</li>
+<li><code>old_layout</code> must <a href="#memory-fitting"><em>fit</em></a> that block of memory (The <code>new_layout</code> argument need not fit it.).</li>
+<li><code>new_layout.size()</code> must be greater than or equal to <code>old_layout.size()</code>.</li>
+</ul>
+<p>Note that <code>new_layout.align()</code> need not be the same as <code>old_layout.align()</code>.</p>
+<h5 id="errors-3"><a class="doc-anchor" href="#errors-3">§</a>Errors</h5>
+<p>Returns <code>Err</code> if the new layout does not meet the allocator’s size and alignment
+constraints of the allocator, or if growing otherwise fails.</p>
+<p>Implementations are encouraged to return <code>Err</code> on memory exhaustion rather than panicking or
+aborting, but this is not a strict requirement. (Specifically: it is <em>legal</em> to implement
+this trait atop an underlying native allocation library that aborts on memory exhaustion.)</p>
+<p>Clients wishing to abort computation in response to an allocation error are encouraged to
+call the <a href="../../alloc/alloc/fn.handle_alloc_error.html"><code>handle_alloc_error</code></a> function, rather than directly invoking <code>panic!</code> or similar.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.shrink" class="method"><a class="src rightside" href="../../src/allocator_api2/stable/alloc/mod.rs.html#326-350">source</a><h4 class="code-header">unsafe fn <a href="#method.shrink" class="fn">shrink</a>(
+    &amp;self,
+    ptr: <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/ptr/non_null/struct.NonNull.html" title="struct core::ptr::non_null::NonNull">NonNull</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u8.html">u8</a>&gt;,
+    old_layout: <a class="struct" href="struct.Layout.html" title="struct allocator_api2::alloc::Layout">Layout</a>,
+    new_layout: <a class="struct" href="struct.Layout.html" title="struct allocator_api2::alloc::Layout">Layout</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/core/ptr/non_null/struct.NonNull.html" title="struct core::ptr::non_null::NonNull">NonNull</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u8.html">u8</a>]&gt;, <a class="struct" href="struct.AllocError.html" title="struct allocator_api2::alloc::AllocError">AllocError</a>&gt;</h4></section></summary><div class="docblock"><p>Attempts to shrink the memory block.</p>
+<p>Returns a new <a href="https://doc.rust-lang.org/1.81.0/core/ptr/non_null/struct.NonNull.html" title="struct core::ptr::non_null::NonNull"><code>NonNull&lt;[u8]&gt;</code></a> containing a pointer and the actual size of the allocated
+memory. The pointer is suitable for holding data described by <code>new_layout</code>. To accomplish
+this, the allocator may shrink the allocation referenced by <code>ptr</code> to fit the new layout.</p>
+<p>If this returns <code>Ok</code>, then ownership of the memory block referenced by <code>ptr</code> has been
+transferred to this allocator. Any access to the old <code>ptr</code> is Undefined Behavior, even if the
+allocation was shrunk in-place. The newly returned pointer is the only valid pointer
+for accessing this memory now.</p>
+<p>If this method returns <code>Err</code>, then ownership of the memory block has not been transferred to
+this allocator, and the contents of the memory block are unaltered.</p>
+<h5 id="safety-4"><a class="doc-anchor" href="#safety-4">§</a>Safety</h5>
+<ul>
+<li><code>ptr</code> must denote a block of memory <a href="#currently-allocated-memory"><em>currently allocated</em></a> via this allocator.</li>
+<li><code>old_layout</code> must <a href="#memory-fitting"><em>fit</em></a> that block of memory (The <code>new_layout</code> argument need not fit it.).</li>
+<li><code>new_layout.size()</code> must be smaller than or equal to <code>old_layout.size()</code>.</li>
+</ul>
+<p>Note that <code>new_layout.align()</code> need not be the same as <code>old_layout.align()</code>.</p>
+<h5 id="errors-4"><a class="doc-anchor" href="#errors-4">§</a>Errors</h5>
+<p>Returns <code>Err</code> if the new layout does not meet the allocator’s size and alignment
+constraints of the allocator, or if shrinking otherwise fails.</p>
+<p>Implementations are encouraged to return <code>Err</code> on memory exhaustion rather than panicking or
+aborting, but this is not a strict requirement. (Specifically: it is <em>legal</em> to implement
+this trait atop an underlying native allocation library that aborts on memory exhaustion.)</p>
+<p>Clients wishing to abort computation in response to an allocation error are encouraged to
+call the <a href="../../alloc/alloc/fn.handle_alloc_error.html"><code>handle_alloc_error</code></a> function, rather than directly invoking <code>panic!</code> or similar.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.by_ref" class="method"><a class="src rightside" href="../../src/allocator_api2/stable/alloc/mod.rs.html#356-361">source</a><h4 class="code-header">fn <a href="#method.by_ref" class="fn">by_ref</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.reference.html">&amp;Self</a><div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Creates a “by reference” adapter for this instance of <code>Allocator</code>.</p>
+<p>The returned adapter also implements <code>Allocator</code> and will simply borrow this.</p>
+</div></details></div><h2 id="foreign-impls" class="section-header">Implementations on Foreign Types<a href="#foreign-impls" class="anchor">§</a></h2><details class="toggle implementors-toggle"><summary><section id="impl-Allocator-for-%26A" class="impl"><a class="src rightside" href="../../src/allocator_api2/stable/alloc/mod.rs.html#364-416">source</a><a href="#impl-Allocator-for-%26A" class="anchor">§</a><h3 class="code-header">impl&lt;A&gt; <a class="trait" href="trait.Allocator.html" title="trait allocator_api2::alloc::Allocator">Allocator</a> for <a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.reference.html">&amp;A</a><div class="where">where
+    A: <a class="trait" href="trait.Allocator.html" title="trait allocator_api2::alloc::Allocator">Allocator</a> + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><section id="method.allocate" class="method trait-impl"><a class="src rightside" href="../../src/allocator_api2/stable/alloc/mod.rs.html#369-371">source</a><a href="#method.allocate" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.allocate" class="fn">allocate</a>(&amp;self, layout: <a class="struct" href="struct.Layout.html" title="struct allocator_api2::alloc::Layout">Layout</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/core/ptr/non_null/struct.NonNull.html" title="struct core::ptr::non_null::NonNull">NonNull</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u8.html">u8</a>]&gt;, <a class="struct" href="struct.AllocError.html" title="struct allocator_api2::alloc::AllocError">AllocError</a>&gt;</h4></section><section id="method.allocate_zeroed-1" class="method trait-impl"><a class="src rightside" href="../../src/allocator_api2/stable/alloc/mod.rs.html#374-376">source</a><a href="#method.allocate_zeroed-1" class="anchor">§</a><h4 class="code-header">fn <a href="#method.allocate_zeroed" class="fn">allocate_zeroed</a>(&amp;self, layout: <a class="struct" href="struct.Layout.html" title="struct allocator_api2::alloc::Layout">Layout</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/core/ptr/non_null/struct.NonNull.html" title="struct core::ptr::non_null::NonNull">NonNull</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u8.html">u8</a>]&gt;, <a class="struct" href="struct.AllocError.html" title="struct allocator_api2::alloc::AllocError">AllocError</a>&gt;</h4></section><section id="method.deallocate" class="method trait-impl"><a class="src rightside" href="../../src/allocator_api2/stable/alloc/mod.rs.html#379-382">source</a><a href="#method.deallocate" class="anchor">§</a><h4 class="code-header">unsafe fn <a href="#tymethod.deallocate" class="fn">deallocate</a>(&amp;self, ptr: <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/ptr/non_null/struct.NonNull.html" title="struct core::ptr::non_null::NonNull">NonNull</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u8.html">u8</a>&gt;, layout: <a class="struct" href="struct.Layout.html" title="struct allocator_api2::alloc::Layout">Layout</a>)</h4></section><section id="method.grow-1" class="method trait-impl"><a class="src rightside" href="../../src/allocator_api2/stable/alloc/mod.rs.html#385-393">source</a><a href="#method.grow-1" class="anchor">§</a><h4 class="code-header">unsafe fn <a href="#method.grow" class="fn">grow</a>(
+    &amp;self,
+    ptr: <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/ptr/non_null/struct.NonNull.html" title="struct core::ptr::non_null::NonNull">NonNull</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u8.html">u8</a>&gt;,
+    old_layout: <a class="struct" href="struct.Layout.html" title="struct allocator_api2::alloc::Layout">Layout</a>,
+    new_layout: <a class="struct" href="struct.Layout.html" title="struct allocator_api2::alloc::Layout">Layout</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/core/ptr/non_null/struct.NonNull.html" title="struct core::ptr::non_null::NonNull">NonNull</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u8.html">u8</a>]&gt;, <a class="struct" href="struct.AllocError.html" title="struct allocator_api2::alloc::AllocError">AllocError</a>&gt;</h4></section><section id="method.grow_zeroed-1" class="method trait-impl"><a class="src rightside" href="../../src/allocator_api2/stable/alloc/mod.rs.html#396-404">source</a><a href="#method.grow_zeroed-1" class="anchor">§</a><h4 class="code-header">unsafe fn <a href="#method.grow_zeroed" class="fn">grow_zeroed</a>(
+    &amp;self,
+    ptr: <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/ptr/non_null/struct.NonNull.html" title="struct core::ptr::non_null::NonNull">NonNull</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u8.html">u8</a>&gt;,
+    old_layout: <a class="struct" href="struct.Layout.html" title="struct allocator_api2::alloc::Layout">Layout</a>,
+    new_layout: <a class="struct" href="struct.Layout.html" title="struct allocator_api2::alloc::Layout">Layout</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/core/ptr/non_null/struct.NonNull.html" title="struct core::ptr::non_null::NonNull">NonNull</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u8.html">u8</a>]&gt;, <a class="struct" href="struct.AllocError.html" title="struct allocator_api2::alloc::AllocError">AllocError</a>&gt;</h4></section><section id="method.shrink-1" class="method trait-impl"><a class="src rightside" href="../../src/allocator_api2/stable/alloc/mod.rs.html#407-415">source</a><a href="#method.shrink-1" class="anchor">§</a><h4 class="code-header">unsafe fn <a href="#method.shrink" class="fn">shrink</a>(
+    &amp;self,
+    ptr: <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/ptr/non_null/struct.NonNull.html" title="struct core::ptr::non_null::NonNull">NonNull</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u8.html">u8</a>&gt;,
+    old_layout: <a class="struct" href="struct.Layout.html" title="struct allocator_api2::alloc::Layout">Layout</a>,
+    new_layout: <a class="struct" href="struct.Layout.html" title="struct allocator_api2::alloc::Layout">Layout</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/core/ptr/non_null/struct.NonNull.html" title="struct core::ptr::non_null::NonNull">NonNull</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u8.html">u8</a>]&gt;, <a class="struct" href="struct.AllocError.html" title="struct allocator_api2::alloc::AllocError">AllocError</a>&gt;</h4></section></div></details><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><section id="impl-Allocator-for-Global" class="impl"><a class="src rightside" href="../../src/allocator_api2/stable/alloc/global.rs.html#97-187">source</a><a href="#impl-Allocator-for-Global" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.Allocator.html" title="trait allocator_api2::alloc::Allocator">Allocator</a> for <a class="struct" href="struct.Global.html" title="struct allocator_api2::alloc::Global">Global</a></h3></section></div><script src="../../trait.impl/allocator_api2/stable/alloc/trait.Allocator.js" async></script></section></div></main></body></html>

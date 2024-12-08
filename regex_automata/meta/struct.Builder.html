@@ -1,0 +1,260 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A builder for configuring and constructing a `Regex`."><title>Builder in regex_automata::meta - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="regex_automata" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc struct"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../regex_automata/index.html">regex_automata</a><span class="version">0.4.7</span></h2></div><h2 class="location"><a href="#">Builder</a></h2><div class="sidebar-elems"><section><h3><a href="#implementations">Methods</a></h3><ul class="block method"><li><a href="#method.build">build</a></li><li><a href="#method.build_from_hir">build_from_hir</a></li><li><a href="#method.build_many">build_many</a></li><li><a href="#method.build_many_from_hir">build_many_from_hir</a></li><li><a href="#method.configure">configure</a></li><li><a href="#method.new">new</a></li><li><a href="#method.syntax">syntax</a></li></ul><h3><a href="#trait-implementations">Trait Implementations</a></h3><ul class="block trait-implementation"><li><a href="#impl-Clone-for-Builder">Clone</a></li><li><a href="#impl-Debug-for-Builder">Debug</a></li></ul><h3><a href="#synthetic-implementations">Auto Trait Implementations</a></h3><ul class="block synthetic-implementation"><li><a href="#impl-Freeze-for-Builder">Freeze</a></li><li><a href="#impl-RefUnwindSafe-for-Builder">RefUnwindSafe</a></li><li><a href="#impl-Send-for-Builder">Send</a></li><li><a href="#impl-Sync-for-Builder">Sync</a></li><li><a href="#impl-Unpin-for-Builder">Unpin</a></li><li><a href="#impl-UnwindSafe-for-Builder">UnwindSafe</a></li></ul><h3><a href="#blanket-implementations">Blanket Implementations</a></h3><ul class="block blanket-implementation"><li><a href="#impl-Any-for-T">Any</a></li><li><a href="#impl-Borrow%3CT%3E-for-T">Borrow&lt;T&gt;</a></li><li><a href="#impl-BorrowMut%3CT%3E-for-T">BorrowMut&lt;T&gt;</a></li><li><a href="#impl-CloneToUninit-for-T">CloneToUninit</a></li><li><a href="#impl-From%3CT%3E-for-T">From&lt;T&gt;</a></li><li><a href="#impl-Into%3CU%3E-for-T">Into&lt;U&gt;</a></li><li><a href="#impl-ToOwned-for-T">ToOwned</a></li><li><a href="#impl-TryFrom%3CU%3E-for-T">TryFrom&lt;U&gt;</a></li><li><a href="#impl-TryInto%3CU%3E-for-T">TryInto&lt;U&gt;</a></li></ul></section><h2><a href="index.html">In regex_automata::meta</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Struct <a href="../index.html">regex_automata</a>::<wbr><a href="index.html">meta</a>::<wbr><a class="struct" href="#">Builder</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/regex_automata/meta/regex.rs.html#3323-3327">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub struct Builder { <span class="comment">/* private fields */</span> }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A builder for configuring and constructing a <code>Regex</code>.</p>
+<p>The builder permits configuring two different aspects of a <code>Regex</code>:</p>
+<ul>
+<li><a href="struct.Builder.html#method.configure" title="method regex_automata::meta::Builder::configure"><code>Builder::configure</code></a> will set high-level configuration options as
+described by a <a href="struct.Config.html" title="struct regex_automata::meta::Config"><code>Config</code></a>.</li>
+<li><a href="struct.Builder.html#method.syntax" title="method regex_automata::meta::Builder::syntax"><code>Builder::syntax</code></a> will set the syntax level configuration options
+as described by a <a href="../util/syntax/struct.Config.html" title="struct regex_automata::util::syntax::Config"><code>util::syntax::Config</code></a>.
+This only applies when building a <code>Regex</code> from pattern strings.</li>
+</ul>
+<p>Once configured, the builder can then be used to construct a <code>Regex</code> from
+one of 4 different inputs:</p>
+<ul>
+<li><a href="struct.Builder.html#method.build" title="method regex_automata::meta::Builder::build"><code>Builder::build</code></a> creates a regex from a single pattern string.</li>
+<li><a href="struct.Builder.html#method.build_many" title="method regex_automata::meta::Builder::build_many"><code>Builder::build_many</code></a> creates a regex from many pattern strings.</li>
+<li><a href="struct.Builder.html#method.build_from_hir" title="method regex_automata::meta::Builder::build_from_hir"><code>Builder::build_from_hir</code></a> creates a regex from a
+<a href="../../regex_syntax/hir/struct.Hir.html" title="struct regex_syntax::hir::Hir"><code>regex-syntax::Hir</code></a> expression.</li>
+<li><a href="struct.Builder.html#method.build_many_from_hir" title="method regex_automata::meta::Builder::build_many_from_hir"><code>Builder::build_many_from_hir</code></a> creates a regex from many
+<a href="../../regex_syntax/hir/struct.Hir.html" title="struct regex_syntax::hir::Hir"><code>regex-syntax::Hir</code></a> expressions.</li>
+</ul>
+<p>The latter two methods in particular provide a way to construct a fully
+feature regular expression matcher directly from an <code>Hir</code> expression
+without having to first convert it to a string. (This is in contrast to the
+top-level <code>regex</code> crate which intentionally provides no such API in order
+to avoid making <code>regex-syntax</code> a public dependency.)</p>
+<p>As a convenience, this builder may be created via <a href="struct.Regex.html#method.builder" title="associated function regex_automata::meta::Regex::builder"><code>Regex::builder</code></a>, which
+may help avoid an extra import.</p>
+<h2 id="example-change-the-line-terminator"><a class="doc-anchor" href="#example-change-the-line-terminator">§</a>Example: change the line terminator</h2>
+<p>This example shows how to enable multi-line mode by default and change the
+line terminator to the NUL byte:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{meta::Regex, util::syntax, Match};
+
+<span class="kw">let </span>re = Regex::builder()
+    .syntax(syntax::Config::new().multi_line(<span class="bool-val">true</span>))
+    .configure(Regex::config().line_terminator(<span class="string">b'\x00'</span>))
+    .build(<span class="string">r"^foo$"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>hay = <span class="string">"\x00foo\x00"</span>;
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Match::must(<span class="number">0</span>, <span class="number">1</span>..<span class="number">4</span>)), re.find(hay));
+</code></pre></div>
+<h2 id="example-disable-utf-8-requirement"><a class="doc-anchor" href="#example-disable-utf-8-requirement">§</a>Example: disable UTF-8 requirement</h2>
+<p>By default, regex patterns are required to match UTF-8. This includes
+regex patterns that can produce matches of length zero. In the case of an
+empty match, by default, matches will not appear between the code units of
+a UTF-8 encoded codepoint.</p>
+<p>However, it can be useful to disable this requirement, particularly if
+you’re searching things like <code>&amp;[u8]</code> that are not known to be valid UTF-8.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{meta::Regex, util::syntax, Match};
+
+<span class="kw">let </span><span class="kw-2">mut </span>builder = Regex::builder();
+<span class="comment">// Disables the requirement that non-empty matches match UTF-8.
+</span>builder.syntax(syntax::Config::new().utf8(<span class="bool-val">false</span>));
+<span class="comment">// Disables the requirement that empty matches match UTF-8 boundaries.
+</span>builder.configure(Regex::config().utf8_empty(<span class="bool-val">false</span>));
+
+<span class="comment">// We can match raw bytes via \xZZ syntax, but we need to disable
+// Unicode mode to do that. We could disable it everywhere, or just
+// selectively, as shown here.
+</span><span class="kw">let </span>re = builder.build(<span class="string">r"(?-u:\xFF)foo(?-u:\xFF)"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>hay = <span class="string">b"\xFFfoo\xFF"</span>;
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Match::must(<span class="number">0</span>, <span class="number">0</span>..<span class="number">5</span>)), re.find(hay));
+
+<span class="comment">// We can also match between code units.
+</span><span class="kw">let </span>re = builder.build(<span class="string">r""</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>hay = <span class="string">"☃"</span>;
+<span class="macro">assert_eq!</span>(re.find_iter(hay).collect::&lt;Vec&lt;Match&gt;&gt;(), <span class="macro">vec!</span>[
+    Match::must(<span class="number">0</span>, <span class="number">0</span>..<span class="number">0</span>),
+    Match::must(<span class="number">0</span>, <span class="number">1</span>..<span class="number">1</span>),
+    Match::must(<span class="number">0</span>, <span class="number">2</span>..<span class="number">2</span>),
+    Match::must(<span class="number">0</span>, <span class="number">3</span>..<span class="number">3</span>),
+]);
+</code></pre></div>
+</div></details><h2 id="implementations" class="section-header">Implementations<a href="#implementations" class="anchor">§</a></h2><div id="implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-Builder" class="impl"><a class="src rightside" href="../../src/regex_automata/meta/regex.rs.html#3329-3634">source</a><a href="#impl-Builder" class="anchor">§</a><h3 class="code-header">impl <a class="struct" href="struct.Builder.html" title="struct regex_automata::meta::Builder">Builder</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.new" class="method"><a class="src rightside" href="../../src/regex_automata/meta/regex.rs.html#3331-3337">source</a><h4 class="code-header">pub fn <a href="#method.new" class="fn">new</a>() -&gt; <a class="struct" href="struct.Builder.html" title="struct regex_automata::meta::Builder">Builder</a></h4></section></summary><div class="docblock"><p>Creates a new builder for configuring and constructing a <a href="struct.Regex.html" title="struct regex_automata::meta::Regex"><code>Regex</code></a>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.build" class="method"><a class="src rightside" href="../../src/regex_automata/meta/regex.rs.html#3359-3361">source</a><h4 class="code-header">pub fn <a href="#method.build" class="fn">build</a>(&amp;self, pattern: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="struct.Regex.html" title="struct regex_automata::meta::Regex">Regex</a>, <a class="struct" href="struct.BuildError.html" title="struct regex_automata::meta::BuildError">BuildError</a>&gt;</h4></section></summary><div class="docblock"><p>Builds a <code>Regex</code> from a single pattern string.</p>
+<p>If there was a problem parsing the pattern or a problem turning it into
+a regex matcher, then an error is returned.</p>
+<h5 id="example"><a class="doc-anchor" href="#example">§</a>Example</h5>
+<p>This example shows how to configure syntax options.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{meta::Regex, util::syntax, Match};
+
+<span class="kw">let </span>re = Regex::builder()
+    .syntax(syntax::Config::new().crlf(<span class="bool-val">true</span>).multi_line(<span class="bool-val">true</span>))
+    .build(<span class="string">r"^foo$"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>hay = <span class="string">"\r\nfoo\r\n"</span>;
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Match::must(<span class="number">0</span>, <span class="number">2</span>..<span class="number">5</span>)), re.find(hay));
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.build_many" class="method"><a class="src rightside" href="../../src/regex_automata/meta/regex.rs.html#3398-3442">source</a><h4 class="code-header">pub fn <a href="#method.build_many" class="fn">build_many</a>&lt;P: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>&gt;&gt;(
+    &amp;self,
+    patterns: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.slice.html">[P]</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="struct.Regex.html" title="struct regex_automata::meta::Regex">Regex</a>, <a class="struct" href="struct.BuildError.html" title="struct regex_automata::meta::BuildError">BuildError</a>&gt;</h4></section></summary><div class="docblock"><p>Builds a <code>Regex</code> from many pattern strings.</p>
+<p>If there was a problem parsing any of the patterns or a problem turning
+them into a regex matcher, then an error is returned.</p>
+<h5 id="example-finding-the-pattern-that-caused-an-error"><a class="doc-anchor" href="#example-finding-the-pattern-that-caused-an-error">§</a>Example: finding the pattern that caused an error</h5>
+<p>When a syntax error occurs, it is possible to ask which pattern
+caused the syntax error.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{meta::Regex, PatternID};
+
+<span class="kw">let </span>err = Regex::builder()
+    .build_many(<span class="kw-2">&amp;</span>[<span class="string">"a"</span>, <span class="string">"b"</span>, <span class="string">r"\p{Foo}"</span>, <span class="string">"c"</span>])
+    .unwrap_err();
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(PatternID::must(<span class="number">2</span>)), err.pattern());</code></pre></div>
+<h5 id="example-zero-patterns-is-valid"><a class="doc-anchor" href="#example-zero-patterns-is-valid">§</a>Example: zero patterns is valid</h5>
+<p>Building a regex with zero patterns results in a regex that never
+matches anything. Because this routine is generic, passing an empty
+slice usually requires a turbo-fish (or something else to help type
+inference).</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{meta::Regex, util::syntax, Match};
+
+<span class="kw">let </span>re = Regex::builder()
+    .build_many::&lt;<span class="kw-2">&amp;</span>str&gt;(<span class="kw-2">&amp;</span>[])<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, re.find(<span class="string">""</span>));
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.build_from_hir" class="method"><a class="src rightside" href="../../src/regex_automata/meta/regex.rs.html#3482-3484">source</a><h4 class="code-header">pub fn <a href="#method.build_from_hir" class="fn">build_from_hir</a>(&amp;self, hir: &amp;<a class="struct" href="../../regex_syntax/hir/struct.Hir.html" title="struct regex_syntax::hir::Hir">Hir</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="struct.Regex.html" title="struct regex_automata::meta::Regex">Regex</a>, <a class="struct" href="struct.BuildError.html" title="struct regex_automata::meta::BuildError">BuildError</a>&gt;</h4></section></summary><div class="docblock"><p>Builds a <code>Regex</code> directly from an <code>Hir</code> expression.</p>
+<p>This is useful if you needed to parse a pattern string into an <code>Hir</code>
+for other reasons (such as analysis or transformations). This routine
+permits building a <code>Regex</code> directly from the <code>Hir</code> expression instead
+of first converting the <code>Hir</code> back to a pattern string.</p>
+<p>When using this method, any options set via <a href="struct.Builder.html#method.syntax" title="method regex_automata::meta::Builder::syntax"><code>Builder::syntax</code></a> are
+ignored. Namely, the syntax options only apply when parsing a pattern
+string, which isn’t relevant here.</p>
+<p>If there was a problem building the underlying regex matcher for the
+given <code>Hir</code>, then an error is returned.</p>
+<h5 id="example-1"><a class="doc-anchor" href="#example-1">§</a>Example</h5>
+<p>This example shows how one can hand-construct an <code>Hir</code> expression and
+build a regex from it without doing any parsing at all.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>{
+    regex_automata::{meta::Regex, Match},
+    regex_syntax::hir::{Hir, Look},
+};
+
+<span class="comment">// (?Rm)^foo$
+</span><span class="kw">let </span>hir = Hir::concat(<span class="macro">vec!</span>[
+    Hir::look(Look::StartCRLF),
+    Hir::literal(<span class="string">"foo"</span>.as_bytes()),
+    Hir::look(Look::EndCRLF),
+]);
+<span class="kw">let </span>re = Regex::builder()
+    .build_from_hir(<span class="kw-2">&amp;</span>hir)<span class="question-mark">?</span>;
+<span class="kw">let </span>hay = <span class="string">"\r\nfoo\r\n"</span>;
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Match::must(<span class="number">0</span>, <span class="number">2</span>..<span class="number">5</span>)), re.find(hay));
+
+<span class="prelude-val">Ok</span>::&lt;(), Box&lt;<span class="kw">dyn </span>std::error::Error&gt;&gt;(())</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.build_many_from_hir" class="method"><a class="src rightside" href="../../src/regex_automata/meta/regex.rs.html#3543-3560">source</a><h4 class="code-header">pub fn <a href="#method.build_many_from_hir" class="fn">build_many_from_hir</a>&lt;H: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html" title="trait core::borrow::Borrow">Borrow</a>&lt;<a class="struct" href="../../regex_syntax/hir/struct.Hir.html" title="struct regex_syntax::hir::Hir">Hir</a>&gt;&gt;(
+    &amp;self,
+    hirs: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.slice.html">[H]</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="struct.Regex.html" title="struct regex_automata::meta::Regex">Regex</a>, <a class="struct" href="struct.BuildError.html" title="struct regex_automata::meta::BuildError">BuildError</a>&gt;</h4></section></summary><div class="docblock"><p>Builds a <code>Regex</code> directly from many <code>Hir</code> expressions.</p>
+<p>This is useful if you needed to parse pattern strings into <code>Hir</code>
+expressions for other reasons (such as analysis or transformations).
+This routine permits building a <code>Regex</code> directly from the <code>Hir</code>
+expressions instead of first converting the <code>Hir</code> expressions back to
+pattern strings.</p>
+<p>When using this method, any options set via <a href="struct.Builder.html#method.syntax" title="method regex_automata::meta::Builder::syntax"><code>Builder::syntax</code></a> are
+ignored. Namely, the syntax options only apply when parsing a pattern
+string, which isn’t relevant here.</p>
+<p>If there was a problem building the underlying regex matcher for the
+given <code>Hir</code> expressions, then an error is returned.</p>
+<p>Note that unlike <a href="struct.Builder.html#method.build_many" title="method regex_automata::meta::Builder::build_many"><code>Builder::build_many</code></a>, this can only fail as a
+result of building the underlying matcher. In that case, there is
+no single <code>Hir</code> expression that can be isolated as a reason for the
+failure. So if this routine fails, it’s not possible to determine which
+<code>Hir</code> expression caused the failure.</p>
+<h5 id="example-2"><a class="doc-anchor" href="#example-2">§</a>Example</h5>
+<p>This example shows how one can hand-construct multiple <code>Hir</code>
+expressions and build a single regex from them without doing any
+parsing at all.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>{
+    regex_automata::{meta::Regex, Match},
+    regex_syntax::hir::{Hir, Look},
+};
+
+<span class="comment">// (?Rm)^foo$
+</span><span class="kw">let </span>hir1 = Hir::concat(<span class="macro">vec!</span>[
+    Hir::look(Look::StartCRLF),
+    Hir::literal(<span class="string">"foo"</span>.as_bytes()),
+    Hir::look(Look::EndCRLF),
+]);
+<span class="comment">// (?Rm)^bar$
+</span><span class="kw">let </span>hir2 = Hir::concat(<span class="macro">vec!</span>[
+    Hir::look(Look::StartCRLF),
+    Hir::literal(<span class="string">"bar"</span>.as_bytes()),
+    Hir::look(Look::EndCRLF),
+]);
+<span class="kw">let </span>re = Regex::builder()
+    .build_many_from_hir(<span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span>hir1, <span class="kw-2">&amp;</span>hir2])<span class="question-mark">?</span>;
+<span class="kw">let </span>hay = <span class="string">"\r\nfoo\r\nbar"</span>;
+<span class="kw">let </span>got: Vec&lt;Match&gt; = re.find_iter(hay).collect();
+<span class="kw">let </span>expected = <span class="macro">vec!</span>[
+    Match::must(<span class="number">0</span>, <span class="number">2</span>..<span class="number">5</span>),
+    Match::must(<span class="number">1</span>, <span class="number">7</span>..<span class="number">10</span>),
+];
+<span class="macro">assert_eq!</span>(expected, got);
+
+<span class="prelude-val">Ok</span>::&lt;(), Box&lt;<span class="kw">dyn </span>std::error::Error&gt;&gt;(())</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.configure" class="method"><a class="src rightside" href="../../src/regex_automata/meta/regex.rs.html#3600-3603">source</a><h4 class="code-header">pub fn <a href="#method.configure" class="fn">configure</a>(&amp;mut self, config: <a class="struct" href="struct.Config.html" title="struct regex_automata::meta::Config">Config</a>) -&gt; &amp;mut <a class="struct" href="struct.Builder.html" title="struct regex_automata::meta::Builder">Builder</a></h4></section></summary><div class="docblock"><p>Configure the behavior of a <code>Regex</code>.</p>
+<p>This configuration controls non-syntax options related to the behavior
+of a <code>Regex</code>. This includes things like whether empty matches can split
+a codepoint, prefilters, line terminators and a long list of options
+for configuring which regex engines the meta regex engine will be able
+to use internally.</p>
+<h5 id="example-3"><a class="doc-anchor" href="#example-3">§</a>Example</h5>
+<p>This example shows how to disable UTF-8 empty mode. This will permit
+empty matches to occur between the UTF-8 encoding of a codepoint.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{meta::Regex, Match};
+
+<span class="kw">let </span>re = Regex::new(<span class="string">""</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>got: Vec&lt;Match&gt; = re.find_iter(<span class="string">"☃"</span>).collect();
+<span class="comment">// Matches only occur at the beginning and end of the snowman.
+</span><span class="macro">assert_eq!</span>(got, <span class="macro">vec!</span>[
+    Match::must(<span class="number">0</span>, <span class="number">0</span>..<span class="number">0</span>),
+    Match::must(<span class="number">0</span>, <span class="number">3</span>..<span class="number">3</span>),
+]);
+
+<span class="kw">let </span>re = Regex::builder()
+    .configure(Regex::config().utf8_empty(<span class="bool-val">false</span>))
+    .build(<span class="string">""</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>got: Vec&lt;Match&gt; = re.find_iter(<span class="string">"☃"</span>).collect();
+<span class="comment">// Matches now occur at every position!
+</span><span class="macro">assert_eq!</span>(got, <span class="macro">vec!</span>[
+    Match::must(<span class="number">0</span>, <span class="number">0</span>..<span class="number">0</span>),
+    Match::must(<span class="number">0</span>, <span class="number">1</span>..<span class="number">1</span>),
+    Match::must(<span class="number">0</span>, <span class="number">2</span>..<span class="number">2</span>),
+    Match::must(<span class="number">0</span>, <span class="number">3</span>..<span class="number">3</span>),
+]);
+
+<span class="prelude-val">Ok</span>::&lt;(), Box&lt;<span class="kw">dyn </span>std::error::Error&gt;&gt;(())</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.syntax" class="method"><a class="src rightside" href="../../src/regex_automata/meta/regex.rs.html#3626-3633">source</a><h4 class="code-header">pub fn <a href="#method.syntax" class="fn">syntax</a>(&amp;mut self, config: <a class="struct" href="../util/syntax/struct.Config.html" title="struct regex_automata::util::syntax::Config">Config</a>) -&gt; &amp;mut <a class="struct" href="struct.Builder.html" title="struct regex_automata::meta::Builder">Builder</a></h4></section></summary><div class="docblock"><p>Configure the syntax options when parsing a pattern string while
+building a <code>Regex</code>.</p>
+<p>These options <em>only</em> apply when <a href="struct.Builder.html#method.build" title="method regex_automata::meta::Builder::build"><code>Builder::build</code></a> or <a href="struct.Builder.html#method.build_many" title="method regex_automata::meta::Builder::build_many"><code>Builder::build_many</code></a>
+are used. The other build methods accept <code>Hir</code> values, which have
+already been parsed.</p>
+<h5 id="example-4"><a class="doc-anchor" href="#example-4">§</a>Example</h5>
+<p>This example shows how to enable case insensitive mode.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{meta::Regex, util::syntax, Match};
+
+<span class="kw">let </span>re = Regex::builder()
+    .syntax(syntax::Config::new().case_insensitive(<span class="bool-val">true</span>))
+    .build(<span class="string">r"δ"</span>)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Match::must(<span class="number">0</span>, <span class="number">0</span>..<span class="number">2</span>)), re.find(<span class="string">r"Δ"</span>));
+
+<span class="prelude-val">Ok</span>::&lt;(), Box&lt;<span class="kw">dyn </span>std::error::Error&gt;&gt;(())</code></pre></div>
+</div></details></div></details></div><h2 id="trait-implementations" class="section-header">Trait Implementations<a href="#trait-implementations" class="anchor">§</a></h2><div id="trait-implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-Clone-for-Builder" class="impl"><a class="src rightside" href="../../src/regex_automata/meta/regex.rs.html#3322">source</a><a href="#impl-Clone-for-Builder" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a> for <a class="struct" href="struct.Builder.html" title="struct regex_automata::meta::Builder">Builder</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.clone" class="method trait-impl"><a class="src rightside" href="../../src/regex_automata/meta/regex.rs.html#3322">source</a><a href="#method.clone" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#tymethod.clone" class="fn">clone</a>(&amp;self) -&gt; <a class="struct" href="struct.Builder.html" title="struct regex_automata::meta::Builder">Builder</a></h4></section></summary><div class='docblock'>Returns a copy of the value. <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#tymethod.clone">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.clone_from" class="method trait-impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#172">source</a></span><a href="#method.clone_from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#method.clone_from" class="fn">clone_from</a>(&amp;mut self, source: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;Self</a>)</h4></section></summary><div class='docblock'>Performs copy-assignment from <code>source</code>. <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#method.clone_from">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Debug-for-Builder" class="impl"><a class="src rightside" href="../../src/regex_automata/meta/regex.rs.html#3322">source</a><a href="#impl-Debug-for-Builder" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html" title="trait core::fmt::Debug">Debug</a> for <a class="struct" href="struct.Builder.html" title="struct regex_automata::meta::Builder">Builder</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.fmt" class="method trait-impl"><a class="src rightside" href="../../src/regex_automata/meta/regex.rs.html#3322">source</a><a href="#method.fmt" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html#tymethod.fmt" class="fn">fmt</a>(&amp;self, f: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/fmt/struct.Formatter.html" title="struct core::fmt::Formatter">Formatter</a>&lt;'_&gt;) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a></h4></section></summary><div class='docblock'>Formats the value using the given formatter. <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html#tymethod.fmt">Read more</a></div></details></div></details></div><h2 id="synthetic-implementations" class="section-header">Auto Trait Implementations<a href="#synthetic-implementations" class="anchor">§</a></h2><div id="synthetic-implementations-list"><section id="impl-Freeze-for-Builder" class="impl"><a href="#impl-Freeze-for-Builder" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Freeze.html" title="trait core::marker::Freeze">Freeze</a> for <a class="struct" href="struct.Builder.html" title="struct regex_automata::meta::Builder">Builder</a></h3></section><section id="impl-RefUnwindSafe-for-Builder" class="impl"><a href="#impl-RefUnwindSafe-for-Builder" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/panic/unwind_safe/trait.RefUnwindSafe.html" title="trait core::panic::unwind_safe::RefUnwindSafe">RefUnwindSafe</a> for <a class="struct" href="struct.Builder.html" title="struct regex_automata::meta::Builder">Builder</a></h3></section><section id="impl-Send-for-Builder" class="impl"><a href="#impl-Send-for-Builder" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> for <a class="struct" href="struct.Builder.html" title="struct regex_automata::meta::Builder">Builder</a></h3></section><section id="impl-Sync-for-Builder" class="impl"><a href="#impl-Sync-for-Builder" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> for <a class="struct" href="struct.Builder.html" title="struct regex_automata::meta::Builder">Builder</a></h3></section><section id="impl-Unpin-for-Builder" class="impl"><a href="#impl-Unpin-for-Builder" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a> for <a class="struct" href="struct.Builder.html" title="struct regex_automata::meta::Builder">Builder</a></h3></section><section id="impl-UnwindSafe-for-Builder" class="impl"><a href="#impl-UnwindSafe-for-Builder" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/panic/unwind_safe/trait.UnwindSafe.html" title="trait core::panic::unwind_safe::UnwindSafe">UnwindSafe</a> for <a class="struct" href="struct.Builder.html" title="struct regex_automata::meta::Builder">Builder</a></h3></section></div><h2 id="blanket-implementations" class="section-header">Blanket Implementations<a href="#blanket-implementations" class="anchor">§</a></h2><div id="blanket-implementations-list"><details class="toggle implementors-toggle"><summary><section id="impl-Any-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#140">source</a><a href="#impl-Any-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html" title="trait core::any::Any">Any</a> for T<div class="where">where
+    T: 'static + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.type_id" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#141">source</a><a href="#method.type_id" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html#tymethod.type_id" class="fn">type_id</a>(&amp;self) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/any/struct.TypeId.html" title="struct core::any::TypeId">TypeId</a></h4></section></summary><div class='docblock'>Gets the <code>TypeId</code> of <code>self</code>. <a href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html#tymethod.type_id">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Borrow%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#209">source</a><a href="#impl-Borrow%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html" title="trait core::borrow::Borrow">Borrow</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#211">source</a><a href="#method.borrow" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html#tymethod.borrow" class="fn">borrow</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a></h4></section></summary><div class='docblock'>Immutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html#tymethod.borrow">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-BorrowMut%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#217">source</a><a href="#impl-BorrowMut%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html" title="trait core::borrow::BorrowMut">BorrowMut</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow_mut" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#218">source</a><a href="#method.borrow_mut" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut" class="fn">borrow_mut</a>(&amp;mut self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a></h4></section></summary><div class='docblock'>Mutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-CloneToUninit-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#271">source</a><a href="#impl-CloneToUninit-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.CloneToUninit.html" title="trait core::clone::CloneToUninit">CloneToUninit</a> for T<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.clone_to_uninit" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#272">source</a><a href="#method.clone_to_uninit" class="anchor">§</a><h4 class="code-header">default unsafe fn <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.CloneToUninit.html#tymethod.clone_to_uninit" class="fn">clone_to_uninit</a>(&amp;self, dst: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.pointer.html">*mut T</a>)</h4></section></summary><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>clone_to_uninit</code>)</span></div></span><div class='docblock'>Performs copy-assignment from <code>self</code> to <code>dst</code>. <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.CloneToUninit.html#tymethod.clone_to_uninit">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-From%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#765">source</a><a href="#impl-From%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for T</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#768">source</a><a href="#method.from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html#tymethod.from" class="fn">from</a>(t: T) -&gt; T</h4></section></summary><div class="docblock"><p>Returns the argument unchanged.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Into%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#748-750">source</a><a href="#impl-Into%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#758">source</a><a href="#method.into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html#tymethod.into" class="fn">into</a>(self) -&gt; U</h4></section></summary><div class="docblock"><p>Calls <code>U::from(self)</code>.</p>
+<p>That is, this conversion is whatever the implementation of
+<code><a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for U</code> chooses to do.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-ToOwned-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#83-85">source</a><a href="#impl-ToOwned-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html" title="trait alloc::borrow::ToOwned">ToOwned</a> for T<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Owned" class="associatedtype trait-impl"><a href="#associatedtype.Owned" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#associatedtype.Owned" class="associatedtype">Owned</a> = T</h4></section></summary><div class='docblock'>The resulting type after obtaining ownership.</div></details><details class="toggle method-toggle" open><summary><section id="method.to_owned" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#88">source</a><a href="#method.to_owned" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#tymethod.to_owned" class="fn">to_owned</a>(&amp;self) -&gt; T</h4></section></summary><div class='docblock'>Creates owned data from borrowed data, usually by cloning. <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#tymethod.to_owned">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.clone_into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#92">source</a><a href="#method.clone_into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#method.clone_into" class="fn">clone_into</a>(&amp;self, target: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a>)</h4></section></summary><div class='docblock'>Uses borrowed data to replace owned data, usually by cloning. <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#method.clone_into">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryFrom%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#805-807">source</a><a href="#impl-TryFrom%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error" class="associatedtype trait-impl"><a href="#associatedtype.Error" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" class="associatedtype">Error</a> = <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/convert/enum.Infallible.html" title="enum core::convert::Infallible">Infallible</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#812">source</a><a href="#method.try_from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#tymethod.try_from" class="fn">try_from</a>(value: U) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, &lt;T as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryInto%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#790-792">source</a><a href="#impl-TryInto%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html" title="trait core::convert::TryInto">TryInto</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error-1" class="associatedtype trait-impl"><a href="#associatedtype.Error-1" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html#associatedtype.Error" class="associatedtype">Error</a> = &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#797">source</a><a href="#method.try_into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html#tymethod.try_into" class="fn">try_into</a>(self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;U, &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details></div></section></div></main></body></html>

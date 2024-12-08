@@ -1,0 +1,650 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A sequence of literals."><title>Seq in regex_syntax::hir::literal - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="regex_syntax" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc struct"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../regex_syntax/index.html">regex_syntax</a><span class="version">0.8.4</span></h2></div><h2 class="location"><a href="#">Seq</a></h2><div class="sidebar-elems"><section><h3><a href="#implementations">Methods</a></h3><ul class="block method"><li><a href="#method.cross_forward">cross_forward</a></li><li><a href="#method.cross_reverse">cross_reverse</a></li><li><a href="#method.dedup">dedup</a></li><li><a href="#method.empty">empty</a></li><li><a href="#method.infinite">infinite</a></li><li><a href="#method.is_empty">is_empty</a></li><li><a href="#method.is_exact">is_exact</a></li><li><a href="#method.is_finite">is_finite</a></li><li><a href="#method.is_inexact">is_inexact</a></li><li><a href="#method.keep_first_bytes">keep_first_bytes</a></li><li><a href="#method.keep_last_bytes">keep_last_bytes</a></li><li><a href="#method.len">len</a></li><li><a href="#method.literals">literals</a></li><li><a href="#method.longest_common_prefix">longest_common_prefix</a></li><li><a href="#method.longest_common_suffix">longest_common_suffix</a></li><li><a href="#method.make_inexact">make_inexact</a></li><li><a href="#method.make_infinite">make_infinite</a></li><li><a href="#method.max_cross_len">max_cross_len</a></li><li><a href="#method.max_literal_len">max_literal_len</a></li><li><a href="#method.max_union_len">max_union_len</a></li><li><a href="#method.min_literal_len">min_literal_len</a></li><li><a href="#method.minimize_by_preference">minimize_by_preference</a></li><li><a href="#method.new">new</a></li><li><a href="#method.optimize_for_prefix_by_preference">optimize_for_prefix_by_preference</a></li><li><a href="#method.optimize_for_suffix_by_preference">optimize_for_suffix_by_preference</a></li><li><a href="#method.push">push</a></li><li><a href="#method.reverse_literals">reverse_literals</a></li><li><a href="#method.singleton">singleton</a></li><li><a href="#method.sort">sort</a></li><li><a href="#method.union">union</a></li><li><a href="#method.union_into_empty">union_into_empty</a></li></ul><h3><a href="#trait-implementations">Trait Implementations</a></h3><ul class="block trait-implementation"><li><a href="#impl-Clone-for-Seq">Clone</a></li><li><a href="#impl-Debug-for-Seq">Debug</a></li><li><a href="#impl-Eq-for-Seq">Eq</a></li><li><a href="#impl-FromIterator%3CLiteral%3E-for-Seq">FromIterator&lt;Literal&gt;</a></li><li><a href="#impl-PartialEq-for-Seq">PartialEq</a></li><li><a href="#impl-StructuralPartialEq-for-Seq">StructuralPartialEq</a></li></ul><h3><a href="#synthetic-implementations">Auto Trait Implementations</a></h3><ul class="block synthetic-implementation"><li><a href="#impl-Freeze-for-Seq">Freeze</a></li><li><a href="#impl-RefUnwindSafe-for-Seq">RefUnwindSafe</a></li><li><a href="#impl-Send-for-Seq">Send</a></li><li><a href="#impl-Sync-for-Seq">Sync</a></li><li><a href="#impl-Unpin-for-Seq">Unpin</a></li><li><a href="#impl-UnwindSafe-for-Seq">UnwindSafe</a></li></ul><h3><a href="#blanket-implementations">Blanket Implementations</a></h3><ul class="block blanket-implementation"><li><a href="#impl-Any-for-T">Any</a></li><li><a href="#impl-Borrow%3CT%3E-for-T">Borrow&lt;T&gt;</a></li><li><a href="#impl-BorrowMut%3CT%3E-for-T">BorrowMut&lt;T&gt;</a></li><li><a href="#impl-CloneToUninit-for-T">CloneToUninit</a></li><li><a href="#impl-From%3CT%3E-for-T">From&lt;T&gt;</a></li><li><a href="#impl-Into%3CU%3E-for-T">Into&lt;U&gt;</a></li><li><a href="#impl-ToOwned-for-T">ToOwned</a></li><li><a href="#impl-TryFrom%3CU%3E-for-T">TryFrom&lt;U&gt;</a></li><li><a href="#impl-TryInto%3CU%3E-for-T">TryInto&lt;U&gt;</a></li></ul></section><h2><a href="index.html">In regex_syntax::hir::literal</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Struct <a href="../../index.html">regex_syntax</a>::<wbr><a href="../index.html">hir</a>::<wbr><a href="index.html">literal</a>::<wbr><a class="struct" href="#">Seq</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/regex_syntax/hir/literal.rs.html#733-745">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub struct Seq { <span class="comment">/* private fields */</span> }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A sequence of literals.</p>
+<p>A <code>Seq</code> is very much like a set in that it represents a union of its
+members. That is, it corresponds to a set of literals where at least one
+must match in order for a particular <a href="../struct.Hir.html" title="struct regex_syntax::hir::Hir"><code>Hir</code></a> expression to match. (Whether
+this corresponds to the entire <code>Hir</code> expression, a prefix of it or a suffix
+of it depends on how the <code>Seq</code> was extracted from the <code>Hir</code>.)</p>
+<p>It is also unlike a set in that multiple identical literals may appear,
+and that the order of the literals in the <code>Seq</code> matters. For example, if
+the sequence is <code>[sam, samwise]</code> and leftmost-first matching is used, then
+<code>samwise</code> can never match and the sequence is equivalent to <code>[sam]</code>.</p>
+<h2 id="states-of-a-sequence"><a class="doc-anchor" href="#states-of-a-sequence">§</a>States of a sequence</h2>
+<p>A <code>Seq</code> has a few different logical states to consider:</p>
+<ul>
+<li>The sequence can represent “any” literal. When this happens, the set does
+not have a finite size. The purpose of this state is to inhibit callers
+from making assumptions about what literals are required in order to match
+a particular <a href="../struct.Hir.html" title="struct regex_syntax::hir::Hir"><code>Hir</code></a> expression. Generally speaking, when a set is in this
+state, literal optimizations are inhibited. A good example of a regex that
+will cause this sort of set to appear is <code>[A-Za-z]</code>. The character class
+is just too big (and also too narrow) to be usefully expanded into 52
+different literals. (Note that the decision for when a seq should become
+infinite is determined by the caller. A seq itself has no hard-coded
+limits.)</li>
+<li>The sequence can be empty, in which case, it is an affirmative statement
+that there are no literals that can match the corresponding <code>Hir</code>.
+Consequently, the <code>Hir</code> never matches any input. For example, <code>[a&amp;&amp;b]</code>.</li>
+<li>The sequence can be non-empty, in which case, at least one of the
+literals must match in order for the corresponding <code>Hir</code> to match.</li>
+</ul>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<p>This example shows how literal sequences can be simplified by stripping
+suffixes and minimizing while maintaining preference order.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_syntax::hir::literal::{Literal, Seq};
+
+<span class="kw">let </span><span class="kw-2">mut </span>seq = Seq::new(<span class="kw-2">&amp;</span>[
+    <span class="string">"farm"</span>,
+    <span class="string">"appliance"</span>,
+    <span class="string">"faraway"</span>,
+    <span class="string">"apple"</span>,
+    <span class="string">"fare"</span>,
+    <span class="string">"gap"</span>,
+    <span class="string">"applicant"</span>,
+    <span class="string">"applaud"</span>,
+]);
+seq.keep_first_bytes(<span class="number">3</span>);
+seq.minimize_by_preference();
+<span class="comment">// Notice that 'far' comes before 'app', which matches the order in the
+// original sequence. This guarantees that leftmost-first semantics are
+// not altered by simplifying the set.
+</span><span class="kw">let </span>expected = Seq::from_iter([
+    Literal::inexact(<span class="string">"far"</span>),
+    Literal::inexact(<span class="string">"app"</span>),
+    Literal::exact(<span class="string">"gap"</span>),
+]);
+<span class="macro">assert_eq!</span>(expected, seq);</code></pre></div>
+</div></details><h2 id="implementations" class="section-header">Implementations<a href="#implementations" class="anchor">§</a></h2><div id="implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-Seq" class="impl"><a class="src rightside" href="../../../src/regex_syntax/hir/literal.rs.html#747-2011">source</a><a href="#impl-Seq" class="anchor">§</a><h3 class="code-header">impl <a class="struct" href="struct.Seq.html" title="struct regex_syntax::hir::literal::Seq">Seq</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.empty" class="method"><a class="src rightside" href="../../../src/regex_syntax/hir/literal.rs.html#753-755">source</a><h4 class="code-header">pub fn <a href="#method.empty" class="fn">empty</a>() -&gt; <a class="struct" href="struct.Seq.html" title="struct regex_syntax::hir::literal::Seq">Seq</a></h4></section></summary><div class="docblock"><p>Returns an empty sequence.</p>
+<p>An empty sequence matches zero literals, and thus corresponds to a
+regex that itself can never match.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.infinite" class="method"><a class="src rightside" href="../../../src/regex_syntax/hir/literal.rs.html#776-778">source</a><h4 class="code-header">pub fn <a href="#method.infinite" class="fn">infinite</a>() -&gt; <a class="struct" href="struct.Seq.html" title="struct regex_syntax::hir::literal::Seq">Seq</a></h4></section></summary><div class="docblock"><p>Returns a sequence of literals without a finite size and may contain
+any literal.</p>
+<p>A sequence without finite size does not reveal anything about the
+characteristics of the literals in its set. There are no fixed prefixes
+or suffixes, nor are lower or upper bounds on the length of the literals
+in the set known.</p>
+<p>This is useful to represent constructs in a regex that are “too big”
+to useful represent as a sequence of literals. For example, <code>[A-Za-z]</code>.
+When sequences get too big, they lose their discriminating nature and
+are more likely to produce false positives, which in turn makes them
+less likely to speed up searches.</p>
+<p>More pragmatically, for many regexes, enumerating all possible literals
+is itself not possible or might otherwise use too many resources. So
+constraining the size of sets during extraction is a practical trade
+off to make.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.singleton" class="method"><a class="src rightside" href="../../../src/regex_syntax/hir/literal.rs.html#782-784">source</a><h4 class="code-header">pub fn <a href="#method.singleton" class="fn">singleton</a>(lit: <a class="struct" href="struct.Literal.html" title="struct regex_syntax::hir::literal::Literal">Literal</a>) -&gt; <a class="struct" href="struct.Seq.html" title="struct regex_syntax::hir::literal::Seq">Seq</a></h4></section></summary><div class="docblock"><p>Returns a sequence containing a single literal.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.new" class="method"><a class="src rightside" href="../../../src/regex_syntax/hir/literal.rs.html#788-794">source</a><h4 class="code-header">pub fn <a href="#method.new" class="fn">new</a>&lt;I, B&gt;(it: I) -&gt; <a class="struct" href="struct.Seq.html" title="struct regex_syntax::hir::literal::Seq">Seq</a><div class="where">where
+    I: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/iter/traits/collect/trait.IntoIterator.html" title="trait core::iter::traits::collect::IntoIterator">IntoIterator</a>&lt;Item = B&gt;,
+    B: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]&gt;,</div></h4></section></summary><div class="docblock"><p>Returns a sequence of exact literals from the given byte strings.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.literals" class="method"><a class="src rightside" href="../../../src/regex_syntax/hir/literal.rs.html#802-804">source</a><h4 class="code-header">pub fn <a href="#method.literals" class="fn">literals</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;[<a class="struct" href="struct.Literal.html" title="struct regex_syntax::hir::literal::Literal">Literal</a>]&gt;</h4></section></summary><div class="docblock"><p>If this is a finite sequence, return its members as a slice of
+literals.</p>
+<p>The slice returned may be empty, in which case, there are no literals
+that can match this sequence.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.push" class="method"><a class="src rightside" href="../../../src/regex_syntax/hir/literal.rs.html#817-826">source</a><h4 class="code-header">pub fn <a href="#method.push" class="fn">push</a>(&amp;mut self, lit: <a class="struct" href="struct.Literal.html" title="struct regex_syntax::hir::literal::Literal">Literal</a>)</h4></section></summary><div class="docblock"><p>Push a literal to the end of this sequence.</p>
+<p>If this sequence is not finite, then this is a no-op.</p>
+<p>Similarly, if the most recently added item of this sequence is
+equivalent to the literal given, then it is not added. This reflects
+a <code>Seq</code>’s “set like” behavior, and represents a practical trade off.
+Namely, there is never any need to have two adjacent and equivalent
+literals in the same sequence, <em>and</em> it is easy to detect in some
+cases.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.make_inexact" class="method"><a class="src rightside" href="../../../src/regex_syntax/hir/literal.rs.html#832-840">source</a><h4 class="code-header">pub fn <a href="#method.make_inexact" class="fn">make_inexact</a>(&amp;mut self)</h4></section></summary><div class="docblock"><p>Make all of the literals in this sequence inexact.</p>
+<p>This is a no-op if this sequence is not finite.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.make_infinite" class="method"><a class="src rightside" href="../../../src/regex_syntax/hir/literal.rs.html#846-848">source</a><h4 class="code-header">pub fn <a href="#method.make_infinite" class="fn">make_infinite</a>(&amp;mut self)</h4></section></summary><div class="docblock"><p>Converts this sequence to an infinite sequence.</p>
+<p>This is a no-op if the sequence is already infinite.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.cross_forward" class="method"><a class="src rightside" href="../../../src/regex_syntax/hir/literal.rs.html#959-984">source</a><h4 class="code-header">pub fn <a href="#method.cross_forward" class="fn">cross_forward</a>(&amp;mut self, other: &amp;mut <a class="struct" href="struct.Seq.html" title="struct regex_syntax::hir::literal::Seq">Seq</a>)</h4></section></summary><div class="docblock"><p>Modify this sequence to contain the cross product between it and the
+sequence given.</p>
+<p>The cross product only considers literals in this sequence that are
+exact. That is, inexact literals are not extended.</p>
+<p>The literals are always drained from <code>other</code>, even if none are used.
+This permits callers to reuse the sequence allocation elsewhere.</p>
+<p>If this sequence is infinite, then this is a no-op, regardless of what
+<code>other</code> contains (and in this case, the literals are still drained from
+<code>other</code>). If <code>other</code> is infinite and this sequence is finite, then this
+is a no-op, unless this sequence contains a zero-length literal. In
+which case, the infiniteness of <code>other</code> infects this sequence, and this
+sequence is itself made infinite.</p>
+<p>Like <a href="struct.Seq.html#method.union" title="method regex_syntax::hir::literal::Seq::union"><code>Seq::union</code></a>, this may attempt to deduplicate literals. See
+<a href="struct.Seq.html#method.dedup" title="method regex_syntax::hir::literal::Seq::dedup"><code>Seq::dedup</code></a> for how deduplication deals with exact and inexact
+literals.</p>
+<h5 id="example-1"><a class="doc-anchor" href="#example-1">§</a>Example</h5>
+<p>This example shows basic usage and how exact and inexact literals
+interact.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_syntax::hir::literal::{Literal, Seq};
+
+<span class="kw">let </span><span class="kw-2">mut </span>seq1 = Seq::from_iter([
+    Literal::exact(<span class="string">"foo"</span>),
+    Literal::inexact(<span class="string">"bar"</span>),
+]);
+<span class="kw">let </span><span class="kw-2">mut </span>seq2 = Seq::from_iter([
+    Literal::inexact(<span class="string">"quux"</span>),
+    Literal::exact(<span class="string">"baz"</span>),
+]);
+seq1.cross_forward(<span class="kw-2">&amp;mut </span>seq2);
+
+<span class="comment">// The literals are pulled out of seq2.
+</span><span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="number">0</span>), seq2.len());
+
+<span class="kw">let </span>expected = Seq::from_iter([
+    Literal::inexact(<span class="string">"fooquux"</span>),
+    Literal::exact(<span class="string">"foobaz"</span>),
+    Literal::inexact(<span class="string">"bar"</span>),
+]);
+<span class="macro">assert_eq!</span>(expected, seq1);</code></pre></div>
+<p>This example shows the behavior of when <code>other</code> is an infinite
+sequence.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_syntax::hir::literal::{Literal, Seq};
+
+<span class="kw">let </span><span class="kw-2">mut </span>seq1 = Seq::from_iter([
+    Literal::exact(<span class="string">"foo"</span>),
+    Literal::inexact(<span class="string">"bar"</span>),
+]);
+<span class="kw">let </span><span class="kw-2">mut </span>seq2 = Seq::infinite();
+seq1.cross_forward(<span class="kw-2">&amp;mut </span>seq2);
+
+<span class="comment">// When seq2 is infinite, cross product doesn't add anything, but
+// ensures all members of seq1 are inexact.
+</span><span class="kw">let </span>expected = Seq::from_iter([
+    Literal::inexact(<span class="string">"foo"</span>),
+    Literal::inexact(<span class="string">"bar"</span>),
+]);
+<span class="macro">assert_eq!</span>(expected, seq1);</code></pre></div>
+<p>This example is like the one above, but shows what happens when this
+sequence contains an empty string. In this case, an infinite <code>other</code>
+sequence infects this sequence (because the empty string means that
+there are no finite prefixes):</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_syntax::hir::literal::{Literal, Seq};
+
+<span class="kw">let </span><span class="kw-2">mut </span>seq1 = Seq::from_iter([
+    Literal::exact(<span class="string">"foo"</span>),
+    Literal::exact(<span class="string">""</span>), <span class="comment">// inexact provokes same behavior
+    </span>Literal::inexact(<span class="string">"bar"</span>),
+]);
+<span class="kw">let </span><span class="kw-2">mut </span>seq2 = Seq::infinite();
+seq1.cross_forward(<span class="kw-2">&amp;mut </span>seq2);
+
+<span class="comment">// seq1 is now infinite!
+</span><span class="macro">assert!</span>(!seq1.is_finite());</code></pre></div>
+<p>This example shows the behavior of this sequence is infinite.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_syntax::hir::literal::{Literal, Seq};
+
+<span class="kw">let </span><span class="kw-2">mut </span>seq1 = Seq::infinite();
+<span class="kw">let </span><span class="kw-2">mut </span>seq2 = Seq::from_iter([
+    Literal::exact(<span class="string">"foo"</span>),
+    Literal::inexact(<span class="string">"bar"</span>),
+]);
+seq1.cross_forward(<span class="kw-2">&amp;mut </span>seq2);
+
+<span class="comment">// seq1 remains unchanged.
+</span><span class="macro">assert!</span>(!seq1.is_finite());
+<span class="comment">// Even though the literals in seq2 weren't used, it was still drained.
+</span><span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="number">0</span>), seq2.len());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.cross_reverse" class="method"><a class="src rightside" href="../../../src/regex_syntax/hir/literal.rs.html#1098-1134">source</a><h4 class="code-header">pub fn <a href="#method.cross_reverse" class="fn">cross_reverse</a>(&amp;mut self, other: &amp;mut <a class="struct" href="struct.Seq.html" title="struct regex_syntax::hir::literal::Seq">Seq</a>)</h4></section></summary><div class="docblock"><p>Modify this sequence to contain the cross product between it and
+the sequence given, where the sequences are treated as suffixes
+instead of prefixes. Namely, the sequence <code>other</code> is <em>prepended</em>
+to <code>self</code> (as opposed to <code>other</code> being <em>appended</em> to <code>self</code> in
+<a href="struct.Seq.html#method.cross_forward" title="method regex_syntax::hir::literal::Seq::cross_forward"><code>Seq::cross_forward</code></a>).</p>
+<p>The cross product only considers literals in this sequence that are
+exact. That is, inexact literals are not extended.</p>
+<p>The literals are always drained from <code>other</code>, even if none are used.
+This permits callers to reuse the sequence allocation elsewhere.</p>
+<p>If this sequence is infinite, then this is a no-op, regardless of what
+<code>other</code> contains (and in this case, the literals are still drained from
+<code>other</code>). If <code>other</code> is infinite and this sequence is finite, then this
+is a no-op, unless this sequence contains a zero-length literal. In
+which case, the infiniteness of <code>other</code> infects this sequence, and this
+sequence is itself made infinite.</p>
+<p>Like <a href="struct.Seq.html#method.union" title="method regex_syntax::hir::literal::Seq::union"><code>Seq::union</code></a>, this may attempt to deduplicate literals. See
+<a href="struct.Seq.html#method.dedup" title="method regex_syntax::hir::literal::Seq::dedup"><code>Seq::dedup</code></a> for how deduplication deals with exact and inexact
+literals.</p>
+<h5 id="example-2"><a class="doc-anchor" href="#example-2">§</a>Example</h5>
+<p>This example shows basic usage and how exact and inexact literals
+interact.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_syntax::hir::literal::{Literal, Seq};
+
+<span class="kw">let </span><span class="kw-2">mut </span>seq1 = Seq::from_iter([
+    Literal::exact(<span class="string">"foo"</span>),
+    Literal::inexact(<span class="string">"bar"</span>),
+]);
+<span class="kw">let </span><span class="kw-2">mut </span>seq2 = Seq::from_iter([
+    Literal::inexact(<span class="string">"quux"</span>),
+    Literal::exact(<span class="string">"baz"</span>),
+]);
+seq1.cross_reverse(<span class="kw-2">&amp;mut </span>seq2);
+
+<span class="comment">// The literals are pulled out of seq2.
+</span><span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="number">0</span>), seq2.len());
+
+<span class="kw">let </span>expected = Seq::from_iter([
+    Literal::inexact(<span class="string">"quuxfoo"</span>),
+    Literal::inexact(<span class="string">"bar"</span>),
+    Literal::exact(<span class="string">"bazfoo"</span>),
+]);
+<span class="macro">assert_eq!</span>(expected, seq1);</code></pre></div>
+<p>This example shows the behavior of when <code>other</code> is an infinite
+sequence.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_syntax::hir::literal::{Literal, Seq};
+
+<span class="kw">let </span><span class="kw-2">mut </span>seq1 = Seq::from_iter([
+    Literal::exact(<span class="string">"foo"</span>),
+    Literal::inexact(<span class="string">"bar"</span>),
+]);
+<span class="kw">let </span><span class="kw-2">mut </span>seq2 = Seq::infinite();
+seq1.cross_reverse(<span class="kw-2">&amp;mut </span>seq2);
+
+<span class="comment">// When seq2 is infinite, cross product doesn't add anything, but
+// ensures all members of seq1 are inexact.
+</span><span class="kw">let </span>expected = Seq::from_iter([
+    Literal::inexact(<span class="string">"foo"</span>),
+    Literal::inexact(<span class="string">"bar"</span>),
+]);
+<span class="macro">assert_eq!</span>(expected, seq1);</code></pre></div>
+<p>This example is like the one above, but shows what happens when this
+sequence contains an empty string. In this case, an infinite <code>other</code>
+sequence infects this sequence (because the empty string means that
+there are no finite suffixes):</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_syntax::hir::literal::{Literal, Seq};
+
+<span class="kw">let </span><span class="kw-2">mut </span>seq1 = Seq::from_iter([
+    Literal::exact(<span class="string">"foo"</span>),
+    Literal::exact(<span class="string">""</span>), <span class="comment">// inexact provokes same behavior
+    </span>Literal::inexact(<span class="string">"bar"</span>),
+]);
+<span class="kw">let </span><span class="kw-2">mut </span>seq2 = Seq::infinite();
+seq1.cross_reverse(<span class="kw-2">&amp;mut </span>seq2);
+
+<span class="comment">// seq1 is now infinite!
+</span><span class="macro">assert!</span>(!seq1.is_finite());</code></pre></div>
+<p>This example shows the behavior when this sequence is infinite.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_syntax::hir::literal::{Literal, Seq};
+
+<span class="kw">let </span><span class="kw-2">mut </span>seq1 = Seq::infinite();
+<span class="kw">let </span><span class="kw-2">mut </span>seq2 = Seq::from_iter([
+    Literal::exact(<span class="string">"foo"</span>),
+    Literal::inexact(<span class="string">"bar"</span>),
+]);
+seq1.cross_reverse(<span class="kw-2">&amp;mut </span>seq2);
+
+<span class="comment">// seq1 remains unchanged.
+</span><span class="macro">assert!</span>(!seq1.is_finite());
+<span class="comment">// Even though the literals in seq2 weren't used, it was still drained.
+</span><span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="number">0</span>), seq2.len());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.union" class="method"><a class="src rightside" href="../../../src/regex_syntax/hir/literal.rs.html#1219-1235">source</a><h4 class="code-header">pub fn <a href="#method.union" class="fn">union</a>(&amp;mut self, other: &amp;mut <a class="struct" href="struct.Seq.html" title="struct regex_syntax::hir::literal::Seq">Seq</a>)</h4></section></summary><div class="docblock"><p>Unions the <code>other</code> sequence into this one.</p>
+<p>The literals are always drained out of the given <code>other</code> sequence,
+even if they are being unioned into an infinite sequence. This permits
+the caller to reuse the <code>other</code> sequence in another context.</p>
+<p>Some literal deduping may be performed. If any deduping happens,
+any leftmost-first or “preference” order match semantics will be
+preserved.</p>
+<h5 id="example-3"><a class="doc-anchor" href="#example-3">§</a>Example</h5>
+<p>This example shows basic usage.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_syntax::hir::literal::Seq;
+
+<span class="kw">let </span><span class="kw-2">mut </span>seq1 = Seq::new(<span class="kw-2">&amp;</span>[<span class="string">"foo"</span>, <span class="string">"bar"</span>]);
+<span class="kw">let </span><span class="kw-2">mut </span>seq2 = Seq::new(<span class="kw-2">&amp;</span>[<span class="string">"bar"</span>, <span class="string">"quux"</span>, <span class="string">"foo"</span>]);
+seq1.union(<span class="kw-2">&amp;mut </span>seq2);
+
+<span class="comment">// The literals are pulled out of seq2.
+</span><span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="number">0</span>), seq2.len());
+
+<span class="comment">// Adjacent literals are deduped, but non-adjacent literals may not be.
+</span><span class="macro">assert_eq!</span>(Seq::new(<span class="kw-2">&amp;</span>[<span class="string">"foo"</span>, <span class="string">"bar"</span>, <span class="string">"quux"</span>, <span class="string">"foo"</span>]), seq1);</code></pre></div>
+<p>This example shows that literals are drained from <code>other</code> even when
+they aren’t necessarily used.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_syntax::hir::literal::Seq;
+
+<span class="kw">let </span><span class="kw-2">mut </span>seq1 = Seq::infinite();
+<span class="comment">// Infinite sequences have no finite length.
+</span><span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, seq1.len());
+
+<span class="kw">let </span><span class="kw-2">mut </span>seq2 = Seq::new(<span class="kw-2">&amp;</span>[<span class="string">"bar"</span>, <span class="string">"quux"</span>, <span class="string">"foo"</span>]);
+seq1.union(<span class="kw-2">&amp;mut </span>seq2);
+
+<span class="comment">// seq1 is still infinite and seq2 has been drained.
+</span><span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, seq1.len());
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="number">0</span>), seq2.len());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.union_into_empty" class="method"><a class="src rightside" href="../../../src/regex_syntax/hir/literal.rs.html#1287-1314">source</a><h4 class="code-header">pub fn <a href="#method.union_into_empty" class="fn">union_into_empty</a>(&amp;mut self, other: &amp;mut <a class="struct" href="struct.Seq.html" title="struct regex_syntax::hir::literal::Seq">Seq</a>)</h4></section></summary><div class="docblock"><p>Unions the <code>other</code> sequence into this one by splice the <code>other</code>
+sequence at the position of the first zero-length literal.</p>
+<p>This is useful for preserving preference order semantics when combining
+two literal sequences. For example, in the regex <code>(a||f)+foo</code>, the
+correct preference order prefix sequence is <code>[a, foo, f]</code>.</p>
+<p>The literals are always drained out of the given <code>other</code> sequence,
+even if they are being unioned into an infinite sequence. This permits
+the caller to reuse the <code>other</code> sequence in another context. Note that
+the literals are drained even if no union is performed as well, i.e.,
+when this sequence does not contain a zero-length literal.</p>
+<p>Some literal deduping may be performed. If any deduping happens,
+any leftmost-first or “preference” order match semantics will be
+preserved.</p>
+<h5 id="example-4"><a class="doc-anchor" href="#example-4">§</a>Example</h5>
+<p>This example shows basic usage.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_syntax::hir::literal::Seq;
+
+<span class="kw">let </span><span class="kw-2">mut </span>seq1 = Seq::new(<span class="kw-2">&amp;</span>[<span class="string">"a"</span>, <span class="string">""</span>, <span class="string">"f"</span>, <span class="string">""</span>]);
+<span class="kw">let </span><span class="kw-2">mut </span>seq2 = Seq::new(<span class="kw-2">&amp;</span>[<span class="string">"foo"</span>]);
+seq1.union_into_empty(<span class="kw-2">&amp;mut </span>seq2);
+
+<span class="comment">// The literals are pulled out of seq2.
+</span><span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="number">0</span>), seq2.len());
+<span class="comment">// 'foo' gets spliced into seq1 where the first empty string occurs.
+</span><span class="macro">assert_eq!</span>(Seq::new(<span class="kw-2">&amp;</span>[<span class="string">"a"</span>, <span class="string">"foo"</span>, <span class="string">"f"</span>]), seq1);</code></pre></div>
+<p>This example shows that literals are drained from <code>other</code> even when
+they aren’t necessarily used.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_syntax::hir::literal::Seq;
+
+<span class="kw">let </span><span class="kw-2">mut </span>seq1 = Seq::new(<span class="kw-2">&amp;</span>[<span class="string">"foo"</span>, <span class="string">"bar"</span>]);
+<span class="kw">let </span><span class="kw-2">mut </span>seq2 = Seq::new(<span class="kw-2">&amp;</span>[<span class="string">"bar"</span>, <span class="string">"quux"</span>, <span class="string">"foo"</span>]);
+seq1.union_into_empty(<span class="kw-2">&amp;mut </span>seq2);
+
+<span class="comment">// seq1 has no zero length literals, so no splicing happens.
+</span><span class="macro">assert_eq!</span>(Seq::new(<span class="kw-2">&amp;</span>[<span class="string">"foo"</span>, <span class="string">"bar"</span>]), seq1);
+<span class="comment">// Even though no splicing happens, seq2 is still drained.
+</span><span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="number">0</span>), seq2.len());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.dedup" class="method"><a class="src rightside" href="../../../src/regex_syntax/hir/literal.rs.html#1341-1354">source</a><h4 class="code-header">pub fn <a href="#method.dedup" class="fn">dedup</a>(&amp;mut self)</h4></section></summary><div class="docblock"><p>Deduplicate adjacent equivalent literals in this sequence.</p>
+<p>If adjacent literals are equivalent strings but one is exact and the
+other inexact, the inexact literal is kept and the exact one is
+removed.</p>
+<p>Deduping an infinite sequence is a no-op.</p>
+<h5 id="example-5"><a class="doc-anchor" href="#example-5">§</a>Example</h5>
+<p>This example shows how literals that are duplicate byte strings but
+are not equivalent with respect to exactness are resolved.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_syntax::hir::literal::{Literal, Seq};
+
+<span class="kw">let </span><span class="kw-2">mut </span>seq = Seq::from_iter([
+    Literal::exact(<span class="string">"foo"</span>),
+    Literal::inexact(<span class="string">"foo"</span>),
+]);
+seq.dedup();
+
+<span class="macro">assert_eq!</span>(Seq::from_iter([Literal::inexact(<span class="string">"foo"</span>)]), seq);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.sort" class="method"><a class="src rightside" href="../../../src/regex_syntax/hir/literal.rs.html#1378-1382">source</a><h4 class="code-header">pub fn <a href="#method.sort" class="fn">sort</a>(&amp;mut self)</h4></section></summary><div class="docblock"><p>Sorts this sequence of literals lexicographically.</p>
+<p>Note that if, before sorting, if a literal that is a prefix of another
+literal appears after it, then after sorting, the sequence will not
+represent the same preference order match semantics. For example,
+sorting the sequence <code>[samwise, sam]</code> yields the sequence <code>[sam, samwise]</code>. Under preference order semantics, the latter sequence will
+never match <code>samwise</code> where as the first sequence can.</p>
+<h5 id="example-6"><a class="doc-anchor" href="#example-6">§</a>Example</h5>
+<p>This example shows basic usage.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_syntax::hir::literal::Seq;
+
+<span class="kw">let </span><span class="kw-2">mut </span>seq = Seq::new(<span class="kw-2">&amp;</span>[<span class="string">"foo"</span>, <span class="string">"quux"</span>, <span class="string">"bar"</span>]);
+seq.sort();
+
+<span class="macro">assert_eq!</span>(Seq::new(<span class="kw-2">&amp;</span>[<span class="string">"bar"</span>, <span class="string">"foo"</span>, <span class="string">"quux"</span>]), seq);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.reverse_literals" class="method"><a class="src rightside" href="../../../src/regex_syntax/hir/literal.rs.html#1400-1406">source</a><h4 class="code-header">pub fn <a href="#method.reverse_literals" class="fn">reverse_literals</a>(&amp;mut self)</h4></section></summary><div class="docblock"><p>Reverses all of the literals in this sequence.</p>
+<p>The order of the sequence itself is preserved.</p>
+<h5 id="example-7"><a class="doc-anchor" href="#example-7">§</a>Example</h5>
+<p>This example shows basic usage.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_syntax::hir::literal::Seq;
+
+<span class="kw">let </span><span class="kw-2">mut </span>seq = Seq::new(<span class="kw-2">&amp;</span>[<span class="string">"oof"</span>, <span class="string">"rab"</span>]);
+seq.reverse_literals();
+<span class="macro">assert_eq!</span>(Seq::new(<span class="kw-2">&amp;</span>[<span class="string">"foo"</span>, <span class="string">"bar"</span>]), seq);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.minimize_by_preference" class="method"><a class="src rightside" href="../../../src/regex_syntax/hir/literal.rs.html#1463-1467">source</a><h4 class="code-header">pub fn <a href="#method.minimize_by_preference" class="fn">minimize_by_preference</a>(&amp;mut self)</h4></section></summary><div class="docblock"><p>Shrinks this seq to its minimal size while respecting the preference
+order of its literals.</p>
+<p>While this routine will remove duplicate literals from this seq, it
+will also remove literals that can never match in a leftmost-first or
+“preference order” search. Similar to <a href="struct.Seq.html#method.dedup" title="method regex_syntax::hir::literal::Seq::dedup"><code>Seq::dedup</code></a>, if a literal is
+deduped, then the one that remains is made inexact.</p>
+<p>This is a no-op on seqs that are empty or not finite.</p>
+<h5 id="example-8"><a class="doc-anchor" href="#example-8">§</a>Example</h5>
+<p>This example shows the difference between <code>{sam, samwise}</code> and
+<code>{samwise, sam}</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_syntax::hir::literal::{Literal, Seq};
+
+<span class="comment">// If 'sam' comes before 'samwise' and a preference order search is
+// executed, then 'samwise' can never match.
+</span><span class="kw">let </span><span class="kw-2">mut </span>seq = Seq::new(<span class="kw-2">&amp;</span>[<span class="string">"sam"</span>, <span class="string">"samwise"</span>]);
+seq.minimize_by_preference();
+<span class="macro">assert_eq!</span>(Seq::from_iter([Literal::inexact(<span class="string">"sam"</span>)]), seq);
+
+<span class="comment">// But if they are reversed, then it's possible for 'samwise' to match
+// since it is given higher preference.
+</span><span class="kw">let </span><span class="kw-2">mut </span>seq = Seq::new(<span class="kw-2">&amp;</span>[<span class="string">"samwise"</span>, <span class="string">"sam"</span>]);
+seq.minimize_by_preference();
+<span class="macro">assert_eq!</span>(Seq::new(<span class="kw-2">&amp;</span>[<span class="string">"samwise"</span>, <span class="string">"sam"</span>]), seq);</code></pre></div>
+<p>This example shows that if an empty string is in this seq, then
+anything that comes after it can never match.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_syntax::hir::literal::{Literal, Seq};
+
+<span class="comment">// An empty string is a prefix of all strings, so it automatically
+// inhibits any subsequent strings from matching.
+</span><span class="kw">let </span><span class="kw-2">mut </span>seq = Seq::new(<span class="kw-2">&amp;</span>[<span class="string">"foo"</span>, <span class="string">"bar"</span>, <span class="string">""</span>, <span class="string">"quux"</span>, <span class="string">"fox"</span>]);
+seq.minimize_by_preference();
+<span class="kw">let </span>expected = Seq::from_iter([
+    Literal::exact(<span class="string">"foo"</span>),
+    Literal::exact(<span class="string">"bar"</span>),
+    Literal::inexact(<span class="string">""</span>),
+]);
+<span class="macro">assert_eq!</span>(expected, seq);
+
+<span class="comment">// And of course, if it's at the beginning, then it makes it impossible
+// for anything else to match.
+</span><span class="kw">let </span><span class="kw-2">mut </span>seq = Seq::new(<span class="kw-2">&amp;</span>[<span class="string">""</span>, <span class="string">"foo"</span>, <span class="string">"quux"</span>, <span class="string">"fox"</span>]);
+seq.minimize_by_preference();
+<span class="macro">assert_eq!</span>(Seq::from_iter([Literal::inexact(<span class="string">""</span>)]), seq);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.keep_first_bytes" class="method"><a class="src rightside" href="../../../src/regex_syntax/hir/literal.rs.html#1489-1495">source</a><h4 class="code-header">pub fn <a href="#method.keep_first_bytes" class="fn">keep_first_bytes</a>(&amp;mut self, len: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>)</h4></section></summary><div class="docblock"><p>Trims all literals in this seq such that only the first <code>len</code> bytes
+remain. If a literal has less than or equal to <code>len</code> bytes, then it
+remains unchanged. Otherwise, it is trimmed and made inexact.</p>
+<h5 id="example-9"><a class="doc-anchor" href="#example-9">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_syntax::hir::literal::{Literal, Seq};
+
+<span class="kw">let </span><span class="kw-2">mut </span>seq = Seq::new(<span class="kw-2">&amp;</span>[<span class="string">"a"</span>, <span class="string">"foo"</span>, <span class="string">"quux"</span>]);
+seq.keep_first_bytes(<span class="number">2</span>);
+
+<span class="kw">let </span>expected = Seq::from_iter([
+    Literal::exact(<span class="string">"a"</span>),
+    Literal::inexact(<span class="string">"fo"</span>),
+    Literal::inexact(<span class="string">"qu"</span>),
+]);
+<span class="macro">assert_eq!</span>(expected, seq);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.keep_last_bytes" class="method"><a class="src rightside" href="../../../src/regex_syntax/hir/literal.rs.html#1517-1523">source</a><h4 class="code-header">pub fn <a href="#method.keep_last_bytes" class="fn">keep_last_bytes</a>(&amp;mut self, len: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>)</h4></section></summary><div class="docblock"><p>Trims all literals in this seq such that only the last <code>len</code> bytes
+remain. If a literal has less than or equal to <code>len</code> bytes, then it
+remains unchanged. Otherwise, it is trimmed and made inexact.</p>
+<h5 id="example-10"><a class="doc-anchor" href="#example-10">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_syntax::hir::literal::{Literal, Seq};
+
+<span class="kw">let </span><span class="kw-2">mut </span>seq = Seq::new(<span class="kw-2">&amp;</span>[<span class="string">"a"</span>, <span class="string">"foo"</span>, <span class="string">"quux"</span>]);
+seq.keep_last_bytes(<span class="number">2</span>);
+
+<span class="kw">let </span>expected = Seq::from_iter([
+    Literal::exact(<span class="string">"a"</span>),
+    Literal::inexact(<span class="string">"oo"</span>),
+    Literal::inexact(<span class="string">"ux"</span>),
+]);
+<span class="macro">assert_eq!</span>(expected, seq);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.is_finite" class="method"><a class="src rightside" href="../../../src/regex_syntax/hir/literal.rs.html#1530-1532">source</a><h4 class="code-header">pub fn <a href="#method.is_finite" class="fn">is_finite</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns true if this sequence is finite.</p>
+<p>When false, this sequence is infinite and must be treated as if it
+contains every possible literal.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.is_empty" class="method"><a class="src rightside" href="../../../src/regex_syntax/hir/literal.rs.html#1539-1541">source</a><h4 class="code-header">pub fn <a href="#method.is_empty" class="fn">is_empty</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns true if and only if this sequence is finite and empty.</p>
+<p>An empty sequence never matches anything. It can only be produced by
+literal extraction when the corresponding regex itself cannot match.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.len" class="method"><a class="src rightside" href="../../../src/regex_syntax/hir/literal.rs.html#1546-1548">source</a><h4 class="code-header">pub fn <a href="#method.len" class="fn">len</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>&gt;</h4></section></summary><div class="docblock"><p>Returns the number of literals in this sequence if the sequence is
+finite. If the sequence is infinite, then <code>None</code> is returned.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.is_exact" class="method"><a class="src rightside" href="../../../src/regex_syntax/hir/literal.rs.html#1554-1556">source</a><h4 class="code-header">pub fn <a href="#method.is_exact" class="fn">is_exact</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns true if and only if all literals in this sequence are exact.</p>
+<p>This returns false if the sequence is infinite.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.is_inexact" class="method"><a class="src rightside" href="../../../src/regex_syntax/hir/literal.rs.html#1562-1564">source</a><h4 class="code-header">pub fn <a href="#method.is_inexact" class="fn">is_inexact</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns true if and only if all literals in this sequence are inexact.</p>
+<p>This returns true if the sequence is infinite.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.max_union_len" class="method"><a class="src rightside" href="../../../src/regex_syntax/hir/literal.rs.html#1570-1574">source</a><h4 class="code-header">pub fn <a href="#method.max_union_len" class="fn">max_union_len</a>(&amp;self, other: &amp;<a class="struct" href="struct.Seq.html" title="struct regex_syntax::hir::literal::Seq">Seq</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>&gt;</h4></section></summary><div class="docblock"><p>Return the maximum length of the sequence that would result from
+unioning <code>self</code> with <code>other</code>. If either set is infinite, then this
+returns <code>None</code>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.max_cross_len" class="method"><a class="src rightside" href="../../../src/regex_syntax/hir/literal.rs.html#1580-1584">source</a><h4 class="code-header">pub fn <a href="#method.max_cross_len" class="fn">max_cross_len</a>(&amp;self, other: &amp;<a class="struct" href="struct.Seq.html" title="struct regex_syntax::hir::literal::Seq">Seq</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>&gt;</h4></section></summary><div class="docblock"><p>Return the maximum length of the sequence that would result from the
+cross product of <code>self</code> with <code>other</code>. If either set is infinite, then
+this returns <code>None</code>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.min_literal_len" class="method"><a class="src rightside" href="../../../src/regex_syntax/hir/literal.rs.html#1590-1592">source</a><h4 class="code-header">pub fn <a href="#method.min_literal_len" class="fn">min_literal_len</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>&gt;</h4></section></summary><div class="docblock"><p>Returns the length of the shortest literal in this sequence.</p>
+<p>If the sequence is infinite or empty, then this returns <code>None</code>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.max_literal_len" class="method"><a class="src rightside" href="../../../src/regex_syntax/hir/literal.rs.html#1598-1600">source</a><h4 class="code-header">pub fn <a href="#method.max_literal_len" class="fn">max_literal_len</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>&gt;</h4></section></summary><div class="docblock"><p>Returns the length of the longest literal in this sequence.</p>
+<p>If the sequence is infinite or empty, then this returns <code>None</code>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.longest_common_prefix" class="method"><a class="src rightside" href="../../../src/regex_syntax/hir/literal.rs.html#1629-1653">source</a><h4 class="code-header">pub fn <a href="#method.longest_common_prefix" class="fn">longest_common_prefix</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]&gt;</h4></section></summary><div class="docblock"><p>Returns the longest common prefix from this seq.</p>
+<p>If the seq matches any literal or other contains no literals, then
+there is no meaningful prefix and this returns <code>None</code>.</p>
+<h5 id="example-11"><a class="doc-anchor" href="#example-11">§</a>Example</h5>
+<p>This shows some example seqs and their longest common prefix.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_syntax::hir::literal::Seq;
+
+<span class="kw">let </span>seq = Seq::new(<span class="kw-2">&amp;</span>[<span class="string">"foo"</span>, <span class="string">"foobar"</span>, <span class="string">"fo"</span>]);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span><span class="string">b"fo"</span>[..]), seq.longest_common_prefix());
+<span class="kw">let </span>seq = Seq::new(<span class="kw-2">&amp;</span>[<span class="string">"foo"</span>, <span class="string">"foo"</span>]);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span><span class="string">b"foo"</span>[..]), seq.longest_common_prefix());
+<span class="kw">let </span>seq = Seq::new(<span class="kw-2">&amp;</span>[<span class="string">"foo"</span>, <span class="string">"bar"</span>]);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span><span class="string">b""</span>[..]), seq.longest_common_prefix());
+<span class="kw">let </span>seq = Seq::new(<span class="kw-2">&amp;</span>[<span class="string">""</span>]);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span><span class="string">b""</span>[..]), seq.longest_common_prefix());
+
+<span class="kw">let </span>seq = Seq::infinite();
+<span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, seq.longest_common_prefix());
+<span class="kw">let </span>seq = Seq::empty();
+<span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, seq.longest_common_prefix());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.longest_common_suffix" class="method"><a class="src rightside" href="../../../src/regex_syntax/hir/literal.rs.html#1682-1707">source</a><h4 class="code-header">pub fn <a href="#method.longest_common_suffix" class="fn">longest_common_suffix</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]&gt;</h4></section></summary><div class="docblock"><p>Returns the longest common suffix from this seq.</p>
+<p>If the seq matches any literal or other contains no literals, then
+there is no meaningful suffix and this returns <code>None</code>.</p>
+<h5 id="example-12"><a class="doc-anchor" href="#example-12">§</a>Example</h5>
+<p>This shows some example seqs and their longest common suffix.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_syntax::hir::literal::Seq;
+
+<span class="kw">let </span>seq = Seq::new(<span class="kw-2">&amp;</span>[<span class="string">"oof"</span>, <span class="string">"raboof"</span>, <span class="string">"of"</span>]);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span><span class="string">b"of"</span>[..]), seq.longest_common_suffix());
+<span class="kw">let </span>seq = Seq::new(<span class="kw-2">&amp;</span>[<span class="string">"foo"</span>, <span class="string">"foo"</span>]);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span><span class="string">b"foo"</span>[..]), seq.longest_common_suffix());
+<span class="kw">let </span>seq = Seq::new(<span class="kw-2">&amp;</span>[<span class="string">"foo"</span>, <span class="string">"bar"</span>]);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span><span class="string">b""</span>[..]), seq.longest_common_suffix());
+<span class="kw">let </span>seq = Seq::new(<span class="kw-2">&amp;</span>[<span class="string">""</span>]);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span><span class="string">b""</span>[..]), seq.longest_common_suffix());
+
+<span class="kw">let </span>seq = Seq::infinite();
+<span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, seq.longest_common_suffix());
+<span class="kw">let </span>seq = Seq::empty();
+<span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, seq.longest_common_suffix());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.optimize_for_prefix_by_preference" class="method"><a class="src rightside" href="../../../src/regex_syntax/hir/literal.rs.html#1819-1821">source</a><h4 class="code-header">pub fn <a href="#method.optimize_for_prefix_by_preference" class="fn">optimize_for_prefix_by_preference</a>(&amp;mut self)</h4></section></summary><div class="docblock"><p>Optimizes this seq while treating its literals as prefixes and
+respecting the preference order of its literals.</p>
+<p>The specific way “optimization” works is meant to be an implementation
+detail, as it essentially represents a set of heuristics. The goal
+that optimization tries to accomplish is to make the literals in this
+set reflect inputs that will result in a more effective prefilter.
+Principally by reducing the false positive rate of candidates found by
+the literals in this sequence. That is, when a match of a literal is
+found, we would like it to be a strong predictor of the overall match
+of the regex. If it isn’t, then much time will be spent starting and
+stopping the prefilter search and attempting to confirm the match only
+to have it fail.</p>
+<p>Some of those heuristics might be:</p>
+<ul>
+<li>Identifying a common prefix from a larger sequence of literals, and
+shrinking the sequence down to that single common prefix.</li>
+<li>Rejecting the sequence entirely if it is believed to result in very
+high false positive rate. When this happens, the sequence is made
+infinite.</li>
+<li>Shrinking the sequence to a smaller number of literals representing
+prefixes, but not shrinking it so much as to make literals too short.
+(A sequence with very short literals, of 1 or 2 bytes, will typically
+result in a higher false positive rate.)</li>
+</ul>
+<p>Optimization should only be run once extraction is complete. Namely,
+optimization may make assumptions that do not compose with other
+operations in the middle of extraction. For example, optimization will
+reduce <code>[E(sam), E(samwise)]</code> to <code>[E(sam)]</code>, but such a transformation
+is only valid if no other extraction will occur. If other extraction
+may occur, then the correct transformation would be to <code>[I(sam)]</code>.</p>
+<p>The <a href="struct.Seq.html#method.optimize_for_suffix_by_preference" title="method regex_syntax::hir::literal::Seq::optimize_for_suffix_by_preference"><code>Seq::optimize_for_suffix_by_preference</code></a> does the same thing, but
+for suffixes.</p>
+<h5 id="example-13"><a class="doc-anchor" href="#example-13">§</a>Example</h5>
+<p>This shows how optimization might transform a sequence. Note that
+the specific behavior is not a documented guarantee. The heuristics
+used are an implementation detail and may change over time in semver
+compatible releases.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_syntax::hir::literal::{Seq, Literal};
+
+<span class="kw">let </span><span class="kw-2">mut </span>seq = Seq::new(<span class="kw-2">&amp;</span>[
+    <span class="string">"samantha"</span>,
+    <span class="string">"sam"</span>,
+    <span class="string">"samwise"</span>,
+    <span class="string">"frodo"</span>,
+]);
+seq.optimize_for_prefix_by_preference();
+<span class="macro">assert_eq!</span>(Seq::from_iter([
+    Literal::exact(<span class="string">"samantha"</span>),
+    <span class="comment">// Kept exact even though 'samwise' got pruned
+    // because optimization assumes literal extraction
+    // has finished.
+    </span>Literal::exact(<span class="string">"sam"</span>),
+    Literal::exact(<span class="string">"frodo"</span>),
+]), seq);</code></pre></div>
+<h5 id="example-optimization-may-make-the-sequence-infinite"><a class="doc-anchor" href="#example-optimization-may-make-the-sequence-infinite">§</a>Example: optimization may make the sequence infinite</h5>
+<p>If the heuristics deem that the sequence could cause a very high false
+positive rate, then it may make the sequence infinite, effectively
+disabling its use as a prefilter.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_syntax::hir::literal::{Seq, Literal};
+
+<span class="kw">let </span><span class="kw-2">mut </span>seq = Seq::new(<span class="kw-2">&amp;</span>[
+    <span class="string">"samantha"</span>,
+    <span class="comment">// An empty string matches at every position,
+    // thus rendering the prefilter completely
+    // ineffective.
+    </span><span class="string">""</span>,
+    <span class="string">"sam"</span>,
+    <span class="string">"samwise"</span>,
+    <span class="string">"frodo"</span>,
+]);
+seq.optimize_for_prefix_by_preference();
+<span class="macro">assert!</span>(!seq.is_finite());</code></pre></div>
+<p>Do note that just because there is a <code>" "</code> in the sequence, that
+doesn’t mean the sequence will always be made infinite after it is
+optimized. Namely, if the sequence is considered exact (any match
+corresponds to an overall match of the original regex), then any match
+is an overall match, and so the false positive rate is always <code>0</code>.</p>
+<p>To demonstrate this, we remove <code>samwise</code> from our sequence. This
+results in no optimization happening and all literals remain exact.
+Thus the entire sequence is exact, and it is kept as-is, even though
+one is an ASCII space:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_syntax::hir::literal::{Seq, Literal};
+
+<span class="kw">let </span><span class="kw-2">mut </span>seq = Seq::new(<span class="kw-2">&amp;</span>[
+    <span class="string">"samantha"</span>,
+    <span class="string">" "</span>,
+    <span class="string">"sam"</span>,
+    <span class="string">"frodo"</span>,
+]);
+seq.optimize_for_prefix_by_preference();
+<span class="macro">assert!</span>(seq.is_finite());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.optimize_for_suffix_by_preference" class="method"><a class="src rightside" href="../../../src/regex_syntax/hir/literal.rs.html#1831-1833">source</a><h4 class="code-header">pub fn <a href="#method.optimize_for_suffix_by_preference" class="fn">optimize_for_suffix_by_preference</a>(&amp;mut self)</h4></section></summary><div class="docblock"><p>Optimizes this seq while treating its literals as suffixes and
+respecting the preference order of its literals.</p>
+<p>Optimization should only be run once extraction is complete.</p>
+<p>The <a href="struct.Seq.html#method.optimize_for_prefix_by_preference" title="method regex_syntax::hir::literal::Seq::optimize_for_prefix_by_preference"><code>Seq::optimize_for_prefix_by_preference</code></a> does the same thing, but
+for prefixes. See its documentation for more explanation.</p>
+</div></details></div></details></div><h2 id="trait-implementations" class="section-header">Trait Implementations<a href="#trait-implementations" class="anchor">§</a></h2><div id="trait-implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-Clone-for-Seq" class="impl"><a class="src rightside" href="../../../src/regex_syntax/hir/literal.rs.html#732">source</a><a href="#impl-Clone-for-Seq" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a> for <a class="struct" href="struct.Seq.html" title="struct regex_syntax::hir::literal::Seq">Seq</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.clone" class="method trait-impl"><a class="src rightside" href="../../../src/regex_syntax/hir/literal.rs.html#732">source</a><a href="#method.clone" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#tymethod.clone" class="fn">clone</a>(&amp;self) -&gt; <a class="struct" href="struct.Seq.html" title="struct regex_syntax::hir::literal::Seq">Seq</a></h4></section></summary><div class='docblock'>Returns a copy of the value. <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#tymethod.clone">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.clone_from" class="method trait-impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#172">source</a></span><a href="#method.clone_from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#method.clone_from" class="fn">clone_from</a>(&amp;mut self, source: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;Self</a>)</h4></section></summary><div class='docblock'>Performs copy-assignment from <code>source</code>. <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#method.clone_from">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Debug-for-Seq" class="impl"><a class="src rightside" href="../../../src/regex_syntax/hir/literal.rs.html#2013-2022">source</a><a href="#impl-Debug-for-Seq" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html" title="trait core::fmt::Debug">Debug</a> for <a class="struct" href="struct.Seq.html" title="struct regex_syntax::hir::literal::Seq">Seq</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.fmt" class="method trait-impl"><a class="src rightside" href="../../../src/regex_syntax/hir/literal.rs.html#2014-2021">source</a><a href="#method.fmt" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html#tymethod.fmt" class="fn">fmt</a>(&amp;self, f: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/fmt/struct.Formatter.html" title="struct core::fmt::Formatter">Formatter</a>&lt;'_&gt;) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a></h4></section></summary><div class='docblock'>Formats the value using the given formatter. <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html#tymethod.fmt">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-FromIterator%3CLiteral%3E-for-Seq" class="impl"><a class="src rightside" href="../../../src/regex_syntax/hir/literal.rs.html#2024-2032">source</a><a href="#impl-FromIterator%3CLiteral%3E-for-Seq" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/iter/traits/collect/trait.FromIterator.html" title="trait core::iter::traits::collect::FromIterator">FromIterator</a>&lt;<a class="struct" href="struct.Literal.html" title="struct regex_syntax::hir::literal::Literal">Literal</a>&gt; for <a class="struct" href="struct.Seq.html" title="struct regex_syntax::hir::literal::Seq">Seq</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.from_iter" class="method trait-impl"><a class="src rightside" href="../../../src/regex_syntax/hir/literal.rs.html#2025-2031">source</a><a href="#method.from_iter" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/iter/traits/collect/trait.FromIterator.html#tymethod.from_iter" class="fn">from_iter</a>&lt;T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/iter/traits/collect/trait.IntoIterator.html" title="trait core::iter::traits::collect::IntoIterator">IntoIterator</a>&lt;Item = <a class="struct" href="struct.Literal.html" title="struct regex_syntax::hir::literal::Literal">Literal</a>&gt;&gt;(it: T) -&gt; <a class="struct" href="struct.Seq.html" title="struct regex_syntax::hir::literal::Seq">Seq</a></h4></section></summary><div class='docblock'>Creates a value from an iterator. <a href="https://doc.rust-lang.org/1.81.0/core/iter/traits/collect/trait.FromIterator.html#tymethod.from_iter">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-PartialEq-for-Seq" class="impl"><a class="src rightside" href="../../../src/regex_syntax/hir/literal.rs.html#732">source</a><a href="#impl-PartialEq-for-Seq" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/cmp/trait.PartialEq.html" title="trait core::cmp::PartialEq">PartialEq</a> for <a class="struct" href="struct.Seq.html" title="struct regex_syntax::hir::literal::Seq">Seq</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.eq" class="method trait-impl"><a class="src rightside" href="../../../src/regex_syntax/hir/literal.rs.html#732">source</a><a href="#method.eq" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/cmp/trait.PartialEq.html#tymethod.eq" class="fn">eq</a>(&amp;self, other: &amp;<a class="struct" href="struct.Seq.html" title="struct regex_syntax::hir::literal::Seq">Seq</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class='docblock'>This method tests for <code>self</code> and <code>other</code> values to be equal, and is used
+by <code>==</code>.</div></details><details class="toggle method-toggle" open><summary><section id="method.ne" class="method trait-impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/cmp.rs.html#262">source</a></span><a href="#method.ne" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/cmp/trait.PartialEq.html#method.ne" class="fn">ne</a>(&amp;self, other: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;Rhs</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class='docblock'>This method tests for <code>!=</code>. The default implementation is almost always
+sufficient, and should not be overridden without very good reason.</div></details></div></details><section id="impl-Eq-for-Seq" class="impl"><a class="src rightside" href="../../../src/regex_syntax/hir/literal.rs.html#732">source</a><a href="#impl-Eq-for-Seq" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/cmp/trait.Eq.html" title="trait core::cmp::Eq">Eq</a> for <a class="struct" href="struct.Seq.html" title="struct regex_syntax::hir::literal::Seq">Seq</a></h3></section><section id="impl-StructuralPartialEq-for-Seq" class="impl"><a class="src rightside" href="../../../src/regex_syntax/hir/literal.rs.html#732">source</a><a href="#impl-StructuralPartialEq-for-Seq" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.StructuralPartialEq.html" title="trait core::marker::StructuralPartialEq">StructuralPartialEq</a> for <a class="struct" href="struct.Seq.html" title="struct regex_syntax::hir::literal::Seq">Seq</a></h3></section></div><h2 id="synthetic-implementations" class="section-header">Auto Trait Implementations<a href="#synthetic-implementations" class="anchor">§</a></h2><div id="synthetic-implementations-list"><section id="impl-Freeze-for-Seq" class="impl"><a href="#impl-Freeze-for-Seq" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Freeze.html" title="trait core::marker::Freeze">Freeze</a> for <a class="struct" href="struct.Seq.html" title="struct regex_syntax::hir::literal::Seq">Seq</a></h3></section><section id="impl-RefUnwindSafe-for-Seq" class="impl"><a href="#impl-RefUnwindSafe-for-Seq" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/panic/unwind_safe/trait.RefUnwindSafe.html" title="trait core::panic::unwind_safe::RefUnwindSafe">RefUnwindSafe</a> for <a class="struct" href="struct.Seq.html" title="struct regex_syntax::hir::literal::Seq">Seq</a></h3></section><section id="impl-Send-for-Seq" class="impl"><a href="#impl-Send-for-Seq" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> for <a class="struct" href="struct.Seq.html" title="struct regex_syntax::hir::literal::Seq">Seq</a></h3></section><section id="impl-Sync-for-Seq" class="impl"><a href="#impl-Sync-for-Seq" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> for <a class="struct" href="struct.Seq.html" title="struct regex_syntax::hir::literal::Seq">Seq</a></h3></section><section id="impl-Unpin-for-Seq" class="impl"><a href="#impl-Unpin-for-Seq" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a> for <a class="struct" href="struct.Seq.html" title="struct regex_syntax::hir::literal::Seq">Seq</a></h3></section><section id="impl-UnwindSafe-for-Seq" class="impl"><a href="#impl-UnwindSafe-for-Seq" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/panic/unwind_safe/trait.UnwindSafe.html" title="trait core::panic::unwind_safe::UnwindSafe">UnwindSafe</a> for <a class="struct" href="struct.Seq.html" title="struct regex_syntax::hir::literal::Seq">Seq</a></h3></section></div><h2 id="blanket-implementations" class="section-header">Blanket Implementations<a href="#blanket-implementations" class="anchor">§</a></h2><div id="blanket-implementations-list"><details class="toggle implementors-toggle"><summary><section id="impl-Any-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#140">source</a><a href="#impl-Any-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html" title="trait core::any::Any">Any</a> for T<div class="where">where
+    T: 'static + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.type_id" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#141">source</a><a href="#method.type_id" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html#tymethod.type_id" class="fn">type_id</a>(&amp;self) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/any/struct.TypeId.html" title="struct core::any::TypeId">TypeId</a></h4></section></summary><div class='docblock'>Gets the <code>TypeId</code> of <code>self</code>. <a href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html#tymethod.type_id">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Borrow%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#209">source</a><a href="#impl-Borrow%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html" title="trait core::borrow::Borrow">Borrow</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#211">source</a><a href="#method.borrow" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html#tymethod.borrow" class="fn">borrow</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a></h4></section></summary><div class='docblock'>Immutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html#tymethod.borrow">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-BorrowMut%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#217">source</a><a href="#impl-BorrowMut%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html" title="trait core::borrow::BorrowMut">BorrowMut</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow_mut" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#218">source</a><a href="#method.borrow_mut" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut" class="fn">borrow_mut</a>(&amp;mut self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a></h4></section></summary><div class='docblock'>Mutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-CloneToUninit-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#271">source</a><a href="#impl-CloneToUninit-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.CloneToUninit.html" title="trait core::clone::CloneToUninit">CloneToUninit</a> for T<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.clone_to_uninit" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#272">source</a><a href="#method.clone_to_uninit" class="anchor">§</a><h4 class="code-header">default unsafe fn <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.CloneToUninit.html#tymethod.clone_to_uninit" class="fn">clone_to_uninit</a>(&amp;self, dst: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.pointer.html">*mut T</a>)</h4></section></summary><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>clone_to_uninit</code>)</span></div></span><div class='docblock'>Performs copy-assignment from <code>self</code> to <code>dst</code>. <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.CloneToUninit.html#tymethod.clone_to_uninit">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-From%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#765">source</a><a href="#impl-From%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for T</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#768">source</a><a href="#method.from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html#tymethod.from" class="fn">from</a>(t: T) -&gt; T</h4></section></summary><div class="docblock"><p>Returns the argument unchanged.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Into%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#748-750">source</a><a href="#impl-Into%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#758">source</a><a href="#method.into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html#tymethod.into" class="fn">into</a>(self) -&gt; U</h4></section></summary><div class="docblock"><p>Calls <code>U::from(self)</code>.</p>
+<p>That is, this conversion is whatever the implementation of
+<code><a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for U</code> chooses to do.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-ToOwned-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#83-85">source</a><a href="#impl-ToOwned-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html" title="trait alloc::borrow::ToOwned">ToOwned</a> for T<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Owned" class="associatedtype trait-impl"><a href="#associatedtype.Owned" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#associatedtype.Owned" class="associatedtype">Owned</a> = T</h4></section></summary><div class='docblock'>The resulting type after obtaining ownership.</div></details><details class="toggle method-toggle" open><summary><section id="method.to_owned" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#88">source</a><a href="#method.to_owned" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#tymethod.to_owned" class="fn">to_owned</a>(&amp;self) -&gt; T</h4></section></summary><div class='docblock'>Creates owned data from borrowed data, usually by cloning. <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#tymethod.to_owned">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.clone_into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#92">source</a><a href="#method.clone_into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#method.clone_into" class="fn">clone_into</a>(&amp;self, target: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a>)</h4></section></summary><div class='docblock'>Uses borrowed data to replace owned data, usually by cloning. <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#method.clone_into">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryFrom%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#805-807">source</a><a href="#impl-TryFrom%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error" class="associatedtype trait-impl"><a href="#associatedtype.Error" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" class="associatedtype">Error</a> = <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/convert/enum.Infallible.html" title="enum core::convert::Infallible">Infallible</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#812">source</a><a href="#method.try_from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#tymethod.try_from" class="fn">try_from</a>(value: U) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, &lt;T as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryInto%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#790-792">source</a><a href="#impl-TryInto%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html" title="trait core::convert::TryInto">TryInto</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error-1" class="associatedtype trait-impl"><a href="#associatedtype.Error-1" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html#associatedtype.Error" class="associatedtype">Error</a> = &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#797">source</a><a href="#method.try_into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html#tymethod.try_into" class="fn">try_into</a>(self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;U, &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details></div></section></div></main></body></html>

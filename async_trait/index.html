@@ -1,0 +1,203 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="github crates-io docs-rs"><title>async_trait - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="async_trait" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../async_trait/index.html">async_trait</a><span class="version">0.1.83</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#attributes">Attribute Macros</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">async_trait</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/async_trait/lib.rs.html#1-357">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><a href="https://github.com/dtolnay/async-trait"><img src="https://img.shields.io/badge/github-8da0cb?style=for-the-badge&amp;labelColor=555555&amp;logo=github" alt="github" /></a> <a href="https://crates.io/crates/async-trait"><img src="https://img.shields.io/badge/crates.io-fc8d62?style=for-the-badge&amp;labelColor=555555&amp;logo=rust" alt="crates-io" /></a> <a href="https://docs.rs/async-trait"><img src="https://img.shields.io/badge/docs.rs-66c2a5?style=for-the-badge&amp;labelColor=555555&amp;logo=docs.rs" alt="docs-rs" /></a></p>
+<br>
+<h4>Type erasure for async trait methods</h4>
+<p>The stabilization of async functions in traits in Rust 1.75 did not include
+support for using traits containing async functions as <code>dyn Trait</code>. Trying
+to use dyn with an async trait produces the following error:</p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">pub trait </span>Trait {
+    <span class="kw">async fn </span>f(<span class="kw-2">&amp;</span><span class="self">self</span>);
+}
+
+<span class="kw">pub fn </span>make() -&gt; Box&lt;<span class="kw">dyn </span>Trait&gt; {
+    <span class="macro">unimplemented!</span>()
+}</code></pre></div>
+<div class="example-wrap"><pre class="language-text"><code>error[E0038]: the trait `Trait` cannot be made into an object
+ --&gt; src/main.rs:5:22
+  |
+5 | pub fn make() -&gt; Box&lt;dyn Trait&gt; {
+  |                      ^^^^^^^^^ `Trait` cannot be made into an object
+  |
+note: for a trait to be &quot;object safe&quot; it needs to allow building a vtable to allow the call to be resolvable dynamically; for more information visit &lt;https://doc.rust-lang.org/reference/items/traits.html#object-safety&gt;
+ --&gt; src/main.rs:2:14
+  |
+1 | pub trait Trait {
+  |           ----- this trait cannot be made into an object...
+2 |     async fn f(&amp;self);
+  |              ^ ...because method `f` is `async`
+  = help: consider moving `f` to another trait
+</code></pre></div>
+<p>This crate provides an attribute macro to make async fn in traits work with
+dyn traits.</p>
+<p>Please refer to <a href="https://smallcultfollowing.com/babysteps/blog/2019/10/26/async-fn-in-traits-are-hard/"><em>why async fn in traits are hard</em></a> for a deeper
+analysis of how this implementation differs from what the compiler and
+language deliver natively.</p>
+<br>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<p>This example implements the core of a highly effective advertising platform
+using async fn in a trait.</p>
+<p>The only thing to notice here is that we write an <code>#[async_trait]</code> macro on
+top of traits and trait impls that contain async fn, and then they work. We
+get to have <code>Vec&lt;Box&lt;dyn Advertisement + Sync&gt;&gt;</code> or <code>&amp;[&amp;dyn Advertisement]</code>,
+for example.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>async_trait::async_trait;
+
+<span class="attr">#[async_trait]
+</span><span class="kw">trait </span>Advertisement {
+    <span class="kw">async fn </span>run(<span class="kw-2">&amp;</span><span class="self">self</span>);
+}
+
+<span class="kw">struct </span>Modal;
+
+<span class="attr">#[async_trait]
+</span><span class="kw">impl </span>Advertisement <span class="kw">for </span>Modal {
+    <span class="kw">async fn </span>run(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+        <span class="self">self</span>.render_fullscreen().<span class="kw">await</span>;
+        <span class="kw">for _ in </span><span class="number">0</span>..<span class="number">4u16 </span>{
+            remind_user_to_join_mailing_list().<span class="kw">await</span>;
+        }
+        <span class="self">self</span>.hide_for_now().<span class="kw">await</span>;
+    }
+}
+
+<span class="kw">struct </span>AutoplayingVideo {
+    media_url: String,
+}
+
+<span class="attr">#[async_trait]
+</span><span class="kw">impl </span>Advertisement <span class="kw">for </span>AutoplayingVideo {
+    <span class="kw">async fn </span>run(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+        <span class="kw">let </span>stream = connect(<span class="kw-2">&amp;</span><span class="self">self</span>.media_url).<span class="kw">await</span>;
+        stream.play().<span class="kw">await</span>;
+
+        <span class="comment">// Video probably persuaded user to join our mailing list!
+        </span>Modal.run().<span class="kw">await</span>;
+    }
+}</code></pre></div>
+<p><br><br></p>
+<h2 id="supported-features"><a class="doc-anchor" href="#supported-features">§</a>Supported features</h2>
+<p>It is the intention that all features of Rust traits should work nicely with
+#[async_trait], but the edge cases are numerous. Please file an issue if
+you see unexpected borrow checker errors, type errors, or warnings. There is
+no use of <code>unsafe</code> in the expanded code, so rest assured that if your code
+compiles it can’t be that badly broken.</p>
+<blockquote>
+<p>☑ Self by value, by reference, by mut reference, or no self;<br>
+☑ Any number of arguments, any return value;<br>
+☑ Generic type parameters and lifetime parameters;<br>
+☑ Associated types;<br>
+☑ Having async and non-async functions in the same trait;<br>
+☑ Default implementations provided by the trait;<br>
+☑ Elided lifetimes.<br></p>
+</blockquote>
+<br>
+<h2 id="explanation"><a class="doc-anchor" href="#explanation">§</a>Explanation</h2>
+<p>Async fns get transformed into methods that return <code>Pin&lt;Box&lt;dyn Future + Send + 'async_trait&gt;&gt;</code> and delegate to an async block.</p>
+<p>For example the <code>impl Advertisement for AutoplayingVideo</code> above would be
+expanded as:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">impl </span>Advertisement <span class="kw">for </span>AutoplayingVideo {
+    <span class="kw">fn </span>run&lt;<span class="lifetime">'async_trait</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="lifetime">'async_trait </span><span class="self">self</span>,
+    ) -&gt; Pin&lt;Box&lt;<span class="kw">dyn </span>core::future::Future&lt;Output = ()&gt; + Send + <span class="lifetime">'async_trait</span>&gt;&gt;
+    <span class="kw">where
+        </span><span class="self">Self</span>: Sync + <span class="lifetime">'async_trait</span>,
+    {
+        Box::pin(<span class="kw">async move </span>{
+            <span class="comment">/* the original method body */
+        </span>})
+    }
+}</code></pre></div>
+<p><br><br></p>
+<h2 id="non-threadsafe-futures"><a class="doc-anchor" href="#non-threadsafe-futures">§</a>Non-threadsafe futures</h2>
+<p>Not all async traits need futures that are <code>dyn Future + Send</code>. To avoid
+having Send and Sync bounds placed on the async trait methods, invoke the
+async trait macro as <code>#[async_trait(?Send)]</code> on both the trait and the impl
+blocks.</p>
+<br>
+<h2 id="elided-lifetimes"><a class="doc-anchor" href="#elided-lifetimes">§</a>Elided lifetimes</h2>
+<p>Be aware that async fn syntax does not allow lifetime elision outside of <code>&amp;</code>
+and <code>&amp;mut</code> references. (This is true even when not using #[async_trait].)
+Lifetimes must be named or marked by the placeholder <code>'_</code>.</p>
+<p>Fortunately the compiler is able to diagnose missing lifetimes with a good
+error message.</p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">type </span>Elided&lt;<span class="lifetime">'a</span>&gt; = <span class="kw-2">&amp;</span><span class="lifetime">'a </span>usize;
+
+<span class="attr">#[async_trait]
+</span><span class="kw">trait </span>Test {
+    <span class="kw">async fn </span>test(not_okay: Elided, okay: <span class="kw-2">&amp;</span>usize) {}
+}</code></pre></div>
+<div class="example-wrap"><pre class="language-text"><code>error[E0726]: implicit elided lifetime not allowed here
+ --&gt; src/main.rs:9:29
+  |
+9 |     async fn test(not_okay: Elided, okay: &amp;usize) {}
+  |                             ^^^^^^- help: indicate the anonymous lifetime: `&lt;&#39;_&gt;`
+</code></pre></div>
+<p>The fix is to name the lifetime or use <code>'_</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[async_trait]
+</span><span class="kw">trait </span>Test {
+    <span class="comment">// either
+    </span><span class="kw">async fn </span>test&lt;<span class="lifetime">'e</span>&gt;(elided: Elided&lt;<span class="lifetime">'e</span>&gt;) {}
+    <span class="comment">// or
+    </span><span class="kw">async fn </span>test(elided: Elided&lt;<span class="lifetime">'_</span>&gt;) {}
+}</code></pre></div>
+<p><br><br></p>
+<h2 id="dyn-traits"><a class="doc-anchor" href="#dyn-traits">§</a>Dyn traits</h2>
+<p>Traits with async methods can be used as trait objects as long as they meet
+the usual requirements for dyn – no methods with type parameters, no self
+by value, no associated types, etc.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[async_trait]
+</span><span class="kw">pub trait </span>ObjectSafe {
+    <span class="kw">async fn </span>f(<span class="kw-2">&amp;</span><span class="self">self</span>);
+    <span class="kw">async fn </span>g(<span class="kw-2">&amp;mut </span><span class="self">self</span>);
+}
+
+<span class="kw">impl </span>ObjectSafe <span class="kw">for </span>MyType {...}
+
+<span class="kw">let </span>value: MyType = ...;
+<span class="kw">let </span>object = <span class="kw-2">&amp;</span>value <span class="kw">as </span><span class="kw-2">&amp;</span><span class="kw">dyn </span>ObjectSafe;  <span class="comment">// make trait object</span></code></pre></div>
+<p>The one wrinkle is in traits that provide default implementations of async
+methods. In order for the default implementation to produce a future that is
+Send, the async_trait macro must emit a bound of <code>Self: Sync</code> on trait
+methods that take <code>&amp;self</code> and a bound <code>Self: Send</code> on trait methods that
+take <code>&amp;mut self</code>. An example of the former is visible in the expanded code
+in the explanation section above.</p>
+<p>If you make a trait with async methods that have default implementations,
+everything will work except that the trait cannot be used as a trait object.
+Creating a value of type <code>&amp;dyn Trait</code> will produce an error that looks like
+this:</p>
+<div class="example-wrap"><pre class="language-text"><code>error: the trait `Test` cannot be made into an object
+ --&gt; src/main.rs:8:5
+  |
+8 |     async fn cannot_dyn(&amp;self) {}
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+</code></pre></div>
+<p>For traits that need to be object safe and need to have default
+implementations for some async methods, there are two resolutions. Either
+you can add Send and/or Sync as supertraits (Send if there are <code>&amp;mut self</code>
+methods with default implementations, Sync if there are <code>&amp;self</code> methods with
+default implementations) to constrain all implementors of the trait such that
+the default implementations are applicable to them:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[async_trait]
+</span><span class="kw">pub trait </span>ObjectSafe: Sync {  <span class="comment">// added supertrait
+    </span><span class="kw">async fn </span>can_dyn(<span class="kw-2">&amp;</span><span class="self">self</span>) {}
+}
+
+<span class="kw">let </span>object = <span class="kw-2">&amp;</span>value <span class="kw">as </span><span class="kw-2">&amp;</span><span class="kw">dyn </span>ObjectSafe;</code></pre></div>
+<p>or you can strike the problematic methods from your trait object by
+bounding them with <code>Self: Sized</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[async_trait]
+</span><span class="kw">pub trait </span>ObjectSafe {
+    <span class="kw">async fn </span>cannot_dyn(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="kw">where </span><span class="self">Self</span>: Sized {}
+
+    <span class="comment">// presumably other methods
+</span>}
+
+<span class="kw">let </span>object = <span class="kw-2">&amp;</span>value <span class="kw">as </span><span class="kw-2">&amp;</span><span class="kw">dyn </span>ObjectSafe;</code></pre></div>
+</div></details><h2 id="attributes" class="section-header">Attribute Macros<a href="#attributes" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="attr" href="attr.async_trait.html" title="attr async_trait::async_trait">async_trait</a></div></li></ul></section></div></main></body></html>

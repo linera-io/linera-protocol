@@ -1,0 +1,987 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Reads bytes from a source."><title>AsyncReadExt in tokio::io - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="tokio" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../tokio/index.html">tokio</a><span class="version">1.40.0</span></h2></div><h2 class="location"><a href="#">AsyncReadExt</a></h2><div class="sidebar-elems"><section><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.chain">chain</a></li><li><a href="#method.read">read</a></li><li><a href="#method.read_buf">read_buf</a></li><li><a href="#method.read_exact">read_exact</a></li><li><a href="#method.read_f32">read_f32</a></li><li><a href="#method.read_f32_le">read_f32_le</a></li><li><a href="#method.read_f64">read_f64</a></li><li><a href="#method.read_f64_le">read_f64_le</a></li><li><a href="#method.read_i128">read_i128</a></li><li><a href="#method.read_i128_le">read_i128_le</a></li><li><a href="#method.read_i16">read_i16</a></li><li><a href="#method.read_i16_le">read_i16_le</a></li><li><a href="#method.read_i32">read_i32</a></li><li><a href="#method.read_i32_le">read_i32_le</a></li><li><a href="#method.read_i64">read_i64</a></li><li><a href="#method.read_i64_le">read_i64_le</a></li><li><a href="#method.read_i8">read_i8</a></li><li><a href="#method.read_to_end">read_to_end</a></li><li><a href="#method.read_to_string">read_to_string</a></li><li><a href="#method.read_u128">read_u128</a></li><li><a href="#method.read_u128_le">read_u128_le</a></li><li><a href="#method.read_u16">read_u16</a></li><li><a href="#method.read_u16_le">read_u16_le</a></li><li><a href="#method.read_u32">read_u32</a></li><li><a href="#method.read_u32_le">read_u32_le</a></li><li><a href="#method.read_u64">read_u64</a></li><li><a href="#method.read_u64_le">read_u64_le</a></li><li><a href="#method.read_u8">read_u8</a></li><li><a href="#method.take">take</a></li></ul><h3><a href="#object-safety">Object Safety</a></h3><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In tokio::io</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="../index.html">tokio</a>::<wbr><a href="index.html">io</a>::<wbr><a class="trait" href="#">AsyncReadExt</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/tokio/io/util/async_read_ext.rs.html#62-1427">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub trait AsyncReadExt: <a class="trait" href="trait.AsyncRead.html" title="trait tokio::io::AsyncRead">AsyncRead</a> {
+<details class="toggle type-contents-toggle"><summary class="hideme"><span>Show 29 methods</span></summary>    // Provided methods
+    fn <a href="#method.chain" class="fn">chain</a>&lt;R&gt;(self, next: R) -&gt; Chain&lt;Self, R&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+             R: <a class="trait" href="trait.AsyncRead.html" title="trait tokio::io::AsyncRead">AsyncRead</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read" class="fn">read</a>&lt;'a&gt;(&amp;'a mut self, buf: &amp;'a mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; Read&lt;'a, Self&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_buf" class="fn">read_buf</a>&lt;'a, B&gt;(&amp;'a mut self, buf: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;'a mut B</a>) -&gt; ReadBuf&lt;'a, Self, B&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a>,
+             B: <a class="trait" href="../../bytes/buf/buf_mut/trait.BufMut.html" title="trait bytes::buf::buf_mut::BufMut">BufMut</a> + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_exact" class="fn">read_exact</a>&lt;'a&gt;(&amp;'a mut self, buf: &amp;'a mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; ReadExact&lt;'a, Self&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_u8" class="fn">read_u8</a>(&amp;mut self) -&gt; ReadU8&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a>&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_i8" class="fn">read_i8</a>(&amp;mut self) -&gt; ReadI8&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a>&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_u16" class="fn">read_u16</a>(&amp;mut self) -&gt; ReadU16&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a>&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_i16" class="fn">read_i16</a>(&amp;mut self) -&gt; ReadI16&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a>&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_u32" class="fn">read_u32</a>(&amp;mut self) -&gt; ReadU32&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a>&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_i32" class="fn">read_i32</a>(&amp;mut self) -&gt; ReadI32&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a>&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_u64" class="fn">read_u64</a>(&amp;mut self) -&gt; ReadU64&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a>&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_i64" class="fn">read_i64</a>(&amp;mut self) -&gt; ReadI64&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a>&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_u128" class="fn">read_u128</a>(&amp;mut self) -&gt; ReadU128&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a>&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_i128" class="fn">read_i128</a>(&amp;mut self) -&gt; ReadI128&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a>&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_f32" class="fn">read_f32</a>(&amp;mut self) -&gt; ReadF32&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a>&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_f64" class="fn">read_f64</a>(&amp;mut self) -&gt; ReadF64&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a>&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_u16_le" class="fn">read_u16_le</a>(&amp;mut self) -&gt; ReadU16Le&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a>&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_i16_le" class="fn">read_i16_le</a>(&amp;mut self) -&gt; ReadI16Le&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a>&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_u32_le" class="fn">read_u32_le</a>(&amp;mut self) -&gt; ReadU32Le&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a>&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_i32_le" class="fn">read_i32_le</a>(&amp;mut self) -&gt; ReadI32Le&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a>&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_u64_le" class="fn">read_u64_le</a>(&amp;mut self) -&gt; ReadU64Le&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a>&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_i64_le" class="fn">read_i64_le</a>(&amp;mut self) -&gt; ReadI64Le&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a>&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_u128_le" class="fn">read_u128_le</a>(&amp;mut self) -&gt; ReadU128Le&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a>&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_i128_le" class="fn">read_i128_le</a>(&amp;mut self) -&gt; ReadI128Le&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a>&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_f32_le" class="fn">read_f32_le</a>(&amp;mut self) -&gt; ReadF32Le&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a>&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_f64_le" class="fn">read_f64_le</a>(&amp;mut self) -&gt; ReadF64Le&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a>&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_to_end" class="fn">read_to_end</a>&lt;'a&gt;(
+        &amp;'a mut self,
+        buf: &amp;'a mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>&gt;,
+    ) -&gt; ReadToEnd&lt;'a, Self&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_to_string" class="fn">read_to_string</a>&lt;'a&gt;(
+        &amp;'a mut self,
+        dst: &amp;'a mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>,
+    ) -&gt; ReadToString&lt;'a, Self&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.take" class="fn">take</a>(self, limit: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>) -&gt; <a class="struct" href="struct.Take.html" title="struct tokio::io::Take">Take</a>&lt;Self&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+</details>}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Reads bytes from a source.</p>
+<p>Implemented as an extension trait, adding utility methods to all
+<a href="trait.AsyncRead.html" title="trait tokio::io::AsyncRead"><code>AsyncRead</code></a> types. Callers will tend to import this trait instead of
+<a href="trait.AsyncRead.html" title="trait tokio::io::AsyncRead"><code>AsyncRead</code></a>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::fs::File;
+<span class="kw">use </span>tokio::io::{<span class="self">self</span>, AsyncReadExt};
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>f = File::open(<span class="string">"foo.txt"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span><span class="kw-2">mut </span>buffer = [<span class="number">0</span>; <span class="number">10</span>];
+
+    <span class="comment">// The `read` method is defined by this trait.
+    </span><span class="kw">let </span>n = f.read(<span class="kw-2">&amp;mut </span>buffer[..]).<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<p>See <a href="index.html" title="mod tokio::io">module</a> documentation for more details.</p>
+</div></details><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.chain" class="method"><a class="src rightside" href="../../src/tokio/io/util/async_read_ext.rs.html#92-98">source</a><h4 class="code-header">fn <a href="#method.chain" class="fn">chain</a>&lt;R&gt;(self, next: R) -&gt; Chain&lt;Self, R&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+    R: <a class="trait" href="trait.AsyncRead.html" title="trait tokio::io::AsyncRead">AsyncRead</a>,</div></h4></section></summary><div class="docblock"><p>Creates a new <code>AsyncRead</code> instance that chains this stream with
+<code>next</code>.</p>
+<p>The returned <code>AsyncRead</code> instance will first read all bytes from this object
+until EOF is encountered. Afterwards the output is equivalent to the
+output of <code>next</code>.</p>
+<h5 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h5>
+<p><a href="../fs/struct.File.html" title="struct tokio::fs::File"><code>File</code></a>s implement <code>AsyncRead</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::fs::File;
+<span class="kw">use </span>tokio::io::{<span class="self">self</span>, AsyncReadExt};
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span>f1 = File::open(<span class="string">"foo.txt"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>f2 = File::open(<span class="string">"bar.txt"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="kw">let </span><span class="kw-2">mut </span>handle = f1.chain(f2);
+    <span class="kw">let </span><span class="kw-2">mut </span>buffer = String::new();
+
+    <span class="comment">// read the value into a String. We could use any AsyncRead
+    // method here, this is just one example.
+    </span>handle.read_to_string(<span class="kw-2">&amp;mut </span>buffer).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read" class="method"><a class="src rightside" href="../../src/tokio/io/util/async_read_ext.rs.html#168-173">source</a><h4 class="code-header">fn <a href="#method.read" class="fn">read</a>&lt;'a&gt;(&amp;'a mut self, buf: &amp;'a mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; Read&lt;'a, Self&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a>,</div></h4></section></summary><div class="docblock"><p>Pulls some bytes from this source into the specified buffer,
+returning how many bytes were read.</p>
+<p>Equivalent to:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">async fn </span>read(<span class="kw-2">&amp;mut </span><span class="self">self</span>, buf: <span class="kw-2">&amp;mut </span>[u8]) -&gt; io::Result&lt;usize&gt;;</code></pre></div>
+<p>This method does not provide any guarantees about whether it
+completes immediately or asynchronously.</p>
+<h5 id="return"><a class="doc-anchor" href="#return">§</a>Return</h5>
+<p>If the return value of this method is <code>Ok(n)</code>, then it must be
+guaranteed that <code>0 &lt;= n &lt;= buf.len()</code>. A nonzero <code>n</code> value indicates
+that the buffer <code>buf</code> has been filled in with <code>n</code> bytes of data from
+this source. If <code>n</code> is <code>0</code>, then it can indicate one of two
+scenarios:</p>
+<ol>
+<li>This reader has reached its “end of file” and will likely no longer
+be able to produce bytes. Note that this does not mean that the
+reader will <em>always</em> no longer be able to produce bytes.</li>
+<li>The buffer specified was 0 bytes in length.</li>
+</ol>
+<p>No guarantees are provided about the contents of <code>buf</code> when this
+function is called, implementations cannot rely on any property of the
+contents of <code>buf</code> being <code>true</code>. It is recommended that <em>implementations</em>
+only write data to <code>buf</code> instead of reading its contents.</p>
+<p>Correspondingly, however, <em>callers</em> of this method may not assume
+any guarantees about how the implementation uses <code>buf</code>. It is
+possible that the code that’s supposed to write to the buffer might
+also read from it. It is your responsibility to make sure that <code>buf</code>
+is initialized before calling <code>read</code>.</p>
+<h5 id="errors"><a class="doc-anchor" href="#errors">§</a>Errors</h5>
+<p>If this function encounters any form of I/O or other error, an error
+variant will be returned. If an error is returned then it must be
+guaranteed that no bytes were read.</p>
+<h5 id="cancel-safety"><a class="doc-anchor" href="#cancel-safety">§</a>Cancel safety</h5>
+<p>This method is cancel safe. If you use it as the event in a
+<a href="../macro.select.html" title="macro tokio::select"><code>tokio::select!</code></a> statement and some other branch
+completes first, then it is guaranteed that no data was read.</p>
+<h5 id="examples-1"><a class="doc-anchor" href="#examples-1">§</a>Examples</h5>
+<p><a href="../fs/struct.File.html" title="struct tokio::fs::File"><code>File</code></a>s implement <code>Read</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::fs::File;
+<span class="kw">use </span>tokio::io::{<span class="self">self</span>, AsyncReadExt};
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>f = File::open(<span class="string">"foo.txt"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span><span class="kw-2">mut </span>buffer = [<span class="number">0</span>; <span class="number">10</span>];
+
+    <span class="comment">// read up to 10 bytes
+    </span><span class="kw">let </span>n = f.read(<span class="kw-2">&amp;mut </span>buffer[..]).<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="macro">println!</span>(<span class="string">"The bytes: {:?}"</span>, <span class="kw-2">&amp;</span>buffer[..n]);
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_buf" class="method"><a class="src rightside" href="../../src/tokio/io/util/async_read_ext.rs.html#246-252">source</a><h4 class="code-header">fn <a href="#method.read_buf" class="fn">read_buf</a>&lt;'a, B&gt;(&amp;'a mut self, buf: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;'a mut B</a>) -&gt; ReadBuf&lt;'a, Self, B&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a>,
+    B: <a class="trait" href="../../bytes/buf/buf_mut/trait.BufMut.html" title="trait bytes::buf::buf_mut::BufMut">BufMut</a> + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Pulls some bytes from this source into the specified buffer,
+advancing the buffer’s internal cursor.</p>
+<p>Equivalent to:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">async fn </span>read_buf&lt;B: BufMut&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, buf: <span class="kw-2">&amp;mut </span>B) -&gt; io::Result&lt;usize&gt;;</code></pre></div>
+<p>Usually, only a single <code>read</code> syscall is issued, even if there is
+more space in the supplied buffer.</p>
+<p>This method does not provide any guarantees about whether it
+completes immediately or asynchronously.</p>
+<h5 id="return-1"><a class="doc-anchor" href="#return-1">§</a>Return</h5>
+<p>A nonzero <code>n</code> value indicates that the buffer <code>buf</code> has been filled
+in with <code>n</code> bytes of data from this source. If <code>n</code> is <code>0</code>, then it
+can indicate one of two scenarios:</p>
+<ol>
+<li>This reader has reached its “end of file” and will likely no longer
+be able to produce bytes. Note that this does not mean that the
+reader will <em>always</em> no longer be able to produce bytes.</li>
+<li>The buffer specified had a remaining capacity of zero.</li>
+</ol>
+<h5 id="errors-1"><a class="doc-anchor" href="#errors-1">§</a>Errors</h5>
+<p>If this function encounters any form of I/O or other error, an error
+variant will be returned. If an error is returned then it must be
+guaranteed that no bytes were read.</p>
+<h5 id="cancel-safety-1"><a class="doc-anchor" href="#cancel-safety-1">§</a>Cancel safety</h5>
+<p>This method is cancel safe. If you use it as the event in a
+<a href="../macro.select.html" title="macro tokio::select"><code>tokio::select!</code></a> statement and some other branch
+completes first, then it is guaranteed that no data was read.</p>
+<h5 id="examples-2"><a class="doc-anchor" href="#examples-2">§</a>Examples</h5>
+<p><a href="../fs/struct.File.html" title="struct tokio::fs::File"><code>File</code></a> implements <code>Read</code> and <a href="../../bytes/bytes_mut/struct.BytesMut.html" title="struct bytes::bytes_mut::BytesMut"><code>BytesMut</code></a> implements <a href="../../bytes/buf/buf_mut/trait.BufMut.html" title="trait bytes::buf::buf_mut::BufMut"><code>BufMut</code></a>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::fs::File;
+<span class="kw">use </span>tokio::io::{<span class="self">self</span>, AsyncReadExt};
+
+<span class="kw">use </span>bytes::BytesMut;
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>f = File::open(<span class="string">"foo.txt"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span><span class="kw-2">mut </span>buffer = BytesMut::with_capacity(<span class="number">10</span>);
+
+    <span class="macro">assert!</span>(buffer.is_empty());
+    <span class="macro">assert!</span>(buffer.capacity() &gt;= <span class="number">10</span>);
+
+    <span class="comment">// note that the return value is not needed to access the data
+    // that was read as `buffer`'s internal cursor is updated.
+    //
+    // this might read more than 10 bytes if the capacity of `buffer`
+    // is larger than 10.
+    </span>f.read_buf(<span class="kw-2">&amp;mut </span>buffer).<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="macro">println!</span>(<span class="string">"The bytes: {:?}"</span>, <span class="kw-2">&amp;</span>buffer[..]);
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_exact" class="method"><a class="src rightside" href="../../src/tokio/io/util/async_read_ext.rs.html#308-313">source</a><h4 class="code-header">fn <a href="#method.read_exact" class="fn">read_exact</a>&lt;'a&gt;(&amp;'a mut self, buf: &amp;'a mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; ReadExact&lt;'a, Self&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a>,</div></h4></section></summary><div class="docblock"><p>Reads the exact number of bytes required to fill <code>buf</code>.</p>
+<p>Equivalent to:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">async fn </span>read_exact(<span class="kw-2">&amp;mut </span><span class="self">self</span>, buf: <span class="kw-2">&amp;mut </span>[u8]) -&gt; io::Result&lt;usize&gt;;</code></pre></div>
+<p>This function reads as many bytes as necessary to completely fill
+the specified buffer <code>buf</code>.</p>
+<h5 id="errors-2"><a class="doc-anchor" href="#errors-2">§</a>Errors</h5>
+<p>If the operation encounters an “end of file” before completely
+filling the buffer, it returns an error of the kind
+<a href="https://doc.rust-lang.org/1.81.0/std/io/error/enum.ErrorKind.html#variant.UnexpectedEof" title="variant std::io::error::ErrorKind::UnexpectedEof"><code>ErrorKind::UnexpectedEof</code></a>. The contents of <code>buf</code> are unspecified
+in this case.</p>
+<p>If any other read error is encountered then the operation
+immediately returns. The contents of <code>buf</code> are unspecified in this
+case.</p>
+<p>If this operation returns an error, it is unspecified how many bytes
+it has read, but it will never read more than would be necessary to
+completely fill the buffer.</p>
+<h5 id="cancel-safety-2"><a class="doc-anchor" href="#cancel-safety-2">§</a>Cancel safety</h5>
+<p>This method is not cancellation safe. If the method is used as the
+event in a <a href="../macro.select.html" title="macro tokio::select"><code>tokio::select!</code></a> statement and some
+other branch completes first, then some data may already have been
+read into <code>buf</code>.</p>
+<h5 id="examples-3"><a class="doc-anchor" href="#examples-3">§</a>Examples</h5>
+<p><a href="../fs/struct.File.html" title="struct tokio::fs::File"><code>File</code></a>s implement <code>Read</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::fs::File;
+<span class="kw">use </span>tokio::io::{<span class="self">self</span>, AsyncReadExt};
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>f = File::open(<span class="string">"foo.txt"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>len = <span class="number">10</span>;
+    <span class="kw">let </span><span class="kw-2">mut </span>buffer = <span class="macro">vec!</span>[<span class="number">0</span>; len];
+
+    <span class="comment">// read exactly 10 bytes
+    </span>f.read_exact(<span class="kw-2">&amp;mut </span>buffer).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_u8" class="method"><a class="src rightside" href="../../src/tokio/io/util/async_read_ext.rs.html#315-1289">source</a><h4 class="code-header">fn <a href="#method.read_u8" class="fn">read_u8</a>(&amp;mut self) -&gt; ReadU8&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a>&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a>,</div></h4></section></summary><div class="docblock"><p>Reads an unsigned 8 bit integer from the underlying reader.</p>
+<p>Equivalent to:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">async fn </span>read_u8(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; io::Result&lt;u8&gt;;</code></pre></div>
+<p>It is recommended to use a buffered reader to avoid excessive
+syscalls.</p>
+<h5 id="errors-3"><a class="doc-anchor" href="#errors-3">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="trait.AsyncReadExt.html#method.read_exact" title="method tokio::io::AsyncReadExt::read_exact"><code>AsyncReadExt::read_exact</code></a>.</p>
+<h5 id="cancel-safety-3"><a class="doc-anchor" href="#cancel-safety-3">§</a>Cancel safety</h5>
+<p>This method is cancel safe. If this method is used as an event in a
+<a href="../macro.select.html" title="macro tokio::select"><code>tokio::select!</code></a> statement and some other branch
+completes first, it is guaranteed that no data were read.</p>
+<h5 id="examples-4"><a class="doc-anchor" href="#examples-4">§</a>Examples</h5>
+<p>Read unsigned 8 bit integers from an <code>AsyncRead</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::io::{<span class="self">self</span>, AsyncReadExt};
+
+<span class="kw">use </span>std::io::Cursor;
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>reader = Cursor::new(<span class="macro">vec!</span>[<span class="number">2</span>, <span class="number">5</span>]);
+
+    <span class="macro">assert_eq!</span>(<span class="number">2</span>, reader.read_u8().<span class="kw">await</span><span class="question-mark">?</span>);
+    <span class="macro">assert_eq!</span>(<span class="number">5</span>, reader.read_u8().<span class="kw">await</span><span class="question-mark">?</span>);
+
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_i8" class="method"><a class="src rightside" href="../../src/tokio/io/util/async_read_ext.rs.html#315-1289">source</a><h4 class="code-header">fn <a href="#method.read_i8" class="fn">read_i8</a>(&amp;mut self) -&gt; ReadI8&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a>&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a>,</div></h4></section></summary><div class="docblock"><p>Reads a signed 8 bit integer from the underlying reader.</p>
+<p>Equivalent to:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">async fn </span>read_i8(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; io::Result&lt;i8&gt;;</code></pre></div>
+<p>It is recommended to use a buffered reader to avoid excessive
+syscalls.</p>
+<h5 id="errors-4"><a class="doc-anchor" href="#errors-4">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="trait.AsyncReadExt.html#method.read_exact" title="method tokio::io::AsyncReadExt::read_exact"><code>AsyncReadExt::read_exact</code></a>.</p>
+<h5 id="cancel-safety-4"><a class="doc-anchor" href="#cancel-safety-4">§</a>Cancel safety</h5>
+<p>This method is cancel safe. If this method is used as an event in a
+<a href="../macro.select.html" title="macro tokio::select"><code>tokio::select!</code></a> statement and some other branch
+completes first, it is guaranteed that no data were read.</p>
+<h5 id="examples-5"><a class="doc-anchor" href="#examples-5">§</a>Examples</h5>
+<p>Read unsigned 8 bit integers from an <code>AsyncRead</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::io::{<span class="self">self</span>, AsyncReadExt};
+
+<span class="kw">use </span>std::io::Cursor;
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>reader = Cursor::new(<span class="macro">vec!</span>[<span class="number">0x02</span>, <span class="number">0xfb</span>]);
+
+    <span class="macro">assert_eq!</span>(<span class="number">2</span>, reader.read_i8().<span class="kw">await</span><span class="question-mark">?</span>);
+    <span class="macro">assert_eq!</span>(-<span class="number">5</span>, reader.read_i8().<span class="kw">await</span><span class="question-mark">?</span>);
+
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_u16" class="method"><a class="src rightside" href="../../src/tokio/io/util/async_read_ext.rs.html#315-1289">source</a><h4 class="code-header">fn <a href="#method.read_u16" class="fn">read_u16</a>(&amp;mut self) -&gt; ReadU16&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a>&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a>,</div></h4></section></summary><div class="docblock"><p>Reads an unsigned 16-bit integer in big-endian order from the
+underlying reader.</p>
+<p>Equivalent to:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">async fn </span>read_u16(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; io::Result&lt;u16&gt;;</code></pre></div>
+<p>It is recommended to use a buffered reader to avoid excessive
+syscalls.</p>
+<h5 id="errors-5"><a class="doc-anchor" href="#errors-5">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="trait.AsyncReadExt.html#method.read_exact" title="method tokio::io::AsyncReadExt::read_exact"><code>AsyncReadExt::read_exact</code></a>.</p>
+<h5 id="cancel-safety-5"><a class="doc-anchor" href="#cancel-safety-5">§</a>Cancel safety</h5>
+<p>This method is not cancellation safe. If the method is used as the
+event in a <a href="../macro.select.html" title="macro tokio::select"><code>tokio::select!</code></a> statement and some
+other branch completes first, then some data may be lost.</p>
+<h5 id="examples-6"><a class="doc-anchor" href="#examples-6">§</a>Examples</h5>
+<p>Read unsigned 16 bit big-endian integers from a <code>AsyncRead</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::io::{<span class="self">self</span>, AsyncReadExt};
+
+<span class="kw">use </span>std::io::Cursor;
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>reader = Cursor::new(<span class="macro">vec!</span>[<span class="number">2</span>, <span class="number">5</span>, <span class="number">3</span>, <span class="number">0</span>]);
+
+    <span class="macro">assert_eq!</span>(<span class="number">517</span>, reader.read_u16().<span class="kw">await</span><span class="question-mark">?</span>);
+    <span class="macro">assert_eq!</span>(<span class="number">768</span>, reader.read_u16().<span class="kw">await</span><span class="question-mark">?</span>);
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_i16" class="method"><a class="src rightside" href="../../src/tokio/io/util/async_read_ext.rs.html#315-1289">source</a><h4 class="code-header">fn <a href="#method.read_i16" class="fn">read_i16</a>(&amp;mut self) -&gt; ReadI16&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a>&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a>,</div></h4></section></summary><div class="docblock"><p>Reads a signed 16-bit integer in big-endian order from the
+underlying reader.</p>
+<p>Equivalent to:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">async fn </span>read_i16(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; io::Result&lt;i16&gt;;</code></pre></div>
+<p>It is recommended to use a buffered reader to avoid excessive
+syscalls.</p>
+<h5 id="errors-6"><a class="doc-anchor" href="#errors-6">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="trait.AsyncReadExt.html#method.read_exact" title="method tokio::io::AsyncReadExt::read_exact"><code>AsyncReadExt::read_exact</code></a>.</p>
+<h5 id="cancel-safety-6"><a class="doc-anchor" href="#cancel-safety-6">§</a>Cancel safety</h5>
+<p>This method is not cancellation safe. If the method is used as the
+event in a <a href="../macro.select.html" title="macro tokio::select"><code>tokio::select!</code></a> statement and some
+other branch completes first, then some data may be lost.</p>
+<h5 id="examples-7"><a class="doc-anchor" href="#examples-7">§</a>Examples</h5>
+<p>Read signed 16 bit big-endian integers from a <code>AsyncRead</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::io::{<span class="self">self</span>, AsyncReadExt};
+
+<span class="kw">use </span>std::io::Cursor;
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>reader = Cursor::new(<span class="macro">vec!</span>[<span class="number">0x00</span>, <span class="number">0xc1</span>, <span class="number">0xff</span>, <span class="number">0x7c</span>]);
+
+    <span class="macro">assert_eq!</span>(<span class="number">193</span>, reader.read_i16().<span class="kw">await</span><span class="question-mark">?</span>);
+    <span class="macro">assert_eq!</span>(-<span class="number">132</span>, reader.read_i16().<span class="kw">await</span><span class="question-mark">?</span>);
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_u32" class="method"><a class="src rightside" href="../../src/tokio/io/util/async_read_ext.rs.html#315-1289">source</a><h4 class="code-header">fn <a href="#method.read_u32" class="fn">read_u32</a>(&amp;mut self) -&gt; ReadU32&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a>&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a>,</div></h4></section></summary><div class="docblock"><p>Reads an unsigned 32-bit integer in big-endian order from the
+underlying reader.</p>
+<p>Equivalent to:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">async fn </span>read_u32(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; io::Result&lt;u32&gt;;</code></pre></div>
+<p>It is recommended to use a buffered reader to avoid excessive
+syscalls.</p>
+<h5 id="errors-7"><a class="doc-anchor" href="#errors-7">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="trait.AsyncReadExt.html#method.read_exact" title="method tokio::io::AsyncReadExt::read_exact"><code>AsyncReadExt::read_exact</code></a>.</p>
+<h5 id="cancel-safety-7"><a class="doc-anchor" href="#cancel-safety-7">§</a>Cancel safety</h5>
+<p>This method is not cancellation safe. If the method is used as the
+event in a <a href="../macro.select.html" title="macro tokio::select"><code>tokio::select!</code></a> statement and some
+other branch completes first, then some data may be lost.</p>
+<h5 id="examples-8"><a class="doc-anchor" href="#examples-8">§</a>Examples</h5>
+<p>Read unsigned 32-bit big-endian integers from a <code>AsyncRead</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::io::{<span class="self">self</span>, AsyncReadExt};
+
+<span class="kw">use </span>std::io::Cursor;
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>reader = Cursor::new(<span class="macro">vec!</span>[<span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x01</span>, <span class="number">0x0b</span>]);
+
+    <span class="macro">assert_eq!</span>(<span class="number">267</span>, reader.read_u32().<span class="kw">await</span><span class="question-mark">?</span>);
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_i32" class="method"><a class="src rightside" href="../../src/tokio/io/util/async_read_ext.rs.html#315-1289">source</a><h4 class="code-header">fn <a href="#method.read_i32" class="fn">read_i32</a>(&amp;mut self) -&gt; ReadI32&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a>&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a>,</div></h4></section></summary><div class="docblock"><p>Reads a signed 32-bit integer in big-endian order from the
+underlying reader.</p>
+<p>Equivalent to:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">async fn </span>read_i32(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; io::Result&lt;i32&gt;;</code></pre></div>
+<p>It is recommended to use a buffered reader to avoid excessive
+syscalls.</p>
+<h5 id="errors-8"><a class="doc-anchor" href="#errors-8">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="trait.AsyncReadExt.html#method.read_exact" title="method tokio::io::AsyncReadExt::read_exact"><code>AsyncReadExt::read_exact</code></a>.</p>
+<h5 id="cancel-safety-8"><a class="doc-anchor" href="#cancel-safety-8">§</a>Cancel safety</h5>
+<p>This method is not cancellation safe. If the method is used as the
+event in a <a href="../macro.select.html" title="macro tokio::select"><code>tokio::select!</code></a> statement and some
+other branch completes first, then some data may be lost.</p>
+<h5 id="examples-9"><a class="doc-anchor" href="#examples-9">§</a>Examples</h5>
+<p>Read signed 32-bit big-endian integers from a <code>AsyncRead</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::io::{<span class="self">self</span>, AsyncReadExt};
+
+<span class="kw">use </span>std::io::Cursor;
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>reader = Cursor::new(<span class="macro">vec!</span>[<span class="number">0xff</span>, <span class="number">0xff</span>, <span class="number">0x7a</span>, <span class="number">0x33</span>]);
+
+    <span class="macro">assert_eq!</span>(-<span class="number">34253</span>, reader.read_i32().<span class="kw">await</span><span class="question-mark">?</span>);
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_u64" class="method"><a class="src rightside" href="../../src/tokio/io/util/async_read_ext.rs.html#315-1289">source</a><h4 class="code-header">fn <a href="#method.read_u64" class="fn">read_u64</a>(&amp;mut self) -&gt; ReadU64&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a>&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a>,</div></h4></section></summary><div class="docblock"><p>Reads an unsigned 64-bit integer in big-endian order from the
+underlying reader.</p>
+<p>Equivalent to:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">async fn </span>read_u64(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; io::Result&lt;u64&gt;;</code></pre></div>
+<p>It is recommended to use a buffered reader to avoid excessive
+syscalls.</p>
+<h5 id="errors-9"><a class="doc-anchor" href="#errors-9">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="trait.AsyncReadExt.html#method.read_exact" title="method tokio::io::AsyncReadExt::read_exact"><code>AsyncReadExt::read_exact</code></a>.</p>
+<h5 id="cancel-safety-9"><a class="doc-anchor" href="#cancel-safety-9">§</a>Cancel safety</h5>
+<p>This method is not cancellation safe. If the method is used as the
+event in a <a href="../macro.select.html" title="macro tokio::select"><code>tokio::select!</code></a> statement and some
+other branch completes first, then some data may be lost.</p>
+<h5 id="examples-10"><a class="doc-anchor" href="#examples-10">§</a>Examples</h5>
+<p>Read unsigned 64-bit big-endian integers from a <code>AsyncRead</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::io::{<span class="self">self</span>, AsyncReadExt};
+
+<span class="kw">use </span>std::io::Cursor;
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>reader = Cursor::new(<span class="macro">vec!</span>[
+        <span class="number">0x00</span>, <span class="number">0x03</span>, <span class="number">0x43</span>, <span class="number">0x95</span>, <span class="number">0x4d</span>, <span class="number">0x60</span>, <span class="number">0x86</span>, <span class="number">0x83
+    </span>]);
+
+    <span class="macro">assert_eq!</span>(<span class="number">918733457491587</span>, reader.read_u64().<span class="kw">await</span><span class="question-mark">?</span>);
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_i64" class="method"><a class="src rightside" href="../../src/tokio/io/util/async_read_ext.rs.html#315-1289">source</a><h4 class="code-header">fn <a href="#method.read_i64" class="fn">read_i64</a>(&amp;mut self) -&gt; ReadI64&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a>&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a>,</div></h4></section></summary><div class="docblock"><p>Reads an signed 64-bit integer in big-endian order from the
+underlying reader.</p>
+<p>Equivalent to:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">async fn </span>read_i64(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; io::Result&lt;i64&gt;;</code></pre></div>
+<p>It is recommended to use a buffered reader to avoid excessive
+syscalls.</p>
+<h5 id="errors-10"><a class="doc-anchor" href="#errors-10">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="trait.AsyncReadExt.html#method.read_exact" title="method tokio::io::AsyncReadExt::read_exact"><code>AsyncReadExt::read_exact</code></a>.</p>
+<h5 id="cancel-safety-10"><a class="doc-anchor" href="#cancel-safety-10">§</a>Cancel safety</h5>
+<p>This method is not cancellation safe. If the method is used as the
+event in a <a href="../macro.select.html" title="macro tokio::select"><code>tokio::select!</code></a> statement and some
+other branch completes first, then some data may be lost.</p>
+<h5 id="examples-11"><a class="doc-anchor" href="#examples-11">§</a>Examples</h5>
+<p>Read signed 64-bit big-endian integers from a <code>AsyncRead</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::io::{<span class="self">self</span>, AsyncReadExt};
+
+<span class="kw">use </span>std::io::Cursor;
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>reader = Cursor::new(<span class="macro">vec!</span>[<span class="number">0x80</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>]);
+
+    <span class="macro">assert_eq!</span>(i64::MIN, reader.read_i64().<span class="kw">await</span><span class="question-mark">?</span>);
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_u128" class="method"><a class="src rightside" href="../../src/tokio/io/util/async_read_ext.rs.html#315-1289">source</a><h4 class="code-header">fn <a href="#method.read_u128" class="fn">read_u128</a>(&amp;mut self) -&gt; ReadU128&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a>&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a>,</div></h4></section></summary><div class="docblock"><p>Reads an unsigned 128-bit integer in big-endian order from the
+underlying reader.</p>
+<p>Equivalent to:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">async fn </span>read_u128(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; io::Result&lt;u128&gt;;</code></pre></div>
+<p>It is recommended to use a buffered reader to avoid excessive
+syscalls.</p>
+<h5 id="errors-11"><a class="doc-anchor" href="#errors-11">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="trait.AsyncReadExt.html#method.read_exact" title="method tokio::io::AsyncReadExt::read_exact"><code>AsyncReadExt::read_exact</code></a>.</p>
+<h5 id="cancel-safety-11"><a class="doc-anchor" href="#cancel-safety-11">§</a>Cancel safety</h5>
+<p>This method is not cancellation safe. If the method is used as the
+event in a <a href="../macro.select.html" title="macro tokio::select"><code>tokio::select!</code></a> statement and some
+other branch completes first, then some data may be lost.</p>
+<h5 id="examples-12"><a class="doc-anchor" href="#examples-12">§</a>Examples</h5>
+<p>Read unsigned 128-bit big-endian integers from a <code>AsyncRead</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::io::{<span class="self">self</span>, AsyncReadExt};
+
+<span class="kw">use </span>std::io::Cursor;
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>reader = Cursor::new(<span class="macro">vec!</span>[
+        <span class="number">0x00</span>, <span class="number">0x03</span>, <span class="number">0x43</span>, <span class="number">0x95</span>, <span class="number">0x4d</span>, <span class="number">0x60</span>, <span class="number">0x86</span>, <span class="number">0x83</span>,
+        <span class="number">0x00</span>, <span class="number">0x03</span>, <span class="number">0x43</span>, <span class="number">0x95</span>, <span class="number">0x4d</span>, <span class="number">0x60</span>, <span class="number">0x86</span>, <span class="number">0x83
+    </span>]);
+
+    <span class="macro">assert_eq!</span>(<span class="number">16947640962301618749969007319746179</span>, reader.read_u128().<span class="kw">await</span><span class="question-mark">?</span>);
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_i128" class="method"><a class="src rightside" href="../../src/tokio/io/util/async_read_ext.rs.html#315-1289">source</a><h4 class="code-header">fn <a href="#method.read_i128" class="fn">read_i128</a>(&amp;mut self) -&gt; ReadI128&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a>&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a>,</div></h4></section></summary><div class="docblock"><p>Reads an signed 128-bit integer in big-endian order from the
+underlying reader.</p>
+<p>Equivalent to:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">async fn </span>read_i128(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; io::Result&lt;i128&gt;;</code></pre></div>
+<p>It is recommended to use a buffered reader to avoid excessive
+syscalls.</p>
+<h5 id="errors-12"><a class="doc-anchor" href="#errors-12">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="trait.AsyncReadExt.html#method.read_exact" title="method tokio::io::AsyncReadExt::read_exact"><code>AsyncReadExt::read_exact</code></a>.</p>
+<h5 id="cancel-safety-12"><a class="doc-anchor" href="#cancel-safety-12">§</a>Cancel safety</h5>
+<p>This method is not cancellation safe. If the method is used as the
+event in a <a href="../macro.select.html" title="macro tokio::select"><code>tokio::select!</code></a> statement and some
+other branch completes first, then some data may be lost.</p>
+<h5 id="examples-13"><a class="doc-anchor" href="#examples-13">§</a>Examples</h5>
+<p>Read signed 128-bit big-endian integers from a <code>AsyncRead</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::io::{<span class="self">self</span>, AsyncReadExt};
+
+<span class="kw">use </span>std::io::Cursor;
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>reader = Cursor::new(<span class="macro">vec!</span>[
+        <span class="number">0x80</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>,
+        <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0
+    </span>]);
+
+    <span class="macro">assert_eq!</span>(i128::MIN, reader.read_i128().<span class="kw">await</span><span class="question-mark">?</span>);
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_f32" class="method"><a class="src rightside" href="../../src/tokio/io/util/async_read_ext.rs.html#315-1289">source</a><h4 class="code-header">fn <a href="#method.read_f32" class="fn">read_f32</a>(&amp;mut self) -&gt; ReadF32&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a>&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a>,</div></h4></section></summary><div class="docblock"><p>Reads an 32-bit floating point type in big-endian order from the
+underlying reader.</p>
+<p>Equivalent to:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">async fn </span>read_f32(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; io::Result&lt;f32&gt;;</code></pre></div>
+<p>It is recommended to use a buffered reader to avoid excessive
+syscalls.</p>
+<h5 id="errors-13"><a class="doc-anchor" href="#errors-13">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="trait.AsyncReadExt.html#method.read_exact" title="method tokio::io::AsyncReadExt::read_exact"><code>AsyncReadExt::read_exact</code></a>.</p>
+<h5 id="cancel-safety-13"><a class="doc-anchor" href="#cancel-safety-13">§</a>Cancel safety</h5>
+<p>This method is not cancellation safe. If the method is used as the
+event in a <a href="../macro.select.html" title="macro tokio::select"><code>tokio::select!</code></a> statement and some
+other branch completes first, then some data may be lost.</p>
+<h5 id="examples-14"><a class="doc-anchor" href="#examples-14">§</a>Examples</h5>
+<p>Read 32-bit floating point type from a <code>AsyncRead</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::io::{<span class="self">self</span>, AsyncReadExt};
+
+<span class="kw">use </span>std::io::Cursor;
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>reader = Cursor::new(<span class="macro">vec!</span>[<span class="number">0xff</span>, <span class="number">0x7f</span>, <span class="number">0xff</span>, <span class="number">0xff</span>]);
+
+    <span class="macro">assert_eq!</span>(f32::MIN, reader.read_f32().<span class="kw">await</span><span class="question-mark">?</span>);
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_f64" class="method"><a class="src rightside" href="../../src/tokio/io/util/async_read_ext.rs.html#315-1289">source</a><h4 class="code-header">fn <a href="#method.read_f64" class="fn">read_f64</a>(&amp;mut self) -&gt; ReadF64&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a>&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a>,</div></h4></section></summary><div class="docblock"><p>Reads an 64-bit floating point type in big-endian order from the
+underlying reader.</p>
+<p>Equivalent to:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">async fn </span>read_f64(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; io::Result&lt;f64&gt;;</code></pre></div>
+<p>It is recommended to use a buffered reader to avoid excessive
+syscalls.</p>
+<h5 id="errors-14"><a class="doc-anchor" href="#errors-14">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="trait.AsyncReadExt.html#method.read_exact" title="method tokio::io::AsyncReadExt::read_exact"><code>AsyncReadExt::read_exact</code></a>.</p>
+<h5 id="cancel-safety-14"><a class="doc-anchor" href="#cancel-safety-14">§</a>Cancel safety</h5>
+<p>This method is not cancellation safe. If the method is used as the
+event in a <a href="../macro.select.html" title="macro tokio::select"><code>tokio::select!</code></a> statement and some
+other branch completes first, then some data may be lost.</p>
+<h5 id="examples-15"><a class="doc-anchor" href="#examples-15">§</a>Examples</h5>
+<p>Read 64-bit floating point type from a <code>AsyncRead</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::io::{<span class="self">self</span>, AsyncReadExt};
+
+<span class="kw">use </span>std::io::Cursor;
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>reader = Cursor::new(<span class="macro">vec!</span>[
+        <span class="number">0xff</span>, <span class="number">0xef</span>, <span class="number">0xff</span>, <span class="number">0xff</span>, <span class="number">0xff</span>, <span class="number">0xff</span>, <span class="number">0xff</span>, <span class="number">0xff
+    </span>]);
+
+    <span class="macro">assert_eq!</span>(f64::MIN, reader.read_f64().<span class="kw">await</span><span class="question-mark">?</span>);
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_u16_le" class="method"><a class="src rightside" href="../../src/tokio/io/util/async_read_ext.rs.html#315-1289">source</a><h4 class="code-header">fn <a href="#method.read_u16_le" class="fn">read_u16_le</a>(&amp;mut self) -&gt; ReadU16Le&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a>&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a>,</div></h4></section></summary><div class="docblock"><p>Reads an unsigned 16-bit integer in little-endian order from the
+underlying reader.</p>
+<p>Equivalent to:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">async fn </span>read_u16_le(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; io::Result&lt;u16&gt;;</code></pre></div>
+<p>It is recommended to use a buffered reader to avoid excessive
+syscalls.</p>
+<h5 id="errors-15"><a class="doc-anchor" href="#errors-15">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="trait.AsyncReadExt.html#method.read_exact" title="method tokio::io::AsyncReadExt::read_exact"><code>AsyncReadExt::read_exact</code></a>.</p>
+<h5 id="cancel-safety-15"><a class="doc-anchor" href="#cancel-safety-15">§</a>Cancel safety</h5>
+<p>This method is not cancellation safe. If the method is used as the
+event in a <a href="../macro.select.html" title="macro tokio::select"><code>tokio::select!</code></a> statement and some
+other branch completes first, then some data may be lost.</p>
+<h5 id="examples-16"><a class="doc-anchor" href="#examples-16">§</a>Examples</h5>
+<p>Read unsigned 16 bit little-endian integers from a <code>AsyncRead</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::io::{<span class="self">self</span>, AsyncReadExt};
+
+<span class="kw">use </span>std::io::Cursor;
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>reader = Cursor::new(<span class="macro">vec!</span>[<span class="number">2</span>, <span class="number">5</span>, <span class="number">3</span>, <span class="number">0</span>]);
+
+    <span class="macro">assert_eq!</span>(<span class="number">1282</span>, reader.read_u16_le().<span class="kw">await</span><span class="question-mark">?</span>);
+    <span class="macro">assert_eq!</span>(<span class="number">3</span>, reader.read_u16_le().<span class="kw">await</span><span class="question-mark">?</span>);
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_i16_le" class="method"><a class="src rightside" href="../../src/tokio/io/util/async_read_ext.rs.html#315-1289">source</a><h4 class="code-header">fn <a href="#method.read_i16_le" class="fn">read_i16_le</a>(&amp;mut self) -&gt; ReadI16Le&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a>&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a>,</div></h4></section></summary><div class="docblock"><p>Reads a signed 16-bit integer in little-endian order from the
+underlying reader.</p>
+<p>Equivalent to:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">async fn </span>read_i16_le(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; io::Result&lt;i16&gt;;</code></pre></div>
+<p>It is recommended to use a buffered reader to avoid excessive
+syscalls.</p>
+<h5 id="errors-16"><a class="doc-anchor" href="#errors-16">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="trait.AsyncReadExt.html#method.read_exact" title="method tokio::io::AsyncReadExt::read_exact"><code>AsyncReadExt::read_exact</code></a>.</p>
+<h5 id="cancel-safety-16"><a class="doc-anchor" href="#cancel-safety-16">§</a>Cancel safety</h5>
+<p>This method is not cancellation safe. If the method is used as the
+event in a <a href="../macro.select.html" title="macro tokio::select"><code>tokio::select!</code></a> statement and some
+other branch completes first, then some data may be lost.</p>
+<h5 id="examples-17"><a class="doc-anchor" href="#examples-17">§</a>Examples</h5>
+<p>Read signed 16 bit little-endian integers from a <code>AsyncRead</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::io::{<span class="self">self</span>, AsyncReadExt};
+
+<span class="kw">use </span>std::io::Cursor;
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>reader = Cursor::new(<span class="macro">vec!</span>[<span class="number">0x00</span>, <span class="number">0xc1</span>, <span class="number">0xff</span>, <span class="number">0x7c</span>]);
+
+    <span class="macro">assert_eq!</span>(-<span class="number">16128</span>, reader.read_i16_le().<span class="kw">await</span><span class="question-mark">?</span>);
+    <span class="macro">assert_eq!</span>(<span class="number">31999</span>, reader.read_i16_le().<span class="kw">await</span><span class="question-mark">?</span>);
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_u32_le" class="method"><a class="src rightside" href="../../src/tokio/io/util/async_read_ext.rs.html#315-1289">source</a><h4 class="code-header">fn <a href="#method.read_u32_le" class="fn">read_u32_le</a>(&amp;mut self) -&gt; ReadU32Le&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a>&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a>,</div></h4></section></summary><div class="docblock"><p>Reads an unsigned 32-bit integer in little-endian order from the
+underlying reader.</p>
+<p>Equivalent to:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">async fn </span>read_u32_le(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; io::Result&lt;u32&gt;;</code></pre></div>
+<p>It is recommended to use a buffered reader to avoid excessive
+syscalls.</p>
+<h5 id="errors-17"><a class="doc-anchor" href="#errors-17">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="trait.AsyncReadExt.html#method.read_exact" title="method tokio::io::AsyncReadExt::read_exact"><code>AsyncReadExt::read_exact</code></a>.</p>
+<h5 id="cancel-safety-17"><a class="doc-anchor" href="#cancel-safety-17">§</a>Cancel safety</h5>
+<p>This method is not cancellation safe. If the method is used as the
+event in a <a href="../macro.select.html" title="macro tokio::select"><code>tokio::select!</code></a> statement and some
+other branch completes first, then some data may be lost.</p>
+<h5 id="examples-18"><a class="doc-anchor" href="#examples-18">§</a>Examples</h5>
+<p>Read unsigned 32-bit little-endian integers from a <code>AsyncRead</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::io::{<span class="self">self</span>, AsyncReadExt};
+
+<span class="kw">use </span>std::io::Cursor;
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>reader = Cursor::new(<span class="macro">vec!</span>[<span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x01</span>, <span class="number">0x0b</span>]);
+
+    <span class="macro">assert_eq!</span>(<span class="number">184614912</span>, reader.read_u32_le().<span class="kw">await</span><span class="question-mark">?</span>);
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_i32_le" class="method"><a class="src rightside" href="../../src/tokio/io/util/async_read_ext.rs.html#315-1289">source</a><h4 class="code-header">fn <a href="#method.read_i32_le" class="fn">read_i32_le</a>(&amp;mut self) -&gt; ReadI32Le&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a>&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a>,</div></h4></section></summary><div class="docblock"><p>Reads a signed 32-bit integer in little-endian order from the
+underlying reader.</p>
+<p>Equivalent to:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">async fn </span>read_i32_le(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; io::Result&lt;i32&gt;;</code></pre></div>
+<p>It is recommended to use a buffered reader to avoid excessive
+syscalls.</p>
+<h5 id="errors-18"><a class="doc-anchor" href="#errors-18">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="trait.AsyncReadExt.html#method.read_exact" title="method tokio::io::AsyncReadExt::read_exact"><code>AsyncReadExt::read_exact</code></a>.</p>
+<h5 id="cancel-safety-18"><a class="doc-anchor" href="#cancel-safety-18">§</a>Cancel safety</h5>
+<p>This method is not cancellation safe. If the method is used as the
+event in a <a href="../macro.select.html" title="macro tokio::select"><code>tokio::select!</code></a> statement and some
+other branch completes first, then some data may be lost.</p>
+<h5 id="examples-19"><a class="doc-anchor" href="#examples-19">§</a>Examples</h5>
+<p>Read signed 32-bit little-endian integers from a <code>AsyncRead</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::io::{<span class="self">self</span>, AsyncReadExt};
+
+<span class="kw">use </span>std::io::Cursor;
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>reader = Cursor::new(<span class="macro">vec!</span>[<span class="number">0xff</span>, <span class="number">0xff</span>, <span class="number">0x7a</span>, <span class="number">0x33</span>]);
+
+    <span class="macro">assert_eq!</span>(<span class="number">863698943</span>, reader.read_i32_le().<span class="kw">await</span><span class="question-mark">?</span>);
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_u64_le" class="method"><a class="src rightside" href="../../src/tokio/io/util/async_read_ext.rs.html#315-1289">source</a><h4 class="code-header">fn <a href="#method.read_u64_le" class="fn">read_u64_le</a>(&amp;mut self) -&gt; ReadU64Le&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a>&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a>,</div></h4></section></summary><div class="docblock"><p>Reads an unsigned 64-bit integer in little-endian order from the
+underlying reader.</p>
+<p>Equivalent to:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">async fn </span>read_u64_le(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; io::Result&lt;u64&gt;;</code></pre></div>
+<p>It is recommended to use a buffered reader to avoid excessive
+syscalls.</p>
+<h5 id="errors-19"><a class="doc-anchor" href="#errors-19">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="trait.AsyncReadExt.html#method.read_exact" title="method tokio::io::AsyncReadExt::read_exact"><code>AsyncReadExt::read_exact</code></a>.</p>
+<h5 id="cancel-safety-19"><a class="doc-anchor" href="#cancel-safety-19">§</a>Cancel safety</h5>
+<p>This method is not cancellation safe. If the method is used as the
+event in a <a href="../macro.select.html" title="macro tokio::select"><code>tokio::select!</code></a> statement and some
+other branch completes first, then some data may be lost.</p>
+<h5 id="examples-20"><a class="doc-anchor" href="#examples-20">§</a>Examples</h5>
+<p>Read unsigned 64-bit little-endian integers from a <code>AsyncRead</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::io::{<span class="self">self</span>, AsyncReadExt};
+
+<span class="kw">use </span>std::io::Cursor;
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>reader = Cursor::new(<span class="macro">vec!</span>[
+        <span class="number">0x00</span>, <span class="number">0x03</span>, <span class="number">0x43</span>, <span class="number">0x95</span>, <span class="number">0x4d</span>, <span class="number">0x60</span>, <span class="number">0x86</span>, <span class="number">0x83
+    </span>]);
+
+    <span class="macro">assert_eq!</span>(<span class="number">9477368352180732672</span>, reader.read_u64_le().<span class="kw">await</span><span class="question-mark">?</span>);
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_i64_le" class="method"><a class="src rightside" href="../../src/tokio/io/util/async_read_ext.rs.html#315-1289">source</a><h4 class="code-header">fn <a href="#method.read_i64_le" class="fn">read_i64_le</a>(&amp;mut self) -&gt; ReadI64Le&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a>&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a>,</div></h4></section></summary><div class="docblock"><p>Reads an signed 64-bit integer in little-endian order from the
+underlying reader.</p>
+<p>Equivalent to:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">async fn </span>read_i64_le(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; io::Result&lt;i64&gt;;</code></pre></div>
+<p>It is recommended to use a buffered reader to avoid excessive
+syscalls.</p>
+<h5 id="errors-20"><a class="doc-anchor" href="#errors-20">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="trait.AsyncReadExt.html#method.read_exact" title="method tokio::io::AsyncReadExt::read_exact"><code>AsyncReadExt::read_exact</code></a>.</p>
+<h5 id="cancel-safety-20"><a class="doc-anchor" href="#cancel-safety-20">§</a>Cancel safety</h5>
+<p>This method is not cancellation safe. If the method is used as the
+event in a <a href="../macro.select.html" title="macro tokio::select"><code>tokio::select!</code></a> statement and some
+other branch completes first, then some data may be lost.</p>
+<h5 id="examples-21"><a class="doc-anchor" href="#examples-21">§</a>Examples</h5>
+<p>Read signed 64-bit little-endian integers from a <code>AsyncRead</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::io::{<span class="self">self</span>, AsyncReadExt};
+
+<span class="kw">use </span>std::io::Cursor;
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>reader = Cursor::new(<span class="macro">vec!</span>[<span class="number">0x80</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>]);
+
+    <span class="macro">assert_eq!</span>(<span class="number">128</span>, reader.read_i64_le().<span class="kw">await</span><span class="question-mark">?</span>);
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_u128_le" class="method"><a class="src rightside" href="../../src/tokio/io/util/async_read_ext.rs.html#315-1289">source</a><h4 class="code-header">fn <a href="#method.read_u128_le" class="fn">read_u128_le</a>(&amp;mut self) -&gt; ReadU128Le&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a>&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a>,</div></h4></section></summary><div class="docblock"><p>Reads an unsigned 128-bit integer in little-endian order from the
+underlying reader.</p>
+<p>Equivalent to:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">async fn </span>read_u128_le(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; io::Result&lt;u128&gt;;</code></pre></div>
+<p>It is recommended to use a buffered reader to avoid excessive
+syscalls.</p>
+<h5 id="errors-21"><a class="doc-anchor" href="#errors-21">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="trait.AsyncReadExt.html#method.read_exact" title="method tokio::io::AsyncReadExt::read_exact"><code>AsyncReadExt::read_exact</code></a>.</p>
+<h5 id="cancel-safety-21"><a class="doc-anchor" href="#cancel-safety-21">§</a>Cancel safety</h5>
+<p>This method is not cancellation safe. If the method is used as the
+event in a <a href="../macro.select.html" title="macro tokio::select"><code>tokio::select!</code></a> statement and some
+other branch completes first, then some data may be lost.</p>
+<h5 id="examples-22"><a class="doc-anchor" href="#examples-22">§</a>Examples</h5>
+<p>Read unsigned 128-bit little-endian integers from a <code>AsyncRead</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::io::{<span class="self">self</span>, AsyncReadExt};
+
+<span class="kw">use </span>std::io::Cursor;
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>reader = Cursor::new(<span class="macro">vec!</span>[
+        <span class="number">0x00</span>, <span class="number">0x03</span>, <span class="number">0x43</span>, <span class="number">0x95</span>, <span class="number">0x4d</span>, <span class="number">0x60</span>, <span class="number">0x86</span>, <span class="number">0x83</span>,
+        <span class="number">0x00</span>, <span class="number">0x03</span>, <span class="number">0x43</span>, <span class="number">0x95</span>, <span class="number">0x4d</span>, <span class="number">0x60</span>, <span class="number">0x86</span>, <span class="number">0x83
+    </span>]);
+
+    <span class="macro">assert_eq!</span>(<span class="number">174826588484952389081207917399662330624</span>, reader.read_u128_le().<span class="kw">await</span><span class="question-mark">?</span>);
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_i128_le" class="method"><a class="src rightside" href="../../src/tokio/io/util/async_read_ext.rs.html#315-1289">source</a><h4 class="code-header">fn <a href="#method.read_i128_le" class="fn">read_i128_le</a>(&amp;mut self) -&gt; ReadI128Le&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a>&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a>,</div></h4></section></summary><div class="docblock"><p>Reads an signed 128-bit integer in little-endian order from the
+underlying reader.</p>
+<p>Equivalent to:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">async fn </span>read_i128_le(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; io::Result&lt;i128&gt;;</code></pre></div>
+<p>It is recommended to use a buffered reader to avoid excessive
+syscalls.</p>
+<h5 id="errors-22"><a class="doc-anchor" href="#errors-22">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="trait.AsyncReadExt.html#method.read_exact" title="method tokio::io::AsyncReadExt::read_exact"><code>AsyncReadExt::read_exact</code></a>.</p>
+<h5 id="cancel-safety-22"><a class="doc-anchor" href="#cancel-safety-22">§</a>Cancel safety</h5>
+<p>This method is not cancellation safe. If the method is used as the
+event in a <a href="../macro.select.html" title="macro tokio::select"><code>tokio::select!</code></a> statement and some
+other branch completes first, then some data may be lost.</p>
+<h5 id="examples-23"><a class="doc-anchor" href="#examples-23">§</a>Examples</h5>
+<p>Read signed 128-bit little-endian integers from a <code>AsyncRead</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::io::{<span class="self">self</span>, AsyncReadExt};
+
+<span class="kw">use </span>std::io::Cursor;
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>reader = Cursor::new(<span class="macro">vec!</span>[
+        <span class="number">0x80</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>,
+        <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0
+    </span>]);
+
+    <span class="macro">assert_eq!</span>(<span class="number">128</span>, reader.read_i128_le().<span class="kw">await</span><span class="question-mark">?</span>);
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_f32_le" class="method"><a class="src rightside" href="../../src/tokio/io/util/async_read_ext.rs.html#315-1289">source</a><h4 class="code-header">fn <a href="#method.read_f32_le" class="fn">read_f32_le</a>(&amp;mut self) -&gt; ReadF32Le&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a>&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a>,</div></h4></section></summary><div class="docblock"><p>Reads an 32-bit floating point type in little-endian order from the
+underlying reader.</p>
+<p>Equivalent to:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">async fn </span>read_f32_le(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; io::Result&lt;f32&gt;;</code></pre></div>
+<p>It is recommended to use a buffered reader to avoid excessive
+syscalls.</p>
+<h5 id="errors-23"><a class="doc-anchor" href="#errors-23">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="trait.AsyncReadExt.html#method.read_exact" title="method tokio::io::AsyncReadExt::read_exact"><code>AsyncReadExt::read_exact</code></a>.</p>
+<h5 id="cancel-safety-23"><a class="doc-anchor" href="#cancel-safety-23">§</a>Cancel safety</h5>
+<p>This method is not cancellation safe. If the method is used as the
+event in a <a href="../macro.select.html" title="macro tokio::select"><code>tokio::select!</code></a> statement and some
+other branch completes first, then some data may be lost.</p>
+<h5 id="examples-24"><a class="doc-anchor" href="#examples-24">§</a>Examples</h5>
+<p>Read 32-bit floating point type from a <code>AsyncRead</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::io::{<span class="self">self</span>, AsyncReadExt};
+
+<span class="kw">use </span>std::io::Cursor;
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>reader = Cursor::new(<span class="macro">vec!</span>[<span class="number">0xff</span>, <span class="number">0xff</span>, <span class="number">0x7f</span>, <span class="number">0xff</span>]);
+
+    <span class="macro">assert_eq!</span>(f32::MIN, reader.read_f32_le().<span class="kw">await</span><span class="question-mark">?</span>);
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_f64_le" class="method"><a class="src rightside" href="../../src/tokio/io/util/async_read_ext.rs.html#315-1289">source</a><h4 class="code-header">fn <a href="#method.read_f64_le" class="fn">read_f64_le</a>(&amp;mut self) -&gt; ReadF64Le&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a>&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a>,</div></h4></section></summary><div class="docblock"><p>Reads an 64-bit floating point type in little-endian order from the
+underlying reader.</p>
+<p>Equivalent to:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">async fn </span>read_f64_le(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; io::Result&lt;f64&gt;;</code></pre></div>
+<p>It is recommended to use a buffered reader to avoid excessive
+syscalls.</p>
+<h5 id="errors-24"><a class="doc-anchor" href="#errors-24">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="trait.AsyncReadExt.html#method.read_exact" title="method tokio::io::AsyncReadExt::read_exact"><code>AsyncReadExt::read_exact</code></a>.</p>
+<h5 id="cancel-safety-24"><a class="doc-anchor" href="#cancel-safety-24">§</a>Cancel safety</h5>
+<p>This method is not cancellation safe. If the method is used as the
+event in a <a href="../macro.select.html" title="macro tokio::select"><code>tokio::select!</code></a> statement and some
+other branch completes first, then some data may be lost.</p>
+<h5 id="examples-25"><a class="doc-anchor" href="#examples-25">§</a>Examples</h5>
+<p>Read 64-bit floating point type from a <code>AsyncRead</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::io::{<span class="self">self</span>, AsyncReadExt};
+
+<span class="kw">use </span>std::io::Cursor;
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>reader = Cursor::new(<span class="macro">vec!</span>[
+        <span class="number">0xff</span>, <span class="number">0xff</span>, <span class="number">0xff</span>, <span class="number">0xff</span>, <span class="number">0xff</span>, <span class="number">0xff</span>, <span class="number">0xef</span>, <span class="number">0xff
+    </span>]);
+
+    <span class="macro">assert_eq!</span>(f64::MIN, reader.read_f64_le().<span class="kw">await</span><span class="question-mark">?</span>);
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_to_end" class="method"><a class="src rightside" href="../../src/tokio/io/util/async_read_ext.rs.html#1336-1341">source</a><h4 class="code-header">fn <a href="#method.read_to_end" class="fn">read_to_end</a>&lt;'a&gt;(&amp;'a mut self, buf: &amp;'a mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>&gt;) -&gt; ReadToEnd&lt;'a, Self&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a>,</div></h4></section></summary><div class="docblock"><p>Reads all bytes until EOF in this source, placing them into <code>buf</code>.</p>
+<p>Equivalent to:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">async fn </span>read_to_end(<span class="kw-2">&amp;mut </span><span class="self">self</span>, buf: <span class="kw-2">&amp;mut </span>Vec&lt;u8&gt;) -&gt; io::Result&lt;usize&gt;;</code></pre></div>
+<p>All bytes read from this source will be appended to the specified
+buffer <code>buf</code>. This function will continuously call <a href="trait.AsyncReadExt.html#method.read" title="method tokio::io::AsyncReadExt::read"><code>read()</code></a> to
+append more data to <code>buf</code> until <a href="trait.AsyncReadExt.html#method.read" title="method tokio::io::AsyncReadExt::read"><code>read()</code></a> returns <code>Ok(0)</code>.</p>
+<p>If successful, the total number of bytes read is returned.</p>
+<h5 id="errors-25"><a class="doc-anchor" href="#errors-25">§</a>Errors</h5>
+<p>If a read error is encountered then the <code>read_to_end</code> operation
+immediately completes. Any bytes which have already been read will
+be appended to <code>buf</code>.</p>
+<h5 id="examples-26"><a class="doc-anchor" href="#examples-26">§</a>Examples</h5>
+<p><a href="../fs/struct.File.html" title="struct tokio::fs::File"><code>File</code></a>s implement <code>Read</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::io::{<span class="self">self</span>, AsyncReadExt};
+<span class="kw">use </span>tokio::fs::File;
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>f = File::open(<span class="string">"foo.txt"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span><span class="kw-2">mut </span>buffer = Vec::new();
+
+    <span class="comment">// read the whole file
+    </span>f.read_to_end(<span class="kw-2">&amp;mut </span>buffer).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<p>(See also the <a href="../fs/fn.read.html" title="fn tokio::fs::read"><code>tokio::fs::read</code></a> convenience function for reading from a
+file.)</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_to_string" class="method"><a class="src rightside" href="../../src/tokio/io/util/async_read_ext.rs.html#1383-1388">source</a><h4 class="code-header">fn <a href="#method.read_to_string" class="fn">read_to_string</a>&lt;'a&gt;(
+    &amp;'a mut self,
+    dst: &amp;'a mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>,
+) -&gt; ReadToString&lt;'a, Self&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a>,</div></h4></section></summary><div class="docblock"><p>Reads all bytes until EOF in this source, appending them to <code>buf</code>.</p>
+<p>Equivalent to:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">async fn </span>read_to_string(<span class="kw-2">&amp;mut </span><span class="self">self</span>, buf: <span class="kw-2">&amp;mut </span>String) -&gt; io::Result&lt;usize&gt;;</code></pre></div>
+<p>If successful, the number of bytes which were read and appended to
+<code>buf</code> is returned.</p>
+<h5 id="errors-26"><a class="doc-anchor" href="#errors-26">§</a>Errors</h5>
+<p>If the data in this stream is <em>not</em> valid UTF-8 then an error is
+returned and <code>buf</code> is unchanged.</p>
+<p>See <a href="trait.AsyncReadExt.html#method.read_to_end" title="method tokio::io::AsyncReadExt::read_to_end"><code>read_to_end</code></a> for other error semantics.</p>
+<h5 id="examples-27"><a class="doc-anchor" href="#examples-27">§</a>Examples</h5>
+<p><a href="../fs/struct.File.html" title="struct tokio::fs::File"><code>File</code></a>s implement <code>Read</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::io::{<span class="self">self</span>, AsyncReadExt};
+<span class="kw">use </span>tokio::fs::File;
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>f = File::open(<span class="string">"foo.txt"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span><span class="kw-2">mut </span>buffer = String::new();
+
+    f.read_to_string(<span class="kw-2">&amp;mut </span>buffer).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<p>(See also the <a href="../fs/fn.read_to_string.html" title="fn tokio::fs::read_to_string"><code>crate::fs::read_to_string</code></a> convenience function for
+reading from a file.)</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.take" class="method"><a class="src rightside" href="../../src/tokio/io/util/async_read_ext.rs.html#1421-1426">source</a><h4 class="code-header">fn <a href="#method.take" class="fn">take</a>(self, limit: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>) -&gt; <a class="struct" href="struct.Take.html" title="struct tokio::io::Take">Take</a>&lt;Self&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Creates an adaptor which reads at most <code>limit</code> bytes from it.</p>
+<p>This function returns a new instance of <code>AsyncRead</code> which will read
+at most <code>limit</code> bytes, after which it will always return EOF
+(<code>Ok(0)</code>). Any read errors will not count towards the number of
+bytes read and future calls to <a href="trait.AsyncReadExt.html#method.read" title="method tokio::io::AsyncReadExt::read"><code>read()</code></a> may succeed.</p>
+<h5 id="examples-28"><a class="doc-anchor" href="#examples-28">§</a>Examples</h5>
+<p><a href="../fs/struct.File.html" title="struct tokio::fs::File"><code>File</code></a>s implement <code>Read</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::io::{<span class="self">self</span>, AsyncReadExt};
+<span class="kw">use </span>tokio::fs::File;
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span>f = File::open(<span class="string">"foo.txt"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span><span class="kw-2">mut </span>buffer = [<span class="number">0</span>; <span class="number">5</span>];
+
+    <span class="comment">// read at most five bytes
+    </span><span class="kw">let </span><span class="kw-2">mut </span>handle = f.take(<span class="number">5</span>);
+
+    handle.read(<span class="kw-2">&amp;mut </span>buffer).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+</div></details></div><h2 id="object-safety" class="section-header">Object Safety<a href="#object-safety" class="anchor">§</a></h2><div class="object-safety-info">This trait is <b>not</b> <a href="https://doc.rust-lang.org/1.81.0/reference/items/traits.html#object-safety">object safe</a>.</div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><section id="impl-AsyncReadExt-for-R" class="impl"><a class="src rightside" href="../../src/tokio/io/util/async_read_ext.rs.html#1430">source</a><a href="#impl-AsyncReadExt-for-R" class="anchor">§</a><h3 class="code-header">impl&lt;R: <a class="trait" href="trait.AsyncRead.html" title="trait tokio::io::AsyncRead">AsyncRead</a> + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>&gt; <a class="trait" href="trait.AsyncReadExt.html" title="trait tokio::io::AsyncReadExt">AsyncReadExt</a> for R</h3></section></div><script src="../../trait.impl/tokio/io/util/async_read_ext/trait.AsyncReadExt.js" async></script></section></div></main></body></html>

@@ -1,0 +1,898 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A wrapper type to construct uninitialized instances of `T`."><title>MaybeUninit in wasmtime_environ::__core::mem - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="wasmtime_environ" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc union"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../wasmtime_environ/index.html">wasmtime_environ</a><span class="version">25.0.1</span></h2></div><h2 class="location"><a href="#">MaybeUninit</a></h2><div class="sidebar-elems"><section><h3><a href="#implementations">Methods</a></h3><ul class="block method"><li><a href="#method.array_assume_init">array_assume_init</a></li><li><a href="#method.as_bytes">as_bytes</a></li><li><a href="#method.as_bytes_mut">as_bytes_mut</a></li><li><a href="#method.as_mut_ptr">as_mut_ptr</a></li><li><a href="#method.as_ptr">as_ptr</a></li><li><a href="#method.assume_init">assume_init</a></li><li><a href="#method.assume_init-1">assume_init</a></li><li><a href="#method.assume_init_drop">assume_init_drop</a></li><li><a href="#method.assume_init_mut">assume_init_mut</a></li><li><a href="#method.assume_init_read">assume_init_read</a></li><li><a href="#method.assume_init_ref">assume_init_ref</a></li><li><a href="#method.clone_from_slice">clone_from_slice</a></li><li><a href="#method.copy_from_slice">copy_from_slice</a></li><li><a href="#method.fill">fill</a></li><li><a href="#method.fill_from">fill_from</a></li><li><a href="#method.fill_with">fill_with</a></li><li><a href="#method.new">new</a></li><li><a href="#method.slice_as_bytes">slice_as_bytes</a></li><li><a href="#method.slice_as_bytes_mut">slice_as_bytes_mut</a></li><li><a href="#method.slice_as_mut_ptr">slice_as_mut_ptr</a></li><li><a href="#method.slice_as_ptr">slice_as_ptr</a></li><li><a href="#method.slice_assume_init_mut">slice_assume_init_mut</a></li><li><a href="#method.slice_assume_init_ref">slice_assume_init_ref</a></li><li><a href="#method.transpose">transpose</a></li><li><a href="#method.uninit">uninit</a></li><li><a href="#method.uninit_array">uninit_array</a></li><li><a href="#method.write">write</a></li><li><a href="#method.write-1">write</a></li><li><a href="#method.zeroed">zeroed</a></li></ul><h3><a href="#trait-implementations">Trait Implementations</a></h3><ul class="block trait-implementation"><li><a href="#impl-Clone-for-MaybeUninit%3CT%3E">Clone</a></li><li><a href="#impl-Copy-for-MaybeUninit%3CT%3E">Copy</a></li><li><a href="#impl-Debug-for-MaybeUninit%3CT%3E">Debug</a></li><li><a href="#impl-FromBytes-for-MaybeUninit%3CT%3E">FromBytes</a></li><li><a href="#impl-FromZeroes-for-MaybeUninit%3CT%3E">FromZeroes</a></li><li><a href="#impl-Unaligned-for-MaybeUninit%3CT%3E">Unaligned</a></li></ul><h3><a href="#synthetic-implementations">Auto Trait Implementations</a></h3><ul class="block synthetic-implementation"><li><a href="#impl-Freeze-for-MaybeUninit%3CT%3E">Freeze</a></li><li><a href="#impl-RefUnwindSafe-for-MaybeUninit%3CT%3E">RefUnwindSafe</a></li><li><a href="#impl-Send-for-MaybeUninit%3CT%3E">Send</a></li><li><a href="#impl-Sync-for-MaybeUninit%3CT%3E">Sync</a></li><li><a href="#impl-Unpin-for-MaybeUninit%3CT%3E">Unpin</a></li><li><a href="#impl-UnwindSafe-for-MaybeUninit%3CT%3E">UnwindSafe</a></li></ul><h3><a href="#blanket-implementations">Blanket Implementations</a></h3><ul class="block blanket-implementation"><li><a href="#impl-Any-for-T">Any</a></li><li><a href="#impl-Borrow%3CT%3E-for-T">Borrow&lt;T&gt;</a></li><li><a href="#impl-BorrowMut%3CT%3E-for-T">BorrowMut&lt;T&gt;</a></li><li><a href="#impl-CloneToUninit-for-T">CloneToUninit</a></li><li><a href="#impl-CloneToUninit-for-T-1">CloneToUninit</a></li><li><a href="#impl-From%3CT%3E-for-T">From&lt;T&gt;</a></li><li><a href="#impl-Into%3CU%3E-for-T">Into&lt;U&gt;</a></li><li><a href="#impl-ToOwned-for-T">ToOwned</a></li><li><a href="#impl-TryFrom%3CU%3E-for-T">TryFrom&lt;U&gt;</a></li><li><a href="#impl-TryInto%3CU%3E-for-T">TryInto&lt;U&gt;</a></li></ul></section><h2><a href="index.html">In wasmtime_environ::__core::mem</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Union <a href="../../index.html">wasmtime_environ</a>::<wbr><a href="../index.html">__core</a>::<wbr><a href="index.html">mem</a>::<wbr><a class="union" href="#">MaybeUninit</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><span class="since" title="Stable since Rust version 1.36.0">1.36.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/mem/maybe_uninit.rs.html#243">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub union MaybeUninit&lt;T&gt; {
+    <span class="comment">/* private fields */</span>
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A wrapper type to construct uninitialized instances of <code>T</code>.</p>
+<h2 id="initialization-invariant"><a class="doc-anchor" href="#initialization-invariant">§</a>Initialization invariant</h2>
+<p>The compiler, in general, assumes that a variable is properly initialized
+according to the requirements of the variable’s type. For example, a variable of
+reference type must be aligned and non-null. This is an invariant that must
+<em>always</em> be upheld, even in unsafe code. As a consequence, zero-initializing a
+variable of reference type causes instantaneous <a href="../../reference/behavior-considered-undefined.html">undefined behavior</a>,
+no matter whether that reference ever gets used to access memory:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::mem::{<span class="self">self</span>, MaybeUninit};
+
+<span class="kw">let </span>x: <span class="kw-2">&amp;</span>i32 = <span class="kw">unsafe </span>{ mem::zeroed() }; <span class="comment">// undefined behavior! ⚠️
+// The equivalent code with `MaybeUninit&lt;&amp;i32&gt;`:
+</span><span class="kw">let </span>x: <span class="kw-2">&amp;</span>i32 = <span class="kw">unsafe </span>{ MaybeUninit::zeroed().assume_init() }; <span class="comment">// undefined behavior! ⚠️</span></code></pre></div>
+<p>This is exploited by the compiler for various optimizations, such as eliding
+run-time checks and optimizing <code>enum</code> layout.</p>
+<p>Similarly, entirely uninitialized memory may have any content, while a <code>bool</code> must
+always be <code>true</code> or <code>false</code>. Hence, creating an uninitialized <code>bool</code> is undefined behavior:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::mem::{<span class="self">self</span>, MaybeUninit};
+
+<span class="kw">let </span>b: bool = <span class="kw">unsafe </span>{ mem::uninitialized() }; <span class="comment">// undefined behavior! ⚠️
+// The equivalent code with `MaybeUninit&lt;bool&gt;`:
+</span><span class="kw">let </span>b: bool = <span class="kw">unsafe </span>{ MaybeUninit::uninit().assume_init() }; <span class="comment">// undefined behavior! ⚠️</span></code></pre></div>
+<p>Moreover, uninitialized memory is special in that it does not have a fixed value (“fixed”
+meaning “it won’t change without being written to”). Reading the same uninitialized byte
+multiple times can give different results. This makes it undefined behavior to have
+uninitialized data in a variable even if that variable has an integer type, which otherwise can
+hold any <em>fixed</em> bit pattern:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::mem::{<span class="self">self</span>, MaybeUninit};
+
+<span class="kw">let </span>x: i32 = <span class="kw">unsafe </span>{ mem::uninitialized() }; <span class="comment">// undefined behavior! ⚠️
+// The equivalent code with `MaybeUninit&lt;i32&gt;`:
+</span><span class="kw">let </span>x: i32 = <span class="kw">unsafe </span>{ MaybeUninit::uninit().assume_init() }; <span class="comment">// undefined behavior! ⚠️</span></code></pre></div>
+<p>On top of that, remember that most types have additional invariants beyond merely
+being considered initialized at the type level. For example, a <code>1</code>-initialized <a href="../../std/vec/struct.Vec.html"><code>Vec&lt;T&gt;</code></a>
+is considered initialized (under the current implementation; this does not constitute
+a stable guarantee) because the only requirement the compiler knows about it
+is that the data pointer must be non-null. Creating such a <code>Vec&lt;T&gt;</code> does not cause
+<em>immediate</em> undefined behavior, but will cause undefined behavior with most
+safe operations (including dropping it).</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p><code>MaybeUninit&lt;T&gt;</code> serves to enable unsafe code to deal with uninitialized data.
+It is a signal to the compiler indicating that the data here might <em>not</em>
+be initialized:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::mem::MaybeUninit;
+
+<span class="comment">// Create an explicitly uninitialized reference. The compiler knows that data inside
+// a `MaybeUninit&lt;T&gt;` may be invalid, and hence this is not UB:
+</span><span class="kw">let </span><span class="kw-2">mut </span>x = MaybeUninit::&lt;<span class="kw-2">&amp;</span>i32&gt;::uninit();
+<span class="comment">// Set it to a valid value.
+</span>x.write(<span class="kw-2">&amp;</span><span class="number">0</span>);
+<span class="comment">// Extract the initialized data -- this is only allowed *after* properly
+// initializing `x`!
+</span><span class="kw">let </span>x = <span class="kw">unsafe </span>{ x.assume_init() };</code></pre></div>
+<p>The compiler then knows to not make any incorrect assumptions or optimizations on this code.</p>
+<p>You can think of <code>MaybeUninit&lt;T&gt;</code> as being a bit like <code>Option&lt;T&gt;</code> but without
+any of the run-time tracking and without any of the safety checks.</p>
+<h3 id="out-pointers"><a class="doc-anchor" href="#out-pointers">§</a>out-pointers</h3>
+<p>You can use <code>MaybeUninit&lt;T&gt;</code> to implement “out-pointers”: instead of returning data
+from a function, pass it a pointer to some (uninitialized) memory to put the
+result into. This can be useful when it is important for the caller to control
+how the memory the result is stored in gets allocated, and you want to avoid
+unnecessary moves.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::mem::MaybeUninit;
+
+<span class="kw">unsafe fn </span>make_vec(out: <span class="kw-2">*mut </span>Vec&lt;i32&gt;) {
+    <span class="comment">// `write` does not drop the old contents, which is important.
+    </span>out.write(<span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>]);
+}
+
+<span class="kw">let </span><span class="kw-2">mut </span>v = MaybeUninit::uninit();
+<span class="kw">unsafe </span>{ make_vec(v.as_mut_ptr()); }
+<span class="comment">// Now we know `v` is initialized! This also makes sure the vector gets
+// properly dropped.
+</span><span class="kw">let </span>v = <span class="kw">unsafe </span>{ v.assume_init() };
+<span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span>v, <span class="kw-2">&amp;</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>]);</code></pre></div>
+<h3 id="initializing-an-array-element-by-element"><a class="doc-anchor" href="#initializing-an-array-element-by-element">§</a>Initializing an array element-by-element</h3>
+<p><code>MaybeUninit&lt;T&gt;</code> can be used to initialize a large array element-by-element:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::mem::{<span class="self">self</span>, MaybeUninit};
+
+<span class="kw">let </span>data = {
+    <span class="comment">// Create an uninitialized array of `MaybeUninit`.
+    </span><span class="kw">let </span><span class="kw-2">mut </span>data: [MaybeUninit&lt;Vec&lt;u32&gt;&gt;; <span class="number">1000</span>] = [<span class="kw">const </span>{ MaybeUninit::uninit() }; <span class="number">1000</span>];
+
+    <span class="comment">// Dropping a `MaybeUninit` does nothing, so if there is a panic during this loop,
+    // we have a memory leak, but there is no memory safety issue.
+    </span><span class="kw">for </span>elem <span class="kw">in </span><span class="kw-2">&amp;mut </span>data[..] {
+        elem.write(<span class="macro">vec!</span>[<span class="number">42</span>]);
+    }
+
+    <span class="comment">// Everything is initialized. Transmute the array to the
+    // initialized type.
+    </span><span class="kw">unsafe </span>{ mem::transmute::&lt;<span class="kw">_</span>, [Vec&lt;u32&gt;; <span class="number">1000</span>]&gt;(data) }
+};
+
+<span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span>data[<span class="number">0</span>], <span class="kw-2">&amp;</span>[<span class="number">42</span>]);</code></pre></div>
+<p>You can also work with partially initialized arrays, which could
+be found in low-level datastructures.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::mem::MaybeUninit;
+
+<span class="comment">// Create an uninitialized array of `MaybeUninit`.
+</span><span class="kw">let </span><span class="kw-2">mut </span>data: [MaybeUninit&lt;String&gt;; <span class="number">1000</span>] = [<span class="kw">const </span>{ MaybeUninit::uninit() }; <span class="number">1000</span>];
+<span class="comment">// Count the number of elements we have assigned.
+</span><span class="kw">let </span><span class="kw-2">mut </span>data_len: usize = <span class="number">0</span>;
+
+<span class="kw">for </span>elem <span class="kw">in </span><span class="kw-2">&amp;mut </span>data[<span class="number">0</span>..<span class="number">500</span>] {
+    elem.write(String::from(<span class="string">"hello"</span>));
+    data_len += <span class="number">1</span>;
+}
+
+<span class="comment">// For each item in the array, drop if we allocated it.
+</span><span class="kw">for </span>elem <span class="kw">in </span><span class="kw-2">&amp;mut </span>data[<span class="number">0</span>..data_len] {
+    <span class="kw">unsafe </span>{ elem.assume_init_drop(); }
+}</code></pre></div>
+<h3 id="initializing-a-struct-field-by-field"><a class="doc-anchor" href="#initializing-a-struct-field-by-field">§</a>Initializing a struct field-by-field</h3>
+<p>You can use <code>MaybeUninit&lt;T&gt;</code>, and the <a href="../ptr/macro.addr_of_mut.html" title="macro wasmtime_environ::__core::ptr::addr_of_mut"><code>std::ptr::addr_of_mut</code></a> macro, to initialize structs field by field:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::mem::MaybeUninit;
+<span class="kw">use </span>std::ptr::addr_of_mut;
+
+<span class="attr">#[derive(Debug, PartialEq)]
+</span><span class="kw">pub struct </span>Foo {
+    name: String,
+    list: Vec&lt;u8&gt;,
+}
+
+<span class="kw">let </span>foo = {
+    <span class="kw">let </span><span class="kw-2">mut </span>uninit: MaybeUninit&lt;Foo&gt; = MaybeUninit::uninit();
+    <span class="kw">let </span>ptr = uninit.as_mut_ptr();
+
+    <span class="comment">// Initializing the `name` field
+    // Using `write` instead of assignment via `=` to not call `drop` on the
+    // old, uninitialized value.
+    </span><span class="kw">unsafe </span>{ <span class="macro">addr_of_mut!</span>((<span class="kw-2">*</span>ptr).name).write(<span class="string">"Bob"</span>.to_string()); }
+
+    <span class="comment">// Initializing the `list` field
+    // If there is a panic here, then the `String` in the `name` field leaks.
+    </span><span class="kw">unsafe </span>{ <span class="macro">addr_of_mut!</span>((<span class="kw-2">*</span>ptr).list).write(<span class="macro">vec!</span>[<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>]); }
+
+    <span class="comment">// All the fields are initialized, so we call `assume_init` to get an initialized Foo.
+    </span><span class="kw">unsafe </span>{ uninit.assume_init() }
+};
+
+<span class="macro">assert_eq!</span>(
+    foo,
+    Foo {
+        name: <span class="string">"Bob"</span>.to_string(),
+        list: <span class="macro">vec!</span>[<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>]
+    }
+);</code></pre></div>
+<h2 id="layout-1"><a class="doc-anchor" href="#layout-1">§</a>Layout</h2>
+<p><code>MaybeUninit&lt;T&gt;</code> is guaranteed to have the same size, alignment, and ABI as <code>T</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::mem::{MaybeUninit, size_of, align_of};
+<span class="macro">assert_eq!</span>(size_of::&lt;MaybeUninit&lt;u64&gt;&gt;(), size_of::&lt;u64&gt;());
+<span class="macro">assert_eq!</span>(align_of::&lt;MaybeUninit&lt;u64&gt;&gt;(), align_of::&lt;u64&gt;());</code></pre></div>
+<p>However remember that a type <em>containing</em> a <code>MaybeUninit&lt;T&gt;</code> is not necessarily the same
+layout; Rust does not in general guarantee that the fields of a <code>Foo&lt;T&gt;</code> have the same order as
+a <code>Foo&lt;U&gt;</code> even if <code>T</code> and <code>U</code> have the same size and alignment. Furthermore because any bit
+value is valid for a <code>MaybeUninit&lt;T&gt;</code> the compiler can’t apply non-zero/niche-filling
+optimizations, potentially resulting in a larger size:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">assert_eq!</span>(size_of::&lt;<span class="prelude-ty">Option</span>&lt;bool&gt;&gt;(), <span class="number">1</span>);
+<span class="macro">assert_eq!</span>(size_of::&lt;<span class="prelude-ty">Option</span>&lt;MaybeUninit&lt;bool&gt;&gt;&gt;(), <span class="number">2</span>);</code></pre></div>
+<p>If <code>T</code> is FFI-safe, then so is <code>MaybeUninit&lt;T&gt;</code>.</p>
+<p>While <code>MaybeUninit</code> is <code>#[repr(transparent)]</code> (indicating it guarantees the same size,
+alignment, and ABI as <code>T</code>), this does <em>not</em> change any of the previous caveats. <code>Option&lt;T&gt;</code> and
+<code>Option&lt;MaybeUninit&lt;T&gt;&gt;</code> may still have different sizes, and types containing a field of type
+<code>T</code> may be laid out (and sized) differently than if that field were <code>MaybeUninit&lt;T&gt;</code>.
+<code>MaybeUninit</code> is a union type, and <code>#[repr(transparent)]</code> on unions is unstable (see <a href="https://github.com/rust-lang/rust/issues/60405">the
+tracking issue</a>). Over time, the exact
+guarantees of <code>#[repr(transparent)]</code> on unions may evolve, and <code>MaybeUninit</code> may or may not
+remain <code>#[repr(transparent)]</code>. That said, <code>MaybeUninit&lt;T&gt;</code> will <em>always</em> guarantee that it has
+the same size, alignment, and ABI as <code>T</code>; it’s just that the way <code>MaybeUninit</code> implements that
+guarantee may evolve.</p>
+</div></details><h2 id="implementations" class="section-header">Implementations<a href="#implementations" class="anchor">§</a></h2><div id="implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-Box%3CMaybeUninit%3CT%3E,+A%3E" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/boxed.rs.html#836">source</a><a href="#impl-Box%3CMaybeUninit%3CT%3E,+A%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T, A&gt; <a class="struct" href="../../prelude/struct.Box.html" title="struct wasmtime_environ::prelude::Box">Box</a>&lt;<a class="union" href="union.MaybeUninit.html" title="union wasmtime_environ::__core::mem::MaybeUninit">MaybeUninit</a>&lt;T&gt;, A&gt;<div class="where">where
+    A: <a class="trait" href="../alloc/trait.Allocator.html" title="trait wasmtime_environ::__core::alloc::Allocator">Allocator</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.assume_init" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/boxed.rs.html#867">source</a><h4 class="code-header">pub unsafe fn <a href="#method.assume_init" class="fn">assume_init</a>(self) -&gt; <a class="struct" href="../../prelude/struct.Box.html" title="struct wasmtime_environ::prelude::Box">Box</a>&lt;T, A&gt;</h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>new_uninit</code>)</span></div></span></summary><div class="docblock"><p>Converts to <code>Box&lt;T, A&gt;</code>.</p>
+<h5 id="safety"><a class="doc-anchor" href="#safety">§</a>Safety</h5>
+<p>As with <a href="union.MaybeUninit.html#method.assume_init" title="method wasmtime_environ::__core::mem::MaybeUninit::assume_init"><code>MaybeUninit::assume_init</code></a>,
+it is up to the caller to guarantee that the value
+really is in an initialized state.
+Calling this when the content is not yet fully initialized
+causes immediate undefined behavior.</p>
+<h5 id="examples-1"><a class="doc-anchor" href="#examples-1">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(new_uninit)]
+
+</span><span class="kw">let </span><span class="kw-2">mut </span>five = Box::&lt;u32&gt;::new_uninit();
+
+<span class="kw">let </span>five: Box&lt;u32&gt; = <span class="kw">unsafe </span>{
+    <span class="comment">// Deferred initialization:
+    </span>five.as_mut_ptr().write(<span class="number">5</span>);
+
+    five.assume_init()
+};
+
+<span class="macro">assert_eq!</span>(<span class="kw-2">*</span>five, <span class="number">5</span>)</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.write" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/boxed.rs.html#901">source</a><h4 class="code-header">pub fn <a href="#method.write" class="fn">write</a>(boxed: <a class="struct" href="../../prelude/struct.Box.html" title="struct wasmtime_environ::prelude::Box">Box</a>&lt;<a class="union" href="union.MaybeUninit.html" title="union wasmtime_environ::__core::mem::MaybeUninit">MaybeUninit</a>&lt;T&gt;, A&gt;, value: T) -&gt; <a class="struct" href="../../prelude/struct.Box.html" title="struct wasmtime_environ::prelude::Box">Box</a>&lt;T, A&gt;</h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>new_uninit</code>)</span></div></span></summary><div class="docblock"><p>Writes the value and converts to <code>Box&lt;T, A&gt;</code>.</p>
+<p>This method converts the box similarly to <a href="../../prelude/struct.Box.html#method.assume_init" title="method wasmtime_environ::prelude::Box::assume_init"><code>Box::assume_init</code></a> but
+writes <code>value</code> into it before conversion thus guaranteeing safety.
+In some scenarios use of this method may improve performance because
+the compiler may be able to optimize copying from stack.</p>
+<h5 id="examples-2"><a class="doc-anchor" href="#examples-2">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(new_uninit)]
+
+</span><span class="kw">let </span>big_box = Box::&lt;[usize; <span class="number">1024</span>]&gt;::new_uninit();
+
+<span class="kw">let </span><span class="kw-2">mut </span>array = [<span class="number">0</span>; <span class="number">1024</span>];
+<span class="kw">for </span>(i, place) <span class="kw">in </span>array.iter_mut().enumerate() {
+    <span class="kw-2">*</span>place = i;
+}
+
+<span class="comment">// The optimizer may be able to elide this copy, so previous code writes
+// to heap directly.
+</span><span class="kw">let </span>big_box = Box::write(big_box, array);
+
+<span class="kw">for </span>(i, x) <span class="kw">in </span>big_box.iter().enumerate() {
+    <span class="macro">assert_eq!</span>(<span class="kw-2">*</span>x, i);
+}</code></pre></div>
+</div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-MaybeUninit%3CT%3E" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/mem/maybe_uninit.rs.html#264">source</a><a href="#impl-MaybeUninit%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="union" href="union.MaybeUninit.html" title="union wasmtime_environ::__core::mem::MaybeUninit">MaybeUninit</a>&lt;T&gt;</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.new" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.36.0, const since 1.36.0">1.36.0 (const: 1.36.0)</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/mem/maybe_uninit.rs.html#286">source</a></span><h4 class="code-header">pub const fn <a href="#method.new" class="fn">new</a>(val: T) -&gt; <a class="union" href="union.MaybeUninit.html" title="union wasmtime_environ::__core::mem::MaybeUninit">MaybeUninit</a>&lt;T&gt;</h4></section></summary><div class="docblock"><p>Creates a new <code>MaybeUninit&lt;T&gt;</code> initialized with the given value.
+It is safe to call <a href="union.MaybeUninit.html#method.assume_init" title="method wasmtime_environ::__core::mem::MaybeUninit::assume_init"><code>assume_init</code></a> on the return value of this function.</p>
+<p>Note that dropping a <code>MaybeUninit&lt;T&gt;</code> will never call <code>T</code>’s drop code.
+It is your responsibility to make sure <code>T</code> gets dropped if it got initialized.</p>
+<h5 id="example"><a class="doc-anchor" href="#example">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::mem::MaybeUninit;
+
+<span class="kw">let </span>v: MaybeUninit&lt;Vec&lt;u8&gt;&gt; = MaybeUninit::new(<span class="macro">vec!</span>[<span class="number">42</span>]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.uninit" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.36.0, const since 1.36.0">1.36.0 (const: 1.36.0)</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/mem/maybe_uninit.rs.html#309">source</a></span><h4 class="code-header">pub const fn <a href="#method.uninit" class="fn">uninit</a>() -&gt; <a class="union" href="union.MaybeUninit.html" title="union wasmtime_environ::__core::mem::MaybeUninit">MaybeUninit</a>&lt;T&gt;</h4></section></summary><div class="docblock"><p>Creates a new <code>MaybeUninit&lt;T&gt;</code> in an uninitialized state.</p>
+<p>Note that dropping a <code>MaybeUninit&lt;T&gt;</code> will never call <code>T</code>’s drop code.
+It is your responsibility to make sure <code>T</code> gets dropped if it got initialized.</p>
+<p>See the <a href="union.MaybeUninit.html" title="union wasmtime_environ::__core::mem::MaybeUninit">type-level documentation</a> for some examples.</p>
+<h5 id="example-1"><a class="doc-anchor" href="#example-1">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::mem::MaybeUninit;
+
+<span class="kw">let </span>v: MaybeUninit&lt;String&gt; = MaybeUninit::uninit();</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.uninit_array" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/mem/maybe_uninit.rs.html#346">source</a><h4 class="code-header">pub const fn <a href="#method.uninit_array" class="fn">uninit_array</a>&lt;const N: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>&gt;() -&gt; [<a class="union" href="union.MaybeUninit.html" title="union wasmtime_environ::__core::mem::MaybeUninit">MaybeUninit</a>&lt;T&gt;; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.array.html">N</a>]</h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>maybe_uninit_uninit_array</code>)</span></div></span></summary><div class="docblock"><p>Create a new array of <code>MaybeUninit&lt;T&gt;</code> items, in an uninitialized state.</p>
+<p>Note: in a future Rust version this method may become unnecessary
+when Rust allows
+<a href="https://github.com/rust-lang/rust/issues/76001">inline const expressions</a>.
+The example below could then use <code>let mut buf = [const { MaybeUninit::&lt;u8&gt;::uninit() }; 32];</code>.</p>
+<h5 id="examples-3"><a class="doc-anchor" href="#examples-3">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(maybe_uninit_uninit_array, maybe_uninit_slice)]
+
+</span><span class="kw">use </span>std::mem::MaybeUninit;
+
+<span class="kw">extern </span><span class="string">"C" </span>{
+    <span class="kw">fn </span>read_into_buffer(ptr: <span class="kw-2">*mut </span>u8, max_len: usize) -&gt; usize;
+}
+
+<span class="doccomment">/// Returns a (possibly smaller) slice of data that was actually read
+</span><span class="kw">fn </span>read(buf: <span class="kw-2">&amp;mut </span>[MaybeUninit&lt;u8&gt;]) -&gt; <span class="kw-2">&amp;</span>[u8] {
+    <span class="kw">unsafe </span>{
+        <span class="kw">let </span>len = read_into_buffer(buf.as_mut_ptr() <span class="kw">as </span><span class="kw-2">*mut </span>u8, buf.len());
+        MaybeUninit::slice_assume_init_ref(<span class="kw-2">&amp;</span>buf[..len])
+    }
+}
+
+<span class="kw">let </span><span class="kw-2">mut </span>buf: [MaybeUninit&lt;u8&gt;; <span class="number">32</span>] = MaybeUninit::uninit_array();
+<span class="kw">let </span>data = read(<span class="kw-2">&amp;mut </span>buf);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.zeroed" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.36.0, const since 1.75.0">1.36.0 (const: 1.75.0)</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/mem/maybe_uninit.rs.html#397">source</a></span><h4 class="code-header">pub const fn <a href="#method.zeroed" class="fn">zeroed</a>() -&gt; <a class="union" href="union.MaybeUninit.html" title="union wasmtime_environ::__core::mem::MaybeUninit">MaybeUninit</a>&lt;T&gt;</h4></section></summary><div class="docblock"><p>Creates a new <code>MaybeUninit&lt;T&gt;</code> in an uninitialized state, with the memory being
+filled with <code>0</code> bytes. It depends on <code>T</code> whether that already makes for
+proper initialization. For example, <code>MaybeUninit&lt;usize&gt;::zeroed()</code> is initialized,
+but <code>MaybeUninit&lt;&amp;'static i32&gt;::zeroed()</code> is not because references must not
+be null.</p>
+<p>Note that dropping a <code>MaybeUninit&lt;T&gt;</code> will never call <code>T</code>’s drop code.
+It is your responsibility to make sure <code>T</code> gets dropped if it got initialized.</p>
+<h5 id="example-2"><a class="doc-anchor" href="#example-2">§</a>Example</h5>
+<p>Correct usage of this function: initializing a struct with zero, where all
+fields of the struct can hold the bit-pattern 0 as a valid value.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::mem::MaybeUninit;
+
+<span class="kw">let </span>x = MaybeUninit::&lt;(u8, bool)&gt;::zeroed();
+<span class="kw">let </span>x = <span class="kw">unsafe </span>{ x.assume_init() };
+<span class="macro">assert_eq!</span>(x, (<span class="number">0</span>, <span class="bool-val">false</span>));</code></pre></div>
+<p>This can be used in const contexts, such as to indicate the end of static arrays for
+plugin registration.</p>
+<p><em>Incorrect</em> usage of this function: calling <code>x.zeroed().assume_init()</code>
+when <code>0</code> is not a valid bit-pattern for the type:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::mem::MaybeUninit;
+
+<span class="kw">enum </span>NotZero { One = <span class="number">1</span>, Two = <span class="number">2 </span>}
+
+<span class="kw">let </span>x = MaybeUninit::&lt;(u8, NotZero)&gt;::zeroed();
+<span class="kw">let </span>x = <span class="kw">unsafe </span>{ x.assume_init() };
+<span class="comment">// Inside a pair, we create a `NotZero` that does not have a valid discriminant.
+// This is undefined behavior. ⚠️</span></code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.write-1" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.55.0, const unstable">1.55.0 (const: <a href="https://github.com/rust-lang/rust/issues/63567" title="Tracking issue for const_maybe_uninit_write">unstable</a>)</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/mem/maybe_uninit.rs.html#491">source</a></span><h4 class="code-header">pub fn <a href="#method.write-1" class="fn">write</a>(&amp;mut self, val: T) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a></h4></section></summary><div class="docblock"><p>Sets the value of the <code>MaybeUninit&lt;T&gt;</code>.</p>
+<p>This overwrites any previous value without dropping it, so be careful
+not to use this twice unless you want to skip running the destructor.
+For your convenience, this also returns a mutable reference to the
+(now safely initialized) contents of <code>self</code>.</p>
+<p>As the content is stored inside a <code>MaybeUninit</code>, the destructor is not
+run for the inner data if the MaybeUninit leaves scope without a call to
+<a href="union.MaybeUninit.html#method.assume_init" title="method wasmtime_environ::__core::mem::MaybeUninit::assume_init"><code>assume_init</code></a>, <a href="union.MaybeUninit.html#method.assume_init_drop" title="method wasmtime_environ::__core::mem::MaybeUninit::assume_init_drop"><code>assume_init_drop</code></a>, or similar. Code that receives
+the mutable reference returned by this function needs to keep this in
+mind. The safety model of Rust regards leaks as safe, but they are
+usually still undesirable. This being said, the mutable reference
+behaves like any other mutable reference would, so assigning a new value
+to it will drop the old content.</p>
+<h5 id="examples-4"><a class="doc-anchor" href="#examples-4">§</a>Examples</h5>
+<p>Correct usage of this method:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::mem::MaybeUninit;
+
+<span class="kw">let </span><span class="kw-2">mut </span>x = MaybeUninit::&lt;Vec&lt;u8&gt;&gt;::uninit();
+
+{
+    <span class="kw">let </span>hello = x.write((<span class="kw-2">&amp;</span><span class="string">b"Hello, world!"</span>).to_vec());
+    <span class="comment">// Setting hello does not leak prior allocations, but drops them
+    </span><span class="kw-2">*</span>hello = (<span class="kw-2">&amp;</span><span class="string">b"Hello"</span>).to_vec();
+    hello[<span class="number">0</span>] = <span class="string">'h' </span><span class="kw">as </span>u8;
+}
+<span class="comment">// x is initialized now:
+</span><span class="kw">let </span>s = <span class="kw">unsafe </span>{ x.assume_init() };
+<span class="macro">assert_eq!</span>(<span class="string">b"hello"</span>, s.as_slice());</code></pre></div>
+<p>This usage of the method causes a leak:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::mem::MaybeUninit;
+
+<span class="kw">let </span><span class="kw-2">mut </span>x = MaybeUninit::&lt;String&gt;::uninit();
+
+x.write(<span class="string">"Hello"</span>.to_string());
+<span class="comment">// This leaks the contained string:
+</span>x.write(<span class="string">"hello"</span>.to_string());
+<span class="comment">// x is initialized now:
+</span><span class="kw">let </span>s = <span class="kw">unsafe </span>{ x.assume_init() };</code></pre></div>
+<p>This method can be used to avoid unsafe in some cases. The example below
+shows a part of an implementation of a fixed sized arena that lends out
+pinned references.
+With <code>write</code>, we can avoid the need to write through a raw pointer:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>core::pin::Pin;
+<span class="kw">use </span>core::mem::MaybeUninit;
+
+<span class="kw">struct </span>PinArena&lt;T&gt; {
+    memory: Box&lt;[MaybeUninit&lt;T&gt;]&gt;,
+    len: usize,
+}
+
+<span class="kw">impl </span>&lt;T&gt; PinArena&lt;T&gt; {
+    <span class="kw">pub fn </span>capacity(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+        <span class="self">self</span>.memory.len()
+    }
+    <span class="kw">pub fn </span>push(<span class="kw-2">&amp;mut </span><span class="self">self</span>, val: T) -&gt; Pin&lt;<span class="kw-2">&amp;mut </span>T&gt; {
+        <span class="kw">if </span><span class="self">self</span>.len &gt;= <span class="self">self</span>.capacity() {
+            <span class="macro">panic!</span>(<span class="string">"Attempted to push to a full pin arena!"</span>);
+        }
+        <span class="kw">let </span>ref_ = <span class="self">self</span>.memory[<span class="self">self</span>.len].write(val);
+        <span class="self">self</span>.len += <span class="number">1</span>;
+        <span class="kw">unsafe </span>{ Pin::new_unchecked(ref_) }
+    }
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.as_ptr" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.36.0, const since 1.59.0">1.36.0 (const: 1.59.0)</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/mem/maybe_uninit.rs.html#533">source</a></span><h4 class="code-header">pub const fn <a href="#method.as_ptr" class="fn">as_ptr</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.pointer.html">*const T</a></h4></section></summary><div class="docblock"><p>Gets a pointer to the contained value. Reading from this pointer or turning it
+into a reference is undefined behavior unless the <code>MaybeUninit&lt;T&gt;</code> is initialized.
+Writing to memory that this pointer (non-transitively) points to is undefined behavior
+(except inside an <code>UnsafeCell&lt;T&gt;</code>).</p>
+<h5 id="examples-5"><a class="doc-anchor" href="#examples-5">§</a>Examples</h5>
+<p>Correct usage of this method:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::mem::MaybeUninit;
+
+<span class="kw">let </span><span class="kw-2">mut </span>x = MaybeUninit::&lt;Vec&lt;u32&gt;&gt;::uninit();
+x.write(<span class="macro">vec!</span>[<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>]);
+<span class="comment">// Create a reference into the `MaybeUninit&lt;T&gt;`. This is okay because we initialized it.
+</span><span class="kw">let </span>x_vec = <span class="kw">unsafe </span>{ <span class="kw-2">&amp;*</span>x.as_ptr() };
+<span class="macro">assert_eq!</span>(x_vec.len(), <span class="number">3</span>);</code></pre></div>
+<p><em>Incorrect</em> usage of this method:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::mem::MaybeUninit;
+
+<span class="kw">let </span>x = MaybeUninit::&lt;Vec&lt;u32&gt;&gt;::uninit();
+<span class="kw">let </span>x_vec = <span class="kw">unsafe </span>{ <span class="kw-2">&amp;*</span>x.as_ptr() };
+<span class="comment">// We have created a reference to an uninitialized vector! This is undefined behavior. ⚠️</span></code></pre></div>
+<p>(Notice that the rules around references to uninitialized data are not finalized yet, but
+until they are, it is advisable to avoid them.)</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.as_mut_ptr" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.36.0, const unstable">1.36.0 (const: <a href="https://github.com/rust-lang/rust/issues/75251" title="Tracking issue for const_maybe_uninit_as_mut_ptr">unstable</a>)</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/mem/maybe_uninit.rs.html#574">source</a></span><h4 class="code-header">pub fn <a href="#method.as_mut_ptr" class="fn">as_mut_ptr</a>(&amp;mut self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.pointer.html">*mut T</a></h4></section></summary><div class="docblock"><p>Gets a mutable pointer to the contained value. Reading from this pointer or turning it
+into a reference is undefined behavior unless the <code>MaybeUninit&lt;T&gt;</code> is initialized.</p>
+<h5 id="examples-6"><a class="doc-anchor" href="#examples-6">§</a>Examples</h5>
+<p>Correct usage of this method:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::mem::MaybeUninit;
+
+<span class="kw">let </span><span class="kw-2">mut </span>x = MaybeUninit::&lt;Vec&lt;u32&gt;&gt;::uninit();
+x.write(<span class="macro">vec!</span>[<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>]);
+<span class="comment">// Create a reference into the `MaybeUninit&lt;Vec&lt;u32&gt;&gt;`.
+// This is okay because we initialized it.
+</span><span class="kw">let </span>x_vec = <span class="kw">unsafe </span>{ <span class="kw-2">&amp;mut *</span>x.as_mut_ptr() };
+x_vec.push(<span class="number">3</span>);
+<span class="macro">assert_eq!</span>(x_vec.len(), <span class="number">4</span>);</code></pre></div>
+<p><em>Incorrect</em> usage of this method:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::mem::MaybeUninit;
+
+<span class="kw">let </span><span class="kw-2">mut </span>x = MaybeUninit::&lt;Vec&lt;u32&gt;&gt;::uninit();
+<span class="kw">let </span>x_vec = <span class="kw">unsafe </span>{ <span class="kw-2">&amp;mut *</span>x.as_mut_ptr() };
+<span class="comment">// We have created a reference to an uninitialized vector! This is undefined behavior. ⚠️</span></code></pre></div>
+<p>(Notice that the rules around references to uninitialized data are not finalized yet, but
+until they are, it is advisable to avoid them.)</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.assume_init-1" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.36.0, const since 1.59.0">1.36.0 (const: 1.59.0)</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/mem/maybe_uninit.rs.html#629">source</a></span><h4 class="code-header">pub const unsafe fn <a href="#method.assume_init-1" class="fn">assume_init</a>(self) -&gt; T</h4></section></summary><div class="docblock"><p>Extracts the value from the <code>MaybeUninit&lt;T&gt;</code> container. This is a great way
+to ensure that the data will get dropped, because the resulting <code>T</code> is
+subject to the usual drop handling.</p>
+<h5 id="safety-1"><a class="doc-anchor" href="#safety-1">§</a>Safety</h5>
+<p>It is up to the caller to guarantee that the <code>MaybeUninit&lt;T&gt;</code> really is in an initialized
+state. Calling this when the content is not yet fully initialized causes immediate undefined
+behavior. The <a href="#initialization-invariant">type-level documentation</a> contains more information about
+this initialization invariant.</p>
+<p>On top of that, remember that most types have additional invariants beyond merely
+being considered initialized at the type level. For example, a <code>1</code>-initialized <a href="../../std/vec/struct.Vec.html"><code>Vec&lt;T&gt;</code></a>
+is considered initialized (under the current implementation; this does not constitute
+a stable guarantee) because the only requirement the compiler knows about it
+is that the data pointer must be non-null. Creating such a <code>Vec&lt;T&gt;</code> does not cause
+<em>immediate</em> undefined behavior, but will cause undefined behavior with most
+safe operations (including dropping it).</p>
+<h5 id="examples-7"><a class="doc-anchor" href="#examples-7">§</a>Examples</h5>
+<p>Correct usage of this method:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::mem::MaybeUninit;
+
+<span class="kw">let </span><span class="kw-2">mut </span>x = MaybeUninit::&lt;bool&gt;::uninit();
+x.write(<span class="bool-val">true</span>);
+<span class="kw">let </span>x_init = <span class="kw">unsafe </span>{ x.assume_init() };
+<span class="macro">assert_eq!</span>(x_init, <span class="bool-val">true</span>);</code></pre></div>
+<p><em>Incorrect</em> usage of this method:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::mem::MaybeUninit;
+
+<span class="kw">let </span>x = MaybeUninit::&lt;Vec&lt;u32&gt;&gt;::uninit();
+<span class="kw">let </span>x_init = <span class="kw">unsafe </span>{ x.assume_init() };
+<span class="comment">// `x` had not been initialized yet, so this last line caused undefined behavior. ⚠️</span></code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.assume_init_read" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.60.0, const since 1.75.0">1.60.0 (const: 1.75.0)</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/mem/maybe_uninit.rs.html#699">source</a></span><h4 class="code-header">pub const unsafe fn <a href="#method.assume_init_read" class="fn">assume_init_read</a>(&amp;self) -&gt; T</h4></section></summary><div class="docblock"><p>Reads the value from the <code>MaybeUninit&lt;T&gt;</code> container. The resulting <code>T</code> is subject
+to the usual drop handling.</p>
+<p>Whenever possible, it is preferable to use <a href="union.MaybeUninit.html#method.assume_init" title="method wasmtime_environ::__core::mem::MaybeUninit::assume_init"><code>assume_init</code></a> instead, which
+prevents duplicating the content of the <code>MaybeUninit&lt;T&gt;</code>.</p>
+<h5 id="safety-2"><a class="doc-anchor" href="#safety-2">§</a>Safety</h5>
+<p>It is up to the caller to guarantee that the <code>MaybeUninit&lt;T&gt;</code> really is in an initialized
+state. Calling this when the content is not yet fully initialized causes undefined
+behavior. The <a href="#initialization-invariant">type-level documentation</a> contains more information about
+this initialization invariant.</p>
+<p>Moreover, similar to the <a href="../ptr/fn.read.html" title="fn wasmtime_environ::__core::ptr::read"><code>ptr::read</code></a> function, this function creates a
+bitwise copy of the contents, regardless whether the contained type
+implements the <a href="../marker/trait.Copy.html" title="trait wasmtime_environ::__core::marker::Copy"><code>Copy</code></a> trait or not. When using multiple copies of the
+data (by calling <code>assume_init_read</code> multiple times, or first calling
+<code>assume_init_read</code> and then <a href="union.MaybeUninit.html#method.assume_init" title="method wasmtime_environ::__core::mem::MaybeUninit::assume_init"><code>assume_init</code></a>), it is your responsibility
+to ensure that data may indeed be duplicated.</p>
+<h5 id="examples-8"><a class="doc-anchor" href="#examples-8">§</a>Examples</h5>
+<p>Correct usage of this method:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::mem::MaybeUninit;
+
+<span class="kw">let </span><span class="kw-2">mut </span>x = MaybeUninit::&lt;u32&gt;::uninit();
+x.write(<span class="number">13</span>);
+<span class="kw">let </span>x1 = <span class="kw">unsafe </span>{ x.assume_init_read() };
+<span class="comment">// `u32` is `Copy`, so we may read multiple times.
+</span><span class="kw">let </span>x2 = <span class="kw">unsafe </span>{ x.assume_init_read() };
+<span class="macro">assert_eq!</span>(x1, x2);
+
+<span class="kw">let </span><span class="kw-2">mut </span>x = MaybeUninit::&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u32&gt;&gt;&gt;::uninit();
+x.write(<span class="prelude-val">None</span>);
+<span class="kw">let </span>x1 = <span class="kw">unsafe </span>{ x.assume_init_read() };
+<span class="comment">// Duplicating a `None` value is okay, so we may read multiple times.
+</span><span class="kw">let </span>x2 = <span class="kw">unsafe </span>{ x.assume_init_read() };
+<span class="macro">assert_eq!</span>(x1, x2);</code></pre></div>
+<p><em>Incorrect</em> usage of this method:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::mem::MaybeUninit;
+
+<span class="kw">let </span><span class="kw-2">mut </span>x = MaybeUninit::&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u32&gt;&gt;&gt;::uninit();
+x.write(<span class="prelude-val">Some</span>(<span class="macro">vec!</span>[<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>]));
+<span class="kw">let </span>x1 = <span class="kw">unsafe </span>{ x.assume_init_read() };
+<span class="kw">let </span>x2 = <span class="kw">unsafe </span>{ x.assume_init_read() };
+<span class="comment">// We now created two copies of the same vector, leading to a double-free ⚠️ when
+// they both get dropped!</span></code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.assume_init_drop" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.60.0">1.60.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/mem/maybe_uninit.rs.html#731">source</a></span><h4 class="code-header">pub unsafe fn <a href="#method.assume_init_drop" class="fn">assume_init_drop</a>(&amp;mut self)</h4></section></summary><div class="docblock"><p>Drops the contained value in place.</p>
+<p>If you have ownership of the <code>MaybeUninit</code>, you can also use
+<a href="union.MaybeUninit.html#method.assume_init" title="method wasmtime_environ::__core::mem::MaybeUninit::assume_init"><code>assume_init</code></a> as an alternative.</p>
+<h5 id="safety-3"><a class="doc-anchor" href="#safety-3">§</a>Safety</h5>
+<p>It is up to the caller to guarantee that the <code>MaybeUninit&lt;T&gt;</code> really is
+in an initialized state. Calling this when the content is not yet fully
+initialized causes undefined behavior.</p>
+<p>On top of that, all additional invariants of the type <code>T</code> must be
+satisfied, as the <code>Drop</code> implementation of <code>T</code> (or its members) may
+rely on this. For example, setting a <a href="../../std/vec/struct.Vec.html"><code>Vec&lt;T&gt;</code></a> to an invalid but
+non-null address makes it initialized (under the current implementation;
+this does not constitute a stable guarantee), because the only
+requirement the compiler knows about it is that the data pointer must be
+non-null. Dropping such a <code>Vec&lt;T&gt;</code> however will cause undefined
+behaviour.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.assume_init_ref" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.55.0, const since 1.59.0">1.55.0 (const: 1.59.0)</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/mem/maybe_uninit.rs.html#797">source</a></span><h4 class="code-header">pub const unsafe fn <a href="#method.assume_init_ref" class="fn">assume_init_ref</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a></h4></section></summary><div class="docblock"><p>Gets a shared reference to the contained value.</p>
+<p>This can be useful when we want to access a <code>MaybeUninit</code> that has been
+initialized but don’t have ownership of the <code>MaybeUninit</code> (preventing the use
+of <code>.assume_init()</code>).</p>
+<h5 id="safety-4"><a class="doc-anchor" href="#safety-4">§</a>Safety</h5>
+<p>Calling this when the content is not yet fully initialized causes undefined
+behavior: it is up to the caller to guarantee that the <code>MaybeUninit&lt;T&gt;</code> really
+is in an initialized state.</p>
+<h5 id="examples-9"><a class="doc-anchor" href="#examples-9">§</a>Examples</h5><h6 id="correct-usage-of-this-method"><a class="doc-anchor" href="#correct-usage-of-this-method">§</a>Correct usage of this method:</h6>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::mem::MaybeUninit;
+
+<span class="kw">let </span><span class="kw-2">mut </span>x = MaybeUninit::&lt;Vec&lt;u32&gt;&gt;::uninit();
+<span class="comment">// Initialize `x`:
+</span>x.write(<span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>]);
+<span class="comment">// Now that our `MaybeUninit&lt;_&gt;` is known to be initialized, it is okay to
+// create a shared reference to it:
+</span><span class="kw">let </span>x: <span class="kw-2">&amp;</span>Vec&lt;u32&gt; = <span class="kw">unsafe </span>{
+    <span class="comment">// SAFETY: `x` has been initialized.
+    </span>x.assume_init_ref()
+};
+<span class="macro">assert_eq!</span>(x, <span class="kw-2">&amp;</span><span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>]);</code></pre></div>
+<h6 id="incorrect-usages-of-this-method"><a class="doc-anchor" href="#incorrect-usages-of-this-method">§</a><em>Incorrect</em> usages of this method:</h6>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::mem::MaybeUninit;
+
+<span class="kw">let </span>x = MaybeUninit::&lt;Vec&lt;u32&gt;&gt;::uninit();
+<span class="kw">let </span>x_vec: <span class="kw-2">&amp;</span>Vec&lt;u32&gt; = <span class="kw">unsafe </span>{ x.assume_init_ref() };
+<span class="comment">// We have created a reference to an uninitialized vector! This is undefined behavior. ⚠️</span></code></pre></div>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::{cell::Cell, mem::MaybeUninit};
+
+<span class="kw">let </span>b = MaybeUninit::&lt;Cell&lt;bool&gt;&gt;::uninit();
+<span class="comment">// Initialize the `MaybeUninit` using `Cell::set`:
+</span><span class="kw">unsafe </span>{
+    b.assume_init_ref().set(<span class="bool-val">true</span>);
+   <span class="comment">// ^^^^^^^^^^^^^^^
+   // Reference to an uninitialized `Cell&lt;bool&gt;`: UB!
+</span>}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.assume_init_mut" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.55.0, const unstable">1.55.0 (const: unstable)</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/mem/maybe_uninit.rs.html#914">source</a></span><h4 class="code-header">pub unsafe fn <a href="#method.assume_init_mut" class="fn">assume_init_mut</a>(&amp;mut self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a></h4></section></summary><div class="docblock"><p>Gets a mutable (unique) reference to the contained value.</p>
+<p>This can be useful when we want to access a <code>MaybeUninit</code> that has been
+initialized but don’t have ownership of the <code>MaybeUninit</code> (preventing the use
+of <code>.assume_init()</code>).</p>
+<h5 id="safety-5"><a class="doc-anchor" href="#safety-5">§</a>Safety</h5>
+<p>Calling this when the content is not yet fully initialized causes undefined
+behavior: it is up to the caller to guarantee that the <code>MaybeUninit&lt;T&gt;</code> really
+is in an initialized state. For instance, <code>.assume_init_mut()</code> cannot be used to
+initialize a <code>MaybeUninit</code>.</p>
+<h5 id="examples-10"><a class="doc-anchor" href="#examples-10">§</a>Examples</h5><h6 id="correct-usage-of-this-method-1"><a class="doc-anchor" href="#correct-usage-of-this-method-1">§</a>Correct usage of this method:</h6>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::mem::MaybeUninit;
+
+<span class="kw">extern </span><span class="string">"C" </span>{
+    <span class="doccomment">/// Initializes *all* the bytes of the input buffer.
+    </span><span class="kw">fn </span>initialize_buffer(buf: <span class="kw-2">*mut </span>[u8; <span class="number">1024</span>]);
+}
+
+<span class="kw">let </span><span class="kw-2">mut </span>buf = MaybeUninit::&lt;[u8; <span class="number">1024</span>]&gt;::uninit();
+
+<span class="comment">// Initialize `buf`:
+</span><span class="kw">unsafe </span>{ initialize_buffer(buf.as_mut_ptr()); }
+<span class="comment">// Now we know that `buf` has been initialized, so we could `.assume_init()` it.
+// However, using `.assume_init()` may trigger a `memcpy` of the 1024 bytes.
+// To assert our buffer has been initialized without copying it, we upgrade
+// the `&amp;mut MaybeUninit&lt;[u8; 1024]&gt;` to a `&amp;mut [u8; 1024]`:
+</span><span class="kw">let </span>buf: <span class="kw-2">&amp;mut </span>[u8; <span class="number">1024</span>] = <span class="kw">unsafe </span>{
+    <span class="comment">// SAFETY: `buf` has been initialized.
+    </span>buf.assume_init_mut()
+};
+
+<span class="comment">// Now we can use `buf` as a normal slice:
+</span>buf.sort_unstable();
+<span class="macro">assert!</span>(
+    buf.windows(<span class="number">2</span>).all(|pair| pair[<span class="number">0</span>] &lt;= pair[<span class="number">1</span>]),
+    <span class="string">"buffer is sorted"</span>,
+);</code></pre></div>
+<h6 id="incorrect-usages-of-this-method-1"><a class="doc-anchor" href="#incorrect-usages-of-this-method-1">§</a><em>Incorrect</em> usages of this method:</h6>
+<p>You cannot use <code>.assume_init_mut()</code> to initialize a value:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::mem::MaybeUninit;
+
+<span class="kw">let </span><span class="kw-2">mut </span>b = MaybeUninit::&lt;bool&gt;::uninit();
+<span class="kw">unsafe </span>{
+    <span class="kw-2">*</span>b.assume_init_mut() = <span class="bool-val">true</span>;
+    <span class="comment">// We have created a (mutable) reference to an uninitialized `bool`!
+    // This is undefined behavior. ⚠️
+</span>}</code></pre></div>
+<p>For instance, you cannot <a href="../../std/io/trait.Read.html"><code>Read</code></a> into an uninitialized buffer:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::{io, mem::MaybeUninit};
+
+<span class="kw">fn </span>read_chunk (reader: <span class="kw-2">&amp;</span><span class="lifetime">'_ </span><span class="kw-2">mut </span><span class="kw">dyn </span>io::Read) -&gt; io::Result&lt;[u8; <span class="number">64</span>]&gt;
+{
+    <span class="kw">let </span><span class="kw-2">mut </span>buffer = MaybeUninit::&lt;[u8; <span class="number">64</span>]&gt;::uninit();
+    reader.read_exact(<span class="kw">unsafe </span>{ buffer.assume_init_mut() })<span class="question-mark">?</span>;
+                            <span class="comment">// ^^^^^^^^^^^^^^^^^^^^^^^^
+                            // (mutable) reference to uninitialized memory!
+                            // This is undefined behavior.
+    </span><span class="prelude-val">Ok</span>(<span class="kw">unsafe </span>{ buffer.assume_init() })
+}</code></pre></div>
+<p>Nor can you use direct field access to do field-by-field gradual initialization:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::{mem::MaybeUninit, ptr};
+
+<span class="kw">struct </span>Foo {
+    a: u32,
+    b: u8,
+}
+
+<span class="kw">let </span>foo: Foo = <span class="kw">unsafe </span>{
+    <span class="kw">let </span><span class="kw-2">mut </span>foo = MaybeUninit::&lt;Foo&gt;::uninit();
+    ptr::write(<span class="kw-2">&amp;mut </span>foo.assume_init_mut().a <span class="kw">as </span><span class="kw-2">*mut </span>u32, <span class="number">1337</span>);
+                 <span class="comment">// ^^^^^^^^^^^^^^^^^^^^^
+                 // (mutable) reference to uninitialized memory!
+                 // This is undefined behavior.
+    </span>ptr::write(<span class="kw-2">&amp;mut </span>foo.assume_init_mut().b <span class="kw">as </span><span class="kw-2">*mut </span>u8, <span class="number">42</span>);
+                 <span class="comment">// ^^^^^^^^^^^^^^^^^^^^^
+                 // (mutable) reference to uninitialized memory!
+                 // This is undefined behavior.
+    </span>foo.assume_init()
+};</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.array_assume_init" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/mem/maybe_uninit.rs.html#952">source</a><h4 class="code-header">pub const unsafe fn <a href="#method.array_assume_init" class="fn">array_assume_init</a>&lt;const N: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>&gt;(
+    array: [<a class="union" href="union.MaybeUninit.html" title="union wasmtime_environ::__core::mem::MaybeUninit">MaybeUninit</a>&lt;T&gt;; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.array.html">N</a>],
+) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.array.html">[T; N]</a></h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>maybe_uninit_array_assume_init</code>)</span></div></span></summary><div class="docblock"><p>Extracts the values from an array of <code>MaybeUninit</code> containers.</p>
+<h5 id="safety-6"><a class="doc-anchor" href="#safety-6">§</a>Safety</h5>
+<p>It is up to the caller to guarantee that all elements of the array are
+in an initialized state.</p>
+<h5 id="examples-11"><a class="doc-anchor" href="#examples-11">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(maybe_uninit_array_assume_init)]
+</span><span class="kw">use </span>std::mem::MaybeUninit;
+
+<span class="kw">let </span><span class="kw-2">mut </span>array: [MaybeUninit&lt;i32&gt;; <span class="number">3</span>] = [MaybeUninit::uninit(); <span class="number">3</span>];
+array[<span class="number">0</span>].write(<span class="number">0</span>);
+array[<span class="number">1</span>].write(<span class="number">1</span>);
+array[<span class="number">2</span>].write(<span class="number">2</span>);
+
+<span class="comment">// SAFETY: Now safe as we initialised all elements
+</span><span class="kw">let </span>array = <span class="kw">unsafe </span>{
+    MaybeUninit::array_assume_init(array)
+};
+
+<span class="macro">assert_eq!</span>(array, [<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.slice_assume_init_ref" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/mem/maybe_uninit.rs.html#978">source</a><h4 class="code-header">pub const unsafe fn <a href="#method.slice_assume_init_ref" class="fn">slice_assume_init_ref</a>(slice: &amp;[<a class="union" href="union.MaybeUninit.html" title="union wasmtime_environ::__core::mem::MaybeUninit">MaybeUninit</a>&lt;T&gt;]) -&gt; &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.slice.html">[T]</a></h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>maybe_uninit_slice</code>)</span></div></span></summary><div class="docblock"><p>Assuming all the elements are initialized, get a slice to them.</p>
+<h5 id="safety-7"><a class="doc-anchor" href="#safety-7">§</a>Safety</h5>
+<p>It is up to the caller to guarantee that the <code>MaybeUninit&lt;T&gt;</code> elements
+really are in an initialized state.
+Calling this when the content is not yet fully initialized causes undefined behavior.</p>
+<p>See <a href="union.MaybeUninit.html#method.assume_init_ref" title="method wasmtime_environ::__core::mem::MaybeUninit::assume_init_ref"><code>assume_init_ref</code></a> for more details and examples.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.slice_assume_init_mut" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/mem/maybe_uninit.rs.html#1000">source</a><h4 class="code-header">pub const unsafe fn <a href="#method.slice_assume_init_mut" class="fn">slice_assume_init_mut</a>(
+    slice: &amp;mut [<a class="union" href="union.MaybeUninit.html" title="union wasmtime_environ::__core::mem::MaybeUninit">MaybeUninit</a>&lt;T&gt;],
+) -&gt; &amp;mut <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.slice.html">[T]</a></h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>maybe_uninit_slice</code>)</span></div></span></summary><div class="docblock"><p>Assuming all the elements are initialized, get a mutable slice to them.</p>
+<h5 id="safety-8"><a class="doc-anchor" href="#safety-8">§</a>Safety</h5>
+<p>It is up to the caller to guarantee that the <code>MaybeUninit&lt;T&gt;</code> elements
+really are in an initialized state.
+Calling this when the content is not yet fully initialized causes undefined behavior.</p>
+<p>See <a href="union.MaybeUninit.html#method.assume_init_mut" title="method wasmtime_environ::__core::mem::MaybeUninit::assume_init_mut"><code>assume_init_mut</code></a> for more details and examples.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.slice_as_ptr" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/mem/maybe_uninit.rs.html#1010">source</a><h4 class="code-header">pub const fn <a href="#method.slice_as_ptr" class="fn">slice_as_ptr</a>(this: &amp;[<a class="union" href="union.MaybeUninit.html" title="union wasmtime_environ::__core::mem::MaybeUninit">MaybeUninit</a>&lt;T&gt;]) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.pointer.html">*const T</a></h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>maybe_uninit_slice</code>)</span></div></span></summary><div class="docblock"><p>Gets a pointer to the first element of the array.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.slice_as_mut_ptr" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/mem/maybe_uninit.rs.html#1018">source</a><h4 class="code-header">pub const fn <a href="#method.slice_as_mut_ptr" class="fn">slice_as_mut_ptr</a>(this: &amp;mut [<a class="union" href="union.MaybeUninit.html" title="union wasmtime_environ::__core::mem::MaybeUninit">MaybeUninit</a>&lt;T&gt;]) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.pointer.html">*mut T</a></h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>maybe_uninit_slice</code>)</span></div></span></summary><div class="docblock"><p>Gets a mutable pointer to the first element of the array.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.copy_from_slice" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/mem/maybe_uninit.rs.html#1066-1068">source</a><h4 class="code-header">pub fn <a href="#method.copy_from_slice" class="fn">copy_from_slice</a>&lt;'a&gt;(
+    this: &amp;'a mut [<a class="union" href="union.MaybeUninit.html" title="union wasmtime_environ::__core::mem::MaybeUninit">MaybeUninit</a>&lt;T&gt;],
+    src: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.slice.html">[T]</a>,
+) -&gt; &amp;'a mut <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.slice.html">[T]</a><div class="where">where
+    T: <a class="trait" href="../marker/trait.Copy.html" title="trait wasmtime_environ::__core::marker::Copy">Copy</a>,</div></h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>maybe_uninit_write_slice</code>)</span></div></span></summary><div class="docblock"><p>Copies the elements from <code>src</code> to <code>this</code>, returning a mutable reference to the now initialized contents of <code>this</code>.</p>
+<p>If <code>T</code> does not implement <code>Copy</code>, use <a href="union.MaybeUninit.html#method.clone_from_slice" title="associated function wasmtime_environ::__core::mem::MaybeUninit::clone_from_slice"><code>clone_from_slice</code></a></p>
+<p>This is similar to <a href="https://doc.rust-lang.org/1.81.0/std/primitive.slice.html#method.copy_from_slice" title="method slice::copy_from_slice"><code>slice::copy_from_slice</code></a>.</p>
+<h5 id="panics"><a class="doc-anchor" href="#panics">§</a>Panics</h5>
+<p>This function will panic if the two slices have different lengths.</p>
+<h5 id="examples-12"><a class="doc-anchor" href="#examples-12">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(maybe_uninit_write_slice)]
+</span><span class="kw">use </span>std::mem::MaybeUninit;
+
+<span class="kw">let </span><span class="kw-2">mut </span>dst = [MaybeUninit::uninit(); <span class="number">32</span>];
+<span class="kw">let </span>src = [<span class="number">0</span>; <span class="number">32</span>];
+
+<span class="kw">let </span>init = MaybeUninit::copy_from_slice(<span class="kw-2">&amp;mut </span>dst, <span class="kw-2">&amp;</span>src);
+
+<span class="macro">assert_eq!</span>(init, src);</code></pre></div>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(maybe_uninit_write_slice)]
+</span><span class="kw">use </span>std::mem::MaybeUninit;
+
+<span class="kw">let </span><span class="kw-2">mut </span>vec = Vec::with_capacity(<span class="number">32</span>);
+<span class="kw">let </span>src = [<span class="number">0</span>; <span class="number">16</span>];
+
+MaybeUninit::copy_from_slice(<span class="kw-2">&amp;mut </span>vec.spare_capacity_mut()[..src.len()], <span class="kw-2">&amp;</span>src);
+
+<span class="comment">// SAFETY: we have just copied all the elements of len into the spare capacity
+// the first src.len() elements of the vec are valid now.
+</span><span class="kw">unsafe </span>{
+    vec.set_len(src.len());
+}
+
+<span class="macro">assert_eq!</span>(vec, src);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.clone_from_slice" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/mem/maybe_uninit.rs.html#1128-1130">source</a><h4 class="code-header">pub fn <a href="#method.clone_from_slice" class="fn">clone_from_slice</a>&lt;'a&gt;(
+    this: &amp;'a mut [<a class="union" href="union.MaybeUninit.html" title="union wasmtime_environ::__core::mem::MaybeUninit">MaybeUninit</a>&lt;T&gt;],
+    src: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.slice.html">[T]</a>,
+) -&gt; &amp;'a mut <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.slice.html">[T]</a><div class="where">where
+    T: <a class="trait" href="../clone/trait.Clone.html" title="trait wasmtime_environ::__core::clone::Clone">Clone</a>,</div></h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>maybe_uninit_write_slice</code>)</span></div></span></summary><div class="docblock"><p>Clones the elements from <code>src</code> to <code>this</code>, returning a mutable reference to the now initialized contents of <code>this</code>.
+Any already initialized elements will not be dropped.</p>
+<p>If <code>T</code> implements <code>Copy</code>, use <a href="union.MaybeUninit.html#method.copy_from_slice" title="associated function wasmtime_environ::__core::mem::MaybeUninit::copy_from_slice"><code>copy_from_slice</code></a></p>
+<p>This is similar to <a href="https://doc.rust-lang.org/1.81.0/std/primitive.slice.html#method.clone_from_slice" title="method slice::clone_from_slice"><code>slice::clone_from_slice</code></a> but does not drop existing elements.</p>
+<h5 id="panics-1"><a class="doc-anchor" href="#panics-1">§</a>Panics</h5>
+<p>This function will panic if the two slices have different lengths, or if the implementation of <code>Clone</code> panics.</p>
+<p>If there is a panic, the already cloned elements will be dropped.</p>
+<h5 id="examples-13"><a class="doc-anchor" href="#examples-13">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(maybe_uninit_write_slice)]
+</span><span class="kw">use </span>std::mem::MaybeUninit;
+
+<span class="kw">let </span><span class="kw-2">mut </span>dst = [MaybeUninit::uninit(), MaybeUninit::uninit(), MaybeUninit::uninit(), MaybeUninit::uninit(), MaybeUninit::uninit()];
+<span class="kw">let </span>src = [<span class="string">"wibbly"</span>.to_string(), <span class="string">"wobbly"</span>.to_string(), <span class="string">"timey"</span>.to_string(), <span class="string">"wimey"</span>.to_string(), <span class="string">"stuff"</span>.to_string()];
+
+<span class="kw">let </span>init = MaybeUninit::clone_from_slice(<span class="kw-2">&amp;mut </span>dst, <span class="kw-2">&amp;</span>src);
+
+<span class="macro">assert_eq!</span>(init, src);</code></pre></div>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(maybe_uninit_write_slice)]
+</span><span class="kw">use </span>std::mem::MaybeUninit;
+
+<span class="kw">let </span><span class="kw-2">mut </span>vec = Vec::with_capacity(<span class="number">32</span>);
+<span class="kw">let </span>src = [<span class="string">"rust"</span>, <span class="string">"is"</span>, <span class="string">"a"</span>, <span class="string">"pretty"</span>, <span class="string">"cool"</span>, <span class="string">"language"</span>];
+
+MaybeUninit::clone_from_slice(<span class="kw-2">&amp;mut </span>vec.spare_capacity_mut()[..src.len()], <span class="kw-2">&amp;</span>src);
+
+<span class="comment">// SAFETY: we have just cloned all the elements of len into the spare capacity
+// the first src.len() elements of the vec are valid now.
+</span><span class="kw">unsafe </span>{
+    vec.set_len(src.len());
+}
+
+<span class="macro">assert_eq!</span>(vec, src);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.fill" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/mem/maybe_uninit.rs.html#1182-1184">source</a><h4 class="code-header">pub fn <a href="#method.fill" class="fn">fill</a>&lt;'a&gt;(this: &amp;'a mut [<a class="union" href="union.MaybeUninit.html" title="union wasmtime_environ::__core::mem::MaybeUninit">MaybeUninit</a>&lt;T&gt;], value: T) -&gt; &amp;'a mut <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.slice.html">[T]</a><div class="where">where
+    T: <a class="trait" href="../clone/trait.Clone.html" title="trait wasmtime_environ::__core::clone::Clone">Clone</a>,</div></h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>maybe_uninit_fill</code>)</span></div></span></summary><div class="docblock"><p>Fills <code>this</code> with elements by cloning <code>value</code>, returning a mutable reference to the now
+initialized contents of <code>this</code>.
+Any previously initialized elements will not be dropped.</p>
+<p>This is similar to <a href="https://doc.rust-lang.org/1.81.0/std/primitive.slice.html#method.fill" title="method slice::fill"><code>slice::fill</code></a>.</p>
+<h5 id="panics-2"><a class="doc-anchor" href="#panics-2">§</a>Panics</h5>
+<p>This function will panic if any call to <code>Clone</code> panics.</p>
+<p>If such a panic occurs, any elements previously initialized during this operation will be
+dropped.</p>
+<h5 id="examples-14"><a class="doc-anchor" href="#examples-14">§</a>Examples</h5>
+<p>Fill an uninit vec with 1.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(maybe_uninit_fill)]
+</span><span class="kw">use </span>std::mem::MaybeUninit;
+
+<span class="kw">let </span><span class="kw-2">mut </span>buf = <span class="macro">vec!</span>[MaybeUninit::uninit(); <span class="number">10</span>];
+<span class="kw">let </span>initialized = MaybeUninit::fill(buf.as_mut_slice(), <span class="number">1</span>);
+<span class="macro">assert_eq!</span>(initialized, <span class="kw-2">&amp;mut </span>[<span class="number">1</span>; <span class="number">10</span>]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.fill_with" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/mem/maybe_uninit.rs.html#1216-1218">source</a><h4 class="code-header">pub fn <a href="#method.fill_with" class="fn">fill_with</a>&lt;'a, F&gt;(this: &amp;'a mut [<a class="union" href="union.MaybeUninit.html" title="union wasmtime_environ::__core::mem::MaybeUninit">MaybeUninit</a>&lt;T&gt;], f: F) -&gt; &amp;'a mut <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.slice.html">[T]</a><div class="where">where
+    F: <a class="trait" href="../ops/trait.FnMut.html" title="trait wasmtime_environ::__core::ops::FnMut">FnMut</a>() -&gt; T,</div></h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>maybe_uninit_fill</code>)</span></div></span></summary><div class="docblock"><p>Fills <code>this</code> with elements returned by calling a closure repeatedly.</p>
+<p>This method uses a closure to create new values.  If you’d rather <code>Clone</code> a given value, use
+<a href="union.MaybeUninit.html#method.fill" title="associated function wasmtime_environ::__core::mem::MaybeUninit::fill"><code>MaybeUninit::fill</code></a>.  If you want to use the <code>Default</code> trait to generate values, you can
+pass <a href="../default/trait.Default.html#tymethod.default" title="associated function wasmtime_environ::__core::default::Default::default"><code>Default::default</code></a> as the argument.</p>
+<h5 id="panics-3"><a class="doc-anchor" href="#panics-3">§</a>Panics</h5>
+<p>This function will panic if any call to the provided closure panics.</p>
+<p>If such a panic occurs, any elements previously initialized during this operation will be
+dropped.</p>
+<h5 id="examples-15"><a class="doc-anchor" href="#examples-15">§</a>Examples</h5>
+<p>Fill an uninit vec with the default value.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(maybe_uninit_fill)]
+</span><span class="kw">use </span>std::mem::MaybeUninit;
+
+<span class="kw">let </span><span class="kw-2">mut </span>buf = <span class="macro">vec!</span>[MaybeUninit::&lt;i32&gt;::uninit(); <span class="number">10</span>];
+<span class="kw">let </span>initialized = MaybeUninit::fill_with(buf.as_mut_slice(), Default::default);
+<span class="macro">assert_eq!</span>(initialized, <span class="kw-2">&amp;mut </span>[<span class="number">0</span>; <span class="number">10</span>]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.fill_from" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/mem/maybe_uninit.rs.html#1275-1280">source</a><h4 class="code-header">pub fn <a href="#method.fill_from" class="fn">fill_from</a>&lt;'a, I&gt;(
+    this: &amp;'a mut [<a class="union" href="union.MaybeUninit.html" title="union wasmtime_environ::__core::mem::MaybeUninit">MaybeUninit</a>&lt;T&gt;],
+    it: I,
+) -&gt; (&amp;'a mut <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.slice.html">[T]</a>, &amp;'a mut [<a class="union" href="union.MaybeUninit.html" title="union wasmtime_environ::__core::mem::MaybeUninit">MaybeUninit</a>&lt;T&gt;])<div class="where">where
+    I: <a class="trait" href="../iter/trait.IntoIterator.html" title="trait wasmtime_environ::__core::iter::IntoIterator">IntoIterator</a>&lt;Item = T&gt;,</div></h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>maybe_uninit_fill</code>)</span></div></span></summary><div class="docblock"><p>Fills <code>this</code> with elements yielded by an iterator until either all elements have been
+initialized or the iterator is empty.</p>
+<p>Returns two slices.  The first slice contains the initialized portion of the original slice.
+The second slice is the still-uninitialized remainder of the original slice.</p>
+<h5 id="panics-4"><a class="doc-anchor" href="#panics-4">§</a>Panics</h5>
+<p>This function panics if the iterator’s <code>next</code> function panics.</p>
+<p>If such a panic occurs, any elements previously initialized during this operation will be
+dropped.</p>
+<h5 id="examples-16"><a class="doc-anchor" href="#examples-16">§</a>Examples</h5>
+<p>Fill an uninit vec with a cycling iterator.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(maybe_uninit_fill)]
+</span><span class="kw">use </span>std::mem::MaybeUninit;
+
+<span class="kw">let </span><span class="kw-2">mut </span>buf = <span class="macro">vec!</span>[MaybeUninit::uninit(); <span class="number">5</span>];
+
+<span class="kw">let </span>iter = [<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>].into_iter().cycle();
+<span class="kw">let </span>(initialized, remainder) = MaybeUninit::fill_from(<span class="kw-2">&amp;mut </span>buf, iter);
+
+<span class="macro">assert_eq!</span>(initialized, <span class="kw-2">&amp;mut </span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">1</span>, <span class="number">2</span>]);
+<span class="macro">assert_eq!</span>(<span class="number">0</span>, remainder.len());</code></pre></div>
+<p>Fill an uninit vec, but not completely.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(maybe_uninit_fill)]
+</span><span class="kw">use </span>std::mem::MaybeUninit;
+
+<span class="kw">let </span><span class="kw-2">mut </span>buf = <span class="macro">vec!</span>[MaybeUninit::uninit(); <span class="number">5</span>];
+<span class="kw">let </span>iter = [<span class="number">1</span>, <span class="number">2</span>];
+<span class="kw">let </span>(initialized, remainder) = MaybeUninit::fill_from(<span class="kw-2">&amp;mut </span>buf, iter);
+
+<span class="macro">assert_eq!</span>(initialized, <span class="kw-2">&amp;mut </span>[<span class="number">1</span>, <span class="number">2</span>]);
+<span class="macro">assert_eq!</span>(remainder.len(), <span class="number">3</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.as_bytes" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/mem/maybe_uninit.rs.html#1319">source</a><h4 class="code-header">pub fn <a href="#method.as_bytes" class="fn">as_bytes</a>(&amp;self) -&gt; &amp;[<a class="union" href="union.MaybeUninit.html" title="union wasmtime_environ::__core::mem::MaybeUninit">MaybeUninit</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>&gt;]</h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>maybe_uninit_as_bytes</code>)</span></div></span></summary><div class="docblock"><p>Returns the contents of this <code>MaybeUninit</code> as a slice of potentially uninitialized bytes.</p>
+<p>Note that even if the contents of a <code>MaybeUninit</code> have been initialized, the value may still
+contain padding bytes which are left uninitialized.</p>
+<h5 id="examples-17"><a class="doc-anchor" href="#examples-17">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(maybe_uninit_as_bytes, maybe_uninit_slice)]
+</span><span class="kw">use </span>std::mem::MaybeUninit;
+
+<span class="kw">let </span>val = <span class="number">0x12345678_i32</span>;
+<span class="kw">let </span>uninit = MaybeUninit::new(val);
+<span class="kw">let </span>uninit_bytes = uninit.as_bytes();
+<span class="kw">let </span>bytes = <span class="kw">unsafe </span>{ MaybeUninit::slice_assume_init_ref(uninit_bytes) };
+<span class="macro">assert_eq!</span>(bytes, val.to_ne_bytes());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.as_bytes_mut" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/mem/maybe_uninit.rs.html#1350">source</a><h4 class="code-header">pub fn <a href="#method.as_bytes_mut" class="fn">as_bytes_mut</a>(&amp;mut self) -&gt; &amp;mut [<a class="union" href="union.MaybeUninit.html" title="union wasmtime_environ::__core::mem::MaybeUninit">MaybeUninit</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>&gt;]</h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>maybe_uninit_as_bytes</code>)</span></div></span></summary><div class="docblock"><p>Returns the contents of this <code>MaybeUninit</code> as a mutable slice of potentially uninitialized
+bytes.</p>
+<p>Note that even if the contents of a <code>MaybeUninit</code> have been initialized, the value may still
+contain padding bytes which are left uninitialized.</p>
+<h5 id="examples-18"><a class="doc-anchor" href="#examples-18">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(maybe_uninit_as_bytes)]
+</span><span class="kw">use </span>std::mem::MaybeUninit;
+
+<span class="kw">let </span>val = <span class="number">0x12345678_i32</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>uninit = MaybeUninit::new(val);
+<span class="kw">let </span>uninit_bytes = uninit.as_bytes_mut();
+<span class="kw">if </span><span class="macro">cfg!</span>(target_endian = <span class="string">"little"</span>) {
+    uninit_bytes[<span class="number">0</span>].write(<span class="number">0xcd</span>);
+} <span class="kw">else </span>{
+    uninit_bytes[<span class="number">3</span>].write(<span class="number">0xcd</span>);
+}
+<span class="kw">let </span>val2 = <span class="kw">unsafe </span>{ uninit.assume_init() };
+<span class="macro">assert_eq!</span>(val2, <span class="number">0x123456cd</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.slice_as_bytes" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/mem/maybe_uninit.rs.html#1380">source</a><h4 class="code-header">pub fn <a href="#method.slice_as_bytes" class="fn">slice_as_bytes</a>(this: &amp;[<a class="union" href="union.MaybeUninit.html" title="union wasmtime_environ::__core::mem::MaybeUninit">MaybeUninit</a>&lt;T&gt;]) -&gt; &amp;[<a class="union" href="union.MaybeUninit.html" title="union wasmtime_environ::__core::mem::MaybeUninit">MaybeUninit</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>&gt;]</h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>maybe_uninit_as_bytes</code>)</span></div></span></summary><div class="docblock"><p>Returns the contents of this slice of <code>MaybeUninit</code> as a slice of potentially uninitialized
+bytes.</p>
+<p>Note that even if the contents of a <code>MaybeUninit</code> have been initialized, the value may still
+contain padding bytes which are left uninitialized.</p>
+<h5 id="examples-19"><a class="doc-anchor" href="#examples-19">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(maybe_uninit_as_bytes, maybe_uninit_write_slice, maybe_uninit_slice)]
+</span><span class="kw">use </span>std::mem::MaybeUninit;
+
+<span class="kw">let </span>uninit = [MaybeUninit::new(<span class="number">0x1234u16</span>), MaybeUninit::new(<span class="number">0x5678u16</span>)];
+<span class="kw">let </span>uninit_bytes = MaybeUninit::slice_as_bytes(<span class="kw-2">&amp;</span>uninit);
+<span class="kw">let </span>bytes = <span class="kw">unsafe </span>{ MaybeUninit::slice_assume_init_ref(<span class="kw-2">&amp;</span>uninit_bytes) };
+<span class="kw">let </span>val1 = u16::from_ne_bytes(bytes[<span class="number">0</span>..<span class="number">2</span>].try_into().unwrap());
+<span class="kw">let </span>val2 = u16::from_ne_bytes(bytes[<span class="number">2</span>..<span class="number">4</span>].try_into().unwrap());
+<span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span>[val1, val2], <span class="kw-2">&amp;</span>[<span class="number">0x1234u16</span>, <span class="number">0x5678u16</span>]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.slice_as_bytes_mut" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/mem/maybe_uninit.rs.html#1409">source</a><h4 class="code-header">pub fn <a href="#method.slice_as_bytes_mut" class="fn">slice_as_bytes_mut</a>(this: &amp;mut [<a class="union" href="union.MaybeUninit.html" title="union wasmtime_environ::__core::mem::MaybeUninit">MaybeUninit</a>&lt;T&gt;]) -&gt; &amp;mut [<a class="union" href="union.MaybeUninit.html" title="union wasmtime_environ::__core::mem::MaybeUninit">MaybeUninit</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>&gt;]</h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>maybe_uninit_as_bytes</code>)</span></div></span></summary><div class="docblock"><p>Returns the contents of this mutable slice of <code>MaybeUninit</code> as a mutable slice of
+potentially uninitialized bytes.</p>
+<p>Note that even if the contents of a <code>MaybeUninit</code> have been initialized, the value may still
+contain padding bytes which are left uninitialized.</p>
+<h5 id="examples-20"><a class="doc-anchor" href="#examples-20">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(maybe_uninit_as_bytes, maybe_uninit_write_slice, maybe_uninit_slice)]
+</span><span class="kw">use </span>std::mem::MaybeUninit;
+
+<span class="kw">let </span><span class="kw-2">mut </span>uninit = [MaybeUninit::&lt;u16&gt;::uninit(), MaybeUninit::&lt;u16&gt;::uninit()];
+<span class="kw">let </span>uninit_bytes = MaybeUninit::slice_as_bytes_mut(<span class="kw-2">&amp;mut </span>uninit);
+MaybeUninit::copy_from_slice(uninit_bytes, <span class="kw-2">&amp;</span>[<span class="number">0x12</span>, <span class="number">0x34</span>, <span class="number">0x56</span>, <span class="number">0x78</span>]);
+<span class="kw">let </span>vals = <span class="kw">unsafe </span>{ MaybeUninit::slice_assume_init_ref(<span class="kw-2">&amp;</span>uninit) };
+<span class="kw">if </span><span class="macro">cfg!</span>(target_endian = <span class="string">"little"</span>) {
+    <span class="macro">assert_eq!</span>(vals, <span class="kw-2">&amp;</span>[<span class="number">0x3412u16</span>, <span class="number">0x7856u16</span>]);
+} <span class="kw">else </span>{
+    <span class="macro">assert_eq!</span>(vals, <span class="kw-2">&amp;</span>[<span class="number">0x1234u16</span>, <span class="number">0x5678u16</span>]);
+}</code></pre></div>
+</div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-MaybeUninit%3C%5BT;+N%5D%3E" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/mem/maybe_uninit.rs.html#1416">source</a><a href="#impl-MaybeUninit%3C%5BT;+N%5D%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T, const N: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>&gt; <a class="union" href="union.MaybeUninit.html" title="union wasmtime_environ::__core::mem::MaybeUninit">MaybeUninit</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.array.html">[T; N]</a>&gt;</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.transpose" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/mem/maybe_uninit.rs.html#1429">source</a><h4 class="code-header">pub const fn <a href="#method.transpose" class="fn">transpose</a>(self) -&gt; [<a class="union" href="union.MaybeUninit.html" title="union wasmtime_environ::__core::mem::MaybeUninit">MaybeUninit</a>&lt;T&gt;; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.array.html">N</a>]</h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>maybe_uninit_uninit_array_transpose</code>)</span></div></span></summary><div class="docblock"><p>Transposes a <code>MaybeUninit&lt;[T; N]&gt;</code> into a <code>[MaybeUninit&lt;T&gt;; N]</code>.</p>
+<h5 id="examples-21"><a class="doc-anchor" href="#examples-21">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(maybe_uninit_uninit_array_transpose)]
+
+</span><span class="kw">let </span>data: [MaybeUninit&lt;u8&gt;; <span class="number">1000</span>] = MaybeUninit::uninit().transpose();</code></pre></div>
+</div></details></div></details></div><h2 id="trait-implementations" class="section-header">Trait Implementations<a href="#trait-implementations" class="anchor">§</a></h2><div id="trait-implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-Clone-for-MaybeUninit%3CT%3E" class="impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.36.0">1.36.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/mem/maybe_uninit.rs.html#249">source</a></span><a href="#impl-Clone-for-MaybeUninit%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="../clone/trait.Clone.html" title="trait wasmtime_environ::__core::clone::Clone">Clone</a> for <a class="union" href="union.MaybeUninit.html" title="union wasmtime_environ::__core::mem::MaybeUninit">MaybeUninit</a>&lt;T&gt;<div class="where">where
+    T: <a class="trait" href="../marker/trait.Copy.html" title="trait wasmtime_environ::__core::marker::Copy">Copy</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.clone" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/mem/maybe_uninit.rs.html#251">source</a><a href="#method.clone" class="anchor">§</a><h4 class="code-header">fn <a href="../clone/trait.Clone.html#tymethod.clone" class="fn">clone</a>(&amp;self) -&gt; <a class="union" href="union.MaybeUninit.html" title="union wasmtime_environ::__core::mem::MaybeUninit">MaybeUninit</a>&lt;T&gt;</h4></section></summary><div class='docblock'>Returns a copy of the value. <a href="../clone/trait.Clone.html#tymethod.clone">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.clone_from" class="method trait-impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#172">source</a></span><a href="#method.clone_from" class="anchor">§</a><h4 class="code-header">fn <a href="../clone/trait.Clone.html#method.clone_from" class="fn">clone_from</a>(&amp;mut self, source: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;Self</a>)</h4></section></summary><div class='docblock'>Performs copy-assignment from <code>source</code>. <a href="../clone/trait.Clone.html#method.clone_from">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Debug-for-MaybeUninit%3CT%3E" class="impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.41.0">1.41.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/mem/maybe_uninit.rs.html#258">source</a></span><a href="#impl-Debug-for-MaybeUninit%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="../fmt/trait.Debug.html" title="trait wasmtime_environ::__core::fmt::Debug">Debug</a> for <a class="union" href="union.MaybeUninit.html" title="union wasmtime_environ::__core::mem::MaybeUninit">MaybeUninit</a>&lt;T&gt;</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.fmt" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/mem/maybe_uninit.rs.html#259">source</a><a href="#method.fmt" class="anchor">§</a><h4 class="code-header">fn <a href="../fmt/trait.Debug.html#tymethod.fmt" class="fn">fmt</a>(&amp;self, f: &amp;mut <a class="struct" href="../fmt/struct.Formatter.html" title="struct wasmtime_environ::__core::fmt::Formatter">Formatter</a>&lt;'_&gt;) -&gt; <a class="enum" href="../result/enum.Result.html" title="enum wasmtime_environ::__core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="struct" href="../fmt/struct.Error.html" title="struct wasmtime_environ::__core::fmt::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Formats the value using the given formatter. <a href="../fmt/trait.Debug.html#tymethod.fmt">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-FromBytes-for-MaybeUninit%3CT%3E" class="impl"><a class="src rightside" href="../../../src/zerocopy/lib.rs.html#3465-3491">source</a><a href="#impl-FromBytes-for-MaybeUninit%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="../../../zerocopy/trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a> for <a class="union" href="union.MaybeUninit.html" title="union wasmtime_environ::__core::mem::MaybeUninit">MaybeUninit</a>&lt;T&gt;<div class="where">where
+    T: <a class="trait" href="../../../zerocopy/trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.ref_from" class="method trait-impl"><a class="src rightside" href="../../../src/zerocopy/lib.rs.html#1863-1865">source</a><a href="#method.ref_from" class="anchor">§</a><h4 class="code-header">fn <a href="../../../zerocopy/trait.FromBytes.html#method.ref_from" class="fn">ref_from</a>(bytes: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="enum" href="../option/enum.Option.html" title="enum wasmtime_environ::__core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;Self</a>&gt;<div class="where">where
+    Self: <a class="trait" href="../marker/trait.Sized.html" title="trait wasmtime_environ::__core::marker::Sized">Sized</a>,</div></h4></section></summary><div class='docblock'>Interprets the given <code>bytes</code> as a <code>&amp;Self</code> without copying. <a href="../../../zerocopy/trait.FromBytes.html#method.ref_from">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.ref_from_prefix" class="method trait-impl"><a class="src rightside" href="../../../src/zerocopy/lib.rs.html#1905-1907">source</a><a href="#method.ref_from_prefix" class="anchor">§</a><h4 class="code-header">fn <a href="../../../zerocopy/trait.FromBytes.html#method.ref_from_prefix" class="fn">ref_from_prefix</a>(bytes: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="enum" href="../option/enum.Option.html" title="enum wasmtime_environ::__core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;Self</a>&gt;<div class="where">where
+    Self: <a class="trait" href="../marker/trait.Sized.html" title="trait wasmtime_environ::__core::marker::Sized">Sized</a>,</div></h4></section></summary><div class='docblock'>Interprets the prefix of the given <code>bytes</code> as a <code>&amp;Self</code> without copying. <a href="../../../zerocopy/trait.FromBytes.html#method.ref_from_prefix">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.ref_from_suffix" class="method trait-impl"><a class="src rightside" href="../../../src/zerocopy/lib.rs.html#1941-1943">source</a><a href="#method.ref_from_suffix" class="anchor">§</a><h4 class="code-header">fn <a href="../../../zerocopy/trait.FromBytes.html#method.ref_from_suffix" class="fn">ref_from_suffix</a>(bytes: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="enum" href="../option/enum.Option.html" title="enum wasmtime_environ::__core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;Self</a>&gt;<div class="where">where
+    Self: <a class="trait" href="../marker/trait.Sized.html" title="trait wasmtime_environ::__core::marker::Sized">Sized</a>,</div></h4></section></summary><div class='docblock'>Interprets the suffix of the given <code>bytes</code> as a <code>&amp;Self</code> without copying. <a href="../../../zerocopy/trait.FromBytes.html#method.ref_from_suffix">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.slice_from" class="method trait-impl"><a class="src rightside" href="../../../src/zerocopy/lib.rs.html#2117-2119">source</a><a href="#method.slice_from" class="anchor">§</a><h4 class="code-header">fn <a href="../../../zerocopy/trait.FromBytes.html#method.slice_from" class="fn">slice_from</a>(bytes: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="enum" href="../option/enum.Option.html" title="enum wasmtime_environ::__core::option::Option">Option</a>&lt;&amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.slice.html">[Self]</a>&gt;<div class="where">where
+    Self: <a class="trait" href="../marker/trait.Sized.html" title="trait wasmtime_environ::__core::marker::Sized">Sized</a>,</div></h4></section></summary><div class='docblock'>Interprets the given <code>bytes</code> as a <code>&amp;[Self]</code> without copying. <a href="../../../zerocopy/trait.FromBytes.html#method.slice_from">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.slice_from_prefix" class="method trait-impl"><a class="src rightside" href="../../../src/zerocopy/lib.rs.html#2168-2170">source</a><a href="#method.slice_from_prefix" class="anchor">§</a><h4 class="code-header">fn <a href="../../../zerocopy/trait.FromBytes.html#method.slice_from_prefix" class="fn">slice_from_prefix</a>(bytes: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], count: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="enum" href="../option/enum.Option.html" title="enum wasmtime_environ::__core::option::Option">Option</a>&lt;(&amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.slice.html">[Self]</a>, &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>])&gt;<div class="where">where
+    Self: <a class="trait" href="../marker/trait.Sized.html" title="trait wasmtime_environ::__core::marker::Sized">Sized</a>,</div></h4></section></summary><div class='docblock'>Interprets the prefix of the given <code>bytes</code> as a <code>&amp;[Self]</code> with length
+equal to <code>count</code> without copying. <a href="../../../zerocopy/trait.FromBytes.html#method.slice_from_prefix">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.slice_from_suffix" class="method trait-impl"><a class="src rightside" href="../../../src/zerocopy/lib.rs.html#2219-2221">source</a><a href="#method.slice_from_suffix" class="anchor">§</a><h4 class="code-header">fn <a href="../../../zerocopy/trait.FromBytes.html#method.slice_from_suffix" class="fn">slice_from_suffix</a>(bytes: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], count: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="enum" href="../option/enum.Option.html" title="enum wasmtime_environ::__core::option::Option">Option</a>&lt;(&amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.slice.html">[Self]</a>)&gt;<div class="where">where
+    Self: <a class="trait" href="../marker/trait.Sized.html" title="trait wasmtime_environ::__core::marker::Sized">Sized</a>,</div></h4></section></summary><div class='docblock'>Interprets the suffix of the given <code>bytes</code> as a <code>&amp;[Self]</code> with length
+equal to <code>count</code> without copying. <a href="../../../zerocopy/trait.FromBytes.html#method.slice_from_suffix">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.read_from" class="method trait-impl"><a class="src rightside" href="../../../src/zerocopy/lib.rs.html#2417-2419">source</a><a href="#method.read_from" class="anchor">§</a><h4 class="code-header">fn <a href="../../../zerocopy/trait.FromBytes.html#method.read_from" class="fn">read_from</a>(bytes: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="enum" href="../option/enum.Option.html" title="enum wasmtime_environ::__core::option::Option">Option</a>&lt;Self&gt;<div class="where">where
+    Self: <a class="trait" href="../marker/trait.Sized.html" title="trait wasmtime_environ::__core::marker::Sized">Sized</a>,</div></h4></section></summary><div class='docblock'>Reads a copy of <code>Self</code> from <code>bytes</code>. <a href="../../../zerocopy/trait.FromBytes.html#method.read_from">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.read_from_prefix" class="method trait-impl"><a class="src rightside" href="../../../src/zerocopy/lib.rs.html#2456-2458">source</a><a href="#method.read_from_prefix" class="anchor">§</a><h4 class="code-header">fn <a href="../../../zerocopy/trait.FromBytes.html#method.read_from_prefix" class="fn">read_from_prefix</a>(bytes: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="enum" href="../option/enum.Option.html" title="enum wasmtime_environ::__core::option::Option">Option</a>&lt;Self&gt;<div class="where">where
+    Self: <a class="trait" href="../marker/trait.Sized.html" title="trait wasmtime_environ::__core::marker::Sized">Sized</a>,</div></h4></section></summary><div class='docblock'>Reads a copy of <code>Self</code> from the prefix of <code>bytes</code>. <a href="../../../zerocopy/trait.FromBytes.html#method.read_from_prefix">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.read_from_suffix" class="method trait-impl"><a class="src rightside" href="../../../src/zerocopy/lib.rs.html#2490-2492">source</a><a href="#method.read_from_suffix" class="anchor">§</a><h4 class="code-header">fn <a href="../../../zerocopy/trait.FromBytes.html#method.read_from_suffix" class="fn">read_from_suffix</a>(bytes: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="enum" href="../option/enum.Option.html" title="enum wasmtime_environ::__core::option::Option">Option</a>&lt;Self&gt;<div class="where">where
+    Self: <a class="trait" href="../marker/trait.Sized.html" title="trait wasmtime_environ::__core::marker::Sized">Sized</a>,</div></h4></section></summary><div class='docblock'>Reads a copy of <code>Self</code> from the suffix of <code>bytes</code>. <a href="../../../zerocopy/trait.FromBytes.html#method.read_from_suffix">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-FromZeroes-for-MaybeUninit%3CT%3E" class="impl"><a class="src rightside" href="../../../src/zerocopy/lib.rs.html#3465-3491">source</a><a href="#impl-FromZeroes-for-MaybeUninit%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="../../../zerocopy/trait.FromZeroes.html" title="trait zerocopy::FromZeroes">FromZeroes</a> for <a class="union" href="union.MaybeUninit.html" title="union wasmtime_environ::__core::mem::MaybeUninit">MaybeUninit</a>&lt;T&gt;<div class="where">where
+    T: <a class="trait" href="../../../zerocopy/trait.FromZeroes.html" title="trait zerocopy::FromZeroes">FromZeroes</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.zero" class="method trait-impl"><a class="src rightside" href="../../../src/zerocopy/lib.rs.html#1425">source</a><a href="#method.zero" class="anchor">§</a><h4 class="code-header">fn <a href="../../../zerocopy/trait.FromZeroes.html#method.zero" class="fn">zero</a>(&amp;mut self)</h4></section></summary><div class='docblock'>Overwrites <code>self</code> with zeroes. <a href="../../../zerocopy/trait.FromZeroes.html#method.zero">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.new_zeroed" class="method trait-impl"><a class="src rightside" href="../../../src/zerocopy/lib.rs.html#1465-1467">source</a><a href="#method.new_zeroed" class="anchor">§</a><h4 class="code-header">fn <a href="../../../zerocopy/trait.FromZeroes.html#method.new_zeroed" class="fn">new_zeroed</a>() -&gt; Self<div class="where">where
+    Self: <a class="trait" href="../marker/trait.Sized.html" title="trait wasmtime_environ::__core::marker::Sized">Sized</a>,</div></h4></section></summary><div class='docblock'>Creates an instance of <code>Self</code> from zeroed bytes. <a href="../../../zerocopy/trait.FromZeroes.html#method.new_zeroed">Read more</a></div></details></div></details><section id="impl-Copy-for-MaybeUninit%3CT%3E" class="impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.36.0">1.36.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/mem/maybe_uninit.rs.html#241">source</a></span><a href="#impl-Copy-for-MaybeUninit%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="../marker/trait.Copy.html" title="trait wasmtime_environ::__core::marker::Copy">Copy</a> for <a class="union" href="union.MaybeUninit.html" title="union wasmtime_environ::__core::mem::MaybeUninit">MaybeUninit</a>&lt;T&gt;<div class="where">where
+    T: <a class="trait" href="../marker/trait.Copy.html" title="trait wasmtime_environ::__core::marker::Copy">Copy</a>,</div></h3></section><section id="impl-Unaligned-for-MaybeUninit%3CT%3E" class="impl"><a class="src rightside" href="../../../src/zerocopy/lib.rs.html#3465-3491">source</a><a href="#impl-Unaligned-for-MaybeUninit%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="../../../zerocopy/trait.Unaligned.html" title="trait zerocopy::Unaligned">Unaligned</a> for <a class="union" href="union.MaybeUninit.html" title="union wasmtime_environ::__core::mem::MaybeUninit">MaybeUninit</a>&lt;T&gt;<div class="where">where
+    T: <a class="trait" href="../../../zerocopy/trait.Unaligned.html" title="trait zerocopy::Unaligned">Unaligned</a>,</div></h3></section></div><h2 id="synthetic-implementations" class="section-header">Auto Trait Implementations<a href="#synthetic-implementations" class="anchor">§</a></h2><div id="synthetic-implementations-list"><section id="impl-Freeze-for-MaybeUninit%3CT%3E" class="impl"><a href="#impl-Freeze-for-MaybeUninit%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="../marker/trait.Freeze.html" title="trait wasmtime_environ::__core::marker::Freeze">Freeze</a> for <a class="union" href="union.MaybeUninit.html" title="union wasmtime_environ::__core::mem::MaybeUninit">MaybeUninit</a>&lt;T&gt;<div class="where">where
+    T: <a class="trait" href="../marker/trait.Freeze.html" title="trait wasmtime_environ::__core::marker::Freeze">Freeze</a>,</div></h3></section><section id="impl-RefUnwindSafe-for-MaybeUninit%3CT%3E" class="impl"><a href="#impl-RefUnwindSafe-for-MaybeUninit%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="../panic/trait.RefUnwindSafe.html" title="trait wasmtime_environ::__core::panic::RefUnwindSafe">RefUnwindSafe</a> for <a class="union" href="union.MaybeUninit.html" title="union wasmtime_environ::__core::mem::MaybeUninit">MaybeUninit</a>&lt;T&gt;<div class="where">where
+    T: <a class="trait" href="../panic/trait.RefUnwindSafe.html" title="trait wasmtime_environ::__core::panic::RefUnwindSafe">RefUnwindSafe</a>,</div></h3></section><section id="impl-Send-for-MaybeUninit%3CT%3E" class="impl"><a href="#impl-Send-for-MaybeUninit%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="../marker/trait.Send.html" title="trait wasmtime_environ::__core::marker::Send">Send</a> for <a class="union" href="union.MaybeUninit.html" title="union wasmtime_environ::__core::mem::MaybeUninit">MaybeUninit</a>&lt;T&gt;<div class="where">where
+    T: <a class="trait" href="../marker/trait.Send.html" title="trait wasmtime_environ::__core::marker::Send">Send</a>,</div></h3></section><section id="impl-Sync-for-MaybeUninit%3CT%3E" class="impl"><a href="#impl-Sync-for-MaybeUninit%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="../marker/trait.Sync.html" title="trait wasmtime_environ::__core::marker::Sync">Sync</a> for <a class="union" href="union.MaybeUninit.html" title="union wasmtime_environ::__core::mem::MaybeUninit">MaybeUninit</a>&lt;T&gt;<div class="where">where
+    T: <a class="trait" href="../marker/trait.Sync.html" title="trait wasmtime_environ::__core::marker::Sync">Sync</a>,</div></h3></section><section id="impl-Unpin-for-MaybeUninit%3CT%3E" class="impl"><a href="#impl-Unpin-for-MaybeUninit%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="../marker/trait.Unpin.html" title="trait wasmtime_environ::__core::marker::Unpin">Unpin</a> for <a class="union" href="union.MaybeUninit.html" title="union wasmtime_environ::__core::mem::MaybeUninit">MaybeUninit</a>&lt;T&gt;<div class="where">where
+    T: <a class="trait" href="../marker/trait.Unpin.html" title="trait wasmtime_environ::__core::marker::Unpin">Unpin</a>,</div></h3></section><section id="impl-UnwindSafe-for-MaybeUninit%3CT%3E" class="impl"><a href="#impl-UnwindSafe-for-MaybeUninit%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="../panic/trait.UnwindSafe.html" title="trait wasmtime_environ::__core::panic::UnwindSafe">UnwindSafe</a> for <a class="union" href="union.MaybeUninit.html" title="union wasmtime_environ::__core::mem::MaybeUninit">MaybeUninit</a>&lt;T&gt;<div class="where">where
+    T: <a class="trait" href="../panic/trait.UnwindSafe.html" title="trait wasmtime_environ::__core::panic::UnwindSafe">UnwindSafe</a>,</div></h3></section></div><h2 id="blanket-implementations" class="section-header">Blanket Implementations<a href="#blanket-implementations" class="anchor">§</a></h2><div id="blanket-implementations-list"><details class="toggle implementors-toggle"><summary><section id="impl-Any-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#140">source</a><a href="#impl-Any-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="../any/trait.Any.html" title="trait wasmtime_environ::__core::any::Any">Any</a> for T<div class="where">where
+    T: 'static + ?<a class="trait" href="../marker/trait.Sized.html" title="trait wasmtime_environ::__core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.type_id" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#141">source</a><a href="#method.type_id" class="anchor">§</a><h4 class="code-header">fn <a href="../any/trait.Any.html#tymethod.type_id" class="fn">type_id</a>(&amp;self) -&gt; <a class="struct" href="../any/struct.TypeId.html" title="struct wasmtime_environ::__core::any::TypeId">TypeId</a></h4></section></summary><div class='docblock'>Gets the <code>TypeId</code> of <code>self</code>. <a href="../any/trait.Any.html#tymethod.type_id">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Borrow%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#209">source</a><a href="#impl-Borrow%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="../borrow/trait.Borrow.html" title="trait wasmtime_environ::__core::borrow::Borrow">Borrow</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="../marker/trait.Sized.html" title="trait wasmtime_environ::__core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#211">source</a><a href="#method.borrow" class="anchor">§</a><h4 class="code-header">fn <a href="../borrow/trait.Borrow.html#tymethod.borrow" class="fn">borrow</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a></h4></section></summary><div class='docblock'>Immutably borrows from an owned value. <a href="../borrow/trait.Borrow.html#tymethod.borrow">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-BorrowMut%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#217">source</a><a href="#impl-BorrowMut%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="../borrow/trait.BorrowMut.html" title="trait wasmtime_environ::__core::borrow::BorrowMut">BorrowMut</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="../marker/trait.Sized.html" title="trait wasmtime_environ::__core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow_mut" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#218">source</a><a href="#method.borrow_mut" class="anchor">§</a><h4 class="code-header">fn <a href="../borrow/trait.BorrowMut.html#tymethod.borrow_mut" class="fn">borrow_mut</a>(&amp;mut self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a></h4></section></summary><div class='docblock'>Mutably borrows from an owned value. <a href="../borrow/trait.BorrowMut.html#tymethod.borrow_mut">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-CloneToUninit-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#286">source</a><a href="#impl-CloneToUninit-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="../clone/trait.CloneToUninit.html" title="trait wasmtime_environ::__core::clone::CloneToUninit">CloneToUninit</a> for T<div class="where">where
+    T: <a class="trait" href="../marker/trait.Copy.html" title="trait wasmtime_environ::__core::marker::Copy">Copy</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.clone_to_uninit" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#287">source</a><a href="#method.clone_to_uninit" class="anchor">§</a><h4 class="code-header">unsafe fn <a href="../clone/trait.CloneToUninit.html#tymethod.clone_to_uninit" class="fn">clone_to_uninit</a>(&amp;self, dst: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.pointer.html">*mut T</a>)</h4></section></summary><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>clone_to_uninit</code>)</span></div></span><div class='docblock'>Performs copy-assignment from <code>self</code> to <code>dst</code>. <a href="../clone/trait.CloneToUninit.html#tymethod.clone_to_uninit">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-CloneToUninit-for-T-1" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#271">source</a><a href="#impl-CloneToUninit-for-T-1" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="../clone/trait.CloneToUninit.html" title="trait wasmtime_environ::__core::clone::CloneToUninit">CloneToUninit</a> for T<div class="where">where
+    T: <a class="trait" href="../clone/trait.Clone.html" title="trait wasmtime_environ::__core::clone::Clone">Clone</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.clone_to_uninit-1" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#272">source</a><a href="#method.clone_to_uninit-1" class="anchor">§</a><h4 class="code-header">default unsafe fn <a href="../clone/trait.CloneToUninit.html#tymethod.clone_to_uninit" class="fn">clone_to_uninit</a>(&amp;self, dst: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.pointer.html">*mut T</a>)</h4></section></summary><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>clone_to_uninit</code>)</span></div></span><div class='docblock'>Performs copy-assignment from <code>self</code> to <code>dst</code>. <a href="../clone/trait.CloneToUninit.html#tymethod.clone_to_uninit">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-From%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#765">source</a><a href="#impl-From%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="../convert/trait.From.html" title="trait wasmtime_environ::__core::convert::From">From</a>&lt;T&gt; for T</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#768">source</a><a href="#method.from" class="anchor">§</a><h4 class="code-header">fn <a href="../convert/trait.From.html#tymethod.from" class="fn">from</a>(t: T) -&gt; T</h4></section></summary><div class="docblock"><p>Returns the argument unchanged.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Into%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#748-750">source</a><a href="#impl-Into%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="../convert/trait.Into.html" title="trait wasmtime_environ::__core::convert::Into">Into</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="../convert/trait.From.html" title="trait wasmtime_environ::__core::convert::From">From</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#758">source</a><a href="#method.into" class="anchor">§</a><h4 class="code-header">fn <a href="../convert/trait.Into.html#tymethod.into" class="fn">into</a>(self) -&gt; U</h4></section></summary><div class="docblock"><p>Calls <code>U::from(self)</code>.</p>
+<p>That is, this conversion is whatever the implementation of
+<code><a href="../convert/trait.From.html" title="trait wasmtime_environ::__core::convert::From">From</a>&lt;T&gt; for U</code> chooses to do.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-ToOwned-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#83-85">source</a><a href="#impl-ToOwned-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="../../prelude/trait.ToOwned.html" title="trait wasmtime_environ::prelude::ToOwned">ToOwned</a> for T<div class="where">where
+    T: <a class="trait" href="../clone/trait.Clone.html" title="trait wasmtime_environ::__core::clone::Clone">Clone</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Owned" class="associatedtype trait-impl"><a href="#associatedtype.Owned" class="anchor">§</a><h4 class="code-header">type <a href="../../prelude/trait.ToOwned.html#associatedtype.Owned" class="associatedtype">Owned</a> = T</h4></section></summary><div class='docblock'>The resulting type after obtaining ownership.</div></details><details class="toggle method-toggle" open><summary><section id="method.to_owned" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#88">source</a><a href="#method.to_owned" class="anchor">§</a><h4 class="code-header">fn <a href="../../prelude/trait.ToOwned.html#tymethod.to_owned" class="fn">to_owned</a>(&amp;self) -&gt; T</h4></section></summary><div class='docblock'>Creates owned data from borrowed data, usually by cloning. <a href="../../prelude/trait.ToOwned.html#tymethod.to_owned">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.clone_into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#92">source</a><a href="#method.clone_into" class="anchor">§</a><h4 class="code-header">fn <a href="../../prelude/trait.ToOwned.html#method.clone_into" class="fn">clone_into</a>(&amp;self, target: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a>)</h4></section></summary><div class='docblock'>Uses borrowed data to replace owned data, usually by cloning. <a href="../../prelude/trait.ToOwned.html#method.clone_into">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryFrom%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#805-807">source</a><a href="#impl-TryFrom%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="../convert/trait.TryFrom.html" title="trait wasmtime_environ::__core::convert::TryFrom">TryFrom</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="../convert/trait.Into.html" title="trait wasmtime_environ::__core::convert::Into">Into</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error" class="associatedtype trait-impl"><a href="#associatedtype.Error" class="anchor">§</a><h4 class="code-header">type <a href="../convert/trait.TryFrom.html#associatedtype.Error" class="associatedtype">Error</a> = <a class="enum" href="../convert/enum.Infallible.html" title="enum wasmtime_environ::__core::convert::Infallible">Infallible</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#812">source</a><a href="#method.try_from" class="anchor">§</a><h4 class="code-header">fn <a href="../convert/trait.TryFrom.html#tymethod.try_from" class="fn">try_from</a>(value: U) -&gt; <a class="enum" href="../result/enum.Result.html" title="enum wasmtime_environ::__core::result::Result">Result</a>&lt;T, &lt;T as <a class="trait" href="../convert/trait.TryFrom.html" title="trait wasmtime_environ::__core::convert::TryFrom">TryFrom</a>&lt;U&gt;&gt;::<a class="associatedtype" href="../convert/trait.TryFrom.html#associatedtype.Error" title="type wasmtime_environ::__core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryInto%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#790-792">source</a><a href="#impl-TryInto%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="../convert/trait.TryInto.html" title="trait wasmtime_environ::__core::convert::TryInto">TryInto</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="../convert/trait.TryFrom.html" title="trait wasmtime_environ::__core::convert::TryFrom">TryFrom</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error-1" class="associatedtype trait-impl"><a href="#associatedtype.Error-1" class="anchor">§</a><h4 class="code-header">type <a href="../convert/trait.TryInto.html#associatedtype.Error" class="associatedtype">Error</a> = &lt;U as <a class="trait" href="../convert/trait.TryFrom.html" title="trait wasmtime_environ::__core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="../convert/trait.TryFrom.html#associatedtype.Error" title="type wasmtime_environ::__core::convert::TryFrom::Error">Error</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#797">source</a><a href="#method.try_into" class="anchor">§</a><h4 class="code-header">fn <a href="../convert/trait.TryInto.html#tymethod.try_into" class="fn">try_into</a>(self) -&gt; <a class="enum" href="../result/enum.Result.html" title="enum wasmtime_environ::__core::result::Result">Result</a>&lt;U, &lt;U as <a class="trait" href="../convert/trait.TryFrom.html" title="trait wasmtime_environ::__core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="../convert/trait.TryFrom.html#associatedtype.Error" title="type wasmtime_environ::__core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details></div></section></div></main></body></html>

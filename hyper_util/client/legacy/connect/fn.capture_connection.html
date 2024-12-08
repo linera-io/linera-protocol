@@ -1,0 +1,44 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Capture the connection for a given request"><title>capture_connection in hyper_util::client::legacy::connect - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="hyper_util" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../../hyper_util/index.html">hyper_util</a><span class="version">0.1.9</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In hyper_util::client::legacy::connect</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../../../index.html">hyper_util</a>::<wbr><a href="../../index.html">client</a>::<wbr><a href="../index.html">legacy</a>::<wbr><a href="index.html">connect</a>::<wbr><a class="fn" href="#">capture_connection</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../../src/hyper_util/client/legacy/connect/capture.rs.html#70-74">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn capture_connection&lt;B&gt;(request: &amp;mut <a class="struct" href="../../../../http/request/struct.Request.html" title="struct http::request::Request">Request</a>&lt;B&gt;) -&gt; <a class="struct" href="struct.CaptureConnection.html" title="struct hyper_util::client::legacy::connect::CaptureConnection">CaptureConnection</a></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Capture the connection for a given request</p>
+<p>When making a request with Hyper, the underlying connection must implement the [<code>Connection</code>] trait.
+<a href="fn.capture_connection.html" title="fn hyper_util::client::legacy::connect::capture_connection"><code>capture_connection</code></a> allows a caller to capture the returned <a href="struct.Connected.html" title="struct hyper_util::client::legacy::connect::Connected"><code>Connected</code></a> structure as soon
+as the connection is established.</p>
+<p><em>Note</em>: If establishing a connection fails, <a href="struct.CaptureConnection.html#method.connection_metadata" title="method hyper_util::client::legacy::connect::CaptureConnection::connection_metadata"><code>CaptureConnection::connection_metadata</code></a> will always return none.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p><strong>Synchronous access</strong>:
+The <a href="struct.CaptureConnection.html#method.connection_metadata" title="method hyper_util::client::legacy::connect::CaptureConnection::connection_metadata"><code>CaptureConnection::connection_metadata</code></a> method allows callers to check if a connection has been
+established. This is ideal for situations where you are certain the connection has already
+been established (e.g. after the response future has already completed).</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>hyper_util::client::legacy::connect::capture_connection;
+<span class="kw">let </span><span class="kw-2">mut </span>request = http::Request::builder()
+  .uri(<span class="string">"http://foo.com"</span>)
+  .body(())
+  .unwrap();
+
+<span class="kw">let </span>captured_connection = capture_connection(<span class="kw-2">&amp;mut </span>request);
+<span class="comment">// some time later after the request has been sent...
+</span><span class="kw">let </span>connection_info = captured_connection.connection_metadata();
+<span class="macro">println!</span>(<span class="string">"we are connected! {:?}"</span>, connection_info.as_ref());</code></pre></div>
+<p><strong>Asynchronous access</strong>:
+The <a href="struct.CaptureConnection.html#method.wait_for_connection_metadata" title="method hyper_util::client::legacy::connect::CaptureConnection::wait_for_connection_metadata"><code>CaptureConnection::wait_for_connection_metadata</code></a> method returns a future resolves as soon as the
+connection is available.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>hyper_util::client::legacy::connect::capture_connection;
+<span class="kw">use </span>hyper_util::client::legacy::Client;
+<span class="kw">use </span>hyper_util::rt::TokioExecutor;
+<span class="kw">use </span>bytes::Bytes;
+<span class="kw">use </span>http_body_util::Empty;
+<span class="kw">let </span><span class="kw-2">mut </span>request = http::Request::builder()
+  .uri(<span class="string">"http://foo.com"</span>)
+  .body(Empty::&lt;Bytes&gt;::new())
+  .unwrap();
+
+<span class="kw">let </span><span class="kw-2">mut </span>captured = capture_connection(<span class="kw-2">&amp;mut </span>request);
+tokio::task::spawn(<span class="kw">async move </span>{
+    <span class="kw">let </span>connection_info = captured.wait_for_connection_metadata().<span class="kw">await</span>;
+    <span class="macro">println!</span>(<span class="string">"we are connected! {:?}"</span>, connection_info.as_ref());
+});
+
+<span class="kw">let </span>client = Client::builder(TokioExecutor::new()).build_http();
+client.request(request).<span class="kw">await</span>.expect(<span class="string">"request failed"</span>);</code></pre></div>
+</div></details></section></div></main></body></html>

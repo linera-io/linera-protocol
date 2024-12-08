@@ -1,0 +1,51 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Small library providing some macros helpful for asserting. The API is very similar to the API provided by the stdlib’s own `assert_eq!`, `assert_ne!`, `debug_assert_eq!`, or `debug_assert_ne!`."><title>more_asserts - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="more_asserts" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../more_asserts/index.html">more_asserts</a><span class="version">0.2.2</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#macros">Macros</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">more_asserts</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/more_asserts/lib.rs.html#1-457">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Small library providing some macros helpful for asserting. The API is very
+similar to the API provided by the stdlib’s own <code>assert_eq!</code>, <code>assert_ne!</code>,
+<code>debug_assert_eq!</code>, or <code>debug_assert_ne!</code>.</p>
+<div><table><thead><tr><th>Name</th><th>Enabled</th><th>Equivalent to</th></tr></thead><tbody>
+<tr><td><code>assert_le!</code></td><td>Always</td><td><code>assert!(a &lt;= b)</code></td></tr>
+<tr><td><code>assert_lt!</code></td><td>Always</td><td><code>assert!(a &lt; b)</code></td></tr>
+<tr><td><code>assert_ge!</code></td><td>Always</td><td><code>assert!(a &gt;= b)</code></td></tr>
+<tr><td><code>assert_gt!</code></td><td>Always</td><td><code>assert!(a &gt; b)</code></td></tr>
+<tr><td><code>debug_assert_le!</code></td><td><code>if cfg!(debug_assertions)</code></td><td><code>debug_assert!(a &lt;= b)</code></td></tr>
+<tr><td><code>debug_assert_lt!</code></td><td><code>if cfg!(debug_assertions)</code></td><td><code>debug_assert!(a &lt; b)</code></td></tr>
+<tr><td><code>debug_assert_ge!</code></td><td><code>if cfg!(debug_assertions)</code></td><td><code>debug_assert!(a &gt;= b)</code></td></tr>
+<tr><td><code>debug_assert_gt!</code></td><td><code>if cfg!(debug_assertions)</code></td><td><code>debug_assert!(a &gt; b)</code></td></tr>
+<tr><td><code>debug_unreachable!</code></td><td><code>if cfg!(debug_assertions)</code></td><td><code>unreachable!</code> when debug_assertions are on.</td></tr>
+</tbody></table>
+</div>
+<p>When one of the assertions fails, it prints out a message like the following:</p>
+<div class="example-wrap"><pre class="language-text"><code>thread &#39;main&#39; panicked at &#39;assertion failed: `left &lt; right`
+ left: `4`,
+right: `3`&#39;, src/main.rs:47:5
+note: Run with `RUST_BACKTRACE=1` for a backtrace.
+</code></pre></div><h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[macro_use]
+</span><span class="kw">extern crate </span>more_asserts;
+
+<span class="attr">#[derive(Debug, PartialEq, PartialOrd)]
+</span><span class="kw">enum </span>Example { Foo, Bar }
+
+<span class="kw">fn </span>main() {
+    <span class="macro">assert_le!</span>(<span class="number">3</span>, <span class="number">4</span>);
+    <span class="macro">assert_ge!</span>(<span class="number">10</span>, <span class="number">10</span>,
+               <span class="string">"You can pass a message too (just like `assert_eq!`)"</span>);
+    <span class="macro">debug_assert_lt!</span>(<span class="number">1.3</span>, <span class="number">4.5</span>,
+        <span class="string">"Format syntax is supported ({})."</span>, <span class="string">"also like `assert_eq!`"</span>);
+
+    <span class="macro">assert_gt!</span>(Example::Bar, Example::Foo,
+        <span class="string">"It works on anything that implements PartialOrd, PartialEq, and Debug!"</span>);
+}</code></pre></div>
+</div></details><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="macro" href="macro.assert_ge.html" title="macro more_asserts::assert_ge">assert_ge</a></div><div class="desc docblock-short">Panics if the first expression is not greater than or equal to the second.
+Requires that the values be comparable with <code>&gt;=</code>.</div></li><li><div class="item-name"><a class="macro" href="macro.assert_gt.html" title="macro more_asserts::assert_gt">assert_gt</a></div><div class="desc docblock-short">Panics if the first expression is not strictly greater than the second.
+Requires that the values be comparable with <code>&gt;</code>.</div></li><li><div class="item-name"><a class="macro" href="macro.assert_le.html" title="macro more_asserts::assert_le">assert_le</a></div><div class="desc docblock-short">Panics if the first expression is not less than or equal to the second.
+Requires that the values be comparable with <code>&lt;=</code>.</div></li><li><div class="item-name"><a class="macro" href="macro.assert_lt.html" title="macro more_asserts::assert_lt">assert_lt</a></div><div class="desc docblock-short">Panics if the first expression is not strictly less than the second.
+Requires that the values be comparable with <code>&lt;</code>.</div></li><li><div class="item-name"><a class="macro" href="macro.debug_assert_ge.html" title="macro more_asserts::debug_assert_ge">debug_assert_ge</a></div><div class="desc docblock-short">Same as <code>assert_ge!</code> in debug builds or release builds where the
+<code>-C debug-assertions</code> was provided to the compiler. For all other builds,
+vanishes without a trace.</div></li><li><div class="item-name"><a class="macro" href="macro.debug_assert_gt.html" title="macro more_asserts::debug_assert_gt">debug_assert_gt</a></div><div class="desc docblock-short">Same as <code>assert_gt!</code> in debug builds or release builds where the
+<code>-C debug-assertions</code> was provided to the compiler. For all other builds,
+vanishes without a trace.</div></li><li><div class="item-name"><a class="macro" href="macro.debug_assert_le.html" title="macro more_asserts::debug_assert_le">debug_assert_le</a></div><div class="desc docblock-short">Same as <code>assert_le!</code> in debug builds or release builds where the
+<code>-C debug-assertions</code> was provided to the compiler. For all other builds,
+vanishes without a trace.</div></li><li><div class="item-name"><a class="macro" href="macro.debug_assert_lt.html" title="macro more_asserts::debug_assert_lt">debug_assert_lt</a></div><div class="desc docblock-short">Same as <code>assert_lt!</code> in debug builds or release builds where the
+<code>-C debug-assertions</code> was provided to the compiler. For all other builds,
+vanishes without a trace.</div></li><li><div class="item-name"><a class="macro" href="macro.debug_unreachable.html" title="macro more_asserts::debug_unreachable">debug_unreachable</a></div><div class="desc docblock-short">Panics if reached. This is a variant of the standard library’s <code>unreachable!</code>
+macro that is controlled by <code>cfg!(debug_assertions)</code>.</div></li></ul></section></div></main></body></html>

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["MAINNET_DEPOSIT_CONTRACT_ADDRESS"],"struct":["DepositRequest"]};

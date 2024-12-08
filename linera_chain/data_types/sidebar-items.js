@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Medium","MessageAction","Transaction"],"struct":["Block","BlockExecutionOutcome","BlockProposal","ChainAndHeight","ChannelFullName","EventRecord","ExecutedBlock","IncomingBundle","LiteValue","LiteVote","MessageBundle","Origin","OutgoingMessage","PostedMessage","ProposalContent","SignatureAggregator","Target","Vote"]};

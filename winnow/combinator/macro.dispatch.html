@@ -1,0 +1,31 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="`match` for parsers"><title>dispatch in winnow::combinator - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="winnow" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../winnow/index.html">winnow</a><span class="version">0.6.20</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In winnow::combinator</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="../index.html">winnow</a>::<wbr><a href="index.html">combinator</a>::<wbr><a class="macro" href="#">dispatch</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/winnow/macros/dispatch.rs.html#42-55">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><span class="macro">macro_rules!</span> dispatch {
+    (<span class="macro-nonterminal">$match_parser</span>: expr; $( <span class="macro-nonterminal">$pat</span>:pat $(<span class="kw">if </span><span class="macro-nonterminal">$pred</span>:expr)<span class="question-mark">? </span>=&gt; <span class="macro-nonterminal">$expr</span>: expr ),+ $(,)<span class="question-mark">? </span>) =&gt; { ... };
+}</pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><code>match</code> for parsers</p>
+<p>When parsers have unique prefixes to test for, this offers better performance over
+<a href="fn.alt.html" title="fn winnow::combinator::alt"><code>alt</code></a> though it might be at the cost of duplicating parts of your grammar
+if you needed to <a href="fn.peek.html" title="fn winnow::combinator::peek"><code>peek</code></a>.</p>
+<p>For tight control over the error in a catch-all case, use <a href="fn.fail.html" title="fn winnow::combinator::fail"><code>fail</code></a>.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>winnow::prelude::<span class="kw-2">*</span>;
+<span class="kw">use </span>winnow::combinator::dispatch;
+
+<span class="kw">fn </span>escaped(input: <span class="kw-2">&amp;mut &amp;</span>str) -&gt; PResult&lt;char&gt; {
+    preceded(<span class="string">'\\'</span>, escape_seq_char).parse_next(input)
+}
+
+<span class="kw">fn </span>escape_seq_char(input: <span class="kw-2">&amp;mut &amp;</span>str) -&gt; PResult&lt;char&gt; {
+    <span class="macro">dispatch!</span> {any;
+        <span class="string">'b' </span>=&gt; empty.value(<span class="string">'\u{8}'</span>),
+        <span class="string">'f' </span>=&gt; empty.value(<span class="string">'\u{c}'</span>),
+        <span class="string">'n' </span>=&gt; empty.value(<span class="string">'\n'</span>),
+        <span class="string">'r' </span>=&gt; empty.value(<span class="string">'\r'</span>),
+        <span class="string">'t' </span>=&gt; empty.value(<span class="string">'\t'</span>),
+        <span class="string">'\\' </span>=&gt; empty.value(<span class="string">'\\'</span>),
+        <span class="string">'"' </span>=&gt; empty.value(<span class="string">'"'</span>),
+        <span class="kw">_ </span>=&gt; fail::&lt;<span class="kw">_</span>, char, <span class="kw">_</span>&gt;,
+    }
+    .parse_next(input)
+}
+
+<span class="macro">assert_eq!</span>(escaped.parse_peek(<span class="string">"\\nHello"</span>), <span class="prelude-val">Ok</span>((<span class="string">"Hello"</span>, <span class="string">'\n'</span>)));</code></pre></div>
+</div></details></section></div></main></body></html>

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["decode","uncons","uncons_range","uncons_while","uncons_while1"],"mod":["buffered","easy","state"],"struct":["IteratorStream","PartialStream","PointerOffset","ReadStream","SliceStream"],"trait":["FullRangeStream","Positioned","Range","RangeStream","RangeStreamOnce","Resetable","Stream","StreamOnce"],"type":["StreamErrorFor"]};

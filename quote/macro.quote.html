@@ -1,0 +1,189 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="The whole point."><title>quote in quote - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="quote" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../quote/index.html">quote</a><span class="version">1.0.37</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="index.html">quote</a>::<wbr><a class="macro" href="#">quote</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/quote/lib.rs.html#490-494">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><span class="macro">macro_rules!</span> quote {
+    ($(<span class="macro-nonterminal">$tt</span>:tt)<span class="kw-2">*</span>) =&gt; { ... };
+}</pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>The whole point.</p>
+<p>Performs variable interpolation against the input and produces it as
+<a href="../proc_macro2/struct.TokenStream.html" title="struct proc_macro2::TokenStream"><code>proc_macro2::TokenStream</code></a>.</p>
+<p>Note: for returning tokens to the compiler in a procedural macro, use
+<code>.into()</code> on the result to convert to <a href="https://doc.rust-lang.org/1.81.0/proc_macro/struct.TokenStream.html" title="struct proc_macro::TokenStream"><code>proc_macro::TokenStream</code></a>.</p>
+<br>
+<h2 id="interpolation"><a class="doc-anchor" href="#interpolation">§</a>Interpolation</h2>
+<p>Variable interpolation is done with <code>#var</code> (similar to <code>$var</code> in
+<code>macro_rules!</code> macros). This grabs the <code>var</code> variable that is currently in
+scope and inserts it in that location in the output tokens. Any type
+implementing the <a href="trait.ToTokens.html"><code>ToTokens</code></a> trait can be interpolated. This includes most
+Rust primitive types as well as most of the syntax tree types from the <a href="https://github.com/dtolnay/syn">Syn</a>
+crate.</p>
+<p>Repetition is done using <code>#(...)*</code> or <code>#(...),*</code> again similar to
+<code>macro_rules!</code>. This iterates through the elements of any variable
+interpolated within the repetition and inserts a copy of the repetition body
+for each one. The variables in an interpolation may be a <code>Vec</code>, slice,
+<code>BTreeSet</code>, or any <code>Iterator</code>.</p>
+<ul>
+<li><code>#(#var)*</code> — no separators</li>
+<li><code>#(#var),*</code> — the character before the asterisk is used as a separator</li>
+<li><code>#( struct #var; )*</code> — the repetition can contain other tokens</li>
+<li><code>#( #k =&gt; println!("{}", #v), )*</code> — even multiple interpolations</li>
+</ul>
+<br>
+<h2 id="hygiene"><a class="doc-anchor" href="#hygiene">§</a>Hygiene</h2>
+<p>Any interpolated tokens preserve the <code>Span</code> information provided by their
+<code>ToTokens</code> implementation. Tokens that originate within the <code>quote!</code>
+invocation are spanned with <a href="https://docs.rs/proc-macro2/1.0/proc_macro2/struct.Span.html#method.call_site"><code>Span::call_site()</code></a>.</p>
+<p>A different span can be provided through the <a href="macro.quote_spanned.html"><code>quote_spanned!</code></a> macro.</p>
+<br>
+<h2 id="return-type"><a class="doc-anchor" href="#return-type">§</a>Return type</h2>
+<p>The macro evaluates to an expression of type <code>proc_macro2::TokenStream</code>.
+Meanwhile Rust procedural macros are expected to return the type
+<code>proc_macro::TokenStream</code>.</p>
+<p>The difference between the two types is that <code>proc_macro</code> types are entirely
+specific to procedural macros and cannot ever exist in code outside of a
+procedural macro, while <code>proc_macro2</code> types may exist anywhere including
+tests and non-macro code like main.rs and build.rs. This is why even the
+procedural macro ecosystem is largely built around <code>proc_macro2</code>, because
+that ensures the libraries are unit testable and accessible in non-macro
+contexts.</p>
+<p>There is a <a href="https://doc.rust-lang.org/std/convert/trait.From.html"><code>From</code></a>-conversion in both directions so returning the output of
+<code>quote!</code> from a procedural macro usually looks like <code>tokens.into()</code> or
+<code>proc_macro::TokenStream::from(tokens)</code>.</p>
+<br>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2><h4 id="procedural-macro"><a class="doc-anchor" href="#procedural-macro">§</a>Procedural macro</h4>
+<p>The structure of a basic procedural macro is as follows. Refer to the <a href="https://github.com/dtolnay/syn">Syn</a>
+crate for further useful guidance on using <code>quote!</code> as part of a procedural
+macro.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">extern crate </span>proc_macro;
+
+<span class="kw">use </span>proc_macro::TokenStream;
+<span class="kw">use </span>quote::quote;
+
+<span class="attr">#[proc_macro_derive(HeapSize)]
+</span><span class="kw">pub fn </span>derive_heap_size(input: TokenStream) -&gt; TokenStream {
+    <span class="comment">// Parse the input and figure out what implementation to generate...
+    </span><span class="kw">let </span>name = <span class="comment">/* ... */</span>;
+    <span class="kw">let </span>expr = <span class="comment">/* ... */</span>;
+
+    <span class="kw">let </span>expanded = <span class="macro">quote!</span> {
+        <span class="comment">// The generated impl.
+        </span><span class="kw">impl </span>heapsize::HeapSize <span class="kw">for </span>#name {
+            <span class="kw">fn </span>heap_size_of_children(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+                #expr
+            }
+        }
+    };
+
+    <span class="comment">// Hand the output tokens back to the compiler.
+    </span>TokenStream::from(expanded)
+}</code></pre></div>
+<p><br></p>
+<h4 id="combining-quoted-fragments"><a class="doc-anchor" href="#combining-quoted-fragments">§</a>Combining quoted fragments</h4>
+<p>Usually you don’t end up constructing an entire final <code>TokenStream</code> in one
+piece. Different parts may come from different helper functions. The tokens
+produced by <code>quote!</code> themselves implement <code>ToTokens</code> and so can be
+interpolated into later <code>quote!</code> invocations to build up a final result.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>type_definition = <span class="macro">quote!</span> {...};
+<span class="kw">let </span>methods = <span class="macro">quote!</span> {...};
+
+<span class="kw">let </span>tokens = <span class="macro">quote!</span> {
+    #type_definition
+    #methods
+};</code></pre></div>
+<p><br></p>
+<h4 id="constructing-identifiers"><a class="doc-anchor" href="#constructing-identifiers">§</a>Constructing identifiers</h4>
+<p>Suppose we have an identifier <code>ident</code> which came from somewhere in a macro
+input and we need to modify it in some way for the macro output. Let’s
+consider prepending the identifier with an underscore.</p>
+<p>Simply interpolating the identifier next to an underscore will not have the
+behavior of concatenating them. The underscore and the identifier will
+continue to be two separate tokens as if you had written <code>_ x</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// incorrect
+</span><span class="macro">quote!</span> {
+    <span class="kw">let </span><span class="kw-2">mut </span>_#ident = <span class="number">0</span>;
+}</code></pre></div>
+<p>The solution is to build a new identifier token with the correct value. As
+this is such a common case, the <a href="macro.format_ident.html" title="macro quote::format_ident"><code>format_ident!</code></a> macro provides a
+convenient utility for doing so correctly.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>varname = <span class="macro">format_ident!</span>(<span class="string">"_{}"</span>, ident);
+<span class="macro">quote!</span> {
+    <span class="kw">let </span><span class="kw-2">mut </span>#varname = <span class="number">0</span>;
+}</code></pre></div>
+<p>Alternatively, the APIs provided by Syn and proc-macro2 can be used to
+directly build the identifier. This is roughly equivalent to the above, but
+will not handle <code>ident</code> being a raw identifier.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>concatenated = <span class="macro">format!</span>(<span class="string">"_{}"</span>, ident);
+<span class="kw">let </span>varname = syn::Ident::new(<span class="kw-2">&amp;</span>concatenated, ident.span());
+<span class="macro">quote!</span> {
+    <span class="kw">let </span><span class="kw-2">mut </span>#varname = <span class="number">0</span>;
+}</code></pre></div>
+<p><br></p>
+<h4 id="making-method-calls"><a class="doc-anchor" href="#making-method-calls">§</a>Making method calls</h4>
+<p>Let’s say our macro requires some type specified in the macro input to have
+a constructor called <code>new</code>. We have the type in a variable called
+<code>field_type</code> of type <code>syn::Type</code> and want to invoke the constructor.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// incorrect
+</span><span class="macro">quote!</span> {
+    <span class="kw">let </span>value = #field_type::new();
+}</code></pre></div>
+<p>This works only sometimes. If <code>field_type</code> is <code>String</code>, the expanded code
+contains <code>String::new()</code> which is fine. But if <code>field_type</code> is something
+like <code>Vec&lt;i32&gt;</code> then the expanded code is <code>Vec&lt;i32&gt;::new()</code> which is invalid
+syntax. Ordinarily in handwritten Rust we would write <code>Vec::&lt;i32&gt;::new()</code>
+but for macros often the following is more convenient.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">quote!</span> {
+    <span class="kw">let </span>value = &lt;#field_type&gt;::new();
+}</code></pre></div>
+<p>This expands to <code>&lt;Vec&lt;i32&gt;&gt;::new()</code> which behaves correctly.</p>
+<p>A similar pattern is appropriate for trait methods.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">quote!</span> {
+    <span class="kw">let </span>value = &lt;#field_type <span class="kw">as </span>core::default::Default&gt;::default();
+}</code></pre></div>
+<p><br></p>
+<h4 id="interpolating-text-inside-of-doc-comments"><a class="doc-anchor" href="#interpolating-text-inside-of-doc-comments">§</a>Interpolating text inside of doc comments</h4>
+<p>Neither doc comments nor string literals get interpolation behavior in
+quote:</p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="macro">quote!</span> {
+    <span class="doccomment">/// try to interpolate: #ident
+    ///
+    /// ...
+</span>}</code></pre></div>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="macro">quote!</span> {
+    <span class="attr">#[doc = <span class="string">"try to interpolate: #ident"</span>]
+</span>}</code></pre></div>
+<p>Instead the best way to build doc comments that involve variables is by
+formatting the doc string literal outside of quote.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>msg = <span class="macro">format!</span>(...);
+<span class="macro">quote!</span> {
+    <span class="attr">#[doc = #msg]
+    </span><span class="doccomment">///
+    /// ...
+</span>}</code></pre></div>
+<p><br></p>
+<h4 id="indexing-into-a-tuple-struct"><a class="doc-anchor" href="#indexing-into-a-tuple-struct">§</a>Indexing into a tuple struct</h4>
+<p>When interpolating indices of a tuple or tuple struct, we need them not to
+appears suffixed as integer literals by interpolating them as <a href="https://docs.rs/syn/2.0/syn/struct.Index.html"><code>syn::Index</code></a>
+instead.</p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">let </span>i = <span class="number">0usize</span>..<span class="self">self</span>.fields.len();
+
+<span class="comment">// expands to 0 + self.0usize.heap_size() + self.1usize.heap_size() + ...
+// which is not valid syntax
+</span><span class="macro">quote!</span> {
+    <span class="number">0 </span>#( + <span class="self">self</span>.#i.heap_size() )*
+}</code></pre></div>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>i = (<span class="number">0</span>..<span class="self">self</span>.fields.len()).map(syn::Index::from);
+
+<span class="comment">// expands to 0 + self.0.heap_size() + self.1.heap_size() + ...
+</span><span class="macro">quote!</span> {
+    <span class="number">0 </span>#( + <span class="self">self</span>.#i.heap_size() )*
+}</code></pre></div>
+</div></details></section></div></main></body></html>

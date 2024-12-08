@@ -1,0 +1,105 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="`VariantAccess` is a visitor that is created by the `Deserializer` and passed to the `Deserialize` to deserialize the content of a particular enum variant."><title>VariantAccess in serde::de - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="serde" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../serde/index.html">serde</a><span class="version">1.0.210</span></h2></div><h2 class="location"><a href="#">VariantAccess</a></h2><div class="sidebar-elems"><section><h3><a href="#required-associated-types">Required Associated Types</a></h3><ul class="block"><li><a href="#associatedtype.Error">Error</a></li></ul><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.newtype_variant_seed">newtype_variant_seed</a></li><li><a href="#tymethod.struct_variant">struct_variant</a></li><li><a href="#tymethod.tuple_variant">tuple_variant</a></li><li><a href="#tymethod.unit_variant">unit_variant</a></li></ul><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.newtype_variant">newtype_variant</a></li></ul><h3><a href="#object-safety">Object Safety</a></h3><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In serde::de</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="../index.html">serde</a>::<wbr><a href="index.html">de</a>::<wbr><a class="trait" href="#">VariantAccess</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/serde/de/mod.rs.html#2031-2223">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub trait VariantAccess&lt;'de&gt;: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a> {
+    type <a href="#associatedtype.Error" class="associatedtype">Error</a>: <a class="trait" href="trait.Error.html" title="trait serde::de::Error">Error</a>;
+
+    // Required methods
+    fn <a href="#tymethod.unit_variant" class="fn">unit_variant</a>(self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, Self::<a class="associatedtype" href="trait.VariantAccess.html#associatedtype.Error" title="type serde::de::VariantAccess::Error">Error</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.newtype_variant_seed" class="fn">newtype_variant_seed</a>&lt;T&gt;(self, seed: T) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T::<a class="associatedtype" href="trait.DeserializeSeed.html#associatedtype.Value" title="type serde::de::DeserializeSeed::Value">Value</a>, Self::<a class="associatedtype" href="trait.VariantAccess.html#associatedtype.Error" title="type serde::de::VariantAccess::Error">Error</a>&gt;
+       <span class="where">where T: <a class="trait" href="trait.DeserializeSeed.html" title="trait serde::de::DeserializeSeed">DeserializeSeed</a>&lt;'de&gt;</span>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.tuple_variant" class="fn">tuple_variant</a>&lt;V&gt;(
+        self,
+        len: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>,
+        visitor: V,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;V::<a class="associatedtype" href="trait.Visitor.html#associatedtype.Value" title="type serde::de::Visitor::Value">Value</a>, Self::<a class="associatedtype" href="trait.VariantAccess.html#associatedtype.Error" title="type serde::de::VariantAccess::Error">Error</a>&gt;
+       <span class="where">where V: <a class="trait" href="trait.Visitor.html" title="trait serde::de::Visitor">Visitor</a>&lt;'de&gt;</span>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.struct_variant" class="fn">struct_variant</a>&lt;V&gt;(
+        self,
+        fields: &amp;'static [&amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>],
+        visitor: V,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;V::<a class="associatedtype" href="trait.Visitor.html#associatedtype.Value" title="type serde::de::Visitor::Value">Value</a>, Self::<a class="associatedtype" href="trait.VariantAccess.html#associatedtype.Error" title="type serde::de::VariantAccess::Error">Error</a>&gt;
+       <span class="where">where V: <a class="trait" href="trait.Visitor.html" title="trait serde::de::Visitor">Visitor</a>&lt;'de&gt;</span>;
+
+    // Provided method
+    fn <a href="#method.newtype_variant" class="fn">newtype_variant</a>&lt;T&gt;(self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, Self::<a class="associatedtype" href="trait.VariantAccess.html#associatedtype.Error" title="type serde::de::VariantAccess::Error">Error</a>&gt;
+       <span class="where">where T: <a class="trait" href="../trait.Deserialize.html" title="trait serde::Deserialize">Deserialize</a>&lt;'de&gt;</span> { ... }
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><code>VariantAccess</code> is a visitor that is created by the <code>Deserializer</code> and
+passed to the <code>Deserialize</code> to deserialize the content of a particular enum
+variant.</p>
+<h2 id="lifetime"><a class="doc-anchor" href="#lifetime">§</a>Lifetime</h2>
+<p>The <code>'de</code> lifetime of this trait is the lifetime of data that may be
+borrowed by the deserialized enum variant. See the page <a href="https://serde.rs/lifetimes.html">Understanding
+deserializer lifetimes</a> for a more detailed explanation of these lifetimes.</p>
+<h2 id="example-implementation"><a class="doc-anchor" href="#example-implementation">§</a>Example implementation</h2>
+<p>The <a href="https://serde.rs/data-format.html">example data format</a> presented on the website demonstrates an
+implementation of <code>VariantAccess</code> for a basic JSON data format.</p>
+</div></details><h2 id="required-associated-types" class="section-header">Required Associated Types<a href="#required-associated-types" class="anchor">§</a></h2><div class="methods"><details class="toggle" open><summary><section id="associatedtype.Error" class="method"><a class="src rightside" href="../../src/serde/de/mod.rs.html#2034">source</a><h4 class="code-header">type <a href="#associatedtype.Error" class="associatedtype">Error</a>: <a class="trait" href="trait.Error.html" title="trait serde::de::Error">Error</a></h4></section></summary><div class="docblock"><p>The error type that can be returned if some error occurs during
+deserialization. Must match the error type of our <code>EnumAccess</code>.</p>
+</div></details></div><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.unit_variant" class="method"><a class="src rightside" href="../../src/serde/de/mod.rs.html#2071">source</a><h4 class="code-header">fn <a href="#tymethod.unit_variant" class="fn">unit_variant</a>(self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, Self::<a class="associatedtype" href="trait.VariantAccess.html#associatedtype.Error" title="type serde::de::VariantAccess::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Called when deserializing a variant with no values.</p>
+<p>If the data contains a different type of variant, the following
+<code>invalid_type</code> error should be constructed:</p>
+
+<div class="example-wrap edition"><a href="#" class="tooltip" title="This example runs with edition 2021">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>unit_variant(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;(), <span class="self">Self</span>::Error&gt; {
+    <span class="comment">// What the data actually contained; suppose it is a tuple variant.
+    </span><span class="kw">let </span>unexp = Unexpected::TupleVariant;
+    <span class="prelude-val">Err</span>(de::Error::invalid_type(unexp, <span class="kw-2">&amp;</span><span class="string">"unit variant"</span>))
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.newtype_variant_seed" class="method"><a class="src rightside" href="../../src/serde/de/mod.rs.html#2113-2115">source</a><h4 class="code-header">fn <a href="#tymethod.newtype_variant_seed" class="fn">newtype_variant_seed</a>&lt;T&gt;(self, seed: T) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T::<a class="associatedtype" href="trait.DeserializeSeed.html#associatedtype.Value" title="type serde::de::DeserializeSeed::Value">Value</a>, Self::<a class="associatedtype" href="trait.VariantAccess.html#associatedtype.Error" title="type serde::de::VariantAccess::Error">Error</a>&gt;<div class="where">where
+    T: <a class="trait" href="trait.DeserializeSeed.html" title="trait serde::de::DeserializeSeed">DeserializeSeed</a>&lt;'de&gt;,</div></h4></section></summary><div class="docblock"><p>Called when deserializing a variant with a single value.</p>
+<p><code>Deserialize</code> implementations should typically use
+<code>VariantAccess::newtype_variant</code> instead.</p>
+<p>If the data contains a different type of variant, the following
+<code>invalid_type</code> error should be constructed:</p>
+
+<div class="example-wrap edition"><a href="#" class="tooltip" title="This example runs with edition 2021">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>newtype_variant_seed&lt;T&gt;(<span class="self">self</span>, _seed: T) -&gt; <span class="prelude-ty">Result</span>&lt;T::Value, <span class="self">Self</span>::Error&gt;
+<span class="kw">where
+    </span>T: DeserializeSeed&lt;<span class="lifetime">'de</span>&gt;,
+{
+    <span class="comment">// What the data actually contained; suppose it is a unit variant.
+    </span><span class="kw">let </span>unexp = Unexpected::UnitVariant;
+    <span class="prelude-val">Err</span>(de::Error::invalid_type(unexp, <span class="kw-2">&amp;</span><span class="string">"newtype variant"</span>))
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.tuple_variant" class="method"><a class="src rightside" href="../../src/serde/de/mod.rs.html#2169-2171">source</a><h4 class="code-header">fn <a href="#tymethod.tuple_variant" class="fn">tuple_variant</a>&lt;V&gt;(
+    self,
+    len: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>,
+    visitor: V,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;V::<a class="associatedtype" href="trait.Visitor.html#associatedtype.Value" title="type serde::de::Visitor::Value">Value</a>, Self::<a class="associatedtype" href="trait.VariantAccess.html#associatedtype.Error" title="type serde::de::VariantAccess::Error">Error</a>&gt;<div class="where">where
+    V: <a class="trait" href="trait.Visitor.html" title="trait serde::de::Visitor">Visitor</a>&lt;'de&gt;,</div></h4></section></summary><div class="docblock"><p>Called when deserializing a tuple-like variant.</p>
+<p>The <code>len</code> is the number of fields expected in the tuple variant.</p>
+<p>If the data contains a different type of variant, the following
+<code>invalid_type</code> error should be constructed:</p>
+
+<div class="example-wrap edition"><a href="#" class="tooltip" title="This example runs with edition 2021">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>tuple_variant&lt;V&gt;(<span class="self">self</span>, _len: usize, _visitor: V) -&gt; <span class="prelude-ty">Result</span>&lt;V::Value, <span class="self">Self</span>::Error&gt;
+<span class="kw">where
+    </span>V: Visitor&lt;<span class="lifetime">'de</span>&gt;,
+{
+    <span class="comment">// What the data actually contained; suppose it is a unit variant.
+    </span><span class="kw">let </span>unexp = Unexpected::UnitVariant;
+    <span class="prelude-val">Err</span>(de::Error::invalid_type(unexp, <span class="kw-2">&amp;</span><span class="string">"tuple variant"</span>))
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.struct_variant" class="method"><a class="src rightside" href="../../src/serde/de/mod.rs.html#2216-2222">source</a><h4 class="code-header">fn <a href="#tymethod.struct_variant" class="fn">struct_variant</a>&lt;V&gt;(
+    self,
+    fields: &amp;'static [&amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>],
+    visitor: V,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;V::<a class="associatedtype" href="trait.Visitor.html#associatedtype.Value" title="type serde::de::Visitor::Value">Value</a>, Self::<a class="associatedtype" href="trait.VariantAccess.html#associatedtype.Error" title="type serde::de::VariantAccess::Error">Error</a>&gt;<div class="where">where
+    V: <a class="trait" href="trait.Visitor.html" title="trait serde::de::Visitor">Visitor</a>&lt;'de&gt;,</div></h4></section></summary><div class="docblock"><p>Called when deserializing a struct-like variant.</p>
+<p>The <code>fields</code> are the names of the fields of the struct variant.</p>
+<p>If the data contains a different type of variant, the following
+<code>invalid_type</code> error should be constructed:</p>
+
+<div class="example-wrap edition"><a href="#" class="tooltip" title="This example runs with edition 2021">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>struct_variant&lt;V&gt;(
+    <span class="self">self</span>,
+    _fields: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>[<span class="kw-2">&amp;</span><span class="lifetime">'static </span>str],
+    _visitor: V,
+) -&gt; <span class="prelude-ty">Result</span>&lt;V::Value, <span class="self">Self</span>::Error&gt;
+<span class="kw">where
+    </span>V: Visitor&lt;<span class="lifetime">'de</span>&gt;,
+{
+    <span class="comment">// What the data actually contained; suppose it is a unit variant.
+    </span><span class="kw">let </span>unexp = Unexpected::UnitVariant;
+    <span class="prelude-val">Err</span>(de::Error::invalid_type(unexp, <span class="kw-2">&amp;</span><span class="string">"struct variant"</span>))
+}</code></pre></div>
+</div></details></div><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.newtype_variant" class="method"><a class="src rightside" href="../../src/serde/de/mod.rs.html#2123-2128">source</a><h4 class="code-header">fn <a href="#method.newtype_variant" class="fn">newtype_variant</a>&lt;T&gt;(self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, Self::<a class="associatedtype" href="trait.VariantAccess.html#associatedtype.Error" title="type serde::de::VariantAccess::Error">Error</a>&gt;<div class="where">where
+    T: <a class="trait" href="../trait.Deserialize.html" title="trait serde::Deserialize">Deserialize</a>&lt;'de&gt;,</div></h4></section></summary><div class="docblock"><p>Called when deserializing a variant with a single value.</p>
+<p>This method exists as a convenience for <code>Deserialize</code> implementations.
+<code>VariantAccess</code> implementations should not override the default
+behavior.</p>
+</div></details></div><h2 id="object-safety" class="section-header">Object Safety<a href="#object-safety" class="anchor">§</a></h2><div class="object-safety-info">This trait is <b>not</b> <a href="https://doc.rust-lang.org/1.81.0/reference/items/traits.html#object-safety">object safe</a>.</div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"></div><script src="../../trait.impl/serde/de/trait.VariantAccess.js" async></script></section></div></main></body></html>

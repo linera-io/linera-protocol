@@ -1,0 +1,66 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Feature flags"><title>time - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="time" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="icon" href="https://avatars0.githubusercontent.com/u/55999857"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../time/index.html"><img src="https://avatars0.githubusercontent.com/u/55999857" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../time/index.html"><img src="https://avatars0.githubusercontent.com/u/55999857" alt="logo"></a><h2><a href="../time/index.html">time</a><span class="version">0.3.36</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#types">Type Aliases</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">time</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/time/lib.rs.html#1-140">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="feature-flags"><a class="doc-anchor" href="#feature-flags">§</a>Feature flags</h2>
+<p>This crate exposes a number of features. These can be enabled or disabled as shown
+<a href="https://doc.rust-lang.org/cargo/reference/features.html">in Cargo’s documentation</a>. Features
+are <em>disabled</em> by default unless otherwise noted.</p>
+<p>Reliance on a given feature is always indicated alongside the item definition.</p>
+<ul>
+<li>
+<p><code>std</code> (<em>enabled by default, implicitly enables <code>alloc</code></em>)</p>
+<p>This enables a number of features that depend on the standard library.</p>
+</li>
+<li>
+<p><code>alloc</code> (<em>enabled by default via <code>std</code></em>)</p>
+<p>Enables a number of features that require the ability to dynamically allocate memory.</p>
+</li>
+<li>
+<p><code>macros</code></p>
+<p>Enables macros that provide compile-time verification of values and intuitive syntax.</p>
+</li>
+<li>
+<p><code>formatting</code> (<em>implicitly enables <code>std</code></em>)</p>
+<p>Enables formatting of most structs.</p>
+</li>
+<li>
+<p><code>parsing</code></p>
+<p>Enables parsing of most structs.</p>
+</li>
+<li>
+<p><code>local-offset</code> (<em>implicitly enables <code>std</code></em>)</p>
+<p>This feature enables a number of methods that allow obtaining the system’s UTC offset.</p>
+</li>
+<li>
+<p><code>large-dates</code></p>
+<p>By default, only years within the ±9999 range (inclusive) are supported. If you need support
+for years outside this range, consider enabling this feature; the supported range will be
+increased to ±999,999.</p>
+<p>Note that enabling this feature has some costs, as it means forgoing some optimizations.
+Ambiguities may be introduced when parsing that would not otherwise exist.</p>
+</li>
+<li>
+<p><code>serde</code></p>
+<p>Enables <a href="https://docs.rs/serde">serde</a> support for all types except <a href="struct.Instant.html" title="struct time::Instant"><code>Instant</code></a>.</p>
+</li>
+<li>
+<p><code>serde-human-readable</code> (<em>implicitly enables <code>serde</code>, <code>formatting</code>, and <code>parsing</code></em>)</p>
+<p>Allows serde representations to use a human-readable format. This is determined by the
+serializer, not the user. If this feature is not enabled or if the serializer requests a
+non-human-readable format, a format optimized for binary representation will be used.</p>
+<p>Libraries should never enable this feature, as the decision of what format to use should be up
+to the user.</p>
+</li>
+<li>
+<p><code>rand</code></p>
+<p>Enables <a href="https://docs.rs/rand">rand</a> support for all types.</p>
+</li>
+<li>
+<p><code>quickcheck</code> (<em>implicitly enables <code>alloc</code></em>)</p>
+<p>Enables <a href="https://docs.rs/quickcheck">quickcheck</a> support for all types except <a href="struct.Instant.html" title="struct time::Instant"><code>Instant</code></a>.</p>
+</li>
+<li>
+<p><code>wasm-bindgen</code></p>
+<p>Enables <a href="https://github.com/rustwasm/wasm-bindgen">wasm-bindgen</a> support for converting
+<a href="https://rustwasm.github.io/wasm-bindgen/api/js_sys/struct.Date.html">JavaScript dates</a>, as
+well as obtaining the UTC offset from JavaScript.</p>
+</li>
+</ul>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.Error"><code>pub use crate::error::<a class="enum" href="error/enum.Error.html" title="enum time::error::Error">Error</a>;</code></div></li></ul><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="convert/index.html" title="mod time::convert">convert</a></div><div class="desc docblock-short">Conversion between units of time.</div></li><li><div class="item-name"><a class="mod" href="error/index.html" title="mod time::error">error</a></div><div class="desc docblock-short">Various error types returned by methods in the time crate.</div></li><li><div class="item-name"><a class="mod" href="ext/index.html" title="mod time::ext">ext</a></div><div class="desc docblock-short">Extension traits.</div></li><li><div class="item-name"><a class="mod" href="format_description/index.html" title="mod time::format_description">format_description</a></div><div class="desc docblock-short">Description of how types should be formatted and parsed.</div></li><li><div class="item-name"><a class="mod" href="formatting/index.html" title="mod time::formatting">formatting</a></div><div class="desc docblock-short">Formatting for various types.</div></li><li><div class="item-name"><a class="mod" href="macros/index.html" title="mod time::macros">macros</a></div><div class="desc docblock-short">Macros to construct statically known values.</div></li><li><div class="item-name"><a class="mod" href="parsing/index.html" title="mod time::parsing">parsing</a></div><div class="desc docblock-short">Parsing for various types.</div></li><li><div class="item-name"><a class="mod" href="util/index.html" title="mod time::util">util</a></div><div class="desc docblock-short">Utility functions.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Date.html" title="struct time::Date">Date</a></div><div class="desc docblock-short">Date in the proleptic Gregorian calendar.</div></li><li><div class="item-name"><a class="struct" href="struct.Duration.html" title="struct time::Duration">Duration</a></div><div class="desc docblock-short">A span of time with nanosecond precision.</div></li><li><div class="item-name"><a class="struct" href="struct.Instant.html" title="struct time::Instant">Instant</a><span class="stab deprecated" title="">Deprecated</span></div><div class="desc docblock-short">A measurement of a monotonically non-decreasing clock. Opaque and useful only with <a href="struct.Duration.html" title="struct time::Duration"><code>Duration</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.OffsetDateTime.html" title="struct time::OffsetDateTime">OffsetDateTime</a></div><div class="desc docblock-short">A <a href="struct.PrimitiveDateTime.html" title="struct time::PrimitiveDateTime"><code>PrimitiveDateTime</code></a> with a <a href="struct.UtcOffset.html" title="struct time::UtcOffset"><code>UtcOffset</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.PrimitiveDateTime.html" title="struct time::PrimitiveDateTime">PrimitiveDateTime</a></div><div class="desc docblock-short">Combined date and time.</div></li><li><div class="item-name"><a class="struct" href="struct.Time.html" title="struct time::Time">Time</a></div><div class="desc docblock-short">The clock time within a given date. Nanosecond precision.</div></li><li><div class="item-name"><a class="struct" href="struct.UtcOffset.html" title="struct time::UtcOffset">UtcOffset</a></div><div class="desc docblock-short">An offset from UTC.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.Month.html" title="enum time::Month">Month</a></div><div class="desc docblock-short">Months of the year.</div></li><li><div class="item-name"><a class="enum" href="enum.Weekday.html" title="enum time::Weekday">Weekday</a></div><div class="desc docblock-short">Days of the week.</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.Result.html" title="type time::Result">Result</a></div><div class="desc docblock-short">An alias for <a href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result"><code>std::result::Result</code></a> with a generic error from the time crate.</div></li></ul></section></div></main></body></html>

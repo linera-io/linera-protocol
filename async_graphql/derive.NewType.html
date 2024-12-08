@@ -1,0 +1,121 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Define a NewType Scalar"><title>NewType in async_graphql - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="async_graphql" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc derive"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../async_graphql/index.html">async_graphql</a><span class="version">7.0.2</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Derive Macro <a href="index.html">async_graphql</a>::<wbr><a class="derive" href="#">NewType</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/async_graphql_derive/lib.rs.html#200">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>#[derive(NewType)]
+{
+    <span class="comment">// Attributes available to this derive:</span>
+    #[graphql]
+}
+</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Define a NewType Scalar</p>
+<p>It also implements <code>From&lt;InnerType&gt;</code> and <code>Into&lt;InnerType&gt;</code>.</p>
+<h2 id="macro-attributes"><a class="doc-anchor" href="#macro-attributes">§</a>Macro attributes</h2><div><table><thead><tr><th>Attribute</th><th>description</th><th>Type</th><th>Optional</th></tr></thead><tbody>
+<tr><td>name</td><td>If this attribute is provided then define a new scalar, otherwise it is just a transparent proxy for the internal scalar.</td><td>string</td><td>Y</td></tr>
+<tr><td>visible(Only valid for new scalars)</td><td>If <code>false</code>, it will not be displayed in introspection. <em><a href="https://async-graphql.github.io/async-graphql/en/visibility.html">See also the Book</a>.</em></td><td>bool</td><td>Y</td></tr>
+<tr><td>visible(Only valid for new scalars)</td><td>Call the specified function. If the return value is <code>false</code>, it will not be displayed in introspection.</td><td>string</td><td>Y</td></tr>
+<tr><td>specified_by_url(Only valid for new scalars)</td><td>Provide a specification URL for this scalar type, it must link to a human-readable specification of the data format, serialization and coercion rules for this scalar.</td><td>string</td><td>Y</td></tr>
+<tr><td>inaccessible</td><td>Indicate that an object is not accessible from a supergraph when using Apollo Federation</td><td>bool</td><td>Y</td></tr>
+<tr><td>tag</td><td>Arbitrary string metadata that will be propagated to the supergraph when using Apollo Federation. This attribute is repeatable</td><td>string</td><td>Y</td></tr>
+</tbody></table>
+</div><h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2><h3 id="use-the-original-scalar-name"><a class="doc-anchor" href="#use-the-original-scalar-name">§</a>Use the original scalar name</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>async_graphql::<span class="kw-2">*</span>;
+
+<span class="attr">#[derive(NewType)]
+</span><span class="kw">struct </span>Weight(f64);
+
+<span class="kw">struct </span>Query;
+
+<span class="attr">#[Object]
+</span><span class="kw">impl </span>Query {
+    <span class="kw">async fn </span>value(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Weight {
+        Weight(<span class="number">1.234</span>)
+    }
+}
+
+<span class="comment">// Test conversion
+</span><span class="kw">let </span>weight: Weight = <span class="number">10f64</span>.into();
+<span class="kw">let </span>weight_f64: f64 = weight.into();
+
+<span class="kw">let </span>schema = Schema::build(Query, EmptyMutation, EmptySubscription).data(<span class="string">"hello"</span>.to_string()).finish();
+
+<span class="kw">let </span>res = schema.execute(<span class="string">"{ value }"</span>).<span class="kw">await</span>.into_result().unwrap().data;
+<span class="macro">assert_eq!</span>(res, <span class="macro">value!</span>({
+    <span class="string">"value"</span>: <span class="number">1.234</span>,
+}));
+
+<span class="kw">let </span>res = schema.execute(<span class="string">r#"
+{
+    __type(name: "Query") {
+        fields {
+            name type {
+                kind
+                ofType { name }
+            }
+        }
+    }
+}"#</span>).<span class="kw">await</span>.into_result().unwrap().data;
+<span class="macro">assert_eq!</span>(res, <span class="macro">value!</span>({
+    <span class="string">"__type"</span>: {
+        <span class="string">"fields"</span>: [{
+            <span class="string">"name"</span>: <span class="string">"value"</span>,
+            <span class="string">"type"</span>: {
+                <span class="string">"kind"</span>: <span class="string">"NON_NULL"</span>,
+                <span class="string">"ofType"</span>: {
+                    <span class="string">"name"</span>: <span class="string">"Float"
+                </span>}
+            }
+        }]
+    }
+}));</code></pre></div>
+<h3 id="define-a-new-scalar"><a class="doc-anchor" href="#define-a-new-scalar">§</a>Define a new scalar</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>async_graphql::<span class="kw-2">*</span>;
+
+<span class="doccomment">/// Widget NewType
+</span><span class="attr">#[derive(NewType)]
+#[graphql(name)] </span><span class="comment">// or: #[graphql(name = true)], #[graphql(name = "Weight")]
+</span><span class="kw">struct </span>Weight(f64);
+
+<span class="kw">struct </span>Query;
+
+<span class="attr">#[Object]
+</span><span class="kw">impl </span>Query {
+    <span class="kw">async fn </span>value(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Weight {
+        Weight(<span class="number">1.234</span>)
+    }
+}
+
+<span class="kw">let </span>schema = Schema::build(Query, EmptyMutation, EmptySubscription).data(<span class="string">"hello"</span>.to_string()).finish();
+
+<span class="kw">let </span>res = schema.execute(<span class="string">"{ value }"</span>).<span class="kw">await</span>.into_result().unwrap().data;
+<span class="macro">assert_eq!</span>(res, <span class="macro">value!</span>({
+    <span class="string">"value"</span>: <span class="number">1.234</span>,
+}));
+
+<span class="kw">let </span>res = schema.execute(<span class="string">r#"
+{
+    __type(name: "Query") {
+        fields {
+            name type {
+                kind
+                ofType { name }
+            }
+        }
+    }
+}"#</span>).<span class="kw">await</span>.into_result().unwrap().data;
+<span class="macro">assert_eq!</span>(res, <span class="macro">value!</span>({
+    <span class="string">"__type"</span>: {
+        <span class="string">"fields"</span>: [{
+            <span class="string">"name"</span>: <span class="string">"value"</span>,
+            <span class="string">"type"</span>: {
+                <span class="string">"kind"</span>: <span class="string">"NON_NULL"</span>,
+                <span class="string">"ofType"</span>: {
+                    <span class="string">"name"</span>: <span class="string">"Weight"
+                </span>}
+            }
+        }]
+    }
+}));
+
+<span class="macro">assert_eq!</span>(schema.execute(<span class="string">r#"{ __type(name: "Weight") { name description } }"#</span>).
+    <span class="kw">await</span>.into_result().unwrap().data, <span class="macro">value!</span>({
+        <span class="string">"__type"</span>: {
+            <span class="string">"name"</span>: <span class="string">"Weight"</span>, <span class="string">"description"</span>: <span class="string">"Widget NewType"
+        </span>}
+    }));</code></pre></div>
+</div></details></section></div></main></body></html>
