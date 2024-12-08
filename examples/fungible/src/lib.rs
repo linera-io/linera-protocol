@@ -34,7 +34,7 @@ Tokens can be transferred from an account to different destinations, such as:
 ## Setting Up
 
 The WebAssembly binaries for the bytecode can be built and published using [steps from the
-book](https://linera.dev/developers/getting_started.html),
+book](https://linera.dev/developers/getting_started/installation.html),
 summarized below.
 
 Before getting started, make sure that the binary tools `linera*` corresponding to
