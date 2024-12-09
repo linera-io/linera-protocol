@@ -389,7 +389,7 @@ pub enum Operation {
         token_to_remove_amount: Amount,
     },
     /// Remove all added liquidity operation
-    /// Remove all the liquidity added by given user, that is remaining in the AMM.
+    /// Remove all the liquidity added by the given user, that is remaining in the AMM.
     /// Owner here is the user removing liquidity, which currently can only
     /// be a chain owner
     RemoveAllAddedLiquidity { owner: AccountOwner },
