@@ -7,10 +7,7 @@ on:
     branches:
       - "**"
     paths:
-      - 'docker/Dockerfile'
-      - 'docker/docker-compose.yml'
-      - 'docker/compose.sh'
-      - 'docker/docker-compose.yml'
+      - 'docker/**'
       - 'Cargo.toml'
       - '.github/workflows/docker.yml'
   workflow_dispatch:
