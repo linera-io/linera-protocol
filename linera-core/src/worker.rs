@@ -263,7 +263,7 @@ where
     storage: StorageClient,
     /// Configuration options for the [`ChainWorker`]s.
     chain_worker_config: ChainWorkerConfig,
-    recent_executed_block_cache: Arc<ValueCache<CryptoHash, Hashed<ExecutedBlock>>>,
+    executed_block_cache: Arc<ValueCache<CryptoHash, Hashed<ExecutedBlock>>>,
     /// Chain IDs that should be tracked by a worker.
     tracked_chains: Option<Arc<RwLock<HashSet<ChainId>>>>,
     /// One-shot channels to notify callers when messages of a particular chain have been
@@ -296,7 +296,7 @@ where
             nickname,
             storage,
             chain_worker_config: ChainWorkerConfig::default().with_key_pair(key_pair),
-            recent_executed_block_cache: Arc::new(ValueCache::default()),
+            executed_block_cache: Arc::new(ValueCache::default()),
             tracked_chains: None,
             delivery_notifiers: Arc::default(),
             chain_worker_tasks: Arc::default(),
@@ -315,7 +315,7 @@ where
             nickname,
             storage,
             chain_worker_config: ChainWorkerConfig::default(),
-            recent_executed_block_cache: Arc::new(ValueCache::default()),
+            executed_block_cache: Arc::new(ValueCache::default()),
             tracked_chains: Some(tracked_chains),
             delivery_notifiers: Arc::default(),
             chain_worker_tasks: Arc::default(),
@@ -396,7 +396,7 @@ where
         certificate: LiteCertificate<'_>,
     ) -> Result<Either<ConfirmedBlockCertificate, ValidatedBlockCertificate>, WorkerError> {
         if let Some(executed_block) = self
-            .recent_executed_block_cache
+            .executed_block_cache
             .get(&certificate.value.value_hash)
             .await
         {
@@ -706,7 +706,7 @@ where
             let actor = ChainWorkerActor::load(
                 self.chain_worker_config.clone(),
                 self.storage.clone(),
-                self.recent_executed_block_cache.clone(),
+                self.executed_block_cache.clone(),
                 self.tracked_chains.clone(),
                 delivery_notifier,
                 chain_id,
