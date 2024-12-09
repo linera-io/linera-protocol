@@ -333,9 +333,7 @@ where
         blobs: Vec<Blob>,
     ) -> Option<Result<ChainInfoResponse, NodeError>> {
         match validator.fault_type {
-            FaultType::DontProcessValidated if matches!(T::KIND, CertificateKind::Validated) => {
-                None
-            }
+            FaultType::DontProcessValidated if T::KIND == CertificateKind::Validated => None,
             FaultType::Honest
             | FaultType::DontSendConfirmVote
             | FaultType::Malicious
@@ -392,7 +390,7 @@ where
             }
             _ => match validator.fault_type {
                 FaultType::DontSendConfirmVote | FaultType::DontProcessValidated
-                    if matches!(T::KIND, CertificateKind::Validated) =>
+                    if T::KIND == CertificateKind::Validated =>
                 {
                     Err(NodeError::ClientIoError {
                         error: "refusing to confirm".to_string(),
