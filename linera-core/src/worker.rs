@@ -395,32 +395,30 @@ where
         &self,
         certificate: LiteCertificate<'_>,
     ) -> Result<Either<ConfirmedBlockCertificate, ValidatedBlockCertificate>, WorkerError> {
-        if let Some(executed_block) = self
+        let executed_block = self
             .executed_block_cache
             .get(&certificate.value.value_hash)
             .await
-        {
-            match certificate.value.kind {
-                linera_chain::types::CertificateKind::Confirmed => {
-                    let value = ConfirmedBlock::from_hashed(executed_block);
-                    Ok(Either::Left(
-                        certificate
-                            .with_value(Hashed::new(value))
-                            .ok_or(WorkerError::InvalidLiteCertificate)?,
-                    ))
-                }
-                linera_chain::types::CertificateKind::Validated => {
-                    let value = ValidatedBlock::from_hashed(executed_block);
-                    Ok(Either::Right(
-                        certificate
-                            .with_value(Hashed::new(value))
-                            .ok_or(WorkerError::InvalidLiteCertificate)?,
-                    ))
-                }
-                _ => return Err(WorkerError::InvalidLiteCertificate), // TODO: different error?
+            .ok_or(WorkerError::MissingCertificateValue)?;
+
+        match certificate.value.kind {
+            linera_chain::types::CertificateKind::Confirmed => {
+                let value = ConfirmedBlock::from_hashed(executed_block);
+                Ok(Either::Left(
+                    certificate
+                        .with_value(Hashed::new(value))
+                        .ok_or(WorkerError::InvalidLiteCertificate)?,
+                ))
             }
-        } else {
-            Err(WorkerError::MissingCertificateValue)
+            linera_chain::types::CertificateKind::Validated => {
+                let value = ValidatedBlock::from_hashed(executed_block);
+                Ok(Either::Right(
+                    certificate
+                        .with_value(Hashed::new(value))
+                        .ok_or(WorkerError::InvalidLiteCertificate)?,
+                ))
+            }
+            _ => return Err(WorkerError::InvalidLiteCertificate),
         }
     }
 }
