@@ -440,7 +440,7 @@ pub struct LiteValue {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-struct ValueHashAndRound(CryptoHash, Round, CertificateKind);
+struct VoteValue(CryptoHash, Round, CertificateKind);
 
 /// A vote on a statement from a validator.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -458,7 +458,7 @@ impl<T> Vote<T> {
     where
         T: CertificateValueT,
     {
-        let hash_and_round = ValueHashAndRound(value.hash(), round, T::KIND);
+        let hash_and_round = VoteValue(value.hash(), round, T::KIND);
         let signature = Signature::new(&hash_and_round, key_pair);
         Self {
             value,
@@ -807,7 +807,7 @@ impl BlockProposal {
 impl LiteVote {
     /// Uses the signing key to create a signed object.
     pub fn new(value: LiteValue, round: Round, key_pair: &KeyPair) -> Self {
-        let hash_and_round = ValueHashAndRound(value.value_hash, round, value.kind);
+        let hash_and_round = VoteValue(value.value_hash, round, value.kind);
         let signature = Signature::new(&hash_and_round, key_pair);
         Self {
             value,
@@ -819,7 +819,7 @@ impl LiteVote {
 
     /// Verifies the signature in the vote.
     pub fn check(&self) -> Result<(), ChainError> {
-        let hash_and_round = ValueHashAndRound(self.value.value_hash, self.round, self.value.kind);
+        let hash_and_round = VoteValue(self.value.value_hash, self.round, self.value.kind);
         Ok(self.signature.check(&hash_and_round, self.validator.0)?)
     }
 }
@@ -853,7 +853,7 @@ impl<'a, T> SignatureAggregator<'a, T> {
     where
         T: CertificateValueT,
     {
-        let hash_and_round = ValueHashAndRound(self.partial.hash(), self.partial.round, T::KIND);
+        let hash_and_round = VoteValue(self.partial.hash(), self.partial.round, T::KIND);
         signature.check(&hash_and_round, validator.0)?;
         // Check that each validator only appears once.
         ensure!(
@@ -911,14 +911,14 @@ pub(crate) fn check_signatures(
         ChainError::CertificateRequiresQuorum
     );
     // All that is left is checking signatures!
-    let hash_and_round = ValueHashAndRound(value_hash, round, certificate_kind);
+    let hash_and_round = VoteValue(value_hash, round, certificate_kind);
     Signature::verify_batch(&hash_and_round, signatures.iter().map(|(v, s)| (&v.0, s)))?;
     Ok(())
 }
 
 impl BcsSignable for ProposalContent {}
 
-impl BcsSignable for ValueHashAndRound {}
+impl BcsSignable for VoteValue {}
 
 doc_scalar!(
     MessageAction,
