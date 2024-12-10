@@ -145,13 +145,13 @@ where
             // Cache the value we voted on, so the client doesn't have to send it again.
             Some(Either::Left(vote)) => {
                 self.state
-                    .recent_executed_block_values
+                    .executed_block_values
                     .insert(Cow::Borrowed(vote.value.inner().inner()))
                     .await;
             }
             Some(Either::Right(vote)) => {
                 self.state
-                    .recent_executed_block_values
+                    .executed_block_values
                     .insert(Cow::Borrowed(vote.value.inner().inner()))
                     .await;
             }
@@ -208,7 +208,7 @@ where
         }
 
         self.state
-            .recent_executed_block_values
+            .executed_block_values
             .insert(Cow::Borrowed(certificate.inner().inner()))
             .await;
         let required_blob_ids = executed_block.required_blob_ids();
@@ -370,7 +370,7 @@ where
         self.save().await?;
 
         self.state
-            .recent_executed_block_values
+            .executed_block_values
             .insert(Cow::Owned(certificate.into_inner().inner().clone())) // TODO: Remove clone
             .await;
 
