@@ -1287,6 +1287,23 @@ where
             .await?;
         Ok(key_values)
     }
+
+    /// Obtains the number of entries in the map
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::create_test_memory_context;
+    /// # use linera_views::map_view::MapView;
+    /// # use linera_views::views::View;
+    /// # let context = create_test_memory_context();
+    /// let mut map: MapView<_, String, _> = MapView::load(context).await.unwrap();
+    /// map.insert("Italian", String::from("Ciao"));
+    /// map.insert("French", String::from("Bonjour"));
+    /// assert_eq!(map.count().await.unwrap(), 2);
+    /// # })
+    /// ```
+    pub async fn count(&self) -> Result<usize, ViewError> {
+        self.map.count().await
+    }
 }
 
 impl<C, I, V> MapView<C, I, V>
@@ -1788,20 +1805,8 @@ where
     /// assert_eq!(map.count().await.unwrap(), 2);
     /// # })
     /// ```
-    pub async fn count(&self) -> Result<usize, ViewError>
-    {
-        let prefix = Vec::new();
-        let mut count = 0;
-        self.map
-            .for_each_key_value(
-                |_key, _bytes| {
-                    count += 1;
-                    Ok(())
-                },
-                prefix,
-            )
-            .await?;
-        Ok(count)
+    pub async fn count(&self) -> Result<usize, ViewError> {
+        self.map.count().await
     }
 }
 
