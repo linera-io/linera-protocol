@@ -586,6 +586,31 @@ where
         .await?;
         Ok(keys)
     }
+
+    /// Returns the number of entries in the collection.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::{create_test_memory_context, MemoryContext};
+    /// # use linera_views::collection_view::ByteCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use linera_views::views::View;
+    /// # let context = create_test_memory_context();
+    /// let mut view: ByteCollectionView<_, RegisterView<_, String>> =
+    ///     ByteCollectionView::load(context).await.unwrap();
+    /// view.load_entry_mut(&[0, 1]).await.unwrap();
+    /// view.load_entry_mut(&[0, 2]).await.unwrap();
+    /// assert_eq!(view.count().await.unwrap(), 2);
+    /// # })
+    /// ```
+    pub async fn count(&self) -> Result<usize, ViewError> {
+        let mut count = 0;
+        self.for_each_key(|_key| {
+            count += 1;
+            Ok(())
+        })
+        .await?;
+        Ok(count)
+    }
 }
 
 #[async_trait]
@@ -907,12 +932,31 @@ where
     /// ```
     pub async fn indices(&self) -> Result<Vec<I>, ViewError> {
         let mut indices = Vec::new();
-        self.for_each_index(|index: I| {
+        self.for_each_index(|index| {
             indices.push(index);
             Ok(())
         })
         .await?;
         Ok(indices)
+    }
+
+    /// Returns the number of entries in the collection.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::{create_test_memory_context, MemoryContext};
+    /// # use linera_views::collection_view::CollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use linera_views::views::View;
+    /// # let context = create_test_memory_context();
+    /// let mut view: CollectionView<_, u64, RegisterView<_, String>> =
+    ///     CollectionView::load(context).await.unwrap();
+    /// view.load_entry_mut(&23).await.unwrap();
+    /// view.load_entry_mut(&25).await.unwrap();
+    /// assert_eq!(view.count().await.unwrap(), 2);
+    /// # })
+    /// ```
+    pub async fn count(&self) -> Result<usize, ViewError> {
+        self.collection.count().await
     }
 }
 
@@ -1267,12 +1311,31 @@ where
     /// ```
     pub async fn indices(&self) -> Result<Vec<I>, ViewError> {
         let mut indices = Vec::new();
-        self.for_each_index(|index: I| {
+        self.for_each_index(|index| {
             indices.push(index);
             Ok(())
         })
         .await?;
         Ok(indices)
+    }
+
+    /// Returns the number of entries in the collection.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::{create_test_memory_context, MemoryContext};
+    /// # use linera_views::collection_view::CollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use linera_views::views::View;
+    /// # let context = create_test_memory_context();
+    /// let mut view: CollectionView<_, u64, RegisterView<_, String>> =
+    ///     CollectionView::load(context).await.unwrap();
+    /// view.load_entry_mut(&23).await.unwrap();
+    /// view.load_entry_mut(&25).await.unwrap();
+    /// assert_eq!(view.count().await.unwrap(), 2);
+    /// # })
+    /// ```
+    pub async fn count(&self) -> Result<usize, ViewError> {
+        self.collection.count().await
     }
 }
 
