@@ -75,6 +75,33 @@ pub enum ValueOrBytes<'a, T> {
     Bytes(Vec<u8>),
 }
 
+impl<'a, T> ValueOrBytes<'a, T>
+where
+    T: Clone + DeserializeOwned,
+{
+    /// Convert to a value.
+    pub fn to_value(self) -> Result<T, ViewError> {
+        match self {
+            ValueOrBytes::Value(value) => Ok(value.clone()),
+            ValueOrBytes::Bytes(bytes) => Ok(bcs::from_bytes(&bytes)?),
+        }
+    }
+}
+
+impl<'a, T> ValueOrBytes<'a, T>
+where
+    T: Serialize,
+{
+    /// Convert to bytes.
+    pub fn to_bytes(self) -> Result<Vec<u8>, ViewError> {
+        match self {
+            ValueOrBytes::Value(value) => Ok(bcs::to_bytes(value)?),
+            ValueOrBytes::Bytes(bytes) => Ok(bytes)
+        }
+    }
+}
+
+
 #[async_trait]
 impl<C, V> View<C> for ByteMapView<C, V>
 where
@@ -751,10 +778,7 @@ where
         let prefix_copy = prefix.clone();
         self.for_each_key_value(
             |key, value| {
-                let value = match value {
-                    ValueOrBytes::Value(value) => value.clone(),
-                    ValueOrBytes::Bytes(bytes) => bcs::from_bytes(&bytes)?,
-                };
+                let value = value.to_value()?;
                 let mut big_key = prefix.clone();
                 big_key.extend(key);
                 key_values.push((big_key, value));
@@ -860,10 +884,7 @@ where
             |index, value| {
                 count += 1;
                 hasher.update_with_bytes(index)?;
-                let bytes = match value {
-                    ValueOrBytes::Value(value) => bcs::to_bytes(value)?,
-                    ValueOrBytes::Bytes(bytes) => bytes,
-                };
+                let bytes = value.to_bytes()?;
                 hasher.update_with_bytes(&bytes)?;
                 Ok(())
             },
@@ -1224,12 +1245,7 @@ where
             .for_each_key_value_while(
                 |key, value| {
                     let index = C::deserialize_value(key)?;
-                    let value = match value {
-                        ValueOrBytes::Value(value) => value.clone(),
-                        ValueOrBytes::Bytes(bytes) => {
-                            C::deserialize_value(&bytes)?
-                        }
-                    };
+                    let value = value.to_value()?;
                     f(index, value)
                 },
                 prefix,
@@ -1267,10 +1283,7 @@ where
             .for_each_key_value(
                 |key, value| {
                     let index = C::deserialize_value(key)?;
-                    let value = match value {
-                        ValueOrBytes::Value(value) => value.clone(),
-                        ValueOrBytes::Bytes(bytes) => C::deserialize_value(&bytes)?,
-                    };
+                    let value = value.to_value()?;
                     f(index, value)
                 },
                 prefix,
@@ -1730,10 +1743,7 @@ where
             .for_each_key_value_while(
                 |key, value| {
                     let index = I::from_custom_bytes(key)?;
-                    let value = match value {
-                        ValueOrBytes::Value(value) => value.clone(),
-                        ValueOrBytes::Bytes(bytes) => C::deserialize_value(&bytes)?,
-                    };
+                    let value = value.to_value()?;
                     f(index, value)
                 },
                 prefix,
@@ -1772,10 +1782,7 @@ where
             .for_each_key_value(
                 |key, value| {
                     let index = I::from_custom_bytes(key)?;
-                    let value = match value {
-                        ValueOrBytes::Value(value) => value.clone(),
-                        ValueOrBytes::Bytes(bytes) => C::deserialize_value(&bytes)?,
-                    };
+                    let value = value.to_value()?;
                     f(index, value)
                 },
                 prefix,
