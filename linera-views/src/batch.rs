@@ -197,6 +197,11 @@ impl Batch {
             .sum()
     }
 
+    /// Whether the batch is empty or not
+    pub fn is_empty(&self) -> bool {
+        self.operations.is_empty()
+    }
+
     /// Returns the number of operations in this [`Batch`].
     pub fn num_operations(&self) -> usize {
         self.operations.len()
