@@ -96,11 +96,10 @@ where
     pub fn to_bytes(self) -> Result<Vec<u8>, ViewError> {
         match self {
             ValueOrBytes::Value(value) => Ok(bcs::to_bytes(value)?),
-            ValueOrBytes::Bytes(bytes) => Ok(bytes)
+            ValueOrBytes::Bytes(bytes) => Ok(bytes),
         }
     }
 }
-
 
 #[async_trait]
 impl<C, V> View<C> for ByteMapView<C, V>
