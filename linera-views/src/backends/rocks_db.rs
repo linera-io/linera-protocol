@@ -83,6 +83,14 @@ impl RocksDbSpawnMode {
             }
         })
     }
+
+    /// Returns the string to be used in the configuration file
+    pub fn to_string(&self) -> String {
+        match &self {
+            RocksDbSpawnMode::SpawnBlocking => "spawn_blocking".to_string(),
+            RocksDbSpawnMode::BlockInPlace => "block_in_place".to_string(),
+        }
+    }
 }
 
 fn check_key_size(key: &[u8]) -> Result<(), RocksDbStoreInternalError> {

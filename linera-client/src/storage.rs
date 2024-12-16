@@ -122,8 +122,10 @@ pub enum StorageConfig {
     },
     #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
     DualRocksDbScyllaDb {
-        /// The path used with a guard if relevant.
-        path_with_guard: PathWithGuard,
+        /// The path used
+        path: PathBuf,
+        /// Whether to use `block_in_place` or `spawn_blocking`.
+        spawn_mode: RocksDbSpawnMode,
         /// The URI for accessing the database
         uri: String,
     },
@@ -134,7 +136,8 @@ impl StorageConfig {
         match self {
             #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
             StorageConfig::DualRocksDbScyllaDb {
-                path_with_guard: _,
+                path: _,
+                spawn_mode: _,
                 uri,
             } => {
                 let uri = uri.clone();
@@ -156,10 +159,11 @@ impl StorageConfig {
         match self {
             #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
             StorageConfig::DualRocksDbScyllaDb {
-                path_with_guard,
+                path,
+                spawn_mode: _,
                 uri: _,
             } => {
-                path_with_guard.path_buf.push(_shard_str);
+                path.push(_shard_str);
             }
             _ => panic!("append_shard_str is not available for this storage"),
         }
@@ -364,32 +368,41 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
         #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
         if let Some(s) = input.strip_prefix(DUAL_ROCKS_DB_SCYLLA_DB) {
             let parts = s.split(':').collect::<Vec<_>>();
-            if parts.len() != 4 && parts.len() != 5 {
+            if parts.len() != 5 && parts.len() != 6 {
                 return Err(Error::Format(
-                    "For DualRocksDbScyllaDb, the formatting has to be dualrocksdbscylladb:directory:tcp:hostname:port:namespace".into(),
+                    "For DualRocksDbScyllaDb, the formatting has to be dualrocksdbscylladb:directory:mode:tcp:hostname:port:namespace".into(),
                 ));
             }
             let path = Path::new(parts[0]);
-            let path_buf = path.to_path_buf();
-            let path_with_guard = PathWithGuard::new(path_buf);
-            let protocol = parts[1];
+            let path = path.to_path_buf();
+            let spawn_mode = match parts[1] {
+                "spawn_blocking" => Ok(RocksDbSpawnMode::SpawnBlocking),
+                "block_in_place" => Ok(RocksDbSpawnMode::BlockInPlace),
+                "runtime" => Ok(RocksDbSpawnMode::get_spawn_mode_from_runtime()),
+                _ => Err(Error::Format(format!(
+                    "Failed to parse {} as a spawn_mode",
+                    parts[1]
+                ))),
+            }?;
+            let protocol = parts[2];
             if protocol != "tcp" {
                 return Err(Error::Format("The only alowed protocol is tcp".into()));
             }
-            let address = parts[2];
-            let port_str = parts[3];
+            let address = parts[3];
+            let port_str = parts[4];
             let port = NonZeroU16::from_str(port_str).map_err(|_| {
                 Error::Format(format!("Failed to find parse port {port_str} for {s}",))
             })?;
             let uri = format!("{}:{}", &address, port);
             let storage_config = StorageConfig::DualRocksDbScyllaDb {
-                path_with_guard,
+                path,
+                spawn_mode,
                 uri,
             };
-            let namespace = if parts.len() == 4 {
+            let namespace = if parts.len() == 5 {
                 DEFAULT_NAMESPACE.to_string()
             } else {
-                parts[4].to_string()
+                parts[5].to_string()
             };
             return Ok(StorageConfigNamespace {
                 storage_config,
@@ -458,19 +471,15 @@ impl StorageConfigNamespace {
             }
             #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
             StorageConfig::DualRocksDbScyllaDb {
-                path_with_guard,
+                path,
+                spawn_mode,
                 uri,
             } => {
-                let spawn_mode = RocksDbSpawnMode::SpawnBlocking;
-                let first_config = RocksDbStoreConfig {
-                    path_with_guard: path_with_guard.clone(),
-                    spawn_mode,
-                    common_config: common_config.clone(),
-                };
-                let second_config = ScyllaDbStoreConfig {
-                    uri: uri.to_string(),
-                    common_config,
-                };
+                let path_buf = path.to_path_buf();
+                let path_with_guard = PathWithGuard::new(path_buf);
+                let first_config =
+                    RocksDbStoreConfig::new(*spawn_mode, path_with_guard, common_config.clone());
+                let second_config = ScyllaDbStoreConfig::new(uri.to_string(), common_config);
                 let config = DualStoreConfig {
                     first_config,
                     second_config,
@@ -494,10 +503,7 @@ impl fmt::Display for StorageConfigNamespace {
             }
             #[cfg(feature = "rocksdb")]
             StorageConfig::RocksDb { path, spawn_mode } => {
-                let spawn_mode = match spawn_mode {
-                    RocksDbSpawnMode::SpawnBlocking => "spawn_blocking".to_string(),
-                    RocksDbSpawnMode::BlockInPlace => "block_in_place".to_string(),
-                };
+                let spawn_mode = spawn_mode.to_string();
                 write!(f, "rocksdb:{}:{}:{}", path.display(), spawn_mode, namespace)
             }
             #[cfg(feature = "dynamodb")]
@@ -511,13 +517,15 @@ impl fmt::Display for StorageConfigNamespace {
             }
             #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
             StorageConfig::DualRocksDbScyllaDb {
-                path_with_guard,
+                path,
+                spawn_mode,
                 uri,
             } => {
                 write!(
                     f,
-                    "dualrocksdbscylladb:{}:tcp:{}:{}",
-                    path_with_guard.path_buf.display(),
+                    "dualrocksdbscylladb:{}:{}:tcp:{}:{}",
+                    path.display(),
+                    spawn_mode.to_string(),
                     uri,
                     namespace
                 )
