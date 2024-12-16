@@ -68,7 +68,7 @@ pub struct ByteMapView<C, V> {
 }
 
 /// Whether we have a value or its serialization.
-pub enum SerOrNot<'a, T> {
+pub enum ValueOrBytes<'a, T> {
     /// The value itself.
     Value(&'a T),
     /// The serialization.
@@ -618,7 +618,7 @@ where
         prefix: Vec<u8>,
     ) -> Result<(), ViewError>
     where
-        F: FnMut(&[u8], SerOrNot<'a, V>) -> Result<bool, ViewError> + Send,
+        F: FnMut(&[u8], ValueOrBytes<'a, V>) -> Result<bool, ViewError> + Send,
     {
         let prefix_len = prefix.len();
         let mut updates = self.updates.range(get_interval(prefix.clone()));
@@ -641,7 +641,7 @@ where
                     match update {
                         Some((key, value)) if &key[prefix_len..] <= index => {
                             if let Update::Set(value) = value {
-                                let value = SerOrNot::Value(value);
+                                let value = ValueOrBytes::Value(value);
                                 if !f(&key[prefix_len..], value)? {
                                     return Ok(());
                                 }
@@ -653,7 +653,7 @@ where
                         }
                         _ => {
                             if !suffix_closed_set.find_key(index) {
-                                let value = SerOrNot::Bytes(bytes.to_vec());
+                                let value = ValueOrBytes::Bytes(bytes.to_vec());
                                 if !f(index, value)? {
                                     return Ok(());
                                 }
@@ -666,7 +666,7 @@ where
         }
         while let Some((key, value)) = update {
             if let Update::Set(value) = value {
-                let value = SerOrNot::Value(value);
+                let value = ValueOrBytes::Value(value);
                 if !f(&key[prefix_len..], value)? {
                     return Ok(());
                 }
@@ -707,7 +707,7 @@ where
         prefix: Vec<u8>,
     ) -> Result<(), ViewError>
     where
-        F: FnMut(&[u8], SerOrNot<'a, V>) -> Result<(), ViewError> + Send,
+        F: FnMut(&[u8], ValueOrBytes<'a, V>) -> Result<(), ViewError> + Send,
     {
         self.for_each_key_value_while(
             |key, value| {
@@ -751,9 +751,9 @@ where
         let prefix_copy = prefix.clone();
         self.for_each_key_value(
             |key, value| {
-                let value: V = match value {
-                    SerOrNot::Value(value) => value.clone(),
-                    SerOrNot::Bytes(bytes) => bcs::from_bytes(&bytes)?,
+                let value = match value {
+                    ValueOrBytes::Value(value) => value.clone(),
+                    ValueOrBytes::Bytes(bytes) => bcs::from_bytes(&bytes)?,
                 };
                 let mut big_key = prefix.clone();
                 big_key.extend(key);
@@ -860,15 +860,11 @@ where
             |index, value| {
                 count += 1;
                 hasher.update_with_bytes(index)?;
-                match value {
-                    SerOrNot::Value(value) => {
-                        let bytes = bcs::to_bytes(value)?;
-                        hasher.update_with_bytes(&bytes)?;
-                    }
-                    SerOrNot::Bytes(bytes) => {
-                        hasher.update_with_bytes(&bytes)?;
-                    }
-                }
+                let bytes = match value {
+                    ValueOrBytes::Value(value) => bcs::to_bytes(value)?,
+                    ValueOrBytes::Bytes(bytes) => bytes,
+                };
+                hasher.update_with_bytes(&bytes)?;
                 Ok(())
             },
             prefix,
@@ -1228,13 +1224,13 @@ where
             .for_each_key_value_while(
                 |key, value| {
                     let index = C::deserialize_value(key)?;
-                    match value {
-                        SerOrNot::Value(value) => f(index, value.clone()),
-                        SerOrNot::Bytes(bytes) => {
-                            let value = C::deserialize_value(&bytes)?;
-                            f(index, value)
+                    let value = match value {
+                        ValueOrBytes::Value(value) => value.clone(),
+                        ValueOrBytes::Bytes(bytes) => {
+                            C::deserialize_value(&bytes)?
                         }
-                    }
+                    };
+                    f(index, value)
                 },
                 prefix,
             )
@@ -1271,13 +1267,11 @@ where
             .for_each_key_value(
                 |key, value| {
                     let index = C::deserialize_value(key)?;
-                    match value {
-                        SerOrNot::Value(value) => f(index, value.clone()),
-                        SerOrNot::Bytes(bytes) => {
-                            let value = C::deserialize_value(&bytes)?;
-                            f(index, value)
-                        }
-                    }
+                    let value = match value {
+                        ValueOrBytes::Value(value) => value.clone(),
+                        ValueOrBytes::Bytes(bytes) => C::deserialize_value(&bytes)?,
+                    };
+                    f(index, value)
                 },
                 prefix,
             )
@@ -1736,13 +1730,11 @@ where
             .for_each_key_value_while(
                 |key, value| {
                     let index = I::from_custom_bytes(key)?;
-                    match value {
-                        SerOrNot::Value(value) => f(index, value.clone()),
-                        SerOrNot::Bytes(bytes) => {
-                            let value = C::deserialize_value(&bytes)?;
-                            f(index, value)
-                        }
-                    }
+                    let value = match value {
+                        ValueOrBytes::Value(value) => value.clone(),
+                        ValueOrBytes::Bytes(bytes) => C::deserialize_value(&bytes)?,
+                    };
+                    f(index, value)
                 },
                 prefix,
             )
@@ -1780,13 +1772,11 @@ where
             .for_each_key_value(
                 |key, value| {
                     let index = I::from_custom_bytes(key)?;
-                    match value {
-                        SerOrNot::Value(value) => f(index, value.clone()),
-                        SerOrNot::Bytes(bytes) => {
-                            let value = C::deserialize_value(&bytes)?;
-                            f(index, value)
-                        }
-                    }
+                    let value = match value {
+                        ValueOrBytes::Value(value) => value.clone(),
+                        ValueOrBytes::Bytes(bytes) => C::deserialize_value(&bytes)?,
+                    };
+                    f(index, value)
                 },
                 prefix,
             )
