@@ -365,7 +365,7 @@ impl<C, V> ByteMapView<C, V>
 where
     C: Context,
     ViewError: From<C::Error>,
-    V: Sync + Serialize + DeserializeOwned + 'static,
+    V: Serialize + 'static,
 {
     /// Applies the function f on each index (aka key) which has the assigned prefix.
     /// Keys are visited in the lexicographic order. The shortened key is send to the
@@ -709,7 +709,7 @@ impl<C, V> ByteMapView<C, V>
 where
     C: Context,
     ViewError: From<C::Error>,
-    V: Sync + Send + Serialize + DeserializeOwned + 'static,
+    V: Send + Serialize + DeserializeOwned + 'static,
 {
     /// Returns the list of keys and values of the map matching a prefix
     /// in lexicographic order.
@@ -824,7 +824,7 @@ impl<C, V> HashableView<C> for ByteMapView<C, V>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    V: Clone + Send + Sync + Serialize + DeserializeOwned + 'static,
+    V: Send + Sync + Serialize + 'static,
 {
     type Hasher = sha3::Sha3_256;
 
@@ -866,7 +866,7 @@ impl<C, I, V> View<C> for MapView<C, I, V>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    I: Send + Sync + Serialize,
+    I: Sync,
     V: Send + Sync + Serialize,
 {
     const NUM_INIT_KEYS: usize = ByteMapView::<C, V>::NUM_INIT_KEYS;
@@ -912,7 +912,7 @@ impl<C, I, V> ClonableView<C> for MapView<C, I, V>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    I: Send + Sync + Serialize,
+    I: Sync,
     V: Clone + Send + Sync + Serialize,
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
@@ -1068,7 +1068,7 @@ impl<C, I, V> MapView<C, I, V>
 where
     C: Context + Sync,
     ViewError: From<C::Error>,
-    I: Sync + Send + Serialize + DeserializeOwned,
+    I: Send + DeserializeOwned,
     V: Sync + Serialize + DeserializeOwned + 'static,
 {
     /// Returns the list of indices in the map. The order is determined by serialization.
@@ -1247,6 +1247,64 @@ where
             )
             .await?;
         Ok(())
+    }
+}
+
+impl<C, I, V> MapView<C, I, V>
+where
+    C: Context + Sync,
+    ViewError: From<C::Error>,
+    I: Send + DeserializeOwned,
+    V: Sync + Send + Serialize + DeserializeOwned + 'static,
+{
+    /// Obtains all the `(index,value)` pairs.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::create_test_memory_context;
+    /// # use linera_views::map_view::MapView;
+    /// # use linera_views::views::View;
+    /// # let context = create_test_memory_context();
+    /// let mut map: MapView<_, String, _> = MapView::load(context).await.unwrap();
+    /// map.insert("Italian", String::from("Ciao"));
+    /// let index_values = map.index_values().await.unwrap();
+    /// assert_eq!(
+    ///     index_values,
+    ///     vec![("Italian".to_string(), "Ciao".to_string())]
+    /// );
+    /// # })
+    /// ```
+    pub async fn index_values(&self) -> Result<Vec<(I, V)>, ViewError> {
+        let prefix = Vec::new();
+        let mut key_values = Vec::new();
+        self.map
+            .for_each_key_value(
+                |key, bytes| {
+                    let index = C::deserialize_value(key)?;
+                    let value = C::deserialize_value(bytes)?;
+                    key_values.push((index, value));
+                    Ok(())
+                },
+                prefix,
+            )
+            .await?;
+        Ok(key_values)
+    }
+
+    /// Obtains the number of entries in the map
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::create_test_memory_context;
+    /// # use linera_views::map_view::MapView;
+    /// # use linera_views::views::View;
+    /// # let context = create_test_memory_context();
+    /// let mut map: MapView<_, String, _> = MapView::load(context).await.unwrap();
+    /// map.insert("Italian", String::from("Ciao"));
+    /// map.insert("French", String::from("Bonjour"));
+    /// assert_eq!(map.count().await.unwrap(), 2);
+    /// # })
+    /// ```
+    pub async fn count(&self) -> Result<usize, ViewError> {
+        self.map.count().await
     }
 }
 
@@ -1512,8 +1570,8 @@ impl<C, I, V> CustomMapView<C, I, V>
 where
     C: Context + Sync,
     ViewError: From<C::Error>,
-    I: Sync + Send + CustomSerialize,
-    V: Sync + Serialize + DeserializeOwned + 'static,
+    I: Send + CustomSerialize,
+    V: Serialize + DeserializeOwned + 'static,
 {
     /// Returns the list of indices in the map. The order is determined
     /// by the custom serialization.
@@ -1702,6 +1760,64 @@ impl<C, I, V> CustomMapView<C, I, V>
 where
     C: Context + Sync,
     ViewError: From<C::Error>,
+    I: Send + CustomSerialize,
+    V: Sync + Send + Serialize + DeserializeOwned + 'static,
+{
+    /// Obtains all the `(index,value)` pairs.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::create_test_memory_context;
+    /// # use linera_views::map_view::MapView;
+    /// # use linera_views::views::View;
+    /// # let context = create_test_memory_context();
+    /// let mut map: MapView<_, String, _> = MapView::load(context).await.unwrap();
+    /// map.insert("Italian", String::from("Ciao"));
+    /// let index_values = map.index_values().await.unwrap();
+    /// assert_eq!(
+    ///     index_values,
+    ///     vec![("Italian".to_string(), "Ciao".to_string())]
+    /// );
+    /// # })
+    /// ```
+    pub async fn index_values(&self) -> Result<Vec<(I, V)>, ViewError> {
+        let prefix = Vec::new();
+        let mut key_values = Vec::new();
+        self.map
+            .for_each_key_value(
+                |key, bytes| {
+                    let index = I::from_custom_bytes(key)?;
+                    let value = C::deserialize_value(bytes)?;
+                    key_values.push((index, value));
+                    Ok(())
+                },
+                prefix,
+            )
+            .await?;
+        Ok(key_values)
+    }
+
+    /// Obtains the number of entries in the map
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::create_test_memory_context;
+    /// # use linera_views::map_view::MapView;
+    /// # use linera_views::views::View;
+    /// # let context = create_test_memory_context();
+    /// let mut map: MapView<_, String, _> = MapView::load(context).await.unwrap();
+    /// map.insert("Italian", String::from("Ciao"));
+    /// map.insert("French", String::from("Bonjour"));
+    /// assert_eq!(map.count().await.unwrap(), 2);
+    /// # })
+    /// ```
+    pub async fn count(&self) -> Result<usize, ViewError> {
+        self.map.count().await
+    }
+}
+
+impl<C, I, V> CustomMapView<C, I, V>
+where
+    C: Context + Sync,
+    ViewError: From<C::Error>,
     I: CustomSerialize,
     V: Default + DeserializeOwned + 'static,
 {
@@ -1723,7 +1839,7 @@ where
     pub async fn get_mut_or_default<Q>(&mut self, index: &Q) -> Result<&mut V, ViewError>
     where
         I: Borrow<Q>,
-        Q: Sync + Send + Serialize + CustomSerialize,
+        Q: Send + CustomSerialize,
     {
         let short_key = index.to_custom_bytes()?;
         self.map.get_mut_or_default(&short_key).await

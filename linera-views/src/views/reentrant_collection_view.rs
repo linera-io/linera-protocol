@@ -842,6 +842,31 @@ where
         Ok(keys)
     }
 
+    /// Returns the number of indices of the collection.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::{create_test_memory_context, MemoryContext};
+    /// # use linera_views::reentrant_collection_view::ReentrantByteCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use linera_views::views::View;
+    /// # let context = create_test_memory_context();
+    /// let mut view: ReentrantByteCollectionView<_, RegisterView<_, String>> =
+    ///     ReentrantByteCollectionView::load(context).await.unwrap();
+    /// view.try_load_entry_mut(&[0, 1]).await.unwrap();
+    /// view.try_load_entry_mut(&[0, 2]).await.unwrap();
+    /// assert_eq!(view.count().await.unwrap(), 2);
+    /// # })
+    /// ```
+    pub async fn count(&self) -> Result<usize, ViewError> {
+        let mut count = 0;
+        self.for_each_key(|_key| {
+            count += 1;
+            Ok(())
+        })
+        .await?;
+        Ok(count)
+    }
+
     /// Applies a function f on each index (aka key). Keys are visited in a
     /// lexicographic order. If the function returns false then the loop
     /// ends prematurely.
@@ -1426,12 +1451,31 @@ where
     /// ```
     pub async fn indices(&self) -> Result<Vec<I>, ViewError> {
         let mut indices = Vec::new();
-        self.for_each_index(|index: I| {
+        self.for_each_index(|index| {
             indices.push(index);
             Ok(())
         })
         .await?;
         Ok(indices)
+    }
+
+    /// Returns the number of indices in the collection.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::{create_test_memory_context, MemoryContext};
+    /// # use linera_views::reentrant_collection_view::ReentrantCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use linera_views::views::View;
+    /// # let context = create_test_memory_context();
+    /// let mut view: ReentrantCollectionView<_, u64, RegisterView<_, String>> =
+    ///     ReentrantCollectionView::load(context).await.unwrap();
+    /// view.try_load_entry_mut(&23).await.unwrap();
+    /// view.try_load_entry_mut(&25).await.unwrap();
+    /// assert_eq!(view.count().await.unwrap(), 2);
+    /// # })
+    /// ```
+    pub async fn count(&self) -> Result<usize, ViewError> {
+        self.collection.count().await
     }
 
     /// Applies a function f on each index. Indices are visited in an order
@@ -1925,12 +1969,31 @@ where
     /// ```
     pub async fn indices(&self) -> Result<Vec<I>, ViewError> {
         let mut indices = Vec::new();
-        self.for_each_index(|index: I| {
+        self.for_each_index(|index| {
             indices.push(index);
             Ok(())
         })
         .await?;
         Ok(indices)
+    }
+
+    /// Returns the number of entries in the collection.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::{create_test_memory_context, MemoryContext};
+    /// # use linera_views::reentrant_collection_view::ReentrantCustomCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use linera_views::views::View;
+    /// # let context = create_test_memory_context();
+    /// let mut view: ReentrantCustomCollectionView<_, u128, RegisterView<_, String>> =
+    ///     ReentrantCustomCollectionView::load(context).await.unwrap();
+    /// view.try_load_entry_mut(&23).await.unwrap();
+    /// view.try_load_entry_mut(&25).await.unwrap();
+    /// assert_eq!(view.count().await.unwrap(), 2);
+    /// # })
+    /// ```
+    pub async fn count(&self) -> Result<usize, ViewError> {
+        self.collection.count().await
     }
 
     /// Applies a function f on each index. Indices are visited in an order

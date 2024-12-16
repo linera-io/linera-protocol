@@ -112,14 +112,7 @@ where
             }
 
             OwnerBalances { callback } => {
-                let mut balances = Vec::new();
-                self.system
-                    .balances
-                    .for_each_index_value(|owner, balance| {
-                        balances.push((owner, balance));
-                        Ok(())
-                    })
-                    .await?;
+                let balances = self.system.balances.index_values().await?;
                 callback.respond(balances.into_iter().collect());
             }
 
