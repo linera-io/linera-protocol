@@ -140,7 +140,7 @@ jobs:
 
   benchmark-test:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
 
     steps:
     - uses: actions/checkout@v3
