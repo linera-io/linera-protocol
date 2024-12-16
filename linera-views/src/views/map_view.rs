@@ -661,12 +661,12 @@ where
                 .context
                 .find_key_values_by_prefix(&base)
                 .await?
-                .iterator()
+                .into_iterator_owned()
             {
                 let (index, bytes) = entry?;
                 loop {
                     match update {
-                        Some((key, value)) if &key[prefix_len..] <= index => {
+                        Some((key, value)) if key[prefix_len..] <= *index => {
                             if let Update::Set(value) = value {
                                 let value = ValueOrBytes::Value(value);
                                 if !f(&key[prefix_len..], value)? {
@@ -674,14 +674,14 @@ where
                                 }
                             }
                             update = updates.next();
-                            if &key[prefix_len..] == index {
+                            if key[prefix_len..] == index {
                                 break;
                             }
                         }
                         _ => {
-                            if !suffix_closed_set.find_key(index) {
-                                let value = ValueOrBytes::Bytes(bytes.to_vec());
-                                if !f(index, value)? {
+                            if !suffix_closed_set.find_key(&index) {
+                                let value = ValueOrBytes::Bytes(bytes);
+                                if !f(&index, value)? {
                                     return Ok(());
                                 }
                             }
