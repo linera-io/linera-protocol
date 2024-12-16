@@ -232,6 +232,28 @@ where
         Ok(keys)
     }
 
+    /// Returns the number of entries in the set.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::{context::create_test_memory_context, set_view::ByteSetView};
+    /// # use linera_views::views::View;
+    /// # let context = create_test_memory_context();
+    /// let mut set = ByteSetView::load(context).await.unwrap();
+    /// set.insert(vec![0, 1]);
+    /// set.insert(vec![0, 2]);
+    /// assert_eq!(set.keys().await.unwrap(), vec![vec![0, 1], vec![0, 2]]);
+    /// # })
+    /// ```
+    pub async fn count(&self) -> Result<usize, ViewError> {
+        let mut count = 0;
+        self.for_each_key(|_key| {
+            count += 1;
+            Ok(())
+        })
+        .await?;
+        Ok(count)
+    }
+
     /// Applies a function f on each index (aka key). Keys are visited in a
     /// lexicographic order. If the function returns false, then the loop ends
     /// prematurely.
@@ -527,13 +549,28 @@ where
     /// # })
     /// ```
     pub async fn indices(&self) -> Result<Vec<I>, ViewError> {
-        let mut indices = Vec::<I>::new();
-        self.for_each_index(|index: I| {
+        let mut indices = Vec::new();
+        self.for_each_index(|index| {
             indices.push(index);
             Ok(())
         })
         .await?;
         Ok(indices)
+    }
+
+    /// Returns the number of entries in the set.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::{context::create_test_memory_context, set_view::SetView};
+    /// # use linera_views::views::View;
+    /// # let context = create_test_memory_context();
+    /// let mut set: SetView<_, u32> = SetView::load(context).await.unwrap();
+    /// set.insert(&(34 as u32));
+    /// assert_eq!(set.count().await.unwrap(), 1);
+    /// # })
+    /// ```
+    pub async fn count(&self) -> Result<usize, ViewError> {
+        self.set.count().await
     }
 
     /// Applies a function f on each index. Indices are visited in an order
@@ -800,13 +837,30 @@ where
     /// # })
     /// ```
     pub async fn indices(&self) -> Result<Vec<I>, ViewError> {
-        let mut indices = Vec::<I>::new();
-        self.for_each_index(|index: I| {
+        let mut indices = Vec::new();
+        self.for_each_index(|index| {
             indices.push(index);
             Ok(())
         })
         .await?;
         Ok(indices)
+    }
+
+    /// Returns the number of entries of the set.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::create_test_memory_context;
+    /// # use linera_views::set_view::CustomSetView;
+    /// # use linera_views::views::View;
+    /// # let context = create_test_memory_context();
+    /// let mut set = CustomSetView::<_, u128>::load(context).await.unwrap();
+    /// set.insert(&(34 as u128));
+    /// set.insert(&(37 as u128));
+    /// assert_eq!(set.count().await.unwrap(), 2);
+    /// # })
+    /// ```
+    pub async fn count(&self) -> Result<usize, ViewError> {
+        self.set.count().await
     }
 
     /// Applies a function f on each index. Indices are visited in an order
