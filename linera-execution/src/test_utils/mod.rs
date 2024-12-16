@@ -173,17 +173,7 @@ where
     }
 
     async fn registered_application_count(&self) -> anyhow::Result<usize> {
-        let mut count = 0;
-
-        self.registry
-            .known_applications
-            .for_each_index(|_| {
-                count += 1;
-                Ok(())
-            })
-            .await?;
-
-        Ok(count)
+        Ok(self.registry.known_applications.count().await?)
     }
 
     async fn register_mock_application_with(

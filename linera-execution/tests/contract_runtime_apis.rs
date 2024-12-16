@@ -800,15 +800,7 @@ impl TransferTestEndpoint {
             Some(account_owner) => (Amount::ZERO, vec![(account_owner, amount)]),
         };
 
-        let mut balances = Vec::new();
-
-        system
-            .balances
-            .for_each_index_value(|owner, balance| {
-                balances.push((owner, balance));
-                Ok(())
-            })
-            .await?;
+        let balances = system.balances.index_values().await?;
 
         assert_eq!(*system.balance.get(), expected_chain_balance);
         assert_eq!(balances, expected_balances);
