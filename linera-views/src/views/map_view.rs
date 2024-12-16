@@ -1267,11 +1267,13 @@ where
     /// let mut map: MapView<_, String, _> = MapView::load(context).await.unwrap();
     /// map.insert("Italian", String::from("Ciao"));
     /// let index_values = map.index_values().await.unwrap();
-    /// assert_eq!(index_values, vec![("Italian".to_string(), "Ciao".to_string())]);
+    /// assert_eq!(
+    ///     index_values,
+    ///     vec![("Italian".to_string(), "Ciao".to_string())]
+    /// );
     /// # })
     /// ```
-    pub async fn index_values(&self) -> Result<Vec<(I,V)>, ViewError>
-    {
+    pub async fn index_values(&self) -> Result<Vec<(I, V)>, ViewError> {
         let prefix = Vec::new();
         let mut key_values = Vec::new();
         self.map
@@ -1771,11 +1773,13 @@ where
     /// let mut map: MapView<_, String, _> = MapView::load(context).await.unwrap();
     /// map.insert("Italian", String::from("Ciao"));
     /// let index_values = map.index_values().await.unwrap();
-    /// assert_eq!(index_values, vec![("Italian".to_string(), "Ciao".to_string())]);
+    /// assert_eq!(
+    ///     index_values,
+    ///     vec![("Italian".to_string(), "Ciao".to_string())]
+    /// );
     /// # })
     /// ```
-    pub async fn index_values(&self) -> Result<Vec<(I,V)>, ViewError>
-    {
+    pub async fn index_values(&self) -> Result<Vec<(I, V)>, ViewError> {
         let prefix = Vec::new();
         let mut key_values = Vec::new();
         self.map
