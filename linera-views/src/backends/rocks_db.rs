@@ -5,6 +5,7 @@
 
 use std::{
     ffi::OsString,
+    fmt::Display,
     ops::{Bound, Bound::Excluded},
     path::PathBuf,
     sync::Arc,
@@ -83,12 +84,13 @@ impl RocksDbSpawnMode {
             }
         })
     }
+}
 
-    /// Returns the string to be used in the configuration file
-    pub fn to_string(&self) -> String {
+impl Display for RocksDbSpawnMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self {
-            RocksDbSpawnMode::SpawnBlocking => "spawn_blocking".to_string(),
-            RocksDbSpawnMode::BlockInPlace => "block_in_place".to_string(),
+            RocksDbSpawnMode::SpawnBlocking => write!(f, "spawn_blocking"),
+            RocksDbSpawnMode::BlockInPlace => write!(f, "block_in_place"),
         }
     }
 }
@@ -268,7 +270,7 @@ pub struct RocksDbStoreInternal {
 #[derive(Clone, Debug)]
 pub struct RocksDbStoreInternalConfig {
     /// The path to the storage containing the namespaces
-    path_with_guard: PathWithGuard,
+    pub path_with_guard: PathWithGuard,
     /// The spawn_mode that is chosen
     spawn_mode: RocksDbSpawnMode,
     /// The common configuration of the key value store

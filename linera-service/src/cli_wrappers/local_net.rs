@@ -24,7 +24,7 @@ use linera_execution::ResourceControlPolicy;
 #[cfg(all(feature = "storage-service", with_testing))]
 use linera_storage_service::common::storage_service_test_endpoint;
 #[cfg(all(feature = "rocksdb", feature = "scylladb", with_testing))]
-use linera_views::rocks_db::RocksDbStore;
+use linera_views::rocks_db::{RocksDbSpawnMode, RocksDbStore};
 #[cfg(all(feature = "scylladb", with_testing))]
 use linera_views::{scylla_db::ScyllaDbStore, store::TestKeyValueStore as _};
 use tempfile::{tempdir, TempDir};
@@ -99,9 +99,11 @@ async fn make_testing_config(database: Database) -> Result<StorageConfig> {
             {
                 let rocksdb_config = RocksDbStore::new_test_config().await?;
                 let scylla_config = ScyllaDbStore::new_test_config().await?;
+                let spawn_mode = RocksDbSpawnMode::get_spawn_mode_from_runtime();
                 Ok(StorageConfig::DualRocksDbScyllaDb {
-                    path_with_guard: rocksdb_config.path_with_guard,
-                    uri: scylla_config.uri,
+                    path_with_guard: rocksdb_config.inner_config.path_with_guard,
+                    spawn_mode,
+                    uri: scylla_config.inner_config.uri,
                 })
             }
             #[cfg(not(all(feature = "rocksdb", feature = "scylladb")))]

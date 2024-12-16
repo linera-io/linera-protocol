@@ -123,7 +123,7 @@ pub enum StorageConfig {
     #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
     DualRocksDbScyllaDb {
         /// The path used
-        path: PathBuf,
+        path_with_guard: PathWithGuard,
         /// Whether to use `block_in_place` or `spawn_blocking`.
         spawn_mode: RocksDbSpawnMode,
         /// The URI for accessing the database
@@ -136,7 +136,7 @@ impl StorageConfig {
         match self {
             #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
             StorageConfig::DualRocksDbScyllaDb {
-                path: _,
+                path_with_guard: _,
                 spawn_mode: _,
                 uri,
             } => {
@@ -159,11 +159,11 @@ impl StorageConfig {
         match self {
             #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
             StorageConfig::DualRocksDbScyllaDb {
-                path,
+                path_with_guard,
                 spawn_mode: _,
                 uri: _,
             } => {
-                path.push(_shard_str);
+                path_with_guard.path_buf.push(_shard_str);
             }
             _ => panic!("append_shard_str is not available for this storage"),
         }
@@ -375,6 +375,7 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
             }
             let path = Path::new(parts[0]);
             let path = path.to_path_buf();
+            let path_with_guard = PathWithGuard::new(path);
             let spawn_mode = match parts[1] {
                 "spawn_blocking" => Ok(RocksDbSpawnMode::SpawnBlocking),
                 "block_in_place" => Ok(RocksDbSpawnMode::BlockInPlace),
@@ -395,7 +396,7 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
             })?;
             let uri = format!("{}:{}", &address, port);
             let storage_config = StorageConfig::DualRocksDbScyllaDb {
-                path,
+                path_with_guard,
                 spawn_mode,
                 uri,
             };
@@ -471,14 +472,15 @@ impl StorageConfigNamespace {
             }
             #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
             StorageConfig::DualRocksDbScyllaDb {
-                path,
+                path_with_guard,
                 spawn_mode,
                 uri,
             } => {
-                let path_buf = path.to_path_buf();
-                let path_with_guard = PathWithGuard::new(path_buf);
-                let first_config =
-                    RocksDbStoreConfig::new(*spawn_mode, path_with_guard, common_config.clone());
+                let first_config = RocksDbStoreConfig::new(
+                    *spawn_mode,
+                    path_with_guard.clone(),
+                    common_config.clone(),
+                );
                 let second_config = ScyllaDbStoreConfig::new(uri.to_string(), common_config);
                 let config = DualStoreConfig {
                     first_config,
@@ -517,15 +519,15 @@ impl fmt::Display for StorageConfigNamespace {
             }
             #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
             StorageConfig::DualRocksDbScyllaDb {
-                path,
+                path_with_guard,
                 spawn_mode,
                 uri,
             } => {
                 write!(
                     f,
                     "dualrocksdbscylladb:{}:{}:tcp:{}:{}",
-                    path.display(),
-                    spawn_mode.to_string(),
+                    path_with_guard.path_buf.display(),
+                    spawn_mode,
                     uri,
                     namespace
                 )
