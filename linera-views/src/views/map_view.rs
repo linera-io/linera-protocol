@@ -67,6 +67,14 @@ pub struct ByteMapView<C, V> {
     updates: BTreeMap<Vec<u8>, Update<V>>,
 }
 
+/// Whether we have a value or its serialization.
+pub enum SerOrNot<'a, T> {
+    /// The value itself.
+    Value(&'a T),
+    /// The serialization.
+    Bytes(Vec<u8>),
+}
+
 #[async_trait]
 impl<C, V> View<C> for ByteMapView<C, V>
 where
@@ -604,13 +612,13 @@ where
     /// assert_eq!(part_keys.len(), 2);
     /// # })
     /// ```
-    pub async fn for_each_key_value_while<F>(
-        &self,
+    pub async fn for_each_key_value_while<'a, F>(
+        &'a self,
         mut f: F,
         prefix: Vec<u8>,
     ) -> Result<(), ViewError>
     where
-        F: FnMut(&[u8], &[u8]) -> Result<bool, ViewError> + Send,
+        F: FnMut(&[u8], SerOrNot<'a, V>) -> Result<bool, ViewError> + Send,
     {
         let prefix_len = prefix.len();
         let mut updates = self.updates.range(get_interval(prefix.clone()));
@@ -633,8 +641,8 @@ where
                     match update {
                         Some((key, value)) if &key[prefix_len..] <= index => {
                             if let Update::Set(value) = value {
-                                let bytes = bcs::to_bytes(value)?;
-                                if !f(&key[prefix_len..], &bytes)? {
+                                let value = SerOrNot::Value(value);
+                                if !f(&key[prefix_len..], value)? {
                                     return Ok(());
                                 }
                             }
@@ -644,8 +652,11 @@ where
                             }
                         }
                         _ => {
-                            if !suffix_closed_set.find_key(index) && !f(index, bytes)? {
-                                return Ok(());
+                            if !suffix_closed_set.find_key(index) {
+                                let value = SerOrNot::Bytes(bytes.to_vec());
+                                if !f(index, value)? {
+                                    return Ok(());
+                                }
                             }
                             break;
                         }
@@ -655,8 +666,8 @@ where
         }
         while let Some((key, value)) = update {
             if let Update::Set(value) = value {
-                let bytes = bcs::to_bytes(value)?;
-                if !f(&key[prefix_len..], &bytes)? {
+                let value = SerOrNot::Value(value);
+                if !f(&key[prefix_len..], value)? {
                     return Ok(());
                 }
             }
@@ -690,9 +701,13 @@ where
     /// assert_eq!(count, 1);
     /// # })
     /// ```
-    pub async fn for_each_key_value<F>(&self, mut f: F, prefix: Vec<u8>) -> Result<(), ViewError>
+    pub async fn for_each_key_value<'a, F>(
+        &'a self,
+        mut f: F,
+        prefix: Vec<u8>,
+    ) -> Result<(), ViewError>
     where
-        F: FnMut(&[u8], &[u8]) -> Result<(), ViewError> + Send,
+        F: FnMut(&[u8], SerOrNot<'a, V>) -> Result<(), ViewError> + Send,
     {
         self.for_each_key_value_while(
             |key, value| {
@@ -709,7 +724,7 @@ impl<C, V> ByteMapView<C, V>
 where
     C: Context,
     ViewError: From<C::Error>,
-    V: Send + Serialize + DeserializeOwned + 'static,
+    V: Clone + Send + Serialize + DeserializeOwned + 'static,
 {
     /// Returns the list of keys and values of the map matching a prefix
     /// in lexicographic order.
@@ -736,7 +751,10 @@ where
         let prefix_copy = prefix.clone();
         self.for_each_key_value(
             |key, value| {
-                let value = bcs::from_bytes(value)?;
+                let value: V = match value {
+                    SerOrNot::Value(value) => value.clone(),
+                    SerOrNot::Bytes(bytes) => bcs::from_bytes(&bytes)?,
+                };
                 let mut big_key = prefix.clone();
                 big_key.extend(key);
                 key_values.push((big_key, value));
@@ -842,7 +860,15 @@ where
             |index, value| {
                 count += 1;
                 hasher.update_with_bytes(index)?;
-                hasher.update_with_bytes(value)?;
+                match value {
+                    SerOrNot::Value(value) => {
+                        let bytes = bcs::to_bytes(value)?;
+                        hasher.update_with_bytes(&bytes)?;
+                    }
+                    SerOrNot::Bytes(bytes) => {
+                        hasher.update_with_bytes(&bytes)?;
+                    }
+                }
                 Ok(())
             },
             prefix,
@@ -1069,7 +1095,7 @@ where
     C: Context + Sync,
     ViewError: From<C::Error>,
     I: Send + DeserializeOwned,
-    V: Sync + Serialize + DeserializeOwned + 'static,
+    V: Clone + Sync + Serialize + DeserializeOwned + 'static,
 {
     /// Returns the list of indices in the map. The order is determined by serialization.
     /// ```rust
@@ -1200,10 +1226,15 @@ where
         let prefix = Vec::new();
         self.map
             .for_each_key_value_while(
-                |key, bytes| {
+                |key, value| {
                     let index = C::deserialize_value(key)?;
-                    let value = C::deserialize_value(bytes)?;
-                    f(index, value)
+                    match value {
+                        SerOrNot::Value(value) => f(index, value.clone()),
+                        SerOrNot::Bytes(bytes) => {
+                            let value = C::deserialize_value(&bytes)?;
+                            f(index, value)
+                        }
+                    }
                 },
                 prefix,
             )
@@ -1238,10 +1269,15 @@ where
         let prefix = Vec::new();
         self.map
             .for_each_key_value(
-                |key, bytes| {
+                |key, value| {
                     let index = C::deserialize_value(key)?;
-                    let value = C::deserialize_value(bytes)?;
-                    f(index, value)
+                    match value {
+                        SerOrNot::Value(value) => f(index, value.clone()),
+                        SerOrNot::Bytes(bytes) => {
+                            let value = C::deserialize_value(&bytes)?;
+                            f(index, value)
+                        }
+                    }
                 },
                 prefix,
             )
@@ -1255,7 +1291,7 @@ where
     C: Context + Sync,
     ViewError: From<C::Error>,
     I: Send + DeserializeOwned,
-    V: Sync + Send + Serialize + DeserializeOwned + 'static,
+    V: Clone + Sync + Send + Serialize + DeserializeOwned + 'static,
 {
     /// Obtains all the `(index,value)` pairs.
     /// ```rust
@@ -1274,19 +1310,12 @@ where
     /// # })
     /// ```
     pub async fn index_values(&self) -> Result<Vec<(I, V)>, ViewError> {
-        let prefix = Vec::new();
         let mut key_values = Vec::new();
-        self.map
-            .for_each_key_value(
-                |key, bytes| {
-                    let index = C::deserialize_value(key)?;
-                    let value = C::deserialize_value(bytes)?;
-                    key_values.push((index, value));
-                    Ok(())
-                },
-                prefix,
-            )
-            .await?;
+        self.for_each_index_value(|index, value| {
+            key_values.push((index, value));
+            Ok(())
+        })
+        .await?;
         Ok(key_values)
     }
 
@@ -1571,7 +1600,7 @@ where
     C: Context + Sync,
     ViewError: From<C::Error>,
     I: Send + CustomSerialize,
-    V: Serialize + DeserializeOwned + 'static,
+    V: Clone + Serialize + DeserializeOwned + 'static,
 {
     /// Returns the list of indices in the map. The order is determined
     /// by the custom serialization.
@@ -1705,10 +1734,15 @@ where
         let prefix = Vec::new();
         self.map
             .for_each_key_value_while(
-                |key, bytes| {
+                |key, value| {
                     let index = I::from_custom_bytes(key)?;
-                    let value = C::deserialize_value(bytes)?;
-                    f(index, value)
+                    match value {
+                        SerOrNot::Value(value) => f(index, value.clone()),
+                        SerOrNot::Bytes(bytes) => {
+                            let value = C::deserialize_value(&bytes)?;
+                            f(index, value)
+                        }
+                    }
                 },
                 prefix,
             )
@@ -1744,10 +1778,15 @@ where
         let prefix = Vec::new();
         self.map
             .for_each_key_value(
-                |key, bytes| {
+                |key, value| {
                     let index = I::from_custom_bytes(key)?;
-                    let value = C::deserialize_value(bytes)?;
-                    f(index, value)
+                    match value {
+                        SerOrNot::Value(value) => f(index, value.clone()),
+                        SerOrNot::Bytes(bytes) => {
+                            let value = C::deserialize_value(&bytes)?;
+                            f(index, value)
+                        }
+                    }
                 },
                 prefix,
             )
@@ -1761,7 +1800,7 @@ where
     C: Context + Sync,
     ViewError: From<C::Error>,
     I: Send + CustomSerialize,
-    V: Sync + Send + Serialize + DeserializeOwned + 'static,
+    V: Clone + Sync + Send + Serialize + DeserializeOwned + 'static,
 {
     /// Obtains all the `(index,value)` pairs.
     /// ```rust
@@ -1780,19 +1819,12 @@ where
     /// # })
     /// ```
     pub async fn index_values(&self) -> Result<Vec<(I, V)>, ViewError> {
-        let prefix = Vec::new();
         let mut key_values = Vec::new();
-        self.map
-            .for_each_key_value(
-                |key, bytes| {
-                    let index = I::from_custom_bytes(key)?;
-                    let value = C::deserialize_value(bytes)?;
-                    key_values.push((index, value));
-                    Ok(())
-                },
-                prefix,
-            )
-            .await?;
+        self.for_each_index_value(|index, value| {
+            key_values.push((index, value));
+            Ok(())
+        })
+        .await?;
         Ok(key_values)
     }
 
