@@ -1177,7 +1177,8 @@ where
         let block_chain_id = certificate.executed_block().block.chain_id;
         let block_height = certificate.executed_block().block.height;
 
-        self.receive_certificate_internal(certificate, mode).await?;
+        self.receive_certificate_internal(certificate, mode, None)
+            .await?;
 
         // Make sure a quorum of validators (according to our new local committee) are up-to-date
         // for data availability.
@@ -1199,6 +1200,7 @@ where
         &self,
         certificate: ConfirmedBlockCertificate,
         mode: ReceiveCertificateMode,
+        nodes: Option<Vec<RemoteNode<P::Node>>>,
     ) -> Result<(), ChainClientError> {
         let block = &certificate.executed_block().block;
 
@@ -1214,9 +1216,13 @@ where
         if let ReceiveCertificateMode::NeedsCheck = mode {
             certificate.check(remote_committee)?;
         }
-        // Recover history from the network. We assume that the committee that signed the
-        // certificate is still active.
-        let nodes = self.make_nodes(remote_committee)?;
+        // Recover history from the network.
+        let nodes = if let Some(nodes) = nodes {
+            nodes
+        } else {
+            // We assume that the committee that signed the certificate is still active.
+            self.make_nodes(remote_committee)?
+        };
         self.client
             .download_certificates(&nodes, block.chain_id, block.height)
             .await?;
@@ -1428,7 +1434,10 @@ where
                 for certificate in certificates.into_values() {
                     let hash = certificate.hash();
                     let mode = ReceiveCertificateMode::AlreadyChecked;
-                    if let Err(e) = client.receive_certificate_internal(certificate, mode).await {
+                    if let Err(e) = client
+                        .receive_certificate_internal(certificate, mode, None)
+                        .await
+                    {
                         warn!("Received invalid certificate {hash}: {e}");
                     }
                 }
@@ -1778,15 +1787,26 @@ where
         for blob_id in blob_ids {
             let mut certificate_stream = validators
                 .iter()
-                .map(|remote_node| remote_node.download_certificate_for_blob(blob_id))
+                .map(|remote_node| async move {
+                    let cert = remote_node.download_certificate_for_blob(blob_id).await?;
+                    Ok::<_, NodeError>((remote_node.clone(), cert))
+                })
                 .collect::<FuturesUnordered<_>>();
             loop {
                 let Some(result) = certificate_stream.next().await else {
                     missing_blobs.push(blob_id);
                     break;
                 };
-                if let Ok(cert) = result {
-                    if self.receive_certificate(cert).await.is_ok() {
+                if let Ok((remote_node, cert)) = result {
+                    if self
+                        .receive_certificate_internal(
+                            cert,
+                            ReceiveCertificateMode::NeedsCheck,
+                            Some(vec![remote_node]),
+                        )
+                        .await
+                        .is_ok()
+                    {
                         break;
                     }
                 }
@@ -2515,7 +2535,7 @@ where
         &self,
         certificate: ConfirmedBlockCertificate,
     ) -> Result<(), ChainClientError> {
-        self.receive_certificate_internal(certificate, ReceiveCertificateMode::NeedsCheck)
+        self.receive_certificate_internal(certificate, ReceiveCertificateMode::NeedsCheck, None)
             .await
     }
 
