@@ -595,7 +595,6 @@ fn get_big_root_key(root_key: &[u8]) -> Vec<u8> {
 }
 
 /// The type for building a new ScyllaDB Key Value Store
-#[derive(Debug)]
 pub struct ScyllaDbStoreInternalConfig {
     /// The url to which the requests have to be sent
     pub uri: String,

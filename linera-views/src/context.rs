@@ -1,8 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fmt::Debug;
-
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 

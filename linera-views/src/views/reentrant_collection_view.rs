@@ -6,7 +6,6 @@ use std::sync::LazyLock;
 use std::{
     borrow::Borrow,
     collections::{btree_map, BTreeMap},
-    fmt::Debug,
     io::Write,
     marker::PhantomData,
     mem,
@@ -1065,7 +1064,7 @@ impl<C, I, W> View<C> for ReentrantCollectionView<C, I, W>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    I: Send + Sync + Debug + Serialize + DeserializeOwned,
+    I: Send + Sync + Serialize + DeserializeOwned,
     W: View<C> + Send + Sync,
 {
     const NUM_INIT_KEYS: usize = ReentrantByteCollectionView::<C, W>::NUM_INIT_KEYS;
@@ -1111,7 +1110,7 @@ impl<C, I, W> ClonableView<C> for ReentrantCollectionView<C, I, W>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    I: Send + Sync + Debug + Serialize + DeserializeOwned,
+    I: Send + Sync + Serialize + DeserializeOwned,
     W: ClonableView<C> + Send + Sync,
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
@@ -1126,7 +1125,7 @@ impl<C, I, W> ReentrantCollectionView<C, I, W>
 where
     C: Context + Send,
     ViewError: From<C::Error>,
-    I: Sync + Clone + Send + Debug + Serialize + DeserializeOwned,
+    I: Sync + Clone + Send + Serialize + DeserializeOwned,
     W: View<C> + Send + Sync,
 {
     /// Loads a subview for the data at the given index in the collection. If an entry
@@ -1281,7 +1280,7 @@ impl<C, I, W> ReentrantCollectionView<C, I, W>
 where
     C: Context + Send + Clone + 'static,
     ViewError: From<C::Error>,
-    I: Sync + Clone + Send + Debug + Serialize + DeserializeOwned,
+    I: Sync + Clone + Send + Serialize + DeserializeOwned,
     W: View<C> + Send + Sync + 'static,
 {
     /// Load multiple entries for writing at once.
@@ -1429,7 +1428,7 @@ impl<C, I, W> ReentrantCollectionView<C, I, W>
 where
     C: Context + Send,
     ViewError: From<C::Error>,
-    I: Sync + Clone + Send + Debug + Serialize + DeserializeOwned,
+    I: Sync + Clone + Send + Serialize + DeserializeOwned,
     W: View<C> + Send + Sync,
 {
     /// Returns the list of indices in the collection in an order determined
@@ -1557,7 +1556,7 @@ impl<C, I, W> HashableView<C> for ReentrantCollectionView<C, I, W>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    I: Debug + Send + Sync + Serialize + DeserializeOwned,
+    I: Send + Sync + Serialize + DeserializeOwned,
     W: HashableView<C> + Send + Sync + 'static,
 {
     type Hasher = sha3::Sha3_256;
@@ -1584,7 +1583,7 @@ impl<C, I, W> View<C> for ReentrantCustomCollectionView<C, I, W>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    I: Send + Sync + Debug + CustomSerialize,
+    I: Send + Sync + CustomSerialize,
     W: View<C> + Send + Sync,
 {
     const NUM_INIT_KEYS: usize = ReentrantByteCollectionView::<C, W>::NUM_INIT_KEYS;
@@ -1630,7 +1629,7 @@ impl<C, I, W> ClonableView<C> for ReentrantCustomCollectionView<C, I, W>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    I: Send + Sync + Debug + CustomSerialize,
+    I: Send + Sync + CustomSerialize,
     W: ClonableView<C> + Send + Sync,
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
@@ -1645,7 +1644,7 @@ impl<C, I, W> ReentrantCustomCollectionView<C, I, W>
 where
     C: Context + Send,
     ViewError: From<C::Error>,
-    I: Sync + Clone + Send + Debug + CustomSerialize,
+    I: Sync + Clone + Send + CustomSerialize,
     W: View<C> + Send + Sync,
 {
     /// Loads a subview for the data at the given index in the collection. If an entry
@@ -1801,7 +1800,7 @@ impl<C, I, W> ReentrantCustomCollectionView<C, I, W>
 where
     C: Context + Send + Clone + 'static,
     ViewError: From<C::Error>,
-    I: Sync + Clone + Send + Debug + CustomSerialize,
+    I: Sync + Clone + Send + CustomSerialize,
     W: View<C> + Send + Sync + 'static,
 {
     /// Load multiple entries for writing at once.
@@ -1947,7 +1946,7 @@ impl<C, I, W> ReentrantCustomCollectionView<C, I, W>
 where
     C: Context + Send,
     ViewError: From<C::Error>,
-    I: Sync + Clone + Send + Debug + CustomSerialize,
+    I: Sync + Clone + Send + CustomSerialize,
     W: View<C> + Send + Sync,
 {
     /// Returns the list of indices in the collection. The order is determined by
@@ -2077,7 +2076,7 @@ impl<C, I, W> HashableView<C> for ReentrantCustomCollectionView<C, I, W>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    I: Debug + Send + Sync + CustomSerialize,
+    I: Send + Sync + CustomSerialize,
     W: HashableView<C> + Send + Sync + 'static,
 {
     type Hasher = sha3::Sha3_256;

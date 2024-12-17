@@ -5,7 +5,6 @@
 use std::sync::LazyLock;
 use std::{
     collections::{vec_deque::IterMut, VecDeque},
-    fmt::Debug,
     ops::Range,
 };
 

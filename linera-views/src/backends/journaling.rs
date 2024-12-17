@@ -19,8 +19,6 @@
 //! time the data in a block are written, the journal header is updated in the same
 //! transaction to mark the block as processed.
 
-use std::fmt::Debug;
-
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use static_assertions as sa;
@@ -94,7 +92,7 @@ impl<T> DirectKeyValueStore for T where
 }
 
 /// The header that contains the current state of the journal.
-#[derive(Serialize, Deserialize, Default, Debug)]
+#[derive(Serialize, Deserialize, Default)]
 struct JournalHeader {
     block_count: u32,
 }

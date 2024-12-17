@@ -39,7 +39,6 @@ static MAP_VIEW_HASH_RUNTIME: LazyLock<HistogramVec> = LazyLock::new(|| {
 use std::{
     borrow::Borrow,
     collections::{btree_map::Entry, BTreeMap},
-    fmt::Debug,
     marker::PhantomData,
     mem,
 };

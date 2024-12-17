@@ -1,12 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::ops::{Bound, Range, RangeBounds};
 #[cfg(with_metrics)]
 use std::sync::LazyLock;
-use std::{
-    fmt::Debug,
-    ops::{Bound, Range, RangeBounds},
-};
 
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};

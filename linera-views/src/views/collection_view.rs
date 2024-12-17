@@ -6,7 +6,6 @@ use std::sync::LazyLock;
 use std::{
     borrow::Borrow,
     collections::{btree_map, BTreeMap},
-    fmt::Debug,
     io::Write,
     marker::PhantomData,
     mem,
@@ -692,7 +691,7 @@ impl<C, I, W> View<C> for CollectionView<C, I, W>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    I: Send + Sync + Debug + Serialize + DeserializeOwned,
+    I: Send + Sync + Serialize + DeserializeOwned,
     W: View<C> + Send + Sync,
 {
     const NUM_INIT_KEYS: usize = ByteCollectionView::<C, W>::NUM_INIT_KEYS;
@@ -738,7 +737,7 @@ impl<C, I, W> ClonableView<C> for CollectionView<C, I, W>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    I: Send + Sync + Debug + Serialize + DeserializeOwned,
+    I: Send + Sync + Serialize + DeserializeOwned,
     W: ClonableView<C> + Send + Sync,
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
@@ -910,7 +909,7 @@ impl<C, I, W> CollectionView<C, I, W>
 where
     C: Context + Send,
     ViewError: From<C::Error>,
-    I: Sync + Clone + Send + Debug + Serialize + DeserializeOwned,
+    I: Sync + Clone + Send + Serialize + DeserializeOwned,
     W: View<C> + Sync,
 {
     /// Returns the list of indices in the collection in the order determined by
@@ -964,7 +963,7 @@ impl<C, I, W> CollectionView<C, I, W>
 where
     C: Context + Send,
     ViewError: From<C::Error>,
-    I: Debug + DeserializeOwned,
+    I: DeserializeOwned,
     W: View<C> + Sync,
 {
     /// Applies a function f on each index. Indices are visited in an order
@@ -1046,7 +1045,7 @@ impl<C, I, W> HashableView<C> for CollectionView<C, I, W>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    I: Clone + Debug + Send + Sync + Serialize + DeserializeOwned,
+    I: Clone + Send + Sync + Serialize + DeserializeOwned,
     W: HashableView<C> + Send + Sync + 'static,
 {
     type Hasher = sha3::Sha3_256;
@@ -1072,7 +1071,7 @@ impl<C, I, W> View<C> for CustomCollectionView<C, I, W>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    I: Send + Sync + Debug,
+    I: Send + Sync,
     W: View<C> + Send + Sync,
 {
     const NUM_INIT_KEYS: usize = ByteCollectionView::<C, W>::NUM_INIT_KEYS;
@@ -1118,7 +1117,7 @@ impl<C, I, W> ClonableView<C> for CustomCollectionView<C, I, W>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    I: Send + Sync + Debug,
+    I: Send + Sync,
     W: ClonableView<C> + Send + Sync,
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
@@ -1290,7 +1289,7 @@ impl<C, I, W> CustomCollectionView<C, I, W>
 where
     C: Context + Send,
     ViewError: From<C::Error>,
-    I: Send + Debug + CustomSerialize,
+    I: Send + CustomSerialize,
     W: View<C> + Sync,
 {
     /// Returns the list of indices in the collection in the order determined by the custom serialization.
@@ -1343,7 +1342,7 @@ impl<C, I, W> CustomCollectionView<C, I, W>
 where
     C: Context + Send,
     ViewError: From<C::Error>,
-    I: Debug + CustomSerialize,
+    I: CustomSerialize,
     W: View<C> + Sync,
 {
     /// Applies a function f on each index. Indices are visited in an order
@@ -1427,7 +1426,7 @@ impl<C, I, W> HashableView<C> for CustomCollectionView<C, I, W>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    I: Clone + Debug + Send + Sync + CustomSerialize,
+    I: Clone + Send + Sync + CustomSerialize,
     W: HashableView<C> + Send + Sync + 'static,
 {
     type Hasher = sha3::Sha3_256;
