@@ -67,7 +67,7 @@ pub struct ByteMapView<C, V> {
 }
 
 /// Whether we have a value or its serialization.
-pub enum ValueOrBytes<'a, T> {
+enum ValueOrBytes<'a, T> {
     /// The value itself.
     Value(&'a T),
     /// The serialization.
@@ -917,7 +917,7 @@ where
         #[cfg(with_metrics)]
         let _hash_latency = MAP_VIEW_HASH_RUNTIME.measure_latency();
         let mut hasher = sha3::Sha3_256::default();
-        let mut count = 0;
+        let mut count = 0u32;
         let prefix = Vec::new();
         self.for_each_key_value_or_bytes(
             |index, value| {
