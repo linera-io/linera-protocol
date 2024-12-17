@@ -627,7 +627,7 @@ where
         let mut hasher = sha3::Sha3_256::default();
         let keys = self.keys().await?;
         let count = keys.len() as u32;
-        hasher.update_with_bcs_bytes(&count);
+        hasher.update_with_bcs_bytes(&count)?;
         let updates = self.updates.get_mut();
         for key in keys {
             hasher.update_with_bytes(&key)?;
