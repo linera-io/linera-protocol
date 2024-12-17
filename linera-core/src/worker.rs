@@ -202,8 +202,6 @@ pub enum WorkerError {
     UnneededBlob { blob_id: BlobId },
     #[error("The blobs provided in the proposal were not the published ones, in order.")]
     WrongBlobsInProposal,
-    #[error("The certificate in the block proposal is not a ValidatedBlock")]
-    MissingExecutedBlockInProposal,
     #[error("Fast blocks cannot query oracles")]
     FastBlockUsingOracles,
     #[error("Blobs not found: {0:?}")]
