@@ -863,9 +863,8 @@ where
     ) -> Result<Vec<(Vec<u8>, V)>, ViewError> {
         let mut key_values = Vec::new();
         let prefix_copy = prefix.clone();
-        self.for_each_key_value_or_bytes(
+        self.for_each_key_value(
             |key, value| {
-                let value = value.to_value()?;
                 let mut big_key = prefix.clone();
                 big_key.extend(key);
                 key_values.push((big_key, value));
@@ -1329,10 +1328,9 @@ where
     {
         let prefix = Vec::new();
         self.map
-            .for_each_key_value_or_bytes_while(
+            .for_each_key_value_while(
                 |key, value| {
                     let index = C::deserialize_value(key)?;
-                    let value = value.to_value()?;
                     f(index, value)
                 },
                 prefix,
@@ -1367,10 +1365,9 @@ where
     {
         let prefix = Vec::new();
         self.map
-            .for_each_key_value_or_bytes(
+            .for_each_key_value(
                 |key, value| {
                     let index = C::deserialize_value(key)?;
-                    let value = value.to_value()?;
                     f(index, value)
                 },
                 prefix,
@@ -1827,10 +1824,9 @@ where
     {
         let prefix = Vec::new();
         self.map
-            .for_each_key_value_or_bytes_while(
+            .for_each_key_value_while(
                 |key, value| {
                     let index = I::from_custom_bytes(key)?;
-                    let value = value.to_value()?;
                     f(index, value)
                 },
                 prefix,
@@ -1866,10 +1862,9 @@ where
     {
         let prefix = Vec::new();
         self.map
-            .for_each_key_value_or_bytes(
+            .for_each_key_value(
                 |key, value| {
                     let index = I::from_custom_bytes(key)?;
-                    let value = value.to_value()?;
                     f(index, value)
                 },
                 prefix,
