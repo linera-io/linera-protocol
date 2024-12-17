@@ -99,10 +99,10 @@ one of the chain where it isn't registered yet:
 
 ```gql,uri=http://localhost:8081
 mutation {
-    requestApplication(
-        chainId: "$CHAIN_1",
-        applicationId: "$APP_ID"
-    )
+  requestApplication(
+    chainId: "$CHAIN_1",
+    applicationId: "$APP_ID"
+  )
 }
 ```
 
@@ -111,12 +111,12 @@ application and provide a link to its GraphQL API. Remember to use each wallet's
 
 ```gql,uri=http://localhost:8081
 query {
-    applications(
-        chainId: "$CHAIN_1"
-    ) {
-        id
-        link
-    }
+  applications(
+    chainId: "$CHAIN_1"
+  ) {
+    id
+    link
+  }
 }
 ```
 
@@ -126,9 +126,9 @@ to print the URL to navigate to, then subscribe to the other chain using the fol
 
 ```gql,uri=http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID
 mutation {
-    subscribe(
-        chainId: "$CHAIN_2"
-    )
+  subscribe(
+    chainId: "$CHAIN_2"
+  )
 }
 ```
 
@@ -136,10 +136,10 @@ Run `echo "http://localhost:8080/chains/$CHAIN_2/applications/$APP_ID"` to print
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_2/applications/$APP_ID
 mutation {
-    post(
-        text: "Linera Social is the new Mastodon!"
-        imageUrl: "https://linera.org/img/logo.svg" # optional
-    )
+  post(
+    text: "Linera Social is the new Mastodon!"
+    imageUrl: "https://linera.org/img/logo.svg" # optional
+  )
 }
 ```
 

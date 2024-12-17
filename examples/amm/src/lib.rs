@@ -111,31 +111,31 @@ To properly setup the tokens in the proper chains, we need to do some transfer o
   of the GraphiQL interface for the FUN1 app. Navigate to that URL and enter:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_AMM/applications/$FUN1_APP_ID
-    mutation {
-        transfer(
-            owner: "User:$OWNER_AMM",
-            amount: "50.",
-            targetAccount: {
-                chainId: "$CHAIN_1",
-                owner: "User:$OWNER_1",
-            }
-        )
+mutation {
+  transfer(
+    owner: "User:$OWNER_AMM",
+    amount: "50.",
+    targetAccount: {
+      chainId: "$CHAIN_1",
+      owner: "User:$OWNER_1",
     }
+  )
+}
 ```
 
 - Transfer 50 FUN1 from `$OWNER_AMM` in `$CHAIN_AMM` to `$OWNER_2` in `$CHAIN_2`, so they're in the proper chain:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_AMM/applications/$FUN1_APP_ID
-    mutation {
-        transfer(
-            owner: "User:$OWNER_AMM",
-            amount: "50.",
-            targetAccount: {
-                chainId: "$CHAIN_2",
-                owner: "User:$OWNER_2",
-            }
-        )
+mutation {
+  transfer(
+    owner: "User:$OWNER_AMM",
+    amount: "50.",
+    targetAccount: {
+      chainId: "$CHAIN_2",
+      owner: "User:$OWNER_2",
     }
+  )
+}
 ```
 
 - Transfer 50 FUN2 from `$OWNER_AMM` in `$CHAIN_AMM` to `$OWNER_1` in `$CHAIN_1`, so they're in the proper chain.
@@ -143,31 +143,31 @@ To properly setup the tokens in the proper chains, we need to do some transfer o
   `echo "http://localhost:8080/chains/$CHAIN_AMM/applications/$FUN2_APP_ID"`.
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_AMM/applications/$FUN2_APP_ID
-    mutation {
-        transfer(
-            owner: "User:$OWNER_AMM",
-            amount: "50.",
-            targetAccount: {
-                chainId: "$CHAIN_1",
-                owner: "User:$OWNER_1",
-            }
-        )
+mutation {
+  transfer(
+    owner: "User:$OWNER_AMM",
+    amount: "50.",
+    targetAccount: {
+      chainId: "$CHAIN_1",
+      owner: "User:$OWNER_1",
     }
+  )
+}
 ```
 
 - Transfer 50 FUN2 from `$OWNER_AMM` in `$CHAIN_AMM` to `$OWNER_2` in `$CHAIN_2`, so they're in the proper chain:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_AMM/applications/$FUN2_APP_ID
-    mutation {
-        transfer(
-            owner: "User:$OWNER_AMM",
-            amount: "50.",
-            targetAccount: {
-                chainId: "$CHAIN_2",
-                owner: "User:$OWNER_2",
-            }
-        )
+mutation {
+  transfer(
+    owner: "User:$OWNER_AMM",
+    amount: "50.",
+    targetAccount: {
+      chainId: "$CHAIN_2",
+      owner: "User:$OWNER_2",
     }
+  )
+}
 ```
 
 All operations can only be from a remote chain i.e. other than the chain on which `AMM` is deployed to.

@@ -78,72 +78,72 @@ Type each of these in the GraphiQL interface and substitute the env variables wi
 - To get the current balance of user $OWNER_1, run the query:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
-    query {
-        accounts {
-            entry(
-                key: "User:$OWNER_1"
-            ) {
-                value
-            }
-        }
+query {
+  accounts {
+    entry(
+      key: "User:$OWNER_1"
+    ) {
+      value
     }
+  }
+}
 ```
 
 - To get the current balance of user $OWNER_2, run the query:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
-    query {
-        accounts {
-            entry(
-                key: "User:$OWNER_2"
-            ) {
-                value
-            }
-        }
+query {
+  accounts {
+    entry(
+      key: "User:$OWNER_2"
+    ) {
+      value
     }
+  }
+}
 ```
 
 - To transfer 50 tokens from $OWNER_1 to $OWNER_2
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
-    mutation {
-        transfer(
-            owner: "User:$OWNER_1",
-            amount: "50.",
-            targetAccount: {
-                chainId: "$CHAIN_1",
-                owner: "User:$OWNER_2"
-            }
-        )
+mutation {
+  transfer(
+    owner: "User:$OWNER_1",
+    amount: "50.",
+    targetAccount: {
+      chainId: "$CHAIN_1",
+      owner: "User:$OWNER_2"
     }
+  )
+}
 ```
 
 - To get the new balance of user $OWNER_1, run the query:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
-    query {
-        accounts {
-            entry(
-                key: "User:$OWNER_1"
-            ) {
-                value
-            }
-        }
+query {
+  accounts {
+    entry(
+      key: "User:$OWNER_1"
+    ) {
+      value
     }
+  }
+}
 ```
 
 - To get the new balance of user $OWNER_2, run the query:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
-    query {
-        accounts {
-            entry(
-                key: "User:$OWNER_2"
-            ) {
-                value
-            }
-        }
+query {
+  accounts {
+    entry(
+      key: "User:$OWNER_2"
+    ) {
+      value
     }
+  }
+}
 ```
 
 ### Using web frontend

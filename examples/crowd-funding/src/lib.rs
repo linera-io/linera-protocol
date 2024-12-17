@@ -169,7 +169,7 @@ Point your browser to http://localhost:8080, and enter the query:
 
 ```gql,uri=http://localhost:8080
 query { applications(
-    chainId: "$CHAIN_0"
+  chainId: "$CHAIN_0"
 ) { id link } }
 ```
 
@@ -181,8 +181,8 @@ there yet. Request `crowd-funding` from the other chain. As an application ID, u
 
 ```gql,uri=http://localhost:8081
 mutation { requestApplication(
-    chainId: "$CHAIN_1"
-    applicationId: "$APP_ID_1"
+  chainId: "$CHAIN_1"
+  applicationId: "$APP_ID_1"
 ) }
 ```
 
@@ -200,8 +200,8 @@ and run the following query:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_0/applications/$APP_ID_1
 mutation { pledge(
-    owner:"User:$OWNER_0",
-    amount:"30."
+  owner:"User:$OWNER_0",
+  amount:"30."
 ) }
 ```
 
@@ -234,7 +234,7 @@ You can check that the 200 tokens have arrived:
 
 ```gql,uri=http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_0
 query {
-    accounts { entry(key: "User:$OWNER_1") { value } }
+  accounts { entry(key: "User:$OWNER_1") { value } }
 }
 ```
 
@@ -263,7 +263,7 @@ then check that we have received 110 tokens, in addition to the
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_0/applications/$APP_ID_0
 query {
-    accounts { entry(key: "User:$OWNER_0") { value } }
+  accounts { entry(key: "User:$OWNER_0") { value } }
 }
 ```
 */
