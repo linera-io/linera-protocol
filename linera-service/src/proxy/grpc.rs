@@ -41,6 +41,7 @@ use linera_rpc::{
         GRPC_MAX_MESSAGE_SIZE,
     },
 };
+use linera_sdk::views::ViewError;
 use linera_storage::Storage;
 use prost::Message;
 use tokio::{select, task::JoinSet};
@@ -332,6 +333,30 @@ where
             }
         }
     }
+
+    /// Returns the appropriate gRPC status for the given [`ViewError`].
+    fn error_to_status(err: ViewError) -> Status {
+        let mut status = match &err {
+            ViewError::TooLargeValue | ViewError::BcsError(_) => {
+                Status::invalid_argument(err.to_string())
+            }
+            ViewError::StoreError { .. }
+            | ViewError::TokioJoinError(_)
+            | ViewError::TryLockError(_)
+            | ViewError::InconsistentEntries
+            | ViewError::PostLoadValuesError
+            | ViewError::IoError(_) => Status::internal(err.to_string()),
+            ViewError::KeyTooLong | ViewError::ArithmeticError(_) => {
+                Status::out_of_range(err.to_string())
+            }
+            ViewError::NotFound(_)
+            | ViewError::BlobsNotFound(_)
+            | ViewError::CannotAcquireCollectionEntry
+            | ViewError::MissingEntries => Status::not_found(err.to_string()),
+        };
+        status.set_source(Arc::new(err));
+        status
+    }
 }
 
 #[async_trait]
@@ -461,7 +486,7 @@ where
             .storage
             .read_blob(blob_id)
             .await
-            .map_err(|err| Status::from_error(Box::new(err)))?;
+            .map_err(Self::error_to_status)?;
         Ok(Response::new(blob.into_inner_content().try_into()?))
     }
 
@@ -476,7 +501,7 @@ where
             .storage
             .read_certificate(hash)
             .await
-            .map_err(|err| Status::from_error(Box::new(err)))?
+            .map_err(Self::error_to_status)?
             .into();
         Ok(Response::new(certificate.try_into()?))
     }
@@ -506,7 +531,7 @@ where
                 .storage
                 .read_certificates(batch.to_vec())
                 .await
-                .map_err(|err| Status::from_error(Box::new(err)))?
+                .map_err(Self::error_to_status)?
             {
                 if grpc_message_limiter.fits::<Certificate>(certificate.clone().into())? {
                     certificates.push(linera_chain::types::Certificate::from(certificate));
@@ -532,7 +557,7 @@ where
             .storage
             .read_blob_state(blob_id)
             .await
-            .map_err(|err| Status::from_error(Box::new(err)))?;
+            .map_err(Self::error_to_status)?;
         Ok(Response::new(blob_state.last_used_by.into()))
     }
 
@@ -547,7 +572,7 @@ where
             .storage
             .missing_blobs(&blob_ids)
             .await
-            .map_err(|err| Status::from_error(Box::new(err)))?;
+            .map_err(Self::error_to_status)?;
         Ok(Response::new(missing_blob_ids.try_into()?))
     }
 }
