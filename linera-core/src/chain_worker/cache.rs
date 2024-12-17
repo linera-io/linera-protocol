@@ -22,7 +22,7 @@ use linera_base::{
 use linera_chain::{data_types::ExecutedBlock, types::Hashed};
 use linera_storage::Storage;
 use lru::LruCache;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, OwnedSemaphorePermit, Semaphore};
 use tracing::{warn, Instrument as _};
 
 use crate::{
@@ -45,6 +45,8 @@ where
     tasks: Arc<Mutex<JoinSet>>,
     /// The cache of running [`ChainWorkerActor`]s.
     cache: Arc<Mutex<LruCache<ChainId, ChainRequestSender<StorageClient>>>>,
+    /// Active endpoint permits.
+    active_endpoints: Arc<Semaphore>,
 }
 
 /// The map of [`DeliveryNotifier`]s for each chain.
@@ -60,6 +62,7 @@ where
             delivery_notifiers: Arc::default(),
             tasks: Arc::default(),
             cache: Arc::new(Mutex::new(LruCache::new(limit))),
+            active_endpoints: Arc::new(Semaphore::new(limit.get())),
         }
     }
 
@@ -72,14 +75,24 @@ where
         Result<ChainActorEndpoint<StorageClient>, NewChainActorEndpoint<StorageClient>>,
         WorkerError,
     > {
-        match self.try_get_existing_endpoint(chain_id) {
+        let permit = self
+            .active_endpoints
+            .clone()
+            .acquire_owned()
+            .await
+            .expect("`active_endpoints` semaphore should never be closed");
+
+        match self.try_get_existing_endpoint(chain_id, permit) {
             Ok(endpoint) => Ok(Ok(endpoint)),
-            Err(MissingEndpointError { cache_is_full }) => {
+            Err(MissingEndpointError {
+                cache_is_full,
+                permit,
+            }) => {
                 if cache_is_full {
                     self.stop_one().await?;
                 }
 
-                Ok(Err(self.create_new_endpoint(chain_id)))
+                Ok(Err(self.create_new_endpoint(chain_id, permit)))
             }
         }
     }
@@ -88,21 +101,27 @@ where
     fn try_get_existing_endpoint(
         &self,
         chain_id: ChainId,
+        permit: OwnedSemaphorePermit,
     ) -> Result<ChainActorEndpoint<StorageClient>, MissingEndpointError> {
         let mut cache = self.cache.lock().unwrap();
 
         if let Some(sender) = cache.get(&chain_id) {
-            Ok(ChainActorEndpoint::new(sender.clone()))
+            Ok(ChainActorEndpoint::new(sender.clone(), permit))
         } else {
             Err(MissingEndpointError {
                 cache_is_full: cache.len() >= usize::from(cache.cap()),
+                permit,
             })
         }
     }
 
     /// Creates a new [`ChainActorEndpoint`], inserts it in the cache, and returns a
     /// [`NewChainActorEndpoint`] ready to start the chain worker actor task.
-    fn create_new_endpoint(&self, chain_id: ChainId) -> NewChainActorEndpoint<StorageClient> {
+    fn create_new_endpoint(
+        &self,
+        chain_id: ChainId,
+        permit: OwnedSemaphorePermit,
+    ) -> NewChainActorEndpoint<StorageClient> {
         let (sender, receiver) = mpsc::unbounded_channel();
         self.cache.lock().unwrap().push(chain_id, sender.clone());
 
@@ -118,7 +137,7 @@ where
             chain_id,
             delivery_notifier,
             tasks: self.tasks.clone(),
-            sender: ChainActorEndpoint::new(sender),
+            sender: ChainActorEndpoint::new(sender, permit),
             receiver,
         }
     }
@@ -187,6 +206,7 @@ where
     StorageClient: Storage,
 {
     sender: ChainRequestSender<StorageClient>,
+    _permit: OwnedSemaphorePermit,
 }
 
 impl<StorageClient> ChainActorEndpoint<StorageClient>
@@ -194,8 +214,11 @@ where
     StorageClient: Storage,
 {
     /// Creates a new [`ChainActorEndpoint`] instance.
-    pub fn new(sender: ChainRequestSender<StorageClient>) -> Self {
-        ChainActorEndpoint { sender }
+    pub fn new(sender: ChainRequestSender<StorageClient>, permit: OwnedSemaphorePermit) -> Self {
+        ChainActorEndpoint {
+            sender,
+            _permit: permit,
+        }
     }
 
     /// Sends a [`ChainWorkerRequest`] to the [`ChainWorkerActor`].
@@ -258,4 +281,6 @@ where
 pub struct MissingEndpointError {
     /// Whether the cache is full.
     cache_is_full: bool,
+    /// The permit for using the desired endpoint, which will be reused if the endpoint is created.
+    permit: OwnedSemaphorePermit,
 }
