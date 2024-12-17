@@ -92,6 +92,15 @@ static NUM_BLOCKS: LazyLock<IntCounterVec> = LazyLock::new(|| {
     register_int_counter_vec("num_blocks", "Number of blocks added to chains", &[])
 });
 
+#[cfg(with_metrics)]
+static CERTIFICATES_SIGNED: LazyLock<IntCounterVec> = LazyLock::new(|| {
+    register_int_counter_vec(
+        "certificates_signed",
+        "Number of certificates signed by each validator",
+        &["validator_name"],
+    )
+});
+
 /// Instruct the networking layer to send cross-chain requests and/or push notifications.
 #[derive(Default, Debug)]
 pub struct NetworkActions {
@@ -848,6 +857,12 @@ where
                 TRANSACTION_COUNT
                     .with_label_values(&[])
                     .inc_by(confirmed_transactions);
+            }
+
+            for (validator_name, _) in certificate.signatures() {
+                CERTIFICATES_SIGNED
+                    .with_label_values(&[&validator_name.to_string()])
+                    .inc();
             }
         }
 
