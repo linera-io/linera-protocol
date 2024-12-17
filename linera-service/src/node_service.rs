@@ -12,16 +12,11 @@ use async_graphql::{
 };
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
 use axum::{extract::Path, http::StatusCode, response, response::IntoResponse, Extension, Router};
-use futures::{
-    future::{self},
-    lock::Mutex,
-    Future,
-};
+use futures::{lock::Mutex, Future};
 use linera_base::{
     crypto::{CryptoError, CryptoHash, PublicKey},
     data_types::{
-        Amount, ApplicationPermissions, BlobBytes, Bytecode, TimeDelta, Timestamp,
-        UserApplicationDescription,
+        Amount, ApplicationPermissions, BlobBytes, Bytecode, TimeDelta, UserApplicationDescription,
     },
     identifiers::{ApplicationId, BytecodeId, ChainId, Owner, UserApplicationId},
     ownership::{ChainOwnership, TimeoutConfig},
@@ -34,9 +29,8 @@ use linera_chain::{
 use linera_client::chain_listener::{ChainListener, ChainListenerConfig, ClientContext};
 use linera_core::{
     client::{ChainClient, ChainClientError},
-    data_types::{ClientOutcome, RoundTimeout},
-    node::NotificationStream,
-    worker::{Notification, Reason},
+    data_types::ClientOutcome,
+    worker::Notification,
 };
 use linera_execution::{
     committee::{Committee, Epoch},
@@ -48,7 +42,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use thiserror::Error as ThisError;
 use tokio::sync::OwnedRwLockReadGuard;
-use tokio_stream::StreamExt;
 use tower_http::cors::CorsLayer;
 use tracing::{debug, error, info, instrument};
 
@@ -221,7 +214,7 @@ where
                 ClientOutcome::WaitForTimeout(timeout) => timeout,
             };
             drop(client);
-            wait_for_next_round(&mut stream, timeout).await;
+            util::wait_for_next_round(&mut stream, timeout).await;
         }
     }
 }
@@ -246,7 +239,7 @@ where
                 Some(timestamp) => {
                     let mut stream = client.subscribe().await?;
                     drop(client);
-                    wait_for_next_round(&mut stream, timestamp).await;
+                    util::wait_for_next_round(&mut stream, timestamp).await;
                 }
             }
         }
@@ -655,7 +648,7 @@ where
             };
             let mut stream = client.subscribe().await?;
             drop(client);
-            wait_for_next_round(&mut stream, timeout).await;
+            util::wait_for_next_round(&mut stream, timeout).await;
         }
     }
 }
@@ -1073,7 +1066,7 @@ where
             let mut stream = client.subscribe().await.map_err(|_| {
                 ChainClientError::InternalError("Could not subscribe to the local node.")
             })?;
-            wait_for_next_round(&mut stream, timeout).await;
+            util::wait_for_next_round(&mut stream, timeout).await;
         };
         Ok(async_graphql::Response::new(hash.to_value()))
     }
@@ -1122,20 +1115,4 @@ where
 
         Ok(response.into())
     }
-}
-
-/// Returns after the specified time or if we receive a notification that a new round has started.
-pub async fn wait_for_next_round(stream: &mut NotificationStream, timeout: RoundTimeout) {
-    let mut stream = stream.filter(|notification| match &notification.reason {
-        Reason::NewBlock { height, .. } => *height >= timeout.next_block_height,
-        Reason::NewRound { round, .. } => *round > timeout.current_round,
-        Reason::NewIncomingBundle { .. } => false,
-    });
-    future::select(
-        Box::pin(stream.next()),
-        Box::pin(linera_base::time::timer::sleep(
-            timeout.timestamp.duration_since(Timestamp::now()),
-        )),
-    )
-    .await;
 }

@@ -71,15 +71,15 @@ Type each of these in the GraphiQL interface and substitute the env variables wi
 - Navigate to the URL you get by running `echo "http://localhost:8080/chains/$CHAIN_1/applications/$APPLICATION_ID"`.
 - To get the current value of `counter`, run the query:
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APPLICATION_ID
-    query {
-        value
-    }
+query {
+  value
+}
 ```
 - To increase the value of the counter by 3, perform the `increment` operation.
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APPLICATION_ID
-    mutation Increment {
-        increment(value: 3)
-    }
+mutation Increment {
+  increment(value: 3)
+}
 ```
 - Running the query again would yield `4`.
 

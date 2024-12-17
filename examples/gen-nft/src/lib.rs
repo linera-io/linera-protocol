@@ -94,20 +94,20 @@ Type each of these in the GraphiQL interface and substitute the env variables wi
 - To mint an NFT, run the query:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
-    mutation {
-        mint(
-            minter: "User:$OWNER_1",
-            prompt: "Hello!"
-        )
-    }
+mutation {
+  mint(
+    minter: "User:$OWNER_1",
+    prompt: "Hello!"
+  )
+}
 ```
 
 - To check that it's assigned to the owner, run the query:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
-    query {
-        ownedNfts(owner: "User:$OWNER_1")
-    }
+query {
+  ownedNfts(owner: "User:$OWNER_1")
+}
 ```
 
 Set the `QUERY_RESULT` variable to have the result returned by the previous query, and `TOKEN_ID` will be properly set for you.
@@ -120,37 +120,37 @@ TOKEN_ID=$(echo "$QUERY_RESULT" | jq -r '.ownedNfts[].tokenId')
 - To check that it's there, run the query:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
-    query {
-        nft(tokenId: "$TOKEN_ID") {
-            tokenId,
-            owner,
-            prompt,
-            minter,
-        }
-    }
+query {
+  nft(tokenId: "$TOKEN_ID") {
+    tokenId,
+    owner,
+    prompt,
+    minter,
+  }
+}
 ```
 
 - To check everything that it's there, run the query:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
-    query {
-        nfts
-    }
+query {
+  nfts
+}
 ```
 
 - To transfer the NFT to user `$OWNER_2`, still on chain `$CHAIN_1`, run the query:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
-    mutation {
-        transfer(
-            sourceOwner: "User:$OWNER_1",
-            tokenId: "$TOKEN_ID",
-            targetAccount: {
-                chainId: "$CHAIN_1",
-                owner: "User:$OWNER_2"
-            }
-        )
+mutation {
+  transfer(
+    sourceOwner: "User:$OWNER_1",
+    tokenId: "$TOKEN_ID",
+    targetAccount: {
+      chainId: "$CHAIN_1",
+      owner: "User:$OWNER_2"
     }
+  )
+}
 ```
 
 ### Using Web Frontend

@@ -189,17 +189,17 @@ First, owner 2 should claim their tokens. Navigate to the URL you get by running
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_2/applications/$FUN1_APP_ID
 mutation {
-    claim(
-        sourceAccount: {
-            chainId: "$CHAIN_1",
-            owner: "User:$OWNER_2",
-        }
-        amount: "100.",
-        targetAccount: {
-            chainId: "$CHAIN_2",
-            owner: "User:$OWNER_3"
-        }
-    )
+  claim(
+    sourceAccount: {
+      chainId: "$CHAIN_1",
+      owner: "User:$OWNER_2",
+    }
+    amount: "100.",
+    targetAccount: {
+      chainId: "$CHAIN_2",
+      owner: "User:$OWNER_3"
+    }
+  )
 }
 ```
 
@@ -207,17 +207,17 @@ And to the URL you get by running `echo "http://localhost:8080/chains/$CHAIN_2/a
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_2/applications/$FUN2_APP_ID
 mutation {
-    claim(
-        sourceAccount: {
-            chainId: "$CHAIN_1",
-            owner: "User:$OWNER_2",
-        }
-        amount: "150.",
-        targetAccount: {
-            chainId: "$CHAIN_2",
-            owner: "User:$OWNER_2"
-        }
-    )
+  claim(
+    sourceAccount: {
+      chainId: "$CHAIN_1",
+      owner: "User:$OWNER_2",
+    }
+    amount: "150.",
+    targetAccount: {
+      chainId: "$CHAIN_2",
+      owner: "User:$OWNER_2"
+    }
+  )
 }
 ```
 
@@ -228,7 +228,7 @@ for 5 FUN2 from owner 1. This leaves 5 FUN2 of owner 2 on chain 1. On the URL yo
 mutation {
   executeOrder(
     order: {
-        Insert : {
+      Insert : {
         owner: "User:$OWNER_2",
         amount: "2",
         nature: Ask,
@@ -251,13 +251,13 @@ Owner 2 should now get back their tokens, and have 145 FUN2 left. On the URL you
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_2/applications/$FUN2_APP_ID
 query {
-    accounts {
-        entry(
-            key: "User:$OWNER_2"
-        ) {
-            value
-        }
+  accounts {
+    entry(
+      key: "User:$OWNER_2"
+    ) {
+      value
     }
+  }
 }
 ```
 */
