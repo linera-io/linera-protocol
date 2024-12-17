@@ -216,9 +216,6 @@ impl ScyllaDbClient {
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, ScyllaDbStoreInternalError> {
         let num_keys = keys.len();
-        if num_keys == 0 {
-            return Ok(Vec::new());
-        }
         let session = &self.session;
         let mut map = HashMap::<Vec<u8>, Vec<usize>>::new();
         let mut inputs = Vec::new();
@@ -262,9 +259,6 @@ impl ScyllaDbClient {
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<bool>, ScyllaDbStoreInternalError> {
         let num_keys = keys.len();
-        if num_keys == 0 {
-            return Ok(Vec::new());
-        }
         let session = &self.session;
         let mut map = HashMap::<Vec<u8>, Vec<usize>>::new();
         let mut inputs = Vec::new();

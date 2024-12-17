@@ -230,14 +230,22 @@ where
     }
 
     async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, Self::Error> {
-        self.store.contains_keys(keys).await
+        if keys.is_empty() {
+            Ok(Vec::new())
+        } else {
+            self.store.contains_keys(keys).await
+        }
     }
 
     async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
-        self.store.read_multi_values_bytes(keys).await
+        if keys.is_empty() {
+            Ok(Vec::new())
+        } else {
+            self.store.read_multi_values_bytes(keys).await
+        }
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error> {
