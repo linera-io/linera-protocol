@@ -640,7 +640,7 @@ where
     /// assert_eq!(part_keys.len(), 2);
     /// # })
     /// ```
-    pub(crate) async fn for_each_key_value_or_bytes_while<'a, F>(
+    pub async fn for_each_key_value_or_bytes_while<'a, F>(
         &'a self,
         mut f: F,
         prefix: Vec<u8>,
@@ -776,7 +776,7 @@ where
     /// assert_eq!(count, 1);
     /// # })
     /// ```
-    pub(crate) async fn for_each_key_value_or_bytes<'a, F>(
+    pub async fn for_each_key_value_or_bytes<'a, F>(
         &'a self,
         mut f: F,
         prefix: Vec<u8>,
@@ -807,7 +807,7 @@ where
     /// map.insert(vec![0, 1], String::from("Hello"));
     /// let mut count = 0;
     /// let prefix = Vec::new();
-    /// map.for_each_key_value_or_bytes(
+    /// map.for_each_key_value(
     ///     |_key, _value| {
     ///         count += 1;
     ///         Ok(())
