@@ -83,24 +83,7 @@ where
                     self.stop_one().await?;
                 }
 
-                let (sender, receiver) = mpsc::unbounded_channel();
-                self.cache.lock().unwrap().push(chain_id, sender.clone());
-
-                let delivery_notifier = self
-                    .delivery_notifiers
-                    .lock()
-                    .unwrap()
-                    .entry(chain_id)
-                    .or_default()
-                    .clone();
-
-                Ok(Err(NewChainActorEndpoint {
-                    chain_id,
-                    delivery_notifier,
-                    tasks: self.tasks.clone(),
-                    sender,
-                    receiver,
-                }))
+                Ok(Err(self.create_new_endpoint(chain_id)))
             }
         }
     }
@@ -118,6 +101,29 @@ where
             Err(MissingEndpointError {
                 cache_is_full: cache.len() >= usize::from(cache.cap()),
             })
+        }
+    }
+
+    /// Creates a new [`ChainActorEndpoint`], inserts it in the cache, and returns a
+    /// [`NewChainActorEndpoint`] ready to start the chain worker actor task.
+    fn create_new_endpoint(&self, chain_id: ChainId) -> NewChainActorEndpoint<StorageClient> {
+        let (sender, receiver) = mpsc::unbounded_channel();
+        self.cache.lock().unwrap().push(chain_id, sender.clone());
+
+        let delivery_notifier = self
+            .delivery_notifiers
+            .lock()
+            .unwrap()
+            .entry(chain_id)
+            .or_default()
+            .clone();
+
+        NewChainActorEndpoint {
+            chain_id,
+            delivery_notifier,
+            tasks: self.tasks.clone(),
+            sender,
+            receiver,
         }
     }
 
