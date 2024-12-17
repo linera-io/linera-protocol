@@ -5,7 +5,6 @@
 
 use std::{
     collections::BTreeMap,
-    fmt::Debug,
     sync::{Arc, LazyLock, Mutex, RwLock},
 };
 
@@ -25,7 +24,6 @@ use crate::{
 };
 
 /// The initial configuration of the system
-#[derive(Debug)]
 pub struct MemoryStoreConfig {
     /// The common configuration of the key value store
     pub common_config: CommonStoreInternalConfig,

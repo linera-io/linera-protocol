@@ -314,7 +314,7 @@ impl TransactionBuilder {
 }
 
 /// A DynamoDB client.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct DynamoDbStoreInternal {
     client: Client,
     namespace: String,
@@ -324,7 +324,6 @@ pub struct DynamoDbStoreInternal {
 }
 
 /// The initial configuration of the system
-#[derive(Debug)]
 pub struct DynamoDbStoreInternalConfig {
     /// The AWS configuration
     config: aws_sdk_dynamodb::Config,

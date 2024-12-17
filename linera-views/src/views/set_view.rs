@@ -3,7 +3,7 @@
 
 #[cfg(with_metrics)]
 use std::sync::LazyLock;
-use std::{borrow::Borrow, collections::BTreeMap, fmt::Debug, marker::PhantomData, mem};
+use std::{borrow::Borrow, collections::BTreeMap, marker::PhantomData, mem};
 
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};

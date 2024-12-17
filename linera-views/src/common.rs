@@ -5,7 +5,6 @@
 
 use std::{
     collections::BTreeSet,
-    fmt::Debug,
     ops::{
         Bound,
         Bound::{Excluded, Included, Unbounded},
