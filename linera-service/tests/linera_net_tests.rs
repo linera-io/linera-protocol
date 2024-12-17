@@ -29,7 +29,7 @@ use linera_base::{
     command::resolve_binary,
     crypto::CryptoHash,
     data_types::Amount,
-    identifiers::{Account, AccountOwner, ApplicationId, ChainId},
+    identifiers::{Account, AccountOwner, ApplicationId, BlobId, BlobType, ChainId},
 };
 use linera_chain::data_types::{Medium, Origin};
 use linera_core::worker::{Notification, Reason};
@@ -1023,6 +1023,10 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
         .publish_data_blob(&chain1, nft1_blob_bytes.clone())
         .await?;
     assert_eq!(nft1_blob_hash, blob_hash);
+    let blob_id1 = BlobId {
+        hash: blob_hash,
+        blob_type: BlobType::Data,
+    };
 
     let nft1_blob_hash = DataBlobHash(nft1_blob_hash);
 
@@ -1153,6 +1157,10 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
         .publish_data_blob(&chain2, nft2_blob_bytes.clone())
         .await?;
     assert_eq!(nft2_blob_hash, blob_hash);
+    let blob_id2 = BlobId {
+        hash: blob_hash,
+        blob_type: BlobType::Data,
+    };
 
     let nft2_blob_hash = DataBlobHash(nft2_blob_hash);
 

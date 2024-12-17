@@ -434,6 +434,9 @@ pub enum ClientCommand {
         chain_id: Option<ChainId>,
     },
 
+    /// Show the list of BlobIds of the validator
+    ListAllBlobIds,
+
     /// Show the version and genesis config hash of a new validator, and print a warning if it is
     /// incompatible. Also print some information about the given chain while we are at it.
     QueryValidator {

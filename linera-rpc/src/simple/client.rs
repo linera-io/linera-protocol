@@ -155,6 +155,10 @@ impl ValidatorNode for SimpleClient {
         self.query(RpcMessage::VersionInfoQuery).await
     }
 
+    async fn get_list_all_blob_ids(&self) -> Result<Vec<BlobId>, NodeError> {
+        self.query(RpcMessage::ListAllBlobIds).await
+    }
+
     async fn get_genesis_config_hash(&self) -> Result<CryptoHash, NodeError> {
         self.query(RpcMessage::GenesisConfigHashQuery).await
     }

@@ -93,6 +93,10 @@ impl ValidatorNode for DummyValidatorNode {
         Err(NodeError::UnexpectedMessage)
     }
 
+    async fn get_list_all_blob_ids(&self) -> Result<Vec<BlobId>, NodeError> {
+        Err(NodeError::UnexpectedMessage)
+    }
+
     async fn get_genesis_config_hash(&self) -> Result<CryptoHash, NodeError> {
         Err(NodeError::UnexpectedMessage)
     }

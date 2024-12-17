@@ -344,6 +344,12 @@ impl ValidatorNode for GrpcClient {
     }
 
     #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
+    async fn get_list_all_blob_ids(&self) -> Result<Vec<BlobId>, NodeError> {
+        let req = ();
+        Ok(client_delegate!(self, get_list_all_blob_ids, req)?.try_into()?)
+    }
+
+    #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
     async fn get_genesis_config_hash(&self) -> Result<CryptoHash, NodeError> {
         let req = ();
         Ok(client_delegate!(self, get_genesis_config_hash, req)?.try_into()?)

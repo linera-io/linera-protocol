@@ -382,6 +382,20 @@ impl Runnable for Job {
                 );
             }
 
+            ListAllBlobIds => {
+                use linera_core::node::ValidatorNode as _;
+                let chain_id = context.default_chain();
+                let chain_client = context.make_chain_client(chain_id)?;
+                let result = chain_client.local_committee().await;
+                let committee = result.context("Failed to get local committee")?;
+                let (_name, validator_name) = committee.validators().first_key_value().unwrap();
+                let address = &validator_name.network_address;
+                let node_provider = context.make_node_provider();
+                let node = node_provider.make_node(address)?;
+                let blob_ids = node.get_list_all_blob_ids().await?;
+                println!("{:?}", blob_ids);
+            }
+
             QueryValidator {
                 address,
                 chain_id,
@@ -1419,6 +1433,7 @@ fn log_file_name_for(command: &ClientCommand) -> Cow<'static, str> {
         | ClientCommand::SyncBalance { .. }
         | ClientCommand::Sync { .. }
         | ClientCommand::ProcessInbox { .. }
+        | ClientCommand::ListAllBlobIds
         | ClientCommand::QueryValidator { .. }
         | ClientCommand::QueryValidators { .. }
         | ClientCommand::SetValidator { .. }

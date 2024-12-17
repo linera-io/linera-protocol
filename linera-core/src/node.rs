@@ -97,6 +97,9 @@ pub trait ValidatorNode {
     /// Gets the version info for this validator node.
     async fn get_version_info(&self) -> Result<VersionInfo, NodeError>;
 
+    /// Gets list of blob ids for this validator node.
+    async fn get_list_all_blob_ids(&self) -> Result<Vec<BlobId>, NodeError>;
+
     /// Gets the network's genesis config hash.
     async fn get_genesis_config_hash(&self) -> Result<CryptoHash, NodeError>;
 

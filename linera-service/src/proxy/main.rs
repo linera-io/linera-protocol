@@ -321,6 +321,9 @@ where
             MissingBlobIds(blob_ids) => Ok(Some(RpcMessage::MissingBlobIdsResponse(Box::new(
                 self.storage.missing_blobs(&blob_ids).await?,
             )))),
+            ListAllBlobIds => Ok(Some(RpcMessage::ListAllBlobIdsResponse(Box::new(
+                self.storage.list_all_blob_ids().await?,
+            )))),
             BlockProposal(_)
             | LiteCertificate(_)
             | TimeoutCertificate(_)
@@ -336,6 +339,7 @@ where
             | DownloadBlobContentResponse(_)
             | BlobLastUsedByResponse(_)
             | MissingBlobIdsResponse(_)
+            | ListAllBlobIdsResponse(_)
             | DownloadConfirmedBlockResponse(_)
             | DownloadCertificatesResponse(_) => {
                 Err(anyhow::Error::from(NodeError::UnexpectedMessage))

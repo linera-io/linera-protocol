@@ -3,7 +3,7 @@
 
 #[cfg(with_metrics)]
 use std::sync::LazyLock;
-use std::{fmt::Debug, sync::Arc};
+use std::{collections::HashSet, fmt::Debug, sync::Arc};
 
 use async_trait::async_trait;
 use dashmap::DashMap;
@@ -25,7 +25,7 @@ use linera_views::{
     backends::dual::{DualStoreRootKeyAssignment, StoreInUse},
     batch::Batch,
     context::ViewContext,
-    store::KeyValueStore,
+    store::{KeyIterable, KeyValueStore},
     views::{View, ViewError},
 };
 use serde::{Deserialize, Serialize};
@@ -185,6 +185,18 @@ pub static LOAD_CHAIN_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
     )
 });
 
+/// The latency to load a chain state.
+#[cfg(with_metrics)]
+#[doc(hidden)]
+pub static LIST_ALL_BLOB_IDS_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
+    register_histogram_vec(
+        "list_all_blob_ids_latency",
+        "The latency to list all blob ids",
+        &[],
+        bucket_latencies(1.0),
+    )
+});
+
 /// Main implementation of the [`Storage`] trait.
 #[derive(Clone)]
 pub struct DbStorage<Store, Clock> {
@@ -203,6 +215,48 @@ enum BaseKey {
     ConfirmedBlock(CryptoHash),
     Blob(BlobId),
     BlobState(BlobId),
+}
+
+const INDEX_CHAIN_STATE: u8 = 0;
+const INDEX_CERTIFICATE: u8 = 1;
+const INDEX_CONFIRMED_BLOCK: u8 = 2;
+const INDEX_BLOB: u8 = 3;
+const INDEX_BLOB_STATE: u8 = 4;
+const BLOB_LENGTH: usize = std::mem::size_of::<BlobId>();
+
+
+impl BaseKey {
+    /// We depend on the precise serialization to do queries and so we have to
+    /// hardcode it.
+    fn to_bytes(&self) -> Result<Vec<u8>, ViewError> {
+        match self {
+            BaseKey::ChainState(chain_id) => {
+                let mut vec = vec![INDEX_CHAIN_STATE];
+                vec.extend(bcs::to_bytes(&chain_id)?);
+                Ok(vec)
+            },
+            BaseKey::Certificate(hash) => {
+                let mut vec = vec![INDEX_CERTIFICATE];
+                vec.extend(bcs::to_bytes(&hash)?);
+                Ok(vec)
+            },
+            BaseKey::ConfirmedBlock(hash) => {
+                let mut vec = vec![INDEX_CONFIRMED_BLOCK];
+                vec.extend(bcs::to_bytes(&hash)?);
+                Ok(vec)
+            },
+            BaseKey::Blob(blob_id) => {
+                let mut vec = vec![INDEX_BLOB];
+                vec.extend(bcs::to_bytes(&blob_id)?);
+                Ok(vec)
+            }
+            BaseKey::BlobState(blob_id) => {
+                let mut vec = vec![INDEX_BLOB_STATE];
+                vec.extend(bcs::to_bytes(&blob_id)?);
+                Ok(vec)
+            },
+        }
+    }
 }
 
 /// An implementation of [`DualStoreRootKeyAssignment`] that stores the
@@ -359,14 +413,32 @@ where
             user_contracts: self.user_contracts.clone(),
             user_services: self.user_services.clone(),
         };
-        let root_key = bcs::to_bytes(&BaseKey::ChainState(chain_id))?;
+        let root_key = BaseKey::ChainState(chain_id).to_bytes()?;
+        println!("root_key={:?}", root_key);
         let store = self.store.clone_with_root_key(&root_key)?;
         let context = ViewContext::create_root_context(store, runtime_context).await?;
         ChainStateView::load(context).await
     }
 
+    async fn list_all_blob_ids(&self) -> Result<Vec<BlobId>, ViewError> {
+        #[cfg(with_metrics)]
+        let _metric = LIST_ALL_BLOB_IDS_LATENCY.measure_latency();
+        let prefix = &[INDEX_BLOB];
+        let keys = self.store.find_keys_by_prefix(prefix).await?;
+        let mut blob_ids = HashSet::new();
+        for key in keys.iterator() {
+            let key = key?;
+            let key_red = &key[..BLOB_LENGTH];
+            let blob_id = bcs::from_bytes(key_red)?;
+            blob_ids.insert(blob_id);
+        }
+        let blob_ids = blob_ids.into_iter().collect::<Vec<_>>();
+        println!("db_storage, blob_ids={:?}", blob_ids);
+        Ok(blob_ids)
+    }
+
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
-        let blob_key = bcs::to_bytes(&BaseKey::Blob(blob_id))?;
+        let blob_key = BaseKey::Blob(blob_id).to_bytes()?;
         let test = self.store.contains_key(&blob_key).await?;
         #[cfg(with_metrics)]
         CONTAINS_BLOB_COUNTER.with_label_values(&[]).inc();
@@ -376,7 +448,7 @@ where
     async fn missing_blobs(&self, blob_ids: &[BlobId]) -> Result<Vec<BlobId>, ViewError> {
         let mut keys = Vec::new();
         for blob_id in blob_ids {
-            let key = bcs::to_bytes(&BaseKey::Blob(*blob_id))?;
+            let key = BaseKey::Blob(*blob_id).to_bytes()?;
             keys.push(key);
         }
         let results = self.store.contains_keys(keys).await?;
@@ -392,7 +464,7 @@ where
     }
 
     async fn contains_blob_state(&self, blob_id: BlobId) -> Result<bool, ViewError> {
-        let blob_key = bcs::to_bytes(&BaseKey::BlobState(blob_id))?;
+        let blob_key = BaseKey::BlobState(blob_id).to_bytes()?;
         let test = self.store.contains_key(&blob_key).await?;
         #[cfg(with_metrics)]
         CONTAINS_BLOB_STATE_COUNTER.with_label_values(&[]).inc();
@@ -403,7 +475,7 @@ where
         &self,
         hash: CryptoHash,
     ) -> Result<Hashed<ConfirmedBlock>, ViewError> {
-        let value_key = bcs::to_bytes(&BaseKey::ConfirmedBlock(hash))?;
+        let value_key = BaseKey::ConfirmedBlock(hash).to_bytes()?;
         let maybe_value = self.store.read_value::<ConfirmedBlock>(&value_key).await?;
         #[cfg(with_metrics)]
         READ_HASHED_CONFIRMED_BLOCK_COUNTER
@@ -414,7 +486,7 @@ where
     }
 
     async fn read_blob(&self, blob_id: BlobId) -> Result<Blob, ViewError> {
-        let blob_key = bcs::to_bytes(&BaseKey::Blob(blob_id))?;
+        let blob_key = BaseKey::Blob(blob_id).to_bytes()?;
         let maybe_blob_bytes = self.store.read_value::<Vec<u8>>(&blob_key).await?;
         #[cfg(with_metrics)]
         READ_BLOB_COUNTER.with_label_values(&[]).inc();
@@ -710,8 +782,8 @@ where
         #[cfg(with_metrics)]
         WRITE_CERTIFICATE_COUNTER.with_label_values(&[]).inc();
         let hash = certificate.hash();
-        let cert_key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
-        let value_key = bcs::to_bytes(&BaseKey::ConfirmedBlock(hash))?;
+        let cert_key = BaseKey::Certificate(hash).to_bytes()?;
+        let value_key = BaseKey::ConfirmedBlock(hash).to_bytes()?;
         batch.put_key_value(cert_key.to_vec(), &certificate.lite_certificate())?;
         batch.put_key_value(value_key.to_vec(), certificate.value())?;
         Ok(())

@@ -355,6 +355,8 @@ where
             | RpcMessage::BlobLastUsedByResponse(_)
             | RpcMessage::MissingBlobIds(_)
             | RpcMessage::MissingBlobIdsResponse(_)
+            | RpcMessage::ListAllBlobIds
+            | RpcMessage::ListAllBlobIdsResponse(_)
             | RpcMessage::DownloadCertificates(_)
             | RpcMessage::DownloadCertificatesResponse(_) => Err(NodeError::UnexpectedMessage),
         };

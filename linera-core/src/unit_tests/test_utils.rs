@@ -175,6 +175,13 @@ where
         Ok(Default::default())
     }
 
+    async fn get_list_all_blob_ids(&self) -> Result<Vec<BlobId>, NodeError> {
+        self.spawn_and_receive(move |validator, sender| {
+            validator.do_list_all_blob_ids(sender)
+        })
+        .await
+    }
+
     async fn get_genesis_config_hash(&self) -> Result<CryptoHash, NodeError> {
         Ok(CryptoHash::test_hash("genesis config"))
     }
@@ -468,6 +475,20 @@ where
             .await
             .map_err(Into::into);
         sender.send(blob.map(|blob| blob.into_content()))
+    }
+
+    async fn do_list_all_blob_ids(
+        self,
+        sender: oneshot::Sender<Result<Vec<BlobId>, NodeError>>,
+    ) -> Result<(), Result<Vec<BlobId>, NodeError>> {
+        let validator = self.client.lock().await;
+        let blob_ids = validator
+            .state
+            .storage_client()
+            .list_all_blob_ids()
+            .await
+            .map_err(Into::into);
+        sender.send(blob_ids)
     }
 
     async fn do_download_certificate(
