@@ -44,15 +44,11 @@ where
     /// The set of spawned [`ChainWorkerActor`] tasks.
     tasks: Arc<Mutex<JoinSet>>,
     /// The cache of running [`ChainWorkerActor`]s.
-    cache: Arc<Mutex<LruCache<ChainId, ChainActorEndpoint<StorageClient>>>>,
+    cache: Arc<Mutex<LruCache<ChainId, ChainRequestSender<StorageClient>>>>,
 }
 
 /// The map of [`DeliveryNotifier`]s for each chain.
 pub(crate) type DeliveryNotifiers = HashMap<ChainId, DeliveryNotifier>;
-
-/// The sender endpoint for [`ChainWorkerRequest`]s.
-pub type ChainActorEndpoint<StorageClient> =
-    mpsc::UnboundedSender<ChainWorkerRequest<<StorageClient as Storage>::Context>>;
 
 impl<StorageClient> ChainWorkers<StorageClient>
 where
@@ -95,8 +91,8 @@ where
     ) -> Result<ChainActorEndpoint<StorageClient>, MissingEndpointError> {
         let mut cache = self.cache.lock().unwrap();
 
-        if let Some(endpoint) = cache.get(&chain_id) {
-            Ok(endpoint.clone())
+        if let Some(sender) = cache.get(&chain_id) {
+            Ok(ChainActorEndpoint::new(sender.clone()))
         } else {
             Err(MissingEndpointError {
                 cache_is_full: cache.len() >= usize::from(cache.cap()),
@@ -122,7 +118,7 @@ where
             chain_id,
             delivery_notifier,
             tasks: self.tasks.clone(),
-            sender,
+            sender: ChainActorEndpoint::new(sender),
             receiver,
         }
     }
@@ -162,7 +158,7 @@ where
     /// Cleans up any delivery notifiers for any chain workers that have stopped.
     fn clean_up_finished_chain_workers(
         &self,
-        active_chain_workers: &LruCache<ChainId, ChainActorEndpoint<StorageClient>>,
+        active_chain_workers: &LruCache<ChainId, ChainRequestSender<StorageClient>>,
     ) {
         self.tasks.lock().unwrap().reap_finished_tasks();
 
@@ -181,7 +177,37 @@ where
     }
 }
 
-/// A [`ChainActorEndpoint`] for an actor that has not started yet.
+/// The sender endpoint for [`ChainWorkerRequest`]s.
+pub type ChainRequestSender<StorageClient> =
+    mpsc::UnboundedSender<ChainWorkerRequest<<StorageClient as Storage>::Context>>;
+
+/// An endpoint to communicate with a [`ChainWorkerActor`].
+pub struct ChainActorEndpoint<StorageClient>
+where
+    StorageClient: Storage,
+{
+    sender: ChainRequestSender<StorageClient>,
+}
+
+impl<StorageClient> ChainActorEndpoint<StorageClient>
+where
+    StorageClient: Storage,
+{
+    /// Creates a new [`ChainActorEndpoint`] instance.
+    pub fn new(sender: ChainRequestSender<StorageClient>) -> Self {
+        ChainActorEndpoint { sender }
+    }
+
+    /// Sends a [`ChainWorkerRequest`] to the [`ChainWorkerActor`].
+    pub fn send(
+        &self,
+        request: ChainWorkerRequest<StorageClient::Context>,
+    ) -> Result<(), mpsc::error::SendError<ChainWorkerRequest<StorageClient::Context>>> {
+        self.sender.send(request)
+    }
+}
+
+/// A wrapper around a [`ChainActorEndpoint`] for an actor that has not started yet.
 pub struct NewChainActorEndpoint<StorageClient>
 where
     StorageClient: Storage,
