@@ -73,15 +73,13 @@ impl GrpcClient {
                 info!("gRPC request interrupted: {}; retrying", status);
                 true
             }
-            Code::Ok
-            | Code::Cancelled
-            | Code::NotFound
-            | Code::AlreadyExists
-            | Code::ResourceExhausted => {
+            Code::Ok | Code::Cancelled | Code::ResourceExhausted => {
                 error!("Unexpected gRPC status: {}; retrying", status);
                 true
             }
             Code::InvalidArgument
+            | Code::NotFound
+            | Code::AlreadyExists
             | Code::PermissionDenied
             | Code::FailedPrecondition
             | Code::OutOfRange
