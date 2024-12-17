@@ -235,6 +235,7 @@ impl StateStorage for DynamoDbTestStorage {
     }
 }
 
+#[derive(Debug)]
 pub struct TestConfig {
     with_x1: bool,
     with_x2: bool,
