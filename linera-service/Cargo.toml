@@ -25,7 +25,6 @@ benchmark = [
     "linera-base/test",
     "linera-client/benchmark",
     "linera-chain/benchmark",
-    "dep:linera-sdk",
 ]
 wasmer = ["linera-client/wasmer", "linera-execution/wasmer", "linera-storage/wasmer"]
 wasmtime = [
@@ -90,7 +89,7 @@ linera-client = { workspace = true, features = ["fs"] }
 linera-core.workspace = true
 linera-execution = { workspace = true, features = ["fs"] }
 linera-rpc = { workspace = true, features = ["server", "simple-network"] }
-linera-sdk = { workspace = true, optional = true }
+linera-sdk = { workspace = true }
 linera-storage.workspace = true
 linera-storage-service = { workspace = true, optional = true }
 linera-version.workspace = true
