@@ -11,14 +11,19 @@ use std::{
     collections::{HashMap, HashSet},
     num::NonZeroUsize,
     sync::{Arc, Mutex, RwLock},
+    time::Duration,
 };
 
-use linera_base::{crypto::CryptoHash, identifiers::ChainId};
+use linera_base::{
+    crypto::CryptoHash,
+    identifiers::ChainId,
+    time::timer::{sleep, timeout},
+};
 use linera_chain::{data_types::ExecutedBlock, types::Hashed};
 use linera_storage::Storage;
 use lru::LruCache;
 use tokio::sync::mpsc;
-use tracing::Instrument as _;
+use tracing::{warn, Instrument as _};
 
 use crate::{
     chain_worker::{ChainWorkerActor, ChainWorkerConfig, ChainWorkerRequest, DeliveryNotifier},
@@ -67,44 +72,85 @@ where
     pub async fn get_endpoint(
         &self,
         chain_id: ChainId,
-    ) -> Option<Result<ChainActorEndpoint<StorageClient>, NewChainActorEndpoint<StorageClient>>>
-    {
+    ) -> Result<
+        Result<ChainActorEndpoint<StorageClient>, NewChainActorEndpoint<StorageClient>>,
+        WorkerError,
+    > {
+        match self.try_get_existing_endpoint(chain_id) {
+            Ok(endpoint) => Ok(Ok(endpoint)),
+            Err(MissingEndpointError { cache_is_full }) => {
+                if cache_is_full {
+                    self.stop_one().await?;
+                }
+
+                let (sender, receiver) = mpsc::unbounded_channel();
+                self.cache.lock().unwrap().push(chain_id, sender.clone());
+
+                let delivery_notifier = self
+                    .delivery_notifiers
+                    .lock()
+                    .unwrap()
+                    .entry(chain_id)
+                    .or_default()
+                    .clone();
+
+                Ok(Err(NewChainActorEndpoint {
+                    chain_id,
+                    delivery_notifier,
+                    tasks: self.tasks.clone(),
+                    sender,
+                    receiver,
+                }))
+            }
+        }
+    }
+
+    /// Attempts to get a [`ChainActorEndpoint`] for a chain worker actor that's already running.
+    fn try_get_existing_endpoint(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<ChainActorEndpoint<StorageClient>, MissingEndpointError> {
         let mut cache = self.cache.lock().unwrap();
 
         if let Some(endpoint) = cache.get(&chain_id) {
-            Some(Ok(endpoint.clone()))
+            Ok(endpoint.clone())
         } else {
-            if cache.len() >= usize::from(cache.cap()) {
-                let (chain_to_evict, _) = cache
-                    .iter()
-                    .rev()
-                    .find(|(_, candidate_endpoint)| candidate_endpoint.strong_count() <= 1)?;
-                let chain_to_evict = *chain_to_evict;
-
-                cache.pop(&chain_to_evict);
-
-                self.clean_up_finished_chain_workers(&*cache);
-            }
-
-            let (sender, receiver) = mpsc::unbounded_channel();
-            cache.push(chain_id, sender.clone());
-
-            let delivery_notifier = self
-                .delivery_notifiers
-                .lock()
-                .unwrap()
-                .entry(chain_id)
-                .or_default()
-                .clone();
-
-            Some(Err(NewChainActorEndpoint {
-                chain_id,
-                delivery_notifier,
-                tasks: self.tasks.clone(),
-                sender,
-                receiver,
-            }))
+            Err(MissingEndpointError {
+                cache_is_full: cache.len() >= usize::from(cache.cap()),
+            })
         }
+    }
+
+    /// Stops a single chain worker, opening up a slot for a new chain worker to be added.
+    async fn stop_one(&self) -> Result<(), WorkerError> {
+        timeout(Duration::from_secs(3), async move {
+            loop {
+                let evicted = {
+                    let mut cache = self.cache.lock().unwrap();
+                    let entry_to_evict = cache
+                        .iter()
+                        .rev()
+                        .find(|(_, candidate_endpoint)| candidate_endpoint.strong_count() <= 1);
+
+                    if let Some((&chain_to_evict, _)) = entry_to_evict {
+                        cache.pop(&chain_to_evict);
+                        self.clean_up_finished_chain_workers(&*cache);
+                        true
+                    } else {
+                        false
+                    }
+                };
+
+                if evicted {
+                    break;
+                } else {
+                    sleep(Duration::from_millis(250)).await;
+                    warn!("No chain worker candidates found for eviction, retrying...");
+                }
+            }
+        })
+        .await
+        .map_err(|_| WorkerError::FullChainWorkerCache)
     }
 
     /// Cleans up any delivery notifiers for any chain workers that have stopped.
@@ -173,4 +219,11 @@ where
 
         Ok(self.sender)
     }
+}
+
+/// An error for when an endpoint to a desired [`ChainActorWorker`] is not available in
+/// the cache.
+pub struct MissingEndpointError {
+    /// Whether the cache is full.
+    cache_is_full: bool,
 }

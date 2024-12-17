@@ -19,7 +19,6 @@ use linera_base::{
     },
     doc_scalar,
     identifiers::{BlobId, ChainId, Owner, UserApplicationId},
-    time::timer::{sleep, timeout},
 };
 use linera_chain::{
     data_types::{
@@ -663,19 +662,7 @@ where
         &self,
         chain_id: ChainId,
     ) -> Result<ChainActorEndpoint<StorageClient>, WorkerError> {
-        let endpoint = timeout(Duration::from_secs(3), async move {
-            loop {
-                match self.chain_workers.get_endpoint(chain_id).await {
-                    Some(endpoint) => break endpoint,
-                    None => sleep(Duration::from_millis(250)).await,
-                }
-                warn!("No chain worker candidates found for eviction, retrying...");
-            }
-        })
-        .await
-        .map_err(|_| WorkerError::FullChainWorkerCache)?;
-
-        match endpoint {
+        match self.chain_workers.get_endpoint(chain_id).await? {
             Ok(endpoint) => Ok(endpoint),
             Err(new_endpoint) => {
                 new_endpoint
