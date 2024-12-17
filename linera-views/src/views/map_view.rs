@@ -616,31 +616,7 @@ where
     /// deserialize something that was serialized. The key/value are send to the
     /// function f. If it returns false the the loop ends prematurely. Keys and values
     /// are visited in the lexicographic order.
-    /// ```rust
-    /// # tokio_test::block_on(async {
-    /// # use linera_views::context::create_test_memory_context;
-    /// # use linera_views::map_view::ByteMapView;
-    /// # use linera_views::views::View;
-    /// # let context = create_test_memory_context();
-    /// let mut map = ByteMapView::load(context).await.unwrap();
-    /// map.insert(vec![0, 1], String::from("Hello"));
-    /// map.insert(vec![1, 2], String::from("Bonjour"));
-    /// map.insert(vec![1, 3], String::from("Hallo"));
-    /// let mut part_keys = Vec::new();
-    /// let prefix = vec![1];
-    /// map.for_each_key_value_or_bytes_while(
-    ///     |key, _value| {
-    ///         part_keys.push(key.to_vec());
-    ///         Ok(part_keys.len() < 2)
-    ///     },
-    ///     prefix,
-    /// )
-    /// .await
-    /// .unwrap();
-    /// assert_eq!(part_keys.len(), 2);
-    /// # })
-    /// ```
-    pub async fn for_each_key_value_or_bytes_while<'a, F>(
+    pub(crate) async fn for_each_key_value_or_bytes_while<'a, F>(
         &'a self,
         mut f: F,
         prefix: Vec<u8>,
@@ -754,29 +730,7 @@ where
     /// or its serialization. This is needed in order to avoid a scenario where we
     /// deserialize something that was serialized. The key/value are send to the
     /// function f. Keys and values are visited in the lexicographic order.
-    /// ```rust
-    /// # tokio_test::block_on(async {
-    /// # use linera_views::context::create_test_memory_context;
-    /// # use linera_views::map_view::ByteMapView;
-    /// # use linera_views::views::View;
-    /// # let context = create_test_memory_context();
-    /// let mut map = ByteMapView::load(context).await.unwrap();
-    /// map.insert(vec![0, 1], String::from("Hello"));
-    /// let mut count = 0;
-    /// let prefix = Vec::new();
-    /// map.for_each_key_value_or_bytes(
-    ///     |_key, _value| {
-    ///         count += 1;
-    ///         Ok(())
-    ///     },
-    ///     prefix,
-    /// )
-    /// .await
-    /// .unwrap();
-    /// assert_eq!(count, 1);
-    /// # })
-    /// ```
-    pub async fn for_each_key_value_or_bytes<'a, F>(
+    pub(crate) async fn for_each_key_value_or_bytes<'a, F>(
         &'a self,
         mut f: F,
         prefix: Vec<u8>,
