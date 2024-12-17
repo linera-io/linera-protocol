@@ -576,14 +576,14 @@ where
     }
 
     async fn write_blobs(&self, blobs: &[Blob]) -> Result<(), ViewError> {
+        if !blobs.is_empty() {
+            return Ok(());
+        }
         let mut batch = Batch::new();
         for blob in blobs {
             Self::add_blob_to_batch(blob, &mut batch)?;
         }
-        if !batch.is_empty() {
-            self.write_batch(batch).await?;
-        }
-        Ok(())
+        self.write_batch(batch).await
     }
 
     async fn write_blobs_and_certificate(
