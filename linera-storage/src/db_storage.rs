@@ -576,7 +576,7 @@ where
     }
 
     async fn write_blobs(&self, blobs: &[Blob]) -> Result<(), ViewError> {
-        if !blobs.is_empty() {
+        if blobs.is_empty() {
             return Ok(());
         }
         let mut batch = Batch::new();
