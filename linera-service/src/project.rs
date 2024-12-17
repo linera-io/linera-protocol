@@ -46,25 +46,25 @@ impl Project {
         debug!("Initializing git repository");
         Self::initialize_git_repository(&root)?;
 
-        debug!("writing Cargo.toml");
+        debug!("Writing Cargo.toml");
         Self::create_cargo_toml(&root, name, linera_root)?;
 
-        debug!("writing rust-toolchain.toml");
+        debug!("Writing rust-toolchain.toml");
         Self::create_rust_toolchain(&root)?;
 
-        debug!("writing state.rs");
+        debug!("Writing state.rs");
         Self::create_state_file(&source_directory, name)?;
 
-        debug!("writing lib.rs");
+        debug!("Writing lib.rs");
         Self::create_lib_file(&source_directory, name)?;
 
-        debug!("writing contract.rs");
+        debug!("Writing contract.rs");
         Self::create_contract_file(&source_directory, name)?;
 
-        debug!("writing service.rs");
+        debug!("Writing service.rs");
         Self::create_service_file(&source_directory, name)?;
 
-        debug!("writing single_chain.rs");
+        debug!("Writing single_chain.rs");
         Self::create_test_file(&test_directory, name)?;
 
         Ok(Self { root })
