@@ -571,7 +571,10 @@ where
         for blob in blobs {
             Self::add_blob_to_batch(blob, &mut batch)?;
         }
-        self.write_batch(batch).await
+        if !batch.is_empty() {
+            self.write_batch(batch).await?;
+        }
+        Ok(())
     }
 
     async fn write_blobs_and_certificate(
