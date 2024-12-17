@@ -173,9 +173,11 @@ where
                 }
             }
         }
-        let key_results = self.store.contains_keys(key_requests).await?;
-        for (index, result) in indices.into_iter().zip(key_results) {
-            results[index] = result;
+        if !key_requests.is_empty() {
+            let key_results = self.store.contains_keys(key_requests).await?;
+            for (index, result) in indices.into_iter().zip(key_results) {
+                results[index] = result;
+            }
         }
         Ok(results)
     }
@@ -207,17 +209,19 @@ where
                 }
             }
         }
-        let values = self
-            .store
-            .read_multi_values_bytes(miss_keys.clone())
-            .await?;
-        let mut lru_read_values = lru_read_values.lock().unwrap();
-        for (i, (key, value)) in cache_miss_indices
-            .into_iter()
-            .zip(miss_keys.into_iter().zip(values))
-        {
-            lru_read_values.insert(key, value.clone());
-            result[i] = value;
+        if !miss_keys.is_empty() {
+            let values = self
+                .store
+                .read_multi_values_bytes(miss_keys.clone())
+                .await?;
+            let mut lru_read_values = lru_read_values.lock().unwrap();
+            for (i, (key, value)) in cache_miss_indices
+                .into_iter()
+                .zip(miss_keys.into_iter().zip(values))
+            {
+                lru_read_values.insert(key, value.clone());
+                result[i] = value;
+            }
         }
         Ok(result)
     }

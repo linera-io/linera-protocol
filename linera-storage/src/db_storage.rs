@@ -422,6 +422,9 @@ where
     }
 
     async fn read_blobs(&self, blob_ids: &[BlobId]) -> Result<Vec<Option<Blob>>, ViewError> {
+        if blob_ids.is_empty() {
+            return Ok(Vec::new());
+        }
         let blob_keys = blob_ids
             .iter()
             .map(|blob_id| bcs::to_bytes(&BaseKey::Blob(*blob_id)))
@@ -452,6 +455,9 @@ where
     }
 
     async fn read_blob_states(&self, blob_ids: &[BlobId]) -> Result<Vec<BlobState>, ViewError> {
+        if blob_ids.is_empty() {
+            return Ok(Vec::new());
+        }
         let blob_state_keys = blob_ids
             .iter()
             .map(|blob_id| bcs::to_bytes(&BaseKey::BlobState(*blob_id)))
@@ -524,6 +530,9 @@ where
         blob_ids: &[BlobId],
         blob_state: BlobState,
     ) -> Result<Vec<Epoch>, ViewError> {
+        if blob_ids.is_empty() {
+            return Ok(Vec::new());
+        }
         let blob_state_keys = blob_ids
             .iter()
             .map(|blob_id| bcs::to_bytes(&BaseKey::BlobState(*blob_id)))
@@ -567,6 +576,9 @@ where
     }
 
     async fn write_blobs(&self, blobs: &[Blob]) -> Result<(), ViewError> {
+        if blobs.is_empty() {
+            return Ok(());
+        }
         let mut batch = Batch::new();
         for blob in blobs {
             Self::add_blob_to_batch(blob, &mut batch)?;
@@ -614,6 +626,9 @@ where
         hashes: I,
     ) -> Result<Vec<ConfirmedBlockCertificate>, ViewError> {
         let hashes = hashes.into_iter().collect::<Vec<_>>();
+        if hashes.is_empty() {
+            return Ok(Vec::new());
+        }
         let keys = Self::get_keys_for_certificates(&hashes)?;
         let values = self.store.read_multi_values_bytes(keys).await;
         if values.is_ok() {

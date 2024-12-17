@@ -85,9 +85,13 @@ impl linera_views::views::View<CustomContext> for TestView {
         #[cfg(not(target_arch = "wasm32"))]
         use linera_views::metrics::prometheus_util::MeasureLatency as _;
         let _latency = linera_views::metrics::LOAD_VIEW_LATENCY.measure_latency();
-        let keys = Self::pre_load(&context)?;
-        let values = context.read_multi_values_bytes(keys).await?;
-        Self::post_load(context, &values)
+        if Self::NUM_INIT_KEYS == 0 {
+            Self::post_load(context, &[])
+        } else {
+            let keys = Self::pre_load(&context)?;
+            let values = context.read_multi_values_bytes(keys).await?;
+            Self::post_load(context, &values)
+        }
     }
     fn rollback(&mut self) {
         self.register.rollback();
