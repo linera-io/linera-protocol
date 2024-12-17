@@ -11,19 +11,14 @@ use std::{
     collections::{HashMap, HashSet},
     num::NonZeroUsize,
     sync::{Arc, Mutex, RwLock},
-    time::Duration,
 };
 
-use linera_base::{
-    crypto::CryptoHash,
-    identifiers::ChainId,
-    time::timer::{sleep, timeout},
-};
+use linera_base::{crypto::CryptoHash, identifiers::ChainId};
 use linera_chain::{data_types::ExecutedBlock, types::Hashed};
 use linera_storage::Storage;
 use lru::LruCache;
 use tokio::sync::{mpsc, OwnedSemaphorePermit, Semaphore};
-use tracing::{warn, Instrument as _};
+use tracing::Instrument as _;
 
 use crate::{
     chain_worker::{ChainWorkerActor, ChainWorkerConfig, ChainWorkerRequest, DeliveryNotifier},
@@ -71,10 +66,7 @@ where
     pub async fn get_endpoint(
         &self,
         chain_id: ChainId,
-    ) -> Result<
-        Result<ChainActorEndpoint<StorageClient>, NewChainActorEndpoint<StorageClient>>,
-        WorkerError,
-    > {
+    ) -> Result<ChainActorEndpoint<StorageClient>, NewChainActorEndpoint<StorageClient>> {
         let permit = self
             .active_endpoints
             .clone()
@@ -82,19 +74,18 @@ where
             .await
             .expect("`active_endpoints` semaphore should never be closed");
 
-        match self.try_get_existing_endpoint(chain_id, permit) {
-            Ok(endpoint) => Ok(Ok(endpoint)),
-            Err(MissingEndpointError {
-                cache_is_full,
-                permit,
-            }) => {
+        self.try_get_existing_endpoint(chain_id, permit).map_err(
+            |MissingEndpointError {
+                 cache_is_full,
+                 permit,
+             }| {
                 if cache_is_full {
-                    self.stop_one().await?;
+                    self.stop_one();
                 }
 
-                Ok(Err(self.create_new_endpoint(chain_id, permit)))
-            }
-        }
+                self.create_new_endpoint(chain_id, permit)
+            },
+        )
     }
 
     /// Attempts to get a [`ChainActorEndpoint`] for a chain worker actor that's already running.
@@ -143,35 +134,17 @@ where
     }
 
     /// Stops a single chain worker, opening up a slot for a new chain worker to be added.
-    async fn stop_one(&self) -> Result<(), WorkerError> {
-        timeout(Duration::from_secs(3), async move {
-            while !self.try_to_stop_one() {
-                sleep(Duration::from_millis(250)).await;
-                warn!("No chain worker candidates found for eviction, retrying...");
-            }
-        })
-        .await
-        .map_err(|_| WorkerError::FullChainWorkerCache)
-    }
-
-    /// Tries to stop a single chain worker and evict it from the cache.
-    ///
-    /// Returns `true` if it evicted an entry in the cache or `false` if it failed to find a chain
-    /// worker to stop.
-    fn try_to_stop_one(&self) -> bool {
+    fn stop_one(&self) {
         let mut cache = self.cache.lock().unwrap();
-        let entry_to_evict = cache
+
+        let (&chain_to_evict, _) = cache
             .iter()
             .rev()
-            .find(|(_, candidate_endpoint)| candidate_endpoint.strong_count() <= 1);
+            .find(|(_, candidate_endpoint)| candidate_endpoint.strong_count() <= 1)
+            .expect("`stop_one` should only be called while holding a permit for an endpoint");
 
-        if let Some((&chain_to_evict, _)) = entry_to_evict {
-            cache.pop(&chain_to_evict);
-            self.clean_up_finished_chain_workers(&*cache);
-            true
-        } else {
-            false
-        }
+        cache.pop(&chain_to_evict);
+        self.clean_up_finished_chain_workers(&*cache);
     }
 
     /// Cleans up any delivery notifiers for any chain workers that have stopped.

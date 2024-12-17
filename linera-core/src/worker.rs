@@ -662,7 +662,7 @@ where
         &self,
         chain_id: ChainId,
     ) -> Result<ChainActorEndpoint<StorageClient>, WorkerError> {
-        match self.chain_workers.get_endpoint(chain_id).await? {
+        match self.chain_workers.get_endpoint(chain_id).await {
             Ok(endpoint) => Ok(endpoint),
             Err(new_endpoint) => {
                 new_endpoint
