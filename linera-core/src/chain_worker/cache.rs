@@ -130,33 +130,33 @@ where
     /// Stops a single chain worker, opening up a slot for a new chain worker to be added.
     async fn stop_one(&self) -> Result<(), WorkerError> {
         timeout(Duration::from_secs(3), async move {
-            loop {
-                let evicted = {
-                    let mut cache = self.cache.lock().unwrap();
-                    let entry_to_evict = cache
-                        .iter()
-                        .rev()
-                        .find(|(_, candidate_endpoint)| candidate_endpoint.strong_count() <= 1);
-
-                    if let Some((&chain_to_evict, _)) = entry_to_evict {
-                        cache.pop(&chain_to_evict);
-                        self.clean_up_finished_chain_workers(&*cache);
-                        true
-                    } else {
-                        false
-                    }
-                };
-
-                if evicted {
-                    break;
-                } else {
-                    sleep(Duration::from_millis(250)).await;
-                    warn!("No chain worker candidates found for eviction, retrying...");
-                }
+            while !self.try_to_stop_one() {
+                sleep(Duration::from_millis(250)).await;
+                warn!("No chain worker candidates found for eviction, retrying...");
             }
         })
         .await
         .map_err(|_| WorkerError::FullChainWorkerCache)
+    }
+
+    /// Tries to stop a single chain worker and evict it from the cache.
+    ///
+    /// Returns `true` if it evicted an entry in the cache or `false` if it failed to find a chain
+    /// worker to stop.
+    fn try_to_stop_one(&self) -> bool {
+        let mut cache = self.cache.lock().unwrap();
+        let entry_to_evict = cache
+            .iter()
+            .rev()
+            .find(|(_, candidate_endpoint)| candidate_endpoint.strong_count() <= 1);
+
+        if let Some((&chain_to_evict, _)) = entry_to_evict {
+            cache.pop(&chain_to_evict);
+            self.clean_up_finished_chain_workers(&*cache);
+            true
+        } else {
+            false
+        }
     }
 
     /// Cleans up any delivery notifiers for any chain workers that have stopped.
