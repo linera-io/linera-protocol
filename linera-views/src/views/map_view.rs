@@ -616,7 +616,7 @@ where
     /// deserialize something that was serialized. The key/value are send to the
     /// function f. If it returns false the the loop ends prematurely. Keys and values
     /// are visited in the lexicographic order.
-    pub(crate) async fn for_each_key_value_or_bytes_while<'a, F>(
+    async fn for_each_key_value_or_bytes_while<'a, F>(
         &'a self,
         mut f: F,
         prefix: Vec<u8>,
@@ -730,7 +730,7 @@ where
     /// or its serialization. This is needed in order to avoid a scenario where we
     /// deserialize something that was serialized. The key/value are send to the
     /// function f. Keys and values are visited in the lexicographic order.
-    pub(crate) async fn for_each_key_value_or_bytes<'a, F>(
+    async fn for_each_key_value_or_bytes<'a, F>(
         &'a self,
         mut f: F,
         prefix: Vec<u8>,
