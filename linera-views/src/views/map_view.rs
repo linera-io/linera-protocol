@@ -66,6 +66,40 @@ pub struct ByteMapView<C, V> {
     updates: BTreeMap<Vec<u8>, Update<V>>,
 }
 
+/// Whether we have a value or its serialization.
+pub enum ValueOrBytes<'a, T> {
+    /// The value itself.
+    Value(&'a T),
+    /// The serialization.
+    Bytes(Vec<u8>),
+}
+
+impl<'a, T> ValueOrBytes<'a, T>
+where
+    T: Clone + DeserializeOwned,
+{
+    /// Convert to a value.
+    pub fn to_value(self) -> Result<T, ViewError> {
+        match self {
+            ValueOrBytes::Value(value) => Ok(value.clone()),
+            ValueOrBytes::Bytes(bytes) => Ok(bcs::from_bytes(&bytes)?),
+        }
+    }
+}
+
+impl<'a, T> ValueOrBytes<'a, T>
+where
+    T: Serialize,
+{
+    /// Convert to bytes.
+    pub fn to_bytes(self) -> Result<Vec<u8>, ViewError> {
+        match self {
+            ValueOrBytes::Value(value) => Ok(bcs::to_bytes(value)?),
+            ValueOrBytes::Bytes(bytes) => Ok(bytes),
+        }
+    }
+}
+
 #[async_trait]
 impl<C, V> View<C> for ByteMapView<C, V>
 where
@@ -364,7 +398,7 @@ impl<C, V> ByteMapView<C, V>
 where
     C: Context,
     ViewError: From<C::Error>,
-    V: Serialize + 'static,
+    V: Clone + Serialize + DeserializeOwned + 'static,
 {
     /// Applies the function f on each index (aka key) which has the assigned prefix.
     /// Keys are visited in the lexicographic order. The shortened key is send to the
@@ -575,6 +609,75 @@ where
         Ok(count)
     }
 
+    /// Applies a function f on each key/value pair matching a prefix. The key is the
+    /// shortened one by the prefix. The value is an enum that can be either a value
+    /// or its serialization. This is needed in order to avoid a scenario where we
+    /// deserialize something that was serialized. The key/value are send to the
+    /// function f. If it returns false the the loop ends prematurely. Keys and values
+    /// are visited in the lexicographic order.
+    async fn for_each_key_value_or_bytes_while<'a, F>(
+        &'a self,
+        mut f: F,
+        prefix: Vec<u8>,
+    ) -> Result<(), ViewError>
+    where
+        F: FnMut(&[u8], ValueOrBytes<'a, V>) -> Result<bool, ViewError> + Send,
+    {
+        let prefix_len = prefix.len();
+        let mut updates = self.updates.range(get_interval(prefix.clone()));
+        let mut update = updates.next();
+        if !self.deletion_set.contains_prefix_of(&prefix) {
+            let iter = self
+                .deletion_set
+                .deleted_prefixes
+                .range(get_interval(prefix.clone()));
+            let mut suffix_closed_set = SuffixClosedSetIterator::new(prefix_len, iter);
+            let base = self.context.base_index(&prefix);
+            for entry in self
+                .context
+                .find_key_values_by_prefix(&base)
+                .await?
+                .into_iterator_owned()
+            {
+                let (index, bytes) = entry?;
+                loop {
+                    match update {
+                        Some((key, value)) if key[prefix_len..] <= *index => {
+                            if let Update::Set(value) = value {
+                                let value = ValueOrBytes::Value(value);
+                                if !f(&key[prefix_len..], value)? {
+                                    return Ok(());
+                                }
+                            }
+                            update = updates.next();
+                            if key[prefix_len..] == index {
+                                break;
+                            }
+                        }
+                        _ => {
+                            if !suffix_closed_set.find_key(&index) {
+                                let value = ValueOrBytes::Bytes(bytes);
+                                if !f(&index, value)? {
+                                    return Ok(());
+                                }
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        while let Some((key, value)) = update {
+            if let Update::Set(value) = value {
+                let value = ValueOrBytes::Value(value);
+                if !f(&key[prefix_len..], value)? {
+                    return Ok(());
+                }
+            }
+            update = updates.next();
+        }
+        Ok(())
+    }
     /// Applies a function f on each index/value pair matching a prefix. Keys
     /// and values are visited in the lexicographic order. The shortened index
     /// is send to the function f and if it returns false then the loop ends
@@ -609,59 +712,39 @@ where
         prefix: Vec<u8>,
     ) -> Result<(), ViewError>
     where
-        F: FnMut(&[u8], &[u8]) -> Result<bool, ViewError> + Send,
+        F: FnMut(&[u8], V) -> Result<bool, ViewError> + Send,
     {
-        let prefix_len = prefix.len();
-        let mut updates = self.updates.range(get_interval(prefix.clone()));
-        let mut update = updates.next();
-        if !self.deletion_set.contains_prefix_of(&prefix) {
-            let iter = self
-                .deletion_set
-                .deleted_prefixes
-                .range(get_interval(prefix.clone()));
-            let mut suffix_closed_set = SuffixClosedSetIterator::new(prefix_len, iter);
-            let base = self.context.base_index(&prefix);
-            for entry in self
-                .context
-                .find_key_values_by_prefix(&base)
-                .await?
-                .iterator()
-            {
-                let (index, bytes) = entry?;
-                loop {
-                    match update {
-                        Some((key, value)) if &key[prefix_len..] <= index => {
-                            if let Update::Set(value) = value {
-                                let bytes = bcs::to_bytes(value)?;
-                                if !f(&key[prefix_len..], &bytes)? {
-                                    return Ok(());
-                                }
-                            }
-                            update = updates.next();
-                            if &key[prefix_len..] == index {
-                                break;
-                            }
-                        }
-                        _ => {
-                            if !suffix_closed_set.find_key(index) && !f(index, bytes)? {
-                                return Ok(());
-                            }
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-        while let Some((key, value)) = update {
-            if let Update::Set(value) = value {
-                let bytes = bcs::to_bytes(value)?;
-                if !f(&key[prefix_len..], &bytes)? {
-                    return Ok(());
-                }
-            }
-            update = updates.next();
-        }
-        Ok(())
+        self.for_each_key_value_or_bytes_while(
+            |key, value| {
+                let value = value.to_value()?;
+                f(key, value)
+            },
+            prefix,
+        )
+        .await
+    }
+
+    /// Applies a function f on each key/value pair matching a prefix. The key is the
+    /// shortened one by the prefix. The value is an enum that can be either a value
+    /// or its serialization. This is needed in order to avoid a scenario where we
+    /// deserialize something that was serialized. The key/value are send to the
+    /// function f. Keys and values are visited in the lexicographic order.
+    async fn for_each_key_value_or_bytes<'a, F>(
+        &'a self,
+        mut f: F,
+        prefix: Vec<u8>,
+    ) -> Result<(), ViewError>
+    where
+        F: FnMut(&[u8], ValueOrBytes<'a, V>) -> Result<(), ViewError> + Send,
+    {
+        self.for_each_key_value_or_bytes_while(
+            |key, value| {
+                f(key, value)?;
+                Ok(true)
+            },
+            prefix,
+        )
+        .await
     }
 
     /// Applies a function f on each key/value pair matching a prefix. The shortened
@@ -691,7 +774,7 @@ where
     /// ```
     pub async fn for_each_key_value<F>(&self, mut f: F, prefix: Vec<u8>) -> Result<(), ViewError>
     where
-        F: FnMut(&[u8], &[u8]) -> Result<(), ViewError> + Send,
+        F: FnMut(&[u8], V) -> Result<(), ViewError> + Send,
     {
         self.for_each_key_value_while(
             |key, value| {
@@ -708,7 +791,7 @@ impl<C, V> ByteMapView<C, V>
 where
     C: Context,
     ViewError: From<C::Error>,
-    V: Send + Serialize + DeserializeOwned + 'static,
+    V: Clone + Send + Serialize + DeserializeOwned + 'static,
 {
     /// Returns the list of keys and values of the map matching a prefix
     /// in lexicographic order.
@@ -735,7 +818,6 @@ where
         let prefix_copy = prefix.clone();
         self.for_each_key_value(
             |key, value| {
-                let value = bcs::from_bytes(value)?;
                 let mut big_key = prefix.clone();
                 big_key.extend(key);
                 key_values.push((big_key, value));
@@ -823,7 +905,7 @@ impl<C, V> HashableView<C> for ByteMapView<C, V>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    V: Send + Sync + Serialize + 'static,
+    V: Clone + Send + Sync + Serialize + DeserializeOwned + 'static,
 {
     type Hasher = sha3::Sha3_256;
 
@@ -837,11 +919,12 @@ where
         let mut hasher = sha3::Sha3_256::default();
         let mut count = 0;
         let prefix = Vec::new();
-        self.for_each_key_value(
+        self.for_each_key_value_or_bytes(
             |index, value| {
                 count += 1;
                 hasher.update_with_bytes(index)?;
-                hasher.update_with_bytes(value)?;
+                let bytes = value.to_bytes()?;
+                hasher.update_with_bytes(&bytes)?;
                 Ok(())
             },
             prefix,
@@ -1068,7 +1151,7 @@ where
     C: Context + Sync,
     ViewError: From<C::Error>,
     I: Send + DeserializeOwned,
-    V: Sync + Serialize + DeserializeOwned + 'static,
+    V: Clone + Sync + Serialize + DeserializeOwned + 'static,
 {
     /// Returns the list of indices in the map. The order is determined by serialization.
     /// ```rust
@@ -1199,9 +1282,8 @@ where
         let prefix = Vec::new();
         self.map
             .for_each_key_value_while(
-                |key, bytes| {
+                |key, value| {
                     let index = C::deserialize_value(key)?;
-                    let value = C::deserialize_value(bytes)?;
                     f(index, value)
                 },
                 prefix,
@@ -1237,9 +1319,8 @@ where
         let prefix = Vec::new();
         self.map
             .for_each_key_value(
-                |key, bytes| {
+                |key, value| {
                     let index = C::deserialize_value(key)?;
-                    let value = C::deserialize_value(bytes)?;
                     f(index, value)
                 },
                 prefix,
@@ -1254,7 +1335,7 @@ where
     C: Context + Sync,
     ViewError: From<C::Error>,
     I: Send + DeserializeOwned,
-    V: Sync + Send + Serialize + DeserializeOwned + 'static,
+    V: Clone + Sync + Send + Serialize + DeserializeOwned + 'static,
 {
     /// Obtains all the `(index,value)` pairs.
     /// ```rust
@@ -1273,19 +1354,12 @@ where
     /// # })
     /// ```
     pub async fn index_values(&self) -> Result<Vec<(I, V)>, ViewError> {
-        let prefix = Vec::new();
         let mut key_values = Vec::new();
-        self.map
-            .for_each_key_value(
-                |key, bytes| {
-                    let index = C::deserialize_value(key)?;
-                    let value = C::deserialize_value(bytes)?;
-                    key_values.push((index, value));
-                    Ok(())
-                },
-                prefix,
-            )
-            .await?;
+        self.for_each_index_value(|index, value| {
+            key_values.push((index, value));
+            Ok(())
+        })
+        .await?;
         Ok(key_values)
     }
 
@@ -1570,7 +1644,7 @@ where
     C: Context + Sync,
     ViewError: From<C::Error>,
     I: Send + CustomSerialize,
-    V: Serialize + DeserializeOwned + 'static,
+    V: Clone + Serialize + DeserializeOwned + 'static,
 {
     /// Returns the list of indices in the map. The order is determined
     /// by the custom serialization.
@@ -1704,9 +1778,8 @@ where
         let prefix = Vec::new();
         self.map
             .for_each_key_value_while(
-                |key, bytes| {
+                |key, value| {
                     let index = I::from_custom_bytes(key)?;
-                    let value = C::deserialize_value(bytes)?;
                     f(index, value)
                 },
                 prefix,
@@ -1743,9 +1816,8 @@ where
         let prefix = Vec::new();
         self.map
             .for_each_key_value(
-                |key, bytes| {
+                |key, value| {
                     let index = I::from_custom_bytes(key)?;
-                    let value = C::deserialize_value(bytes)?;
                     f(index, value)
                 },
                 prefix,
@@ -1760,7 +1832,7 @@ where
     C: Context + Sync,
     ViewError: From<C::Error>,
     I: Send + CustomSerialize,
-    V: Sync + Send + Serialize + DeserializeOwned + 'static,
+    V: Clone + Sync + Send + Serialize + DeserializeOwned + 'static,
 {
     /// Obtains all the `(index,value)` pairs.
     /// ```rust
@@ -1779,19 +1851,12 @@ where
     /// # })
     /// ```
     pub async fn index_values(&self) -> Result<Vec<(I, V)>, ViewError> {
-        let prefix = Vec::new();
         let mut key_values = Vec::new();
-        self.map
-            .for_each_key_value(
-                |key, bytes| {
-                    let index = I::from_custom_bytes(key)?;
-                    let value = C::deserialize_value(bytes)?;
-                    key_values.push((index, value));
-                    Ok(())
-                },
-                prefix,
-            )
-            .await?;
+        self.for_each_index_value(|index, value| {
+            key_values.push((index, value));
+            Ok(())
+        })
+        .await?;
         Ok(key_values)
     }
 
