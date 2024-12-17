@@ -34,7 +34,7 @@ use linera_views::{
 };
 #[cfg(with_wasm_runtime)]
 use {
-    linera_base::{data_types::CompressedBytecode, identifiers::BlobType},
+    linera_base::identifiers::BlobType,
     linera_execution::{WasmContractModule, WasmServiceModule},
 };
 
@@ -256,6 +256,8 @@ pub trait Storage: Sized {
         &self,
         application_description: &UserApplicationDescription,
     ) -> Result<UserContractCode, ExecutionError> {
+        use linera_base::data_types::BlobContent;
+
         let Some(wasm_runtime) = self.wasm_runtime() else {
             panic!("A Wasm runtime is required to load user applications.");
         };
@@ -264,8 +266,9 @@ pub trait Storage: Sized {
             BlobType::ContractBytecode,
         );
         let contract_blob = self.read_blob(contract_bytecode_blob_id).await?;
-        let compressed_contract_bytecode = CompressedBytecode {
-            compressed_bytes: contract_blob.inner_bytes(),
+        let BlobContent::ContractBytecode(compressed_contract_bytecode) = contract_blob.into()
+        else {
+            return Err(ViewError::InconsistentEntries.into()); // Should be unreachable.
         };
         let contract_bytecode =
             linera_base::task::Blocking::<linera_base::task::NoInput, _>::spawn(
@@ -299,6 +302,8 @@ pub trait Storage: Sized {
         &self,
         application_description: &UserApplicationDescription,
     ) -> Result<UserServiceCode, ExecutionError> {
+        use linera_base::data_types::BlobContent;
+
         let Some(wasm_runtime) = self.wasm_runtime() else {
             panic!("A Wasm runtime is required to load user applications.");
         };
@@ -307,8 +312,8 @@ pub trait Storage: Sized {
             BlobType::ServiceBytecode,
         );
         let service_blob = self.read_blob(service_bytecode_blob_id).await?;
-        let compressed_service_bytecode = CompressedBytecode {
-            compressed_bytes: service_blob.inner_bytes(),
+        let BlobContent::ServiceBytecode(compressed_service_bytecode) = service_blob.into() else {
+            return Err(ViewError::InconsistentEntries.into()); // Should be unreachable.
         };
         let service_bytecode = linera_base::task::Blocking::<linera_base::task::NoInput, _>::spawn(
             move |_| async move { compressed_service_bytecode.decompress() },

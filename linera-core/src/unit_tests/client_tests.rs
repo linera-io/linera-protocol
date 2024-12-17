@@ -1292,10 +1292,7 @@ where
         .await?;
 
     let blob0_bytes = b"blob0".to_vec();
-    let blob0_id = BlobId::new(
-        CryptoHash::new(&BlobBytes(blob0_bytes.clone())),
-        BlobType::Data,
-    );
+    let blob0_id = BlobId::new(CryptoHash::new_from_bytes(&blob0_bytes), BlobType::Data);
 
     // Try to read a blob without publishing it first, should fail
     let result = client1_a
@@ -1467,10 +1464,7 @@ where
     builder.set_fault_type([3], FaultType::Offline).await;
 
     let blob0_bytes = b"blob0".to_vec();
-    let blob0_id = BlobId::new(
-        CryptoHash::new(&BlobBytes(blob0_bytes.clone())),
-        BlobType::Data,
-    );
+    let blob0_id = BlobId::new(CryptoHash::new_from_bytes(&blob0_bytes), BlobType::Data);
 
     // Publish blob on chain 1
     let publish_certificate = client1
@@ -1611,10 +1605,7 @@ where
     builder.set_fault_type([3], FaultType::Offline).await;
 
     let blob0_bytes = b"blob0".to_vec();
-    let blob0_id = BlobId::new(
-        CryptoHash::new(&BlobBytes(blob0_bytes.clone())),
-        BlobType::Data,
-    );
+    let blob0_id = BlobId::new(CryptoHash::new_from_bytes(&blob0_bytes), BlobType::Data);
 
     client1.synchronize_from_validators().await.unwrap();
     // Publish blob0 on chain 1
@@ -1628,10 +1619,7 @@ where
         .requires_blob(&blob0_id));
 
     let blob2_bytes = b"blob2".to_vec();
-    let blob2_id = BlobId::new(
-        CryptoHash::new(&BlobBytes(blob2_bytes.clone())),
-        BlobType::Data,
-    );
+    let blob2_id = BlobId::new(CryptoHash::new_from_bytes(&blob2_bytes), BlobType::Data);
 
     client2.synchronize_from_validators().await.unwrap();
     // Publish blob2 on chain 2
@@ -2266,10 +2254,7 @@ where
     builder.set_fault_type([3], FaultType::Offline).await;
 
     // Publish a blob on chain 1.
-    let blob_id = BlobId::new(
-        CryptoHash::new(&BlobBytes(blob_bytes.clone())),
-        BlobType::Data,
-    );
+    let blob_id = BlobId::new(CryptoHash::new_from_bytes(&blob_bytes), BlobType::Data);
     let certificate = client1
         .publish_data_blob(blob_bytes)
         .await

@@ -424,6 +424,15 @@ impl CryptoHash {
         CryptoHash(hasher.finalize())
     }
 
+    /// Computes the hash of the given bytes.
+    pub fn new_from_bytes(bytes: &[u8]) -> Self {
+        use sha3::digest::Digest;
+
+        let mut hasher = sha3::Sha3_256::default();
+        bytes.write(&mut hasher);
+        CryptoHash(hasher.finalize())
+    }
+
     /// Reads the bytes of the hash value.
     pub fn as_bytes(&self) -> &HasherOutput {
         &self.0

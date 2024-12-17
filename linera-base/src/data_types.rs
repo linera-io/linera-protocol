@@ -11,7 +11,7 @@ use std::sync::LazyLock;
 use std::{
     fmt::{self, Display},
     fs,
-    hash::{Hash, Hasher},
+    hash::Hash,
     io, iter,
     num::ParseIntError,
     path::Path,
@@ -31,7 +31,6 @@ use thiserror::Error;
 #[cfg(with_metrics)]
 use crate::prometheus_util::{bucket_latencies, register_histogram_vec, MeasureLatency};
 use crate::{
-    crypto::BcsHashable,
     doc_scalar, hex_debug,
     identifiers::{
         ApplicationId, BlobId, BlobType, BytecodeId, Destination, GenericApplicationId, MessageId,
@@ -952,20 +951,6 @@ impl CompressedBytecode {
     }
 }
 
-/// Internal bytes of a blob.
-#[derive(Clone, Serialize, Deserialize, WitType, WitStore)]
-#[cfg_attr(with_testing, derive(Eq, PartialEq))]
-#[repr(transparent)]
-pub struct BlobBytes(#[serde(with = "serde_bytes")] pub Vec<u8>);
-
-impl BcsHashable for BlobBytes {}
-
-impl Hash for BlobBytes {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.0.hash(state);
-    }
-}
-
 /// A blob of binary data.
 #[derive(Hash, Clone, Debug, Serialize, Deserialize, WitType, WitStore)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
@@ -1021,14 +1006,10 @@ impl BlobContent {
 
     /// Creates a `Blob` checking that this is the correct `BlobId`.
     pub fn with_blob_id_checked(self, blob_id: BlobId) -> Option<Blob> {
-        match blob_id.blob_type {
-            BlobType::Data if matches!(&self, BlobContent::Data(_)) => Some(()),
-            BlobType::ContractBytecode if matches!(&self, BlobContent::ContractBytecode(_)) => {
-                Some(())
-            }
-            BlobType::ServiceBytecode if matches!(&self, BlobContent::ServiceBytecode(_)) => {
-                Some(())
-            }
+        match (blob_id.blob_type, &self) {
+            (BlobType::Data, BlobContent::Data(_)) => Some(()),
+            (BlobType::ContractBytecode, BlobContent::ContractBytecode(_)) => Some(()),
+            (BlobType::ServiceBytecode, BlobContent::ServiceBytecode(_)) => Some(()),
             _ => None,
         }?;
 
@@ -1041,8 +1022,8 @@ impl BlobContent {
         }
     }
 
-    /// Gets the inner blob's bytes.
-    pub fn inner_bytes(&self) -> Vec<u8> {
+    /// Gets a reference to the inner blob's bytes.
+    pub fn inner_bytes(&self) -> &[u8] {
         match self {
             BlobContent::Data(bytes) => bytes,
             BlobContent::ContractBytecode(compressed_bytecode) => {
@@ -1052,12 +1033,19 @@ impl BlobContent {
                 &compressed_bytecode.compressed_bytes
             }
         }
-        .clone()
     }
 
-    /// Gets the `BlobBytes` for this `BlobContent`.
-    pub fn blob_bytes(&self) -> BlobBytes {
-        BlobBytes(self.inner_bytes())
+    /// Gets the inner blob's bytes, consuming the blob.
+    pub fn into_inner_bytes(self) -> Vec<u8> {
+        match self {
+            BlobContent::Data(bytes) => bytes,
+            BlobContent::ContractBytecode(compressed_bytecode) => {
+                compressed_bytecode.compressed_bytes
+            }
+            BlobContent::ServiceBytecode(compressed_bytecode) => {
+                compressed_bytecode.compressed_bytes
+            }
+        }
     }
 
     /// Returns the size of the blob content in bytes.
@@ -1134,7 +1122,7 @@ impl Blob {
     }
 
     /// Gets the inner blob's bytes.
-    pub fn inner_bytes(&self) -> Vec<u8> {
+    pub fn inner_bytes(&self) -> &[u8] {
         self.content.inner_bytes()
     }
 

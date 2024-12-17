@@ -54,11 +54,7 @@ use {
 };
 #[cfg(feature = "fs")]
 use {
-    linera_base::{
-        crypto::CryptoHash,
-        data_types::{BlobBytes, Bytecode},
-        identifiers::BytecodeId,
-    },
+    linera_base::{crypto::CryptoHash, data_types::Bytecode, identifiers::BytecodeId},
     linera_core::client::create_bytecode_blobs,
     std::{fs, path::PathBuf},
 };
@@ -542,7 +538,7 @@ where
         .await?;
 
         info!("{}", "Data blob published successfully!");
-        Ok(CryptoHash::new(&BlobBytes(blob_bytes)))
+        Ok(CryptoHash::new_from_bytes(&blob_bytes))
     }
 
     // TODO(#2490): Consider removing or renaming this.

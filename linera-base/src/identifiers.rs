@@ -206,7 +206,7 @@ impl BlobId {
     /// Creates a new `BlobId` from a `BlobContent`
     pub fn from_content(content: &BlobContent) -> Self {
         Self {
-            hash: CryptoHash::new(&content.blob_bytes()),
+            hash: CryptoHash::new_from_bytes(content.inner_bytes()),
             blob_type: content.into(),
         }
     }

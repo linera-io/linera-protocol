@@ -28,7 +28,7 @@ use futures::{
 use linera_base::{
     command::resolve_binary,
     crypto::CryptoHash,
-    data_types::{Amount, BlobBytes},
+    data_types::Amount,
     identifiers::{Account, AccountOwner, ApplicationId, ChainId},
 };
 use linera_chain::data_types::{Medium, Origin};
@@ -1015,7 +1015,7 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
     let nft1_minter = account_owner1;
 
     let nft1_blob_bytes = b"nft1_data".to_vec();
-    let nft1_blob_hash = CryptoHash::new(&BlobBytes(nft1_blob_bytes.clone()));
+    let nft1_blob_hash = CryptoHash::new_from_bytes(&nft1_blob_bytes);
     let blob_hash = node_service1
         .publish_data_blob(&chain1, nft1_blob_bytes.clone())
         .await?;
@@ -1145,7 +1145,7 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
     let nft2_name = "nft2".to_string();
     let nft2_minter = account_owner2;
     let nft2_blob_bytes = b"nft2_data".to_vec();
-    let nft2_blob_hash = CryptoHash::new(&BlobBytes(nft2_blob_bytes.clone()));
+    let nft2_blob_hash = CryptoHash::new_from_bytes(&nft2_blob_bytes);
     let blob_hash = node_service2
         .publish_data_blob(&chain2, nft2_blob_bytes.clone())
         .await?;

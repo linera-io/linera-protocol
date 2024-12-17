@@ -15,9 +15,7 @@ use axum::{extract::Path, http::StatusCode, response, response::IntoResponse, Ex
 use futures::{lock::Mutex, Future};
 use linera_base::{
     crypto::{CryptoError, CryptoHash, PublicKey},
-    data_types::{
-        Amount, ApplicationPermissions, BlobBytes, Bytecode, TimeDelta, UserApplicationDescription,
-    },
+    data_types::{Amount, ApplicationPermissions, Bytecode, TimeDelta, UserApplicationDescription},
     identifiers::{ApplicationId, BytecodeId, ChainId, Owner, UserApplicationId},
     ownership::{ChainOwnership, TimeoutConfig},
     BcsHexParseError,
@@ -583,7 +581,7 @@ where
         chain_id: ChainId,
         bytes: Vec<u8>,
     ) -> Result<CryptoHash, Error> {
-        let hash = CryptoHash::new(&BlobBytes(bytes.clone()));
+        let hash = CryptoHash::new_from_bytes(&bytes);
         self.apply_client_command(&chain_id, move |client| {
             let bytes = bytes.clone();
             async move {
