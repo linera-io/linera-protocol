@@ -134,6 +134,17 @@ pub struct Response {
     pub body: Vec<u8>,
 }
 
+impl Response {
+    /// Creates an HTTP [`Response`] with a user defined `status_code`.
+    pub fn new(status_code: u16) -> Self {
+        Response {
+            status: status_code,
+            headers: vec![],
+            body: vec![],
+        }
+    }
+}
+
 #[cfg(with_reqwest)]
 impl Response {
     /// Creates a [`Response`] from a [`reqwest::Response`], waiting for it to be fully
