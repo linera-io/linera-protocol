@@ -24,7 +24,7 @@ use linera_execution::{
     system::OpenChainConfig,
     Message, MessageKind, Operation, SystemMessage, SystemOperation,
 };
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 
 use crate::{
     types::{
@@ -400,7 +400,7 @@ pub struct ExecutedBlock {
     pub outcome: BlockExecutionOutcome,
 }
 
-impl BcsHashable for ExecutedBlock {}
+impl<'de> BcsHashable<'de> for ExecutedBlock {}
 
 /// The messages and the state hash resulting from a [`Block`]'s execution.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
@@ -444,7 +444,7 @@ struct VoteValue(CryptoHash, Round, CertificateKind);
 
 /// A vote on a statement from a validator.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(bound(deserialize = "T: DeserializeOwned + BcsHashable"))]
+#[serde(bound(deserialize = "T: BcsHashable<'de>"))]
 pub struct Vote<T> {
     pub value: Hashed<T>,
     pub round: Round,
@@ -916,9 +916,9 @@ pub(crate) fn check_signatures(
     Ok(())
 }
 
-impl BcsSignable for ProposalContent {}
+impl<'de> BcsSignable<'de> for ProposalContent {}
 
-impl BcsSignable for VoteValue {}
+impl<'de> BcsSignable<'de> for VoteValue {}
 
 doc_scalar!(
     MessageAction,

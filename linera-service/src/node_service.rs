@@ -583,7 +583,7 @@ where
         chain_id: ChainId,
         bytes: Vec<u8>,
     ) -> Result<CryptoHash, Error> {
-        let hash = CryptoHash::new(&BlobBytes(bytes.clone()));
+        let hash = CryptoHash::new(&BlobBytes(&bytes));
         self.apply_client_command(&chain_id, move |client| {
             let bytes = bytes.clone();
             async move {

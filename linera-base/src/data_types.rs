@@ -956,9 +956,9 @@ impl CompressedBytecode {
 #[derive(Clone, Hash, Serialize, Deserialize)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
 #[repr(transparent)]
-pub struct BlobBytes(#[serde(with = "serde_bytes")] pub Vec<u8>);
+pub struct BlobBytes<'a>(#[serde(with = "serde_bytes")] pub &'a [u8]);
 
-impl BcsHashable for BlobBytes {}
+impl<'a> BcsHashable<'a> for BlobBytes<'a> {}
 
 /// A blob of binary data.
 #[derive(Hash, Clone, Debug, Serialize, Deserialize, WitType, WitStore)]
@@ -1059,7 +1059,7 @@ impl BlobContent {
 
     /// Gets the `BlobBytes` for this `BlobContent`.
     pub fn blob_bytes(&self) -> BlobBytes {
-        BlobBytes(self.inner_bytes().to_vec())
+        BlobBytes(self.inner_bytes())
     }
 
     /// Returns the size of the blob content in bytes.

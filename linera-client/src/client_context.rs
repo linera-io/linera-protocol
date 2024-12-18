@@ -542,7 +542,7 @@ where
         .await?;
 
         info!("{}", "Data blob published successfully!");
-        Ok(CryptoHash::new(&BlobBytes(blob_bytes)))
+        Ok(CryptoHash::new(&BlobBytes(&blob_bytes)))
     }
 
     // TODO(#2490): Consider removing or renaming this.

@@ -315,7 +315,7 @@ impl ChainInfoResponse {
     }
 }
 
-impl BcsSignable for ChainInfo {}
+impl<'de> BcsSignable<'de> for ChainInfo {}
 
 /// The outcome of trying to commit a list of operations to the chain.
 #[derive(Debug)]
