@@ -168,7 +168,7 @@ where
 {
     fn creator_chain_id(&self) -> ChainId {
         self.description.get().expect(
-            "Can't register applications on an system state with no associated `ChainDescription`",
+            "Can't register applications on a system state with no associated `ChainDescription`",
         ).into()
     }
 
