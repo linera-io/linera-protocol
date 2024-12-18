@@ -15,7 +15,7 @@ use crate::{
 /// Implement [`WitType`], [`WitLoad`] and [`WitStore`].
 ///
 /// When implementing [`WitStore`] for tuples, it's necessary to deconstruct the tuple and rebuild
-/// it as an heterogeneous list. However, because the methods receive `&self`, the deconstruction
+/// it as a heterogeneous list. However, because the methods receive `&self`, the deconstruction
 /// leads to references to the elements. Therefore an extra constraint is necessary, which is that
 /// the reference also implements [`WitStore`] and that the layout is the same as the referenced
 /// type.
