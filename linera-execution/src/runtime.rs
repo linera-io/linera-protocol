@@ -1032,7 +1032,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
             self.transaction_tracker
                 .replay_oracle_response(OracleResponse::Blob(blob_id))?;
         }
-        Ok(blob_content.inner_bytes())
+        Ok(blob_content.into_inner_bytes())
     }
 
     fn assert_data_blob_exists(&mut self, hash: &CryptoHash) -> Result<(), ExecutionError> {
