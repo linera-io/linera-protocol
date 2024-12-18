@@ -9,6 +9,24 @@ use serde::{Deserialize, Serialize};
 
 use crate::hex_debug;
 
+/// An HTTP request.
+#[derive(Clone, Debug, WitLoad, WitStore, WitType)]
+#[witty(name = "http-request")]
+pub struct Request {
+    /// The [`Method`] used for the HTTP request.
+    pub method: Method,
+
+    /// The URL this request is intended to.
+    pub url: String,
+
+    /// The headers that should be included in the request.
+    pub headers: Vec<Header>,
+
+    /// The body of the request.
+    #[debug(with = "hex_debug")]
+    pub body: Vec<u8>,
+}
+
 /// The method used in an HTTP request.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, WitLoad, WitStore, WitType)]
 #[witty(name = "http-method")]
