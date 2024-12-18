@@ -440,6 +440,8 @@ impl Runnable for Job {
                     committee.validators()
                 );
                 let node_provider = context.make_node_provider();
+                let mut num_ok_validators = 0;
+                let mut faulty_validators = vec![];
                 for (name, state) in committee.validators() {
                     let address = &state.network_address;
                     let node = node_provider.make_node(address)?;
@@ -452,6 +454,11 @@ impl Runnable for Job {
                         }
                         Err(e) => {
                             error!("Failed to get version information for validator {name:?} at {address}:\n{e}");
+                            faulty_validators.push((
+                                name,
+                                address,
+                                "Failed to get version information.".to_string(),
+                            ));
                             continue;
                         }
                     }
@@ -465,16 +472,27 @@ impl Runnable for Job {
                             );
                             if response.check(name).is_ok() {
                                 info!("Signature for public key {name} is OK.");
+                                num_ok_validators += 1;
                             } else {
                                 error!("Signature for public key {name} is NOT OK.");
+                                faulty_validators.push((name, address, format!("{:?}", response)));
                             }
                         }
                         Err(e) => {
                             error!("Failed to get chain info for validator {name:?} at {address} and chain {chain_id}:\n{e}");
+                            faulty_validators.push((
+                                name,
+                                address,
+                                "Failed to get chain info.".to_string(),
+                            ));
                             continue;
                         }
                     }
                 }
+                if !faulty_validators.is_empty() {
+                    println!("{:#?}", faulty_validators);
+                }
+                println!("{}/{} OK.", num_ok_validators, committee.validators().len());
             }
 
             command @ (SetValidator { .. }
