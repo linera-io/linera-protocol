@@ -177,6 +177,7 @@ fn test_specialized_generic_enum_type() {
 }
 
 /// Helper type to make visible what each metadata value is.
+#[derive(Clone, Copy, Debug)]
 struct ExpectedMetadata {
     size: u32,
     alignment: u32,
@@ -184,8 +185,23 @@ struct ExpectedMetadata {
     declaration: &'static str,
 }
 
-/// Tests that a type `T` has the `expected` [`WitType`] metadata in its implementation.
+/// Tests that a type `T` and wrapped versions of it have the `expected` [`WitType`] metadata in
+/// their implementations.
 fn test_wit_type_implementation<T>(expected: ExpectedMetadata)
+where
+    T: WitType,
+{
+    let expected_when_wrapped = ExpectedMetadata {
+        declaration: "",
+        ..expected
+    };
+
+    test_single_wit_type_implementation::<T>(expected);
+    test_single_wit_type_implementation::<Box<T>>(expected_when_wrapped);
+}
+
+/// Tests that a type `T` has the `expected` [`WitType`] metadata in its implementation.
+fn test_single_wit_type_implementation<T>(expected: ExpectedMetadata)
 where
     T: WitType,
 {
