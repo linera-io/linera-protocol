@@ -20,6 +20,7 @@ pub mod crypto;
 pub mod data_types;
 pub mod dyn_convert;
 mod graphql;
+pub mod http;
 pub mod identifiers;
 mod limited_writer;
 pub mod ownership;

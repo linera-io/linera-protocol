@@ -8,6 +8,7 @@ use std::cell::Cell;
 use linera_base::{
     abi::ServiceAbi,
     data_types::{Amount, BlockHeight, Timestamp},
+    http,
     identifiers::{AccountOwner, ApplicationId, ChainId},
 };
 
@@ -133,6 +134,17 @@ where
 
         serde_json::from_slice(&response_bytes)
             .expect("Failed to deserialize query response from application")
+    }
+
+    /// Makes an HTTP request to the given URL as an oracle and returns the answer, if any.
+    ///
+    /// Should only be used with queries where it is very likely that all validators will receive
+    /// the same response, otherwise most block proposals will fail.
+    ///
+    /// Cannot be used in fast blocks: A block using this call should be proposed by a regular
+    /// owner, not a super owner.
+    pub fn http_request(&mut self, request: http::Request) -> http::Response {
+        wit::http_request(&request.into()).into()
     }
 
     /// Fetches a blob of bytes from a given URL.

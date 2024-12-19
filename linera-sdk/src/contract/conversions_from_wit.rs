@@ -6,6 +6,7 @@
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
     data_types::{Amount, BlockHeight, TimeDelta, Timestamp},
+    http,
     identifiers::{ApplicationId, BytecodeId, ChainId, MessageId, Owner},
     ownership::{ChainOwnership, CloseChainError, TimeoutConfig},
 };
@@ -146,5 +147,21 @@ impl From<wit_system_api::CloseChainError> for CloseChainError {
         match guest {
             wit_system_api::CloseChainError::NotPermitted => CloseChainError::NotPermitted,
         }
+    }
+}
+
+impl From<wit_system_api::Response> for http::Response {
+    fn from(guest: wit_system_api::Response) -> http::Response {
+        http::Response {
+            status: guest.status,
+            headers: guest.headers.into_iter().map(http::Header::from).collect(),
+            body: guest.body,
+        }
+    }
+}
+
+impl From<wit_system_api::Header> for http::Header {
+    fn from(guest: wit_system_api::Header) -> http::Header {
+        http::Header::new(guest.name, guest.value)
     }
 }

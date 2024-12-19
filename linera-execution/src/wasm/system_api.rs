@@ -6,6 +6,7 @@ use std::{any::Any, collections::HashMap, marker::PhantomData};
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, ApplicationPermissions, BlockHeight, SendMessageRequest, Timestamp},
+    http,
     identifiers::{
         Account, AccountOwner, ApplicationId, ChainId, ChannelName, MessageId, Owner, StreamName,
     },
@@ -342,17 +343,15 @@ where
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
-    /// Makes a POST request to the given URL and returns the response body.
-    fn http_post(
+    /// Makes an HTTP request to the given URL and returns the response body.
+    fn http_request(
         caller: &mut Caller,
-        query: String,
-        content_type: String,
-        payload: Vec<u8>,
-    ) -> Result<Vec<u8>, RuntimeError> {
+        request: http::Request,
+    ) -> Result<http::Response, RuntimeError> {
         caller
             .user_data_mut()
             .runtime
-            .http_post(&query, content_type, payload)
+            .http_request(request)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
@@ -550,17 +549,15 @@ where
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
-    /// Makes a POST request to the given URL and returns the response body.
-    fn http_post(
+    /// Makes an HTTP request to the given URL and returns the response body.
+    fn http_request(
         caller: &mut Caller,
-        query: String,
-        content_type: String,
-        payload: Vec<u8>,
-    ) -> Result<Vec<u8>, RuntimeError> {
+        request: http::Request,
+    ) -> Result<http::Response, RuntimeError> {
         caller
             .user_data_mut()
             .runtime
-            .http_post(&query, content_type, payload)
+            .http_request(request)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 

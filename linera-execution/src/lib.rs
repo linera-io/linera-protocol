@@ -39,7 +39,7 @@ use linera_base::{
         Amount, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, DecompressionError,
         Resources, SendMessageRequest, Timestamp, UserApplicationDescription,
     },
-    doc_scalar, hex_debug,
+    doc_scalar, hex_debug, http,
     identifiers::{
         Account, AccountOwner, ApplicationId, BlobId, BytecodeId, ChainId, ChannelName,
         Destination, GenericApplicationId, MessageId, Owner, StreamName, UserApplicationId,
@@ -271,6 +271,11 @@ pub enum ExecutionError {
     ServiceModuleSend(#[from] linera_base::task::SendError<UserServiceCode>),
     #[error("Blobs not found: {0:?}")]
     BlobsNotFound(Vec<BlobId>),
+
+    #[error("Invalid HTTP header name used for HTTP request")]
+    InvalidHeaderName(#[from] reqwest::header::InvalidHeaderName),
+    #[error("Invalid HTTP header value used for HTTP request")]
+    InvalidHeaderValue(#[from] reqwest::header::InvalidHeaderValue),
 }
 
 impl From<ViewError> for ExecutionError {
@@ -603,13 +608,8 @@ pub trait BaseRuntime {
         query: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError>;
 
-    /// Makes a POST request to the given URL and returns the answer, if any.
-    fn http_post(
-        &mut self,
-        url: &str,
-        content_type: String,
-        payload: Vec<u8>,
-    ) -> Result<Vec<u8>, ExecutionError>;
+    /// Makes an HTTP request to the given URL and returns the answer, if any.
+    fn http_request(&mut self, request: http::Request) -> Result<http::Response, ExecutionError>;
 
     /// Ensures that the current time at block validation is `< timestamp`. Note that block
     /// validation happens at or after the block timestamp, but isn't necessarily the same.
