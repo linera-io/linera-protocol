@@ -467,7 +467,7 @@ where
             .read_blob(blob_id)
             .await
             .map_err(Into::into);
-        sender.send(blob.map(|blob| blob.into_inner_content()))
+        sender.send(blob.map(|blob| blob.into_content()))
     }
 
     async fn do_download_certificate(

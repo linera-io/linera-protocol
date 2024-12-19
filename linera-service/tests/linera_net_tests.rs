@@ -28,12 +28,15 @@ use futures::{
 use linera_base::{
     command::resolve_binary,
     crypto::CryptoHash,
-    data_types::{Amount, BlobBytes},
+    data_types::Amount,
     identifiers::{Account, AccountOwner, ApplicationId, ChainId},
 };
 use linera_chain::data_types::{Medium, Origin};
 use linera_core::worker::{Notification, Reason};
-use linera_sdk::{base::BlockHeight, DataBlobHash};
+use linera_sdk::{
+    base::{BlobContent, BlockHeight},
+    DataBlobHash,
+};
 #[cfg(feature = "existing-net")]
 use linera_service::cli_wrappers::existing_net::ExistingNetTestingConfig;
 #[cfg(any(
@@ -1015,7 +1018,7 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
     let nft1_minter = account_owner1;
 
     let nft1_blob_bytes = b"nft1_data".to_vec();
-    let nft1_blob_hash = CryptoHash::new(&BlobBytes(&nft1_blob_bytes));
+    let nft1_blob_hash = CryptoHash::new(&BlobContent::new_data(nft1_blob_bytes.clone()));
     let blob_hash = node_service1
         .publish_data_blob(&chain1, nft1_blob_bytes.clone())
         .await?;
@@ -1145,7 +1148,7 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
     let nft2_name = "nft2".to_string();
     let nft2_minter = account_owner2;
     let nft2_blob_bytes = b"nft2_data".to_vec();
-    let nft2_blob_hash = CryptoHash::new(&BlobBytes(&nft2_blob_bytes));
+    let nft2_blob_hash = CryptoHash::new(&BlobContent::new_data(nft2_blob_bytes.clone()));
     let blob_hash = node_service2
         .publish_data_blob(&chain2, nft2_blob_bytes.clone())
         .await?;

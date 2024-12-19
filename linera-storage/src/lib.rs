@@ -265,7 +265,7 @@ pub trait Storage: Sized {
         );
         let contract_blob = self.read_blob(contract_bytecode_blob_id).await?;
         let compressed_contract_bytecode = CompressedBytecode {
-            compressed_bytes: contract_blob.into_inner_bytes(),
+            compressed_bytes: contract_blob.into_bytes().to_vec(),
         };
         let contract_bytecode =
             linera_base::task::Blocking::<linera_base::task::NoInput, _>::spawn(
@@ -308,7 +308,7 @@ pub trait Storage: Sized {
         );
         let service_blob = self.read_blob(service_bytecode_blob_id).await?;
         let compressed_service_bytecode = CompressedBytecode {
-            compressed_bytes: service_blob.into_inner_bytes(),
+            compressed_bytes: service_blob.into_bytes().to_vec(),
         };
         let service_bytecode = linera_base::task::Blocking::<linera_base::task::NoInput, _>::spawn(
             move |_| async move { compressed_service_bytecode.decompress() },
