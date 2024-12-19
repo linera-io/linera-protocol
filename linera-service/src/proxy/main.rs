@@ -301,7 +301,7 @@ where
                 self.storage
                     .read_blob(*blob_id)
                     .await?
-                    .into_inner_content()
+                    .into_content()
                     .into(),
             )),
             DownloadConfirmedBlock(hash) => {

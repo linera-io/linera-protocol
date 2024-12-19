@@ -56,7 +56,7 @@ use {
 use {
     linera_base::{
         crypto::CryptoHash,
-        data_types::{BlobBytes, Bytecode},
+        data_types::{BlobContent, Bytecode},
         identifiers::BytecodeId,
     },
     linera_core::client::create_bytecode_blobs,
@@ -542,7 +542,7 @@ where
         .await?;
 
         info!("{}", "Data blob published successfully!");
-        Ok(CryptoHash::new(&BlobBytes(&blob_bytes)))
+        Ok(CryptoHash::new(&BlobContent::new_data(blob_bytes)))
     }
 
     // TODO(#2490): Consider removing or renaming this.

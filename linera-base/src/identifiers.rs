@@ -19,7 +19,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use crate::{
     bcs_scalar,
     crypto::{BcsHashable, CryptoError, CryptoHash, PublicKey},
-    data_types::{BlobContent, BlockHeight},
+    data_types::BlockHeight,
     doc_scalar, hex_debug,
 };
 
@@ -182,16 +182,6 @@ impl FromStr for BlobType {
     }
 }
 
-impl From<&BlobContent> for BlobType {
-    fn from(content: &BlobContent) -> Self {
-        match content {
-            BlobContent::Data(_) => BlobType::Data,
-            BlobContent::ContractBytecode(_) => BlobType::ContractBytecode,
-            BlobContent::ServiceBytecode(_) => BlobType::ServiceBytecode,
-        }
-    }
-}
-
 /// A content-addressed blob ID i.e. the hash of the `BlobContent`.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash, Debug, WitType, WitStore, WitLoad)]
 #[cfg_attr(with_testing, derive(test_strategy::Arbitrary, Default))]
@@ -203,14 +193,6 @@ pub struct BlobId {
 }
 
 impl BlobId {
-    /// Creates a new `BlobId` from a `BlobContent`
-    pub fn from_content(content: &BlobContent) -> Self {
-        Self {
-            hash: CryptoHash::new(&content.blob_bytes()),
-            blob_type: content.into(),
-        }
-    }
-
     /// Creates a new `BlobId` from a `CryptoHash`. This must be a hash of the blob's bytes!
     pub fn new(hash: CryptoHash, blob_type: BlobType) -> Self {
         Self { hash, blob_type }

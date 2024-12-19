@@ -54,18 +54,10 @@ ApplicationPermissions:
         SEQ:
           TYPENAME: ApplicationId
 BlobContent:
-  ENUM:
-    0:
-      Data:
-        NEWTYPE: BYTES
-    1:
-      ContractBytecode:
-        NEWTYPE:
-          TYPENAME: CompressedBytecode
-    2:
-      ServiceBytecode:
-        NEWTYPE:
-          TYPENAME: CompressedBytecode
+  STRUCT:
+    - blob_type:
+        TYPENAME: BlobType
+    - bytes: BYTES
 BlobId:
   STRUCT:
     - hash:
@@ -339,9 +331,6 @@ Committee:
             TYPENAME: ValidatorState
     - policy:
         TYPENAME: ResourceControlPolicy
-CompressedBytecode:
-  STRUCT:
-    - compressed_bytes: BYTES
 ConfirmedBlock:
   STRUCT:
     - executed_block:

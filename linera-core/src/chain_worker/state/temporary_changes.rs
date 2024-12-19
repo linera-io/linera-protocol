@@ -4,9 +4,12 @@
 //! Operations that don't persist any changes to the chain state.
 
 use linera_base::{
-    data_types::{ArithmeticError, Blob, BlobContent, Timestamp, UserApplicationDescription},
+    data_types::{
+        ArithmeticError, Blob, BlobContent, CompressedBytecode, Timestamp,
+        UserApplicationDescription,
+    },
     ensure,
-    identifiers::{AccountOwner, GenericApplicationId, UserApplicationId},
+    identifiers::{AccountOwner, BlobType, GenericApplicationId, UserApplicationId},
 };
 use linera_chain::{
     data_types::{
@@ -346,20 +349,22 @@ where
         policy: &ResourceControlPolicy,
     ) -> Result<(), WorkerError> {
         ensure!(
-            u64::try_from(content.size())
+            u64::try_from(content.bytes().len())
                 .ok()
                 .is_some_and(|size| size <= policy.maximum_blob_size),
             WorkerError::BlobTooLarge
         );
-        match content {
-            BlobContent::ContractBytecode(compressed_bytecode)
-            | BlobContent::ServiceBytecode(compressed_bytecode) => {
+        match content.blob_type() {
+            BlobType::ContractBytecode | BlobType::ServiceBytecode => {
                 ensure!(
-                    compressed_bytecode.decompressed_size_at_most(policy.maximum_bytecode_size)?,
+                    CompressedBytecode::decompressed_size_at_most(
+                        content.bytes(),
+                        policy.maximum_bytecode_size
+                    )?,
                     WorkerError::BytecodeTooLarge
                 );
             }
-            BlobContent::Data(_) => {}
+            BlobType::Data => {}
         }
         Ok(())
     }

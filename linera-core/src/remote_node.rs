@@ -235,13 +235,13 @@ impl<N: ValidatorNode> RemoteNode<N> {
     async fn try_download_blob(&self, blob_id: BlobId) -> Option<Blob> {
         match self.node.download_blob_content(blob_id).await {
             Ok(blob) => {
-                let blob = blob.with_blob_id_checked(blob_id);
-
-                if blob.is_none() {
+                let blob = Blob::new(blob);
+                if blob.id() != blob_id {
                     tracing::info!("Validator {} sent an invalid blob {blob_id}.", self.name);
+                    None
+                } else {
+                    Some(blob)
                 }
-
-                blob
             }
             Err(error) => {
                 tracing::debug!(

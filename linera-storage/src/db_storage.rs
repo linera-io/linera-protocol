@@ -688,7 +688,7 @@ where
         #[cfg(with_metrics)]
         WRITE_BLOB_COUNTER.with_label_values(&[]).inc();
         let blob_key = bcs::to_bytes(&BaseKey::Blob(blob.id()))?;
-        batch.put_key_value(blob_key.to_vec(), &blob.inner_bytes())?;
+        batch.put_key_value(blob_key.to_vec(), &blob.bytes())?;
         Ok(())
     }
 
