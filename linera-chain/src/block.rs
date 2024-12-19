@@ -7,13 +7,14 @@ use std::fmt::Debug;
 use linera_base::{
     crypto::{BcsHashable, CryptoHash},
     data_types::BlockHeight,
+    hashed::Hashed,
     identifiers::ChainId,
 };
 use linera_execution::committee::Epoch;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{data_types::ExecutedBlock, types::Hashed, ChainError};
+use crate::{data_types::ExecutedBlock, ChainError};
 
 /// Wrapper around an `ExecutedBlock` that has been validated.
 #[derive(Debug, PartialEq, Eq, Clone, Deserialize, Serialize)]
@@ -82,19 +83,6 @@ impl ConfirmedBlock {
 
     async fn status(&self) -> String {
         "confirmed".to_string()
-    }
-}
-
-#[async_graphql::Object(cache_control(no_cache), name_type)]
-impl Hashed<ConfirmedBlock> {
-    #[graphql(derived(name = "hash"))]
-    async fn _hash(&self) -> CryptoHash {
-        self.hash()
-    }
-
-    #[graphql(derived(name = "value"))]
-    async fn _value(&self) -> ConfirmedBlock {
-        self.inner().clone()
     }
 }
 

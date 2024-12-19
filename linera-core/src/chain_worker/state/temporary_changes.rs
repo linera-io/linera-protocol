@@ -9,6 +9,7 @@ use linera_base::{
         UserApplicationDescription,
     },
     ensure,
+    hashed::Hashed,
     identifiers::{AccountOwner, BlobType, GenericApplicationId, UserApplicationId},
 };
 use linera_chain::{
@@ -17,7 +18,7 @@ use linera_chain::{
         IncomingBundle, Medium, MessageAction, ProposalContent,
     },
     manager,
-    types::{Hashed, ValidatedBlock},
+    types::ValidatedBlock,
 };
 use linera_execution::{ChannelSubscription, Query, ResourceControlPolicy, Response};
 use linera_storage::{Clock as _, Storage};
