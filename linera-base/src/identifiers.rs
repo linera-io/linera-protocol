@@ -159,9 +159,9 @@ pub enum BlobType {
     /// A generic data blob.
     #[default]
     Data,
-    /// A blob containing contract bytecode.
+    /// A blob containing compressed contract bytecode.
     ContractBytecode,
-    /// A blob containing service bytecode.
+    /// A blob containing compressed service bytecode.
     ServiceBytecode,
 }
 
