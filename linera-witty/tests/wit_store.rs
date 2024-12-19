@@ -18,11 +18,11 @@ use self::types::{
 /// Check that a wrapper type is properly stored in memory and lowered into its flat layout.
 #[test]
 fn test_simple_bool_wrapper() {
-    test_store_in_memory(&SimpleWrapper(true), &[1], &[]);
-    test_store_in_memory(&SimpleWrapper(false), &[0], &[]);
+    test_store_in_memory(SimpleWrapper(true), &[1], &[]);
+    test_store_in_memory(SimpleWrapper(false), &[0], &[]);
 
-    test_lower_to_flat_layout(&SimpleWrapper(true), hlist![1], &[]);
-    test_lower_to_flat_layout(&SimpleWrapper(false), hlist![0], &[]);
+    test_lower_to_flat_layout(SimpleWrapper(true), hlist![1], &[]);
+    test_lower_to_flat_layout(SimpleWrapper(false), hlist![0], &[]);
 }
 
 /// Check that a type with multiple fields ordered in a way that doesn't require any padding is
@@ -32,7 +32,7 @@ fn test_tuple_struct_without_padding() {
     let data = TupleWithoutPadding(0x0123_4567_89ab_cdef_u64, 0x0011_2233_i32, 0x4455_i16);
 
     test_store_in_memory(
-        &data,
+        data,
         &[
             0xef, 0xcd, 0xab, 0x89, 0x67, 0x45, 0x23, 0x01, 0x33, 0x22, 0x11, 0x00, 0x55, 0x44, 0,
             0,
@@ -40,7 +40,7 @@ fn test_tuple_struct_without_padding() {
         &[],
     );
     test_lower_to_flat_layout(
-        &data,
+        data,
         hlist![0x0123_4567_89ab_cdef_i64, 0x0011_2233_i32, 0x0000_4455_i32],
         &[],
     );
@@ -53,7 +53,7 @@ fn test_tuple_struct_with_padding() {
     let data = TupleWithPadding(0x0123_u16, 0x4567_89ab_u32, 0x0011_2233_4455_6677_i64);
 
     test_store_in_memory(
-        &data,
+        data,
         &[
             0x23, 0x01, 0, 0, 0xab, 0x89, 0x67, 0x45, 0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11,
             0x00,
@@ -61,7 +61,7 @@ fn test_tuple_struct_with_padding() {
         &[],
     );
     test_lower_to_flat_layout(
-        &data,
+        data,
         hlist![0x0000_0123_i32, 0x4567_89ab_i32, 0x0011_2233_4455_6677_i64],
         &[],
     );
@@ -79,7 +79,7 @@ fn test_named_struct_with_double_padding() {
     };
 
     test_store_in_memory(
-        &data,
+        data,
         &[
             0x23, 0x01, 0, 0, 0x33, 0x22, 0x11, 0x00, 0x45, 0, 0, 0, 0, 0, 0, 0, 0x66, 0x55, 0x44,
             0xef, 0xcd, 0xab, 0x89, 0x67,
@@ -87,7 +87,7 @@ fn test_named_struct_with_double_padding() {
         &[],
     );
     test_lower_to_flat_layout(
-        &data,
+        data,
         hlist![
             0x0000_0123_i32,
             0x0011_2233_i32,
@@ -115,7 +115,7 @@ fn test_nested_types() {
     };
 
     test_store_in_memory(
-        &data,
+        data,
         &[
             0x23, 0x01, 0, 0, 0, 0, 0, 0, 0x00, 0, 0, 0, 0, 0, 0, 0, 0x99, 0x88, 0x77, 0x66, 0x55,
             0x44, 0x33, 0x22, 0x11, 0x00, 0xef, 0xcd, 0xab, 0x89, 0x67, 0x45, 0x01, 0, 0, 0, 0, 0,
@@ -125,7 +125,7 @@ fn test_nested_types() {
         &[],
     );
     test_lower_to_flat_layout(
-        &data,
+        data,
         hlist![
             0x0000_0123_i32,
             0x0000_0000_i32,
@@ -146,7 +146,7 @@ fn test_enum_type() {
     let data = Enum::Empty;
 
     test_store_in_memory(
-        &data,
+        data,
         &[
             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
             0x00, 0x00, 0x00, 0x00, 0, 0, 0, 0, 0, 0,
@@ -154,7 +154,7 @@ fn test_enum_type() {
         &[],
     );
     test_lower_to_flat_layout(
-        &data,
+        data,
         hlist![
             0x0000_0000_i32,
             0x0000_0000_0000_0000_i64,
@@ -174,7 +174,7 @@ fn test_enum_type() {
     let data = Enum::LargeVariantWithLooseAlignment(0, 1, 2, 3, 4, 5, 6, 7, 8, 9);
 
     test_store_in_memory(
-        &data,
+        data,
         &[
             0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05,
             0x06, 0x07, 0x08, 0x09, 0, 0, 0, 0, 0, 0,
@@ -182,7 +182,7 @@ fn test_enum_type() {
         &[],
     );
     test_lower_to_flat_layout(
-        &data,
+        data,
         hlist![
             0x0000_0001_i32,
             0x0000_0000_0000_0000_i64,
@@ -204,7 +204,7 @@ fn test_enum_type() {
     };
 
     test_store_in_memory(
-        &data,
+        data,
         &[
             0x02, 0, 0, 0, 0, 0, 0, 0, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0, 0, 0, 0,
             0, 0, 0, 0,
@@ -212,7 +212,7 @@ fn test_enum_type() {
         &[],
     );
     test_lower_to_flat_layout(
-        &data,
+        data,
         hlist![
             0x0000_0002_i32,
             0x0102_0304_0506_0708_i64,
@@ -245,14 +245,14 @@ fn test_specialized_generic_struct() {
     ];
 
     test_store_in_memory(
-        &data,
+        data.clone(),
         &[
             0xc8, 0, 0x38, 0xff, 0x0c, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00,
         ],
         &expected_heap,
     );
     test_lower_to_flat_layout(
-        &data,
+        data,
         hlist![0x0000_00c8_i32, -200_i32, 0x0000_0000_i32, 0x0000_0004_i32],
         &expected_heap,
     );
@@ -265,14 +265,14 @@ fn test_specialized_generic_enum_type() {
     let data = SpecializedGenericEnum::None;
 
     test_store_in_memory(
-        &data,
+        data,
         &[
             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         ],
         &[],
     );
     test_lower_to_flat_layout(
-        &data,
+        data,
         hlist![0x0000_0000_i32, 0x0000_0000_i32, 0x0000_0000_i32],
         &[],
     );
@@ -280,14 +280,14 @@ fn test_specialized_generic_enum_type() {
     let data = SpecializedGenericEnum::First(None);
 
     test_store_in_memory(
-        &data,
+        data,
         &[
             0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         ],
         &[],
     );
     test_lower_to_flat_layout(
-        &data,
+        data,
         hlist![0x0000_0001_i32, 0x0000_0000_i32, 0x0000_0000_i32],
         &[],
     );
@@ -295,14 +295,14 @@ fn test_specialized_generic_enum_type() {
     let data = SpecializedGenericEnum::First(Some(false));
 
     test_store_in_memory(
-        &data,
+        data,
         &[
             0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         ],
         &[],
     );
     test_lower_to_flat_layout(
-        &data,
+        data,
         hlist![0x0000_0001_i32, 0x0000_0001_i32, 0x0000_0000_i32],
         &[],
     );
@@ -310,14 +310,14 @@ fn test_specialized_generic_enum_type() {
     let data = SpecializedGenericEnum::First(Some(true));
 
     test_store_in_memory(
-        &data,
+        data,
         &[
             0x01, 0x00, 0x00, 0x00, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         ],
         &[],
     );
     test_lower_to_flat_layout(
-        &data,
+        data,
         hlist![0x0000_0001_i32, 0x0000_0001_i32, 0x0000_0001_i32],
         &[],
     );
@@ -325,14 +325,14 @@ fn test_specialized_generic_enum_type() {
     let data = SpecializedGenericEnum::MaybeSecond { maybe: None };
 
     test_store_in_memory(
-        &data,
+        data,
         &[
             0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         ],
         &[],
     );
     test_lower_to_flat_layout(
-        &data,
+        data,
         hlist![0x0000_0002_i32, 0x0000_0000_i32, 0x0000_0000_i32],
         &[],
     );
@@ -340,22 +340,43 @@ fn test_specialized_generic_enum_type() {
     let data = SpecializedGenericEnum::MaybeSecond { maybe: Some(9) };
 
     test_store_in_memory(
-        &data,
+        data,
         &[
             0x02, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00,
         ],
         &[],
     );
     test_lower_to_flat_layout(
-        &data,
+        data,
         hlist![0x0000_0002_i32, 0x0000_0001_i32, 0x0000_0009_i32],
         &[],
     );
 }
 
+/// Tests that the `data` of type `T` and wrapped versions of it can be stored as a sequence of
+/// bytes in memory and that they match the `expected` bytes.
+fn test_store_in_memory<T>(
+    data: T,
+    expected_without_allocation: &[u8],
+    expected_additionally_allocated: &[u8],
+) where
+    T: WitStore,
+{
+    test_single_store_in_memory(
+        &data,
+        expected_without_allocation,
+        expected_additionally_allocated,
+    );
+    test_single_store_in_memory(
+        &Box::new(data),
+        expected_without_allocation,
+        expected_additionally_allocated,
+    );
+}
+
 /// Tests that the `data` of type `T` can be stored as a sequence of bytes in memory and that it
 /// matches the `expected` bytes.
-fn test_store_in_memory<T>(
+fn test_single_store_in_memory<T>(
     data: &T,
     expected_without_allocation: &[u8],
     expected_additionally_allocated: &[u8],
@@ -388,9 +409,23 @@ fn test_store_in_memory<T>(
     );
 }
 
+/// Tests that the `data` of type `T` and wrapped versions of it can be lowered to their flat layout
+/// and that they match the `expected` value.
+fn test_lower_to_flat_layout<T>(
+    data: T,
+    expected: <T::Layout as Layout>::Flat,
+    expected_memory: &[u8],
+) where
+    T: WitStore,
+    <T::Layout as Layout>::Flat: Copy + Debug + Eq,
+{
+    test_single_lower_to_flat_layout(&data, expected, expected_memory);
+    test_single_lower_to_flat_layout(&Box::new(data), expected, expected_memory);
+}
+
 /// Tests that the `data` of type `T` can be lowered to its flat layout and that it matches the
 /// `expected` value.
-fn test_lower_to_flat_layout<T>(
+fn test_single_lower_to_flat_layout<T>(
     data: &T,
     expected: <T::Layout as Layout>::Flat,
     expected_memory: &[u8],
