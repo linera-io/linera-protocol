@@ -1,12 +1,12 @@
 # Values for charts linera-validator for local validators.
 
 # Linera
-lineraImage: "" # Is set by helmfile.
+lineraImage: {{ env "LINERA_HELMFILE_LINERA_IMAGE" | default "linera:latest" }}
 lineraImagePullPolicy: Never
 logLevel: "debug"
 proxyPort: 19100
 metricsPort: 21100
-numShards: 10
+numShards: {{ env "LINERA_HELMFILE_SET_NUM_SHARDS" | default 10 }}
 
 # Loki
 loki-stack:
@@ -27,6 +27,7 @@ loki-stack:
 
 # Prometheus/Grafana
 kube-prometheus-stack:
+  {{- if not .Values.writeToGrafanaCloud }}
   grafana:
     sidecar:
       dashboards:
@@ -38,8 +39,22 @@ kube-prometheus-stack:
       size: 1Gi
     plugins:
       - grafana-piechart-panel
+  {{- end }}
   prometheus:
     prometheusSpec:
+      {{- if .Values.writeToGrafanaCloud }}
+      remoteWrite:
+        - url: https://prometheus-prod-13-prod-us-east-0.grafana.net/api/prom/push
+          basicAuth:
+            username:
+              name: grafana-cloud-auth-secret
+              key: username
+            password:
+              name: grafana-cloud-auth-secret
+              key: password
+      externalLabels:
+        validator: {{ .Values.validatorLabel }}
+      {{- end }}
       retention: 2d
       retentionSize: 1GB
       storageSpec:
@@ -101,5 +116,5 @@ environment: "kind"
 
 # Validator
 validator:
-  serverConfig: "" # Is set by helmfile.
-  genesisConfig: "" # Is set by helmfile.
+  serverConfig: {{ env "LINERA_HELMFILE_SET_SERVER_CONFIG" | default "working/server_1.json" }}
+  genesisConfig: {{ env "LINERA_HELMFILE_SET_GENESIS_CONFIG" | default "working/genesis.json" }}
