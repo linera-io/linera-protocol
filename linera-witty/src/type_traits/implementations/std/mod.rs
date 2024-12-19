@@ -87,6 +87,7 @@ macro_rules! impl_for_wrapper_type {
     };
 }
 
+mod r#box;
 mod collections;
 mod floats;
 mod integers;
