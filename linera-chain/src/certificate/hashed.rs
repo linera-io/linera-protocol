@@ -8,9 +8,6 @@ use custom_debug_derive::Debug;
 use linera_base::crypto::{BcsHashable, CryptoHash};
 use serde::{Deserialize, Serialize};
 
-use super::CertificateValueT;
-use crate::data_types::LiteValue;
-
 /// Wrapper type around hashed instance of `T` type.
 #[derive(Debug)]
 pub struct Hashed<T> {
@@ -51,17 +48,6 @@ impl<T> Hashed<T> {
 
     pub fn into_inner(self) -> T {
         self.value
-    }
-
-    pub fn lite(&self) -> LiteValue
-    where
-        T: CertificateValueT,
-    {
-        LiteValue {
-            value_hash: self.hash,
-            chain_id: self.value.chain_id(),
-            kind: T::KIND,
-        }
     }
 }
 

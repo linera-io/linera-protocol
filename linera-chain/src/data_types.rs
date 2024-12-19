@@ -439,6 +439,16 @@ pub struct LiteValue {
     pub kind: CertificateKind,
 }
 
+impl LiteValue {
+    pub fn new<T: CertificateValueT>(value: &Hashed<T>) -> Self {
+        LiteValue {
+            value_hash: value.hash(),
+            chain_id: value.inner().chain_id(),
+            kind: T::KIND,
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 struct VoteValue(CryptoHash, Round, CertificateKind);
 
@@ -474,7 +484,7 @@ impl<T> Vote<T> {
         T: CertificateValueT,
     {
         LiteVote {
-            value: self.value.lite(),
+            value: LiteValue::new(&self.value),
             round: self.round,
             validator: self.validator,
             signature: self.signature,

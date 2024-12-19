@@ -13,7 +13,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, ChannelFullName, IncomingBundle, LiteVote, Medium, MessageAction, Origin,
+        Block, ChannelFullName, IncomingBundle, LiteValue, LiteVote, Medium, MessageAction, Origin,
         SignatureAggregator,
     },
     types::{ConfirmedBlock, ConfirmedBlockCertificate, Hashed},
@@ -217,7 +217,11 @@ impl BlockBuilder {
             .await?;
 
         let value = Hashed::new(ConfirmedBlock::new(executed_block));
-        let vote = LiteVote::new(value.lite(), Round::Fast, self.validator.key_pair());
+        let vote = LiteVote::new(
+            LiteValue::new(&value),
+            Round::Fast,
+            self.validator.key_pair(),
+        );
         let mut builder = SignatureAggregator::new(value, Round::Fast, self.validator.committee());
         let certificate = builder
             .append(vote.validator, vote.signature)
