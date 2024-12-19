@@ -30,7 +30,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     types::{
-        CertificateKind, CertificateValueT, GenericCertificate, LiteCertificate,
+        CertificateKind, CertificateValue, GenericCertificate, LiteCertificate,
         ValidatedBlockCertificate,
     },
     ChainError,
@@ -442,7 +442,7 @@ pub struct LiteValue {
 }
 
 impl LiteValue {
-    pub fn new<T: CertificateValueT>(value: &Hashed<T>) -> Self {
+    pub fn new<T: CertificateValue>(value: &Hashed<T>) -> Self {
         LiteValue {
             value_hash: value.hash(),
             chain_id: value.inner().chain_id(),
@@ -468,7 +468,7 @@ impl<T> Vote<T> {
     /// Use signing key to create a signed object.
     pub fn new(value: Hashed<T>, round: Round, key_pair: &KeyPair) -> Self
     where
-        T: CertificateValueT,
+        T: CertificateValue,
     {
         let hash_and_round = VoteValue(value.hash(), round, T::KIND);
         let signature = Signature::new(&hash_and_round, key_pair);
@@ -483,7 +483,7 @@ impl<T> Vote<T> {
     /// Returns the vote, with a `LiteValue` instead of the full value.
     pub fn lite(&self) -> LiteVote
     where
-        T: CertificateValueT,
+        T: CertificateValue,
     {
         LiteVote {
             value: LiteValue::new(&self.value),
@@ -863,7 +863,7 @@ impl<'a, T> SignatureAggregator<'a, T> {
         signature: Signature,
     ) -> Result<Option<GenericCertificate<T>>, ChainError>
     where
-        T: CertificateValueT,
+        T: CertificateValue,
     {
         let hash_and_round = VoteValue(self.partial.hash(), self.partial.round, T::KIND);
         signature.check(&hash_and_round, validator.0)?;

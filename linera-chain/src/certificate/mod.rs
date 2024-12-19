@@ -93,7 +93,7 @@ pub enum CertificateKind {
     Confirmed = 2,
 }
 
-pub trait CertificateValueT: Clone {
+pub trait CertificateValue: Clone {
     const KIND: CertificateKind;
 
     fn chain_id(&self) -> ChainId;
@@ -105,7 +105,7 @@ pub trait CertificateValueT: Clone {
     fn required_blob_ids(&self) -> HashSet<BlobId>;
 }
 
-impl CertificateValueT for Timeout {
+impl CertificateValue for Timeout {
     const KIND: CertificateKind = CertificateKind::Timeout;
 
     fn chain_id(&self) -> ChainId {
@@ -125,7 +125,7 @@ impl CertificateValueT for Timeout {
     }
 }
 
-impl CertificateValueT for ValidatedBlock {
+impl CertificateValue for ValidatedBlock {
     const KIND: CertificateKind = CertificateKind::Validated;
 
     fn chain_id(&self) -> ChainId {
@@ -145,7 +145,7 @@ impl CertificateValueT for ValidatedBlock {
     }
 }
 
-impl CertificateValueT for ConfirmedBlock {
+impl CertificateValue for ConfirmedBlock {
     const KIND: CertificateKind = CertificateKind::Confirmed;
 
     fn chain_id(&self) -> ChainId {
