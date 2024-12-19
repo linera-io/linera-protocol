@@ -6,7 +6,7 @@ use std::borrow::Cow;
 
 use custom_debug_derive::Debug;
 use linera_base::crypto::{BcsHashable, CryptoHash};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 
 use super::CertificateValueT;
 use crate::data_types::LiteValue;
@@ -33,9 +33,9 @@ impl<T> Hashed<T> {
     ///
     /// Note: Contrary to its `unchecked_new` counterpart, this method is safe because it
     /// calculates the hash from the value.
-    pub fn new(value: T) -> Self
+    pub fn new<'de>(value: T) -> Self
     where
-        T: BcsHashable,
+        T: BcsHashable<'de>,
     {
         let hash = CryptoHash::new(&value);
         Self { value, hash }
@@ -74,7 +74,7 @@ impl<T: Serialize> Serialize for Hashed<T> {
     }
 }
 
-impl<'de, T: DeserializeOwned + BcsHashable> Deserialize<'de> for Hashed<T> {
+impl<'de, T: BcsHashable<'de>> Deserialize<'de> for Hashed<T> {
     fn deserialize<D>(deserializer: D) -> Result<Hashed<T>, D::Error>
     where
         D: serde::Deserializer<'de>,

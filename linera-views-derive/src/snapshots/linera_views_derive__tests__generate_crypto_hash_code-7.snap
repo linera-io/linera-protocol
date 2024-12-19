@@ -16,7 +16,7 @@ impl linera_views::views::CryptoHashView<custom::GenericContext<T>> for TestView
         use serde::{Serialize, Deserialize};
         #[derive(Serialize, Deserialize)]
         struct TestViewHash(GenericArray<u8, <Sha3_256 as OutputSizeUser>::OutputSize>);
-        impl BcsHashable for TestViewHash {}
+        impl<'de> BcsHashable<'de> for TestViewHash {}
         let hash = self.hash().await?;
         Ok(CryptoHash::new(&TestViewHash(hash)))
     }
@@ -32,7 +32,7 @@ impl linera_views::views::CryptoHashView<custom::GenericContext<T>> for TestView
         use serde::{Serialize, Deserialize};
         #[derive(Serialize, Deserialize)]
         struct TestViewHash(GenericArray<u8, <Sha3_256 as OutputSizeUser>::OutputSize>);
-        impl BcsHashable for TestViewHash {}
+        impl<'de> BcsHashable<'de> for TestViewHash {}
         let hash = self.hash_mut().await?;
         Ok(CryptoHash::new(&TestViewHash(hash)))
     }

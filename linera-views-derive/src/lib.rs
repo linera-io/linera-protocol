@@ -356,7 +356,7 @@ fn generate_crypto_hash_code(input: ItemStruct) -> TokenStream2 {
                 use serde::{Serialize, Deserialize};
                 #[derive(Serialize, Deserialize)]
                 struct #hash_type(GenericArray<u8, <Sha3_256 as OutputSizeUser>::OutputSize>);
-                impl BcsHashable for #hash_type {}
+                impl<'de> BcsHashable<'de> for #hash_type {}
                 let hash = self.hash().await?;
                 Ok(CryptoHash::new(&#hash_type(hash)))
             }
@@ -372,7 +372,7 @@ fn generate_crypto_hash_code(input: ItemStruct) -> TokenStream2 {
                 use serde::{Serialize, Deserialize};
                 #[derive(Serialize, Deserialize)]
                 struct #hash_type(GenericArray<u8, <Sha3_256 as OutputSizeUser>::OutputSize>);
-                impl BcsHashable for #hash_type {}
+                impl<'de> BcsHashable<'de> for #hash_type {}
                 let hash = self.hash_mut().await?;
                 Ok(CryptoHash::new(&#hash_type(hash)))
             }

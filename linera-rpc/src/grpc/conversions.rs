@@ -925,7 +925,7 @@ pub mod tests {
     #[derive(Debug, Serialize, Deserialize)]
     struct Foo(String);
 
-    impl BcsSignable for Foo {}
+    impl<'de> BcsSignable<'de> for Foo {}
 
     fn get_block() -> Block {
         make_first_block(ChainId::root(0))
