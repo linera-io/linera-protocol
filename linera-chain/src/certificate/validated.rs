@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_base::{crypto::Signature, data_types::Round, identifiers::BlobId};
+use linera_base::{crypto::Signature, data_types::Round, hashed::Hashed, identifiers::BlobId};
 use linera_execution::committee::ValidatorName;
 use serde::{
     ser::{Serialize, SerializeStruct, Serializer},
@@ -13,7 +13,6 @@ use super::{generic::GenericCertificate, Certificate};
 use crate::{
     block::{ConversionError, ValidatedBlock},
     data_types::ExecutedBlock,
-    types::Hashed,
 };
 
 impl GenericCertificate<ValidatedBlock> {

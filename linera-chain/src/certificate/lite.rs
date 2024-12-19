@@ -4,11 +4,11 @@
 
 use std::borrow::Cow;
 
-use linera_base::{crypto::Signature, data_types::Round};
+use linera_base::{crypto::Signature, data_types::Round, hashed::Hashed};
 use linera_execution::committee::{Committee, ValidatorName};
 use serde::{Deserialize, Serialize};
 
-use super::{CertificateValueT, GenericCertificate, Hashed};
+use super::{CertificateValueT, GenericCertificate};
 use crate::{
     data_types::{check_signatures, LiteValue, LiteVote},
     ChainError,

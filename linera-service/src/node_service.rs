@@ -16,12 +16,13 @@ use futures::{lock::Mutex, Future};
 use linera_base::{
     crypto::{CryptoError, CryptoHash, PublicKey},
     data_types::{Amount, ApplicationPermissions, Bytecode, TimeDelta, UserApplicationDescription},
+    hashed::Hashed,
     identifiers::{ApplicationId, BytecodeId, ChainId, Owner, UserApplicationId},
     ownership::{ChainOwnership, TimeoutConfig},
     BcsHexParseError,
 };
 use linera_chain::{
-    types::{ConfirmedBlock, GenericCertificate, Hashed},
+    types::{ConfirmedBlock, GenericCertificate},
     ChainStateView,
 };
 use linera_client::chain_listener::{ChainListener, ChainListenerConfig, ClientContext};

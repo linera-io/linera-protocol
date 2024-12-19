@@ -14,12 +14,13 @@ use dashmap::{mapref::entry::Entry, DashMap};
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
     data_types::{Amount, Blob, BlockHeight, TimeDelta, Timestamp, UserApplicationDescription},
+    hashed::Hashed,
     identifiers::{BlobId, ChainDescription, ChainId, GenericApplicationId, UserApplicationId},
     ownership::ChainOwnership,
 };
 use linera_chain::{
     data_types::ChannelFullName,
-    types::{ConfirmedBlock, ConfirmedBlockCertificate, Hashed},
+    types::{ConfirmedBlock, ConfirmedBlockCertificate},
     ChainError, ChainStateView,
 };
 use linera_execution::{

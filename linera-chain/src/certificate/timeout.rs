@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_base::{crypto::Signature, data_types::Round};
+use linera_base::{crypto::Signature, data_types::Round, hashed::Hashed};
 use linera_execution::committee::ValidatorName;
 use serde::{
     ser::{Serialize, SerializeStruct, Serializer},
@@ -10,10 +10,7 @@ use serde::{
 };
 
 use super::{generic::GenericCertificate, Certificate};
-use crate::{
-    block::{ConversionError, Timeout},
-    types::Hashed,
-};
+use crate::block::{ConversionError, Timeout};
 
 impl TryFrom<Certificate> for GenericCertificate<Timeout> {
     type Error = ConversionError;

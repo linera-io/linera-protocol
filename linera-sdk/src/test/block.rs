@@ -8,6 +8,7 @@
 use linera_base::{
     crypto::PublicKey,
     data_types::{Amount, ApplicationPermissions, Round, Timestamp},
+    hashed::Hashed,
     identifiers::{ApplicationId, ChainId, GenericApplicationId, Owner},
     ownership::TimeoutConfig,
 };
@@ -16,7 +17,7 @@ use linera_chain::{
         Block, ChannelFullName, IncomingBundle, LiteValue, LiteVote, Medium, MessageAction, Origin,
         SignatureAggregator,
     },
-    types::{ConfirmedBlock, ConfirmedBlockCertificate, Hashed},
+    types::{ConfirmedBlock, ConfirmedBlockCertificate},
 };
 use linera_execution::{
     system::{Recipient, SystemChannel, SystemOperation},

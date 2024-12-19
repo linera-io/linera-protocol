@@ -13,7 +13,9 @@ use linera_base::{
     bcs,
     crypto::{BcsHashable, BcsSignable, CryptoError, CryptoHash, KeyPair, PublicKey, Signature},
     data_types::{Amount, Blob, BlockHeight, OracleResponse, Round, Timestamp},
-    doc_scalar, ensure, hex_debug,
+    doc_scalar, ensure,
+    hashed::Hashed,
+    hex_debug,
     identifiers::{
         Account, BlobId, BlobType, ChainId, ChannelName, Destination, GenericApplicationId,
         MessageId, Owner, StreamId,
@@ -28,7 +30,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     types::{
-        CertificateKind, CertificateValueT, GenericCertificate, Hashed, LiteCertificate,
+        CertificateKind, CertificateValueT, GenericCertificate, LiteCertificate,
         ValidatedBlockCertificate,
     },
     ChainError,

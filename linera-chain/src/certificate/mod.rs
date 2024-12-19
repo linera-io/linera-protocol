@@ -4,7 +4,6 @@
 
 mod confirmed;
 mod generic;
-mod hashed;
 mod lite;
 mod timeout;
 mod validated;
@@ -12,7 +11,6 @@ mod validated;
 use std::collections::HashSet;
 
 pub use generic::GenericCertificate;
-pub use hashed::Hashed;
 use linera_base::{
     crypto::Signature,
     data_types::{BlockHeight, Round},

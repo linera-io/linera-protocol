@@ -630,10 +630,13 @@ impl<T> GrpcMessageLimiter<T> {
 
 #[cfg(test)]
 mod proto_message_cap {
-    use linera_base::crypto::{KeyPair, Signature};
+    use linera_base::{
+        crypto::{KeyPair, Signature},
+        hashed::Hashed,
+    };
     use linera_chain::{
         data_types::{BlockExecutionOutcome, ExecutedBlock},
-        types::{Certificate, ConfirmedBlock, ConfirmedBlockCertificate, Hashed},
+        types::{Certificate, ConfirmedBlock, ConfirmedBlockCertificate},
     };
     use linera_execution::committee::ValidatorName;
     use linera_sdk::base::{ChainId, TestString};

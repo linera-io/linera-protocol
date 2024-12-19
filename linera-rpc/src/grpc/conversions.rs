@@ -5,13 +5,14 @@ use linera_base::{
     crypto::{CryptoError, CryptoHash, PublicKey, Signature},
     data_types::{BlobContent, BlockHeight},
     ensure,
+    hashed::Hashed,
     identifiers::{AccountOwner, BlobId, ChainId, Owner},
 };
 use linera_chain::{
     data_types::{BlockProposal, LiteValue, ProposalContent},
     types::{
-        Certificate, CertificateKind, ConfirmedBlock, ConfirmedBlockCertificate, Hashed,
-        LiteCertificate, Timeout, TimeoutCertificate, ValidatedBlock, ValidatedBlockCertificate,
+        Certificate, CertificateKind, ConfirmedBlock, ConfirmedBlockCertificate, LiteCertificate,
+        Timeout, TimeoutCertificate, ValidatedBlock, ValidatedBlockCertificate,
     },
 };
 use linera_core::{

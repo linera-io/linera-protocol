@@ -6,6 +6,7 @@
 use linera_base::{
     crypto::KeyPair,
     data_types::{Amount, BlockHeight, Round, Timestamp},
+    hashed::Hashed,
     identifiers::{ChainId, Owner},
 };
 use linera_execution::{
@@ -17,7 +18,7 @@ use linera_execution::{
 use crate::{
     block::ConfirmedBlock,
     data_types::{Block, BlockProposal, IncomingBundle, PostedMessage, SignatureAggregator, Vote},
-    types::{CertificateValueT, GenericCertificate, Hashed},
+    types::{CertificateValueT, GenericCertificate},
 };
 
 /// Creates a new child of the given block, with the same timestamp.

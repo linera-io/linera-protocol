@@ -15,11 +15,12 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{Blob, BlockHeight, UserApplicationDescription},
     ensure,
+    hashed::Hashed,
     identifiers::{BlobId, ChainId, UserApplicationId},
 };
 use linera_chain::{
     data_types::{Block, BlockProposal, ExecutedBlock, Medium, MessageBundle, Origin, Target},
-    types::{ConfirmedBlockCertificate, Hashed, TimeoutCertificate, ValidatedBlockCertificate},
+    types::{ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
     ChainError, ChainStateView,
 };
 use linera_execution::{

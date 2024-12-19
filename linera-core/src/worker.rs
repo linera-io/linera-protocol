@@ -18,6 +18,7 @@ use linera_base::{
         ArithmeticError, Blob, BlockHeight, DecompressionError, Round, UserApplicationDescription,
     },
     doc_scalar,
+    hashed::Hashed,
     identifiers::{BlobId, ChainId, Owner, UserApplicationId},
     time::timer::{sleep, timeout},
 };
@@ -26,7 +27,7 @@ use linera_chain::{
         Block, BlockExecutionOutcome, BlockProposal, ExecutedBlock, MessageBundle, Origin, Target,
     },
     types::{
-        CertificateValueT, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate, Hashed,
+        CertificateValueT, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate,
         LiteCertificate, Timeout, TimeoutCertificate, ValidatedBlock, ValidatedBlockCertificate,
     },
     ChainError, ChainStateView,

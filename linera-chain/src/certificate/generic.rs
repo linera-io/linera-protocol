@@ -6,10 +6,11 @@ use custom_debug_derive::Debug;
 use linera_base::{
     crypto::{CryptoHash, Signature},
     data_types::Round,
+    hashed::Hashed,
 };
 use linera_execution::committee::{Committee, ValidatorName};
 
-use super::{hashed::Hashed, CertificateValueT};
+use super::CertificateValueT;
 use crate::{data_types::LiteValue, ChainError};
 
 /// Generic type representing a certificate for `value` of type `T`.

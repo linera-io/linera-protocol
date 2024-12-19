@@ -19,6 +19,7 @@ use assert_matches::assert_matches;
 use linera_base::{
     crypto::{CryptoHash, *},
     data_types::*,
+    hashed::Hashed,
     identifiers::{
         Account, AccountOwner, ChainDescription, ChainId, ChannelName, Destination,
         GenericApplicationId, MessageId, Owner,
@@ -33,8 +34,8 @@ use linera_chain::{
     },
     test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt, VoteTestExt},
     types::{
-        CertificateValueT, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate, Hashed,
-        Timeout, ValidatedBlock,
+        CertificateValueT, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate, Timeout,
+        ValidatedBlock,
     },
     ChainError, ChainExecutionContext,
 };

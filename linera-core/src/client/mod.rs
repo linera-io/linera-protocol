@@ -32,6 +32,7 @@ use linera_base::{
         Amount, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, Round, Timestamp,
     },
     ensure,
+    hashed::Hashed,
     identifiers::{
         Account, AccountOwner, ApplicationId, BlobId, BlobType, BytecodeId, ChainId, MessageId,
         Owner, UserApplicationId,
@@ -44,7 +45,7 @@ use linera_chain::{
         MessageAction,
     },
     types::{
-        CertificateValueT, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate, Hashed,
+        CertificateValueT, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate,
         LiteCertificate, Timeout, TimeoutCertificate, ValidatedBlock, ValidatedBlockCertificate,
     },
     ChainError, ChainExecutionContext, ChainStateView,
