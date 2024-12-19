@@ -94,6 +94,7 @@ mod integers;
 mod option;
 mod phantom_data;
 mod primitives;
+mod rc;
 mod result;
 mod string;
 mod time;
