@@ -201,7 +201,7 @@ impl TryFrom<RpcMessage> for Vec<BlobId> {
     type Error = NodeError;
     fn try_from(message: RpcMessage) -> Result<Self, Self::Error> {
         match message {
-            RpcMessage::MissingBlobIds(blob_ids) => Ok(*blob_ids),
+            RpcMessage::MissingBlobIdsResponse(blob_ids) => Ok(*blob_ids),
             RpcMessage::Error(error) => Err(*error),
             _ => Err(NodeError::UnexpectedMessage),
         }
