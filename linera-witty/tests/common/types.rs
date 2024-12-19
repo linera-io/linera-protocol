@@ -60,7 +60,7 @@ pub struct SpecializedGenericStruct<A, B> {
 }
 
 /// A generic enum with some specialized fields.
-#[derive(Clone, Debug, Eq, PartialEq, WitType, WitLoad, WitStore)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, WitType, WitLoad, WitStore)]
 #[witty_specialize_with(A = Option<bool>)]
 #[witty_specialize_with(B = u32)]
 pub enum SpecializedGenericEnum<A, B> {
