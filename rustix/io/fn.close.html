@@ -1,0 +1,25 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="`close(raw_fd)`—Closes a `RawFd` directly."><title>close in rustix::io - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="rustix" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../rustix/index.html">rustix</a><span class="version">0.38.37</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In rustix::io</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../index.html">rustix</a>::<wbr><a href="index.html">io</a>::<wbr><a class="fn" href="#">close</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/rustix/io/close.rs.html#53-55">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub unsafe fn close(raw_fd: <a class="type" href="../fd/type.RawFd.html" title="type rustix::fd::RawFd">RawFd</a>)</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><code>close(raw_fd)</code>—Closes a <code>RawFd</code> directly.</p>
+<p>Most users won’t need to use this, as <code>OwnedFd</code> automatically closes its
+file descriptor on <code>Drop</code>.</p>
+<p>This function does not return a <code>Result</code>, as it is the <a href="https://lwn.net/Articles/576518/">responsibility</a> of
+filesystem designers to not return errors from <code>close</code>. Users who chose to
+use NFS or similar filesystems should take care to monitor for problems
+externally.</p>
+<h2 id="references"><a class="doc-anchor" href="#references">§</a>References</h2>
+<ul>
+<li><a href="https://beej.us/guide/bgnet/html/split/system-calls-or-bust.html#close-and-shutdownget-outta-my-face">Beej’s Guide to Network Programming</a></li>
+<li><a href="https://pubs.opengroup.org/onlinepubs/9799919799/functions/close.html">POSIX</a></li>
+<li><a href="https://man7.org/linux/man-pages/man2/close.2.html">Linux</a></li>
+<li><a href="https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/close.2.html#//apple_ref/doc/man/2/close">Apple</a></li>
+<li><a href="https://docs.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-closesocket">Winsock</a></li>
+<li><a href="https://man.freebsd.org/cgi/man.cgi?query=close&amp;sektion=2">FreeBSD</a></li>
+<li><a href="https://man.netbsd.org/close.2">NetBSD</a></li>
+<li><a href="https://man.openbsd.org/close.2">OpenBSD</a></li>
+<li><a href="https://man.dragonflybsd.org/?command=close&amp;section=2">DragonFly BSD</a></li>
+<li><a href="https://illumos.org/man/2/close">illumos</a></li>
+<li><a href="https://www.gnu.org/software/libc/manual/html_node/Opening-and-Closing-Files.html#index-close">glibc</a></li>
+</ul>
+<h2 id="safety"><a class="doc-anchor" href="#safety">§</a>Safety</h2>
+<p>This function takes a <code>RawFd</code>, which must be valid before the call, and is
+not valid after the call.</p>
+</div></details></section></div></main></body></html>

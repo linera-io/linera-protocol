@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["TestCollectionView","TestLogView","TestMapView","TestRegisterView"],"trait":["TestView"]};

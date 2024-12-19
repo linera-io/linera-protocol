@@ -1,0 +1,484 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Utilities for writing middleware"><title>axum::middleware - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="axum" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../axum/index.html">axum</a><span class="version">0.7.6</span></h2></div><h2 class="location"><a href="#">Module middleware</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#traits">Traits</a></li><li><a href="#functions">Functions</a></li></ul></section><h2><a href="../index.html">In crate axum</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">axum</a>::<wbr><a class="mod" href="#">middleware</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/axum/middleware/mod.rs.html#1-29">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Utilities for writing middleware</p>
+<h2 id="table-of-contents"><a class="doc-anchor" href="#table-of-contents">§</a>Table of contents</h2>
+<ul>
+<li><a href="#intro">Intro</a></li>
+<li><a href="#applying-middleware">Applying middleware</a></li>
+<li><a href="#commonly-used-middleware">Commonly used middleware</a></li>
+<li><a href="#ordering">Ordering</a></li>
+<li><a href="#writing-middleware">Writing middleware</a></li>
+<li><a href="#routing-to-servicesmiddleware-and-backpressure">Routing to services/middleware and backpressure</a></li>
+<li><a href="#accessing-state-in-middleware">Accessing state in middleware</a></li>
+<li><a href="#passing-state-from-middleware-to-handlers">Passing state from middleware to handlers</a></li>
+<li><a href="#rewriting-request-uri-in-middleware">Rewriting request URI in middleware</a></li>
+</ul>
+<h2 id="intro"><a class="doc-anchor" href="#intro">§</a>Intro</h2>
+<p>axum is unique in that it doesn’t have its own bespoke middleware system and
+instead integrates with <a href="https://crates.io/crates/tower"><code>tower</code></a>. This means the ecosystem of <a href="https://crates.io/crates/tower"><code>tower</code></a> and
+<a href="https://crates.io/crates/tower-http"><code>tower-http</code></a> middleware all work with axum.</p>
+<p>While it’s not necessary to fully understand tower to write or use middleware
+with axum, having at least a basic understanding of tower’s concepts is
+recommended. See <a href="https://github.com/tower-rs/tower/tree/master/guides">tower’s guides</a> for a general introduction.
+Reading the documentation for <a href="../../tower/builder/struct.ServiceBuilder.html" title="struct tower::builder::ServiceBuilder"><code>tower::ServiceBuilder</code></a> is also recommended.</p>
+<h2 id="applying-middleware"><a class="doc-anchor" href="#applying-middleware">§</a>Applying middleware</h2>
+<p>axum allows you to add middleware just about anywhere</p>
+<ul>
+<li>To entire routers with <a href="../struct.Router.html#method.layer" title="method axum::Router::layer"><code>Router::layer</code></a> and <a href="../struct.Router.html#method.route_layer" title="method axum::Router::route_layer"><code>Router::route_layer</code></a>.</li>
+<li>To method routers with <a href="../routing/method_routing/struct.MethodRouter.html#method.layer" title="method axum::routing::method_routing::MethodRouter::layer"><code>MethodRouter::layer</code></a> and <a href="../routing/method_routing/struct.MethodRouter.html#method.route_layer" title="method axum::routing::method_routing::MethodRouter::route_layer"><code>MethodRouter::route_layer</code></a>.</li>
+<li>To individual handlers with <a href="../handler/trait.Handler.html#method.layer" title="method axum::handler::Handler::layer"><code>Handler::layer</code></a>.</li>
+</ul>
+<h3 id="applying-multiple-middleware"><a class="doc-anchor" href="#applying-multiple-middleware">§</a>Applying multiple middleware</h3>
+<p>It’s recommended to use <a href="../../tower/builder/struct.ServiceBuilder.html" title="struct tower::builder::ServiceBuilder"><code>tower::ServiceBuilder</code></a> to apply multiple middleware at
+once, instead of calling <code>layer</code> (or <code>route_layer</code>) repeatedly:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>axum::{
+    routing::get,
+    Extension,
+    Router,
+};
+<span class="kw">use </span>tower_http::{trace::TraceLayer};
+<span class="kw">use </span>tower::ServiceBuilder;
+
+<span class="kw">async fn </span>handler() {}
+
+<span class="attr">#[derive(Clone)]
+</span><span class="kw">struct </span>State {}
+
+<span class="kw">let </span>app = Router::new()
+    .route(<span class="string">"/"</span>, get(handler))
+    .layer(
+        ServiceBuilder::new()
+            .layer(TraceLayer::new_for_http())
+            .layer(Extension(State {}))
+    );</code></pre></div>
+<h2 id="commonly-used-middleware"><a class="doc-anchor" href="#commonly-used-middleware">§</a>Commonly used middleware</h2>
+<p>Some commonly used middleware are:</p>
+<ul>
+<li><a href="tower_http::trace"><code>TraceLayer</code></a> for high level tracing/logging.</li>
+<li><a href="tower_http::cors"><code>CorsLayer</code></a> for handling CORS.</li>
+<li><a href="tower_http::compression"><code>CompressionLayer</code></a> for automatic compression of responses.</li>
+<li><a href="tower_http::request_id"><code>RequestIdLayer</code></a> and
+<a href="tower_http::request_id"><code>PropagateRequestIdLayer</code></a> set and propagate request
+ids.</li>
+<li><a href="tower_http::timeout::TimeoutLayer"><code>TimeoutLayer</code></a> for timeouts.</li>
+</ul>
+<h2 id="ordering"><a class="doc-anchor" href="#ordering">§</a>Ordering</h2>
+<p>When you add middleware with <a href="../struct.Router.html#method.layer" title="method axum::Router::layer"><code>Router::layer</code></a> (or similar) all previously added
+routes will be wrapped in the middleware. Generally speaking, this results in
+middleware being executed from bottom to top.</p>
+<p>So if you do this:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>axum::{routing::get, Router};
+
+<span class="kw">async fn </span>handler() {}
+
+<span class="kw">let </span>app = Router::new()
+    .route(<span class="string">"/"</span>, get(handler))
+    .layer(layer_one)
+    .layer(layer_two)
+    .layer(layer_three);</code></pre></div>
+<p>Think of the middleware as being layered like an onion where each new layer
+wraps all previous layers:</p>
+<div class="example-wrap"><pre class="language-not_rust"><code>        requests
+           |
+           v
++----- layer_three -----+
+| +---- layer_two ----+ |
+| | +-- layer_one --+ | |
+| | |               | | |
+| | |    handler    | | |
+| | |               | | |
+| | +-- layer_one --+ | |
+| +---- layer_two ----+ |
++----- layer_three -----+
+           |
+           v
+        responses
+</code></pre></div>
+<p>That is:</p>
+<ul>
+<li>First <code>layer_three</code> receives the request</li>
+<li>It then does its thing and passes the request onto <code>layer_two</code></li>
+<li>Which passes the request onto <code>layer_one</code></li>
+<li>Which passes the request onto <code>handler</code> where a response is produced</li>
+<li>That response is then passed to <code>layer_one</code></li>
+<li>Then to <code>layer_two</code></li>
+<li>And finally to <code>layer_three</code> where it’s returned out of your app</li>
+</ul>
+<p>It’s a little more complicated in practice because any middleware is free to
+return early and not call the next layer, for example if a request cannot be
+authorized, but it’s a useful mental model to have.</p>
+<p>As previously mentioned it’s recommended to add multiple middleware using
+<code>tower::ServiceBuilder</code>, however this impacts ordering:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tower::ServiceBuilder;
+<span class="kw">use </span>axum::{routing::get, Router};
+
+<span class="kw">async fn </span>handler() {}
+
+<span class="kw">let </span>app = Router::new()
+    .route(<span class="string">"/"</span>, get(handler))
+    .layer(
+        ServiceBuilder::new()
+            .layer(layer_one)
+            .layer(layer_two)
+            .layer(layer_three),
+    );</code></pre></div>
+<p><code>ServiceBuilder</code> works by composing all layers into one such that they run top
+to bottom. So with the previous code <code>layer_one</code> would receive the request
+first, then <code>layer_two</code>, then <code>layer_three</code>, then <code>handler</code>, and then the
+response would bubble back up through <code>layer_three</code>, then <code>layer_two</code>, and
+finally <code>layer_one</code>.</p>
+<p>Executing middleware top to bottom is generally easier to understand and follow
+mentally which is one of the reasons <code>ServiceBuilder</code> is recommended.</p>
+<h2 id="writing-middleware"><a class="doc-anchor" href="#writing-middleware">§</a>Writing middleware</h2>
+<p>axum offers many ways of writing middleware, at different levels of abstraction
+and with different pros and cons.</p>
+<h3 id="axummiddlewarefrom_fn"><a class="doc-anchor" href="#axummiddlewarefrom_fn">§</a><code>axum::middleware::from_fn</code></h3>
+<p>Use <a href="fn.from_fn.html" title="fn axum::middleware::from_fn"><code>axum::middleware::from_fn</code></a> to write your middleware when:</p>
+<ul>
+<li>You’re not comfortable with implementing your own futures and would rather use
+the familiar <code>async</code>/<code>await</code> syntax.</li>
+<li>You don’t intend to publish your middleware as a crate for others to use.
+Middleware written like this are only compatible with axum.</li>
+</ul>
+<h3 id="axummiddlewarefrom_extractor"><a class="doc-anchor" href="#axummiddlewarefrom_extractor">§</a><code>axum::middleware::from_extractor</code></h3>
+<p>Use <a href="fn.from_extractor.html" title="fn axum::middleware::from_extractor"><code>axum::middleware::from_extractor</code></a> to write your middleware when:</p>
+<ul>
+<li>You have a type that you sometimes want to use as an extractor and sometimes
+as a middleware. If you only need your type as a middleware prefer
+<a href="fn.from_fn.html" title="fn axum::middleware::from_fn"><code>middleware::from_fn</code></a>.</li>
+</ul>
+<h3 id="towers-combinators"><a class="doc-anchor" href="#towers-combinators">§</a>tower’s combinators</h3>
+<p>tower has several utility combinators that can be used to perform simple
+modifications to requests or responses. The most commonly used ones are</p>
+<ul>
+<li><a href="../../tower/builder/struct.ServiceBuilder.html#method.map_request" title="method tower::builder::ServiceBuilder::map_request"><code>ServiceBuilder::map_request</code></a></li>
+<li><a href="../../tower/builder/struct.ServiceBuilder.html#method.map_response" title="method tower::builder::ServiceBuilder::map_response"><code>ServiceBuilder::map_response</code></a></li>
+<li><a href="../../tower/builder/struct.ServiceBuilder.html#method.then" title="method tower::builder::ServiceBuilder::then"><code>ServiceBuilder::then</code></a></li>
+<li><a href="../../tower/builder/struct.ServiceBuilder.html#method.and_then" title="method tower::builder::ServiceBuilder::and_then"><code>ServiceBuilder::and_then</code></a></li>
+</ul>
+<p>You should use these when</p>
+<ul>
+<li>You want to perform a small ad hoc operation, such as adding a header.</li>
+<li>You don’t intend to publish your middleware as a crate for others to use.</li>
+</ul>
+<h3 id="towerservice-and-pinboxdyn-future"><a class="doc-anchor" href="#towerservice-and-pinboxdyn-future">§</a><code>tower::Service</code> and <code>Pin&lt;Box&lt;dyn Future&gt;&gt;</code></h3>
+<p>For maximum control (and a more low level API) you can write you own middleware
+by implementing <a href="../../tower_service/trait.Service.html" title="trait tower_service::Service"><code>tower::Service</code></a>:</p>
+<p>Use <a href="../../tower_service/trait.Service.html" title="trait tower_service::Service"><code>tower::Service</code></a> with <code>Pin&lt;Box&lt;dyn Future&gt;&gt;</code> to write your middleware when:</p>
+<ul>
+<li>Your middleware needs to be configurable for example via builder methods on
+your <a href="../../tower_layer/trait.Layer.html" title="trait tower_layer::Layer"><code>tower::Layer</code></a> such as [<code>tower_http::trace::TraceLayer</code>].</li>
+<li>You do intend to publish your middleware as a crate for others to use.</li>
+<li>You’re not comfortable with implementing your own futures.</li>
+</ul>
+<p>A decent template for such a middleware could be:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>axum::{
+    response::Response,
+    body::Body,
+    extract::Request,
+};
+<span class="kw">use </span>futures_util::future::BoxFuture;
+<span class="kw">use </span>tower::{Service, Layer};
+<span class="kw">use </span>std::task::{Context, Poll};
+
+<span class="attr">#[derive(Clone)]
+</span><span class="kw">struct </span>MyLayer;
+
+<span class="kw">impl</span>&lt;S&gt; Layer&lt;S&gt; <span class="kw">for </span>MyLayer {
+    <span class="kw">type </span>Service = MyMiddleware&lt;S&gt;;
+
+    <span class="kw">fn </span>layer(<span class="kw-2">&amp;</span><span class="self">self</span>, inner: S) -&gt; <span class="self">Self</span>::Service {
+        MyMiddleware { inner }
+    }
+}
+
+<span class="attr">#[derive(Clone)]
+</span><span class="kw">struct </span>MyMiddleware&lt;S&gt; {
+    inner: S,
+}
+
+<span class="kw">impl</span>&lt;S&gt; Service&lt;Request&gt; <span class="kw">for </span>MyMiddleware&lt;S&gt;
+<span class="kw">where
+    </span>S: Service&lt;Request, Response = Response&gt; + Send + <span class="lifetime">'static</span>,
+    S::Future: Send + <span class="lifetime">'static</span>,
+{
+    <span class="kw">type </span>Response = S::Response;
+    <span class="kw">type </span>Error = S::Error;
+    <span class="comment">// `BoxFuture` is a type alias for `Pin&lt;Box&lt;dyn Future + Send + 'a&gt;&gt;`
+    </span><span class="kw">type </span>Future = BoxFuture&lt;<span class="lifetime">'static</span>, <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>::Response, <span class="self">Self</span>::Error&gt;&gt;;
+
+    <span class="kw">fn </span>poll_ready(<span class="kw-2">&amp;mut </span><span class="self">self</span>, cx: <span class="kw-2">&amp;mut </span>Context&lt;<span class="lifetime">'_</span>&gt;) -&gt; Poll&lt;<span class="prelude-ty">Result</span>&lt;(), <span class="self">Self</span>::Error&gt;&gt; {
+        <span class="self">self</span>.inner.poll_ready(cx)
+    }
+
+    <span class="kw">fn </span>call(<span class="kw-2">&amp;mut </span><span class="self">self</span>, request: Request) -&gt; <span class="self">Self</span>::Future {
+        <span class="kw">let </span>future = <span class="self">self</span>.inner.call(request);
+        Box::pin(<span class="kw">async move </span>{
+            <span class="kw">let </span>response: Response = future.<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="prelude-val">Ok</span>(response)
+        })
+    }
+}</code></pre></div>
+<p>Note that your error type being defined as <code>S::Error</code> means that your middleware typically <em>returns no errors</em>. As a principle always try to return a response and try not to bail out with a custom error type. For example, if a 3rd party library you are using inside your new middleware returns its own specialized error type, try to convert it to some reasonable response and return <code>Ok</code> with that response.</p>
+<p>If you choose to implement a custom error type such as <code>type Error = BoxError</code> (a boxed opaque error), or any other error type that is not <code>Infallible</code>, you must use a <code>HandleErrorLayer</code>, here is an example using a <code>ServiceBuilder</code>:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code>ServiceBuilder::new()
+        .layer(HandleErrorLayer::new(|<span class="kw">_</span>: BoxError| <span class="kw">async </span>{
+            <span class="comment">// because Axum uses infallible errors, you must handle your custom error type from your middleware here
+            </span>StatusCode::BAD_REQUEST
+        }))
+        .layer(
+             <span class="comment">// &lt;your actual layer which DOES return an error&gt;
+        </span>);</code></pre></div>
+<h3 id="towerservice-and-custom-futures"><a class="doc-anchor" href="#towerservice-and-custom-futures">§</a><code>tower::Service</code> and custom futures</h3>
+<p>If you’re comfortable implementing your own futures (or want to learn it) and
+need as much control as possible then using <code>tower::Service</code> without boxed
+futures is the way to go.</p>
+<p>Use <a href="../../tower_service/trait.Service.html" title="trait tower_service::Service"><code>tower::Service</code></a> with manual futures to write your middleware when:</p>
+<ul>
+<li>You want your middleware to have the lowest possible overhead.</li>
+<li>Your middleware needs to be configurable for example via builder methods on
+your <a href="../../tower_layer/trait.Layer.html" title="trait tower_layer::Layer"><code>tower::Layer</code></a> such as [<code>tower_http::trace::TraceLayer</code>].</li>
+<li>You do intend to publish your middleware as a crate for others to use, perhaps
+as part of tower-http.</li>
+<li>You’re comfortable with implementing your own futures, or want to learn how
+the lower levels of async Rust works.</li>
+</ul>
+<p>tower’s <a href="https://github.com/tower-rs/tower/blob/master/guides/building-a-middleware-from-scratch.md">“Building a middleware from scratch”</a>
+guide is a good place to learn how to do this.</p>
+<h2 id="error-handling-for-middleware"><a class="doc-anchor" href="#error-handling-for-middleware">§</a>Error handling for middleware</h2>
+<p>axum’s error handling model requires handlers to always return a response.
+However middleware is one possible way to introduce errors into an application.
+If hyper receives an error the connection will be closed without sending a
+response. Thus axum requires those errors to be handled gracefully:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>axum::{
+    routing::get,
+    error_handling::HandleErrorLayer,
+    http::StatusCode,
+    BoxError,
+    Router,
+};
+<span class="kw">use </span>tower::{ServiceBuilder, timeout::TimeoutLayer};
+<span class="kw">use </span>std::time::Duration;
+
+<span class="kw">async fn </span>handler() {}
+
+<span class="kw">let </span>app = Router::new()
+    .route(<span class="string">"/"</span>, get(handler))
+    .layer(
+        ServiceBuilder::new()
+            <span class="comment">// this middleware goes above `TimeoutLayer` because it will receive
+            // errors returned by `TimeoutLayer`
+            </span>.layer(HandleErrorLayer::new(|<span class="kw">_</span>: BoxError| <span class="kw">async </span>{
+                StatusCode::REQUEST_TIMEOUT
+            }))
+            .layer(TimeoutLayer::new(Duration::from_secs(<span class="number">10</span>)))
+    );</code></pre></div>
+<p>See <a href="../error_handling/index.html" title="mod axum::error_handling"><code>error_handling</code></a> for more details on axum’s error
+handling model.</p>
+<h2 id="routing-to-servicesmiddleware-and-backpressure"><a class="doc-anchor" href="#routing-to-servicesmiddleware-and-backpressure">§</a>Routing to services/middleware and backpressure</h2>
+<p>Generally routing to one of multiple services and backpressure doesn’t mix
+well. Ideally you would want ensure a service is ready to receive a request
+before calling it. However, in order to know which service to call, you need
+the request…</p>
+<p>One approach is to not consider the router service itself ready until all
+destination services are ready. That is the approach used by
+[<code>tower::steer::Steer</code>].</p>
+<p>Another approach is to always consider all services ready (always return
+<code>Poll::Ready(Ok(()))</code>) from <code>Service::poll_ready</code> and then actually drive
+readiness inside the response future returned by <code>Service::call</code>. This works
+well when your services don’t care about backpressure and are always ready
+anyway.</p>
+<p>axum expects that all services used in your app won’t care about
+backpressure and so it uses the latter strategy. However that means you
+should avoid routing to a service (or using a middleware) that <em>does</em> care
+about backpressure. At the very least you should [load shed][tower::load_shed]
+so requests are dropped quickly and don’t keep piling up.</p>
+<p>It also means that if <code>poll_ready</code> returns an error then that error will be
+returned in the response future from <code>call</code> and <em>not</em> from <code>poll_ready</code>. In
+that case, the underlying service will <em>not</em> be discarded and will continue
+to be used for future requests. Services that expect to be discarded if
+<code>poll_ready</code> fails should <em>not</em> be used with axum.</p>
+<p>One possible approach is to only apply backpressure sensitive middleware
+around your entire app. This is possible because axum applications are
+themselves services:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>axum::{
+    routing::get,
+    Router,
+};
+<span class="kw">use </span>tower::ServiceBuilder;
+
+<span class="kw">async fn </span>handler() { <span class="comment">/* ... */ </span>}
+
+<span class="kw">let </span>app = Router::new().route(<span class="string">"/"</span>, get(handler));
+
+<span class="kw">let </span>app = ServiceBuilder::new()
+    .layer(some_backpressure_sensitive_middleware)
+    .service(app);</code></pre></div>
+<p>However when applying middleware around your whole application in this way
+you have to take care that errors are still being handled appropriately.</p>
+<p>Also note that handlers created from async functions don’t care about
+backpressure and are always ready. So if you’re not using any Tower
+middleware you don’t have to worry about any of this.</p>
+<h2 id="accessing-state-in-middleware"><a class="doc-anchor" href="#accessing-state-in-middleware">§</a>Accessing state in middleware</h2>
+<p>How to make state available to middleware depends on how the middleware is
+written.</p>
+<h3 id="accessing-state-in-axummiddlewarefrom_fn"><a class="doc-anchor" href="#accessing-state-in-axummiddlewarefrom_fn">§</a>Accessing state in <code>axum::middleware::from_fn</code></h3>
+<p>Use <a href="fn.from_fn_with_state.html" title="fn axum::middleware::from_fn_with_state"><code>axum::middleware::from_fn_with_state</code></a>.</p>
+<h3 id="accessing-state-in-custom-towerlayers"><a class="doc-anchor" href="#accessing-state-in-custom-towerlayers">§</a>Accessing state in custom <code>tower::Layer</code>s</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>axum::{
+    Router,
+    routing::get,
+    middleware::{<span class="self">self</span>, Next},
+    response::Response,
+    extract::{State, Request},
+};
+<span class="kw">use </span>tower::{Layer, Service};
+<span class="kw">use </span>std::task::{Context, Poll};
+
+<span class="attr">#[derive(Clone)]
+</span><span class="kw">struct </span>AppState {}
+
+<span class="attr">#[derive(Clone)]
+</span><span class="kw">struct </span>MyLayer {
+    state: AppState,
+}
+
+<span class="kw">impl</span>&lt;S&gt; Layer&lt;S&gt; <span class="kw">for </span>MyLayer {
+    <span class="kw">type </span>Service = MyService&lt;S&gt;;
+
+    <span class="kw">fn </span>layer(<span class="kw-2">&amp;</span><span class="self">self</span>, inner: S) -&gt; <span class="self">Self</span>::Service {
+        MyService {
+            inner,
+            state: <span class="self">self</span>.state.clone(),
+        }
+    }
+}
+
+<span class="attr">#[derive(Clone)]
+</span><span class="kw">struct </span>MyService&lt;S&gt; {
+    inner: S,
+    state: AppState,
+}
+
+<span class="kw">impl</span>&lt;S, B&gt; Service&lt;Request&lt;B&gt;&gt; <span class="kw">for </span>MyService&lt;S&gt;
+<span class="kw">where
+    </span>S: Service&lt;Request&lt;B&gt;&gt;,
+{
+    <span class="kw">type </span>Response = S::Response;
+    <span class="kw">type </span>Error = S::Error;
+    <span class="kw">type </span>Future = S::Future;
+
+    <span class="kw">fn </span>poll_ready(<span class="kw-2">&amp;mut </span><span class="self">self</span>, cx: <span class="kw-2">&amp;mut </span>Context&lt;<span class="lifetime">'_</span>&gt;) -&gt; Poll&lt;<span class="prelude-ty">Result</span>&lt;(), <span class="self">Self</span>::Error&gt;&gt; {
+        <span class="self">self</span>.inner.poll_ready(cx)
+    }
+
+    <span class="kw">fn </span>call(<span class="kw-2">&amp;mut </span><span class="self">self</span>, req: Request&lt;B&gt;) -&gt; <span class="self">Self</span>::Future {
+        <span class="comment">// Do something with `self.state`.
+        //
+        // See `axum::RequestExt` for how to run extractors directly from
+        // a `Request`.
+
+        </span><span class="self">self</span>.inner.call(req)
+    }
+}
+
+<span class="kw">async fn </span>handler(<span class="kw">_</span>: State&lt;AppState&gt;) {}
+
+<span class="kw">let </span>state = AppState {};
+
+<span class="kw">let </span>app = Router::new()
+    .route(<span class="string">"/"</span>, get(handler))
+    .layer(MyLayer { state: state.clone() })
+    .with_state(state);</code></pre></div>
+<h2 id="passing-state-from-middleware-to-handlers"><a class="doc-anchor" href="#passing-state-from-middleware-to-handlers">§</a>Passing state from middleware to handlers</h2>
+<p>State can be passed from middleware to handlers using <a href="https://docs.rs/http/latest/http/request/struct.Request.html#method.extensions">request extensions</a>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>axum::{
+    Router,
+    http::StatusCode,
+    routing::get,
+    response::{IntoResponse, Response},
+    middleware::{<span class="self">self</span>, Next},
+    extract::{Request, Extension},
+};
+
+<span class="attr">#[derive(Clone)]
+</span><span class="kw">struct </span>CurrentUser { <span class="comment">/* ... */ </span>}
+
+<span class="kw">async fn </span>auth(<span class="kw-2">mut </span>req: Request, next: Next) -&gt; <span class="prelude-ty">Result</span>&lt;Response, StatusCode&gt; {
+    <span class="kw">let </span>auth_header = req.headers()
+        .get(http::header::AUTHORIZATION)
+        .and_then(|header| header.to_str().ok());
+
+    <span class="kw">let </span>auth_header = <span class="kw">if let </span><span class="prelude-val">Some</span>(auth_header) = auth_header {
+        auth_header
+    } <span class="kw">else </span>{
+        <span class="kw">return </span><span class="prelude-val">Err</span>(StatusCode::UNAUTHORIZED);
+    };
+
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(current_user) = authorize_current_user(auth_header).<span class="kw">await </span>{
+        <span class="comment">// insert the current user into a request extension so the handler can
+        // extract it
+        </span>req.extensions_mut().insert(current_user);
+        <span class="prelude-val">Ok</span>(next.run(req).<span class="kw">await</span>)
+    } <span class="kw">else </span>{
+        <span class="prelude-val">Err</span>(StatusCode::UNAUTHORIZED)
+    }
+}
+
+<span class="kw">async fn </span>authorize_current_user(auth_token: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Option</span>&lt;CurrentUser&gt; {
+    <span class="comment">// ...
+</span>}
+
+<span class="kw">async fn </span>handler(
+    <span class="comment">// extract the current user, set by the middleware
+    </span>Extension(current_user): Extension&lt;CurrentUser&gt;,
+) {
+    <span class="comment">// ...
+</span>}
+
+<span class="kw">let </span>app = Router::new()
+    .route(<span class="string">"/"</span>, get(handler))
+    .route_layer(middleware::from_fn(auth));</code></pre></div>
+<p><a href="https://docs.rs/http/latest/http/response/struct.Response.html#method.extensions">Response extensions</a> can also be used but note that request extensions are not
+automatically moved to response extensions. You need to manually do that for the
+extensions you need.</p>
+<h2 id="rewriting-request-uri-in-middleware"><a class="doc-anchor" href="#rewriting-request-uri-in-middleware">§</a>Rewriting request URI in middleware</h2>
+<p>Middleware added with <a href="../struct.Router.html#method.layer" title="method axum::Router::layer"><code>Router::layer</code></a> will run after routing. That means it
+cannot be used to run middleware that rewrites the request URI. By the time the
+middleware runs the routing is already done.</p>
+<p>The workaround is to wrap the middleware around the entire <code>Router</code> (this works
+because <code>Router</code> implements <a href="../../tower_service/trait.Service.html" title="trait tower_service::Service"><code>Service</code></a>):</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tower::Layer;
+<span class="kw">use </span>axum::{
+    Router,
+    ServiceExt, <span class="comment">// for `into_make_service`
+    </span>response::Response,
+    middleware::Next,
+    extract::Request,
+};
+
+<span class="kw">fn </span>rewrite_request_uri&lt;B&gt;(req: Request&lt;B&gt;) -&gt; Request&lt;B&gt; {
+    <span class="comment">// ...
+</span>}
+
+<span class="comment">// this can be any `tower::Layer`
+</span><span class="kw">let </span>middleware = tower::util::MapRequestLayer::new(rewrite_request_uri);
+
+<span class="kw">let </span>app = Router::new();
+
+<span class="comment">// apply the layer around the whole `Router`
+// this way the middleware will run before `Router` receives the request
+</span><span class="kw">let </span>app_with_middleware = middleware.layer(app);
+
+<span class="kw">let </span>listener = tokio::net::TcpListener::bind(<span class="string">"0.0.0.0:3000"</span>).<span class="kw">await</span>.unwrap();
+axum::serve(listener, app_with_middleware.into_make_service()).<span class="kw">await</span>.unwrap();</code></pre></div>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="future/index.html" title="mod axum::middleware::future">future</a></div><div class="desc docblock-short">Future types.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.AddExtension.html" title="struct axum::middleware::AddExtension">AddExtension</a></div><div class="desc docblock-short">Middleware for adding some shareable value to <a href="https://docs.rs/http/latest/http/struct.Extensions.html">request extensions</a>.</div></li><li><div class="item-name"><a class="struct" href="struct.FromExtractor.html" title="struct axum::middleware::FromExtractor">FromExtractor</a></div><div class="desc docblock-short">Middleware that runs an extractor and discards the value.</div></li><li><div class="item-name"><a class="struct" href="struct.FromExtractorLayer.html" title="struct axum::middleware::FromExtractorLayer">FromExtractorLayer</a></div><div class="desc docblock-short"><a href="../../tower_layer/trait.Layer.html" title="trait tower_layer::Layer"><code>Layer</code></a> that applies <a href="struct.FromExtractor.html" title="struct axum::middleware::FromExtractor"><code>FromExtractor</code></a> that runs an extractor and
+discards the value.</div></li><li><div class="item-name"><a class="struct" href="struct.FromFn.html" title="struct axum::middleware::FromFn">FromFn</a></div><div class="desc docblock-short">A middleware created from an async function.</div></li><li><div class="item-name"><a class="struct" href="struct.FromFnLayer.html" title="struct axum::middleware::FromFnLayer">FromFnLayer</a></div><div class="desc docblock-short">A <a href="../../tower_layer/trait.Layer.html" title="trait tower_layer::Layer"><code>tower::Layer</code></a> from an async function.</div></li><li><div class="item-name"><a class="struct" href="struct.MapRequest.html" title="struct axum::middleware::MapRequest">MapRequest</a></div><div class="desc docblock-short">A middleware created from an async function that transforms a request.</div></li><li><div class="item-name"><a class="struct" href="struct.MapRequestLayer.html" title="struct axum::middleware::MapRequestLayer">MapRequestLayer</a></div><div class="desc docblock-short">A <a href="../../tower_layer/trait.Layer.html" title="trait tower_layer::Layer"><code>tower::Layer</code></a> from an async function that transforms a request.</div></li><li><div class="item-name"><a class="struct" href="struct.MapResponse.html" title="struct axum::middleware::MapResponse">MapResponse</a></div><div class="desc docblock-short">A middleware created from an async function that transforms a response.</div></li><li><div class="item-name"><a class="struct" href="struct.MapResponseLayer.html" title="struct axum::middleware::MapResponseLayer">MapResponseLayer</a></div><div class="desc docblock-short">A <a href="../../tower_layer/trait.Layer.html" title="trait tower_layer::Layer"><code>tower::Layer</code></a> from an async function that transforms a response.</div></li><li><div class="item-name"><a class="struct" href="struct.Next.html" title="struct axum::middleware::Next">Next</a></div><div class="desc docblock-short">The remainder of a middleware stack, including the handler.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.IntoMapRequestResult.html" title="trait axum::middleware::IntoMapRequestResult">IntoMapRequestResult</a></div><div class="desc docblock-short">Trait implemented by types that can be returned from <a href="fn.map_request.html" title="fn axum::middleware::map_request"><code>map_request</code></a>,
+<a href="fn.map_request_with_state.html" title="fn axum::middleware::map_request_with_state"><code>map_request_with_state</code></a>.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.from_extractor.html" title="fn axum::middleware::from_extractor">from_extractor</a></div><div class="desc docblock-short">Create a middleware from an extractor.</div></li><li><div class="item-name"><a class="fn" href="fn.from_extractor_with_state.html" title="fn axum::middleware::from_extractor_with_state">from_extractor_with_state</a></div><div class="desc docblock-short">Create a middleware from an extractor with the given state.</div></li><li><div class="item-name"><a class="fn" href="fn.from_fn.html" title="fn axum::middleware::from_fn">from_fn</a></div><div class="desc docblock-short">Create a middleware from an async function.</div></li><li><div class="item-name"><a class="fn" href="fn.from_fn_with_state.html" title="fn axum::middleware::from_fn_with_state">from_fn_with_state</a></div><div class="desc docblock-short">Create a middleware from an async function with the given state.</div></li><li><div class="item-name"><a class="fn" href="fn.map_request.html" title="fn axum::middleware::map_request">map_request</a></div><div class="desc docblock-short">Create a middleware from an async function that transforms a request.</div></li><li><div class="item-name"><a class="fn" href="fn.map_request_with_state.html" title="fn axum::middleware::map_request_with_state">map_request_with_state</a></div><div class="desc docblock-short">Create a middleware from an async function that transforms a request, with the given state.</div></li><li><div class="item-name"><a class="fn" href="fn.map_response.html" title="fn axum::middleware::map_response">map_response</a></div><div class="desc docblock-short">Create a middleware from an async function that transforms a response.</div></li><li><div class="item-name"><a class="fn" href="fn.map_response_with_state.html" title="fn axum::middleware::map_response_with_state">map_response_with_state</a></div><div class="desc docblock-short">Create a middleware from an async function that transforms a response, with the given state.</div></li></ul></section></div></main></body></html>

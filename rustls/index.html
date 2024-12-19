@@ -1,0 +1,229 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Rustls - a modern TLS library"><title>rustls - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="rustls" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../rustls/index.html">rustls</a><span class="version">0.23.13</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#statics">Statics</a></li><li><a href="#traits">Traits</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">rustls</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/rustls/lib.rs.html#1-673">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="rustls---a-modern-tls-library"><a class="doc-anchor" href="#rustls---a-modern-tls-library">§</a>Rustls - a modern TLS library</h2>
+<p>Rustls is a TLS library that aims to provide a good level of cryptographic security,
+requires no configuration to achieve that security, and provides no unsafe features or
+obsolete cryptography by default.</p>
+<p>Rustls implements TLS1.2 and TLS1.3 for both clients and servers. See <a href="manual/_04_features/index.html" title="mod rustls::manual::_04_features">the full
+list of protocol features</a>.</p>
+<h4 id="platform-support"><a class="doc-anchor" href="#platform-support">§</a>Platform support</h4>
+<p>While Rustls itself is platform independent, by default it uses <a href="https://crates.io/crates/aws-lc-rs"><code>aws-lc-rs</code></a> for implementing
+the cryptography in TLS.  See <a href="https://aws.github.io/aws-lc-rs/faq.html#can-i-run-aws-lc-rs-on-x-platform-or-architecture">the aws-lc-rs FAQ</a> for more details of the
+platform/architecture support constraints in aws-lc-rs.</p>
+<p><a href="https://crates.io/crates/ring"><code>ring</code></a> is also available via the <code>ring</code> crate feature: see
+<a href="https://github.com/briansmith/ring/blob/2e8363b433fa3b3962c877d9ed2e9145612f3160/include/ring-core/target.h#L18-L64">the supported <code>ring</code> target platforms</a>.</p>
+<p>By providing a custom instance of the <a href="crypto/struct.CryptoProvider.html" title="struct rustls::crypto::CryptoProvider"><code>crypto::CryptoProvider</code></a> struct, you
+can replace all cryptography dependencies of rustls.  This is a route to being portable
+to a wider set of architectures and environments, or compliance requirements.  See the
+<a href="crypto/struct.CryptoProvider.html" title="struct rustls::crypto::CryptoProvider"><code>crypto::CryptoProvider</code></a> documentation for more details.</p>
+<p>Specifying <code>default-features = false</code> when depending on rustls will remove the
+dependency on aws-lc-rs.</p>
+<p>Rustls requires Rust 1.63 or later. It has an optional dependency on zlib-rs which requires 1.75 or later.</p>
+<h4 id="cryptography-providers"><a class="doc-anchor" href="#cryptography-providers">§</a>Cryptography providers</h4>
+<p>Since Rustls 0.22 it has been possible to choose the provider of the cryptographic primitives
+that Rustls uses. This may be appealing if you have specific platform, compliance or feature
+requirements that aren’t met by the default provider, <a href="https://crates.io/crates/aws-lc-rs"><code>aws-lc-rs</code></a>.</p>
+<p>Users that wish to customize the provider in use can do so when constructing <code>ClientConfig</code>
+and <code>ServerConfig</code> instances using the <code>with_crypto_provider</code> method on the respective config
+builder types. See the <a href="crypto/struct.CryptoProvider.html" title="struct rustls::crypto::CryptoProvider"><code>crypto::CryptoProvider</code></a> documentation for more details.</p>
+<h5 id="built-in-providers"><a class="doc-anchor" href="#built-in-providers">§</a>Built-in providers</h5>
+<p>Rustls ships with two built-in providers controlled with associated feature flags:</p>
+<ul>
+<li><a href="https://crates.io/crates/aws-lc-rs"><code>aws-lc-rs</code></a> - enabled by default, available with the <code>aws_lc_rs</code> feature flag enabled.</li>
+<li><a href="https://crates.io/crates/ring"><code>ring</code></a> - available with the <code>ring</code> feature flag enabled.</li>
+</ul>
+<p>See the documentation for <a href="crypto/struct.CryptoProvider.html" title="struct rustls::crypto::CryptoProvider"><code>crypto::CryptoProvider</code></a> for details on how providers are
+selected.</p>
+<h5 id="third-party-providers"><a class="doc-anchor" href="#third-party-providers">§</a>Third-party providers</h5>
+<p>The community has also started developing third-party providers for Rustls:</p>
+<ul>
+<li><a href="https://github.com/fortanix/rustls-mbedtls-provider"><code>rustls-mbedtls-provider</code></a> - a provider that uses <a href="https://github.com/Mbed-TLS/mbedtls"><code>mbedtls</code></a> for cryptography.</li>
+<li><a href="https://github.com/janrueth/boring-rustls-provider"><code>boring-rustls-provider</code></a> - a work-in-progress provider that uses <a href="https://github.com/google/boringssl"><code>boringssl</code></a> for
+cryptography.</li>
+<li><a href="https://github.com/RustCrypto/rustls-rustcrypto"><code>rustls-rustcrypto</code></a> - an experimental provider that uses the crypto primitives
+from <a href="https://github.com/RustCrypto"><code>RustCrypto</code></a> for cryptography.</li>
+<li><a href="https://crates.io/crates/rustls-post-quantum"><code>rustls-post-quantum</code></a>: an experimental provider that adds support for post-quantum
+key exchange to the default aws-lc-rs provider.</li>
+<li><a href="https://github.com/wolfSSL/rustls-wolfcrypt-provider"><code>rustls-wolfcrypt-provider</code></a> - a work-in-progress provider that uses <a href="https://www.wolfssl.com/products/wolfcrypt"><code>wolfCrypt</code></a> for cryptography.</li>
+</ul>
+<h5 id="custom-provider"><a class="doc-anchor" href="#custom-provider">§</a>Custom provider</h5>
+<p>We also provide a simple example of writing your own provider in the <a href="https://github.com/rustls/rustls/tree/main/provider-example/"><code>custom-provider</code></a>
+example. This example implements a minimal provider using parts of the <a href="https://github.com/RustCrypto"><code>RustCrypto</code></a>
+ecosystem.</p>
+<p>See the <a href="https://docs.rs/rustls/latest/rustls/crypto/struct.CryptoProvider.html#making-a-custom-cryptoprovider">Making a custom CryptoProvider</a> section of the documentation for more information
+on this topic.</p>
+<h3 id="design-overview"><a class="doc-anchor" href="#design-overview">§</a>Design overview</h3>
+<p>Rustls is a low-level library. If your goal is to make HTTPS connections you may prefer
+to use a library built on top of Rustls like <a href="https://crates.io/crates/hyper">hyper</a> or <a href="https://crates.io/crates/ureq">ureq</a>.</p>
+<h4 id="rustls-does-not-take-care-of-network-io"><a class="doc-anchor" href="#rustls-does-not-take-care-of-network-io">§</a>Rustls does not take care of network IO</h4>
+<p>It doesn’t make or accept TCP connections, or do DNS, or read or write files.</p>
+<p>Our <a href="https://github.com/rustls/rustls/tree/main/examples">examples</a> directory contains demos that show how to handle I/O using the
+<a href="struct.Stream.html" title="struct rustls::Stream"><code>stream::Stream</code></a> helper, as well as more complex asynchronous I/O using <a href="https://docs.rs/mio/latest/mio/"><code>mio</code></a>.
+If you’re already using Tokio for an async runtime you may prefer to use <a href="https://github.com/rustls/tokio-rustls"><code>tokio-rustls</code></a> instead
+of interacting with rustls directly.</p>
+<h4 id="rustls-provides-encrypted-pipes"><a class="doc-anchor" href="#rustls-provides-encrypted-pipes">§</a>Rustls provides encrypted pipes</h4>
+<p>These are the <a href="server/struct.ServerConnection.html" title="struct rustls::server::ServerConnection"><code>ServerConnection</code></a> and <a href="client/struct.ClientConnection.html" title="struct rustls::client::ClientConnection"><code>ClientConnection</code></a> types.  You supply raw TLS traffic
+on the left (via the <a href="enum.Connection.html#method.read_tls" title="method rustls::Connection::read_tls"><code>read_tls()</code></a> and <a href="enum.Connection.html#method.read_tls" title="method rustls::Connection::read_tls"><code>write_tls()</code></a> methods) and then read/write the
+plaintext on the right:</p>
+<div class="example-wrap"><pre class="language-text"><code>         TLS                                   Plaintext
+         ===                                   =========
+    read_tls()      +-----------------------+      reader() as io::Read
+                    |                       |
+          +---------&gt;   ClientConnection    +---------&gt;
+                    |          or           |
+          &lt;---------+   ServerConnection    &lt;---------+
+                    |                       |
+    write_tls()     +-----------------------+      writer() as io::Write
+</code></pre></div><h4 id="rustls-takes-care-of-server-certificate-verification"><a class="doc-anchor" href="#rustls-takes-care-of-server-certificate-verification">§</a>Rustls takes care of server certificate verification</h4>
+<p>You do not need to provide anything other than a set of root certificates to trust.
+Certificate verification cannot be turned off or disabled in the main API.</p>
+<h3 id="getting-started"><a class="doc-anchor" href="#getting-started">§</a>Getting started</h3>
+<p>This is the minimum you need to do to make a TLS client connection.</p>
+<p>First we load some root certificates.  These are used to authenticate the server.
+The simplest way is to depend on the <a href="https://crates.io/crates/webpki-roots"><code>webpki_roots</code></a> crate which contains
+the Mozilla set of root certificates.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>root_store = rustls::RootCertStore::from_iter(
+    webpki_roots::TLS_SERVER_ROOTS
+        .iter()
+        .cloned(),
+);</code></pre></div>
+<p>Next, we make a <code>ClientConfig</code>.  You’re likely to make one of these per process,
+and use it for all connections made by that process.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>config = rustls::ClientConfig::builder()
+    .with_root_certificates(root_store)
+    .with_no_client_auth();</code></pre></div>
+<p>Now we can make a connection.  You need to provide the server’s hostname so we
+know what to expect to find in the server’s certificate.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>rc_config = Arc::new(config);
+<span class="kw">let </span>example_com = <span class="string">"example.com"</span>.try_into().unwrap();
+<span class="kw">let </span><span class="kw-2">mut </span>client = rustls::ClientConnection::new(rc_config, example_com);</code></pre></div>
+<p>Now you should do appropriate IO for the <code>client</code> object.  If <code>client.wants_read()</code> yields
+true, you should call <code>client.read_tls()</code> when the underlying connection has data.
+Likewise, if <code>client.wants_write()</code> yields true, you should call <code>client.write_tls()</code>
+when the underlying connection is able to send data.  You should continue doing this
+as long as the connection is valid.</p>
+<p>The return types of <code>read_tls()</code> and <code>write_tls()</code> only tell you if the IO worked.  No
+parsing or processing of the TLS messages is done.  After each <code>read_tls()</code> you should
+therefore call <code>client.process_new_packets()</code> which parses and processes the messages.
+Any error returned from <code>process_new_packets</code> is fatal to the connection, and will tell you
+why.  For example, if the server’s certificate is expired <code>process_new_packets</code> will
+return <code>Err(InvalidCertificate(Expired))</code>.  From this point on,
+<code>process_new_packets</code> will not do any new work and will return that error continually.</p>
+<p>You can extract newly received data by calling <code>client.reader()</code> (which implements the
+<code>io::Read</code> trait).  You can send data to the peer by calling <code>client.writer()</code> (which
+implements <code>io::Write</code> trait).  Note that <code>client.writer().write()</code> buffers data you
+send if the TLS connection is not yet established: this is useful for writing (say) a
+HTTP request, but this is buffered so avoid large amounts of data.</p>
+<p>The following code uses a fictional socket IO API for illustration, and does not handle
+errors.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io;
+<span class="kw">use </span>rustls::Connection;
+
+client.writer().write(<span class="string">b"GET / HTTP/1.0\r\n\r\n"</span>).unwrap();
+<span class="kw">let </span><span class="kw-2">mut </span>socket = connect(<span class="string">"example.com"</span>, <span class="number">443</span>);
+<span class="kw">loop </span>{
+  <span class="kw">if </span>client.wants_read() &amp;&amp; socket.ready_for_read() {
+    client.read_tls(<span class="kw-2">&amp;mut </span>socket).unwrap();
+    client.process_new_packets().unwrap();
+
+    <span class="kw">let </span><span class="kw-2">mut </span>plaintext = Vec::new();
+    client.reader().read_to_end(<span class="kw-2">&amp;mut </span>plaintext).unwrap();
+    io::stdout().write(<span class="kw-2">&amp;</span>plaintext).unwrap();
+  }
+
+  <span class="kw">if </span>client.wants_write() &amp;&amp; socket.ready_for_write() {
+    client.write_tls(<span class="kw-2">&amp;mut </span>socket).unwrap();
+  }
+
+  socket.wait_for_something_to_happen();
+}</code></pre></div>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>You can find several client and server examples of varying complexity in the <a href="https://github.com/rustls/rustls/tree/main/examples">examples</a>
+directory, including <a href="https://github.com/rustls/rustls/blob/main/examples/src/bin/tlsserver-mio.rs"><code>tlsserver-mio</code></a>
+and <a href="https://github.com/rustls/rustls/blob/main/examples/src/bin/tlsclient-mio.rs"><code>tlsclient-mio</code></a>
+- full worked examples using <a href="https://docs.rs/mio/latest/mio/"><code>mio</code></a>.</p>
+<h2 id="crate-features"><a class="doc-anchor" href="#crate-features">§</a>Crate features</h2>
+<p>Here’s a list of what features are exposed by the rustls crate and what
+they mean.</p>
+<ul>
+<li>
+<p><code>aws_lc_rs</code> (enabled by default): makes the rustls crate depend on the <a href="https://crates.io/crates/aws-lc-rs"><code>aws-lc-rs</code></a> crate.
+Use <code>rustls::crypto::aws_lc_rs::default_provider().install_default()</code> to
+use it as the default <code>CryptoProvider</code>, or provide it explicitly
+when making a <code>ClientConfig</code> or <code>ServerConfig</code>.</p>
+<p>Note that aws-lc-rs has additional build-time dependencies like cmake.
+See <a href="https://aws.github.io/aws-lc-rs/requirements/index.html">the documentation</a> for details.</p>
+</li>
+<li>
+<p><code>ring</code>: makes the rustls crate depend on the <em>ring</em> crate for cryptography.
+Use <code>rustls::crypto::ring::default_provider().install_default()</code> to
+use it as the default <code>CryptoProvider</code>, or provide it explicitly
+when making a <code>ClientConfig</code> or <code>ServerConfig</code>.</p>
+</li>
+<li>
+<p><code>fips</code>: enable support for FIPS140-3-approved cryptography, via the aws-lc-rs crate.
+This feature enables the <code>aws_lc_rs</code> feature, which makes the rustls crate depend
+on <a href="https://github.com/aws/aws-lc-rs">aws-lc-rs</a>.  It also changes the default
+for <a href="server/struct.ServerConfig.html#structfield.require_ems" title="field rustls::server::ServerConfig::require_ems"><code>ServerConfig::require_ems</code></a> and <a href="client/struct.ClientConfig.html#structfield.require_ems" title="field rustls::client::ClientConfig::require_ems"><code>ClientConfig::require_ems</code></a>.</p>
+<p>See <a href="manual/_06_fips/index.html" title="mod rustls::manual::_06_fips">manual::_06_fips</a> for more details.</p>
+</li>
+<li>
+<p><code>custom-provider</code>: disables implicit use of built-in providers (<code>aws-lc-rs</code> or <code>ring</code>). This forces
+applications to manually install one, for instance, when using a custom <code>CryptoProvider</code>.</p>
+</li>
+<li>
+<p><code>tls12</code> (enabled by default): enable support for TLS version 1.2. Note that, due to the
+additive nature of Cargo features and because it is enabled by default, other crates
+in your dependency graph could re-enable it for your application. If you want to disable
+TLS 1.2 for security reasons, consider explicitly enabling TLS 1.3 only in the config
+builder API.</p>
+</li>
+<li>
+<p><code>logging</code> (enabled by default): make the rustls crate depend on the <code>log</code> crate.
+rustls outputs interesting protocol-level messages at <code>trace!</code> and <code>debug!</code> level,
+and protocol-level errors at <code>warn!</code> and <code>error!</code> level.  The log messages do not
+contain secret key data, and so are safe to archive without affecting session security.</p>
+</li>
+<li>
+<p><code>read_buf</code>: when building with Rust Nightly, adds support for the unstable
+<code>std::io::ReadBuf</code> and related APIs. This reduces costs from initializing
+buffers. Will do nothing on non-Nightly releases.</p>
+</li>
+<li>
+<p><code>brotli</code>: uses the <code>brotli</code> crate for RFC8879 certificate compression support.</p>
+</li>
+<li>
+<p><code>zlib</code>: uses the <code>zlib-rs</code> crate for RFC8879 certificate compression support.</p>
+</li>
+</ul>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.TicketSwitcher"><code>pub use crate::ticketer::<a class="struct" href="ticketer/struct.TicketSwitcher.html" title="struct rustls::ticketer::TicketSwitcher">TicketSwitcher</a>;</code></div></li><li><div class="item-name" id="reexport.ClientConfig"><code>pub use client::<a class="struct" href="client/struct.ClientConfig.html" title="struct rustls::client::ClientConfig">ClientConfig</a>;</code></div></li><li><div class="item-name" id="reexport.ClientConnection"><code>pub use client::<a class="struct" href="client/struct.ClientConnection.html" title="struct rustls::client::ClientConnection">ClientConnection</a>;</code></div></li><li><div class="item-name" id="reexport.ServerConfig"><code>pub use server::<a class="struct" href="server/struct.ServerConfig.html" title="struct rustls::server::ServerConfig">ServerConfig</a>;</code></div></li><li><div class="item-name" id="reexport.ServerConnection"><code>pub use server::<a class="struct" href="server/struct.ServerConnection.html" title="struct rustls::server::ServerConnection">ServerConnection</a>;</code></div></li></ul><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="client/index.html" title="mod rustls::client">client</a></div><div class="desc docblock-short">Items for use in a client.</div></li><li><div class="item-name"><a class="mod" href="compress/index.html" title="mod rustls::compress">compress</a></div><div class="desc docblock-short">Certificate compression and decompression support</div></li><li><div class="item-name"><a class="mod" href="crypto/index.html" title="mod rustls::crypto">crypto</a></div><div class="desc docblock-short">Crypto provider interface.</div></li><li><div class="item-name"><a class="mod" href="ffdhe_groups/index.html" title="mod rustls::ffdhe_groups">ffdhe_groups</a></div><div class="desc docblock-short">This module contains parameters for FFDHE named groups as defined
+in <a href="https://datatracker.ietf.org/doc/html/rfc7919#appendix-A">RFC 7919 Appendix A</a>.</div></li><li><div class="item-name"><a class="mod" href="lock/index.html" title="mod rustls::lock">lock</a></div><div class="desc docblock-short">APIs abstracting over locking primitives.</div></li><li><div class="item-name"><a class="mod" href="manual/index.html" title="mod rustls::manual">manual</a></div><div class="desc docblock-short">This is the rustls manual.</div></li><li><div class="item-name"><a class="mod" href="pki_types/index.html" title="mod rustls::pki_types">pki_types</a></div><div class="desc docblock-short">Re-exports the contents of the <a href="https://docs.rs/rustls-pki-types">rustls-pki-types</a> crate for easy access</div></li><li><div class="item-name"><a class="mod" href="quic/index.html" title="mod rustls::quic">quic</a></div><div class="desc docblock-short">APIs for implementing QUIC TLS</div></li><li><div class="item-name"><a class="mod" href="server/index.html" title="mod rustls::server">server</a></div><div class="desc docblock-short">Items for use in a server.</div></li><li><div class="item-name"><a class="mod" href="sign/index.html" title="mod rustls::sign">sign</a></div><div class="desc docblock-short">Message signing interfaces.</div></li><li><div class="item-name"><a class="mod" href="ticketer/index.html" title="mod rustls::ticketer">ticketer</a></div><div class="desc docblock-short">APIs for implementing TLS tickets</div></li><li><div class="item-name"><a class="mod" href="time_provider/index.html" title="mod rustls::time_provider">time_provider</a></div><div class="desc docblock-short">The library’s source of time.</div></li><li><div class="item-name"><a class="mod" href="unbuffered/index.html" title="mod rustls::unbuffered">unbuffered</a></div><div class="desc docblock-short">Unbuffered connection API</div></li><li><div class="item-name"><a class="mod" href="version/index.html" title="mod rustls::version">version</a></div><div class="desc docblock-short">All defined protocol versions appear in this module.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.CipherSuiteCommon.html" title="struct rustls::CipherSuiteCommon">CipherSuiteCommon</a></div><div class="desc docblock-short">Common state for cipher suites (both for TLS 1.2 and TLS 1.3)</div></li><li><div class="item-name"><a class="struct" href="struct.CommonState.html" title="struct rustls::CommonState">CommonState</a></div><div class="desc docblock-short">Connection state common to both client and server connections.</div></li><li><div class="item-name"><a class="struct" href="struct.ConfigBuilder.html" title="struct rustls::ConfigBuilder">ConfigBuilder</a></div><div class="desc docblock-short">A <a href="https://rust-unofficial.github.io/patterns/patterns/creational/builder.html">builder</a> for <a href="server/struct.ServerConfig.html" title="struct rustls::server::ServerConfig"><code>ServerConfig</code></a> or <a href="client/struct.ClientConfig.html" title="struct rustls::client::ClientConfig"><code>ClientConfig</code></a> values.</div></li><li><div class="item-name"><a class="struct" href="struct.ConnectionCommon.html" title="struct rustls::ConnectionCommon">ConnectionCommon</a></div><div class="desc docblock-short">Interface shared by client and server connections.</div></li><li><div class="item-name"><a class="struct" href="struct.DigitallySignedStruct.html" title="struct rustls::DigitallySignedStruct">DigitallySignedStruct</a></div><div class="desc docblock-short">This type combines a <a href="enum.SignatureScheme.html" title="enum rustls::SignatureScheme"><code>SignatureScheme</code></a> and a signature payload produced with that scheme.</div></li><li><div class="item-name"><a class="struct" href="struct.DistinguishedName.html" title="struct rustls::DistinguishedName">DistinguishedName</a></div><div class="desc docblock-short">A <code>DistinguishedName</code> is a <code>Vec&lt;u8&gt;</code> wrapped in internal types.</div></li><li><div class="item-name"><a class="struct" href="struct.ExtractedSecrets.html" title="struct rustls::ExtractedSecrets">ExtractedSecrets</a></div><div class="desc docblock-short">Secrets for transmitting/receiving data over a TLS session.</div></li><li><div class="item-name"><a class="struct" href="struct.IoState.html" title="struct rustls::IoState">IoState</a></div><div class="desc docblock-short">Values of this structure are returned from <a href="enum.Connection.html#method.process_new_packets" title="method rustls::Connection::process_new_packets"><code>Connection::process_new_packets</code></a>
+and tell the caller the current I/O state of the TLS connection.</div></li><li><div class="item-name"><a class="struct" href="struct.KeyLogFile.html" title="struct rustls::KeyLogFile">KeyLogFile</a></div><div class="desc docblock-short"><a href="trait.KeyLog.html" title="trait rustls::KeyLog"><code>KeyLog</code></a> implementation that opens a file whose name is
+given by the <code>SSLKEYLOGFILE</code> environment variable, and writes
+keys into it.</div></li><li><div class="item-name"><a class="struct" href="struct.NoKeyLog.html" title="struct rustls::NoKeyLog">NoKeyLog</a></div><div class="desc docblock-short">KeyLog that does exactly nothing.</div></li><li><div class="item-name"><a class="struct" href="struct.OtherError.html" title="struct rustls::OtherError">OtherError</a></div><div class="desc docblock-short">Any other error that cannot be expressed by a more specific <a href="enum.Error.html" title="enum rustls::Error"><code>Error</code></a> variant.</div></li><li><div class="item-name"><a class="struct" href="struct.Reader.html" title="struct rustls::Reader">Reader</a></div><div class="desc docblock-short">A structure that implements <a href="https://doc.rust-lang.org/1.81.0/std/io/trait.Read.html" title="trait std::io::Read"><code>std::io::Read</code></a> for reading plaintext.</div></li><li><div class="item-name"><a class="struct" href="struct.RootCertStore.html" title="struct rustls::RootCertStore">RootCertStore</a></div><div class="desc docblock-short">A container for root certificates able to provide a root-of-trust
+for connection authentication.</div></li><li><div class="item-name"><a class="struct" href="struct.Stream.html" title="struct rustls::Stream">Stream</a></div><div class="desc docblock-short">This type implements <code>io::Read</code> and <code>io::Write</code>, encapsulating
+a Connection <code>C</code> and an underlying transport <code>T</code>, such as a socket.</div></li><li><div class="item-name"><a class="struct" href="struct.StreamOwned.html" title="struct rustls::StreamOwned">StreamOwned</a></div><div class="desc docblock-short">This type implements <code>io::Read</code> and <code>io::Write</code>, encapsulating
+and owning a Connection <code>C</code> and an underlying blocking transport
+<code>T</code>, such as a socket.</div></li><li><div class="item-name"><a class="struct" href="struct.SupportedProtocolVersion.html" title="struct rustls::SupportedProtocolVersion">SupportedProtocolVersion</a></div><div class="desc docblock-short">A TLS protocol version supported by rustls.</div></li><li><div class="item-name"><a class="struct" href="struct.Tls12CipherSuite.html" title="struct rustls::Tls12CipherSuite">Tls12CipherSuite</a></div><div class="desc docblock-short">A TLS 1.2 cipher suite supported by rustls.</div></li><li><div class="item-name"><a class="struct" href="struct.Tls13CipherSuite.html" title="struct rustls::Tls13CipherSuite">Tls13CipherSuite</a></div><div class="desc docblock-short">A TLS 1.3 cipher suite supported by rustls.</div></li><li><div class="item-name"><a class="struct" href="struct.WantsVerifier.html" title="struct rustls::WantsVerifier">WantsVerifier</a></div><div class="desc docblock-short">Config builder state where the caller must supply a verifier.</div></li><li><div class="item-name"><a class="struct" href="struct.WantsVersions.html" title="struct rustls::WantsVersions">WantsVersions</a></div><div class="desc docblock-short">Config builder state where the caller must supply TLS protocol versions.</div></li><li><div class="item-name"><a class="struct" href="struct.Writer.html" title="struct rustls::Writer">Writer</a></div><div class="desc docblock-short">A structure that implements <a href="https://doc.rust-lang.org/1.81.0/std/io/trait.Write.html" title="trait std::io::Write"><code>std::io::Write</code></a> for writing plaintext.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.AlertDescription.html" title="enum rustls::AlertDescription">AlertDescription</a></div><div class="desc docblock-short">The <code>AlertDescription</code> TLS protocol enum.  Values in this enum are taken
+from the various RFCs covering TLS, and are listed by IANA.
+The <code>Unknown</code> item is used when processing unrecognised ordinals.</div></li><li><div class="item-name"><a class="enum" href="enum.CertRevocationListError.html" title="enum rustls::CertRevocationListError">CertRevocationListError</a></div><div class="desc docblock-short">The ways in which a certificate revocation list (CRL) can be invalid.</div></li><li><div class="item-name"><a class="enum" href="enum.CertificateCompressionAlgorithm.html" title="enum rustls::CertificateCompressionAlgorithm">CertificateCompressionAlgorithm</a></div><div class="desc docblock-short">The “TLS Certificate Compression Algorithm IDs” TLS protocol enum.
+Values in this enum are taken from <a href="https://www.rfc-editor.org/rfc/rfc8879.html#section-7.3">RFC8879</a>.</div></li><li><div class="item-name"><a class="enum" href="enum.CertificateError.html" title="enum rustls::CertificateError">CertificateError</a></div><div class="desc docblock-short">The ways in which certificate validators can express errors.</div></li><li><div class="item-name"><a class="enum" href="enum.CipherSuite.html" title="enum rustls::CipherSuite">CipherSuite</a></div><div class="desc docblock-short">The <code>CipherSuite</code> TLS protocol enum.  Values in this enum are taken
+from the various RFCs covering TLS, and are listed by IANA.
+The <code>Unknown</code> item is used when processing unrecognised ordinals.</div></li><li><div class="item-name"><a class="enum" href="enum.Connection.html" title="enum rustls::Connection">Connection</a></div><div class="desc docblock-short">A client or server connection.</div></li><li><div class="item-name"><a class="enum" href="enum.ConnectionTrafficSecrets.html" title="enum rustls::ConnectionTrafficSecrets">ConnectionTrafficSecrets</a></div><div class="desc docblock-short">Secrets used to encrypt/decrypt data in a TLS session.</div></li><li><div class="item-name"><a class="enum" href="enum.ContentType.html" title="enum rustls::ContentType">ContentType</a></div><div class="desc docblock-short">The <code>ContentType</code> TLS protocol enum.  Values in this enum are taken
+from the various RFCs covering TLS, and are listed by IANA.
+The <code>Unknown</code> item is used when processing unrecognised ordinals.</div></li><li><div class="item-name"><a class="enum" href="enum.EncryptedClientHelloError.html" title="enum rustls::EncryptedClientHelloError">EncryptedClientHelloError</a></div><div class="desc docblock-short">An error that occurred while handling Encrypted Client Hello (ECH).</div></li><li><div class="item-name"><a class="enum" href="enum.Error.html" title="enum rustls::Error">Error</a></div><div class="desc docblock-short">rustls reports protocol errors using this type.</div></li><li><div class="item-name"><a class="enum" href="enum.HandshakeKind.html" title="enum rustls::HandshakeKind">HandshakeKind</a></div><div class="desc docblock-short">Describes which sort of handshake happened.</div></li><li><div class="item-name"><a class="enum" href="enum.HandshakeType.html" title="enum rustls::HandshakeType">HandshakeType</a></div><div class="desc docblock-short">The <code>HandshakeType</code> TLS protocol enum.  Values in this enum are taken
+from the various RFCs covering TLS, and are listed by IANA.
+The <code>Unknown</code> item is used when processing unrecognised ordinals.</div></li><li><div class="item-name"><a class="enum" href="enum.InconsistentKeys.html" title="enum rustls::InconsistentKeys">InconsistentKeys</a></div><div class="desc docblock-short">Specific failure cases from <a href="sign/struct.CertifiedKey.html#method.keys_match" title="method rustls::sign::CertifiedKey::keys_match"><code>keys_match</code></a>.</div></li><li><div class="item-name"><a class="enum" href="enum.InvalidMessage.html" title="enum rustls::InvalidMessage">InvalidMessage</a></div><div class="desc docblock-short">A corrupt TLS message payload that resulted in an error.</div></li><li><div class="item-name"><a class="enum" href="enum.NamedGroup.html" title="enum rustls::NamedGroup">NamedGroup</a></div><div class="desc docblock-short">The <code>NamedGroup</code> TLS protocol enum.  Values in this enum are taken
+from the various RFCs covering TLS, and are listed by IANA.
+The <code>Unknown</code> item is used when processing unrecognised ordinals.</div></li><li><div class="item-name"><a class="enum" href="enum.PeerIncompatible.html" title="enum rustls::PeerIncompatible">PeerIncompatible</a></div><div class="desc docblock-short">The set of cases where we failed to make a connection because a peer
+doesn’t support a TLS version/feature we require.</div></li><li><div class="item-name"><a class="enum" href="enum.PeerMisbehaved.html" title="enum rustls::PeerMisbehaved">PeerMisbehaved</a></div><div class="desc docblock-short">The set of cases where we failed to make a connection because we thought
+the peer was misbehaving.</div></li><li><div class="item-name"><a class="enum" href="enum.ProtocolVersion.html" title="enum rustls::ProtocolVersion">ProtocolVersion</a></div><div class="desc docblock-short">The <code>ProtocolVersion</code> TLS protocol enum.  Values in this enum are taken
+from the various RFCs covering TLS, and are listed by IANA.
+The <code>Unknown</code> item is used when processing unrecognised ordinals.</div></li><li><div class="item-name"><a class="enum" href="enum.Side.html" title="enum rustls::Side">Side</a></div><div class="desc docblock-short">Side of the connection.</div></li><li><div class="item-name"><a class="enum" href="enum.SignatureAlgorithm.html" title="enum rustls::SignatureAlgorithm">SignatureAlgorithm</a></div><div class="desc docblock-short">The <code>SignatureAlgorithm</code> TLS protocol enum.  Values in this enum are taken
+from the various RFCs covering TLS, and are listed by IANA.
+The <code>Unknown</code> item is used when processing unrecognised ordinals.</div></li><li><div class="item-name"><a class="enum" href="enum.SignatureScheme.html" title="enum rustls::SignatureScheme">SignatureScheme</a></div><div class="desc docblock-short">The <code>SignatureScheme</code> TLS protocol enum.  Values in this enum are taken
+from the various RFCs covering TLS, and are listed by IANA.
+The <code>Unknown</code> item is used when processing unrecognised ordinals.</div></li><li><div class="item-name"><a class="enum" href="enum.SupportedCipherSuite.html" title="enum rustls::SupportedCipherSuite">SupportedCipherSuite</a></div><div class="desc docblock-short">A cipher suite supported by rustls.</div></li></ul><h2 id="statics" class="section-header">Statics<a href="#statics" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="static" href="static.ALL_VERSIONS.html" title="static rustls::ALL_VERSIONS">ALL_VERSIONS</a></div><div class="desc docblock-short">A list of all the protocol versions supported by rustls.</div></li><li><div class="item-name"><a class="static" href="static.DEFAULT_VERSIONS.html" title="static rustls::DEFAULT_VERSIONS">DEFAULT_VERSIONS</a></div><div class="desc docblock-short">The version configuration that an application should use by default.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.ConfigSide.html" title="trait rustls::ConfigSide">ConfigSide</a></div><div class="desc docblock-short">Helper trait to abstract <a href="struct.ConfigBuilder.html" title="struct rustls::ConfigBuilder"><code>ConfigBuilder</code></a> over building a <a href="client/struct.ClientConfig.html" title="struct rustls::client::ClientConfig"><code>ClientConfig</code></a> or <a href="server/struct.ServerConfig.html" title="struct rustls::server::ServerConfig"><code>ServerConfig</code></a>.</div></li><li><div class="item-name"><a class="trait" href="trait.KeyLog.html" title="trait rustls::KeyLog">KeyLog</a></div><div class="desc docblock-short">This trait represents the ability to do something useful
+with key material, such as logging it to a file for debugging.</div></li><li><div class="item-name"><a class="trait" href="trait.SideData.html" title="trait rustls::SideData">SideData</a></div><div class="desc docblock-short">Data specific to the peer’s side (client or server).</div></li></ul></section></div></main></body></html>

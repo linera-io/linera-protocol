@@ -1,0 +1,48 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Parses a file as an expression or an item according to the context."><title>include in wasmtime_environ::__core::prelude::rust_2018 - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="wasmtime_environ" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../../wasmtime_environ/index.html">wasmtime_environ</a><span class="version">25.0.1</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In wasmtime_environ::__core::prelude::rust_2018</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="../../../index.html">wasmtime_environ</a>::<wbr><a href="../../index.html">__core</a>::<wbr><a href="../index.html">prelude</a>::<wbr><a href="index.html">rust_2018</a>::<wbr><a class="macro" href="#">include</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/macros/mod.rs.html#1520">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><span class="macro">macro_rules!</span> include {
+    (<span class="macro-nonterminal">$file</span>:expr $(,)<span class="question-mark">?</span>) =&gt; { ... };
+}</pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Parses a file as an expression or an item according to the context.</p>
+<p><strong>Warning</strong>: For multi-file Rust projects, the <code>include!</code> macro is probably not what you
+are looking for. Usually, multi-file Rust projects use
+<a href="https://doc.rust-lang.org/reference/items/modules.html">modules</a>. Multi-file projects and
+modules are explained in the Rust-by-Example book
+<a href="https://doc.rust-lang.org/rust-by-example/mod/split.html">here</a> and the module system is
+explained in the Rust Book
+<a href="https://doc.rust-lang.org/book/ch07-02-defining-modules-to-control-scope-and-privacy.html">here</a>.</p>
+<p>The included file is placed in the surrounding code
+<a href="https://doc.rust-lang.org/reference/macros-by-example.html#hygiene">unhygienically</a>. If
+the included file is parsed as an expression and variables or functions share names across
+both files, it could result in variables or functions being different from what the
+included file expected.</p>
+<p>The included file is located relative to the current file (similarly to how modules are
+found). The provided path is interpreted in a platform-specific way at compile time. So,
+for instance, an invocation with a Windows path containing backslashes <code>\</code> would not
+compile correctly on Unix.</p>
+<h2 id="uses"><a class="doc-anchor" href="#uses">§</a>Uses</h2>
+<p>The <code>include!</code> macro is primarily used for two purposes. It is used to include
+documentation that is written in a separate file and it is used to include <a href="https://doc.rust-lang.org/cargo/reference/build-scripts.html#outputs-of-the-build-script">build artifacts
+usually as a result from the <code>build.rs</code>
+script</a>.</p>
+<p>When using the <code>include</code> macro to include stretches of documentation, remember that the
+included file still needs to be a valid Rust syntax. It is also possible to
+use the <a href="../../macro.include_str.html" title="macro wasmtime_environ::__core::include_str"><code>include_str</code></a> macro as <code>#![doc = include_str!("...")]</code> (at the module level) or
+<code>#[doc = include_str!("...")]</code> (at the item level) to include documentation from a plain
+text or markdown file.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Assume there are two files in the same directory with the following contents:</p>
+<p>File ‘monkeys.in’:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code>[<span class="string">'🙈'</span>, <span class="string">'🙊'</span>, <span class="string">'🙉'</span>]
+    .iter()
+    .cycle()
+    .take(<span class="number">6</span>)
+    .collect::&lt;String&gt;()</code></pre></div>
+<p>File ‘main.rs’:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>main() {
+    <span class="kw">let </span>my_string = <span class="macro">include!</span>(<span class="string">"monkeys.in"</span>);
+    <span class="macro">assert_eq!</span>(<span class="string">"🙈🙊🙉🙈🙊🙉"</span>, my_string);
+    <span class="macro">println!</span>(<span class="string">"{my_string}"</span>);
+}</code></pre></div>
+<p>Compiling ‘main.rs’ and running the resulting binary will print
+“🙈🙊🙉🙈🙊🙉”.</p>
+</div></details></section></div></main></body></html>

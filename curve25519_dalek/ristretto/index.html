@@ -1,0 +1,119 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="An implementation of Ristretto, which provides a prime-order group."><title>curve25519_dalek::ristretto - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="curve25519_dalek" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../../curve25519_dalek/index.html"><img src="https://cdn.jsdelivr.net/gh/dalek-cryptography/curve25519-dalek/docs/assets/dalek-logo-clear.png" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../../curve25519_dalek/index.html"><img src="https://cdn.jsdelivr.net/gh/dalek-cryptography/curve25519-dalek/docs/assets/dalek-logo-clear.png" alt="logo"></a><h2><a href="../../curve25519_dalek/index.html">curve25519_dalek</a><span class="version">4.1.3</span></h2></div><h2 class="location"><a href="#">Module ristretto</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#structs">Structs</a></li></ul></section><h2><a href="../index.html">In crate curve25519_dalek</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">curve25519_dalek</a>::<wbr><a class="mod" href="#">ristretto</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/curve25519_dalek/ristretto.rs.html#16-1872">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>An implementation of <a href="https://ristretto.group/">Ristretto</a>, which provides a
+prime-order group.</p>
+<h2 id="the-ristretto-group"><a class="doc-anchor" href="#the-ristretto-group">§</a>The Ristretto Group</h2>
+<p>Ristretto is a modification of Mike Hamburg’s Decaf scheme to work
+with cofactor-\(8\) curves, such as Curve25519.</p>
+<p>The introduction of the Decaf paper, <a href="https://eprint.iacr.org/2015/673.pdf"><em>Decaf:
+Eliminating cofactors through point
+compression</em></a>, notes that while
+most cryptographic systems require a group of prime order, most
+concrete implementations using elliptic curve groups fall short –
+they either provide a group of prime order, but with incomplete or
+variable-time addition formulae (for instance, most Weierstrass
+models), or else they provide a fast and safe implementation of a
+group whose order is not quite a prime \(q\), but \(hq\) for a
+small cofactor \(h\) (for instance, Edwards curves, which have
+cofactor at least \(4\)).</p>
+<p>This abstraction mismatch is commonly “handled” by pushing the
+complexity upwards, adding ad-hoc protocol modifications.  But
+these modifications require careful analysis and are a recurring
+source of <a href="https://moderncrypto.org/mail-archive/curves/2017/000898.html">vulnerabilities</a> and <a href="https://moderncrypto.org/mail-archive/curves/2017/000858.html">design
+complications</a>.</p>
+<p>Instead, Decaf (and Ristretto) use a quotient group to implement a
+prime-order group using a non-prime-order curve.  This provides
+the correct abstraction for cryptographic systems, while retaining
+the speed and safety benefits of an Edwards curve.</p>
+<p>Decaf is named “after the procedure which divides the effect of
+coffee by \(4\)”.  However, Curve25519 has a cofactor of
+\(8\).  To eliminate its cofactor, Ristretto restricts further;
+this <a href="https://en.wikipedia.org/wiki/Ristretto">additional restriction</a> gives the
+<em>Ristretto</em> encoding.</p>
+<p>More details on why Ristretto is necessary can be found in the
+<a href="https://ristretto.group/why_ristretto.html">Why Ristretto?</a> section of the Ristretto website.</p>
+<p>Ristretto
+points are provided in <code>curve25519-dalek</code> by the <code>RistrettoPoint</code>
+struct.</p>
+<h3 id="encoding-and-decoding"><a class="doc-anchor" href="#encoding-and-decoding">§</a>Encoding and Decoding</h3>
+<p>Encoding is done by converting to and from a <code>CompressedRistretto</code>
+struct, which is a typed wrapper around <code>[u8; 32]</code>.</p>
+<p>The encoding is not batchable, but it is possible to
+double-and-encode in a batch using
+<code>RistrettoPoint::double_and_compress_batch</code>.</p>
+<h3 id="equality-testing"><a class="doc-anchor" href="#equality-testing">§</a>Equality Testing</h3>
+<p>Testing equality of points on an Edwards curve in projective
+coordinates requires an expensive inversion.  By contrast, equality
+checking in the Ristretto group can be done in projective
+coordinates without requiring an inversion, so it is much faster.</p>
+<p>The <code>RistrettoPoint</code> struct implements the
+<code>subtle::ConstantTimeEq</code> trait for constant-time equality
+checking, and the Rust <code>Eq</code> trait for variable-time equality
+checking.</p>
+<h3 id="scalars"><a class="doc-anchor" href="#scalars">§</a>Scalars</h3>
+<p>Scalars are represented by the <code>Scalar</code> struct.  Each scalar has a
+canonical representative mod the group order.  To attempt to load
+a supposedly-canonical scalar, use
+<code>Scalar::from_canonical_bytes()</code>. To check whether a
+representative is canonical, use <code>Scalar::is_canonical()</code>.</p>
+<h3 id="scalar-multiplication"><a class="doc-anchor" href="#scalar-multiplication">§</a>Scalar Multiplication</h3>
+<p>Scalar multiplication on Ristretto points is provided by:</p>
+<ul>
+<li>
+<p>the <code>*</code> operator between a <code>Scalar</code> and a <code>RistrettoPoint</code>, which
+performs constant-time variable-base scalar multiplication;</p>
+</li>
+<li>
+<p>the <code>*</code> operator between a <code>Scalar</code> and a
+<code>RistrettoBasepointTable</code>, which performs constant-time fixed-base
+scalar multiplication;</p>
+</li>
+<li>
+<p>an implementation of the
+<a href="../traits/trait.MultiscalarMul.html"><code>MultiscalarMul</code></a> trait for
+constant-time variable-base multiscalar multiplication;</p>
+</li>
+<li>
+<p>an implementation of the
+<a href="../traits/trait.VartimeMultiscalarMul.html"><code>VartimeMultiscalarMul</code></a>
+trait for variable-time variable-base multiscalar multiplication;</p>
+</li>
+</ul>
+<h3 id="random-points-and-hashing-to-ristretto"><a class="doc-anchor" href="#random-points-and-hashing-to-ristretto">§</a>Random Points and Hashing to Ristretto</h3>
+<p>The Ristretto group comes equipped with an Elligator map.  This is
+used to implement</p>
+<ul>
+<li>
+<p><code>RistrettoPoint::random()</code>, which generates random points from an
+RNG - enabled by <code>rand_core</code> feature;</p>
+</li>
+<li>
+<p><code>RistrettoPoint::from_hash()</code> and
+<code>RistrettoPoint::hash_from_bytes()</code>, which perform hashing to the
+group.</p>
+</li>
+</ul>
+<p>The Elligator map itself is not currently exposed.</p>
+<h3 id="implementation"><a class="doc-anchor" href="#implementation">§</a>Implementation</h3>
+<p>The Decaf suggestion is to use a quotient group, such as \(\mathcal
+E / \mathcal E[4]\) or \(2 \mathcal E / \mathcal E[2] \), to
+implement a prime-order group using a non-prime-order curve.</p>
+<p>This requires only changing</p>
+<ol>
+<li>the function for equality checking (so that two representatives
+of the same coset are considered equal);</li>
+<li>the function for encoding (so that two representatives of the
+same coset are encoded as identical bitstrings);</li>
+<li>the function for decoding (so that only the canonical encoding of
+a coset is accepted).</li>
+</ol>
+<p>Internally, each coset is represented by a curve point; two points
+\( P, Q \) may represent the same coset in the same way that two
+points with different \(X,Y,Z\) coordinates may represent the
+same point.  The group operations are carried out with no overhead
+using Edwards formulas.</p>
+<p>Notes on the details of the encoding can be found in the
+<a href="https://ristretto.group/details/index.html">Details</a> section of the Ristretto website.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.CompressedRistretto.html" title="struct curve25519_dalek::ristretto::CompressedRistretto">CompressedRistretto</a></div><div class="desc docblock-short">A Ristretto point, in compressed wire format.</div></li><li><div class="item-name"><a class="struct" href="struct.RistrettoBasepointTable.html" title="struct curve25519_dalek::ristretto::RistrettoBasepointTable">RistrettoBasepointTable</a></div><div class="desc docblock-short">A precomputed table of multiples of a basepoint, used to accelerate
+scalar multiplication.</div></li><li><div class="item-name"><a class="struct" href="struct.RistrettoPoint.html" title="struct curve25519_dalek::ristretto::RistrettoPoint">RistrettoPoint</a></div><div class="desc docblock-short">A <code>RistrettoPoint</code> represents a point in the Ristretto group for
+Curve25519.  Ristretto, a variant of Decaf, constructs a
+prime-order group as a quotient group of a subgroup of (the
+Edwards form of) Curve25519.</div></li><li><div class="item-name"><a class="struct" href="struct.VartimeRistrettoPrecomputation.html" title="struct curve25519_dalek::ristretto::VartimeRistrettoPrecomputation">VartimeRistrettoPrecomputation</a></div><div class="desc docblock-short">Precomputation for variable-time multiscalar multiplication with <code>RistrettoPoint</code>s.</div></li></ul></section></div></main></body></html>

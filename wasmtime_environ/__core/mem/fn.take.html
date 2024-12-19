@@ -1,0 +1,47 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Replaces `dest` with the default value of `T`, returning the previous `dest` value."><title>take in wasmtime_environ::__core::mem - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="wasmtime_environ" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../wasmtime_environ/index.html">wasmtime_environ</a><span class="version">25.0.1</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In wasmtime_environ::__core::mem</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../../index.html">wasmtime_environ</a>::<wbr><a href="../index.html">__core</a>::<wbr><a href="index.html">mem</a>::<wbr><a class="fn" href="#">take</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><span class="since" title="Stable since Rust version 1.40.0">1.40.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/mem/mod.rs.html#791">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn take&lt;T&gt;(dest: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a>) -&gt; T<div class="where">where
+    T: <a class="trait" href="../default/trait.Default.html" title="trait wasmtime_environ::__core::default::Default">Default</a>,</div></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Replaces <code>dest</code> with the default value of <code>T</code>, returning the previous <code>dest</code> value.</p>
+<ul>
+<li>If you want to replace the values of two variables, see <a href="fn.swap.html" title="fn wasmtime_environ::__core::mem::swap"><code>swap</code></a>.</li>
+<li>If you want to replace with a passed value instead of the default value, see <a href="fn.replace.html" title="fn wasmtime_environ::__core::mem::replace"><code>replace</code></a>.</li>
+</ul>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>A simple example:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::mem;
+
+<span class="kw">let </span><span class="kw-2">mut </span>v: Vec&lt;i32&gt; = <span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">2</span>];
+
+<span class="kw">let </span>old_v = mem::take(<span class="kw-2">&amp;mut </span>v);
+<span class="macro">assert_eq!</span>(<span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">2</span>], old_v);
+<span class="macro">assert!</span>(v.is_empty());</code></pre></div>
+<p><code>take</code> allows taking ownership of a struct field by replacing it with an “empty” value.
+Without <code>take</code> you can run into issues like these:</p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">struct </span>Buffer&lt;T&gt; { buf: Vec&lt;T&gt; }
+
+<span class="kw">impl</span>&lt;T&gt; Buffer&lt;T&gt; {
+    <span class="kw">fn </span>get_and_reset(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; Vec&lt;T&gt; {
+        <span class="comment">// error: cannot move out of dereference of `&amp;mut`-pointer
+        </span><span class="kw">let </span>buf = <span class="self">self</span>.buf;
+        <span class="self">self</span>.buf = Vec::new();
+        buf
+    }
+}</code></pre></div>
+<p>Note that <code>T</code> does not necessarily implement <a href="../clone/trait.Clone.html" title="trait wasmtime_environ::__core::clone::Clone"><code>Clone</code></a>, so it can’t even clone and reset
+<code>self.buf</code>. But <code>take</code> can be used to disassociate the original value of <code>self.buf</code> from
+<code>self</code>, allowing it to be returned:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::mem;
+
+<span class="kw">impl</span>&lt;T&gt; Buffer&lt;T&gt; {
+    <span class="kw">fn </span>get_and_reset(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; Vec&lt;T&gt; {
+        mem::take(<span class="kw-2">&amp;mut </span><span class="self">self</span>.buf)
+    }
+}
+
+<span class="kw">let </span><span class="kw-2">mut </span>buffer = Buffer { buf: <span class="macro">vec!</span>[<span class="number">0</span>, <span class="number">1</span>] };
+<span class="macro">assert_eq!</span>(buffer.buf.len(), <span class="number">2</span>);
+
+<span class="macro">assert_eq!</span>(buffer.get_and_reset(), <span class="macro">vec!</span>[<span class="number">0</span>, <span class="number">1</span>]);
+<span class="macro">assert_eq!</span>(buffer.buf.len(), <span class="number">0</span>);</code></pre></div>
+</div></details></section></div></main></body></html>

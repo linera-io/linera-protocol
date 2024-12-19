@@ -1,0 +1,299 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A handle to both a closure in Rust as well as JS closure which will invoke the Rust closure."><title>Closure in wasm_bindgen::closure - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="wasm_bindgen" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc struct"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../wasm_bindgen/index.html">wasm_bindgen</a><span class="version">0.2.93</span></h2></div><h2 class="location"><a href="#">Closure</a></h2><div class="sidebar-elems"><section><h3><a href="#implementations">Methods</a></h3><ul class="block method"><li><a href="#method.forget">forget</a></li><li><a href="#method.into_js_value">into_js_value</a></li><li><a href="#method.new">new</a></li><li><a href="#method.once">once</a></li><li><a href="#method.once_into_js">once_into_js</a></li><li><a href="#method.wrap">wrap</a></li></ul><h3><a href="#trait-implementations">Trait Implementations</a></h3><ul class="block trait-implementation"><li><a href="#impl-AsRef%3CJsValue%3E-for-Closure%3CT%3E">AsRef&lt;JsValue&gt;</a></li><li><a href="#impl-Debug-for-Closure%3CT%3E">Debug</a></li><li><a href="#impl-Drop-for-Closure%3CT%3E">Drop</a></li><li><a href="#impl-IntoWasmAbi-for-%26Closure%3CT%3E">IntoWasmAbi</a></li><li><a href="#impl-OptionIntoWasmAbi-for-%26Closure%3CT%3E">OptionIntoWasmAbi</a></li></ul><h3><a href="#synthetic-implementations">Auto Trait Implementations</a></h3><ul class="block synthetic-implementation"><li><a href="#impl-Send-for-Closure%3CT%3E">!Send</a></li><li><a href="#impl-Sync-for-Closure%3CT%3E">!Sync</a></li><li><a href="#impl-Freeze-for-Closure%3CT%3E">Freeze</a></li><li><a href="#impl-RefUnwindSafe-for-Closure%3CT%3E">RefUnwindSafe</a></li><li><a href="#impl-Unpin-for-Closure%3CT%3E">Unpin</a></li><li><a href="#impl-UnwindSafe-for-Closure%3CT%3E">UnwindSafe</a></li></ul><h3><a href="#blanket-implementations">Blanket Implementations</a></h3><ul class="block blanket-implementation"><li><a href="#impl-Any-for-T">Any</a></li><li><a href="#impl-Borrow%3CT%3E-for-T">Borrow&lt;T&gt;</a></li><li><a href="#impl-BorrowMut%3CT%3E-for-T">BorrowMut&lt;T&gt;</a></li><li><a href="#impl-From%3CT%3E-for-T">From&lt;T&gt;</a></li><li><a href="#impl-Into%3CU%3E-for-T">Into&lt;U&gt;</a></li><li><a href="#impl-TryFrom%3CU%3E-for-T">TryFrom&lt;U&gt;</a></li><li><a href="#impl-TryInto%3CU%3E-for-T">TryInto&lt;U&gt;</a></li></ul></section><h2><a href="index.html">In wasm_bindgen::closure</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Struct <a href="../index.html">wasm_bindgen</a>::<wbr><a href="index.html">closure</a>::<wbr><a class="struct" href="#">Closure</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/wasm_bindgen/closure.rs.html#242-245">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub struct Closure&lt;T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>&gt; { <span class="comment">/* private fields */</span> }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A handle to both a closure in Rust as well as JS closure which will invoke
+the Rust closure.</p>
+<p>A <code>Closure</code> is the primary way that a <code>'static</code> lifetime closure is
+transferred from Rust to JS. <code>Closure</code> currently requires that the closures
+it’s created with have the <code>'static</code> lifetime in Rust for soundness reasons.</p>
+<p>This type is a “handle” in the sense that whenever it is dropped it will
+invalidate the JS closure that it refers to. Any usage of the closure in JS
+after the <code>Closure</code> has been dropped will raise an exception. It’s then up
+to you to arrange for <code>Closure</code> to be properly deallocate at an appropriate
+location in your program.</p>
+<p>The type parameter on <code>Closure</code> is the type of closure that this represents.
+Currently this can only be the <code>Fn</code> and <code>FnMut</code> traits with up to 7
+arguments (and an optional return value).</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Here are a number of examples of using <code>Closure</code>.</p>
+<h3 id="using-the-setinterval-api"><a class="doc-anchor" href="#using-the-setinterval-api">§</a>Using the <code>setInterval</code> API</h3>
+<p>Sample usage of <code>Closure</code> to invoke the <code>setInterval</code> API.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>wasm_bindgen::prelude::<span class="kw-2">*</span>;
+
+<span class="attr">#[wasm_bindgen]
+</span><span class="kw">extern </span><span class="string">"C" </span>{
+    <span class="kw">fn </span>setInterval(closure: <span class="kw-2">&amp;</span>Closure&lt;<span class="kw">dyn </span>FnMut()&gt;, time: u32) -&gt; i32;
+    <span class="kw">fn </span>clearInterval(id: i32);
+
+    <span class="attr">#[wasm_bindgen(js_namespace = console)]
+    </span><span class="kw">fn </span>log(s: <span class="kw-2">&amp;</span>str);
+}
+
+<span class="attr">#[wasm_bindgen]
+</span><span class="kw">pub struct </span>IntervalHandle {
+    interval_id: i32,
+    _closure: Closure&lt;<span class="kw">dyn </span>FnMut()&gt;,
+}
+
+<span class="kw">impl </span>Drop <span class="kw">for </span>IntervalHandle {
+    <span class="kw">fn </span>drop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+        clearInterval(<span class="self">self</span>.interval_id);
+    }
+}
+
+<span class="attr">#[wasm_bindgen]
+</span><span class="kw">pub fn </span>run() -&gt; IntervalHandle {
+    <span class="comment">// First up we use `Closure::new` to wrap up a Rust closure and create
+    // a JS closure.
+    </span><span class="kw">let </span>cb = Closure::new(|| {
+        log(<span class="string">"interval elapsed!"</span>);
+    });
+
+    <span class="comment">// Next we pass this via reference to the `setInterval` function, and
+    // `setInterval` gets a handle to the corresponding JS closure.
+    </span><span class="kw">let </span>interval_id = setInterval(<span class="kw-2">&amp;</span>cb, <span class="number">1_000</span>);
+
+    <span class="comment">// If we were to drop `cb` here it would cause an exception to be raised
+    // whenever the interval elapses. Instead we *return* our handle back to JS
+    // so JS can decide when to cancel the interval and deallocate the closure.
+    </span>IntervalHandle {
+        interval_id,
+        _closure: cb,
+    }
+}</code></pre></div>
+<h3 id="casting-a-closure-to-a-js_sysfunction"><a class="doc-anchor" href="#casting-a-closure-to-a-js_sysfunction">§</a>Casting a <code>Closure</code> to a <code>js_sys::Function</code></h3>
+<p>This is the same <code>setInterval</code> example as above, except it is using
+<code>web_sys</code> (which uses <code>js_sys::Function</code> for callbacks) instead of manually
+writing bindings to <code>setInterval</code> and other Web APIs.</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>wasm_bindgen::JsCast;
+
+<span class="attr">#[wasm_bindgen]
+</span><span class="kw">pub struct </span>IntervalHandle {
+    interval_id: i32,
+    _closure: Closure&lt;<span class="kw">dyn </span>FnMut()&gt;,
+}
+
+<span class="kw">impl </span>Drop <span class="kw">for </span>IntervalHandle {
+    <span class="kw">fn </span>drop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+        <span class="kw">let </span>window = web_sys::window().unwrap();
+        window.clear_interval_with_handle(<span class="self">self</span>.interval_id);
+    }
+}
+
+<span class="attr">#[wasm_bindgen]
+</span><span class="kw">pub fn </span>run() -&gt; <span class="prelude-ty">Result</span>&lt;IntervalHandle, JsValue&gt; {
+    <span class="kw">let </span>cb = Closure::new(|| {
+        web_sys::console::log_1(<span class="kw-2">&amp;</span><span class="string">"interval elapsed!"</span>.into());
+    });
+
+    <span class="kw">let </span>window = web_sys::window().unwrap();
+    <span class="kw">let </span>interval_id = window.set_interval_with_callback_and_timeout_and_arguments_0(
+        <span class="comment">// Note this method call, which uses `as_ref()` to get a `JsValue`
+        // from our `Closure` which is then converted to a `&amp;Function`
+        // using the `JsCast::unchecked_ref` function.
+        </span>cb.as_ref().unchecked_ref(),
+        <span class="number">1_000</span>,
+    )<span class="question-mark">?</span>;
+
+    <span class="comment">// Same as above.
+    </span><span class="prelude-val">Ok</span>(IntervalHandle {
+        interval_id,
+        _closure: cb,
+    })
+}</code></pre></div>
+<h3 id="using-fnonce-and-closureonce-with-requestanimationframe"><a class="doc-anchor" href="#using-fnonce-and-closureonce-with-requestanimationframe">§</a>Using <code>FnOnce</code> and <code>Closure::once</code> with <code>requestAnimationFrame</code></h3>
+<p>Because <code>requestAnimationFrame</code> only calls its callback once, we can use
+<code>FnOnce</code> and <code>Closure::once</code> with it.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>wasm_bindgen::prelude::<span class="kw-2">*</span>;
+
+<span class="attr">#[wasm_bindgen]
+</span><span class="kw">extern </span><span class="string">"C" </span>{
+    <span class="kw">fn </span>requestAnimationFrame(closure: <span class="kw-2">&amp;</span>Closure&lt;<span class="kw">dyn </span>FnMut()&gt;) -&gt; u32;
+    <span class="kw">fn </span>cancelAnimationFrame(id: u32);
+
+    <span class="attr">#[wasm_bindgen(js_namespace = console)]
+    </span><span class="kw">fn </span>log(s: <span class="kw-2">&amp;</span>str);
+}
+
+<span class="attr">#[wasm_bindgen]
+</span><span class="kw">pub struct </span>AnimationFrameHandle {
+    animation_id: u32,
+    _closure: Closure&lt;<span class="kw">dyn </span>FnMut()&gt;,
+}
+
+<span class="kw">impl </span>Drop <span class="kw">for </span>AnimationFrameHandle {
+    <span class="kw">fn </span>drop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+        cancelAnimationFrame(<span class="self">self</span>.animation_id);
+    }
+}
+
+<span class="comment">// A type that will log a message when it is dropped.
+</span><span class="kw">struct </span>LogOnDrop(<span class="kw-2">&amp;</span><span class="lifetime">'static </span>str);
+<span class="kw">impl </span>Drop <span class="kw">for </span>LogOnDrop {
+    <span class="kw">fn </span>drop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+        log(<span class="self">self</span>.<span class="number">0</span>);
+    }
+}
+
+<span class="attr">#[wasm_bindgen]
+</span><span class="kw">pub fn </span>run() -&gt; AnimationFrameHandle {
+    <span class="comment">// We are using `Closure::once` which takes a `FnOnce`, so the function
+    // can drop and/or move things that it closes over.
+    </span><span class="kw">let </span>fired = LogOnDrop(<span class="string">"animation frame fired or canceled"</span>);
+    <span class="kw">let </span>cb = Closure::once(<span class="kw">move </span>|| drop(fired));
+
+    <span class="comment">// Schedule the animation frame!
+    </span><span class="kw">let </span>animation_id = requestAnimationFrame(<span class="kw-2">&amp;</span>cb);
+
+    <span class="comment">// Again, return a handle to JS, so that the closure is not dropped
+    // immediately and JS can decide whether to cancel the animation frame.
+    </span>AnimationFrameHandle {
+        animation_id,
+        _closure: cb,
+    }
+}</code></pre></div>
+<h3 id="converting-fnonces-directly-into-javascript-functions-with-closureonce_into_js"><a class="doc-anchor" href="#converting-fnonces-directly-into-javascript-functions-with-closureonce_into_js">§</a>Converting <code>FnOnce</code>s directly into JavaScript Functions with <code>Closure::once_into_js</code></h3>
+<p>If we don’t want to allow a <code>FnOnce</code> to be eagerly dropped (maybe because we
+just want it to drop after it is called and don’t care about cancellation)
+then we can use the <code>Closure::once_into_js</code> function.</p>
+<p>This is the same <code>requestAnimationFrame</code> example as above, but without
+supporting early cancellation.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>wasm_bindgen::prelude::<span class="kw-2">*</span>;
+
+<span class="attr">#[wasm_bindgen]
+</span><span class="kw">extern </span><span class="string">"C" </span>{
+    <span class="comment">// We modify the binding to take an untyped `JsValue` since that is what
+    // is returned by `Closure::once_into_js`.
+    //
+    // If we were using the `web_sys` binding for `requestAnimationFrame`,
+    // then the call sites would cast the `JsValue` into a `&amp;js_sys::Function`
+    // using `f.unchecked_ref::&lt;js_sys::Function&gt;()`. See the `web_sys`
+    // example above for details.
+    </span><span class="kw">fn </span>requestAnimationFrame(callback: JsValue);
+
+    <span class="attr">#[wasm_bindgen(js_namespace = console)]
+    </span><span class="kw">fn </span>log(s: <span class="kw-2">&amp;</span>str);
+}
+
+<span class="comment">// A type that will log a message when it is dropped.
+</span><span class="kw">struct </span>LogOnDrop(<span class="kw-2">&amp;</span><span class="lifetime">'static </span>str);
+<span class="kw">impl </span>Drop <span class="kw">for </span>LogOnDrop {
+    <span class="kw">fn </span>drop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+        log(<span class="self">self</span>.<span class="number">0</span>);
+    }
+}
+
+<span class="attr">#[wasm_bindgen]
+</span><span class="kw">pub fn </span>run() {
+    <span class="comment">// We are using `Closure::once_into_js` which takes a `FnOnce` and
+    // converts it into a JavaScript function, which is returned as a
+    // `JsValue`.
+    </span><span class="kw">let </span>fired = LogOnDrop(<span class="string">"animation frame fired"</span>);
+    <span class="kw">let </span>cb = Closure::once_into_js(<span class="kw">move </span>|| drop(fired));
+
+    <span class="comment">// Schedule the animation frame!
+    </span>requestAnimationFrame(cb);
+
+    <span class="comment">// No need to worry about whether or not we drop a `Closure`
+    // here or return some sort of handle to JS!
+</span>}</code></pre></div>
+</div></details><h2 id="implementations" class="section-header">Implementations<a href="#implementations" class="anchor">§</a></h2><div id="implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-Closure%3CT%3E" class="impl"><a class="src rightside" href="../../src/wasm_bindgen/closure.rs.html#252-378">source</a><a href="#impl-Closure%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="struct" href="struct.Closure.html" title="struct wasm_bindgen::closure::Closure">Closure</a>&lt;T&gt;<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a> + WasmClosure,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.new" class="method"><a class="src rightside" href="../../src/wasm_bindgen/closure.rs.html#272-277">source</a><h4 class="code-header">pub fn <a href="#method.new" class="fn">new</a>&lt;F&gt;(t: F) -&gt; <a class="struct" href="struct.Closure.html" title="struct wasm_bindgen::closure::Closure">Closure</a>&lt;T&gt;<div class="where">where
+    F: IntoWasmClosure&lt;T&gt; + 'static,</div></h4></section></summary><div class="docblock"><p>Creates a new instance of <code>Closure</code> from the provided Rust function.</p>
+<p>Note that the closure provided here, <code>F</code>, has a few requirements
+associated with it:</p>
+<ul>
+<li>
+<p>It must implement <code>Fn</code> or <code>FnMut</code> (for <code>FnOnce</code> functions see
+<code>Closure::once</code> and <code>Closure::once_into_js</code>).</p>
+</li>
+<li>
+<p>It must be <code>'static</code>, aka no stack references (use the <code>move</code>
+keyword).</p>
+</li>
+<li>
+<p>It can have at most 7 arguments.</p>
+</li>
+<li>
+<p>Its arguments and return values are all types that can be shared with
+JS (i.e. have <code>#[wasm_bindgen]</code> annotations or are simple numbers,
+etc.)</p>
+</li>
+</ul>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.wrap" class="method"><a class="src rightside" href="../../src/wasm_bindgen/closure.rs.html#281-352">source</a><h4 class="code-header">pub fn <a href="#method.wrap" class="fn">wrap</a>(data: <a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;T&gt;) -&gt; <a class="struct" href="struct.Closure.html" title="struct wasm_bindgen::closure::Closure">Closure</a>&lt;T&gt;</h4></section></summary><div class="docblock"><p>A more direct version of <code>Closure::new</code> which creates a <code>Closure</code> from
+a <code>Box&lt;dyn Fn&gt;</code>/<code>Box&lt;dyn FnMut&gt;</code>, which is how it’s kept internally.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.into_js_value" class="method"><a class="src rightside" href="../../src/wasm_bindgen/closure.rs.html#368-372">source</a><h4 class="code-header">pub fn <a href="#method.into_js_value" class="fn">into_js_value</a>(self) -&gt; <a class="struct" href="../struct.JsValue.html" title="struct wasm_bindgen::JsValue">JsValue</a></h4></section></summary><div class="docblock"><p>Release memory management of this closure from Rust to the JS GC.</p>
+<p>When a <code>Closure</code> is dropped it will release the Rust memory and
+invalidate the associated JS closure, but this isn’t always desired.
+Some callbacks are alive for the entire duration of the program or for a
+lifetime dynamically managed by the JS GC. This function can be used
+to drop this <code>Closure</code> while keeping the associated JS function still
+valid.</p>
+<p>If the platform supports weak references, the Rust memory will be
+reclaimed when the JS closure is GC’d. If weak references is not
+supported, this can be dangerous if this function is called many times
+in an application because the memory leak will overwhelm the page
+quickly and crash the wasm.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.forget" class="method"><a class="src rightside" href="../../src/wasm_bindgen/closure.rs.html#375-377">source</a><h4 class="code-header">pub fn <a href="#method.forget" class="fn">forget</a>(self)</h4></section></summary><div class="docblock"><p>Same as <code>into_js_value</code>, but doesn’t return a value.</p>
+</div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Closure%3Cdyn+FnOnce()%3E" class="impl"><a class="src rightside" href="../../src/wasm_bindgen/closure.rs.html#383-444">source</a><a href="#impl-Closure%3Cdyn+FnOnce()%3E" class="anchor">§</a><h3 class="code-header">impl <a class="struct" href="struct.Closure.html" title="struct wasm_bindgen::closure::Closure">Closure</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnOnce.html" title="trait core::ops::function::FnOnce">FnOnce</a>()&gt;</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.once" class="method"><a class="src rightside" href="../../src/wasm_bindgen/closure.rs.html#411-416">source</a><h4 class="code-header">pub fn <a href="#method.once" class="fn">once</a>&lt;F, A, R&gt;(fn_once: F) -&gt; <a class="struct" href="struct.Closure.html" title="struct wasm_bindgen::closure::Closure">Closure</a>&lt;F::FnMut&gt;<div class="where">where
+    F: 'static + WasmClosureFnOnce&lt;A, R&gt;,</div></h4></section></summary><div class="docblock"><p>Create a <code>Closure</code> from a function that can only be called once.</p>
+<p>Since we have no way of enforcing that JS cannot attempt to call this
+<code>FnOne(A...) -&gt; R</code> more than once, this produces a <code>Closure&lt;dyn FnMut(A...) -&gt; R&gt;</code> that will dynamically throw a JavaScript error if called more
+than once.</p>
+<h5 id="example"><a class="doc-anchor" href="#example">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>wasm_bindgen::prelude::<span class="kw-2">*</span>;
+
+<span class="comment">// Create an non-`Copy`, owned `String`.
+</span><span class="kw">let </span><span class="kw-2">mut </span>s = String::from(<span class="string">"Hello"</span>);
+
+<span class="comment">// Close over `s`. Since `f` returns `s`, it is `FnOnce` and can only be
+// called once. If it was called a second time, it wouldn't have any `s`
+// to work with anymore!
+</span><span class="kw">let </span>f = <span class="kw">move </span>|| {
+    s += <span class="string">", World!"</span>;
+    s
+};
+
+<span class="comment">// Create a `Closure` from `f`. Note that the `Closure`'s type parameter
+// is `FnMut`, even though `f` is `FnOnce`.
+</span><span class="kw">let </span>closure: Closure&lt;<span class="kw">dyn </span>FnMut() -&gt; String&gt; = Closure::once(f);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.once_into_js" class="method"><a class="src rightside" href="../../src/wasm_bindgen/closure.rs.html#438-443">source</a><h4 class="code-header">pub fn <a href="#method.once_into_js" class="fn">once_into_js</a>&lt;F, A, R&gt;(fn_once: F) -&gt; <a class="struct" href="../struct.JsValue.html" title="struct wasm_bindgen::JsValue">JsValue</a><div class="where">where
+    F: 'static + WasmClosureFnOnce&lt;A, R&gt;,</div></h4></section></summary><div class="docblock"><p>Convert a <code>FnOnce(A...) -&gt; R</code> into a JavaScript <code>Function</code> object.</p>
+<p>If the JavaScript function is invoked more than once, it will throw an
+exception.</p>
+<p>Unlike <code>Closure::once</code>, this does <em>not</em> return a <code>Closure</code> that can be
+dropped before the function is invoked to deallocate the closure. The
+only way the <code>FnOnce</code> is deallocated is by calling the JavaScript
+function. If the JavaScript function is never called then the <code>FnOnce</code>
+and everything it closes over will leak.</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>wasm_bindgen::{prelude::<span class="kw-2">*</span>, JsCast};
+
+<span class="kw">let </span>f = Closure::once_into_js(<span class="kw">move </span>|| {
+    <span class="comment">// ...
+</span>});
+
+<span class="macro">assert!</span>(f.is_instance_of::&lt;js_sys::Function&gt;());</code></pre></div>
+</div></details></div></details></div><h2 id="trait-implementations" class="section-header">Trait Implementations<a href="#trait-implementations" class="anchor">§</a></h2><div id="trait-implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-AsRef%3CJsValue%3E-for-Closure%3CT%3E" class="impl"><a class="src rightside" href="../../src/wasm_bindgen/closure.rs.html#457-461">source</a><a href="#impl-AsRef%3CJsValue%3E-for-Closure%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;<a class="struct" href="../struct.JsValue.html" title="struct wasm_bindgen::JsValue">JsValue</a>&gt; for <a class="struct" href="struct.Closure.html" title="struct wasm_bindgen::closure::Closure">Closure</a>&lt;T&gt;</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.as_ref" class="method trait-impl"><a class="src rightside" href="../../src/wasm_bindgen/closure.rs.html#458-460">source</a><a href="#method.as_ref" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html#tymethod.as_ref" class="fn">as_ref</a>(&amp;self) -&gt; &amp;<a class="struct" href="../struct.JsValue.html" title="struct wasm_bindgen::JsValue">JsValue</a></h4></section></summary><div class='docblock'>Converts this type into a shared reference of the (usually inferred) input type.</div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Debug-for-Closure%3CT%3E" class="impl"><a class="src rightside" href="../../src/wasm_bindgen/closure.rs.html#504-511">source</a><a href="#impl-Debug-for-Closure%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html" title="trait core::fmt::Debug">Debug</a> for <a class="struct" href="struct.Closure.html" title="struct wasm_bindgen::closure::Closure">Closure</a>&lt;T&gt;<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.fmt" class="method trait-impl"><a class="src rightside" href="../../src/wasm_bindgen/closure.rs.html#508-510">source</a><a href="#method.fmt" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html#tymethod.fmt" class="fn">fmt</a>(&amp;self, f: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/fmt/struct.Formatter.html" title="struct core::fmt::Formatter">Formatter</a>&lt;'_&gt;) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a></h4></section></summary><div class='docblock'>Formats the value using the given formatter. <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html#tymethod.fmt">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Drop-for-Closure%3CT%3E" class="impl"><a class="src rightside" href="../../src/wasm_bindgen/closure.rs.html#513-526">source</a><a href="#impl-Drop-for-Closure%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/drop/trait.Drop.html" title="trait core::ops::drop::Drop">Drop</a> for <a class="struct" href="struct.Closure.html" title="struct wasm_bindgen::closure::Closure">Closure</a>&lt;T&gt;<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.drop" class="method trait-impl"><a class="src rightside" href="../../src/wasm_bindgen/closure.rs.html#517-525">source</a><a href="#method.drop" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/ops/drop/trait.Drop.html#tymethod.drop" class="fn">drop</a>(&amp;mut self)</h4></section></summary><div class='docblock'>Executes the destructor for this type. <a href="https://doc.rust-lang.org/1.81.0/core/ops/drop/trait.Drop.html#tymethod.drop">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-IntoWasmAbi-for-%26Closure%3CT%3E" class="impl"><a class="src rightside" href="../../src/wasm_bindgen/closure.rs.html#474-483">source</a><a href="#impl-IntoWasmAbi-for-%26Closure%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;'a, T&gt; <a class="trait" href="../convert/trait.IntoWasmAbi.html" title="trait wasm_bindgen::convert::IntoWasmAbi">IntoWasmAbi</a> for &amp;'a <a class="struct" href="struct.Closure.html" title="struct wasm_bindgen::closure::Closure">Closure</a>&lt;T&gt;<div class="where">where
+    T: WasmClosure + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Abi" class="associatedtype trait-impl"><a href="#associatedtype.Abi" class="anchor">§</a><h4 class="code-header">type <a href="../convert/trait.IntoWasmAbi.html#associatedtype.Abi" class="associatedtype">Abi</a> = <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a></h4></section></summary><div class='docblock'>The wasm ABI type that this converts into when crossing the ABI
+boundary.</div></details><details class="toggle method-toggle" open><summary><section id="method.into_abi" class="method trait-impl"><a class="src rightside" href="../../src/wasm_bindgen/closure.rs.html#480-482">source</a><a href="#method.into_abi" class="anchor">§</a><h4 class="code-header">fn <a href="../convert/trait.IntoWasmAbi.html#tymethod.into_abi" class="fn">into_abi</a>(self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a></h4></section></summary><div class='docblock'>Convert <code>self</code> into <code>Self::Abi</code> so that it can be sent across the wasm
+ABI boundary.</div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-OptionIntoWasmAbi-for-%26Closure%3CT%3E" class="impl"><a class="src rightside" href="../../src/wasm_bindgen/closure.rs.html#485-492">source</a><a href="#impl-OptionIntoWasmAbi-for-%26Closure%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;'a, T&gt; <a class="trait" href="../convert/trait.OptionIntoWasmAbi.html" title="trait wasm_bindgen::convert::OptionIntoWasmAbi">OptionIntoWasmAbi</a> for &amp;'a <a class="struct" href="struct.Closure.html" title="struct wasm_bindgen::closure::Closure">Closure</a>&lt;T&gt;<div class="where">where
+    T: WasmClosure + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.none" class="method trait-impl"><a class="src rightside" href="../../src/wasm_bindgen/closure.rs.html#489-491">source</a><a href="#method.none" class="anchor">§</a><h4 class="code-header">fn <a href="../convert/trait.OptionIntoWasmAbi.html#tymethod.none" class="fn">none</a>() -&gt; Self::<a class="associatedtype" href="../convert/trait.IntoWasmAbi.html#associatedtype.Abi" title="type wasm_bindgen::convert::IntoWasmAbi::Abi">Abi</a></h4></section></summary><div class='docblock'>Returns an ABI instance indicating “none”, which JS will interpret as
+the <code>None</code> branch of this option. <a href="../convert/trait.OptionIntoWasmAbi.html#tymethod.none">Read more</a></div></details></div></details></div><h2 id="synthetic-implementations" class="section-header">Auto Trait Implementations<a href="#synthetic-implementations" class="anchor">§</a></h2><div id="synthetic-implementations-list"><section id="impl-Freeze-for-Closure%3CT%3E" class="impl"><a href="#impl-Freeze-for-Closure%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Freeze.html" title="trait core::marker::Freeze">Freeze</a> for <a class="struct" href="struct.Closure.html" title="struct wasm_bindgen::closure::Closure">Closure</a>&lt;T&gt;<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section><section id="impl-RefUnwindSafe-for-Closure%3CT%3E" class="impl"><a href="#impl-RefUnwindSafe-for-Closure%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/panic/unwind_safe/trait.RefUnwindSafe.html" title="trait core::panic::unwind_safe::RefUnwindSafe">RefUnwindSafe</a> for <a class="struct" href="struct.Closure.html" title="struct wasm_bindgen::closure::Closure">Closure</a>&lt;T&gt;<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/panic/unwind_safe/trait.RefUnwindSafe.html" title="trait core::panic::unwind_safe::RefUnwindSafe">RefUnwindSafe</a> + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section><section id="impl-Send-for-Closure%3CT%3E" class="impl"><a href="#impl-Send-for-Closure%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; !<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> for <a class="struct" href="struct.Closure.html" title="struct wasm_bindgen::closure::Closure">Closure</a>&lt;T&gt;</h3></section><section id="impl-Sync-for-Closure%3CT%3E" class="impl"><a href="#impl-Sync-for-Closure%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; !<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> for <a class="struct" href="struct.Closure.html" title="struct wasm_bindgen::closure::Closure">Closure</a>&lt;T&gt;</h3></section><section id="impl-Unpin-for-Closure%3CT%3E" class="impl"><a href="#impl-Unpin-for-Closure%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a> for <a class="struct" href="struct.Closure.html" title="struct wasm_bindgen::closure::Closure">Closure</a>&lt;T&gt;<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section><section id="impl-UnwindSafe-for-Closure%3CT%3E" class="impl"><a href="#impl-UnwindSafe-for-Closure%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/panic/unwind_safe/trait.UnwindSafe.html" title="trait core::panic::unwind_safe::UnwindSafe">UnwindSafe</a> for <a class="struct" href="struct.Closure.html" title="struct wasm_bindgen::closure::Closure">Closure</a>&lt;T&gt;<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/panic/unwind_safe/trait.UnwindSafe.html" title="trait core::panic::unwind_safe::UnwindSafe">UnwindSafe</a> + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></div><h2 id="blanket-implementations" class="section-header">Blanket Implementations<a href="#blanket-implementations" class="anchor">§</a></h2><div id="blanket-implementations-list"><details class="toggle implementors-toggle"><summary><section id="impl-Any-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#140">source</a><a href="#impl-Any-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html" title="trait core::any::Any">Any</a> for T<div class="where">where
+    T: 'static + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.type_id" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#141">source</a><a href="#method.type_id" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html#tymethod.type_id" class="fn">type_id</a>(&amp;self) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/any/struct.TypeId.html" title="struct core::any::TypeId">TypeId</a></h4></section></summary><div class='docblock'>Gets the <code>TypeId</code> of <code>self</code>. <a href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html#tymethod.type_id">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Borrow%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#209">source</a><a href="#impl-Borrow%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html" title="trait core::borrow::Borrow">Borrow</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#211">source</a><a href="#method.borrow" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html#tymethod.borrow" class="fn">borrow</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a></h4></section></summary><div class='docblock'>Immutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html#tymethod.borrow">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-BorrowMut%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#217">source</a><a href="#impl-BorrowMut%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html" title="trait core::borrow::BorrowMut">BorrowMut</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow_mut" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#218">source</a><a href="#method.borrow_mut" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut" class="fn">borrow_mut</a>(&amp;mut self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a></h4></section></summary><div class='docblock'>Mutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-From%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#765">source</a><a href="#impl-From%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for T</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#768">source</a><a href="#method.from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html#tymethod.from" class="fn">from</a>(t: T) -&gt; T</h4></section></summary><div class="docblock"><p>Returns the argument unchanged.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Into%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#748-750">source</a><a href="#impl-Into%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#758">source</a><a href="#method.into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html#tymethod.into" class="fn">into</a>(self) -&gt; U</h4></section></summary><div class="docblock"><p>Calls <code>U::from(self)</code>.</p>
+<p>That is, this conversion is whatever the implementation of
+<code><a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for U</code> chooses to do.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryFrom%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#805-807">source</a><a href="#impl-TryFrom%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error" class="associatedtype trait-impl"><a href="#associatedtype.Error" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" class="associatedtype">Error</a> = <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/convert/enum.Infallible.html" title="enum core::convert::Infallible">Infallible</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#812">source</a><a href="#method.try_from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#tymethod.try_from" class="fn">try_from</a>(value: U) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, &lt;T as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryInto%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#790-792">source</a><a href="#impl-TryInto%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html" title="trait core::convert::TryInto">TryInto</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error-1" class="associatedtype trait-impl"><a href="#associatedtype.Error-1" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html#associatedtype.Error" class="associatedtype">Error</a> = &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#797">source</a><a href="#method.try_into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html#tymethod.try_into" class="fn">try_into</a>(self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;U, &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details></div></section></div></main></body></html>

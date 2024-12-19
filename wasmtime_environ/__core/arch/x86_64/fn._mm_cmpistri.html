@@ -1,0 +1,125 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Compares packed strings with implicit lengths in `a` and `b` using the control in `IMM8` and return the generated index. Similar to `_mm_cmpestri` with the exception that `_mm_cmpestri` requires the lengths of `a` and `b` to be explicitly specified."><title>_mm_cmpistri in wasmtime_environ::__core::arch::x86_64 - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="wasmtime_environ" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../../wasmtime_environ/index.html">wasmtime_environ</a><span class="version">25.0.1</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In wasmtime_environ::__core::arch::x86_64</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../../../index.html">wasmtime_environ</a>::<wbr><a href="../../index.html">__core</a>::<wbr><a href="../index.html">arch</a>::<wbr><a href="index.html">x86_64</a>::<wbr><a class="fn" href="#">_mm_cmpistri</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><span class="since" title="Stable since Rust version 1.27.0">1.27.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/stdarch/crates/core_arch/src/x86/sse42.rs.html#264">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub unsafe fn _mm_cmpistri&lt;const IMM8: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i32.html">i32</a>&gt;(a: <a class="struct" href="struct.__m128i.html" title="struct wasmtime_environ::__core::arch::x86_64::__m128i">__m128i</a>, b: <a class="struct" href="struct.__m128i.html" title="struct wasmtime_environ::__core::arch::x86_64::__m128i">__m128i</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i32.html">i32</a></code></pre><span class="item-info"><div class="stab portability">Available on <strong>x86-64</strong> only.</div></span><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Compares packed strings with implicit lengths in <code>a</code> and <code>b</code> using the
+control in <code>IMM8</code> and return the generated index. Similar to
+<a href="fn._mm_cmpestri.html" title="fn wasmtime_environ::__core::arch::x86_64::_mm_cmpestri"><code>_mm_cmpestri</code></a> with the exception that <a href="fn._mm_cmpestri.html" title="fn wasmtime_environ::__core::arch::x86_64::_mm_cmpestri"><code>_mm_cmpestri</code></a> requires the
+lengths of <code>a</code> and <code>b</code> to be explicitly specified.</p>
+<h2 id="control-modes"><a class="doc-anchor" href="#control-modes">§</a>Control modes</h2>
+<p>The control specified by <code>IMM8</code> may be one or more of the following.</p>
+<h3 id="data-size-and-signedness"><a class="doc-anchor" href="#data-size-and-signedness">§</a>Data size and signedness</h3>
+<ul>
+<li><a href="constant._SIDD_UBYTE_OPS.html" title="constant wasmtime_environ::__core::arch::x86_64::_SIDD_UBYTE_OPS"><code>_SIDD_UBYTE_OPS</code></a> - Default</li>
+<li><a href="constant._SIDD_UWORD_OPS.html" title="constant wasmtime_environ::__core::arch::x86_64::_SIDD_UWORD_OPS"><code>_SIDD_UWORD_OPS</code></a></li>
+<li><a href="constant._SIDD_SBYTE_OPS.html" title="constant wasmtime_environ::__core::arch::x86_64::_SIDD_SBYTE_OPS"><code>_SIDD_SBYTE_OPS</code></a></li>
+<li><a href="constant._SIDD_SWORD_OPS.html" title="constant wasmtime_environ::__core::arch::x86_64::_SIDD_SWORD_OPS"><code>_SIDD_SWORD_OPS</code></a></li>
+</ul>
+<h3 id="comparison-options"><a class="doc-anchor" href="#comparison-options">§</a>Comparison options</h3>
+<ul>
+<li><a href="constant._SIDD_CMP_EQUAL_ANY.html" title="constant wasmtime_environ::__core::arch::x86_64::_SIDD_CMP_EQUAL_ANY"><code>_SIDD_CMP_EQUAL_ANY</code></a> - Default</li>
+<li><a href="constant._SIDD_CMP_RANGES.html" title="constant wasmtime_environ::__core::arch::x86_64::_SIDD_CMP_RANGES"><code>_SIDD_CMP_RANGES</code></a></li>
+<li><a href="constant._SIDD_CMP_EQUAL_EACH.html" title="constant wasmtime_environ::__core::arch::x86_64::_SIDD_CMP_EQUAL_EACH"><code>_SIDD_CMP_EQUAL_EACH</code></a></li>
+<li><a href="constant._SIDD_CMP_EQUAL_ORDERED.html" title="constant wasmtime_environ::__core::arch::x86_64::_SIDD_CMP_EQUAL_ORDERED"><code>_SIDD_CMP_EQUAL_ORDERED</code></a></li>
+</ul>
+<h3 id="result-polarity"><a class="doc-anchor" href="#result-polarity">§</a>Result polarity</h3>
+<ul>
+<li><a href="constant._SIDD_POSITIVE_POLARITY.html" title="constant wasmtime_environ::__core::arch::x86_64::_SIDD_POSITIVE_POLARITY"><code>_SIDD_POSITIVE_POLARITY</code></a> - Default</li>
+<li><a href="constant._SIDD_NEGATIVE_POLARITY.html" title="constant wasmtime_environ::__core::arch::x86_64::_SIDD_NEGATIVE_POLARITY"><code>_SIDD_NEGATIVE_POLARITY</code></a></li>
+</ul>
+<h3 id="bit-returned"><a class="doc-anchor" href="#bit-returned">§</a>Bit returned</h3>
+<ul>
+<li><a href="constant._SIDD_LEAST_SIGNIFICANT.html" title="constant wasmtime_environ::__core::arch::x86_64::_SIDD_LEAST_SIGNIFICANT"><code>_SIDD_LEAST_SIGNIFICANT</code></a> - Default</li>
+<li><a href="constant._SIDD_MOST_SIGNIFICANT.html" title="constant wasmtime_environ::__core::arch::x86_64::_SIDD_MOST_SIGNIFICANT"><code>_SIDD_MOST_SIGNIFICANT</code></a></li>
+</ul>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Finds a substring using <a href="constant._SIDD_CMP_EQUAL_ORDERED.html" title="constant wasmtime_environ::__core::arch::x86_64::_SIDD_CMP_EQUAL_ORDERED"><code>_SIDD_CMP_EQUAL_ORDERED</code></a></p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[cfg(target_arch = <span class="string">"x86"</span>)]
+</span><span class="kw">use </span>std::arch::x86::<span class="kw-2">*</span>;
+<span class="attr">#[cfg(target_arch = <span class="string">"x86_64"</span>)]
+</span><span class="kw">use </span>std::arch::x86_64::<span class="kw-2">*</span>;
+
+<span class="kw">let </span>haystack = <span class="string">b"This is a long string of text data\r\n\tthat extends
+multiple lines"</span>;
+<span class="kw">let </span>needle = <span class="string">b"\r\n\t\0\0\0\0\0\0\0\0\0\0\0\0\0"</span>;
+
+<span class="kw">let </span>a = _mm_loadu_si128(needle.as_ptr() <span class="kw">as </span><span class="kw-2">*const </span><span class="kw">_</span>);
+<span class="kw">let </span>hop = <span class="number">16</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>indexes = Vec::new();
+
+<span class="comment">// Chunk the haystack into 16 byte chunks and find
+// the first "\r\n\t" in the chunk.
+</span><span class="kw">for </span>(i, chunk) <span class="kw">in </span>haystack.chunks(hop).enumerate() {
+    <span class="kw">let </span>b = _mm_loadu_si128(chunk.as_ptr() <span class="kw">as </span><span class="kw-2">*const </span><span class="kw">_</span>);
+    <span class="kw">let </span>idx = _mm_cmpistri(a, b, _SIDD_CMP_EQUAL_ORDERED);
+    <span class="kw">if </span>idx != <span class="number">16 </span>{
+        indexes.push((idx <span class="kw">as </span>usize) + (i * hop));
+    }
+}
+<span class="macro">assert_eq!</span>(indexes, <span class="macro">vec!</span>[<span class="number">34</span>]);</code></pre></div>
+<p>The <code>_mm_cmpistri</code> intrinsic may also be used to find the existence of
+one or more of a given set of characters in the haystack.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[cfg(target_arch = <span class="string">"x86"</span>)]
+</span><span class="kw">use </span>std::arch::x86::<span class="kw-2">*</span>;
+<span class="attr">#[cfg(target_arch = <span class="string">"x86_64"</span>)]
+</span><span class="kw">use </span>std::arch::x86_64::<span class="kw-2">*</span>;
+
+<span class="comment">// Ensure your input is 16 byte aligned
+</span><span class="kw">let </span>password = <span class="string">b"hunter2\0\0\0\0\0\0\0\0\0"</span>;
+<span class="kw">let </span>special_chars = <span class="string">b"!@#$%^&amp;*()[]:;&lt;&gt;"</span>;
+
+<span class="comment">// Load the input
+</span><span class="kw">let </span>a = _mm_loadu_si128(special_chars.as_ptr() <span class="kw">as </span><span class="kw-2">*const </span><span class="kw">_</span>);
+<span class="kw">let </span>b = _mm_loadu_si128(password.as_ptr() <span class="kw">as </span><span class="kw-2">*const </span><span class="kw">_</span>);
+
+<span class="comment">// Use _SIDD_CMP_EQUAL_ANY to find the index of any bytes in b
+</span><span class="kw">let </span>idx = _mm_cmpistri(a.into(), b.into(), _SIDD_CMP_EQUAL_ANY);
+
+<span class="kw">if </span>idx &lt; <span class="number">16 </span>{
+    <span class="macro">println!</span>(<span class="string">"Congrats! Your password contains a special character"</span>);
+} <span class="kw">else </span>{
+    <span class="macro">println!</span>(<span class="string">"Your password should contain a special character"</span>);
+}</code></pre></div>
+<p>Finds the index of the first character in the haystack that is within a
+range of characters.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[cfg(target_arch = <span class="string">"x86"</span>)]
+</span><span class="kw">use </span>std::arch::x86::<span class="kw-2">*</span>;
+<span class="attr">#[cfg(target_arch = <span class="string">"x86_64"</span>)]
+</span><span class="kw">use </span>std::arch::x86_64::<span class="kw-2">*</span>;
+
+
+<span class="comment">// Specify the ranges of values to be searched for [A-Za-z0-9].
+</span><span class="kw">let </span>a = <span class="string">b"AZaz09\0\0\0\0\0\0\0\0\0\0"</span>;
+<span class="kw">let </span>a = _mm_loadu_si128(a.as_ptr() <span class="kw">as </span><span class="kw-2">*const </span><span class="kw">_</span>);
+
+<span class="comment">// Use _SIDD_CMP_RANGES to find the index of first byte in ranges.
+// Which in this case will be the first alpha numeric byte found
+// in the string.
+</span><span class="kw">let </span>idx = _mm_cmpistri(a, b, _SIDD_CMP_RANGES);
+
+<span class="kw">if </span>idx &lt; <span class="number">16 </span>{
+    <span class="macro">println!</span>(<span class="string">"Found an alpha numeric character"</span>);
+} <span class="kw">else </span>{
+    <span class="macro">println!</span>(<span class="string">"Did not find an alpha numeric character"</span>);
+}</code></pre></div>
+<p>Working with 16-bit characters.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[cfg(target_arch = <span class="string">"x86"</span>)]
+</span><span class="kw">use </span>std::arch::x86::<span class="kw-2">*</span>;
+<span class="attr">#[cfg(target_arch = <span class="string">"x86_64"</span>)]
+</span><span class="kw">use </span>std::arch::x86_64::<span class="kw-2">*</span>;
+
+<span class="comment">// Load the input
+</span><span class="kw">let </span>a = _mm_loadu_si128(some_utf16_words.as_ptr() <span class="kw">as </span><span class="kw-2">*const </span><span class="kw">_</span>);
+<span class="kw">let </span>b = _mm_loadu_si128(more_utf16_words.as_ptr() <span class="kw">as </span><span class="kw-2">*const </span><span class="kw">_</span>);
+
+<span class="comment">// Specify _SIDD_UWORD_OPS to compare words instead of bytes, and
+// use _SIDD_CMP_EQUAL_EACH to compare the two strings.
+</span><span class="kw">let </span>idx = _mm_cmpistri(a, b, _SIDD_UWORD_OPS | _SIDD_CMP_EQUAL_EACH);
+
+<span class="kw">if </span>idx == <span class="number">0 </span>{
+    <span class="macro">println!</span>(<span class="string">"16-bit unicode strings were equal!"</span>);
+} <span class="kw">else </span>{
+    <span class="macro">println!</span>(<span class="string">"16-bit unicode strings were not equal!"</span>);
+}</code></pre></div>
+<p><a href="https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_cmpistri">Intel’s documentation</a></p>
+</div></details></section></div></main></body></html>

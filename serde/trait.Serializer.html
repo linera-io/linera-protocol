@@ -1,0 +1,952 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A data format that can serialize any data structure supported by Serde."><title>Serializer in serde - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="serde" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../serde/index.html">serde</a><span class="version">1.0.210</span></h2></div><h2 class="location"><a href="#">Serializer</a></h2><div class="sidebar-elems"><section><h3><a href="#required-associated-types">Required Associated Types</a></h3><ul class="block"><li><a href="#associatedtype.Error">Error</a></li><li><a href="#associatedtype.Ok">Ok</a></li><li><a href="#associatedtype.SerializeMap">SerializeMap</a></li><li><a href="#associatedtype.SerializeSeq">SerializeSeq</a></li><li><a href="#associatedtype.SerializeStruct">SerializeStruct</a></li><li><a href="#associatedtype.SerializeStructVariant">SerializeStructVariant</a></li><li><a href="#associatedtype.SerializeTuple">SerializeTuple</a></li><li><a href="#associatedtype.SerializeTupleStruct">SerializeTupleStruct</a></li><li><a href="#associatedtype.SerializeTupleVariant">SerializeTupleVariant</a></li></ul><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.serialize_bool">serialize_bool</a></li><li><a href="#tymethod.serialize_bytes">serialize_bytes</a></li><li><a href="#tymethod.serialize_char">serialize_char</a></li><li><a href="#tymethod.serialize_f32">serialize_f32</a></li><li><a href="#tymethod.serialize_f64">serialize_f64</a></li><li><a href="#tymethod.serialize_i16">serialize_i16</a></li><li><a href="#tymethod.serialize_i32">serialize_i32</a></li><li><a href="#tymethod.serialize_i64">serialize_i64</a></li><li><a href="#tymethod.serialize_i8">serialize_i8</a></li><li><a href="#tymethod.serialize_map">serialize_map</a></li><li><a href="#tymethod.serialize_newtype_struct">serialize_newtype_struct</a></li><li><a href="#tymethod.serialize_newtype_variant">serialize_newtype_variant</a></li><li><a href="#tymethod.serialize_none">serialize_none</a></li><li><a href="#tymethod.serialize_seq">serialize_seq</a></li><li><a href="#tymethod.serialize_some">serialize_some</a></li><li><a href="#tymethod.serialize_str">serialize_str</a></li><li><a href="#tymethod.serialize_struct">serialize_struct</a></li><li><a href="#tymethod.serialize_struct_variant">serialize_struct_variant</a></li><li><a href="#tymethod.serialize_tuple">serialize_tuple</a></li><li><a href="#tymethod.serialize_tuple_struct">serialize_tuple_struct</a></li><li><a href="#tymethod.serialize_tuple_variant">serialize_tuple_variant</a></li><li><a href="#tymethod.serialize_u16">serialize_u16</a></li><li><a href="#tymethod.serialize_u32">serialize_u32</a></li><li><a href="#tymethod.serialize_u64">serialize_u64</a></li><li><a href="#tymethod.serialize_u8">serialize_u8</a></li><li><a href="#tymethod.serialize_unit">serialize_unit</a></li><li><a href="#tymethod.serialize_unit_struct">serialize_unit_struct</a></li><li><a href="#tymethod.serialize_unit_variant">serialize_unit_variant</a></li></ul><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.collect_map">collect_map</a></li><li><a href="#method.collect_seq">collect_seq</a></li><li><a href="#method.collect_str">collect_str</a></li><li><a href="#method.is_human_readable">is_human_readable</a></li><li><a href="#method.serialize_i128">serialize_i128</a></li><li><a href="#method.serialize_u128">serialize_u128</a></li></ul><h3><a href="#foreign-impls">Implementations on Foreign Types</a></h3><ul class="block"><li><a href="#impl-Serializer-for-%26mut+Formatter%3C'b%3E">&amp;&#x27;a mut Formatter&lt;&#x27;b&gt;</a></li></ul><h3><a href="#object-safety">Object Safety</a></h3><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In crate serde</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="index.html">serde</a>::<wbr><a class="trait" href="#">Serializer</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/serde/ser/mod.rs.html#340-1448">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub trait Serializer: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a> {
+    type <a href="#associatedtype.Ok" class="associatedtype">Ok</a>;
+    type <a href="#associatedtype.Error" class="associatedtype">Error</a>: <a class="trait" href="ser/trait.Error.html" title="trait serde::ser::Error">Error</a>;
+    type <a href="#associatedtype.SerializeSeq" class="associatedtype">SerializeSeq</a>: <a class="trait" href="ser/trait.SerializeSeq.html" title="trait serde::ser::SerializeSeq">SerializeSeq</a>&lt;Ok = Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Error = Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;;
+    type <a href="#associatedtype.SerializeTuple" class="associatedtype">SerializeTuple</a>: <a class="trait" href="ser/trait.SerializeTuple.html" title="trait serde::ser::SerializeTuple">SerializeTuple</a>&lt;Ok = Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Error = Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;;
+    type <a href="#associatedtype.SerializeTupleStruct" class="associatedtype">SerializeTupleStruct</a>: <a class="trait" href="ser/trait.SerializeTupleStruct.html" title="trait serde::ser::SerializeTupleStruct">SerializeTupleStruct</a>&lt;Ok = Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Error = Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;;
+    type <a href="#associatedtype.SerializeTupleVariant" class="associatedtype">SerializeTupleVariant</a>: <a class="trait" href="ser/trait.SerializeTupleVariant.html" title="trait serde::ser::SerializeTupleVariant">SerializeTupleVariant</a>&lt;Ok = Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Error = Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;;
+    type <a href="#associatedtype.SerializeMap" class="associatedtype">SerializeMap</a>: <a class="trait" href="ser/trait.SerializeMap.html" title="trait serde::ser::SerializeMap">SerializeMap</a>&lt;Ok = Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Error = Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;;
+    type <a href="#associatedtype.SerializeStruct" class="associatedtype">SerializeStruct</a>: <a class="trait" href="ser/trait.SerializeStruct.html" title="trait serde::ser::SerializeStruct">SerializeStruct</a>&lt;Ok = Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Error = Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;;
+    type <a href="#associatedtype.SerializeStructVariant" class="associatedtype">SerializeStructVariant</a>: <a class="trait" href="ser/trait.SerializeStructVariant.html" title="trait serde::ser::SerializeStructVariant">SerializeStructVariant</a>&lt;Ok = Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Error = Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;;
+
+<details class="toggle type-contents-toggle"><summary class="hideme"><span>Show 34 methods</span></summary>    // Required methods
+    fn <a href="#tymethod.serialize_bool" class="fn">serialize_bool</a>(self, v: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.serialize_i8" class="fn">serialize_i8</a>(self, v: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i8.html">i8</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.serialize_i16" class="fn">serialize_i16</a>(self, v: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i16.html">i16</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.serialize_i32" class="fn">serialize_i32</a>(self, v: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i32.html">i32</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.serialize_i64" class="fn">serialize_i64</a>(self, v: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i64.html">i64</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.serialize_u8" class="fn">serialize_u8</a>(self, v: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.serialize_u16" class="fn">serialize_u16</a>(self, v: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u16.html">u16</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.serialize_u32" class="fn">serialize_u32</a>(self, v: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.serialize_u64" class="fn">serialize_u64</a>(self, v: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.serialize_f32" class="fn">serialize_f32</a>(self, v: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.f32.html">f32</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.serialize_f64" class="fn">serialize_f64</a>(self, v: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.f64.html">f64</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.serialize_char" class="fn">serialize_char</a>(self, v: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.char.html">char</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.serialize_str" class="fn">serialize_str</a>(self, v: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.serialize_bytes" class="fn">serialize_bytes</a>(self, v: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.serialize_none" class="fn">serialize_none</a>(self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.serialize_some" class="fn">serialize_some</a>&lt;T&gt;(self, value: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;
+       <span class="where">where T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a> + <a class="trait" href="trait.Serialize.html" title="trait serde::Serialize">Serialize</a></span>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.serialize_unit" class="fn">serialize_unit</a>(self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.serialize_unit_struct" class="fn">serialize_unit_struct</a>(
+        self,
+        name: &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.serialize_unit_variant" class="fn">serialize_unit_variant</a>(
+        self,
+        name: &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+        variant_index: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>,
+        variant: &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.serialize_newtype_struct" class="fn">serialize_newtype_struct</a>&lt;T&gt;(
+        self,
+        name: &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+        value: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a>,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;
+       <span class="where">where T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a> + <a class="trait" href="trait.Serialize.html" title="trait serde::Serialize">Serialize</a></span>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.serialize_newtype_variant" class="fn">serialize_newtype_variant</a>&lt;T&gt;(
+        self,
+        name: &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+        variant_index: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>,
+        variant: &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+        value: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a>,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;
+       <span class="where">where T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a> + <a class="trait" href="trait.Serialize.html" title="trait serde::Serialize">Serialize</a></span>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.serialize_seq" class="fn">serialize_seq</a>(
+        self,
+        len: <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>&gt;,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.SerializeSeq" title="type serde::Serializer::SerializeSeq">SerializeSeq</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.serialize_tuple" class="fn">serialize_tuple</a>(
+        self,
+        len: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.SerializeTuple" title="type serde::Serializer::SerializeTuple">SerializeTuple</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.serialize_tuple_struct" class="fn">serialize_tuple_struct</a>(
+        self,
+        name: &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+        len: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.SerializeTupleStruct" title="type serde::Serializer::SerializeTupleStruct">SerializeTupleStruct</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.serialize_tuple_variant" class="fn">serialize_tuple_variant</a>(
+        self,
+        name: &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+        variant_index: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>,
+        variant: &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+        len: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.SerializeTupleVariant" title="type serde::Serializer::SerializeTupleVariant">SerializeTupleVariant</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.serialize_map" class="fn">serialize_map</a>(
+        self,
+        len: <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>&gt;,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.SerializeMap" title="type serde::Serializer::SerializeMap">SerializeMap</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.serialize_struct" class="fn">serialize_struct</a>(
+        self,
+        name: &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+        len: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.SerializeStruct" title="type serde::Serializer::SerializeStruct">SerializeStruct</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.serialize_struct_variant" class="fn">serialize_struct_variant</a>(
+        self,
+        name: &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+        variant_index: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>,
+        variant: &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+        len: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.SerializeStructVariant" title="type serde::Serializer::SerializeStructVariant">SerializeStructVariant</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;;
+
+    // Provided methods
+    fn <a href="#method.serialize_i128" class="fn">serialize_i128</a>(self, v: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i128.html">i128</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.serialize_u128" class="fn">serialize_u128</a>(self, v: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u128.html">u128</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.collect_seq" class="fn">collect_seq</a>&lt;I&gt;(self, iter: I) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;
+       <span class="where">where I: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/iter/traits/collect/trait.IntoIterator.html" title="trait core::iter::traits::collect::IntoIterator">IntoIterator</a>,
+             &lt;I as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/iter/traits/collect/trait.IntoIterator.html" title="trait core::iter::traits::collect::IntoIterator">IntoIterator</a>&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/iter/traits/collect/trait.IntoIterator.html#associatedtype.Item" title="type core::iter::traits::collect::IntoIterator::Item">Item</a>: <a class="trait" href="trait.Serialize.html" title="trait serde::Serialize">Serialize</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.collect_map" class="fn">collect_map</a>&lt;K, V, I&gt;(self, iter: I) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;
+       <span class="where">where K: <a class="trait" href="trait.Serialize.html" title="trait serde::Serialize">Serialize</a>,
+             V: <a class="trait" href="trait.Serialize.html" title="trait serde::Serialize">Serialize</a>,
+             I: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/iter/traits/collect/trait.IntoIterator.html" title="trait core::iter::traits::collect::IntoIterator">IntoIterator</a>&lt;Item = <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.tuple.html">(K, V)</a>&gt;</span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.collect_str" class="fn">collect_str</a>&lt;T&gt;(self, value: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;
+       <span class="where">where T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Display.html" title="trait core::fmt::Display">Display</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.is_human_readable" class="fn">is_human_readable</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a> { ... }
+</details>}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A <strong>data format</strong> that can serialize any data structure supported by Serde.</p>
+<p>The role of this trait is to define the serialization half of the <a href="https://serde.rs/data-model.html">Serde
+data model</a>, which is a way to categorize every Rust data structure into one
+of 29 possible types. Each method of the <code>Serializer</code> trait corresponds to
+one of the types of the data model.</p>
+<p>Implementations of <code>Serialize</code> map themselves into this data model by
+invoking exactly one of the <code>Serializer</code> methods.</p>
+<p>The types that make up the Serde data model are:</p>
+<ul>
+<li><strong>14 primitive types</strong>
+<ul>
+<li>bool</li>
+<li>i8, i16, i32, i64, i128</li>
+<li>u8, u16, u32, u64, u128</li>
+<li>f32, f64</li>
+<li>char</li>
+</ul>
+</li>
+<li><strong>string</strong>
+<ul>
+<li>UTF-8 bytes with a length and no null terminator.</li>
+<li>When serializing, all strings are handled equally. When deserializing,
+there are three flavors of strings: transient, owned, and borrowed.</li>
+</ul>
+</li>
+<li><strong>byte array</strong> - [u8]
+<ul>
+<li>Similar to strings, during deserialization byte arrays can be
+transient, owned, or borrowed.</li>
+</ul>
+</li>
+<li><strong>option</strong>
+<ul>
+<li>Either none or some value.</li>
+</ul>
+</li>
+<li><strong>unit</strong>
+<ul>
+<li>The type of <code>()</code> in Rust. It represents an anonymous value containing
+no data.</li>
+</ul>
+</li>
+<li><strong>unit_struct</strong>
+<ul>
+<li>For example <code>struct Unit</code> or <code>PhantomData&lt;T&gt;</code>. It represents a named
+value containing no data.</li>
+</ul>
+</li>
+<li><strong>unit_variant</strong>
+<ul>
+<li>For example the <code>E::A</code> and <code>E::B</code> in <code>enum E { A, B }</code>.</li>
+</ul>
+</li>
+<li><strong>newtype_struct</strong>
+<ul>
+<li>For example <code>struct Millimeters(u8)</code>.</li>
+</ul>
+</li>
+<li><strong>newtype_variant</strong>
+<ul>
+<li>For example the <code>E::N</code> in <code>enum E { N(u8) }</code>.</li>
+</ul>
+</li>
+<li><strong>seq</strong>
+<ul>
+<li>A variably sized heterogeneous sequence of values, for example
+<code>Vec&lt;T&gt;</code> or <code>HashSet&lt;T&gt;</code>. When serializing, the length may or may not
+be known before iterating through all the data. When deserializing,
+the length is determined by looking at the serialized data.</li>
+</ul>
+</li>
+<li><strong>tuple</strong>
+<ul>
+<li>A statically sized heterogeneous sequence of values for which the
+length will be known at deserialization time without looking at the
+serialized data, for example <code>(u8,)</code> or <code>(String, u64, Vec&lt;T&gt;)</code> or
+<code>[u64; 10]</code>.</li>
+</ul>
+</li>
+<li><strong>tuple_struct</strong>
+<ul>
+<li>A named tuple, for example <code>struct Rgb(u8, u8, u8)</code>.</li>
+</ul>
+</li>
+<li><strong>tuple_variant</strong>
+<ul>
+<li>For example the <code>E::T</code> in <code>enum E { T(u8, u8) }</code>.</li>
+</ul>
+</li>
+<li><strong>map</strong>
+<ul>
+<li>A heterogeneous key-value pairing, for example <code>BTreeMap&lt;K, V&gt;</code>.</li>
+</ul>
+</li>
+<li><strong>struct</strong>
+<ul>
+<li>A heterogeneous key-value pairing in which the keys are strings and
+will be known at deserialization time without looking at the
+serialized data, for example <code>struct S { r: u8, g: u8, b: u8 }</code>.</li>
+</ul>
+</li>
+<li><strong>struct_variant</strong>
+<ul>
+<li>For example the <code>E::S</code> in <code>enum E { S { r: u8, g: u8, b: u8 } }</code>.</li>
+</ul>
+</li>
+</ul>
+<p>Many Serde serializers produce text or binary data as output, for example
+JSON or Postcard. This is not a requirement of the <code>Serializer</code> trait, and
+there are serializers that do not produce text or binary output. One example
+is the <code>serde_json::value::Serializer</code> (distinct from the main <code>serde_json</code>
+serializer) that produces a <code>serde_json::Value</code> data structure in memory as
+output.</p>
+<h2 id="example-implementation"><a class="doc-anchor" href="#example-implementation">§</a>Example implementation</h2>
+<p>The <a href="https://serde.rs/data-format.html">example data format</a> presented on the website contains example code for
+a basic JSON <code>Serializer</code>.</p>
+</div></details><h2 id="required-associated-types" class="section-header">Required Associated Types<a href="#required-associated-types" class="anchor">§</a></h2><div class="methods"><details class="toggle" open><summary><section id="associatedtype.Ok" class="method"><a class="src rightside" href="../src/serde/ser/mod.rs.html#349">source</a><h4 class="code-header">type <a href="#associatedtype.Ok" class="associatedtype">Ok</a></h4></section></summary><div class="docblock"><p>The output type produced by this <code>Serializer</code> during successful
+serialization. Most serializers that produce text or binary output
+should set <code>Ok = ()</code> and serialize into an <a href="https://doc.rust-lang.org/std/io/trait.Write.html"><code>io::Write</code></a> or buffer
+contained within the <code>Serializer</code> instance. Serializers that build
+in-memory data structures may be simplified by using <code>Ok</code> to propagate
+the data structure around.</p>
+</div></details><details class="toggle" open><summary><section id="associatedtype.Error" class="method"><a class="src rightside" href="../src/serde/ser/mod.rs.html#352">source</a><h4 class="code-header">type <a href="#associatedtype.Error" class="associatedtype">Error</a>: <a class="trait" href="ser/trait.Error.html" title="trait serde::ser::Error">Error</a></h4></section></summary><div class="docblock"><p>The error type when some error occurs during serialization.</p>
+</div></details><details class="toggle" open><summary><section id="associatedtype.SerializeSeq" class="method"><a class="src rightside" href="../src/serde/ser/mod.rs.html#358">source</a><h4 class="code-header">type <a href="#associatedtype.SerializeSeq" class="associatedtype">SerializeSeq</a>: <a class="trait" href="ser/trait.SerializeSeq.html" title="trait serde::ser::SerializeSeq">SerializeSeq</a>&lt;Ok = Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Error = Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Type returned from <a href="#tymethod.serialize_seq"><code>serialize_seq</code></a> for serializing the content of the
+sequence.</p>
+</div></details><details class="toggle" open><summary><section id="associatedtype.SerializeTuple" class="method"><a class="src rightside" href="../src/serde/ser/mod.rs.html#364">source</a><h4 class="code-header">type <a href="#associatedtype.SerializeTuple" class="associatedtype">SerializeTuple</a>: <a class="trait" href="ser/trait.SerializeTuple.html" title="trait serde::ser::SerializeTuple">SerializeTuple</a>&lt;Ok = Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Error = Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Type returned from <a href="#tymethod.serialize_tuple"><code>serialize_tuple</code></a> for serializing the content of
+the tuple.</p>
+</div></details><details class="toggle" open><summary><section id="associatedtype.SerializeTupleStruct" class="method"><a class="src rightside" href="../src/serde/ser/mod.rs.html#370">source</a><h4 class="code-header">type <a href="#associatedtype.SerializeTupleStruct" class="associatedtype">SerializeTupleStruct</a>: <a class="trait" href="ser/trait.SerializeTupleStruct.html" title="trait serde::ser::SerializeTupleStruct">SerializeTupleStruct</a>&lt;Ok = Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Error = Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Type returned from <a href="#tymethod.serialize_tuple_struct"><code>serialize_tuple_struct</code></a> for serializing the
+content of the tuple struct.</p>
+</div></details><details class="toggle" open><summary><section id="associatedtype.SerializeTupleVariant" class="method"><a class="src rightside" href="../src/serde/ser/mod.rs.html#376">source</a><h4 class="code-header">type <a href="#associatedtype.SerializeTupleVariant" class="associatedtype">SerializeTupleVariant</a>: <a class="trait" href="ser/trait.SerializeTupleVariant.html" title="trait serde::ser::SerializeTupleVariant">SerializeTupleVariant</a>&lt;Ok = Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Error = Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Type returned from <a href="#tymethod.serialize_tuple_variant"><code>serialize_tuple_variant</code></a> for serializing the
+content of the tuple variant.</p>
+</div></details><details class="toggle" open><summary><section id="associatedtype.SerializeMap" class="method"><a class="src rightside" href="../src/serde/ser/mod.rs.html#382">source</a><h4 class="code-header">type <a href="#associatedtype.SerializeMap" class="associatedtype">SerializeMap</a>: <a class="trait" href="ser/trait.SerializeMap.html" title="trait serde::ser::SerializeMap">SerializeMap</a>&lt;Ok = Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Error = Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Type returned from <a href="#tymethod.serialize_map"><code>serialize_map</code></a> for serializing the content of the
+map.</p>
+</div></details><details class="toggle" open><summary><section id="associatedtype.SerializeStruct" class="method"><a class="src rightside" href="../src/serde/ser/mod.rs.html#388">source</a><h4 class="code-header">type <a href="#associatedtype.SerializeStruct" class="associatedtype">SerializeStruct</a>: <a class="trait" href="ser/trait.SerializeStruct.html" title="trait serde::ser::SerializeStruct">SerializeStruct</a>&lt;Ok = Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Error = Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Type returned from <a href="#tymethod.serialize_struct"><code>serialize_struct</code></a> for serializing the content of
+the struct.</p>
+</div></details><details class="toggle" open><summary><section id="associatedtype.SerializeStructVariant" class="method"><a class="src rightside" href="../src/serde/ser/mod.rs.html#394">source</a><h4 class="code-header">type <a href="#associatedtype.SerializeStructVariant" class="associatedtype">SerializeStructVariant</a>: <a class="trait" href="ser/trait.SerializeStructVariant.html" title="trait serde::ser::SerializeStructVariant">SerializeStructVariant</a>&lt;Ok = Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Error = Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Type returned from <a href="#tymethod.serialize_struct_variant"><code>serialize_struct_variant</code></a> for serializing the
+content of the struct variant.</p>
+</div></details></div><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.serialize_bool" class="method"><a class="src rightside" href="../src/serde/ser/mod.rs.html#412">source</a><h4 class="code-header">fn <a href="#tymethod.serialize_bool" class="fn">serialize_bool</a>(self, v: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Serialize a <code>bool</code> value.</p>
+
+<div class="example-wrap edition"><a href="#" class="tooltip" title="This example runs with edition 2021">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">impl </span>Serialize <span class="kw">for </span>bool {
+    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+    <span class="kw">where
+        </span>S: Serializer,
+    {
+        serializer.serialize_bool(<span class="kw-2">*</span><span class="self">self</span>)
+    }
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.serialize_i8" class="method"><a class="src rightside" href="../src/serde/ser/mod.rs.html#434">source</a><h4 class="code-header">fn <a href="#tymethod.serialize_i8" class="fn">serialize_i8</a>(self, v: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i8.html">i8</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Serialize an <code>i8</code> value.</p>
+<p>If the format does not differentiate between <code>i8</code> and <code>i64</code>, a
+reasonable implementation would be to cast the value to <code>i64</code> and
+forward to <code>serialize_i64</code>.</p>
+
+<div class="example-wrap edition"><a href="#" class="tooltip" title="This example runs with edition 2021">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">impl </span>Serialize <span class="kw">for </span>i8 {
+    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+    <span class="kw">where
+        </span>S: Serializer,
+    {
+        serializer.serialize_i8(<span class="kw-2">*</span><span class="self">self</span>)
+    }
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.serialize_i16" class="method"><a class="src rightside" href="../src/serde/ser/mod.rs.html#456">source</a><h4 class="code-header">fn <a href="#tymethod.serialize_i16" class="fn">serialize_i16</a>(self, v: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i16.html">i16</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Serialize an <code>i16</code> value.</p>
+<p>If the format does not differentiate between <code>i16</code> and <code>i64</code>, a
+reasonable implementation would be to cast the value to <code>i64</code> and
+forward to <code>serialize_i64</code>.</p>
+
+<div class="example-wrap edition"><a href="#" class="tooltip" title="This example runs with edition 2021">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">impl </span>Serialize <span class="kw">for </span>i16 {
+    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+    <span class="kw">where
+        </span>S: Serializer,
+    {
+        serializer.serialize_i16(<span class="kw-2">*</span><span class="self">self</span>)
+    }
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.serialize_i32" class="method"><a class="src rightside" href="../src/serde/ser/mod.rs.html#478">source</a><h4 class="code-header">fn <a href="#tymethod.serialize_i32" class="fn">serialize_i32</a>(self, v: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i32.html">i32</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Serialize an <code>i32</code> value.</p>
+<p>If the format does not differentiate between <code>i32</code> and <code>i64</code>, a
+reasonable implementation would be to cast the value to <code>i64</code> and
+forward to <code>serialize_i64</code>.</p>
+
+<div class="example-wrap edition"><a href="#" class="tooltip" title="This example runs with edition 2021">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">impl </span>Serialize <span class="kw">for </span>i32 {
+    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+    <span class="kw">where
+        </span>S: Serializer,
+    {
+        serializer.serialize_i32(<span class="kw-2">*</span><span class="self">self</span>)
+    }
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.serialize_i64" class="method"><a class="src rightside" href="../src/serde/ser/mod.rs.html#496">source</a><h4 class="code-header">fn <a href="#tymethod.serialize_i64" class="fn">serialize_i64</a>(self, v: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i64.html">i64</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Serialize an <code>i64</code> value.</p>
+
+<div class="example-wrap edition"><a href="#" class="tooltip" title="This example runs with edition 2021">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">impl </span>Serialize <span class="kw">for </span>i64 {
+    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+    <span class="kw">where
+        </span>S: Serializer,
+    {
+        serializer.serialize_i64(<span class="kw-2">*</span><span class="self">self</span>)
+    }
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.serialize_u8" class="method"><a class="src rightside" href="../src/serde/ser/mod.rs.html#541">source</a><h4 class="code-header">fn <a href="#tymethod.serialize_u8" class="fn">serialize_u8</a>(self, v: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Serialize a <code>u8</code> value.</p>
+<p>If the format does not differentiate between <code>u8</code> and <code>u64</code>, a
+reasonable implementation would be to cast the value to <code>u64</code> and
+forward to <code>serialize_u64</code>.</p>
+
+<div class="example-wrap edition"><a href="#" class="tooltip" title="This example runs with edition 2021">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">impl </span>Serialize <span class="kw">for </span>u8 {
+    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+    <span class="kw">where
+        </span>S: Serializer,
+    {
+        serializer.serialize_u8(<span class="kw-2">*</span><span class="self">self</span>)
+    }
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.serialize_u16" class="method"><a class="src rightside" href="../src/serde/ser/mod.rs.html#563">source</a><h4 class="code-header">fn <a href="#tymethod.serialize_u16" class="fn">serialize_u16</a>(self, v: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u16.html">u16</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Serialize a <code>u16</code> value.</p>
+<p>If the format does not differentiate between <code>u16</code> and <code>u64</code>, a
+reasonable implementation would be to cast the value to <code>u64</code> and
+forward to <code>serialize_u64</code>.</p>
+
+<div class="example-wrap edition"><a href="#" class="tooltip" title="This example runs with edition 2021">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">impl </span>Serialize <span class="kw">for </span>u16 {
+    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+    <span class="kw">where
+        </span>S: Serializer,
+    {
+        serializer.serialize_u16(<span class="kw-2">*</span><span class="self">self</span>)
+    }
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.serialize_u32" class="method"><a class="src rightside" href="../src/serde/ser/mod.rs.html#585">source</a><h4 class="code-header">fn <a href="#tymethod.serialize_u32" class="fn">serialize_u32</a>(self, v: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Serialize a <code>u32</code> value.</p>
+<p>If the format does not differentiate between <code>u32</code> and <code>u64</code>, a
+reasonable implementation would be to cast the value to <code>u64</code> and
+forward to <code>serialize_u64</code>.</p>
+
+<div class="example-wrap edition"><a href="#" class="tooltip" title="This example runs with edition 2021">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">impl </span>Serialize <span class="kw">for </span>u32 {
+    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+    <span class="kw">where
+        </span>S: Serializer,
+    {
+        serializer.serialize_u32(<span class="kw-2">*</span><span class="self">self</span>)
+    }
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.serialize_u64" class="method"><a class="src rightside" href="../src/serde/ser/mod.rs.html#603">source</a><h4 class="code-header">fn <a href="#tymethod.serialize_u64" class="fn">serialize_u64</a>(self, v: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Serialize a <code>u64</code> value.</p>
+
+<div class="example-wrap edition"><a href="#" class="tooltip" title="This example runs with edition 2021">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">impl </span>Serialize <span class="kw">for </span>u64 {
+    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+    <span class="kw">where
+        </span>S: Serializer,
+    {
+        serializer.serialize_u64(<span class="kw-2">*</span><span class="self">self</span>)
+    }
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.serialize_f32" class="method"><a class="src rightside" href="../src/serde/ser/mod.rs.html#648">source</a><h4 class="code-header">fn <a href="#tymethod.serialize_f32" class="fn">serialize_f32</a>(self, v: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.f32.html">f32</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Serialize an <code>f32</code> value.</p>
+<p>If the format does not differentiate between <code>f32</code> and <code>f64</code>, a
+reasonable implementation would be to cast the value to <code>f64</code> and
+forward to <code>serialize_f64</code>.</p>
+
+<div class="example-wrap edition"><a href="#" class="tooltip" title="This example runs with edition 2021">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">impl </span>Serialize <span class="kw">for </span>f32 {
+    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+    <span class="kw">where
+        </span>S: Serializer,
+    {
+        serializer.serialize_f32(<span class="kw-2">*</span><span class="self">self</span>)
+    }
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.serialize_f64" class="method"><a class="src rightside" href="../src/serde/ser/mod.rs.html#666">source</a><h4 class="code-header">fn <a href="#tymethod.serialize_f64" class="fn">serialize_f64</a>(self, v: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.f64.html">f64</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Serialize an <code>f64</code> value.</p>
+
+<div class="example-wrap edition"><a href="#" class="tooltip" title="This example runs with edition 2021">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">impl </span>Serialize <span class="kw">for </span>f64 {
+    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+    <span class="kw">where
+        </span>S: Serializer,
+    {
+        serializer.serialize_f64(<span class="kw-2">*</span><span class="self">self</span>)
+    }
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.serialize_char" class="method"><a class="src rightside" href="../src/serde/ser/mod.rs.html#687">source</a><h4 class="code-header">fn <a href="#tymethod.serialize_char" class="fn">serialize_char</a>(self, v: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.char.html">char</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Serialize a character.</p>
+<p>If the format does not support characters, it is reasonable to serialize
+it as a single element <code>str</code> or a <code>u32</code>.</p>
+
+<div class="example-wrap edition"><a href="#" class="tooltip" title="This example runs with edition 2021">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">impl </span>Serialize <span class="kw">for </span>char {
+    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+    <span class="kw">where
+        </span>S: Serializer,
+    {
+        serializer.serialize_char(<span class="kw-2">*</span><span class="self">self</span>)
+    }
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.serialize_str" class="method"><a class="src rightside" href="../src/serde/ser/mod.rs.html#705">source</a><h4 class="code-header">fn <a href="#tymethod.serialize_str" class="fn">serialize_str</a>(self, v: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Serialize a <code>&amp;str</code>.</p>
+
+<div class="example-wrap edition"><a href="#" class="tooltip" title="This example runs with edition 2021">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">impl </span>Serialize <span class="kw">for </span>str {
+    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+    <span class="kw">where
+        </span>S: Serializer,
+    {
+        serializer.serialize_str(<span class="self">self</span>)
+    }
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.serialize_bytes" class="method"><a class="src rightside" href="../src/serde/ser/mod.rs.html#740">source</a><h4 class="code-header">fn <a href="#tymethod.serialize_bytes" class="fn">serialize_bytes</a>(self, v: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Serialize a chunk of raw byte data.</p>
+<p>Enables serializers to serialize byte slices more compactly or more
+efficiently than other types of slices. If no efficient implementation
+is available, a reasonable implementation would be to forward to
+<code>serialize_seq</code>. If forwarded, the implementation looks usually just
+like this:</p>
+
+<div class="example-wrap edition"><a href="#" class="tooltip" title="This example runs with edition 2021">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>serialize_bytes(<span class="self">self</span>, v: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>::Ok, <span class="self">Self</span>::Error&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>seq = <span class="self">self</span>.serialize_seq(<span class="prelude-val">Some</span>(v.len()))<span class="question-mark">?</span>;
+    <span class="kw">for </span>b <span class="kw">in </span>v {
+        seq.serialize_element(b)<span class="question-mark">?</span>;
+    }
+    seq.end()
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.serialize_none" class="method"><a class="src rightside" href="../src/serde/ser/mod.rs.html#773">source</a><h4 class="code-header">fn <a href="#tymethod.serialize_none" class="fn">serialize_none</a>(self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Serialize a <a href="https://doc.rust-lang.org/std/option/enum.Option.html#variant.None"><code>None</code></a> value.</p>
+
+<div class="example-wrap edition"><a href="#" class="tooltip" title="This example runs with edition 2021">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">impl</span>&lt;T&gt; Serialize <span class="kw">for </span><span class="prelude-ty">Option</span>&lt;T&gt;
+<span class="kw">where
+    </span>T: Serialize,
+{
+    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+    <span class="kw">where
+        </span>S: Serializer,
+    {
+        <span class="kw">match </span><span class="kw-2">*</span><span class="self">self </span>{
+            <span class="prelude-val">Some</span>(<span class="kw-2">ref </span>value) =&gt; serializer.serialize_some(value),
+            <span class="prelude-val">None </span>=&gt; serializer.serialize_none(),
+        }
+    }
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.serialize_some" class="method"><a class="src rightside" href="../src/serde/ser/mod.rs.html#806-808">source</a><h4 class="code-header">fn <a href="#tymethod.serialize_some" class="fn">serialize_some</a>&lt;T&gt;(self, value: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a> + <a class="trait" href="trait.Serialize.html" title="trait serde::Serialize">Serialize</a>,</div></h4></section></summary><div class="docblock"><p>Serialize a <a href="https://doc.rust-lang.org/std/option/enum.Option.html#variant.Some"><code>Some(T)</code></a> value.</p>
+
+<div class="example-wrap edition"><a href="#" class="tooltip" title="This example runs with edition 2021">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">impl</span>&lt;T&gt; Serialize <span class="kw">for </span><span class="prelude-ty">Option</span>&lt;T&gt;
+<span class="kw">where
+    </span>T: Serialize,
+{
+    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+    <span class="kw">where
+        </span>S: Serializer,
+    {
+        <span class="kw">match </span><span class="kw-2">*</span><span class="self">self </span>{
+            <span class="prelude-val">Some</span>(<span class="kw-2">ref </span>value) =&gt; serializer.serialize_some(value),
+            <span class="prelude-val">None </span>=&gt; serializer.serialize_none(),
+        }
+    }
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.serialize_unit" class="method"><a class="src rightside" href="../src/serde/ser/mod.rs.html#826">source</a><h4 class="code-header">fn <a href="#tymethod.serialize_unit" class="fn">serialize_unit</a>(self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Serialize a <code>()</code> value.</p>
+
+<div class="example-wrap edition"><a href="#" class="tooltip" title="This example runs with edition 2021">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">impl </span>Serialize <span class="kw">for </span>() {
+    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+    <span class="kw">where
+        </span>S: Serializer,
+    {
+        serializer.serialize_unit()
+    }
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.serialize_unit_struct" class="method"><a class="src rightside" href="../src/serde/ser/mod.rs.html#846">source</a><h4 class="code-header">fn <a href="#tymethod.serialize_unit_struct" class="fn">serialize_unit_struct</a>(
+    self,
+    name: &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Serialize a unit struct like <code>struct Unit</code> or <code>PhantomData&lt;T&gt;</code>.</p>
+<p>A reasonable implementation would be to forward to <code>serialize_unit</code>.</p>
+
+<div class="example-wrap edition"><a href="#" class="tooltip" title="This example runs with edition 2021">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>serde::{Serialize, Serializer};
+
+<span class="kw">struct </span>Nothing;
+
+<span class="kw">impl </span>Serialize <span class="kw">for </span>Nothing {
+    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+    <span class="kw">where
+        </span>S: Serializer,
+    {
+        serializer.serialize_unit_struct(<span class="string">"Nothing"</span>)
+    }
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.serialize_unit_variant" class="method"><a class="src rightside" href="../src/serde/ser/mod.rs.html#874-879">source</a><h4 class="code-header">fn <a href="#tymethod.serialize_unit_variant" class="fn">serialize_unit_variant</a>(
+    self,
+    name: &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+    variant_index: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>,
+    variant: &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Serialize a unit variant like <code>E::A</code> in <code>enum E { A, B }</code>.</p>
+<p>The <code>name</code> is the name of the enum, the <code>variant_index</code> is the index of
+this variant within the enum, and the <code>variant</code> is the name of the
+variant.</p>
+
+<div class="example-wrap edition"><a href="#" class="tooltip" title="This example runs with edition 2021">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>serde::{Serialize, Serializer};
+
+<span class="kw">enum </span>E {
+    A,
+    B,
+}
+
+<span class="kw">impl </span>Serialize <span class="kw">for </span>E {
+    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+    <span class="kw">where
+        </span>S: Serializer,
+    {
+        <span class="kw">match </span><span class="kw-2">*</span><span class="self">self </span>{
+            E::A =&gt; serializer.serialize_unit_variant(<span class="string">"E"</span>, <span class="number">0</span>, <span class="string">"A"</span>),
+            E::B =&gt; serializer.serialize_unit_variant(<span class="string">"E"</span>, <span class="number">1</span>, <span class="string">"B"</span>),
+        }
+    }
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.serialize_newtype_struct" class="method"><a class="src rightside" href="../src/serde/ser/mod.rs.html#901-907">source</a><h4 class="code-header">fn <a href="#tymethod.serialize_newtype_struct" class="fn">serialize_newtype_struct</a>&lt;T&gt;(
+    self,
+    name: &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+    value: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a> + <a class="trait" href="trait.Serialize.html" title="trait serde::Serialize">Serialize</a>,</div></h4></section></summary><div class="docblock"><p>Serialize a newtype struct like <code>struct Millimeters(u8)</code>.</p>
+<p>Serializers are encouraged to treat newtype structs as insignificant
+wrappers around the data they contain. A reasonable implementation would
+be to forward to <code>value.serialize(self)</code>.</p>
+
+<div class="example-wrap edition"><a href="#" class="tooltip" title="This example runs with edition 2021">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>serde::{Serialize, Serializer};
+
+<span class="kw">struct </span>Millimeters(u8);
+
+<span class="kw">impl </span>Serialize <span class="kw">for </span>Millimeters {
+    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+    <span class="kw">where
+        </span>S: Serializer,
+    {
+        serializer.serialize_newtype_struct(<span class="string">"Millimeters"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>)
+    }
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.serialize_newtype_variant" class="method"><a class="src rightside" href="../src/serde/ser/mod.rs.html#935-943">source</a><h4 class="code-header">fn <a href="#tymethod.serialize_newtype_variant" class="fn">serialize_newtype_variant</a>&lt;T&gt;(
+    self,
+    name: &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+    variant_index: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>,
+    variant: &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+    value: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a> + <a class="trait" href="trait.Serialize.html" title="trait serde::Serialize">Serialize</a>,</div></h4></section></summary><div class="docblock"><p>Serialize a newtype variant like <code>E::N</code> in <code>enum E { N(u8) }</code>.</p>
+<p>The <code>name</code> is the name of the enum, the <code>variant_index</code> is the index of
+this variant within the enum, and the <code>variant</code> is the name of the
+variant. The <code>value</code> is the data contained within this newtype variant.</p>
+
+<div class="example-wrap edition"><a href="#" class="tooltip" title="This example runs with edition 2021">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>serde::{Serialize, Serializer};
+
+<span class="kw">enum </span>E {
+    M(String),
+    N(u8),
+}
+
+<span class="kw">impl </span>Serialize <span class="kw">for </span>E {
+    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+    <span class="kw">where
+        </span>S: Serializer,
+    {
+        <span class="kw">match </span><span class="kw-2">*</span><span class="self">self </span>{
+            E::M(<span class="kw-2">ref </span>s) =&gt; serializer.serialize_newtype_variant(<span class="string">"E"</span>, <span class="number">0</span>, <span class="string">"M"</span>, s),
+            E::N(n) =&gt; serializer.serialize_newtype_variant(<span class="string">"E"</span>, <span class="number">1</span>, <span class="string">"N"</span>, <span class="kw-2">&amp;</span>n),
+        }
+    }
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.serialize_seq" class="method"><a class="src rightside" href="../src/serde/ser/mod.rs.html#991">source</a><h4 class="code-header">fn <a href="#tymethod.serialize_seq" class="fn">serialize_seq</a>(
+    self,
+    len: <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>&gt;,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.SerializeSeq" title="type serde::Serializer::SerializeSeq">SerializeSeq</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Begin to serialize a variably sized sequence. This call must be
+followed by zero or more calls to <code>serialize_element</code>, then a call to
+<code>end</code>.</p>
+<p>The argument is the number of elements in the sequence, which may or may
+not be computable before the sequence is iterated. Some serializers only
+support sequences whose length is known up front.</p>
+
+<div class="example-wrap edition"><a href="#" class="tooltip" title="This example runs with edition 2021">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>serde::ser::{Serialize, SerializeSeq, Serializer};
+
+<span class="kw">impl</span>&lt;T&gt; Serialize <span class="kw">for </span>Vec&lt;T&gt;
+<span class="kw">where
+    </span>T: Serialize,
+{
+    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+    <span class="kw">where
+        </span>S: Serializer,
+    {
+        <span class="kw">let </span><span class="kw-2">mut </span>seq = serializer.serialize_seq(<span class="prelude-val">Some</span>(<span class="self">self</span>.len()))<span class="question-mark">?</span>;
+        <span class="kw">for </span>element <span class="kw">in </span><span class="self">self </span>{
+            seq.serialize_element(element)<span class="question-mark">?</span>;
+        }
+        seq.end()
+    }
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.serialize_tuple" class="method"><a class="src rightside" href="../src/serde/ser/mod.rs.html#1047">source</a><h4 class="code-header">fn <a href="#tymethod.serialize_tuple" class="fn">serialize_tuple</a>(
+    self,
+    len: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.SerializeTuple" title="type serde::Serializer::SerializeTuple">SerializeTuple</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Begin to serialize a statically sized sequence whose length will be
+known at deserialization time without looking at the serialized data.
+This call must be followed by zero or more calls to <code>serialize_element</code>,
+then a call to <code>end</code>.</p>
+
+<div class="example-wrap edition"><a href="#" class="tooltip" title="This example runs with edition 2021">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>serde::ser::{Serialize, SerializeTuple, Serializer};
+
+<span class="kw">impl</span>&lt;A, B, C&gt; Serialize <span class="kw">for </span>(A, B, C)
+<span class="kw">where
+    </span>A: Serialize,
+    B: Serialize,
+    C: Serialize,
+{
+    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+    <span class="kw">where
+        </span>S: Serializer,
+    {
+        <span class="kw">let </span><span class="kw-2">mut </span>tup = serializer.serialize_tuple(<span class="number">3</span>)<span class="question-mark">?</span>;
+        tup.serialize_element(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>)<span class="question-mark">?</span>;
+        tup.serialize_element(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">1</span>)<span class="question-mark">?</span>;
+        tup.serialize_element(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">2</span>)<span class="question-mark">?</span>;
+        tup.end()
+    }
+}</code></pre></div>
+
+<div class="example-wrap edition"><a href="#" class="tooltip" title="This example runs with edition 2021">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>serde::ser::{Serialize, SerializeTuple, Serializer};
+
+<span class="kw">const </span>VRAM_SIZE: usize = <span class="number">386</span>;
+<span class="kw">struct </span>Vram([u16; VRAM_SIZE]);
+
+<span class="kw">impl </span>Serialize <span class="kw">for </span>Vram {
+    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+    <span class="kw">where
+        </span>S: Serializer,
+    {
+        <span class="kw">let </span><span class="kw-2">mut </span>seq = serializer.serialize_tuple(VRAM_SIZE)<span class="question-mark">?</span>;
+        <span class="kw">for </span>element <span class="kw">in </span><span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>[..] {
+            seq.serialize_element(element)<span class="question-mark">?</span>;
+        }
+        seq.end()
+    }
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.serialize_tuple_struct" class="method"><a class="src rightside" href="../src/serde/ser/mod.rs.html#1074-1078">source</a><h4 class="code-header">fn <a href="#tymethod.serialize_tuple_struct" class="fn">serialize_tuple_struct</a>(
+    self,
+    name: &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+    len: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.SerializeTupleStruct" title="type serde::Serializer::SerializeTupleStruct">SerializeTupleStruct</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Begin to serialize a tuple struct like <code>struct Rgb(u8, u8, u8)</code>. This
+call must be followed by zero or more calls to <code>serialize_field</code>, then a
+call to <code>end</code>.</p>
+<p>The <code>name</code> is the name of the tuple struct and the <code>len</code> is the number
+of data fields that will be serialized.</p>
+
+<div class="example-wrap edition"><a href="#" class="tooltip" title="This example runs with edition 2021">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>serde::ser::{Serialize, SerializeTupleStruct, Serializer};
+
+<span class="kw">struct </span>Rgb(u8, u8, u8);
+
+<span class="kw">impl </span>Serialize <span class="kw">for </span>Rgb {
+    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+    <span class="kw">where
+        </span>S: Serializer,
+    {
+        <span class="kw">let </span><span class="kw-2">mut </span>ts = serializer.serialize_tuple_struct(<span class="string">"Rgb"</span>, <span class="number">3</span>)<span class="question-mark">?</span>;
+        ts.serialize_field(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>)<span class="question-mark">?</span>;
+        ts.serialize_field(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">1</span>)<span class="question-mark">?</span>;
+        ts.serialize_field(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">2</span>)<span class="question-mark">?</span>;
+        ts.end()
+    }
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.serialize_tuple_variant" class="method"><a class="src rightside" href="../src/serde/ser/mod.rs.html#1119-1125">source</a><h4 class="code-header">fn <a href="#tymethod.serialize_tuple_variant" class="fn">serialize_tuple_variant</a>(
+    self,
+    name: &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+    variant_index: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>,
+    variant: &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+    len: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.SerializeTupleVariant" title="type serde::Serializer::SerializeTupleVariant">SerializeTupleVariant</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Begin to serialize a tuple variant like <code>E::T</code> in <code>enum E { T(u8, u8) }</code>. This call must be followed by zero or more calls to
+<code>serialize_field</code>, then a call to <code>end</code>.</p>
+<p>The <code>name</code> is the name of the enum, the <code>variant_index</code> is the index of
+this variant within the enum, the <code>variant</code> is the name of the variant,
+and the <code>len</code> is the number of data fields that will be serialized.</p>
+
+<div class="example-wrap edition"><a href="#" class="tooltip" title="This example runs with edition 2021">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>serde::ser::{Serialize, SerializeTupleVariant, Serializer};
+
+<span class="kw">enum </span>E {
+    T(u8, u8),
+    U(String, u32, u32),
+}
+
+<span class="kw">impl </span>Serialize <span class="kw">for </span>E {
+    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+    <span class="kw">where
+        </span>S: Serializer,
+    {
+        <span class="kw">match </span><span class="kw-2">*</span><span class="self">self </span>{
+            E::T(<span class="kw-2">ref </span>a, <span class="kw-2">ref </span>b) =&gt; {
+                <span class="kw">let </span><span class="kw-2">mut </span>tv = serializer.serialize_tuple_variant(<span class="string">"E"</span>, <span class="number">0</span>, <span class="string">"T"</span>, <span class="number">2</span>)<span class="question-mark">?</span>;
+                tv.serialize_field(a)<span class="question-mark">?</span>;
+                tv.serialize_field(b)<span class="question-mark">?</span>;
+                tv.end()
+            }
+            E::U(<span class="kw-2">ref </span>a, <span class="kw-2">ref </span>b, <span class="kw-2">ref </span>c) =&gt; {
+                <span class="kw">let </span><span class="kw-2">mut </span>tv = serializer.serialize_tuple_variant(<span class="string">"E"</span>, <span class="number">1</span>, <span class="string">"U"</span>, <span class="number">3</span>)<span class="question-mark">?</span>;
+                tv.serialize_field(a)<span class="question-mark">?</span>;
+                tv.serialize_field(b)<span class="question-mark">?</span>;
+                tv.serialize_field(c)<span class="question-mark">?</span>;
+                tv.end()
+            }
+        }
+    }
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.serialize_map" class="method"><a class="src rightside" href="../src/serde/ser/mod.rs.html#1173">source</a><h4 class="code-header">fn <a href="#tymethod.serialize_map" class="fn">serialize_map</a>(
+    self,
+    len: <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>&gt;,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.SerializeMap" title="type serde::Serializer::SerializeMap">SerializeMap</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Begin to serialize a map. This call must be followed by zero or more
+calls to <code>serialize_key</code> and <code>serialize_value</code>, then a call to <code>end</code>.</p>
+<p>The argument is the number of elements in the map, which may or may not
+be computable before the map is iterated. Some serializers only support
+maps whose length is known up front.</p>
+
+<div class="example-wrap edition"><a href="#" class="tooltip" title="This example runs with edition 2021">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>serde::ser::{Serialize, SerializeMap, Serializer};
+
+<span class="kw">impl</span>&lt;K, V&gt; Serialize <span class="kw">for </span>HashMap&lt;K, V&gt;
+<span class="kw">where
+    </span>K: Serialize,
+    V: Serialize,
+{
+    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+    <span class="kw">where
+        </span>S: Serializer,
+    {
+        <span class="kw">let </span><span class="kw-2">mut </span>map = serializer.serialize_map(<span class="prelude-val">Some</span>(<span class="self">self</span>.len()))<span class="question-mark">?</span>;
+        <span class="kw">for </span>(k, v) <span class="kw">in </span><span class="self">self </span>{
+            map.serialize_entry(k, v)<span class="question-mark">?</span>;
+        }
+        map.end()
+    }
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.serialize_struct" class="method"><a class="src rightside" href="../src/serde/ser/mod.rs.html#1205-1209">source</a><h4 class="code-header">fn <a href="#tymethod.serialize_struct" class="fn">serialize_struct</a>(
+    self,
+    name: &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+    len: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.SerializeStruct" title="type serde::Serializer::SerializeStruct">SerializeStruct</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Begin to serialize a struct like <code>struct Rgb { r: u8, g: u8, b: u8 }</code>.
+This call must be followed by zero or more calls to <code>serialize_field</code>,
+then a call to <code>end</code>.</p>
+<p>The <code>name</code> is the name of the struct and the <code>len</code> is the number of
+data fields that will be serialized. <code>len</code> does not include fields
+which are skipped with <a href="ser/trait.SerializeStruct.html#method.skip_field" title="method serde::ser::SerializeStruct::skip_field"><code>SerializeStruct::skip_field</code></a>.</p>
+
+<div class="example-wrap edition"><a href="#" class="tooltip" title="This example runs with edition 2021">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>serde::ser::{Serialize, SerializeStruct, Serializer};
+
+<span class="kw">struct </span>Rgb {
+    r: u8,
+    g: u8,
+    b: u8,
+}
+
+<span class="kw">impl </span>Serialize <span class="kw">for </span>Rgb {
+    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+    <span class="kw">where
+        </span>S: Serializer,
+    {
+        <span class="kw">let </span><span class="kw-2">mut </span>rgb = serializer.serialize_struct(<span class="string">"Rgb"</span>, <span class="number">3</span>)<span class="question-mark">?</span>;
+        rgb.serialize_field(<span class="string">"r"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.r)<span class="question-mark">?</span>;
+        rgb.serialize_field(<span class="string">"g"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.g)<span class="question-mark">?</span>;
+        rgb.serialize_field(<span class="string">"b"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.b)<span class="question-mark">?</span>;
+        rgb.end()
+    }
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.serialize_struct_variant" class="method"><a class="src rightside" href="../src/serde/ser/mod.rs.html#1249-1255">source</a><h4 class="code-header">fn <a href="#tymethod.serialize_struct_variant" class="fn">serialize_struct_variant</a>(
+    self,
+    name: &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+    variant_index: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>,
+    variant: &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+    len: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.SerializeStructVariant" title="type serde::Serializer::SerializeStructVariant">SerializeStructVariant</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Begin to serialize a struct variant like <code>E::S</code> in <code>enum E { S { r: u8, g: u8, b: u8 } }</code>. This call must be followed by zero or more calls to
+<code>serialize_field</code>, then a call to <code>end</code>.</p>
+<p>The <code>name</code> is the name of the enum, the <code>variant_index</code> is the index of
+this variant within the enum, the <code>variant</code> is the name of the variant,
+and the <code>len</code> is the number of data fields that will be serialized.
+<code>len</code> does not include fields which are skipped with
+<a href="ser/trait.SerializeStructVariant.html#method.skip_field" title="method serde::ser::SerializeStructVariant::skip_field"><code>SerializeStructVariant::skip_field</code></a>.</p>
+
+<div class="example-wrap edition"><a href="#" class="tooltip" title="This example runs with edition 2021">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>serde::ser::{Serialize, SerializeStructVariant, Serializer};
+
+<span class="kw">enum </span>E {
+    S { r: u8, g: u8, b: u8 },
+}
+
+<span class="kw">impl </span>Serialize <span class="kw">for </span>E {
+    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+    <span class="kw">where
+        </span>S: Serializer,
+    {
+        <span class="kw">match </span><span class="kw-2">*</span><span class="self">self </span>{
+            E::S {
+                <span class="kw-2">ref </span>r,
+                <span class="kw-2">ref </span>g,
+                <span class="kw-2">ref </span>b,
+            } =&gt; {
+                <span class="kw">let </span><span class="kw-2">mut </span>sv = serializer.serialize_struct_variant(<span class="string">"E"</span>, <span class="number">0</span>, <span class="string">"S"</span>, <span class="number">3</span>)<span class="question-mark">?</span>;
+                sv.serialize_field(<span class="string">"r"</span>, r)<span class="question-mark">?</span>;
+                sv.serialize_field(<span class="string">"g"</span>, g)<span class="question-mark">?</span>;
+                sv.serialize_field(<span class="string">"b"</span>, b)<span class="question-mark">?</span>;
+                sv.end()
+            }
+        }
+    }
+}</code></pre></div>
+</div></details></div><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.serialize_i128" class="method"><a class="src rightside" href="../src/serde/ser/mod.rs.html#516-519">source</a><h4 class="code-header">fn <a href="#method.serialize_i128" class="fn">serialize_i128</a>(self, v: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i128.html">i128</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Serialize an <code>i128</code> value.</p>
+
+<div class="example-wrap edition"><a href="#" class="tooltip" title="This example runs with edition 2021">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">impl </span>Serialize <span class="kw">for </span>i128 {
+    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+    <span class="kw">where
+        </span>S: Serializer,
+    {
+        serializer.serialize_i128(<span class="kw-2">*</span><span class="self">self</span>)
+    }
+}</code></pre></div>
+<p>The default behavior unconditionally returns an error.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.serialize_u128" class="method"><a class="src rightside" href="../src/serde/ser/mod.rs.html#623-626">source</a><h4 class="code-header">fn <a href="#method.serialize_u128" class="fn">serialize_u128</a>(self, v: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u128.html">u128</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Serialize a <code>u128</code> value.</p>
+
+<div class="example-wrap edition"><a href="#" class="tooltip" title="This example runs with edition 2021">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">impl </span>Serialize <span class="kw">for </span>u128 {
+    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+    <span class="kw">where
+        </span>S: Serializer,
+    {
+        serializer.serialize_u128(<span class="kw-2">*</span><span class="self">self</span>)
+    }
+}</code></pre></div>
+<p>The default behavior unconditionally returns an error.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.collect_seq" class="method"><a class="src rightside" href="../src/serde/ser/mod.rs.html#1281-1290">source</a><h4 class="code-header">fn <a href="#method.collect_seq" class="fn">collect_seq</a>&lt;I&gt;(self, iter: I) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;<div class="where">where
+    I: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/iter/traits/collect/trait.IntoIterator.html" title="trait core::iter::traits::collect::IntoIterator">IntoIterator</a>,
+    &lt;I as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/iter/traits/collect/trait.IntoIterator.html" title="trait core::iter::traits::collect::IntoIterator">IntoIterator</a>&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/iter/traits/collect/trait.IntoIterator.html#associatedtype.Item" title="type core::iter::traits::collect::IntoIterator::Item">Item</a>: <a class="trait" href="trait.Serialize.html" title="trait serde::Serialize">Serialize</a>,</div></h4></section></summary><div class="docblock"><p>Collect an iterator as a sequence.</p>
+<p>The default implementation serializes each item yielded by the iterator
+using <a href="#tymethod.serialize_seq"><code>serialize_seq</code></a>. Implementors should not need to override this
+method.</p>
+
+<div class="example-wrap edition"><a href="#" class="tooltip" title="This example runs with edition 2021">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>serde::{Serialize, Serializer};
+
+<span class="kw">struct </span>SecretlyOneHigher {
+    data: Vec&lt;i32&gt;,
+}
+
+<span class="kw">impl </span>Serialize <span class="kw">for </span>SecretlyOneHigher {
+    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+    <span class="kw">where
+        </span>S: Serializer,
+    {
+        serializer.collect_seq(<span class="self">self</span>.data.iter().map(|x| x + <span class="number">1</span>))
+    }
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.collect_map" class="method"><a class="src rightside" href="../src/serde/ser/mod.rs.html#1318-1328">source</a><h4 class="code-header">fn <a href="#method.collect_map" class="fn">collect_map</a>&lt;K, V, I&gt;(self, iter: I) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;<div class="where">where
+    K: <a class="trait" href="trait.Serialize.html" title="trait serde::Serialize">Serialize</a>,
+    V: <a class="trait" href="trait.Serialize.html" title="trait serde::Serialize">Serialize</a>,
+    I: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/iter/traits/collect/trait.IntoIterator.html" title="trait core::iter::traits::collect::IntoIterator">IntoIterator</a>&lt;Item = <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.tuple.html">(K, V)</a>&gt;,</div></h4></section></summary><div class="docblock"><p>Collect an iterator as a map.</p>
+<p>The default implementation serializes each pair yielded by the iterator
+using <a href="#tymethod.serialize_map"><code>serialize_map</code></a>. Implementors should not need to override this
+method.</p>
+
+<div class="example-wrap edition"><a href="#" class="tooltip" title="This example runs with edition 2021">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>serde::{Serialize, Serializer};
+<span class="kw">use </span>std::collections::BTreeSet;
+
+<span class="kw">struct </span>MapToUnit {
+    keys: BTreeSet&lt;i32&gt;,
+}
+
+<span class="comment">// Serializes as a map in which the values are all unit.
+</span><span class="kw">impl </span>Serialize <span class="kw">for </span>MapToUnit {
+    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+    <span class="kw">where
+        </span>S: Serializer,
+    {
+        serializer.collect_map(<span class="self">self</span>.keys.iter().map(|k| (k, ())))
+    }
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.collect_str" class="method"><a class="src rightside" href="../src/serde/ser/mod.rs.html#1359-1364">source</a><h4 class="code-header">fn <a href="#method.collect_str" class="fn">collect_str</a>&lt;T&gt;(self, value: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Ok" title="type serde::Serializer::Ok">Ok</a>, Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.Error" title="type serde::Serializer::Error">Error</a>&gt;<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Display.html" title="trait core::fmt::Display">Display</a>,</div></h4></section></summary><div class="docblock"><p>Serialize a string produced by an implementation of <code>Display</code>.</p>
+<p>The default implementation builds a heap-allocated <a href="https://doc.rust-lang.org/std/string/struct.String.html"><code>String</code></a> and
+delegates to <a href="#tymethod.serialize_str"><code>serialize_str</code></a>. Serializers are encouraged to provide a
+more efficient implementation if possible.</p>
+
+<div class="example-wrap edition"><a href="#" class="tooltip" title="This example runs with edition 2021">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>serde::{Serialize, Serializer};
+
+<span class="kw">impl </span>Serialize <span class="kw">for </span>DateTime {
+    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+    <span class="kw">where
+        </span>S: Serializer,
+    {
+        serializer.collect_str(<span class="kw-2">&amp;</span><span class="macro">format_args!</span>(<span class="string">"{:?}{:?}"</span>, <span class="self">self</span>.naive_local(), <span class="self">self</span>.offset()))
+    }
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.is_human_readable" class="method"><a class="src rightside" href="../src/serde/ser/mod.rs.html#1445-1447">source</a><h4 class="code-header">fn <a href="#method.is_human_readable" class="fn">is_human_readable</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Determine whether <code>Serialize</code> implementations should serialize in
+human-readable form.</p>
+<p>Some types have a human-readable form that may be somewhat expensive to
+construct, as well as a binary form that is compact and efficient.
+Generally text-based formats like JSON and YAML will prefer to use the
+human-readable one and binary formats like Postcard will prefer the
+compact one.</p>
+
+<div class="example-wrap edition"><a href="#" class="tooltip" title="This example runs with edition 2021">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>serde::{Serialize, Serializer};
+
+<span class="kw">impl </span>Serialize <span class="kw">for </span>Timestamp {
+    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+    <span class="kw">where
+        </span>S: Serializer,
+    {
+        <span class="kw">if </span>serializer.is_human_readable() {
+            <span class="comment">// Serialize to a human-readable string "2015-05-15T17:01:00Z".
+            </span><span class="self">self</span>.to_string().serialize(serializer)
+        } <span class="kw">else </span>{
+            <span class="comment">// Serialize to a compact binary representation.
+            </span><span class="self">self</span>.seconds_since_epoch().serialize(serializer)
+        }
+    }
+}</code></pre></div>
+<p>The default implementation of this method returns <code>true</code>. Data formats
+may override this to <code>false</code> to request a compact form for types that
+support one. Note that modifying this method to change a format from
+human-readable to compact or vice versa should be regarded as a breaking
+change, as a value serialized in human-readable mode is not required to
+deserialize from the same data in compact mode.</p>
+</div></details></div><h2 id="object-safety" class="section-header">Object Safety<a href="#object-safety" class="anchor">§</a></h2><div class="object-safety-info">This trait is <b>not</b> <a href="https://doc.rust-lang.org/1.81.0/reference/items/traits.html#object-safety">object safe</a>.</div><h2 id="foreign-impls" class="section-header">Implementations on Foreign Types<a href="#foreign-impls" class="anchor">§</a></h2><details class="toggle implementors-toggle"><summary><section id="impl-Serializer-for-%26mut+Formatter%3C'b%3E" class="impl"><a class="src rightside" href="../src/serde/ser/fmt.rs.html#38-170">source</a><a href="#impl-Serializer-for-%26mut+Formatter%3C'b%3E" class="anchor">§</a><h3 class="code-header">impl&lt;'a, 'b&gt; <a class="trait" href="trait.Serializer.html" title="trait serde::Serializer">Serializer</a> for &amp;'a mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/fmt/struct.Formatter.html" title="struct core::fmt::Formatter">Formatter</a>&lt;'b&gt;</h3></section></summary><div class="docblock">
+<div class="example-wrap edition"><a href="#" class="tooltip" title="This example runs with edition 2021">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>serde::ser::Serialize;
+<span class="kw">use </span>serde_derive::Serialize;
+<span class="kw">use </span>std::fmt::{<span class="self">self</span>, Display};
+
+<span class="attr">#[derive(Serialize)]
+#[serde(rename_all = <span class="string">"kebab-case"</span>)]
+</span><span class="kw">pub enum </span>MessageType {
+    StartRequest,
+    EndRequest,
+}
+
+<span class="kw">impl </span>Display <span class="kw">for </span>MessageType {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter) -&gt; fmt::Result {
+        <span class="self">self</span>.serialize(f)
+    }
+}</code></pre></div>
+</div><div class="impl-items"><section id="associatedtype.Ok-1" class="associatedtype trait-impl"><a href="#associatedtype.Ok-1" class="anchor">§</a><h4 class="code-header">type <a href="#associatedtype.Ok" class="associatedtype">Ok</a> = <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a></h4></section><section id="associatedtype.Error-1" class="associatedtype trait-impl"><a href="#associatedtype.Error-1" class="anchor">§</a><h4 class="code-header">type <a href="#associatedtype.Error" class="associatedtype">Error</a> = <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/fmt/struct.Error.html" title="struct core::fmt::Error">Error</a></h4></section><section id="associatedtype.SerializeSeq-1" class="associatedtype trait-impl"><a href="#associatedtype.SerializeSeq-1" class="anchor">§</a><h4 class="code-header">type <a href="#associatedtype.SerializeSeq" class="associatedtype">SerializeSeq</a> = <a class="struct" href="ser/struct.Impossible.html" title="struct serde::ser::Impossible">Impossible</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/fmt/struct.Error.html" title="struct core::fmt::Error">Error</a>&gt;</h4></section><section id="associatedtype.SerializeTuple-1" class="associatedtype trait-impl"><a href="#associatedtype.SerializeTuple-1" class="anchor">§</a><h4 class="code-header">type <a href="#associatedtype.SerializeTuple" class="associatedtype">SerializeTuple</a> = <a class="struct" href="ser/struct.Impossible.html" title="struct serde::ser::Impossible">Impossible</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/fmt/struct.Error.html" title="struct core::fmt::Error">Error</a>&gt;</h4></section><section id="associatedtype.SerializeTupleStruct-1" class="associatedtype trait-impl"><a href="#associatedtype.SerializeTupleStruct-1" class="anchor">§</a><h4 class="code-header">type <a href="#associatedtype.SerializeTupleStruct" class="associatedtype">SerializeTupleStruct</a> = <a class="struct" href="ser/struct.Impossible.html" title="struct serde::ser::Impossible">Impossible</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/fmt/struct.Error.html" title="struct core::fmt::Error">Error</a>&gt;</h4></section><section id="associatedtype.SerializeTupleVariant-1" class="associatedtype trait-impl"><a href="#associatedtype.SerializeTupleVariant-1" class="anchor">§</a><h4 class="code-header">type <a href="#associatedtype.SerializeTupleVariant" class="associatedtype">SerializeTupleVariant</a> = <a class="struct" href="ser/struct.Impossible.html" title="struct serde::ser::Impossible">Impossible</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/fmt/struct.Error.html" title="struct core::fmt::Error">Error</a>&gt;</h4></section><section id="associatedtype.SerializeMap-1" class="associatedtype trait-impl"><a href="#associatedtype.SerializeMap-1" class="anchor">§</a><h4 class="code-header">type <a href="#associatedtype.SerializeMap" class="associatedtype">SerializeMap</a> = <a class="struct" href="ser/struct.Impossible.html" title="struct serde::ser::Impossible">Impossible</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/fmt/struct.Error.html" title="struct core::fmt::Error">Error</a>&gt;</h4></section><section id="associatedtype.SerializeStruct-1" class="associatedtype trait-impl"><a href="#associatedtype.SerializeStruct-1" class="anchor">§</a><h4 class="code-header">type <a href="#associatedtype.SerializeStruct" class="associatedtype">SerializeStruct</a> = <a class="struct" href="ser/struct.Impossible.html" title="struct serde::ser::Impossible">Impossible</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/fmt/struct.Error.html" title="struct core::fmt::Error">Error</a>&gt;</h4></section><section id="associatedtype.SerializeStructVariant-1" class="associatedtype trait-impl"><a href="#associatedtype.SerializeStructVariant-1" class="anchor">§</a><h4 class="code-header">type <a href="#associatedtype.SerializeStructVariant" class="associatedtype">SerializeStructVariant</a> = <a class="struct" href="ser/struct.Impossible.html" title="struct serde::ser::Impossible">Impossible</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/fmt/struct.Error.html" title="struct core::fmt::Error">Error</a>&gt;</h4></section><section id="method.serialize_bool" class="method trait-impl"><a class="src rightside" href="../src/serde/ser/fmt.rs.html#49-66">source</a><a href="#method.serialize_bool" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.serialize_bool" class="fn">serialize_bool</a>(self, v: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a></h4></section><section id="method.serialize_i8" class="method trait-impl"><a class="src rightside" href="../src/serde/ser/fmt.rs.html#49-66">source</a><a href="#method.serialize_i8" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.serialize_i8" class="fn">serialize_i8</a>(self, v: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i8.html">i8</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a></h4></section><section id="method.serialize_i16" class="method trait-impl"><a class="src rightside" href="../src/serde/ser/fmt.rs.html#49-66">source</a><a href="#method.serialize_i16" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.serialize_i16" class="fn">serialize_i16</a>(self, v: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i16.html">i16</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a></h4></section><section id="method.serialize_i32" class="method trait-impl"><a class="src rightside" href="../src/serde/ser/fmt.rs.html#49-66">source</a><a href="#method.serialize_i32" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.serialize_i32" class="fn">serialize_i32</a>(self, v: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i32.html">i32</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a></h4></section><section id="method.serialize_i64" class="method trait-impl"><a class="src rightside" href="../src/serde/ser/fmt.rs.html#49-66">source</a><a href="#method.serialize_i64" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.serialize_i64" class="fn">serialize_i64</a>(self, v: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i64.html">i64</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a></h4></section><section id="method.serialize_i128-1" class="method trait-impl"><a class="src rightside" href="../src/serde/ser/fmt.rs.html#49-66">source</a><a href="#method.serialize_i128-1" class="anchor">§</a><h4 class="code-header">fn <a href="#method.serialize_i128" class="fn">serialize_i128</a>(self, v: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i128.html">i128</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a></h4></section><section id="method.serialize_u8" class="method trait-impl"><a class="src rightside" href="../src/serde/ser/fmt.rs.html#49-66">source</a><a href="#method.serialize_u8" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.serialize_u8" class="fn">serialize_u8</a>(self, v: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a></h4></section><section id="method.serialize_u16" class="method trait-impl"><a class="src rightside" href="../src/serde/ser/fmt.rs.html#49-66">source</a><a href="#method.serialize_u16" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.serialize_u16" class="fn">serialize_u16</a>(self, v: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u16.html">u16</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a></h4></section><section id="method.serialize_u32" class="method trait-impl"><a class="src rightside" href="../src/serde/ser/fmt.rs.html#49-66">source</a><a href="#method.serialize_u32" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.serialize_u32" class="fn">serialize_u32</a>(self, v: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a></h4></section><section id="method.serialize_u64" class="method trait-impl"><a class="src rightside" href="../src/serde/ser/fmt.rs.html#49-66">source</a><a href="#method.serialize_u64" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.serialize_u64" class="fn">serialize_u64</a>(self, v: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a></h4></section><section id="method.serialize_u128-1" class="method trait-impl"><a class="src rightside" href="../src/serde/ser/fmt.rs.html#49-66">source</a><a href="#method.serialize_u128-1" class="anchor">§</a><h4 class="code-header">fn <a href="#method.serialize_u128" class="fn">serialize_u128</a>(self, v: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u128.html">u128</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a></h4></section><section id="method.serialize_f32" class="method trait-impl"><a class="src rightside" href="../src/serde/ser/fmt.rs.html#49-66">source</a><a href="#method.serialize_f32" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.serialize_f32" class="fn">serialize_f32</a>(self, v: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.f32.html">f32</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a></h4></section><section id="method.serialize_f64" class="method trait-impl"><a class="src rightside" href="../src/serde/ser/fmt.rs.html#49-66">source</a><a href="#method.serialize_f64" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.serialize_f64" class="fn">serialize_f64</a>(self, v: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.f64.html">f64</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a></h4></section><section id="method.serialize_char" class="method trait-impl"><a class="src rightside" href="../src/serde/ser/fmt.rs.html#49-66">source</a><a href="#method.serialize_char" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.serialize_char" class="fn">serialize_char</a>(self, v: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.char.html">char</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a></h4></section><section id="method.serialize_str" class="method trait-impl"><a class="src rightside" href="../src/serde/ser/fmt.rs.html#49-66">source</a><a href="#method.serialize_str" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.serialize_str" class="fn">serialize_str</a>(self, v: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a></h4></section><section id="method.serialize_unit_struct" class="method trait-impl"><a class="src rightside" href="../src/serde/ser/fmt.rs.html#49-66">source</a><a href="#method.serialize_unit_struct" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.serialize_unit_struct" class="fn">serialize_unit_struct</a>(self, v: &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a></h4></section><section id="method.serialize_unit_variant" class="method trait-impl"><a class="src rightside" href="../src/serde/ser/fmt.rs.html#68-75">source</a><a href="#method.serialize_unit_variant" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.serialize_unit_variant" class="fn">serialize_unit_variant</a>(
+    self,
+    _name: &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+    _variant_index: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>,
+    variant: &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a></h4></section><section id="method.serialize_newtype_struct" class="method trait-impl"><a class="src rightside" href="../src/serde/ser/fmt.rs.html#77-82">source</a><a href="#method.serialize_newtype_struct" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.serialize_newtype_struct" class="fn">serialize_newtype_struct</a>&lt;T&gt;(self, _name: &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>, value: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a><div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a> + <a class="trait" href="trait.Serialize.html" title="trait serde::Serialize">Serialize</a>,</div></h4></section><section id="method.serialize_bytes" class="method trait-impl"><a class="src rightside" href="../src/serde/ser/fmt.rs.html#84-86">source</a><a href="#method.serialize_bytes" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.serialize_bytes" class="fn">serialize_bytes</a>(self, _v: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a></h4></section><section id="method.serialize_none" class="method trait-impl"><a class="src rightside" href="../src/serde/ser/fmt.rs.html#88-90">source</a><a href="#method.serialize_none" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.serialize_none" class="fn">serialize_none</a>(self) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a></h4></section><section id="method.serialize_some" class="method trait-impl"><a class="src rightside" href="../src/serde/ser/fmt.rs.html#92-97">source</a><a href="#method.serialize_some" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.serialize_some" class="fn">serialize_some</a>&lt;T&gt;(self, _value: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a><div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a> + <a class="trait" href="trait.Serialize.html" title="trait serde::Serialize">Serialize</a>,</div></h4></section><section id="method.serialize_unit" class="method trait-impl"><a class="src rightside" href="../src/serde/ser/fmt.rs.html#99-101">source</a><a href="#method.serialize_unit" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.serialize_unit" class="fn">serialize_unit</a>(self) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a></h4></section><section id="method.serialize_newtype_variant" class="method trait-impl"><a class="src rightside" href="../src/serde/ser/fmt.rs.html#103-114">source</a><a href="#method.serialize_newtype_variant" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.serialize_newtype_variant" class="fn">serialize_newtype_variant</a>&lt;T&gt;(
+    self,
+    _name: &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+    _variant_index: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>,
+    _variant: &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+    _value: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a>,
+) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a><div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a> + <a class="trait" href="trait.Serialize.html" title="trait serde::Serialize">Serialize</a>,</div></h4></section><section id="method.serialize_seq" class="method trait-impl"><a class="src rightside" href="../src/serde/ser/fmt.rs.html#116-118">source</a><a href="#method.serialize_seq" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.serialize_seq" class="fn">serialize_seq</a>(self, _len: <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>&gt;) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.SerializeSeq" title="type serde::Serializer::SerializeSeq">SerializeSeq</a>, <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/fmt/struct.Error.html" title="struct core::fmt::Error">Error</a>&gt;</h4></section><section id="method.serialize_tuple" class="method trait-impl"><a class="src rightside" href="../src/serde/ser/fmt.rs.html#120-122">source</a><a href="#method.serialize_tuple" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.serialize_tuple" class="fn">serialize_tuple</a>(self, _len: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.SerializeTuple" title="type serde::Serializer::SerializeTuple">SerializeTuple</a>, <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/fmt/struct.Error.html" title="struct core::fmt::Error">Error</a>&gt;</h4></section><section id="method.serialize_tuple_struct" class="method trait-impl"><a class="src rightside" href="../src/serde/ser/fmt.rs.html#124-130">source</a><a href="#method.serialize_tuple_struct" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.serialize_tuple_struct" class="fn">serialize_tuple_struct</a>(
+    self,
+    _name: &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+    _len: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.SerializeTupleStruct" title="type serde::Serializer::SerializeTupleStruct">SerializeTupleStruct</a>, <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/fmt/struct.Error.html" title="struct core::fmt::Error">Error</a>&gt;</h4></section><section id="method.serialize_tuple_variant" class="method trait-impl"><a class="src rightside" href="../src/serde/ser/fmt.rs.html#132-140">source</a><a href="#method.serialize_tuple_variant" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.serialize_tuple_variant" class="fn">serialize_tuple_variant</a>(
+    self,
+    _name: &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+    _variant_index: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>,
+    _variant: &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+    _len: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.SerializeTupleVariant" title="type serde::Serializer::SerializeTupleVariant">SerializeTupleVariant</a>, <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/fmt/struct.Error.html" title="struct core::fmt::Error">Error</a>&gt;</h4></section><section id="method.serialize_map" class="method trait-impl"><a class="src rightside" href="../src/serde/ser/fmt.rs.html#142-144">source</a><a href="#method.serialize_map" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.serialize_map" class="fn">serialize_map</a>(self, _len: <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>&gt;) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.SerializeMap" title="type serde::Serializer::SerializeMap">SerializeMap</a>, <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/fmt/struct.Error.html" title="struct core::fmt::Error">Error</a>&gt;</h4></section><section id="method.serialize_struct" class="method trait-impl"><a class="src rightside" href="../src/serde/ser/fmt.rs.html#146-152">source</a><a href="#method.serialize_struct" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.serialize_struct" class="fn">serialize_struct</a>(
+    self,
+    _name: &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+    _len: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.SerializeStruct" title="type serde::Serializer::SerializeStruct">SerializeStruct</a>, <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/fmt/struct.Error.html" title="struct core::fmt::Error">Error</a>&gt;</h4></section><section id="method.serialize_struct_variant" class="method trait-impl"><a class="src rightside" href="../src/serde/ser/fmt.rs.html#154-162">source</a><a href="#method.serialize_struct_variant" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.serialize_struct_variant" class="fn">serialize_struct_variant</a>(
+    self,
+    _name: &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+    _variant_index: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>,
+    _variant: &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+    _len: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.Serializer.html#associatedtype.SerializeStructVariant" title="type serde::Serializer::SerializeStructVariant">SerializeStructVariant</a>, <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/fmt/struct.Error.html" title="struct core::fmt::Error">Error</a>&gt;</h4></section><section id="method.collect_str-1" class="method trait-impl"><a class="src rightside" href="../src/serde/ser/fmt.rs.html#164-169">source</a><a href="#method.collect_str-1" class="anchor">§</a><h4 class="code-header">fn <a href="#method.collect_str" class="fn">collect_str</a>&lt;T&gt;(self, value: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a><div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Display.html" title="trait core::fmt::Display">Display</a>,</div></h4></section></div></details><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"></div><script src="../trait.impl/serde/ser/trait.Serializer.js" data-ignore-extern-crates="core" async></script></section></div></main></body></html>

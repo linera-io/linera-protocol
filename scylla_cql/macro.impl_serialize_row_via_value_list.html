@@ -1,0 +1,41 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Implements the `SerializeRow` trait for a type, provided that the type already implements the legacy `ValueList` trait."><title>impl_serialize_row_via_value_list in scylla_cql - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="scylla_cql" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../scylla_cql/index.html">scylla_cql</a><span class="version">0.1.0</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="index.html">scylla_cql</a>::<wbr><a class="macro" href="#">impl_serialize_row_via_value_list</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/scylla_cql/types/serialize/row.rs.html#395-419">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><span class="macro">macro_rules!</span> impl_serialize_row_via_value_list {
+    (<span class="macro-nonterminal">$t</span>:ident$(&lt;$(<span class="macro-nonterminal">$targ</span>:tt $(: <span class="macro-nonterminal">$tbound</span>:tt)<span class="question-mark">?</span>),<span class="kw-2">*</span>&gt;)<span class="question-mark">?</span>) =&gt; { ... };
+}</pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Implements the <a href="types/serialize/row/trait.SerializeRow.html" title="trait scylla_cql::types::serialize::row::SerializeRow"><code>SerializeRow</code></a> trait for a type, provided that the type
+already implements the legacy
+<a href="frame/value/trait.ValueList.html" title="trait scylla_cql::frame::value::ValueList"><code>ValueList</code></a> trait.</p>
+<h2 id="note"><a class="doc-anchor" href="#note">§</a>Note</h2>
+<p>The translation from one trait to another encounters a performance penalty
+and does not utilize the stronger guarantees of <code>SerializeRow</code>. Before
+resorting to this macro, you should consider other options instead:</p>
+<ul>
+<li>If the impl was generated using the <code>ValueList</code> procedural macro, you
+should switch to the <code>SerializeRow</code> procedural macro. <em>The new macro
+behaves differently by default, so please read its documentation first!</em></li>
+<li>If the impl was written by hand, it is still preferable to rewrite it
+manually. You have an opportunity to make your serialization logic
+type-safe and potentially improve performance.</li>
+</ul>
+<p>Basically, you should consider using the macro if you have a hand-written
+impl and the moment it is not easy/not desirable to rewrite it.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">struct </span>NoGenerics {}
+<span class="kw">impl </span>ValueList <span class="kw">for </span>NoGenerics {
+    <span class="kw">fn </span>serialized(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; SerializedResult&lt;<span class="lifetime">'_</span>&gt; {
+        ().serialized()
+    }
+}
+<span class="macro">impl_serialize_row_via_value_list!</span>(NoGenerics);
+
+<span class="comment">// Generic types are also supported. You must specify the bounds if the
+// struct/enum contains any.
+</span><span class="kw">struct </span>WithGenerics&lt;T, U: Clone&gt;(T, U);
+<span class="kw">impl</span>&lt;T: Value, U: Clone + Value&gt; ValueList <span class="kw">for </span>WithGenerics&lt;T, U&gt; {
+    <span class="kw">fn </span>serialized(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; SerializedResult&lt;<span class="lifetime">'_</span>&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>values = LegacySerializedValues::new();
+        values.add_value(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>);
+        values.add_value(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">1</span>.clone());
+        <span class="prelude-val">Ok</span>(Cow::Owned(values))
+    }
+}
+<span class="macro">impl_serialize_row_via_value_list!</span>(WithGenerics&lt;T, U: Clone&gt;);</code></pre></div>
+</div></details></section></div></main></body></html>

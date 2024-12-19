@@ -1,0 +1,211 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Shareable mutable containers."><title>wasmtime_environ::__core::cell - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="wasmtime_environ" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../wasmtime_environ/index.html">wasmtime_environ</a><span class="version">25.0.1</span></h2></div><h2 class="location"><a href="#">Module cell</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#structs">Structs</a></li></ul></section><h2><a href="../index.html">In wasmtime_environ::__core</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../../index.html">wasmtime_environ</a>::<wbr><a href="../index.html">__core</a>::<wbr><a class="mod" href="#">cell</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/lib.rs.html#384">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Shareable mutable containers.</p>
+<p>Rust memory safety is based on this rule: Given an object <code>T</code>, it is only possible to
+have one of the following:</p>
+<ul>
+<li>Having several immutable references (<code>&amp;T</code>) to the object (also known as <strong>aliasing</strong>).</li>
+<li>Having one mutable reference (<code>&amp;mut T</code>) to the object (also known as <strong>mutability</strong>).</li>
+</ul>
+<p>This is enforced by the Rust compiler. However, there are situations where this rule is not
+flexible enough. Sometimes it is required to have multiple references to an object and yet
+mutate it.</p>
+<p>Shareable mutable containers exist to permit mutability in a controlled manner, even in the
+presence of aliasing. <a href="struct.Cell.html" title="struct wasmtime_environ::__core::cell::Cell"><code>Cell&lt;T&gt;</code></a>, <a href="struct.RefCell.html" title="struct wasmtime_environ::__core::cell::RefCell"><code>RefCell&lt;T&gt;</code></a>, and <a href="struct.OnceCell.html" title="struct wasmtime_environ::__core::cell::OnceCell"><code>OnceCell&lt;T&gt;</code></a> allow doing this in
+a single-threaded way—they do not implement <a href="../../std/marker/trait.Sync.html"><code>Sync</code></a>. (If you need to do aliasing and
+mutation among multiple threads, <a href="../../std/sync/struct.Mutex.html"><code>Mutex&lt;T&gt;</code></a>, <a href="../../std/sync/struct.RwLock.html"><code>RwLock&lt;T&gt;</code></a>, <a href="../../std/sync/struct.OnceLock.html"><code>OnceLock&lt;T&gt;</code></a> or <a href="../sync/atomic/index.html" title="mod wasmtime_environ::__core::sync::atomic"><code>atomic</code></a>
+types are the correct data structures to do so).</p>
+<p>Values of the <code>Cell&lt;T&gt;</code>, <code>RefCell&lt;T&gt;</code>, and <code>OnceCell&lt;T&gt;</code> types may be mutated through shared
+references (i.e. the common <code>&amp;T</code> type), whereas most Rust types can only be mutated through
+unique (<code>&amp;mut T</code>) references. We say these cell types provide ‘interior mutability’
+(mutable via <code>&amp;T</code>), in contrast with typical Rust types that exhibit ‘inherited mutability’
+(mutable only via <code>&amp;mut T</code>).</p>
+<p>Cell types come in three flavors: <code>Cell&lt;T&gt;</code>, <code>RefCell&lt;T&gt;</code>, and <code>OnceCell&lt;T&gt;</code>. Each provides
+a different way of providing safe interior mutability.</p>
+<h3 id="cellt"><a class="doc-anchor" href="#cellt">§</a><code>Cell&lt;T&gt;</code></h3>
+<p><a href="struct.Cell.html" title="struct wasmtime_environ::__core::cell::Cell"><code>Cell&lt;T&gt;</code></a> implements interior mutability by moving values in and out of the cell. That is, an
+<code>&amp;mut T</code> to the inner value can never be obtained, and the value itself cannot be directly
+obtained without replacing it with something else. Both of these rules ensure that there is
+never more than one reference pointing to the inner value. This type provides the following
+methods:</p>
+<ul>
+<li>For types that implement <a href="../marker/trait.Copy.html" title="trait wasmtime_environ::__core::marker::Copy"><code>Copy</code></a>, the <a href="struct.Cell.html#method.get" title="method wasmtime_environ::__core::cell::Cell::get"><code>get</code></a> method retrieves the current
+interior value by duplicating it.</li>
+<li>For types that implement <a href="../default/trait.Default.html" title="trait wasmtime_environ::__core::default::Default"><code>Default</code></a>, the <a href="struct.Cell.html#method.take" title="method wasmtime_environ::__core::cell::Cell::take"><code>take</code></a> method replaces the current
+interior value with <a href="../default/trait.Default.html#tymethod.default" title="associated function wasmtime_environ::__core::default::Default::default"><code>Default::default()</code></a> and returns the replaced value.</li>
+<li>All types have:
+<ul>
+<li><a href="struct.Cell.html#method.replace" title="method wasmtime_environ::__core::cell::Cell::replace"><code>replace</code></a>: replaces the current interior value and returns the replaced
+value.</li>
+<li><a href="struct.Cell.html#method.into_inner" title="method wasmtime_environ::__core::cell::Cell::into_inner"><code>into_inner</code></a>: this method consumes the <code>Cell&lt;T&gt;</code> and returns the
+interior value.</li>
+<li><a href="struct.Cell.html#method.set" title="method wasmtime_environ::__core::cell::Cell::set"><code>set</code></a>: this method replaces the interior value, dropping the replaced value.</li>
+</ul>
+</li>
+</ul>
+<p><code>Cell&lt;T&gt;</code> is typically used for more simple types where copying or moving values isn’t too
+resource intensive (e.g. numbers), and should usually be preferred over other cell types when
+possible. For larger and non-copy types, <code>RefCell</code> provides some advantages.</p>
+<h3 id="refcellt"><a class="doc-anchor" href="#refcellt">§</a><code>RefCell&lt;T&gt;</code></h3>
+<p><a href="struct.RefCell.html" title="struct wasmtime_environ::__core::cell::RefCell"><code>RefCell&lt;T&gt;</code></a> uses Rust’s lifetimes to implement “dynamic borrowing”, a process whereby one can
+claim temporary, exclusive, mutable access to the inner value. Borrows for <code>RefCell&lt;T&gt;</code>s are
+tracked at <em>runtime</em>, unlike Rust’s native reference types which are entirely tracked
+statically, at compile time.</p>
+<p>An immutable reference to a <code>RefCell</code>’s inner value (<code>&amp;T</code>) can be obtained with
+<a href="struct.RefCell.html#method.borrow" title="method wasmtime_environ::__core::cell::RefCell::borrow"><code>borrow</code></a>, and a mutable borrow (<code>&amp;mut T</code>) can be obtained with
+<a href="struct.RefCell.html#method.borrow_mut" title="method wasmtime_environ::__core::cell::RefCell::borrow_mut"><code>borrow_mut</code></a>. When these functions are called, they first verify that
+Rust’s borrow rules will be satisfied: any number of immutable borrows are allowed or a
+single mutable borrow is allowed, but never both. If a borrow is attempted that would violate
+these rules, the thread will panic.</p>
+<p>The corresponding <a href="../../std/marker/trait.Sync.html"><code>Sync</code></a> version of <code>RefCell&lt;T&gt;</code> is <a href="../../std/sync/struct.RwLock.html"><code>RwLock&lt;T&gt;</code></a>.</p>
+<h3 id="oncecellt"><a class="doc-anchor" href="#oncecellt">§</a><code>OnceCell&lt;T&gt;</code></h3>
+<p><a href="struct.OnceCell.html" title="struct wasmtime_environ::__core::cell::OnceCell"><code>OnceCell&lt;T&gt;</code></a> is somewhat of a hybrid of <code>Cell</code> and <code>RefCell</code> that works for values that
+typically only need to be set once. This means that a reference <code>&amp;T</code> can be obtained without
+moving or copying the inner value (unlike <code>Cell</code>) but also without runtime checks (unlike
+<code>RefCell</code>). However, its value can also not be updated once set unless you have a mutable
+reference to the <code>OnceCell</code>.</p>
+<p><code>OnceCell</code> provides the following methods:</p>
+<ul>
+<li><a href="struct.OnceCell.html#method.get" title="method wasmtime_environ::__core::cell::OnceCell::get"><code>get</code></a>: obtain a reference to the inner value</li>
+<li><a href="struct.OnceCell.html#method.set" title="method wasmtime_environ::__core::cell::OnceCell::set"><code>set</code></a>: set the inner value if it is unset (returns a <code>Result</code>)</li>
+<li><a href="struct.OnceCell.html#method.get_or_init" title="method wasmtime_environ::__core::cell::OnceCell::get_or_init"><code>get_or_init</code></a>: return the inner value, initializing it if needed</li>
+<li><a href="struct.OnceCell.html#method.get_mut" title="method wasmtime_environ::__core::cell::OnceCell::get_mut"><code>get_mut</code></a>: provide a mutable reference to the inner value, only available
+if you have a mutable reference to the cell itself.</li>
+</ul>
+<p>The corresponding <a href="../../std/marker/trait.Sync.html"><code>Sync</code></a> version of <code>OnceCell&lt;T&gt;</code> is <a href="../../std/sync/struct.OnceLock.html"><code>OnceLock&lt;T&gt;</code></a>.</p>
+<h3 id="lazycellt-f"><a class="doc-anchor" href="#lazycellt-f">§</a><code>LazyCell&lt;T, F&gt;</code></h3>
+<p>A common pattern with OnceCell is, for a given OnceCell, to use the same function on every
+call to <a href="struct.OnceCell.html#method.get_or_init" title="method wasmtime_environ::__core::cell::OnceCell::get_or_init"><code>OnceCell::get_or_init</code></a> with that cell. This is what is offered by <a href="struct.LazyCell.html" title="struct wasmtime_environ::__core::cell::LazyCell"><code>LazyCell</code></a>,
+which pairs cells of <code>T</code> with functions of <code>F</code>, and always calls <code>F</code> before it yields <code>&amp;T</code>.
+This happens implicitly by simply attempting to dereference the LazyCell to get its contents,
+so its use is much more transparent with a place which has been initialized by a constant.</p>
+<p>More complicated patterns that don’t fit this description can be built on <code>OnceCell&lt;T&gt;</code> instead.</p>
+<p><code>LazyCell</code> works by providing an implementation of <code>impl Deref</code> that calls the function,
+so you can just use it by dereference (e.g. <code>*lazy_cell</code> or <code>lazy_cell.deref()</code>).</p>
+<p>The corresponding <a href="../../std/marker/trait.Sync.html"><code>Sync</code></a> version of <code>LazyCell&lt;T, F&gt;</code> is <a href="../../std/sync/struct.LazyLock.html"><code>LazyLock&lt;T, F&gt;</code></a>.</p>
+<h2 id="when-to-choose-interior-mutability"><a class="doc-anchor" href="#when-to-choose-interior-mutability">§</a>When to choose interior mutability</h2>
+<p>The more common inherited mutability, where one must have unique access to mutate a value, is
+one of the key language elements that enables Rust to reason strongly about pointer aliasing,
+statically preventing crash bugs. Because of that, inherited mutability is preferred, and
+interior mutability is something of a last resort. Since cell types enable mutation where it
+would otherwise be disallowed though, there are occasions when interior mutability might be
+appropriate, or even <em>must</em> be used, e.g.</p>
+<ul>
+<li>Introducing mutability ‘inside’ of something immutable</li>
+<li>Implementation details of logically-immutable methods.</li>
+<li>Mutating implementations of <a href="../clone/trait.Clone.html" title="trait wasmtime_environ::__core::clone::Clone"><code>Clone</code></a>.</li>
+</ul>
+<h3 id="introducing-mutability-inside-of-something-immutable"><a class="doc-anchor" href="#introducing-mutability-inside-of-something-immutable">§</a>Introducing mutability ‘inside’ of something immutable</h3>
+<p>Many shared smart pointer types, including <a href="../../std/rc/struct.Rc.html"><code>Rc&lt;T&gt;</code></a> and <a href="../../std/sync/struct.Arc.html"><code>Arc&lt;T&gt;</code></a>, provide containers that can
+be cloned and shared between multiple parties. Because the contained values may be
+multiply-aliased, they can only be borrowed with <code>&amp;</code>, not <code>&amp;mut</code>. Without cells it would be
+impossible to mutate data inside of these smart pointers at all.</p>
+<p>It’s very common then to put a <code>RefCell&lt;T&gt;</code> inside shared pointer types to reintroduce
+mutability:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::cell::{RefCell, RefMut};
+<span class="kw">use </span>std::collections::HashMap;
+<span class="kw">use </span>std::rc::Rc;
+
+<span class="kw">fn </span>main() {
+    <span class="kw">let </span>shared_map: Rc&lt;RefCell&lt;<span class="kw">_</span>&gt;&gt; = Rc::new(RefCell::new(HashMap::new()));
+    <span class="comment">// Create a new block to limit the scope of the dynamic borrow
+    </span>{
+        <span class="kw">let </span><span class="kw-2">mut </span>map: RefMut&lt;<span class="lifetime">'_</span>, <span class="kw">_</span>&gt; = shared_map.borrow_mut();
+        map.insert(<span class="string">"africa"</span>, <span class="number">92388</span>);
+        map.insert(<span class="string">"kyoto"</span>, <span class="number">11837</span>);
+        map.insert(<span class="string">"piccadilly"</span>, <span class="number">11826</span>);
+        map.insert(<span class="string">"marbles"</span>, <span class="number">38</span>);
+    }
+
+    <span class="comment">// Note that if we had not let the previous borrow of the cache fall out
+    // of scope then the subsequent borrow would cause a dynamic thread panic.
+    // This is the major hazard of using `RefCell`.
+    </span><span class="kw">let </span>total: i32 = shared_map.borrow().values().sum();
+    <span class="macro">println!</span>(<span class="string">"{total}"</span>);
+}</code></pre></div>
+<p>Note that this example uses <code>Rc&lt;T&gt;</code> and not <code>Arc&lt;T&gt;</code>. <code>RefCell&lt;T&gt;</code>s are for single-threaded
+scenarios. Consider using <a href="../../std/sync/struct.RwLock.html"><code>RwLock&lt;T&gt;</code></a> or <a href="../../std/sync/struct.Mutex.html"><code>Mutex&lt;T&gt;</code></a> if you need shared mutability in a
+multi-threaded situation.</p>
+<h3 id="implementation-details-of-logically-immutable-methods"><a class="doc-anchor" href="#implementation-details-of-logically-immutable-methods">§</a>Implementation details of logically-immutable methods</h3>
+<p>Occasionally it may be desirable not to expose in an API that there is mutation happening
+“under the hood”. This may be because logically the operation is immutable, but e.g., caching
+forces the implementation to perform mutation; or because you must employ mutation to implement
+a trait method that was originally defined to take <code>&amp;self</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::cell::OnceCell;
+
+<span class="kw">struct </span>Graph {
+    edges: Vec&lt;(i32, i32)&gt;,
+    span_tree_cache: OnceCell&lt;Vec&lt;(i32, i32)&gt;&gt;
+}
+
+<span class="kw">impl </span>Graph {
+    <span class="kw">fn </span>minimum_spanning_tree(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;(i32, i32)&gt; {
+        <span class="self">self</span>.span_tree_cache
+            .get_or_init(|| <span class="self">self</span>.calc_span_tree())
+            .clone()
+    }
+
+    <span class="kw">fn </span>calc_span_tree(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;(i32, i32)&gt; {
+        <span class="comment">// Expensive computation goes here
+        </span><span class="macro">vec!</span>[]
+    }
+}</code></pre></div>
+<h3 id="mutating-implementations-of-clone"><a class="doc-anchor" href="#mutating-implementations-of-clone">§</a>Mutating implementations of <code>Clone</code></h3>
+<p>This is simply a special - but common - case of the previous: hiding mutability for operations
+that appear to be immutable. The <a href="../clone/trait.Clone.html#tymethod.clone" title="method wasmtime_environ::__core::clone::Clone::clone"><code>clone</code></a> method is expected to not change the
+source value, and is declared to take <code>&amp;self</code>, not <code>&amp;mut self</code>. Therefore, any mutation that
+happens in the <code>clone</code> method must use cell types. For example, <a href="../../std/rc/struct.Rc.html"><code>Rc&lt;T&gt;</code></a> maintains its
+reference counts within a <code>Cell&lt;T&gt;</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::cell::Cell;
+<span class="kw">use </span>std::ptr::NonNull;
+<span class="kw">use </span>std::process::abort;
+<span class="kw">use </span>std::marker::PhantomData;
+
+<span class="kw">struct </span>Rc&lt;T: <span class="question-mark">?</span>Sized&gt; {
+    ptr: NonNull&lt;RcBox&lt;T&gt;&gt;,
+    phantom: PhantomData&lt;RcBox&lt;T&gt;&gt;,
+}
+
+<span class="kw">struct </span>RcBox&lt;T: <span class="question-mark">?</span>Sized&gt; {
+    strong: Cell&lt;usize&gt;,
+    refcount: Cell&lt;usize&gt;,
+    value: T,
+}
+
+<span class="kw">impl</span>&lt;T: <span class="question-mark">?</span>Sized&gt; Clone <span class="kw">for </span>Rc&lt;T&gt; {
+    <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Rc&lt;T&gt; {
+        <span class="self">self</span>.inc_strong();
+        Rc {
+            ptr: <span class="self">self</span>.ptr,
+            phantom: PhantomData,
+        }
+    }
+}
+
+<span class="kw">trait </span>RcBoxPtr&lt;T: <span class="question-mark">?</span>Sized&gt; {
+
+    <span class="kw">fn </span>inner(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>RcBox&lt;T&gt;;
+
+    <span class="kw">fn </span>strong(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+        <span class="self">self</span>.inner().strong.get()
+    }
+
+    <span class="kw">fn </span>inc_strong(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+        <span class="self">self</span>.inner()
+            .strong
+            .set(<span class="self">self</span>.strong()
+                     .checked_add(<span class="number">1</span>)
+                     .unwrap_or_else(|| abort() ));
+    }
+}
+
+<span class="kw">impl</span>&lt;T: <span class="question-mark">?</span>Sized&gt; RcBoxPtr&lt;T&gt; <span class="kw">for </span>Rc&lt;T&gt; {
+   <span class="kw">fn </span>inner(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>RcBox&lt;T&gt; {
+       <span class="kw">unsafe </span>{
+           <span class="self">self</span>.ptr.as_ref()
+       }
+   }
+}</code></pre></div>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.BorrowError.html" title="struct wasmtime_environ::__core::cell::BorrowError">BorrowError</a></div><div class="desc docblock-short">An error returned by <a href="struct.RefCell.html#method.try_borrow" title="method wasmtime_environ::__core::cell::RefCell::try_borrow"><code>RefCell::try_borrow</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.BorrowMutError.html" title="struct wasmtime_environ::__core::cell::BorrowMutError">BorrowMutError</a></div><div class="desc docblock-short">An error returned by <a href="struct.RefCell.html#method.try_borrow_mut" title="method wasmtime_environ::__core::cell::RefCell::try_borrow_mut"><code>RefCell::try_borrow_mut</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.Cell.html" title="struct wasmtime_environ::__core::cell::Cell">Cell</a></div><div class="desc docblock-short">A mutable memory location.</div></li><li><div class="item-name"><a class="struct" href="struct.LazyCell.html" title="struct wasmtime_environ::__core::cell::LazyCell">LazyCell</a></div><div class="desc docblock-short">A value which is initialized on the first access.</div></li><li><div class="item-name"><a class="struct" href="struct.OnceCell.html" title="struct wasmtime_environ::__core::cell::OnceCell">OnceCell</a></div><div class="desc docblock-short">A cell which can nominally be written to only once.</div></li><li><div class="item-name"><a class="struct" href="struct.Ref.html" title="struct wasmtime_environ::__core::cell::Ref">Ref</a></div><div class="desc docblock-short">Wraps a borrowed reference to a value in a <code>RefCell</code> box.
+A wrapper type for an immutably borrowed value from a <code>RefCell&lt;T&gt;</code>.</div></li><li><div class="item-name"><a class="struct" href="struct.RefCell.html" title="struct wasmtime_environ::__core::cell::RefCell">RefCell</a></div><div class="desc docblock-short">A mutable memory location with dynamically checked borrow rules</div></li><li><div class="item-name"><a class="struct" href="struct.RefMut.html" title="struct wasmtime_environ::__core::cell::RefMut">RefMut</a></div><div class="desc docblock-short">A wrapper type for a mutably borrowed value from a <code>RefCell&lt;T&gt;</code>.</div></li><li><div class="item-name"><a class="struct" href="struct.UnsafeCell.html" title="struct wasmtime_environ::__core::cell::UnsafeCell">UnsafeCell</a></div><div class="desc docblock-short">The core primitive for interior mutability in Rust.</div></li><li><div class="item-name"><a class="struct" href="struct.SyncUnsafeCell.html" title="struct wasmtime_environ::__core::cell::SyncUnsafeCell">SyncUnsafeCell</a><span class="stab unstable" title="">Experimental</span></div><div class="desc docblock-short"><a href="struct.UnsafeCell.html" title="struct wasmtime_environ::__core::cell::UnsafeCell"><code>UnsafeCell</code></a>, but <a href="../marker/trait.Sync.html" title="trait wasmtime_environ::__core::marker::Sync"><code>Sync</code></a>.</div></li></ul></section></div></main></body></html>

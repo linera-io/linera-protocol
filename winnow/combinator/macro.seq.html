@@ -1,0 +1,63 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Initialize a struct or tuple out of a sequences of parsers"><title>seq in winnow::combinator - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="winnow" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../winnow/index.html">winnow</a><span class="version">0.6.20</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In winnow::combinator</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="../index.html">winnow</a>::<wbr><a href="index.html">combinator</a>::<wbr><a class="macro" href="#">seq</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/winnow/macros/seq.rs.html#74-108">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><span class="macro">macro_rules!</span> seq {
+    ($(<span class="macro-nonterminal">$name</span>: ident)::* { $(<span class="macro-nonterminal">$fields</span>: tt)* }) =&gt; { ... };
+    ($(<span class="macro-nonterminal">$name</span>: ident)::* ( $(<span class="macro-nonterminal">$elements</span>: tt)* )) =&gt; { ... };
+    (( $(<span class="macro-nonterminal">$elements</span>: tt)* )) =&gt; { ... };
+    ($(<span class="macro-nonterminal">$elements</span>: tt)<span class="kw-2">*</span>) =&gt; { ... };
+}</pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Initialize a struct or tuple out of a sequences of parsers</p>
+<p>Unlike normal struct initialization syntax:</p>
+<ul>
+<li><code>_</code> fields can exist to run a parser but ignore the result</li>
+<li>Parse results for a field can later be referenced using the field name</li>
+</ul>
+<p>Unlike normal tuple initialization syntax:</p>
+<ul>
+<li>Struct-style initialization (<code>{ 0: _, 1: _}</code>) is not supported</li>
+<li><code>_: &lt;parser&gt;</code> fields can exist to run a parser but ignore the result</li>
+</ul>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>winnow::combinator::seq;
+
+<span class="attr">#[derive(Default, Debug, PartialEq)]
+</span><span class="kw">struct </span>Field {
+    namespace: u32,
+    name: Vec&lt;u8&gt;,
+    value: Vec&lt;u8&gt;,
+    point: (u32, u32),
+    metadata: Vec&lt;u8&gt;,
+}
+
+<span class="comment">// Parse into structs / tuple-structs
+</span><span class="kw">fn </span>field(input: <span class="kw-2">&amp;mut &amp;</span>[u8]) -&gt; PResult&lt;Field&gt; {
+    <span class="macro">seq!</span>{Field {
+        namespace: empty.value(<span class="number">5</span>),
+        name: alphanumeric1.map(|s: <span class="kw-2">&amp;</span>[u8]| s.to_owned()),
+        <span class="comment">// `_` fields are ignored when building the struct
+        </span><span class="kw">_</span>: (space0, <span class="string">b':'</span>, space0),
+        value: alphanumeric1.map(|s: <span class="kw-2">&amp;</span>[u8]| s.to_owned()),
+        <span class="kw">_</span>: (space0, <span class="string">b':'</span>, space0),
+        point: point,
+        <span class="comment">// default initialization also works
+        </span>..Default::default()
+    }}.parse_next(input)
+}
+
+<span class="comment">// Or parse into tuples
+</span><span class="kw">fn </span>point(input: <span class="kw-2">&amp;mut &amp;</span>[u8]) -&gt; PResult&lt;(u32, u32)&gt; {
+    <span class="kw">let </span>num = dec_uint::&lt;<span class="kw">_</span>, u32, ContextError&gt;;
+    <span class="macro">seq!</span>(num, <span class="kw">_</span>: (space0, <span class="string">b','</span>, space0), num).parse_next(input)
+}
+
+<span class="macro">assert_eq!</span>(
+    field.parse_peek(<span class="kw-2">&amp;</span><span class="string">b"test: data: 123 , 4"</span>[..]),
+    <span class="prelude-val">Ok</span>((
+        <span class="kw-2">&amp;</span><span class="string">b""</span>[..],
+        Field {
+            namespace: <span class="number">5</span>,
+            name: <span class="string">b"test"</span>[..].to_owned(),
+            value: <span class="string">b"data"</span>[..].to_owned(),
+            point: (<span class="number">123</span>, <span class="number">4</span>),
+            metadata: Default::default(),
+        },
+    )),
+);</code></pre></div>
+</div></details></section></div></main></body></html>

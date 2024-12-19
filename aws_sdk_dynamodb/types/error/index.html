@@ -1,0 +1,180 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Error types that Amazon DynamoDB can respond with."><title>aws_sdk_dynamodb::types::error - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="aws_sdk_dynamodb" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../aws_sdk_dynamodb/index.html">aws_sdk_dynamodb</a><span class="version">1.47.0</span></h2></div><h2 class="location"><a href="#">Module error</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li></ul></section><h2><a href="../index.html">In aws_sdk_dynamodb::types</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../../index.html">aws_sdk_dynamodb</a>::<wbr><a href="../index.html">types</a>::<wbr><a class="mod" href="#">error</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/aws_sdk_dynamodb/types/error.rs.html#2-135">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Error types that Amazon DynamoDB can respond with.</p>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="builders/index.html" title="mod aws_sdk_dynamodb::types::error::builders">builders</a></div><div class="desc docblock-short">Builders</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.BackupInUseException.html" title="struct aws_sdk_dynamodb::types::error::BackupInUseException">BackupInUseException</a></div><div class="desc docblock-short"><p>There is another ongoing conflicting backup control plane operation on the table. The backup is either being created, deleted or restored to a table.</p></div></li><li><div class="item-name"><a class="struct" href="struct.BackupNotFoundException.html" title="struct aws_sdk_dynamodb::types::error::BackupNotFoundException">BackupNotFoundException</a></div><div class="desc docblock-short"><p>Backup not found for the given BackupARN.</p></div></li><li><div class="item-name"><a class="struct" href="struct.ConditionalCheckFailedException.html" title="struct aws_sdk_dynamodb::types::error::ConditionalCheckFailedException">ConditionalCheckFailedException</a></div><div class="desc docblock-short"><p>A condition specified in the operation could not be evaluated.</p></div></li><li><div class="item-name"><a class="struct" href="struct.ContinuousBackupsUnavailableException.html" title="struct aws_sdk_dynamodb::types::error::ContinuousBackupsUnavailableException">ContinuousBackupsUnavailableException</a></div><div class="desc docblock-short"><p>Backups have not yet been enabled for this table.</p></div></li><li><div class="item-name"><a class="struct" href="struct.DuplicateItemException.html" title="struct aws_sdk_dynamodb::types::error::DuplicateItemException">DuplicateItemException</a></div><div class="desc docblock-short"><p>There was an attempt to insert an item with the same primary key as an item that already exists in the DynamoDB table.</p></div></li><li><div class="item-name"><a class="struct" href="struct.ExportConflictException.html" title="struct aws_sdk_dynamodb::types::error::ExportConflictException">ExportConflictException</a></div><div class="desc docblock-short"><p>There was a conflict when writing to the specified S3 bucket.</p></div></li><li><div class="item-name"><a class="struct" href="struct.ExportNotFoundException.html" title="struct aws_sdk_dynamodb::types::error::ExportNotFoundException">ExportNotFoundException</a></div><div class="desc docblock-short"><p>The specified export was not found.</p></div></li><li><div class="item-name"><a class="struct" href="struct.GlobalTableAlreadyExistsException.html" title="struct aws_sdk_dynamodb::types::error::GlobalTableAlreadyExistsException">GlobalTableAlreadyExistsException</a></div><div class="desc docblock-short"><p>The specified global table already exists.</p></div></li><li><div class="item-name"><a class="struct" href="struct.GlobalTableNotFoundException.html" title="struct aws_sdk_dynamodb::types::error::GlobalTableNotFoundException">GlobalTableNotFoundException</a></div><div class="desc docblock-short"><p>The specified global table does not exist.</p></div></li><li><div class="item-name"><a class="struct" href="struct.IdempotentParameterMismatchException.html" title="struct aws_sdk_dynamodb::types::error::IdempotentParameterMismatchException">IdempotentParameterMismatchException</a></div><div class="desc docblock-short"><p>DynamoDB rejected the request because you retried a request with a different payload but with an idempotent token that was already used.</p></div></li><li><div class="item-name"><a class="struct" href="struct.ImportConflictException.html" title="struct aws_sdk_dynamodb::types::error::ImportConflictException">ImportConflictException</a></div><div class="desc docblock-short"><p>There was a conflict when importing from the specified S3 source. This can occur when the current import conflicts with a previous import request that had the same client token.</p></div></li><li><div class="item-name"><a class="struct" href="struct.ImportNotFoundException.html" title="struct aws_sdk_dynamodb::types::error::ImportNotFoundException">ImportNotFoundException</a></div><div class="desc docblock-short"><p>The specified import was not found.</p></div></li><li><div class="item-name"><a class="struct" href="struct.IndexNotFoundException.html" title="struct aws_sdk_dynamodb::types::error::IndexNotFoundException">IndexNotFoundException</a></div><div class="desc docblock-short"><p>The operation tried to access a nonexistent index.</p></div></li><li><div class="item-name"><a class="struct" href="struct.InternalServerError.html" title="struct aws_sdk_dynamodb::types::error::InternalServerError">InternalServerError</a></div><div class="desc docblock-short"><p>An error occurred on the server side.</p></div></li><li><div class="item-name"><a class="struct" href="struct.InvalidEndpointException.html" title="struct aws_sdk_dynamodb::types::error::InvalidEndpointException">InvalidEndpointException</a></div></li><li><div class="item-name"><a class="struct" href="struct.InvalidExportTimeException.html" title="struct aws_sdk_dynamodb::types::error::InvalidExportTimeException">InvalidExportTimeException</a></div><div class="desc docblock-short"><p>The specified <code>ExportTime</code> is outside of the point in time recovery window.</p></div></li><li><div class="item-name"><a class="struct" href="struct.InvalidRestoreTimeException.html" title="struct aws_sdk_dynamodb::types::error::InvalidRestoreTimeException">InvalidRestoreTimeException</a></div><div class="desc docblock-short"><p>An invalid restore time was specified. RestoreDateTime must be between EarliestRestorableDateTime and LatestRestorableDateTime.</p></div></li><li><div class="item-name"><a class="struct" href="struct.ItemCollectionSizeLimitExceededException.html" title="struct aws_sdk_dynamodb::types::error::ItemCollectionSizeLimitExceededException">ItemCollectionSizeLimitExceededException</a></div><div class="desc docblock-short"><p>An item collection is too large. This exception is only returned for tables that have one or more local secondary indexes.</p></div></li><li><div class="item-name"><a class="struct" href="struct.LimitExceededException.html" title="struct aws_sdk_dynamodb::types::error::LimitExceededException">LimitExceededException</a></div><div class="desc docblock-short"><p>There is no limit to the number of daily on-demand backups that can be taken.</p>
+<p>For most purposes, up to 500 simultaneous table operations are allowed per account. These operations include <code>CreateTable</code>, <code>UpdateTable</code>, <code>DeleteTable</code>,<code>UpdateTimeToLive</code>, <code>RestoreTableFromBackup</code>, and <code>RestoreTableToPointInTime</code>.</p>
+<p>When you are creating a table with one or more secondary indexes, you can have up to 250 such requests running at a time. However, if the table or index specifications are complex, then DynamoDB might temporarily reduce the number of concurrent operations.</p>
+<p>When importing into DynamoDB, up to 50 simultaneous import table operations are allowed per account.</p>
+<p>There is a soft account quota of 2,500 tables.</p>
+<p>GetRecords was called with a value of more than 1000 for the limit request parameter.</p>
+<p>More than 2 processes are reading from the same streams shard at the same time. Exceeding this limit may result in request throttling.</p></div></li><li><div class="item-name"><a class="struct" href="struct.PointInTimeRecoveryUnavailableException.html" title="struct aws_sdk_dynamodb::types::error::PointInTimeRecoveryUnavailableException">PointInTimeRecoveryUnavailableException</a></div><div class="desc docblock-short"><p>Point in time recovery has not yet been enabled for this source table.</p></div></li><li><div class="item-name"><a class="struct" href="struct.PolicyNotFoundException.html" title="struct aws_sdk_dynamodb::types::error::PolicyNotFoundException">PolicyNotFoundException</a></div><div class="desc docblock-short"><p>The operation tried to access a nonexistent resource-based policy.</p>
+<p>If you specified an <code>ExpectedRevisionId</code>, it's possible that a policy is present for the resource but its revision ID didn't match the expected value.</p></div></li><li><div class="item-name"><a class="struct" href="struct.ProvisionedThroughputExceededException.html" title="struct aws_sdk_dynamodb::types::error::ProvisionedThroughputExceededException">ProvisionedThroughputExceededException</a></div><div class="desc docblock-short"><p>Your request rate is too high. The Amazon Web Services SDKs for DynamoDB automatically retry requests that receive this exception. Your request is eventually successful, unless your retry queue is too large to finish. Reduce the frequency of requests and use exponential backoff. For more information, go to <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Programming.Errors.html#Programming.Errors.RetryAndBackoff">Error Retries and Exponential Backoff</a> in the <i>Amazon DynamoDB Developer Guide</i>.</p></div></li><li><div class="item-name"><a class="struct" href="struct.ReplicaAlreadyExistsException.html" title="struct aws_sdk_dynamodb::types::error::ReplicaAlreadyExistsException">ReplicaAlreadyExistsException</a></div><div class="desc docblock-short"><p>The specified replica is already part of the global table.</p></div></li><li><div class="item-name"><a class="struct" href="struct.ReplicaNotFoundException.html" title="struct aws_sdk_dynamodb::types::error::ReplicaNotFoundException">ReplicaNotFoundException</a></div><div class="desc docblock-short"><p>The specified replica is no longer part of the global table.</p></div></li><li><div class="item-name"><a class="struct" href="struct.RequestLimitExceeded.html" title="struct aws_sdk_dynamodb::types::error::RequestLimitExceeded">RequestLimitExceeded</a></div><div class="desc docblock-short"><p>Throughput exceeds the current throughput quota for your account. Please contact <a href="https://aws.amazon.com/support">Amazon Web Services Support</a> to request a quota increase.</p></div></li><li><div class="item-name"><a class="struct" href="struct.ResourceInUseException.html" title="struct aws_sdk_dynamodb::types::error::ResourceInUseException">ResourceInUseException</a></div><div class="desc docblock-short"><p>The operation conflicts with the resource's availability. For example:</p>
+<ul>
+<li>
+<p>You attempted to recreate an existing table.</p></li>
+<li>
+<p>You tried to delete a table currently in the <code>CREATING</code> state.</p></li>
+<li>
+<p>You tried to update a resource that was already being updated.</p></li>
+</ul>
+<p>When appropriate, wait for the ongoing update to complete and attempt the request again.</p></div></li><li><div class="item-name"><a class="struct" href="struct.ResourceNotFoundException.html" title="struct aws_sdk_dynamodb::types::error::ResourceNotFoundException">ResourceNotFoundException</a></div><div class="desc docblock-short"><p>The operation tried to access a nonexistent table or index. The resource might not be specified correctly, or its status might not be <code>ACTIVE</code>.</p></div></li><li><div class="item-name"><a class="struct" href="struct.TableAlreadyExistsException.html" title="struct aws_sdk_dynamodb::types::error::TableAlreadyExistsException">TableAlreadyExistsException</a></div><div class="desc docblock-short"><p>A target table with the specified name already exists.</p></div></li><li><div class="item-name"><a class="struct" href="struct.TableInUseException.html" title="struct aws_sdk_dynamodb::types::error::TableInUseException">TableInUseException</a></div><div class="desc docblock-short"><p>A target table with the specified name is either being created or deleted.</p></div></li><li><div class="item-name"><a class="struct" href="struct.TableNotFoundException.html" title="struct aws_sdk_dynamodb::types::error::TableNotFoundException">TableNotFoundException</a></div><div class="desc docblock-short"><p>A source table with the name <code>TableName</code> does not currently exist within the subscriber's account or the subscriber is operating in the wrong Amazon Web Services Region.</p></div></li><li><div class="item-name"><a class="struct" href="struct.TransactionCanceledException.html" title="struct aws_sdk_dynamodb::types::error::TransactionCanceledException">TransactionCanceledException</a></div><div class="desc docblock-short"><p>The entire transaction request was canceled.</p>
+<p>DynamoDB cancels a <code>TransactWriteItems</code> request under the following circumstances:</p>
+<ul>
+<li>
+<p>A condition in one of the condition expressions is not met.</p></li>
+<li>
+<p>A table in the <code>TransactWriteItems</code> request is in a different account or region.</p></li>
+<li>
+<p>More than one action in the <code>TransactWriteItems</code> operation targets the same item.</p></li>
+<li>
+<p>There is insufficient provisioned capacity for the transaction to be completed.</p></li>
+<li>
+<p>An item size becomes too large (larger than 400 KB), or a local secondary index (LSI) becomes too large, or a similar validation error occurs because of changes made by the transaction.</p></li>
+<li>
+<p>There is a user error, such as an invalid data format.</p></li>
+<li>
+<p>There is an ongoing <code>TransactWriteItems</code> operation that conflicts with a concurrent <code>TransactWriteItems</code> request. In this case the <code>TransactWriteItems</code> operation fails with a <code>TransactionCanceledException</code>.</p></li>
+</ul>
+<p>DynamoDB cancels a <code>TransactGetItems</code> request under the following circumstances:</p>
+<ul>
+<li>
+<p>There is an ongoing <code>TransactGetItems</code> operation that conflicts with a concurrent <code>PutItem</code>, <code>UpdateItem</code>, <code>DeleteItem</code> or <code>TransactWriteItems</code> request. In this case the <code>TransactGetItems</code> operation fails with a <code>TransactionCanceledException</code>.</p></li>
+<li>
+<p>A table in the <code>TransactGetItems</code> request is in a different account or region.</p></li>
+<li>
+<p>There is insufficient provisioned capacity for the transaction to be completed.</p></li>
+<li>
+<p>There is a user error, such as an invalid data format.</p></li>
+</ul><note>
+<p>If using Java, DynamoDB lists the cancellation reasons on the <code>CancellationReasons</code> property. This property is not set for other languages. Transaction cancellation reasons are ordered in the order of requested items, if an item has no error it will have <code>None</code> code and <code>Null</code> message.</p>
+</note>
+<p>Cancellation reason codes and possible error messages:</p>
+<ul>
+<li>
+<p>No Errors:</p>
+<ul>
+<li>
+<p>Code: <code>None</code></p></li>
+<li>
+<p>Message: <code>null</code></p></li>
+</ul></li>
+<li>
+<p>Conditional Check Failed:</p>
+<ul>
+<li>
+<p>Code: <code>ConditionalCheckFailed</code></p></li>
+<li>
+<p>Message: The conditional request failed.</p></li>
+</ul></li>
+<li>
+<p>Item Collection Size Limit Exceeded:</p>
+<ul>
+<li>
+<p>Code: <code>ItemCollectionSizeLimitExceeded</code></p></li>
+<li>
+<p>Message: Collection size exceeded.</p></li>
+</ul></li>
+<li>
+<p>Transaction Conflict:</p>
+<ul>
+<li>
+<p>Code: <code>TransactionConflict</code></p></li>
+<li>
+<p>Message: Transaction is ongoing for the item.</p></li>
+</ul></li>
+<li>
+<p>Provisioned Throughput Exceeded:</p>
+<ul>
+<li>
+<p>Code: <code>ProvisionedThroughputExceeded</code></p></li>
+<li>
+<p>Messages:</p>
+<ul>
+<li>
+<p>The level of configured provisioned throughput for the table was exceeded. Consider increasing your provisioning level with the UpdateTable API.</p><note>
+<p>This Message is received when provisioned throughput is exceeded is on a provisioned DynamoDB table.</p>
+</note></li>
+<li>
+<p>The level of configured provisioned throughput for one or more global secondary indexes of the table was exceeded. Consider increasing your provisioning level for the under-provisioned global secondary indexes with the UpdateTable API.</p><note>
+<p>This message is returned when provisioned throughput is exceeded is on a provisioned GSI.</p>
+</note></li>
+</ul></li>
+</ul></li>
+<li>
+<p>Throttling Error:</p>
+<ul>
+<li>
+<p>Code: <code>ThrottlingError</code></p></li>
+<li>
+<p>Messages:</p>
+<ul>
+<li>
+<p>Throughput exceeds the current capacity of your table or index. DynamoDB is automatically scaling your table or index so please try again shortly. If exceptions persist, check if you have a hot key: https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/bp-partition-key-design.html.</p><note>
+<p>This message is returned when writes get throttled on an On-Demand table as DynamoDB is automatically scaling the table.</p>
+</note></li>
+<li>
+<p>Throughput exceeds the current capacity for one or more global secondary indexes. DynamoDB is automatically scaling your index so please try again shortly.</p><note>
+<p>This message is returned when writes get throttled on an On-Demand GSI as DynamoDB is automatically scaling the GSI.</p>
+</note></li>
+</ul></li>
+</ul></li>
+<li>
+<p>Validation Error:</p>
+<ul>
+<li>
+<p>Code: <code>ValidationError</code></p></li>
+<li>
+<p>Messages:</p>
+<ul>
+<li>
+<p>One or more parameter values were invalid.</p></li>
+<li>
+<p>The update expression attempted to update the secondary index key beyond allowed size limits.</p></li>
+<li>
+<p>The update expression attempted to update the secondary index key to unsupported type.</p></li>
+<li>
+<p>An operand in the update expression has an incorrect data type.</p></li>
+<li>
+<p>Item size to update has exceeded the maximum allowed size.</p></li>
+<li>
+<p>Number overflow. Attempting to store a number with magnitude larger than supported range.</p></li>
+<li>
+<p>Type mismatch for attribute to update.</p></li>
+<li>
+<p>Nesting Levels have exceeded supported limits.</p></li>
+<li>
+<p>The document path provided in the update expression is invalid for update.</p></li>
+<li>
+<p>The provided expression refers to an attribute that does not exist in the item.</p></li>
+</ul></li>
+</ul></li>
+</ul></div></li><li><div class="item-name"><a class="struct" href="struct.TransactionConflictException.html" title="struct aws_sdk_dynamodb::types::error::TransactionConflictException">TransactionConflictException</a></div><div class="desc docblock-short"><p>Operation was rejected because there is an ongoing transaction for the item.</p></div></li><li><div class="item-name"><a class="struct" href="struct.TransactionInProgressException.html" title="struct aws_sdk_dynamodb::types::error::TransactionInProgressException">TransactionInProgressException</a></div><div class="desc docblock-short"><p>The transaction with the given request token is already in progress.</p>
+<p>Recommended Settings</p><note>
+<p>This is a general recommendation for handling the <code>TransactionInProgressException</code>. These settings help ensure that the client retries will trigger completion of the ongoing <code>TransactWriteItems</code> request.</p>
+</note>
+<ul>
+<li>
+<p>Set <code>clientExecutionTimeout</code> to a value that allows at least one retry to be processed after 5 seconds have elapsed since the first attempt for the <code>TransactWriteItems</code> operation.</p></li>
+<li>
+<p>Set <code>socketTimeout</code> to a value a little lower than the <code>requestTimeout</code> setting.</p></li>
+<li>
+<p><code>requestTimeout</code> should be set based on the time taken for the individual retries of a single HTTP request for your use case, but setting it to 1 second or higher should work well to reduce chances of retries and <code>TransactionInProgressException</code> errors.</p></li>
+<li>
+<p>Use exponential backoff when retrying and tune backoff if needed.</p></li>
+</ul>
+<p>Assuming <a href="https://github.com/aws/aws-sdk-java/blob/fd409dee8ae23fb8953e0bb4dbde65536a7e0514/aws-java-sdk-core/src/main/java/com/amazonaws/retry/PredefinedRetryPolicies.java#L97">default retry policy</a>, example timeout settings based on the guidelines above are as follows:</p>
+<p>Example timeline:</p>
+<ul>
+<li>
+<p>0-1000 first attempt</p></li>
+<li>
+<p>1000-1500 first sleep/delay (default retry policy uses 500 ms as base delay for 4xx errors)</p></li>
+<li>
+<p>1500-2500 second attempt</p></li>
+<li>
+<p>2500-3500 second sleep/delay (500 * 2, exponential backoff)</p></li>
+<li>
+<p>3500-4500 third attempt</p></li>
+<li>
+<p>4500-6500 third sleep/delay (500 * 2^2)</p></li>
+<li>
+<p>6500-7500 fourth attempt (this can trigger inline recovery since 5 seconds have elapsed since the first attempt reached TC)</p></li>
+</ul></div></li></ul></section></div></main></body></html>

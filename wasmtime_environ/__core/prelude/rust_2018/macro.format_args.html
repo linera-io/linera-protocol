@@ -1,0 +1,38 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Constructs parameters for the other string-formatting macros."><title>format_args in wasmtime_environ::__core::prelude::rust_2018 - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="wasmtime_environ" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../../wasmtime_environ/index.html">wasmtime_environ</a><span class="version">25.0.1</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In wasmtime_environ::__core::prelude::rust_2018</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="../../../index.html">wasmtime_environ</a>::<wbr><a href="../../index.html">__core</a>::<wbr><a href="../index.html">prelude</a>::<wbr><a href="index.html">rust_2018</a>::<wbr><a class="macro" href="#">format_args</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/macros/mod.rs.html#1012">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><span class="macro">macro_rules!</span> format_args {
+    (<span class="macro-nonterminal">$fmt</span>:expr) =&gt; { ... };
+    (<span class="macro-nonterminal">$fmt</span>:expr, $(<span class="macro-nonterminal">$args</span>:tt)<span class="kw-2">*</span>) =&gt; { ... };
+}</pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Constructs parameters for the other string-formatting macros.</p>
+<p>This macro functions by taking a formatting string literal containing
+<code>{}</code> for each additional argument passed. <code>format_args!</code> prepares the
+additional parameters to ensure the output can be interpreted as a string
+and canonicalizes the arguments into a single type. Any value that implements
+the <a href="../../fmt/trait.Display.html" title="trait wasmtime_environ::__core::fmt::Display"><code>Display</code></a> trait can be passed to <code>format_args!</code>, as can any
+<a href="../../fmt/trait.Debug.html" title="trait wasmtime_environ::__core::fmt::Debug"><code>Debug</code></a> implementation be passed to a <code>{:?}</code> within the formatting string.</p>
+<p>This macro produces a value of type <a href="../../fmt/struct.Arguments.html" title="struct wasmtime_environ::__core::fmt::Arguments"><code>fmt::Arguments</code></a>. This value can be
+passed to the macros within <a href="../std/fmt/index.html"><code>std::fmt</code></a> for performing useful redirection.
+All other formatting macros (<a href="../std/macro.format.html"><code>format!</code></a>, <a href="../../macro.write.html" title="macro wasmtime_environ::__core::write"><code>write!</code></a>, <a href="../std/macro.println.html"><code>println!</code></a>, etc) are
+proxied through this one. <code>format_args!</code>, unlike its derived macros, avoids
+heap allocations.</p>
+<p>You can use the <a href="../../fmt/struct.Arguments.html" title="struct wasmtime_environ::__core::fmt::Arguments"><code>fmt::Arguments</code></a> value that <code>format_args!</code> returns
+in <code>Debug</code> and <code>Display</code> contexts as seen below. The example also shows
+that <code>Debug</code> and <code>Display</code> format to the same thing: the interpolated
+format string in <code>format_args!</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>debug = <span class="macro">format!</span>(<span class="string">"{:?}"</span>, <span class="macro">format_args!</span>(<span class="string">"{} foo {:?}"</span>, <span class="number">1</span>, <span class="number">2</span>));
+<span class="kw">let </span>display = <span class="macro">format!</span>(<span class="string">"{}"</span>, <span class="macro">format_args!</span>(<span class="string">"{} foo {:?}"</span>, <span class="number">1</span>, <span class="number">2</span>));
+<span class="macro">assert_eq!</span>(<span class="string">"1 foo 2"</span>, display);
+<span class="macro">assert_eq!</span>(display, debug);</code></pre></div>
+<p>See <a href="../std/fmt/index.html">the formatting documentation in <code>std::fmt</code></a>
+for details of the macro argument syntax, and further information.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::fmt;
+
+<span class="kw">let </span>s = fmt::format(<span class="macro">format_args!</span>(<span class="string">"hello {}"</span>, <span class="string">"world"</span>));
+<span class="macro">assert_eq!</span>(s, <span class="macro">format!</span>(<span class="string">"hello {}"</span>, <span class="string">"world"</span>));</code></pre></div>
+<h2 id="lifetime-limitation"><a class="doc-anchor" href="#lifetime-limitation">§</a>Lifetime limitation</h2>
+<p>Except when no formatting arguments are used,
+the produced <code>fmt::Arguments</code> value borrows temporary values,
+which means it can only be used within the same expression
+and cannot be stored for later use.
+This is a known limitation, see <a href="https://github.com/rust-lang/rust/issues/92698">#92698</a>.</p>
+</div></details></section></div></main></body></html>

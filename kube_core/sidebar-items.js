@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Version"],"mod":["conversion","crd","discovery","duration","dynamic","gvk","metadata","object","params","request","response","subresource","util","watch"],"struct":["ClusterResourceScope","DynamicResourceScope","ErrorResponse","ListMeta","NamespaceResourceScope","ObjectMeta","SubResourceScope"],"trait":["Resource","ResourceExt","ResourceScope"]};

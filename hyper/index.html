@@ -1,0 +1,65 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="hyper"><title>hyper - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="hyper" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../hyper/index.html">hyper</a><span class="version">1.4.1</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#types">Type Aliases</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">hyper</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/hyper/lib.rs.html#1-138">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="hyper"><a class="doc-anchor" href="#hyper">§</a>hyper</h2>
+<p>hyper is a <strong>fast</strong> and <strong>correct</strong> HTTP implementation written in and for Rust.</p>
+<h3 id="features"><a class="doc-anchor" href="#features">§</a>Features</h3>
+<ul>
+<li>HTTP/1 and HTTP/2</li>
+<li>Asynchronous design</li>
+<li>Leading in performance</li>
+<li>Tested and <strong>correct</strong></li>
+<li>Extensive production use</li>
+<li><a href="client/index.html">Client</a> and <a href="server/index.html">Server</a> APIs</li>
+</ul>
+<p>If just starting out, <strong>check out the <a href="https://hyper.rs/guides/1/">Guides</a>
+first.</strong></p>
+<h3 id="low-level"><a class="doc-anchor" href="#low-level">§</a>“Low-level”</h3>
+<p>hyper is a lower-level HTTP library, meant to be a building block
+for libraries and applications.</p>
+<p>If looking for just a convenient HTTP client, consider the
+<a href="https://crates.io/crates/reqwest">reqwest</a> crate.</p>
+<h2 id="optional-features"><a class="doc-anchor" href="#optional-features">§</a>Optional Features</h2>
+<p>hyper uses a set of <a href="https://doc.rust-lang.org/cargo/reference/manifest.html#the-features-section">feature flags</a> to reduce the amount of compiled code.
+It is possible to just enable certain features over others. By default,
+hyper does not enable any features but allows one to enable a subset for
+their use case. Below is a list of the available feature flags. You may
+also notice above each function, struct and trait there is listed one or
+more feature flags that are required for that item to be used.</p>
+<p>If you are new to hyper it is possible to enable the <code>full</code> feature flag
+which will enable all public APIs. Beware though that this will pull in
+many extra dependencies that you may not need.</p>
+<p>The following optional features are available:</p>
+<ul>
+<li><code>http1</code>: Enables HTTP/1 support.</li>
+<li><code>http2</code>: Enables HTTP/2 support.</li>
+<li><code>client</code>: Enables the HTTP <code>client</code>.</li>
+<li><code>server</code>: Enables the HTTP <code>server</code>.</li>
+</ul>
+<h2 id="unstable-features"><a class="doc-anchor" href="#unstable-features">§</a>Unstable Features</h2>
+<p>hyper includes a set of unstable optional features that can be enabled through the use of a
+feature flag and a <a href="https://doc.rust-lang.org/reference/conditional-compilation.html">configuration flag</a>.</p>
+<p>The following is a list of feature flags and their corresponding <code>RUSTFLAG</code>:</p>
+<ul>
+<li><code>ffi</code>: Enables C API for hyper <code>hyper_unstable_ffi</code>.</li>
+<li><code>tracing</code>: Enables debug logging with <code>hyper_unstable_tracing</code>.</li>
+</ul>
+<p>Enabling an unstable feature is possible with the following <code>cargo</code> command, as of version <code>1.64.0</code>:</p>
+<div class="example-wrap"><pre class="language-notrust"><code>RUSTFLAGS=&quot;--cfg hyper_unstable_tracing&quot; cargo rustc --features client,http1,http2,tracing --crate-type cdylib
+</code></pre></div><h2 id="stability"><a class="doc-anchor" href="#stability">§</a>Stability</h2>
+<p>It’s worth talking a bit about the stability of hyper. hyper’s API follows
+<a href="https://semver.org">SemVer</a>. Breaking changes will only be introduced in
+major versions, if ever. New additions to the API, such as new types,
+methods, or traits will only be added in minor versions.</p>
+<p>Some parts of hyper are documented as NOT being part of the stable API. The
+following is a brief list, you can read more about each one in the relevant
+part of the documentation.</p>
+<ul>
+<li>Downcasting error types from <code>Error::source()</code> is not considered stable.</li>
+<li>Private dependencies use of global variables is not considered stable.
+So, if a dependency uses <code>log</code> or <code>tracing</code>, hyper doesn’t promise it
+will continue to do so.</li>
+<li>Behavior from default options is not stable. hyper reserves the right to
+add new options that are enabled by default which might alter the
+behavior, for the purposes of protection. It is also possible to <em>change</em>
+what the default options are set to, also in efforts to protect the
+most people possible.</li>
+</ul>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.HeaderMap"><code>pub use crate::http::<a class="struct" href="header/struct.HeaderMap.html" title="struct hyper::header::HeaderMap">HeaderMap</a>;</code></div></li></ul><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="body/index.html" title="mod hyper::body">body</a></div><div class="desc docblock-short">Streaming bodies for Requests and Responses</div></li><li><div class="item-name"><a class="mod" href="client/index.html" title="mod hyper::client">client</a></div><div class="desc docblock-short">HTTP Client</div></li><li><div class="item-name"><a class="mod" href="ext/index.html" title="mod hyper::ext">ext</a></div><div class="desc docblock-short">HTTP extensions.</div></li><li><div class="item-name"><a class="mod" href="header/index.html" title="mod hyper::header">header</a></div><div class="desc docblock-short">HTTP header types</div></li><li><div class="item-name"><a class="mod" href="rt/index.html" title="mod hyper::rt">rt</a></div><div class="desc docblock-short">Runtime components</div></li><li><div class="item-name"><a class="mod" href="server/index.html" title="mod hyper::server">server</a></div><div class="desc docblock-short">HTTP Server</div></li><li><div class="item-name"><a class="mod" href="service/index.html" title="mod hyper::service">service</a></div><div class="desc docblock-short">Asynchronous Services</div></li><li><div class="item-name"><a class="mod" href="upgrade/index.html" title="mod hyper::upgrade">upgrade</a></div><div class="desc docblock-short">HTTP Upgrades</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Error.html" title="struct hyper::Error">Error</a></div><div class="desc docblock-short">Represents errors that can occur handling HTTP streams.</div></li><li><div class="item-name"><a class="struct" href="struct.Method.html" title="struct hyper::Method">Method</a></div><div class="desc docblock-short">The Request Method (VERB)</div></li><li><div class="item-name"><a class="struct" href="struct.Request.html" title="struct hyper::Request">Request</a></div><div class="desc docblock-short">Represents an HTTP request.</div></li><li><div class="item-name"><a class="struct" href="struct.Response.html" title="struct hyper::Response">Response</a></div><div class="desc docblock-short">Represents an HTTP response</div></li><li><div class="item-name"><a class="struct" href="struct.StatusCode.html" title="struct hyper::StatusCode">StatusCode</a></div><div class="desc docblock-short">An HTTP status code (<code>status-code</code> in RFC 7230 et al.).</div></li><li><div class="item-name"><a class="struct" href="struct.Uri.html" title="struct hyper::Uri">Uri</a></div><div class="desc docblock-short">The URI component of a request.</div></li><li><div class="item-name"><a class="struct" href="struct.Version.html" title="struct hyper::Version">Version</a></div><div class="desc docblock-short">Represents a version of the HTTP spec.</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.Result.html" title="type hyper::Result">Result</a></div><div class="desc docblock-short">Result type often returned from methods that can have hyper <code>Error</code>s.</div></li></ul></section></div></main></body></html>

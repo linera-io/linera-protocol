@@ -1,0 +1,104 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A Rust implementation of ed25519 key generation, signing, and verification."><title>ed25519_dalek - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="ed25519_dalek" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../ed25519_dalek/index.html">ed25519_dalek</a><span class="version">2.1.1</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#structs">Structs</a></li><li><a href="#constants">Constants</a></li><li><a href="#traits">Traits</a></li><li><a href="#functions">Functions</a></li><li><a href="#types">Type Aliases</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">ed25519_dalek</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/ed25519_dalek/lib.rs.html#10-293">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A Rust implementation of ed25519 key generation, signing, and verification.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<p>Creating an ed25519 signature on a message is simple.</p>
+<p>First, we need to generate a <code>SigningKey</code>, which includes both public and
+secret halves of an asymmetric key.  To do so, we need a cryptographically
+secure pseudorandom number generator (CSPRNG). For this example, we’ll use
+the operating system’s builtin PRNG:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rand::rngs::OsRng;
+<span class="kw">use </span>ed25519_dalek::SigningKey;
+<span class="kw">use </span>ed25519_dalek::Signature;
+
+<span class="kw">let </span><span class="kw-2">mut </span>csprng = OsRng;
+<span class="kw">let </span>signing_key: SigningKey = SigningKey::generate(<span class="kw-2">&amp;mut </span>csprng);</code></pre></div>
+<p>We can now use this <code>signing_key</code> to sign a message:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>ed25519_dalek::{Signature, Signer};
+<span class="kw">let </span>message: <span class="kw-2">&amp;</span>[u8] = <span class="string">b"This is a test of the tsunami alert system."</span>;
+<span class="kw">let </span>signature: Signature = signing_key.sign(message);</code></pre></div>
+<p>As well as to verify that this is, indeed, a valid signature on
+that <code>message</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>ed25519_dalek::Verifier;
+<span class="macro">assert!</span>(signing_key.verify(message, <span class="kw-2">&amp;</span>signature).is_ok());</code></pre></div>
+<p>Anyone else, given the <code>public</code> half of the <code>signing_key</code> can also easily
+verify this signature:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>ed25519_dalek::{VerifyingKey, Verifier};
+
+<span class="kw">let </span>verifying_key: VerifyingKey = signing_key.verifying_key();
+<span class="macro">assert!</span>(verifying_key.verify(message, <span class="kw-2">&amp;</span>signature).is_ok());</code></pre></div>
+<h3 id="serialisation"><a class="doc-anchor" href="#serialisation">§</a>Serialisation</h3>
+<p><code>VerifyingKey</code>s, <code>SecretKey</code>s, <code>SigningKey</code>s, and <code>Signature</code>s can be serialised
+into byte-arrays by calling <code>.to_bytes()</code>.  It’s perfectly acceptable and
+safe to transfer and/or store those bytes.  (Of course, never transfer your
+secret key to anyone else, since they will only need the public key to
+verify your signatures!)</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>ed25519_dalek::{PUBLIC_KEY_LENGTH, SECRET_KEY_LENGTH, KEYPAIR_LENGTH, SIGNATURE_LENGTH};
+
+<span class="kw">let </span>verifying_key_bytes: [u8; PUBLIC_KEY_LENGTH] = signing_key.verifying_key().to_bytes();
+<span class="kw">let </span>secret_key_bytes: [u8; SECRET_KEY_LENGTH] = signing_key.to_bytes();
+<span class="kw">let </span>signing_key_bytes:    [u8; KEYPAIR_LENGTH]    = signing_key.to_keypair_bytes();
+<span class="kw">let </span>signature_bytes:  [u8; SIGNATURE_LENGTH]  = signature.to_bytes();</code></pre></div>
+<p>And similarly, decoded from bytes with <code>::from_bytes()</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>verifying_key: VerifyingKey = VerifyingKey::from_bytes(<span class="kw-2">&amp;</span>verifying_key_bytes)<span class="question-mark">?</span>;
+<span class="kw">let </span>signing_key: SigningKey = SigningKey::from_bytes(<span class="kw-2">&amp;</span>signing_key_bytes);
+<span class="kw">let </span>signature: Signature = Signature::try_from(<span class="kw-2">&amp;</span>signature_bytes[..])<span class="question-mark">?</span>;</code></pre></div>
+<h4 id="pkcs8-key-encoding"><a class="doc-anchor" href="#pkcs8-key-encoding">§</a>PKCS#8 Key Encoding</h4>
+<p>PKCS#8 is a private key format with support for multiple algorithms.
+It can be encoded as binary (DER) or text (PEM).</p>
+<p>You can recognize PEM-encoded PKCS#8 keys by the following:</p>
+<div class="example-wrap"><pre class="language-text"><code>-----BEGIN PRIVATE KEY-----
+</code></pre></div>
+<p>To use PKCS#8, you need to enable the <code>pkcs8</code> crate feature.</p>
+<p>The following traits can be used to decode/encode <a href="struct.SigningKey.html" title="struct ed25519_dalek::SigningKey"><code>SigningKey</code></a> and
+<a href="struct.VerifyingKey.html" title="struct ed25519_dalek::VerifyingKey"><code>VerifyingKey</code></a> as PKCS#8. Note that [<code>pkcs8</code>] is re-exported from the
+toplevel of the crate:</p>
+<ul>
+<li>[<code>pkcs8::DecodePrivateKey</code>]: decode private keys from PKCS#8</li>
+<li>[<code>pkcs8::EncodePrivateKey</code>]: encode private keys to PKCS#8</li>
+<li>[<code>pkcs8::DecodePublicKey</code>]: decode public keys from PKCS#8</li>
+<li>[<code>pkcs8::EncodePublicKey</code>]: encode public keys to PKCS#8</li>
+</ul>
+<h5 id="example-1"><a class="doc-anchor" href="#example-1">§</a>Example</h5>
+<p>NOTE: this requires the <code>pem</code> crate feature.</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>ed25519_dalek::{VerifyingKey, pkcs8::DecodePublicKey};
+
+<span class="kw">let </span>pem = <span class="string">"-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEAGb9ECWmEzf6FQbrBZ9w7lshQhqowtrbLDFw4rXAxZuE=
+-----END PUBLIC KEY-----"</span>;
+
+<span class="kw">let </span>verifying_key = VerifyingKey::from_public_key_pem(pem)
+    .expect(<span class="string">"invalid public key PEM"</span>);</code></pre></div>
+<h4 id="using-serde"><a class="doc-anchor" href="#using-serde">§</a>Using Serde</h4>
+<p>If you prefer the bytes to be wrapped in another serialisation format, all
+types additionally come with built-in <a href="https://serde.rs">serde</a> support by
+building <code>ed25519-dalek</code> via:</p>
+<div class="example-wrap"><pre class="language-bash"><code>$ cargo build --features=&quot;serde&quot;
+</code></pre></div>
+<p>They can be then serialised into any of the wire formats which serde supports.
+For example, using <a href="https://github.com/TyOverby/bincode">bincode</a>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>bincode::serialize;
+
+<span class="kw">let </span>encoded_verifying_key: Vec&lt;u8&gt; = serialize(<span class="kw-2">&amp;</span>verifying_key).unwrap();
+<span class="kw">let </span>encoded_signature: Vec&lt;u8&gt; = serialize(<span class="kw-2">&amp;</span>signature).unwrap();</code></pre></div>
+<p>After sending the <code>encoded_verifying_key</code> and <code>encoded_signature</code>, the
+recipient may deserialise them and verify:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>bincode::deserialize;
+
+<span class="kw">let </span>message: <span class="kw-2">&amp;</span>[u8] = <span class="string">b"This is a test of the tsunami alert system."</span>;
+<span class="kw">let </span>decoded_verifying_key: VerifyingKey = deserialize(<span class="kw-2">&amp;</span>encoded_verifying_key).unwrap();
+<span class="kw">let </span>decoded_signature: Signature = deserialize(<span class="kw-2">&amp;</span>encoded_signature).unwrap();
+
+<span class="kw">let </span>verified: bool = decoded_verifying_key.verify(<span class="kw-2">&amp;</span>message, <span class="kw-2">&amp;</span>decoded_signature).is_ok();
+
+<span class="macro">assert!</span>(verified);</code></pre></div>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.ed25519"><code>pub use <a class="mod" href="../ed25519/index.html" title="mod ed25519">ed25519</a>;</code></div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Signature.html" title="struct ed25519_dalek::Signature">Signature</a></div><div class="desc docblock-short">Ed25519 signature.</div></li><li><div class="item-name"><a class="struct" href="struct.SigningKey.html" title="struct ed25519_dalek::SigningKey">SigningKey</a></div><div class="desc docblock-short">ed25519 signing key which can be used to produce signatures.</div></li><li><div class="item-name"><a class="struct" href="struct.VerifyingKey.html" title="struct ed25519_dalek::VerifyingKey">VerifyingKey</a></div><div class="desc docblock-short">An ed25519 public key.</div></li></ul><h2 id="constants" class="section-header">Constants<a href="#constants" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="constant" href="constant.EXPANDED_SECRET_KEY_LENGTH.html" title="constant ed25519_dalek::EXPANDED_SECRET_KEY_LENGTH">EXPANDED_SECRET_KEY_LENGTH</a></div><div class="desc docblock-short">The length of an “expanded” ed25519 key, <code>ExpandedSecretKey</code>, in bytes.</div></li><li><div class="item-name"><a class="constant" href="constant.KEYPAIR_LENGTH.html" title="constant ed25519_dalek::KEYPAIR_LENGTH">KEYPAIR_LENGTH</a></div><div class="desc docblock-short">The length of an ed25519 <code>Keypair</code>, in bytes.</div></li><li><div class="item-name"><a class="constant" href="constant.PUBLIC_KEY_LENGTH.html" title="constant ed25519_dalek::PUBLIC_KEY_LENGTH">PUBLIC_KEY_LENGTH</a></div><div class="desc docblock-short">The length of an ed25519 <code>PublicKey</code>, in bytes.</div></li><li><div class="item-name"><a class="constant" href="constant.SECRET_KEY_LENGTH.html" title="constant ed25519_dalek::SECRET_KEY_LENGTH">SECRET_KEY_LENGTH</a></div><div class="desc docblock-short">The length of a ed25519 <code>SecretKey</code>, in bytes.</div></li><li><div class="item-name"><a class="constant" href="constant.SIGNATURE_LENGTH.html" title="constant ed25519_dalek::SIGNATURE_LENGTH">SIGNATURE_LENGTH</a></div><div class="desc docblock-short">The length of a ed25519 <code>Signature</code>, in bytes.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.Digest.html" title="trait ed25519_dalek::Digest">Digest</a></div><div class="desc docblock-short">Convenience wrapper trait covering functionality of cryptographic hash
+functions with fixed output size.</div></li><li><div class="item-name"><a class="trait" href="trait.Signer.html" title="trait ed25519_dalek::Signer">Signer</a></div><div class="desc docblock-short">Sign the provided message bytestring using <code>Self</code> (e.g. a cryptographic key
+or connection to an HSM), returning a digital signature.</div></li><li><div class="item-name"><a class="trait" href="trait.Verifier.html" title="trait ed25519_dalek::Verifier">Verifier</a></div><div class="desc docblock-short">Verify the provided message bytestring using <code>Self</code> (e.g. a public key)</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.verify_batch.html" title="fn ed25519_dalek::verify_batch">verify_batch</a></div><div class="desc docblock-short">Verify a batch of <code>signatures</code> on <code>messages</code> with their respective <code>verifying_keys</code>.</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.SecretKey.html" title="type ed25519_dalek::SecretKey">SecretKey</a></div><div class="desc docblock-short">ed25519 secret key as defined in <a href="https://www.rfc-editor.org/rfc/rfc8032#section-5.1.5">RFC8032 § 5.1.5</a>:</div></li><li><div class="item-name"><a class="type" href="type.SignatureError.html" title="type ed25519_dalek::SignatureError">SignatureError</a></div><div class="desc docblock-short">Errors which may occur while processing signatures and keypairs.</div></li></ul></section></div></main></body></html>

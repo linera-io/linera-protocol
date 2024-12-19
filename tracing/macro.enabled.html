@@ -1,0 +1,72 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Checks whether a span or event is enabled based on the provided metadata."><title>enabled in tracing - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="tracing" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../tracing/index.html"><img src="https://raw.githubusercontent.com/tokio-rs/tracing/master/assets/logo-type.png" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../tracing/index.html"><img src="https://raw.githubusercontent.com/tokio-rs/tracing/master/assets/logo-type.png" alt="logo"></a><h2><a href="../tracing/index.html">tracing</a><span class="version">0.1.40</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="index.html">tracing</a>::<wbr><a class="macro" href="#">enabled</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/tracing/macros.rs.html#1184-1264">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><span class="macro">macro_rules!</span> enabled {
+    (kind: <span class="macro-nonterminal">$kind</span>:expr, target: <span class="macro-nonterminal">$target</span>:expr, <span class="macro-nonterminal">$lvl</span>:expr, { $(<span class="macro-nonterminal">$fields</span>:tt)* } ) =&gt; { ... };
+    (kind: <span class="macro-nonterminal">$kind</span>:expr, target: <span class="macro-nonterminal">$target</span>:expr, <span class="macro-nonterminal">$lvl</span>:expr ) =&gt; { ... };
+    (target: <span class="macro-nonterminal">$target</span>:expr, <span class="macro-nonterminal">$lvl</span>:expr ) =&gt; { ... };
+    (kind: <span class="macro-nonterminal">$kind</span>:expr, target: <span class="macro-nonterminal">$target</span>:expr, <span class="macro-nonterminal">$lvl</span>:expr, $(<span class="macro-nonterminal">$field</span>:tt)<span class="kw-2">*</span>) =&gt; { ... };
+    (target: <span class="macro-nonterminal">$target</span>:expr, <span class="macro-nonterminal">$lvl</span>:expr, $(<span class="macro-nonterminal">$field</span>:tt)<span class="kw-2">*</span>) =&gt; { ... };
+    (kind: <span class="macro-nonterminal">$kind</span>:expr, <span class="macro-nonterminal">$lvl</span>:expr, $(<span class="macro-nonterminal">$field</span>:tt)<span class="kw-2">*</span>) =&gt; { ... };
+    (kind: <span class="macro-nonterminal">$kind</span>:expr, <span class="macro-nonterminal">$lvl</span>:expr) =&gt; { ... };
+    (<span class="macro-nonterminal">$lvl</span>:expr) =&gt; { ... };
+    (<span class="macro-nonterminal">$lvl</span>:expr, $(<span class="macro-nonterminal">$field</span>:tt)<span class="kw-2">*</span>) =&gt; { ... };
+}</pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Checks whether a span or event is <a href="trait.Subscriber.html#tymethod.enabled" title="method tracing::Subscriber::enabled">enabled</a> based on the provided <a href="struct.Metadata.html" title="struct tracing::Metadata">metadata</a>.</p>
+<p>This macro is a specialized tool: it is intended to be used prior
+to an expensive computation required <em>just</em> for that event, but
+<em>cannot</em> be done as part of an argument to that event, such as
+when multiple events are emitted (e.g., iterating over a collection
+and emitting an event for each item).</p>
+<h2 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h2>
+<p><a href="trait.Subscriber.html" title="trait tracing::Subscriber">Subscribers</a> can make filtering decisions based all the data included in a
+span or event’s <a href="struct.Metadata.html" title="struct tracing::Metadata"><code>Metadata</code></a>. This means that it is possible for <code>enabled!</code>
+to return a <em>false positive</em> (indicating that something would be enabled
+when it actually would not be) or a <em>false negative</em> (indicating that
+something would be disabled when it would actually be enabled).</p>
+<p>This occurs when a subscriber is using a <em>more specific</em> filter than the
+metadata provided to the <code>enabled!</code> macro. Some situations that can result
+in false positives or false negatives include:</p>
+<ul>
+<li>If a subscriber is using a filter which may enable a span or event based
+on field names, but <code>enabled!</code> is invoked without listing field names,
+<code>enabled!</code> may return a false negative if a specific field name would
+cause the subscriber to enable something that would otherwise be disabled.</li>
+<li>If a subscriber is using a filter which enables or disables specific events by
+file path and line number,  a particular event may be enabled/disabled
+even if an <code>enabled!</code> invocation with the same level, target, and fields
+indicated otherwise.</li>
+<li>The subscriber can choose to enable <em>only</em> spans or <em>only</em> events, which <code>enabled</code>
+will not reflect.</li>
+</ul>
+<p><code>enabled!()</code> requires a <a href="struct.Level.html" title="struct tracing::Level">level</a> argument, an optional <code>target:</code>
+argument, and an optional set of field names. If the fields are not provided,
+they are considered to be unknown. <code>enabled!</code> attempts to match the
+syntax of <code>event!()</code> as closely as possible, which can be seen in the
+examples below.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>If the current subscriber is interested in recording <code>DEBUG</code>-level spans and
+events in the current file and module path, this will evaluate to true:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tracing::{enabled, Level};
+
+<span class="kw">if </span><span class="macro">enabled!</span>(Level::DEBUG) {
+    <span class="comment">// some expensive work...
+</span>}</code></pre></div>
+<p>If the current subscriber is interested in recording spans and events
+in the current file and module path, with the target “my_crate”, and at the
+level  <code>DEBUG</code>, this will evaluate to true:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">if </span><span class="macro">enabled!</span>(target: <span class="string">"my_crate"</span>, Level::DEBUG) {
+    <span class="comment">// some expensive work...
+</span>}</code></pre></div>
+<p>If the current subscriber is interested in recording spans and events
+in the current file and module path, with the target “my_crate”, at
+the level <code>DEBUG</code>, and with a field named “hello”, this will evaluate
+to true:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">if </span><span class="macro">enabled!</span>(target: <span class="string">"my_crate"</span>, Level::DEBUG, hello) {
+    <span class="comment">// some expensive work...
+</span>}</code></pre></div>
+<h2 id="alternatives"><a class="doc-anchor" href="#alternatives">§</a>Alternatives</h2>
+<p><code>enabled!</code> queries subscribers with <a href="struct.Metadata.html" title="struct tracing::Metadata"><code>Metadata</code></a> where
+<a href="struct.Metadata.html#method.is_event" title="method tracing::Metadata::is_event"><code>is_event</code></a> and <a href="struct.Metadata.html#method.is_span" title="method tracing::Metadata::is_span"><code>is_span</code></a> both return <code>false</code>. Alternatively,
+use <a href="macro.event_enabled.html" title="macro tracing::event_enabled"><code>event_enabled!</code></a> or <a href="macro.span_enabled.html" title="macro tracing::span_enabled"><code>span_enabled!</code></a> to ensure one of these
+returns true.</p>
+</div></details></section></div></main></body></html>

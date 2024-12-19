@@ -1,0 +1,97 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="ByteStream Abstractions"><title>aws_smithy_types::byte_stream - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="aws_smithy_types" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../aws_smithy_types/index.html">aws_smithy_types</a><span class="version">1.2.7</span></h2></div><h2 class="location"><a href="#">Module byte_stream</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li></ul></section><h2><a href="../index.html">In crate aws_smithy_types</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">aws_smithy_types</a>::<wbr><a class="mod" href="#">byte_stream</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/aws_smithy_types/byte_stream.rs.html#6-664">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>ByteStream Abstractions</p>
+<p>When the SDK returns streaming binary data, the inner Http Body is
+wrapped in <a href="struct.ByteStream.html" title="struct aws_smithy_types::byte_stream::ByteStream"><code>ByteStream</code></a>. ByteStream provides misuse-resistant primitives
+to make it easier to handle common patterns with streaming data.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2><h4 id="writing-a-bytestream-into-a-file"><a class="doc-anchor" href="#writing-a-bytestream-into-a-file">§</a>Writing a ByteStream into a file:</h4>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aws_smithy_types::byte_stream::ByteStream;
+<span class="kw">use </span>std::error::Error;
+<span class="kw">use </span>tokio::fs::File;
+<span class="kw">use </span>tokio::io::AsyncWriteExt;
+<span class="kw">struct </span>SynthesizeSpeechOutput {
+    audio_stream: ByteStream,
+}
+
+<span class="kw">async fn </span>audio_to_file(
+    output: SynthesizeSpeechOutput,
+) -&gt; <span class="prelude-ty">Result</span>&lt;(), Box&lt;<span class="kw">dyn </span>Error + Send + Sync&gt;&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>buf = output.audio_stream.collect().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span><span class="kw-2">mut </span>file = File::open(<span class="string">"audio.mp3"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+    file.write_all_buf(<span class="kw-2">&amp;mut </span>buf).<span class="kw">await</span><span class="question-mark">?</span>;
+    file.flush().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<h4 id="converting-a-bytestream-into-bytes"><a class="doc-anchor" href="#converting-a-bytestream-into-bytes">§</a>Converting a ByteStream into Bytes</h4>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>bytes::Bytes;
+<span class="kw">use </span>aws_smithy_types::byte_stream::ByteStream;
+<span class="kw">use </span>std::error::Error;
+<span class="kw">struct </span>SynthesizeSpeechOutput {
+    audio_stream: ByteStream,
+}
+<span class="kw">async fn </span>load_audio(
+    output: SynthesizeSpeechOutput,
+) -&gt; <span class="prelude-ty">Result</span>&lt;Bytes, Box&lt;<span class="kw">dyn </span>Error + Send + Sync&gt;&gt; {
+    <span class="prelude-val">Ok</span>(output.audio_stream.collect().<span class="kw">await</span><span class="question-mark">?</span>.into_bytes())
+}</code></pre></div>
+<h4 id="stream-a-bytestream-into-a-file"><a class="doc-anchor" href="#stream-a-bytestream-into-a-file">§</a>Stream a ByteStream into a file</h4>
+<p>The previous example is recommended in cases where loading the entire file into memory first is desirable. For extremely large
+files, you may wish to stream the data directly to the file system, chunk by chunk.
+This is possible using the <a href="struct.ByteStream.html#method.next" title="method aws_smithy_types::byte_stream::ByteStream::next"><code>.next()</code></a> method.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>bytes::{Buf, Bytes};
+<span class="kw">use </span>aws_smithy_types::byte_stream::ByteStream;
+<span class="kw">use </span>std::error::Error;
+<span class="kw">use </span>tokio::fs::File;
+<span class="kw">use </span>tokio::io::AsyncWriteExt;
+<span class="kw">use </span>tokio_stream::StreamExt;
+<span class="kw">struct </span>SynthesizeSpeechOutput {
+    audio_stream: ByteStream,
+}
+
+<span class="kw">async fn </span>audio_to_file(
+    output: SynthesizeSpeechOutput,
+) -&gt; <span class="prelude-ty">Result</span>&lt;(), Box&lt;<span class="kw">dyn </span>Error + Send + Sync&gt;&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>file = File::open(<span class="string">"audio.mp3"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span><span class="kw-2">mut </span>stream = output.audio_stream;
+    <span class="kw">while let </span><span class="prelude-val">Some</span>(bytes) = stream.next().<span class="kw">await </span>{
+        <span class="kw">let </span>bytes: Bytes = bytes<span class="question-mark">?</span>;
+        file.write_all(<span class="kw-2">&amp;</span>bytes).<span class="kw">await</span><span class="question-mark">?</span>;
+    }
+    file.flush().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<h4 id="create-a-bytestream-from-a-file"><a class="doc-anchor" href="#create-a-bytestream-from-a-file">§</a>Create a ByteStream from a file</h4>
+<p><em>Note: This is only available with <code>rt-tokio</code> enabled.</em></p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aws_smithy_types::byte_stream::ByteStream;
+<span class="kw">use </span>std::path::Path;
+<span class="kw">struct </span>GetObjectInput {
+  body: ByteStream
+}
+
+<span class="kw">async fn </span>bytestream_from_file() -&gt; GetObjectInput {
+    <span class="kw">let </span>bytestream = ByteStream::from_path(<span class="string">"docs/some-large-file.csv"</span>)
+        .<span class="kw">await
+        </span>.expect(<span class="string">"valid path"</span>);
+    GetObjectInput { body: bytestream }
+}</code></pre></div>
+<p>If you want more control over how the file is read, such as specifying the size of the buffer used to read the file
+or the length of the file, use an <code>FsBuilder</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aws_smithy_types::byte_stream::{ByteStream, Length};
+<span class="kw">use </span>std::path::Path;
+<span class="kw">struct </span>GetObjectInput {
+    body: ByteStream
+}
+
+<span class="kw">async fn </span>bytestream_from_file() -&gt; GetObjectInput {
+    <span class="kw">let </span>bytestream = ByteStream::read_from().path(<span class="string">"docs/some-large-file.csv"</span>)
+        .buffer_size(<span class="number">32_784</span>)
+        .length(Length::Exact(<span class="number">123_456</span>))
+        .build()
+        .<span class="kw">await
+        </span>.expect(<span class="string">"valid path"</span>);
+    GetObjectInput { body: bytestream }
+}</code></pre></div>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="error/index.html" title="mod aws_smithy_types::byte_stream::error">error</a></div><div class="desc docblock-short">Errors related to bytestreams.</div></li><li><div class="item-name"><a class="mod" href="http_body_0_4_x/index.html" title="mod aws_smithy_types::byte_stream::http_body_0_4_x">http_body_0_4_x</a></div><div class="desc docblock-short">This module is named after the <code>http-body</code> version number since we anticipate
+needing to provide equivalent functionality for 1.x of that crate in the future.
+The name has a suffix <code>_x</code> to avoid name collision with a third-party <code>http-body-0-4</code>.</div></li><li><div class="item-name"><a class="mod" href="http_body_1_x/index.html" title="mod aws_smithy_types::byte_stream::http_body_1_x">http_body_1_x</a></div><div class="desc docblock-short">Adapters to use http-body 1.0 bodies with SdkBody &amp; ByteStream</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.AggregatedBytes.html" title="struct aws_smithy_types::byte_stream::AggregatedBytes">AggregatedBytes</a></div><div class="desc docblock-short">Non-contiguous Binary Data Storage</div></li><li><div class="item-name"><a class="struct" href="struct.ByteStream.html" title="struct aws_smithy_types::byte_stream::ByteStream">ByteStream</a></div><div class="desc docblock-short">Stream of binary data</div></li><li><div class="item-name"><a class="struct" href="struct.FsBuilder.html" title="struct aws_smithy_types::byte_stream::FsBuilder">FsBuilder</a></div><div class="desc docblock-short">Builder for creating <a href="struct.ByteStream.html" title="struct aws_smithy_types::byte_stream::ByteStream"><code>ByteStreams</code></a> from a file/path, with full control over advanced options.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.Length.html" title="enum aws_smithy_types::byte_stream::Length">Length</a></div><div class="desc docblock-short">The length (in bytes) to read. Determines whether or not a short read counts as an error.</div></li></ul></section></div></main></body></html>

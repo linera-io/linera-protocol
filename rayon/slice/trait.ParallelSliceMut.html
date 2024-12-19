@@ -1,0 +1,336 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Parallel extensions for mutable slices."><title>ParallelSliceMut in rayon::slice - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="rayon" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../rayon/index.html">rayon</a><span class="version">1.10.0</span></h2></div><h2 class="location"><a href="#">ParallelSliceMut</a></h2><div class="sidebar-elems"><section><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.as_parallel_slice_mut">as_parallel_slice_mut</a></li></ul><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.par_chunk_by_mut">par_chunk_by_mut</a></li><li><a href="#method.par_chunks_exact_mut">par_chunks_exact_mut</a></li><li><a href="#method.par_chunks_mut">par_chunks_mut</a></li><li><a href="#method.par_rchunks_exact_mut">par_rchunks_exact_mut</a></li><li><a href="#method.par_rchunks_mut">par_rchunks_mut</a></li><li><a href="#method.par_sort">par_sort</a></li><li><a href="#method.par_sort_by">par_sort_by</a></li><li><a href="#method.par_sort_by_cached_key">par_sort_by_cached_key</a></li><li><a href="#method.par_sort_by_key">par_sort_by_key</a></li><li><a href="#method.par_sort_unstable">par_sort_unstable</a></li><li><a href="#method.par_sort_unstable_by">par_sort_unstable_by</a></li><li><a href="#method.par_sort_unstable_by_key">par_sort_unstable_by_key</a></li><li><a href="#method.par_split_inclusive_mut">par_split_inclusive_mut</a></li><li><a href="#method.par_split_mut">par_split_mut</a></li></ul><h3><a href="#foreign-impls">Implementations on Foreign Types</a></h3><ul class="block"><li><a href="#impl-ParallelSliceMut%3CT%3E-for-%5BT%5D">[T]</a></li></ul><h3><a href="#object-safety">Object Safety</a></h3><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In rayon::slice</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="../index.html">rayon</a>::<wbr><a href="index.html">slice</a>::<wbr><a class="trait" href="#">ParallelSliceMut</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/rayon/slice/mod.rs.html#211-756">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub trait ParallelSliceMut&lt;T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a>&gt; {
+<details class="toggle type-contents-toggle"><summary class="hideme"><span>Show 15 methods</span></summary>    // Required method
+    fn <a href="#tymethod.as_parallel_slice_mut" class="fn">as_parallel_slice_mut</a>(&amp;mut self) -&gt; &amp;mut <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.slice.html">[T]</a>;
+
+    // Provided methods
+    fn <a href="#method.par_split_mut" class="fn">par_split_mut</a>&lt;P&gt;(&amp;mut self, separator: P) -&gt; <a class="struct" href="struct.SplitMut.html" title="struct rayon::slice::SplitMut">SplitMut</a>&lt;'_, T, P&gt;
+       <span class="where">where P: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.Fn.html" title="trait core::ops::function::Fn">Fn</a>(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.par_split_inclusive_mut" class="fn">par_split_inclusive_mut</a>&lt;P&gt;(
+        &amp;mut self,
+        separator: P,
+    ) -&gt; <a class="struct" href="struct.SplitInclusiveMut.html" title="struct rayon::slice::SplitInclusiveMut">SplitInclusiveMut</a>&lt;'_, T, P&gt;
+       <span class="where">where P: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.Fn.html" title="trait core::ops::function::Fn">Fn</a>(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.par_chunks_mut" class="fn">par_chunks_mut</a>(&amp;mut self, chunk_size: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="struct" href="struct.ChunksMut.html" title="struct rayon::slice::ChunksMut">ChunksMut</a>&lt;'_, T&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.par_chunks_exact_mut" class="fn">par_chunks_exact_mut</a>(
+        &amp;mut self,
+        chunk_size: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>,
+    ) -&gt; <a class="struct" href="struct.ChunksExactMut.html" title="struct rayon::slice::ChunksExactMut">ChunksExactMut</a>&lt;'_, T&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.par_rchunks_mut" class="fn">par_rchunks_mut</a>(&amp;mut self, chunk_size: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="struct" href="struct.RChunksMut.html" title="struct rayon::slice::RChunksMut">RChunksMut</a>&lt;'_, T&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.par_rchunks_exact_mut" class="fn">par_rchunks_exact_mut</a>(
+        &amp;mut self,
+        chunk_size: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>,
+    ) -&gt; <a class="struct" href="struct.RChunksExactMut.html" title="struct rayon::slice::RChunksExactMut">RChunksExactMut</a>&lt;'_, T&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.par_sort" class="fn">par_sort</a>(&amp;mut self)
+       <span class="where">where T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/cmp/trait.Ord.html" title="trait core::cmp::Ord">Ord</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.par_sort_by" class="fn">par_sort_by</a>&lt;F&gt;(&amp;mut self, compare: F)
+       <span class="where">where F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.Fn.html" title="trait core::ops::function::Fn">Fn</a>(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a>, <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/cmp/enum.Ordering.html" title="enum core::cmp::Ordering">Ordering</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.par_sort_by_key" class="fn">par_sort_by_key</a>&lt;K, F&gt;(&amp;mut self, f: F)
+       <span class="where">where K: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/cmp/trait.Ord.html" title="trait core::cmp::Ord">Ord</a>,
+             F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.Fn.html" title="trait core::ops::function::Fn">Fn</a>(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a>) -&gt; K + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.par_sort_by_cached_key" class="fn">par_sort_by_cached_key</a>&lt;K, F&gt;(&amp;mut self, f: F)
+       <span class="where">where F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.Fn.html" title="trait core::ops::function::Fn">Fn</a>(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a>) -&gt; K + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a>,
+             K: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/cmp/trait.Ord.html" title="trait core::cmp::Ord">Ord</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.par_sort_unstable" class="fn">par_sort_unstable</a>(&amp;mut self)
+       <span class="where">where T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/cmp/trait.Ord.html" title="trait core::cmp::Ord">Ord</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.par_sort_unstable_by" class="fn">par_sort_unstable_by</a>&lt;F&gt;(&amp;mut self, compare: F)
+       <span class="where">where F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.Fn.html" title="trait core::ops::function::Fn">Fn</a>(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a>, <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/cmp/enum.Ordering.html" title="enum core::cmp::Ordering">Ordering</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.par_sort_unstable_by_key" class="fn">par_sort_unstable_by_key</a>&lt;K, F&gt;(&amp;mut self, f: F)
+       <span class="where">where K: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/cmp/trait.Ord.html" title="trait core::cmp::Ord">Ord</a>,
+             F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.Fn.html" title="trait core::ops::function::Fn">Fn</a>(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a>) -&gt; K + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.par_chunk_by_mut" class="fn">par_chunk_by_mut</a>&lt;F&gt;(&amp;mut self, pred: F) -&gt; <a class="struct" href="struct.ChunkByMut.html" title="struct rayon::slice::ChunkByMut">ChunkByMut</a>&lt;'_, T, F&gt;
+       <span class="where">where F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.Fn.html" title="trait core::ops::function::Fn">Fn</a>(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a>, <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a></span> { ... }
+</details>}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Parallel extensions for mutable slices.</p>
+</div></details><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.as_parallel_slice_mut" class="method"><a class="src rightside" href="../../src/rayon/slice/mod.rs.html#214">source</a><h4 class="code-header">fn <a href="#tymethod.as_parallel_slice_mut" class="fn">as_parallel_slice_mut</a>(&amp;mut self) -&gt; &amp;mut <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.slice.html">[T]</a></h4></section></summary><div class="docblock"><p>Returns a plain mutable slice, which is used to implement the rest of
+the parallel methods.</p>
+</div></details></div><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.par_split_mut" class="method"><a class="src rightside" href="../../src/rayon/slice/mod.rs.html#228-236">source</a><h4 class="code-header">fn <a href="#method.par_split_mut" class="fn">par_split_mut</a>&lt;P&gt;(&amp;mut self, separator: P) -&gt; <a class="struct" href="struct.SplitMut.html" title="struct rayon::slice::SplitMut">SplitMut</a>&lt;'_, T, P&gt;<div class="where">where
+    P: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.Fn.html" title="trait core::ops::function::Fn">Fn</a>(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a>,</div></h4></section></summary><div class="docblock"><p>Returns a parallel iterator over mutable subslices separated by
+elements that match the separator.</p>
+<h5 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rayon::prelude::<span class="kw-2">*</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>array = [<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">0</span>, <span class="number">2</span>, <span class="number">4</span>, <span class="number">8</span>, <span class="number">0</span>, <span class="number">3</span>, <span class="number">6</span>, <span class="number">9</span>];
+array.par_split_mut(|i| <span class="kw-2">*</span>i == <span class="number">0</span>)
+     .for_each(|slice| slice.reverse());
+<span class="macro">assert_eq!</span>(array, [<span class="number">3</span>, <span class="number">2</span>, <span class="number">1</span>, <span class="number">0</span>, <span class="number">8</span>, <span class="number">4</span>, <span class="number">2</span>, <span class="number">0</span>, <span class="number">9</span>, <span class="number">6</span>, <span class="number">3</span>]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.par_split_inclusive_mut" class="method"><a class="src rightside" href="../../src/rayon/slice/mod.rs.html#250-258">source</a><h4 class="code-header">fn <a href="#method.par_split_inclusive_mut" class="fn">par_split_inclusive_mut</a>&lt;P&gt;(
+    &amp;mut self,
+    separator: P,
+) -&gt; <a class="struct" href="struct.SplitInclusiveMut.html" title="struct rayon::slice::SplitInclusiveMut">SplitInclusiveMut</a>&lt;'_, T, P&gt;<div class="where">where
+    P: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.Fn.html" title="trait core::ops::function::Fn">Fn</a>(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a>,</div></h4></section></summary><div class="docblock"><p>Returns a parallel iterator over mutable subslices separated by elements
+that match the separator, including the matched part as a terminator.</p>
+<h5 id="examples-1"><a class="doc-anchor" href="#examples-1">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rayon::prelude::<span class="kw-2">*</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>array = [<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">0</span>, <span class="number">2</span>, <span class="number">4</span>, <span class="number">8</span>, <span class="number">0</span>, <span class="number">3</span>, <span class="number">6</span>, <span class="number">9</span>];
+array.par_split_inclusive_mut(|i| <span class="kw-2">*</span>i == <span class="number">0</span>)
+     .for_each(|slice| slice.reverse());
+<span class="macro">assert_eq!</span>(array, [<span class="number">0</span>, <span class="number">3</span>, <span class="number">2</span>, <span class="number">1</span>, <span class="number">0</span>, <span class="number">8</span>, <span class="number">4</span>, <span class="number">2</span>, <span class="number">9</span>, <span class="number">6</span>, <span class="number">3</span>]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.par_chunks_mut" class="method"><a class="src rightside" href="../../src/rayon/slice/mod.rs.html#277-280">source</a><h4 class="code-header">fn <a href="#method.par_chunks_mut" class="fn">par_chunks_mut</a>(&amp;mut self, chunk_size: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="struct" href="struct.ChunksMut.html" title="struct rayon::slice::ChunksMut">ChunksMut</a>&lt;'_, T&gt;</h4></section></summary><div class="docblock"><p>Returns a parallel iterator over at most <code>chunk_size</code> elements of
+<code>self</code> at a time. The chunks are mutable and do not overlap.</p>
+<p>If the number of elements in the iterator is not divisible by
+<code>chunk_size</code>, the last chunk may be shorter than <code>chunk_size</code>.  All
+other chunks will have that exact length.</p>
+<h5 id="examples-2"><a class="doc-anchor" href="#examples-2">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rayon::prelude::<span class="kw-2">*</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>array = [<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>];
+array.par_chunks_mut(<span class="number">2</span>)
+     .for_each(|slice| slice.reverse());
+<span class="macro">assert_eq!</span>(array, [<span class="number">2</span>, <span class="number">1</span>, <span class="number">4</span>, <span class="number">3</span>, <span class="number">5</span>]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.par_chunks_exact_mut" class="method"><a class="src rightside" href="../../src/rayon/slice/mod.rs.html#299-302">source</a><h4 class="code-header">fn <a href="#method.par_chunks_exact_mut" class="fn">par_chunks_exact_mut</a>(&amp;mut self, chunk_size: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="struct" href="struct.ChunksExactMut.html" title="struct rayon::slice::ChunksExactMut">ChunksExactMut</a>&lt;'_, T&gt;</h4></section></summary><div class="docblock"><p>Returns a parallel iterator over <code>chunk_size</code> elements of
+<code>self</code> at a time. The chunks are mutable and do not overlap.</p>
+<p>If <code>chunk_size</code> does not divide the length of the slice, then the
+last up to <code>chunk_size-1</code> elements will be omitted and can be
+retrieved from the remainder function of the iterator.</p>
+<h5 id="examples-3"><a class="doc-anchor" href="#examples-3">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rayon::prelude::<span class="kw-2">*</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>array = [<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>];
+array.par_chunks_exact_mut(<span class="number">3</span>)
+     .for_each(|slice| slice.reverse());
+<span class="macro">assert_eq!</span>(array, [<span class="number">3</span>, <span class="number">2</span>, <span class="number">1</span>, <span class="number">4</span>, <span class="number">5</span>]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.par_rchunks_mut" class="method"><a class="src rightside" href="../../src/rayon/slice/mod.rs.html#321-324">source</a><h4 class="code-header">fn <a href="#method.par_rchunks_mut" class="fn">par_rchunks_mut</a>(&amp;mut self, chunk_size: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="struct" href="struct.RChunksMut.html" title="struct rayon::slice::RChunksMut">RChunksMut</a>&lt;'_, T&gt;</h4></section></summary><div class="docblock"><p>Returns a parallel iterator over at most <code>chunk_size</code> elements of <code>self</code> at a time,
+starting at the end. The chunks are mutable and do not overlap.</p>
+<p>If the number of elements in the iterator is not divisible by
+<code>chunk_size</code>, the last chunk may be shorter than <code>chunk_size</code>.  All
+other chunks will have that exact length.</p>
+<h5 id="examples-4"><a class="doc-anchor" href="#examples-4">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rayon::prelude::<span class="kw-2">*</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>array = [<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>];
+array.par_rchunks_mut(<span class="number">2</span>)
+     .for_each(|slice| slice.reverse());
+<span class="macro">assert_eq!</span>(array, [<span class="number">1</span>, <span class="number">3</span>, <span class="number">2</span>, <span class="number">5</span>, <span class="number">4</span>]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.par_rchunks_exact_mut" class="method"><a class="src rightside" href="../../src/rayon/slice/mod.rs.html#343-346">source</a><h4 class="code-header">fn <a href="#method.par_rchunks_exact_mut" class="fn">par_rchunks_exact_mut</a>(&amp;mut self, chunk_size: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="struct" href="struct.RChunksExactMut.html" title="struct rayon::slice::RChunksExactMut">RChunksExactMut</a>&lt;'_, T&gt;</h4></section></summary><div class="docblock"><p>Returns a parallel iterator over <code>chunk_size</code> elements of <code>self</code> at a time,
+starting at the end. The chunks are mutable and do not overlap.</p>
+<p>If <code>chunk_size</code> does not divide the length of the slice, then the
+last up to <code>chunk_size-1</code> elements will be omitted and can be
+retrieved from the remainder function of the iterator.</p>
+<h5 id="examples-5"><a class="doc-anchor" href="#examples-5">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rayon::prelude::<span class="kw-2">*</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>array = [<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>];
+array.par_rchunks_exact_mut(<span class="number">3</span>)
+     .for_each(|slice| slice.reverse());
+<span class="macro">assert_eq!</span>(array, [<span class="number">1</span>, <span class="number">2</span>, <span class="number">5</span>, <span class="number">4</span>, <span class="number">3</span>]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.par_sort" class="method"><a class="src rightside" href="../../src/rayon/slice/mod.rs.html#381-386">source</a><h4 class="code-header">fn <a href="#method.par_sort" class="fn">par_sort</a>(&amp;mut self)<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/cmp/trait.Ord.html" title="trait core::cmp::Ord">Ord</a>,</div></h4></section></summary><div class="docblock"><p>Sorts the slice in parallel.</p>
+<p>This sort is stable (i.e., does not reorder equal elements) and <em>O</em>(<em>n</em> * log(<em>n</em>)) worst-case.</p>
+<p>When applicable, unstable sorting is preferred because it is generally faster than stable
+sorting and it doesn’t allocate auxiliary memory.
+See <a href="#method.par_sort_unstable"><code>par_sort_unstable</code></a>.</p>
+<h5 id="current-implementation"><a class="doc-anchor" href="#current-implementation">§</a>Current implementation</h5>
+<p>The current algorithm is an adaptive merge sort inspired by
+<a href="https://en.wikipedia.org/wiki/Timsort">timsort</a>.
+It is designed to be very fast in cases where the slice is nearly sorted, or consists of
+two or more sorted sequences concatenated one after another.</p>
+<p>Also, it allocates temporary storage the same size as <code>self</code>, but for very short slices a
+non-allocating insertion sort is used instead.</p>
+<p>In order to sort the slice in parallel, the slice is first divided into smaller chunks and
+all chunks are sorted in parallel. Then, adjacent chunks that together form non-descending
+or descending runs are concatenated. Finally, the remaining chunks are merged together using
+parallel subdivision of chunks and parallel merge operation.</p>
+<h5 id="examples-6"><a class="doc-anchor" href="#examples-6">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rayon::prelude::<span class="kw-2">*</span>;
+
+<span class="kw">let </span><span class="kw-2">mut </span>v = [-<span class="number">5</span>, <span class="number">4</span>, <span class="number">1</span>, -<span class="number">3</span>, <span class="number">2</span>];
+
+v.par_sort();
+<span class="macro">assert_eq!</span>(v, [-<span class="number">5</span>, -<span class="number">3</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">4</span>]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.par_sort_by" class="method"><a class="src rightside" href="../../src/rayon/slice/mod.rs.html#442-449">source</a><h4 class="code-header">fn <a href="#method.par_sort_by" class="fn">par_sort_by</a>&lt;F&gt;(&amp;mut self, compare: F)<div class="where">where
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.Fn.html" title="trait core::ops::function::Fn">Fn</a>(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a>, <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/cmp/enum.Ordering.html" title="enum core::cmp::Ordering">Ordering</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a>,</div></h4></section></summary><div class="docblock"><p>Sorts the slice in parallel with a comparator function.</p>
+<p>This sort is stable (i.e., does not reorder equal elements) and <em>O</em>(<em>n</em> * log(<em>n</em>)) worst-case.</p>
+<p>The comparator function must define a total ordering for the elements in the slice. If
+the ordering is not total, the order of the elements is unspecified. An order is a
+total order if it is (for all <code>a</code>, <code>b</code> and <code>c</code>):</p>
+<ul>
+<li>total and antisymmetric: exactly one of <code>a &lt; b</code>, <code>a == b</code> or <code>a &gt; b</code> is true, and</li>
+<li>transitive, <code>a &lt; b</code> and <code>b &lt; c</code> implies <code>a &lt; c</code>. The same must hold for both <code>==</code> and <code>&gt;</code>.</li>
+</ul>
+<p>For example, while <a href="https://doc.rust-lang.org/1.81.0/std/primitive.f64.html" title="primitive f64"><code>f64</code></a> doesn’t implement <a href="https://doc.rust-lang.org/1.81.0/core/cmp/trait.Ord.html" title="trait core::cmp::Ord"><code>Ord</code></a> because <code>NaN != NaN</code>, we can use
+<code>partial_cmp</code> as our sort function when we know the slice doesn’t contain a <code>NaN</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rayon::prelude::<span class="kw-2">*</span>;
+
+<span class="kw">let </span><span class="kw-2">mut </span>floats = [<span class="number">5f64</span>, <span class="number">4.0</span>, <span class="number">1.0</span>, <span class="number">3.0</span>, <span class="number">2.0</span>];
+floats.par_sort_by(|a, b| a.partial_cmp(b).unwrap());
+<span class="macro">assert_eq!</span>(floats, [<span class="number">1.0</span>, <span class="number">2.0</span>, <span class="number">3.0</span>, <span class="number">4.0</span>, <span class="number">5.0</span>]);</code></pre></div>
+<p>When applicable, unstable sorting is preferred because it is generally faster than stable
+sorting and it doesn’t allocate auxiliary memory.
+See <a href="#method.par_sort_unstable_by"><code>par_sort_unstable_by</code></a>.</p>
+<h5 id="current-implementation-1"><a class="doc-anchor" href="#current-implementation-1">§</a>Current implementation</h5>
+<p>The current algorithm is an adaptive merge sort inspired by
+<a href="https://en.wikipedia.org/wiki/Timsort">timsort</a>.
+It is designed to be very fast in cases where the slice is nearly sorted, or consists of
+two or more sorted sequences concatenated one after another.</p>
+<p>Also, it allocates temporary storage the same size as <code>self</code>, but for very short slices a
+non-allocating insertion sort is used instead.</p>
+<p>In order to sort the slice in parallel, the slice is first divided into smaller chunks and
+all chunks are sorted in parallel. Then, adjacent chunks that together form non-descending
+or descending runs are concatenated. Finally, the remaining chunks are merged together using
+parallel subdivision of chunks and parallel merge operation.</p>
+<h5 id="examples-7"><a class="doc-anchor" href="#examples-7">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rayon::prelude::<span class="kw-2">*</span>;
+
+<span class="kw">let </span><span class="kw-2">mut </span>v = [<span class="number">5</span>, <span class="number">4</span>, <span class="number">1</span>, <span class="number">3</span>, <span class="number">2</span>];
+v.par_sort_by(|a, b| a.cmp(b));
+<span class="macro">assert_eq!</span>(v, [<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>]);
+
+<span class="comment">// reverse sorting
+</span>v.par_sort_by(|a, b| b.cmp(a));
+<span class="macro">assert_eq!</span>(v, [<span class="number">5</span>, <span class="number">4</span>, <span class="number">3</span>, <span class="number">2</span>, <span class="number">1</span>]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.par_sort_by_key" class="method"><a class="src rightside" href="../../src/rayon/slice/mod.rs.html#489-495">source</a><h4 class="code-header">fn <a href="#method.par_sort_by_key" class="fn">par_sort_by_key</a>&lt;K, F&gt;(&amp;mut self, f: F)<div class="where">where
+    K: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/cmp/trait.Ord.html" title="trait core::cmp::Ord">Ord</a>,
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.Fn.html" title="trait core::ops::function::Fn">Fn</a>(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a>) -&gt; K + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a>,</div></h4></section></summary><div class="docblock"><p>Sorts the slice in parallel with a key extraction function.</p>
+<p>This sort is stable (i.e., does not reorder equal elements) and <em>O</em>(<em>m</em> * <em>n</em> * log(<em>n</em>))
+worst-case, where the key function is <em>O</em>(<em>m</em>).</p>
+<p>For expensive key functions (e.g. functions that are not simple property accesses or
+basic operations), <a href="#method.par_sort_by_cached_key"><code>par_sort_by_cached_key</code></a> is likely to
+be significantly faster, as it does not recompute element keys.</p>
+<p>When applicable, unstable sorting is preferred because it is generally faster than stable
+sorting and it doesn’t allocate auxiliary memory.
+See <a href="#method.par_sort_unstable_by_key"><code>par_sort_unstable_by_key</code></a>.</p>
+<h5 id="current-implementation-2"><a class="doc-anchor" href="#current-implementation-2">§</a>Current implementation</h5>
+<p>The current algorithm is an adaptive merge sort inspired by
+<a href="https://en.wikipedia.org/wiki/Timsort">timsort</a>.
+It is designed to be very fast in cases where the slice is nearly sorted, or consists of
+two or more sorted sequences concatenated one after another.</p>
+<p>Also, it allocates temporary storage the same size as <code>self</code>, but for very short slices a
+non-allocating insertion sort is used instead.</p>
+<p>In order to sort the slice in parallel, the slice is first divided into smaller chunks and
+all chunks are sorted in parallel. Then, adjacent chunks that together form non-descending
+or descending runs are concatenated. Finally, the remaining chunks are merged together using
+parallel subdivision of chunks and parallel merge operation.</p>
+<h5 id="examples-8"><a class="doc-anchor" href="#examples-8">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rayon::prelude::<span class="kw-2">*</span>;
+
+<span class="kw">let </span><span class="kw-2">mut </span>v = [-<span class="number">5i32</span>, <span class="number">4</span>, <span class="number">1</span>, -<span class="number">3</span>, <span class="number">2</span>];
+
+v.par_sort_by_key(|k| k.abs());
+<span class="macro">assert_eq!</span>(v, [<span class="number">1</span>, <span class="number">2</span>, -<span class="number">3</span>, <span class="number">4</span>, -<span class="number">5</span>]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.par_sort_by_cached_key" class="method"><a class="src rightside" href="../../src/rayon/slice/mod.rs.html#537-586">source</a><h4 class="code-header">fn <a href="#method.par_sort_by_cached_key" class="fn">par_sort_by_cached_key</a>&lt;K, F&gt;(&amp;mut self, f: F)<div class="where">where
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.Fn.html" title="trait core::ops::function::Fn">Fn</a>(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a>) -&gt; K + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a>,
+    K: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/cmp/trait.Ord.html" title="trait core::cmp::Ord">Ord</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a>,</div></h4></section></summary><div class="docblock"><p>Sorts the slice in parallel with a key extraction function.</p>
+<p>During sorting, the key function is called at most once per element, by using
+temporary storage to remember the results of key evaluation.
+The key function is called in parallel, so the order of calls is completely unspecified.</p>
+<p>This sort is stable (i.e., does not reorder equal elements) and <em>O</em>(<em>m</em> * <em>n</em> + <em>n</em> * log(<em>n</em>))
+worst-case, where the key function is <em>O</em>(<em>m</em>).</p>
+<p>For simple key functions (e.g., functions that are property accesses or
+basic operations), <a href="#method.par_sort_by_key"><code>par_sort_by_key</code></a> is likely to be
+faster.</p>
+<h5 id="current-implementation-3"><a class="doc-anchor" href="#current-implementation-3">§</a>Current implementation</h5>
+<p>The current algorithm is based on <a href="https://github.com/orlp/pdqsort">pattern-defeating quicksort</a> by Orson Peters,
+which combines the fast average case of randomized quicksort with the fast worst case of
+heapsort, while achieving linear time on slices with certain patterns. It uses some
+randomization to avoid degenerate cases, but with a fixed seed to always provide
+deterministic behavior.</p>
+<p>In the worst case, the algorithm allocates temporary storage in a <code>Vec&lt;(K, usize)&gt;</code> the
+length of the slice.</p>
+<p>All quicksorts work in two stages: partitioning into two halves followed by recursive
+calls. The partitioning phase is sequential, but the two recursive calls are performed in
+parallel. Finally, after sorting the cached keys, the item positions are updated sequentially.</p>
+<h5 id="examples-9"><a class="doc-anchor" href="#examples-9">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rayon::prelude::<span class="kw-2">*</span>;
+
+<span class="kw">let </span><span class="kw-2">mut </span>v = [-<span class="number">5i32</span>, <span class="number">4</span>, <span class="number">32</span>, -<span class="number">3</span>, <span class="number">2</span>];
+
+v.par_sort_by_cached_key(|k| k.to_string());
+<span class="macro">assert!</span>(v == [-<span class="number">3</span>, -<span class="number">5</span>, <span class="number">2</span>, <span class="number">32</span>, <span class="number">4</span>]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.par_sort_unstable" class="method"><a class="src rightside" href="../../src/rayon/slice/mod.rs.html#620-625">source</a><h4 class="code-header">fn <a href="#method.par_sort_unstable" class="fn">par_sort_unstable</a>(&amp;mut self)<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/cmp/trait.Ord.html" title="trait core::cmp::Ord">Ord</a>,</div></h4></section></summary><div class="docblock"><p>Sorts the slice in parallel, but might not preserve the order of equal elements.</p>
+<p>This sort is unstable (i.e., may reorder equal elements), in-place
+(i.e., does not allocate), and <em>O</em>(<em>n</em> * log(<em>n</em>)) worst-case.</p>
+<h5 id="current-implementation-4"><a class="doc-anchor" href="#current-implementation-4">§</a>Current implementation</h5>
+<p>The current algorithm is based on <a href="https://github.com/orlp/pdqsort">pattern-defeating quicksort</a> by Orson Peters,
+which combines the fast average case of randomized quicksort with the fast worst case of
+heapsort, while achieving linear time on slices with certain patterns. It uses some
+randomization to avoid degenerate cases, but with a fixed seed to always provide
+deterministic behavior.</p>
+<p>It is typically faster than stable sorting, except in a few special cases, e.g., when the
+slice consists of several concatenated sorted sequences.</p>
+<p>All quicksorts work in two stages: partitioning into two halves followed by recursive
+calls. The partitioning phase is sequential, but the two recursive calls are performed in
+parallel.</p>
+<h5 id="examples-10"><a class="doc-anchor" href="#examples-10">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rayon::prelude::<span class="kw-2">*</span>;
+
+<span class="kw">let </span><span class="kw-2">mut </span>v = [-<span class="number">5</span>, <span class="number">4</span>, <span class="number">1</span>, -<span class="number">3</span>, <span class="number">2</span>];
+
+v.par_sort_unstable();
+<span class="macro">assert_eq!</span>(v, [-<span class="number">5</span>, -<span class="number">3</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">4</span>]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.par_sort_unstable_by" class="method"><a class="src rightside" href="../../src/rayon/slice/mod.rs.html#681-688">source</a><h4 class="code-header">fn <a href="#method.par_sort_unstable_by" class="fn">par_sort_unstable_by</a>&lt;F&gt;(&amp;mut self, compare: F)<div class="where">where
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.Fn.html" title="trait core::ops::function::Fn">Fn</a>(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a>, <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/cmp/enum.Ordering.html" title="enum core::cmp::Ordering">Ordering</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a>,</div></h4></section></summary><div class="docblock"><p>Sorts the slice in parallel with a comparator function, but might not preserve the order of
+equal elements.</p>
+<p>This sort is unstable (i.e., may reorder equal elements), in-place
+(i.e., does not allocate), and <em>O</em>(<em>n</em> * log(<em>n</em>)) worst-case.</p>
+<p>The comparator function must define a total ordering for the elements in the slice. If
+the ordering is not total, the order of the elements is unspecified. An order is a
+total order if it is (for all <code>a</code>, <code>b</code> and <code>c</code>):</p>
+<ul>
+<li>total and antisymmetric: exactly one of <code>a &lt; b</code>, <code>a == b</code> or <code>a &gt; b</code> is true, and</li>
+<li>transitive, <code>a &lt; b</code> and <code>b &lt; c</code> implies <code>a &lt; c</code>. The same must hold for both <code>==</code> and <code>&gt;</code>.</li>
+</ul>
+<p>For example, while <a href="https://doc.rust-lang.org/1.81.0/std/primitive.f64.html" title="primitive f64"><code>f64</code></a> doesn’t implement <a href="https://doc.rust-lang.org/1.81.0/core/cmp/trait.Ord.html" title="trait core::cmp::Ord"><code>Ord</code></a> because <code>NaN != NaN</code>, we can use
+<code>partial_cmp</code> as our sort function when we know the slice doesn’t contain a <code>NaN</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rayon::prelude::<span class="kw-2">*</span>;
+
+<span class="kw">let </span><span class="kw-2">mut </span>floats = [<span class="number">5f64</span>, <span class="number">4.0</span>, <span class="number">1.0</span>, <span class="number">3.0</span>, <span class="number">2.0</span>];
+floats.par_sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
+<span class="macro">assert_eq!</span>(floats, [<span class="number">1.0</span>, <span class="number">2.0</span>, <span class="number">3.0</span>, <span class="number">4.0</span>, <span class="number">5.0</span>]);</code></pre></div>
+<h5 id="current-implementation-5"><a class="doc-anchor" href="#current-implementation-5">§</a>Current implementation</h5>
+<p>The current algorithm is based on <a href="https://github.com/orlp/pdqsort">pattern-defeating quicksort</a> by Orson Peters,
+which combines the fast average case of randomized quicksort with the fast worst case of
+heapsort, while achieving linear time on slices with certain patterns. It uses some
+randomization to avoid degenerate cases, but with a fixed seed to always provide
+deterministic behavior.</p>
+<p>It is typically faster than stable sorting, except in a few special cases, e.g., when the
+slice consists of several concatenated sorted sequences.</p>
+<p>All quicksorts work in two stages: partitioning into two halves followed by recursive
+calls. The partitioning phase is sequential, but the two recursive calls are performed in
+parallel.</p>
+<h5 id="examples-11"><a class="doc-anchor" href="#examples-11">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rayon::prelude::<span class="kw-2">*</span>;
+
+<span class="kw">let </span><span class="kw-2">mut </span>v = [<span class="number">5</span>, <span class="number">4</span>, <span class="number">1</span>, <span class="number">3</span>, <span class="number">2</span>];
+v.par_sort_unstable_by(|a, b| a.cmp(b));
+<span class="macro">assert_eq!</span>(v, [<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>]);
+
+<span class="comment">// reverse sorting
+</span>v.par_sort_unstable_by(|a, b| b.cmp(a));
+<span class="macro">assert_eq!</span>(v, [<span class="number">5</span>, <span class="number">4</span>, <span class="number">3</span>, <span class="number">2</span>, <span class="number">1</span>]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.par_sort_unstable_by_key" class="method"><a class="src rightside" href="../../src/rayon/slice/mod.rs.html#725-731">source</a><h4 class="code-header">fn <a href="#method.par_sort_unstable_by_key" class="fn">par_sort_unstable_by_key</a>&lt;K, F&gt;(&amp;mut self, f: F)<div class="where">where
+    K: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/cmp/trait.Ord.html" title="trait core::cmp::Ord">Ord</a>,
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.Fn.html" title="trait core::ops::function::Fn">Fn</a>(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a>) -&gt; K + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a>,</div></h4></section></summary><div class="docblock"><p>Sorts the slice in parallel with a key extraction function, but might not preserve the order
+of equal elements.</p>
+<p>This sort is unstable (i.e., may reorder equal elements), in-place
+(i.e., does not allocate), and <em>O</em>(m * <em>n</em> * log(<em>n</em>)) worst-case,
+where the key function is <em>O</em>(<em>m</em>).</p>
+<h5 id="current-implementation-6"><a class="doc-anchor" href="#current-implementation-6">§</a>Current implementation</h5>
+<p>The current algorithm is based on <a href="https://github.com/orlp/pdqsort">pattern-defeating quicksort</a> by Orson Peters,
+which combines the fast average case of randomized quicksort with the fast worst case of
+heapsort, while achieving linear time on slices with certain patterns. It uses some
+randomization to avoid degenerate cases, but with a fixed seed to always provide
+deterministic behavior.</p>
+<p>Due to its key calling strategy, <code>par_sort_unstable_by_key</code> is likely to be slower than
+<a href="#method.par_sort_by_cached_key"><code>par_sort_by_cached_key</code></a> in cases where the key function
+is expensive.</p>
+<p>All quicksorts work in two stages: partitioning into two halves followed by recursive
+calls. The partitioning phase is sequential, but the two recursive calls are performed in
+parallel.</p>
+<h5 id="examples-12"><a class="doc-anchor" href="#examples-12">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rayon::prelude::<span class="kw-2">*</span>;
+
+<span class="kw">let </span><span class="kw-2">mut </span>v = [-<span class="number">5i32</span>, <span class="number">4</span>, <span class="number">1</span>, -<span class="number">3</span>, <span class="number">2</span>];
+
+v.par_sort_unstable_by_key(|k| k.abs());
+<span class="macro">assert_eq!</span>(v, [<span class="number">1</span>, <span class="number">2</span>, -<span class="number">3</span>, <span class="number">4</span>, -<span class="number">5</span>]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.par_chunk_by_mut" class="method"><a class="src rightside" href="../../src/rayon/slice/mod.rs.html#750-755">source</a><h4 class="code-header">fn <a href="#method.par_chunk_by_mut" class="fn">par_chunk_by_mut</a>&lt;F&gt;(&amp;mut self, pred: F) -&gt; <a class="struct" href="struct.ChunkByMut.html" title="struct rayon::slice::ChunkByMut">ChunkByMut</a>&lt;'_, T, F&gt;<div class="where">where
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.Fn.html" title="trait core::ops::function::Fn">Fn</a>(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a>, <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a>,</div></h4></section></summary><div class="docblock"><p>Returns a parallel iterator over the slice producing non-overlapping mutable
+runs of elements using the predicate to separate them.</p>
+<p>The predicate is called on two elements following themselves,
+it means the predicate is called on <code>slice[0]</code> and <code>slice[1]</code>
+then on <code>slice[1]</code> and <code>slice[2]</code> and so on.</p>
+<h5 id="examples-13"><a class="doc-anchor" href="#examples-13">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rayon::prelude::<span class="kw-2">*</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>xs = [<span class="number">1</span>, <span class="number">2</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">3</span>, <span class="number">3</span>];
+<span class="kw">let </span>chunks: Vec&lt;<span class="kw">_</span>&gt; = xs.par_chunk_by_mut(|<span class="kw-2">&amp;</span>x, <span class="kw-2">&amp;</span>y| x == y).collect();
+<span class="macro">assert_eq!</span>(chunks[<span class="number">0</span>], <span class="kw-2">&amp;mut </span>[<span class="number">1</span>]);
+<span class="macro">assert_eq!</span>(chunks[<span class="number">1</span>], <span class="kw-2">&amp;mut </span>[<span class="number">2</span>, <span class="number">2</span>]);
+<span class="macro">assert_eq!</span>(chunks[<span class="number">2</span>], <span class="kw-2">&amp;mut </span>[<span class="number">3</span>, <span class="number">3</span>, <span class="number">3</span>]);</code></pre></div>
+</div></details></div><h2 id="object-safety" class="section-header">Object Safety<a href="#object-safety" class="anchor">§</a></h2><div class="object-safety-info">This trait is <b>not</b> <a href="https://doc.rust-lang.org/1.81.0/reference/items/traits.html#object-safety">object safe</a>.</div><h2 id="foreign-impls" class="section-header">Implementations on Foreign Types<a href="#foreign-impls" class="anchor">§</a></h2><details class="toggle implementors-toggle"><summary><section id="impl-ParallelSliceMut%3CT%3E-for-%5BT%5D" class="impl"><a class="src rightside" href="../../src/rayon/slice/mod.rs.html#758-763">source</a><a href="#impl-ParallelSliceMut%3CT%3E-for-%5BT%5D" class="anchor">§</a><h3 class="code-header">impl&lt;T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a>&gt; <a class="trait" href="trait.ParallelSliceMut.html" title="trait rayon::slice::ParallelSliceMut">ParallelSliceMut</a>&lt;T&gt; for <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.slice.html">[T]</a></h3></section></summary><div class="impl-items"><section id="method.as_parallel_slice_mut" class="method trait-impl"><a class="src rightside" href="../../src/rayon/slice/mod.rs.html#760-762">source</a><a href="#method.as_parallel_slice_mut" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.as_parallel_slice_mut" class="fn">as_parallel_slice_mut</a>(&amp;mut self) -&gt; &amp;mut <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.slice.html">[T]</a></h4></section></div></details><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"></div><script src="../../trait.impl/rayon/slice/trait.ParallelSliceMut.js" data-ignore-extern-crates="std" async></script></section></div></main></body></html>

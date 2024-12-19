@@ -1,0 +1,449 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A trait that abstracts over Aho-Corasick automata."><title>Automaton in aho_corasick::automaton - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="aho_corasick" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../aho_corasick/index.html">aho_corasick</a><span class="version">1.1.3</span></h2></div><h2 class="location"><a href="#">Automaton</a></h2><div class="sidebar-elems"><section><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.is_dead">is_dead</a></li><li><a href="#tymethod.is_match">is_match</a></li><li><a href="#tymethod.is_special">is_special</a></li><li><a href="#tymethod.is_start">is_start</a></li><li><a href="#tymethod.match_kind">match_kind</a></li><li><a href="#tymethod.match_len">match_len</a></li><li><a href="#tymethod.match_pattern">match_pattern</a></li><li><a href="#tymethod.max_pattern_len">max_pattern_len</a></li><li><a href="#tymethod.memory_usage">memory_usage</a></li><li><a href="#tymethod.min_pattern_len">min_pattern_len</a></li><li><a href="#tymethod.next_state">next_state</a></li><li><a href="#tymethod.pattern_len">pattern_len</a></li><li><a href="#tymethod.patterns_len">patterns_len</a></li><li><a href="#tymethod.prefilter">prefilter</a></li><li><a href="#tymethod.start_state">start_state</a></li></ul><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.try_find">try_find</a></li><li><a href="#method.try_find_iter">try_find_iter</a></li><li><a href="#method.try_find_overlapping">try_find_overlapping</a></li><li><a href="#method.try_find_overlapping_iter">try_find_overlapping_iter</a></li><li><a href="#method.try_replace_all">try_replace_all</a></li><li><a href="#method.try_replace_all_bytes">try_replace_all_bytes</a></li><li><a href="#method.try_replace_all_with">try_replace_all_with</a></li><li><a href="#method.try_replace_all_with_bytes">try_replace_all_with_bytes</a></li><li><a href="#method.try_stream_find_iter">try_stream_find_iter</a></li><li><a href="#method.try_stream_replace_all">try_stream_replace_all</a></li><li><a href="#method.try_stream_replace_all_with">try_stream_replace_all_with</a></li></ul><h3><a href="#foreign-impls">Implementations on Foreign Types</a></h3><ul class="block"><li><a href="#impl-Automaton-for-%26A">&amp;&#x27;a A</a></li></ul><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In aho_corasick::automaton</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="../index.html">aho_corasick</a>::<wbr><a href="index.html">automaton</a>::<wbr><a class="trait" href="#">Automaton</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/aho_corasick/automaton.rs.html#198-637">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub unsafe trait Automaton: Sealed {
+<details class="toggle type-contents-toggle"><summary class="hideme"><span>Show 26 methods</span></summary>    // Required methods
+    fn <a href="#tymethod.start_state" class="fn">start_state</a>(&amp;self, anchored: <a class="enum" href="../enum.Anchored.html" title="enum aho_corasick::Anchored">Anchored</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="struct.StateID.html" title="struct aho_corasick::automaton::StateID">StateID</a>, <a class="struct" href="../struct.MatchError.html" title="struct aho_corasick::MatchError">MatchError</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.next_state" class="fn">next_state</a>(&amp;self, anchored: <a class="enum" href="../enum.Anchored.html" title="enum aho_corasick::Anchored">Anchored</a>, sid: <a class="struct" href="struct.StateID.html" title="struct aho_corasick::automaton::StateID">StateID</a>, byte: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>) -&gt; <a class="struct" href="struct.StateID.html" title="struct aho_corasick::automaton::StateID">StateID</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.is_special" class="fn">is_special</a>(&amp;self, sid: <a class="struct" href="struct.StateID.html" title="struct aho_corasick::automaton::StateID">StateID</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.is_dead" class="fn">is_dead</a>(&amp;self, sid: <a class="struct" href="struct.StateID.html" title="struct aho_corasick::automaton::StateID">StateID</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.is_match" class="fn">is_match</a>(&amp;self, sid: <a class="struct" href="struct.StateID.html" title="struct aho_corasick::automaton::StateID">StateID</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.is_start" class="fn">is_start</a>(&amp;self, sid: <a class="struct" href="struct.StateID.html" title="struct aho_corasick::automaton::StateID">StateID</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.match_kind" class="fn">match_kind</a>(&amp;self) -&gt; <a class="enum" href="../enum.MatchKind.html" title="enum aho_corasick::MatchKind">MatchKind</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.match_len" class="fn">match_len</a>(&amp;self, sid: <a class="struct" href="struct.StateID.html" title="struct aho_corasick::automaton::StateID">StateID</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.match_pattern" class="fn">match_pattern</a>(&amp;self, sid: <a class="struct" href="struct.StateID.html" title="struct aho_corasick::automaton::StateID">StateID</a>, index: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="struct" href="../struct.PatternID.html" title="struct aho_corasick::PatternID">PatternID</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.patterns_len" class="fn">patterns_len</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.pattern_len" class="fn">pattern_len</a>(&amp;self, pid: <a class="struct" href="../struct.PatternID.html" title="struct aho_corasick::PatternID">PatternID</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.min_pattern_len" class="fn">min_pattern_len</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.max_pattern_len" class="fn">max_pattern_len</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.memory_usage" class="fn">memory_usage</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.prefilter" class="fn">prefilter</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;<a class="struct" href="struct.Prefilter.html" title="struct aho_corasick::automaton::Prefilter">Prefilter</a>&gt;;
+
+    // Provided methods
+    fn <a href="#method.try_find" class="fn">try_find</a>(&amp;self, input: &amp;<a class="struct" href="../struct.Input.html" title="struct aho_corasick::Input">Input</a>&lt;'_&gt;) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../struct.Match.html" title="struct aho_corasick::Match">Match</a>&gt;, <a class="struct" href="../struct.MatchError.html" title="struct aho_corasick::MatchError">MatchError</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.try_find_overlapping" class="fn">try_find_overlapping</a>(
+        &amp;self,
+        input: &amp;<a class="struct" href="../struct.Input.html" title="struct aho_corasick::Input">Input</a>&lt;'_&gt;,
+        state: &amp;mut <a class="struct" href="struct.OverlappingState.html" title="struct aho_corasick::automaton::OverlappingState">OverlappingState</a>,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="struct" href="../struct.MatchError.html" title="struct aho_corasick::MatchError">MatchError</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.try_find_iter" class="fn">try_find_iter</a>&lt;'a, 'h&gt;(
+        &amp;'a self,
+        input: <a class="struct" href="../struct.Input.html" title="struct aho_corasick::Input">Input</a>&lt;'h&gt;,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="struct.FindIter.html" title="struct aho_corasick::automaton::FindIter">FindIter</a>&lt;'a, 'h, Self&gt;, <a class="struct" href="../struct.MatchError.html" title="struct aho_corasick::MatchError">MatchError</a>&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.try_find_overlapping_iter" class="fn">try_find_overlapping_iter</a>&lt;'a, 'h&gt;(
+        &amp;'a self,
+        input: <a class="struct" href="../struct.Input.html" title="struct aho_corasick::Input">Input</a>&lt;'h&gt;,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="struct.FindOverlappingIter.html" title="struct aho_corasick::automaton::FindOverlappingIter">FindOverlappingIter</a>&lt;'a, 'h, Self&gt;, <a class="struct" href="../struct.MatchError.html" title="struct aho_corasick::MatchError">MatchError</a>&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.try_replace_all" class="fn">try_replace_all</a>&lt;B&gt;(
+        &amp;self,
+        haystack: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+        replace_with: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.slice.html">[B]</a>,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>, <a class="struct" href="../struct.MatchError.html" title="struct aho_corasick::MatchError">MatchError</a>&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+             B: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>&gt;</span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.try_replace_all_bytes" class="fn">try_replace_all_bytes</a>&lt;B&gt;(
+        &amp;self,
+        haystack: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>],
+        replace_with: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.slice.html">[B]</a>,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>&gt;, <a class="struct" href="../struct.MatchError.html" title="struct aho_corasick::MatchError">MatchError</a>&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+             B: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]&gt;</span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.try_replace_all_with" class="fn">try_replace_all_with</a>&lt;F&gt;(
+        &amp;self,
+        haystack: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+        dst: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>,
+        replace_with: F,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="struct" href="../struct.MatchError.html" title="struct aho_corasick::MatchError">MatchError</a>&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+             F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(&amp;<a class="struct" href="../struct.Match.html" title="struct aho_corasick::Match">Match</a>, &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>, &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.try_replace_all_with_bytes" class="fn">try_replace_all_with_bytes</a>&lt;F&gt;(
+        &amp;self,
+        haystack: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>],
+        dst: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>&gt;,
+        replace_with: F,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="struct" href="../struct.MatchError.html" title="struct aho_corasick::MatchError">MatchError</a>&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+             F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(&amp;<a class="struct" href="../struct.Match.html" title="struct aho_corasick::Match">Match</a>, &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>&gt;) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.try_stream_find_iter" class="fn">try_stream_find_iter</a>&lt;'a, R: <a class="trait" href="https://doc.rust-lang.org/1.81.0/std/io/trait.Read.html" title="trait std::io::Read">Read</a>&gt;(
+        &amp;'a self,
+        rdr: R,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="struct.StreamFindIter.html" title="struct aho_corasick::automaton::StreamFindIter">StreamFindIter</a>&lt;'a, Self, R&gt;, <a class="struct" href="../struct.MatchError.html" title="struct aho_corasick::MatchError">MatchError</a>&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.try_stream_replace_all" class="fn">try_stream_replace_all</a>&lt;R, W, B&gt;(
+        &amp;self,
+        rdr: R,
+        wtr: W,
+        replace_with: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.slice.html">[B]</a>,
+    ) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+             R: <a class="trait" href="https://doc.rust-lang.org/1.81.0/std/io/trait.Read.html" title="trait std::io::Read">Read</a>,
+             W: <a class="trait" href="https://doc.rust-lang.org/1.81.0/std/io/trait.Write.html" title="trait std::io::Write">Write</a>,
+             B: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]&gt;</span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.try_stream_replace_all_with" class="fn">try_stream_replace_all_with</a>&lt;R, W, F&gt;(
+        &amp;self,
+        rdr: R,
+        wtr: W,
+        replace_with: F,
+    ) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+             R: <a class="trait" href="https://doc.rust-lang.org/1.81.0/std/io/trait.Read.html" title="trait std::io::Read">Read</a>,
+             W: <a class="trait" href="https://doc.rust-lang.org/1.81.0/std/io/trait.Write.html" title="trait std::io::Write">Write</a>,
+             F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(&amp;<a class="struct" href="../struct.Match.html" title="struct aho_corasick::Match">Match</a>, &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut W</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</span> { ... }
+</details>}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A trait that abstracts over Aho-Corasick automata.</p>
+<p>This trait primarily exists for niche use cases such as:</p>
+<ul>
+<li>Using an NFA or DFA directly, bypassing the top-level
+<a href="../struct.AhoCorasick.html" title="struct aho_corasick::AhoCorasick"><code>AhoCorasick</code></a> searcher. Currently, these include
+<a href="../nfa/noncontiguous/struct.NFA.html" title="struct aho_corasick::nfa::noncontiguous::NFA"><code>noncontiguous::NFA</code></a>,
+<a href="../nfa/contiguous/struct.NFA.html" title="struct aho_corasick::nfa::contiguous::NFA"><code>contiguous::NFA</code></a> and
+<a href="../dfa/struct.DFA.html" title="struct aho_corasick::dfa::DFA"><code>dfa::DFA</code></a>.</li>
+<li>Implementing your own custom search routine by walking the automaton
+yourself. This might be useful for implementing search on non-contiguous
+strings or streams.</li>
+</ul>
+<p>For most use cases, it is not expected that users will need
+to use or even know about this trait. Indeed, the top level
+<a href="../struct.AhoCorasick.html" title="struct aho_corasick::AhoCorasick"><code>AhoCorasick</code></a> searcher does not expose any details
+about this trait, nor does it implement it itself.</p>
+<p>Note that this trait defines a number of default methods, such as
+<a href="trait.Automaton.html#method.try_find" title="method aho_corasick::automaton::Automaton::try_find"><code>Automaton::try_find</code></a> and <a href="trait.Automaton.html#method.try_find_iter" title="method aho_corasick::automaton::Automaton::try_find_iter"><code>Automaton::try_find_iter</code></a>, which implement
+higher level search routines in terms of the lower level automata API.</p>
+<h2 id="sealed"><a class="doc-anchor" href="#sealed">§</a>Sealed</h2>
+<p>Currently, this trait is sealed. That means users of this crate can write
+generic routines over this trait but cannot implement it themselves. This
+restriction may be lifted in the future, but sealing the trait permits
+adding new required methods in a backwards compatible fashion.</p>
+<h2 id="special-states"><a class="doc-anchor" href="#special-states">§</a>Special states</h2>
+<p>This trait encodes a notion of “special” states in an automaton. Namely,
+a state is treated as special if it is a dead, match or start state:</p>
+<ul>
+<li>A dead state is a state that cannot be left once entered. All transitions
+on a dead state lead back to itself. The dead state is meant to be treated
+as a sentinel indicating that the search should stop and return a match if
+one has been found, and nothing otherwise.</li>
+<li>A match state is a state that indicates one or more patterns have
+matched. Depending on the <a href="../enum.MatchKind.html" title="enum aho_corasick::MatchKind"><code>MatchKind</code></a> of the automaton, a search may
+stop once a match is seen, or it may continue looking for matches until
+it enters a dead state or sees the end of the haystack.</li>
+<li>A start state is a state that a search begins in. It is useful to know
+when a search enters a start state because it may mean that a prefilter can
+be used to skip ahead and quickly look for candidate matches. Unlike dead
+and match states, it is never necessary to explicitly handle start states
+for correctness. Indeed, in this crate, implementations of <code>Automaton</code>
+will only treat start states as “special” when a prefilter is enabled and
+active. Otherwise, treating it as special has no purpose and winds up
+slowing down the overall search because it results in ping-ponging between
+the main state transition and the “special” state logic.</li>
+</ul>
+<p>Since checking whether a state is special by doing three different
+checks would be too expensive inside a fast search loop, the
+<a href="trait.Automaton.html#tymethod.is_special" title="method aho_corasick::automaton::Automaton::is_special"><code>Automaton::is_special</code></a> method is provided for quickly checking whether
+the state is special. The <code>Automaton::is_dead</code>, <code>Automaton::is_match</code> and
+<code>Automaton::is_start</code> predicates can then be used to determine which kind
+of special state it is.</p>
+<h2 id="panics"><a class="doc-anchor" href="#panics">§</a>Panics</h2>
+<p>Most of the APIs on this trait should panic or give incorrect results
+if invalid inputs are given to it. For example, <code>Automaton::next_state</code>
+has unspecified behavior if the state ID given to it is not a valid
+state ID for the underlying automaton. Valid state IDs can only be
+retrieved in one of two ways: calling <code>Automaton::start_state</code> or calling
+<code>Automaton::next_state</code> with a valid state ID.</p>
+<h2 id="safety"><a class="doc-anchor" href="#safety">§</a>Safety</h2>
+<p>This trait is not safe to implement so that code may rely on the
+correctness of implementations of this trait to avoid undefined behavior.
+The primary correctness guarantees are:</p>
+<ul>
+<li><code>Automaton::start_state</code> always returns a valid state ID or an error or
+panics.</li>
+<li><code>Automaton::next_state</code>, when given a valid state ID, always returns
+a valid state ID for all values of <code>anchored</code> and <code>byte</code>, or otherwise
+panics.</li>
+</ul>
+<p>In general, the rest of the methods on <code>Automaton</code> need to uphold their
+contracts as well. For example, <code>Automaton::is_dead</code> should only returns
+true if the given state ID is actually a dead state.</p>
+<p>Note that currently this crate does not rely on the safety property defined
+here to avoid undefined behavior. Instead, this was done to make it
+<em>possible</em> to do in the future.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<p>This example shows how one might implement a basic but correct search
+routine. We keep things simple by not using prefilters or worrying about
+anchored searches, but do make sure our search is correct for all possible
+<a href="../enum.MatchKind.html" title="enum aho_corasick::MatchKind"><code>MatchKind</code></a> semantics. (The comments in the code below note the parts
+that are needed to support certain <code>MatchKind</code> semantics.)</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::{
+    automaton::Automaton,
+    nfa::noncontiguous::NFA,
+    Anchored, Match, MatchError, MatchKind,
+};
+
+<span class="comment">// Run an unanchored search for 'aut' in 'haystack'. Return the first match
+// seen according to the automaton's match semantics. This returns an error
+// if the given automaton does not support unanchored searches.
+</span><span class="kw">fn </span>find&lt;A: Automaton&gt;(
+    aut: A,
+    haystack: <span class="kw-2">&amp;</span>[u8],
+) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Match&gt;, MatchError&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>sid = aut.start_state(Anchored::No)<span class="question-mark">?</span>;
+    <span class="kw">let </span><span class="kw-2">mut </span>at = <span class="number">0</span>;
+    <span class="kw">let </span><span class="kw-2">mut </span>mat = <span class="prelude-val">None</span>;
+    <span class="kw">let </span>get_match = |sid, at| {
+        <span class="kw">let </span>pid = aut.match_pattern(sid, <span class="number">0</span>);
+        <span class="kw">let </span>len = aut.pattern_len(pid);
+        Match::new(pid, (at - len)..at)
+    };
+    <span class="comment">// Start states can be match states!
+    </span><span class="kw">if </span>aut.is_match(sid) {
+        mat = <span class="prelude-val">Some</span>(get_match(sid, at));
+        <span class="comment">// Standard semantics require matches to be reported as soon as
+        // they're seen. Otherwise, we continue until we see a dead state
+        // or the end of the haystack.
+        </span><span class="kw">if </span><span class="macro">matches!</span>(aut.match_kind(), MatchKind::Standard) {
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(mat);
+        }
+    }
+    <span class="kw">while </span>at &lt; haystack.len() {
+        sid = aut.next_state(Anchored::No, sid, haystack[at]);
+        <span class="kw">if </span>aut.is_special(sid) {
+            <span class="kw">if </span>aut.is_dead(sid) {
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(mat);
+            } <span class="kw">else if </span>aut.is_match(sid) {
+                mat = <span class="prelude-val">Some</span>(get_match(sid, at + <span class="number">1</span>));
+                <span class="comment">// As above, standard semantics require that we return
+                // immediately once a match is found.
+                </span><span class="kw">if </span><span class="macro">matches!</span>(aut.match_kind(), MatchKind::Standard) {
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(mat);
+                }
+            }
+        }
+        at += <span class="number">1</span>;
+    }
+    <span class="prelude-val">Ok</span>(mat)
+}
+
+<span class="comment">// Show that it works for standard searches.
+</span><span class="kw">let </span>nfa = NFA::new(<span class="kw-2">&amp;</span>[<span class="string">"samwise"</span>, <span class="string">"sam"</span>]).unwrap();
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Match::must(<span class="number">1</span>, <span class="number">0</span>..<span class="number">3</span>)), find(<span class="kw-2">&amp;</span>nfa, <span class="string">b"samwise"</span>)<span class="question-mark">?</span>);
+
+<span class="comment">// But also works when using leftmost-first. Notice how the match result
+// has changed!
+</span><span class="kw">let </span>nfa = NFA::builder()
+    .match_kind(MatchKind::LeftmostFirst)
+    .build(<span class="kw-2">&amp;</span>[<span class="string">"samwise"</span>, <span class="string">"sam"</span>])
+    .unwrap();
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Match::must(<span class="number">0</span>, <span class="number">0</span>..<span class="number">7</span>)), find(<span class="kw-2">&amp;</span>nfa, <span class="string">b"samwise"</span>)<span class="question-mark">?</span>);
+</code></pre></div>
+</div></details><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.start_state" class="method"><a class="src rightside" href="../../src/aho_corasick/automaton.rs.html#210">source</a><h4 class="code-header">fn <a href="#tymethod.start_state" class="fn">start_state</a>(&amp;self, anchored: <a class="enum" href="../enum.Anchored.html" title="enum aho_corasick::Anchored">Anchored</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="struct.StateID.html" title="struct aho_corasick::automaton::StateID">StateID</a>, <a class="struct" href="../struct.MatchError.html" title="struct aho_corasick::MatchError">MatchError</a>&gt;</h4></section></summary><div class="docblock"><p>Returns the starting state for the given anchor mode.</p>
+<p>Upon success, the state ID returned is guaranteed to be valid for
+this automaton.</p>
+<h5 id="errors"><a class="doc-anchor" href="#errors">§</a>Errors</h5>
+<p>This returns an error when the given search configuration is not
+supported by the underlying automaton. For example, if the underlying
+automaton only supports unanchored searches but the given configuration
+was set to an anchored search, then this must return an error.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.next_state" class="method"><a class="src rightside" href="../../src/aho_corasick/automaton.rs.html#237-242">source</a><h4 class="code-header">fn <a href="#tymethod.next_state" class="fn">next_state</a>(&amp;self, anchored: <a class="enum" href="../enum.Anchored.html" title="enum aho_corasick::Anchored">Anchored</a>, sid: <a class="struct" href="struct.StateID.html" title="struct aho_corasick::automaton::StateID">StateID</a>, byte: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>) -&gt; <a class="struct" href="struct.StateID.html" title="struct aho_corasick::automaton::StateID">StateID</a></h4></section></summary><div class="docblock"><p>Performs a state transition from <code>sid</code> for <code>byte</code> and returns the next
+state.</p>
+<p><code>anchored</code> should be <a href="../enum.Anchored.html#variant.Yes" title="variant aho_corasick::Anchored::Yes"><code>Anchored::Yes</code></a> when executing an anchored
+search and <a href="../enum.Anchored.html#variant.No" title="variant aho_corasick::Anchored::No"><code>Anchored::No</code></a> otherwise. For some implementations of
+<code>Automaton</code>, it is required to know whether the search is anchored
+or not in order to avoid following failure transitions. Other
+implementations may ignore <code>anchored</code> altogether and depend on
+<code>Automaton::start_state</code> returning a state that walks a different path
+through the automaton depending on whether the search is anchored or
+not.</p>
+<h5 id="panics-1"><a class="doc-anchor" href="#panics-1">§</a>Panics</h5>
+<p>This routine may panic or return incorrect results when the given state
+ID is invalid. A state ID is valid if and only if:</p>
+<ol>
+<li>It came from a call to <code>Automaton::start_state</code>, or</li>
+<li>It came from a previous call to <code>Automaton::next_state</code> with a
+valid state ID.</li>
+</ol>
+<p>Implementations must treat all possible values of <code>byte</code> as valid.</p>
+<p>Implementations may panic on unsupported values of <code>anchored</code>, but are
+not required to do so.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.is_special" class="method"><a class="src rightside" href="../../src/aho_corasick/automaton.rs.html#253">source</a><h4 class="code-header">fn <a href="#tymethod.is_special" class="fn">is_special</a>(&amp;self, sid: <a class="struct" href="struct.StateID.html" title="struct aho_corasick::automaton::StateID">StateID</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns true if the given ID represents a “special” state. A special
+state is a dead, match or start state.</p>
+<p>Note that implementations may choose to return false when the given ID
+corresponds to a start state. Namely, it always correct to treat start
+states as non-special. Implementations must return true for states that
+are dead or contain matches.</p>
+<p>This has unspecified behavior when given an invalid state ID.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.is_dead" class="method"><a class="src rightside" href="../../src/aho_corasick/automaton.rs.html#263">source</a><h4 class="code-header">fn <a href="#tymethod.is_dead" class="fn">is_dead</a>(&amp;self, sid: <a class="struct" href="struct.StateID.html" title="struct aho_corasick::automaton::StateID">StateID</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns true if the given ID represents a dead state.</p>
+<p>A dead state is a type of “sink” in a finite state machine. It
+corresponds to a state whose transitions all loop back to itself. That
+is, once entered, it can never be left. In practice, it serves as a
+sentinel indicating that the search should terminate.</p>
+<p>This has unspecified behavior when given an invalid state ID.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.is_match" class="method"><a class="src rightside" href="../../src/aho_corasick/automaton.rs.html#276">source</a><h4 class="code-header">fn <a href="#tymethod.is_match" class="fn">is_match</a>(&amp;self, sid: <a class="struct" href="struct.StateID.html" title="struct aho_corasick::automaton::StateID">StateID</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns true if the given ID represents a match state.</p>
+<p>A match state is always associated with one or more pattern IDs that
+matched at the position in the haystack when the match state was
+entered. When a match state is entered, the match semantics dictate
+whether it should be returned immediately (for <code>MatchKind::Standard</code>)
+or if the search should continue (for <code>MatchKind::LeftmostFirst</code> and
+<code>MatchKind::LeftmostLongest</code>) until a dead state is seen or the end of
+the haystack has been reached.</p>
+<p>This has unspecified behavior when given an invalid state ID.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.is_start" class="method"><a class="src rightside" href="../../src/aho_corasick/automaton.rs.html#293">source</a><h4 class="code-header">fn <a href="#tymethod.is_start" class="fn">is_start</a>(&amp;self, sid: <a class="struct" href="struct.StateID.html" title="struct aho_corasick::automaton::StateID">StateID</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns true if the given ID represents a start state.</p>
+<p>While it is never incorrect to ignore start states during a search
+(except for the start of the search of course), knowing whether one has
+entered a start state can be useful for certain classes of performance
+optimizations. For example, if one is in a start state, it may be legal
+to try to skip ahead and look for match candidates more quickly than
+would otherwise be accomplished by walking the automaton.</p>
+<p>Implementations of <code>Automaton</code> in this crate “unspecialize” start
+states when a prefilter is not active or enabled. In this case, it
+is possible for <code>Automaton::is_special(sid)</code> to return false while
+<code>Automaton::is_start(sid)</code> returns true.</p>
+<p>This has unspecified behavior when given an invalid state ID.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.match_kind" class="method"><a class="src rightside" href="../../src/aho_corasick/automaton.rs.html#296">source</a><h4 class="code-header">fn <a href="#tymethod.match_kind" class="fn">match_kind</a>(&amp;self) -&gt; <a class="enum" href="../enum.MatchKind.html" title="enum aho_corasick::MatchKind">MatchKind</a></h4></section></summary><div class="docblock"><p>Returns the match semantics that this automaton was built with.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.match_len" class="method"><a class="src rightside" href="../../src/aho_corasick/automaton.rs.html#302">source</a><h4 class="code-header">fn <a href="#tymethod.match_len" class="fn">match_len</a>(&amp;self, sid: <a class="struct" href="struct.StateID.html" title="struct aho_corasick::automaton::StateID">StateID</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a></h4></section></summary><div class="docblock"><p>Returns the total number of matches for the given state ID.</p>
+<p>This has unspecified behavior if the given ID does not refer to a match
+state.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.match_pattern" class="method"><a class="src rightside" href="../../src/aho_corasick/automaton.rs.html#314">source</a><h4 class="code-header">fn <a href="#tymethod.match_pattern" class="fn">match_pattern</a>(&amp;self, sid: <a class="struct" href="struct.StateID.html" title="struct aho_corasick::automaton::StateID">StateID</a>, index: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="struct" href="../struct.PatternID.html" title="struct aho_corasick::PatternID">PatternID</a></h4></section></summary><div class="docblock"><p>Returns the pattern ID for the match state given by <code>sid</code> at the
+<code>index</code> given.</p>
+<p>Typically, <code>index</code> is only ever greater than <code>0</code> when implementing an
+overlapping search. Otherwise, it’s likely that your search only cares
+about reporting the first pattern ID in a match state.</p>
+<p>This has unspecified behavior if the given ID does not refer to a match
+state, or if the index is greater than or equal to the total number of
+matches in this match state.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.patterns_len" class="method"><a class="src rightside" href="../../src/aho_corasick/automaton.rs.html#317">source</a><h4 class="code-header">fn <a href="#tymethod.patterns_len" class="fn">patterns_len</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a></h4></section></summary><div class="docblock"><p>Returns the total number of patterns compiled into this automaton.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.pattern_len" class="method"><a class="src rightside" href="../../src/aho_corasick/automaton.rs.html#324">source</a><h4 class="code-header">fn <a href="#tymethod.pattern_len" class="fn">pattern_len</a>(&amp;self, pid: <a class="struct" href="../struct.PatternID.html" title="struct aho_corasick::PatternID">PatternID</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a></h4></section></summary><div class="docblock"><p>Returns the length of the pattern for the given ID.</p>
+<p>This has unspecified behavior when given an invalid pattern
+ID. A pattern ID is valid if and only if it is less than
+<code>Automaton::patterns_len</code>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.min_pattern_len" class="method"><a class="src rightside" href="../../src/aho_corasick/automaton.rs.html#328">source</a><h4 class="code-header">fn <a href="#tymethod.min_pattern_len" class="fn">min_pattern_len</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a></h4></section></summary><div class="docblock"><p>Returns the length, in bytes, of the shortest pattern in this
+automaton.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.max_pattern_len" class="method"><a class="src rightside" href="../../src/aho_corasick/automaton.rs.html#331">source</a><h4 class="code-header">fn <a href="#tymethod.max_pattern_len" class="fn">max_pattern_len</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a></h4></section></summary><div class="docblock"><p>Returns the length, in bytes, of the longest pattern in this automaton.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.memory_usage" class="method"><a class="src rightside" href="../../src/aho_corasick/automaton.rs.html#334">source</a><h4 class="code-header">fn <a href="#tymethod.memory_usage" class="fn">memory_usage</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a></h4></section></summary><div class="docblock"><p>Returns the heap memory usage, in bytes, used by this automaton.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.prefilter" class="method"><a class="src rightside" href="../../src/aho_corasick/automaton.rs.html#346">source</a><h4 class="code-header">fn <a href="#tymethod.prefilter" class="fn">prefilter</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;<a class="struct" href="struct.Prefilter.html" title="struct aho_corasick::automaton::Prefilter">Prefilter</a>&gt;</h4></section></summary><div class="docblock"><p>Returns a prefilter, if available, that can be used to accelerate
+searches for this automaton.</p>
+<p>The typical way this is used is when the start state is entered during
+a search. When that happens, one can use a prefilter to skip ahead and
+look for candidate matches without having to walk the automaton on the
+bytes between candidates.</p>
+<p>Typically a prefilter is only available when there are a small (&lt;100)
+number of patterns built into the automaton.</p>
+</div></details></div><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.try_find" class="method"><a class="src rightside" href="../../src/aho_corasick/automaton.rs.html#354-359">source</a><h4 class="code-header">fn <a href="#method.try_find" class="fn">try_find</a>(&amp;self, input: &amp;<a class="struct" href="../struct.Input.html" title="struct aho_corasick::Input">Input</a>&lt;'_&gt;) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../struct.Match.html" title="struct aho_corasick::Match">Match</a>&gt;, <a class="struct" href="../struct.MatchError.html" title="struct aho_corasick::MatchError">MatchError</a>&gt;</h4></section></summary><div class="docblock"><p>Executes a non-overlapping search with this automaton using the given
+configuration.</p>
+<p>See
+<a href="../struct.AhoCorasick.html#method.try_find" title="method aho_corasick::AhoCorasick::try_find"><code>AhoCorasick::try_find</code></a>
+for more documentation and examples.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_find_overlapping" class="method"><a class="src rightside" href="../../src/aho_corasick/automaton.rs.html#367-373">source</a><h4 class="code-header">fn <a href="#method.try_find_overlapping" class="fn">try_find_overlapping</a>(
+    &amp;self,
+    input: &amp;<a class="struct" href="../struct.Input.html" title="struct aho_corasick::Input">Input</a>&lt;'_&gt;,
+    state: &amp;mut <a class="struct" href="struct.OverlappingState.html" title="struct aho_corasick::automaton::OverlappingState">OverlappingState</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="struct" href="../struct.MatchError.html" title="struct aho_corasick::MatchError">MatchError</a>&gt;</h4></section></summary><div class="docblock"><p>Executes a overlapping search with this automaton using the given
+configuration.</p>
+<p>See
+<a href="../struct.AhoCorasick.html#method.try_find_overlapping" title="method aho_corasick::AhoCorasick::try_find_overlapping"><code>AhoCorasick::try_find_overlapping</code></a>
+for more documentation and examples.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_find_iter" class="method"><a class="src rightside" href="../../src/aho_corasick/automaton.rs.html#381-389">source</a><h4 class="code-header">fn <a href="#method.try_find_iter" class="fn">try_find_iter</a>&lt;'a, 'h&gt;(
+    &amp;'a self,
+    input: <a class="struct" href="../struct.Input.html" title="struct aho_corasick::Input">Input</a>&lt;'h&gt;,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="struct.FindIter.html" title="struct aho_corasick::automaton::FindIter">FindIter</a>&lt;'a, 'h, Self&gt;, <a class="struct" href="../struct.MatchError.html" title="struct aho_corasick::MatchError">MatchError</a>&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Returns an iterator of non-overlapping matches with this automaton
+using the given configuration.</p>
+<p>See
+<a href="../struct.AhoCorasick.html#method.try_find_iter" title="method aho_corasick::AhoCorasick::try_find_iter"><code>AhoCorasick::try_find_iter</code></a>
+for more documentation and examples.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_find_overlapping_iter" class="method"><a class="src rightside" href="../../src/aho_corasick/automaton.rs.html#397-423">source</a><h4 class="code-header">fn <a href="#method.try_find_overlapping_iter" class="fn">try_find_overlapping_iter</a>&lt;'a, 'h&gt;(
+    &amp;'a self,
+    input: <a class="struct" href="../struct.Input.html" title="struct aho_corasick::Input">Input</a>&lt;'h&gt;,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="struct.FindOverlappingIter.html" title="struct aho_corasick::automaton::FindOverlappingIter">FindOverlappingIter</a>&lt;'a, 'h, Self&gt;, <a class="struct" href="../struct.MatchError.html" title="struct aho_corasick::MatchError">MatchError</a>&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Returns an iterator of overlapping matches with this automaton
+using the given configuration.</p>
+<p>See
+<a href="../struct.AhoCorasick.html#method.try_find_overlapping_iter" title="method aho_corasick::AhoCorasick::try_find_overlapping_iter"><code>AhoCorasick::try_find_overlapping_iter</code></a>
+for more documentation and examples.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_replace_all" class="method"><a class="src rightside" href="../../src/aho_corasick/automaton.rs.html#433-454">source</a><h4 class="code-header">fn <a href="#method.try_replace_all" class="fn">try_replace_all</a>&lt;B&gt;(
+    &amp;self,
+    haystack: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+    replace_with: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.slice.html">[B]</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>, <a class="struct" href="../struct.MatchError.html" title="struct aho_corasick::MatchError">MatchError</a>&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+    B: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>&gt;,</div></h4></section></summary><div class="docblock"><p>Replaces all non-overlapping matches in <code>haystack</code> with
+strings from <code>replace_with</code> depending on the pattern that
+matched. The <code>replace_with</code> slice must have length equal to
+<code>Automaton::patterns_len</code>.</p>
+<p>See
+<a href="../struct.AhoCorasick.html#method.try_replace_all" title="method aho_corasick::AhoCorasick::try_replace_all"><code>AhoCorasick::try_replace_all</code></a>
+for more documentation and examples.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_replace_all_bytes" class="method"><a class="src rightside" href="../../src/aho_corasick/automaton.rs.html#464-485">source</a><h4 class="code-header">fn <a href="#method.try_replace_all_bytes" class="fn">try_replace_all_bytes</a>&lt;B&gt;(
+    &amp;self,
+    haystack: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>],
+    replace_with: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.slice.html">[B]</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>&gt;, <a class="struct" href="../struct.MatchError.html" title="struct aho_corasick::MatchError">MatchError</a>&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+    B: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]&gt;,</div></h4></section></summary><div class="docblock"><p>Replaces all non-overlapping matches in <code>haystack</code> with
+strings from <code>replace_with</code> depending on the pattern that
+matched. The <code>replace_with</code> slice must have length equal to
+<code>Automaton::patterns_len</code>.</p>
+<p>See
+<a href="../struct.AhoCorasick.html#method.try_replace_all_bytes" title="method aho_corasick::AhoCorasick::try_replace_all_bytes"><code>AhoCorasick::try_replace_all_bytes</code></a>
+for more documentation and examples.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_replace_all_with" class="method"><a class="src rightside" href="../../src/aho_corasick/automaton.rs.html#493-522">source</a><h4 class="code-header">fn <a href="#method.try_replace_all_with" class="fn">try_replace_all_with</a>&lt;F&gt;(
+    &amp;self,
+    haystack: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+    dst: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>,
+    replace_with: F,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="struct" href="../struct.MatchError.html" title="struct aho_corasick::MatchError">MatchError</a>&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(&amp;<a class="struct" href="../struct.Match.html" title="struct aho_corasick::Match">Match</a>, &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>, &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>,</div></h4></section></summary><div class="docblock"><p>Replaces all non-overlapping matches in <code>haystack</code> by calling the
+<code>replace_with</code> closure given.</p>
+<p>See
+<a href="../struct.AhoCorasick.html#method.try_replace_all_with" title="method aho_corasick::AhoCorasick::try_replace_all_with"><code>AhoCorasick::try_replace_all_with</code></a>
+for more documentation and examples.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_replace_all_with_bytes" class="method"><a class="src rightside" href="../../src/aho_corasick/automaton.rs.html#530-550">source</a><h4 class="code-header">fn <a href="#method.try_replace_all_with_bytes" class="fn">try_replace_all_with_bytes</a>&lt;F&gt;(
+    &amp;self,
+    haystack: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>],
+    dst: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>&gt;,
+    replace_with: F,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="struct" href="../struct.MatchError.html" title="struct aho_corasick::MatchError">MatchError</a>&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(&amp;<a class="struct" href="../struct.Match.html" title="struct aho_corasick::Match">Match</a>, &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>&gt;) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>,</div></h4></section></summary><div class="docblock"><p>Replaces all non-overlapping matches in <code>haystack</code> by calling the
+<code>replace_with</code> closure given.</p>
+<p>See
+<a href="../struct.AhoCorasick.html#method.try_replace_all_with_bytes" title="method aho_corasick::AhoCorasick::try_replace_all_with_bytes"><code>AhoCorasick::try_replace_all_with_bytes</code></a>
+for more documentation and examples.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_stream_find_iter" class="method"><a class="src rightside" href="../../src/aho_corasick/automaton.rs.html#559-567">source</a><h4 class="code-header">fn <a href="#method.try_stream_find_iter" class="fn">try_stream_find_iter</a>&lt;'a, R: <a class="trait" href="https://doc.rust-lang.org/1.81.0/std/io/trait.Read.html" title="trait std::io::Read">Read</a>&gt;(
+    &amp;'a self,
+    rdr: R,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="struct.StreamFindIter.html" title="struct aho_corasick::automaton::StreamFindIter">StreamFindIter</a>&lt;'a, Self, R&gt;, <a class="struct" href="../struct.MatchError.html" title="struct aho_corasick::MatchError">MatchError</a>&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Returns an iterator of non-overlapping matches with this automaton
+from the stream given.</p>
+<p>See
+<a href="../struct.AhoCorasick.html#method.try_stream_find_iter" title="method aho_corasick::AhoCorasick::try_stream_find_iter"><code>AhoCorasick::try_stream_find_iter</code></a>
+for more documentation and examples.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_stream_replace_all" class="method"><a class="src rightside" href="../../src/aho_corasick/automaton.rs.html#578-599">source</a><h4 class="code-header">fn <a href="#method.try_stream_replace_all" class="fn">try_stream_replace_all</a>&lt;R, W, B&gt;(
+    &amp;self,
+    rdr: R,
+    wtr: W,
+    replace_with: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.slice.html">[B]</a>,
+) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+    R: <a class="trait" href="https://doc.rust-lang.org/1.81.0/std/io/trait.Read.html" title="trait std::io::Read">Read</a>,
+    W: <a class="trait" href="https://doc.rust-lang.org/1.81.0/std/io/trait.Write.html" title="trait std::io::Write">Write</a>,
+    B: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]&gt;,</div></h4></section></summary><div class="docblock"><p>Replaces all non-overlapping matches in <code>rdr</code> with strings from
+<code>replace_with</code> depending on the pattern that matched, and writes the
+result to <code>wtr</code>. The <code>replace_with</code> slice must have length equal to
+<code>Automaton::patterns_len</code>.</p>
+<p>See
+<a href="../struct.AhoCorasick.html#method.try_stream_replace_all" title="method aho_corasick::AhoCorasick::try_stream_replace_all"><code>AhoCorasick::try_stream_replace_all</code></a>
+for more documentation and examples.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_stream_replace_all_with" class="method"><a class="src rightside" href="../../src/aho_corasick/automaton.rs.html#608-636">source</a><h4 class="code-header">fn <a href="#method.try_stream_replace_all_with" class="fn">try_stream_replace_all_with</a>&lt;R, W, F&gt;(
+    &amp;self,
+    rdr: R,
+    wtr: W,
+    replace_with: F,
+) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+    R: <a class="trait" href="https://doc.rust-lang.org/1.81.0/std/io/trait.Read.html" title="trait std::io::Read">Read</a>,
+    W: <a class="trait" href="https://doc.rust-lang.org/1.81.0/std/io/trait.Write.html" title="trait std::io::Write">Write</a>,
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(&amp;<a class="struct" href="../struct.Match.html" title="struct aho_corasick::Match">Match</a>, &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut W</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;,</div></h4></section></summary><div class="docblock"><p>Replaces all non-overlapping matches in <code>rdr</code> by calling the
+<code>replace_with</code> closure given and writing the result to <code>wtr</code>.</p>
+<p>See
+<a href="../struct.AhoCorasick.html#method.try_stream_replace_all_with" title="method aho_corasick::AhoCorasick::try_stream_replace_all_with"><code>AhoCorasick::try_stream_replace_all_with</code></a>
+for more documentation and examples.</p>
+</div></details></div><h2 id="foreign-impls" class="section-header">Implementations on Foreign Types<a href="#foreign-impls" class="anchor">§</a></h2><details class="toggle implementors-toggle"><summary><section id="impl-Automaton-for-%26A" class="impl"><a class="src rightside" href="../../src/aho_corasick/automaton.rs.html#641-721">source</a><a href="#impl-Automaton-for-%26A" class="anchor">§</a><h3 class="code-header">impl&lt;'a, A: <a class="trait" href="trait.Automaton.html" title="trait aho_corasick::automaton::Automaton">Automaton</a> + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>&gt; <a class="trait" href="trait.Automaton.html" title="trait aho_corasick::automaton::Automaton">Automaton</a> for <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;'a A</a></h3></section></summary><div class="impl-items"><section id="method.start_state" class="method trait-impl"><a class="src rightside" href="../../src/aho_corasick/automaton.rs.html#643-645">source</a><a href="#method.start_state" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.start_state" class="fn">start_state</a>(&amp;self, anchored: <a class="enum" href="../enum.Anchored.html" title="enum aho_corasick::Anchored">Anchored</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="struct.StateID.html" title="struct aho_corasick::automaton::StateID">StateID</a>, <a class="struct" href="../struct.MatchError.html" title="struct aho_corasick::MatchError">MatchError</a>&gt;</h4></section><section id="method.next_state" class="method trait-impl"><a class="src rightside" href="../../src/aho_corasick/automaton.rs.html#648-655">source</a><a href="#method.next_state" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.next_state" class="fn">next_state</a>(&amp;self, anchored: <a class="enum" href="../enum.Anchored.html" title="enum aho_corasick::Anchored">Anchored</a>, sid: <a class="struct" href="struct.StateID.html" title="struct aho_corasick::automaton::StateID">StateID</a>, byte: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>) -&gt; <a class="struct" href="struct.StateID.html" title="struct aho_corasick::automaton::StateID">StateID</a></h4></section><section id="method.is_special" class="method trait-impl"><a class="src rightside" href="../../src/aho_corasick/automaton.rs.html#658-660">source</a><a href="#method.is_special" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.is_special" class="fn">is_special</a>(&amp;self, sid: <a class="struct" href="struct.StateID.html" title="struct aho_corasick::automaton::StateID">StateID</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section><section id="method.is_dead" class="method trait-impl"><a class="src rightside" href="../../src/aho_corasick/automaton.rs.html#663-665">source</a><a href="#method.is_dead" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.is_dead" class="fn">is_dead</a>(&amp;self, sid: <a class="struct" href="struct.StateID.html" title="struct aho_corasick::automaton::StateID">StateID</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section><section id="method.is_match" class="method trait-impl"><a class="src rightside" href="../../src/aho_corasick/automaton.rs.html#668-670">source</a><a href="#method.is_match" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.is_match" class="fn">is_match</a>(&amp;self, sid: <a class="struct" href="struct.StateID.html" title="struct aho_corasick::automaton::StateID">StateID</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section><section id="method.is_start" class="method trait-impl"><a class="src rightside" href="../../src/aho_corasick/automaton.rs.html#673-675">source</a><a href="#method.is_start" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.is_start" class="fn">is_start</a>(&amp;self, sid: <a class="struct" href="struct.StateID.html" title="struct aho_corasick::automaton::StateID">StateID</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section><section id="method.match_kind" class="method trait-impl"><a class="src rightside" href="../../src/aho_corasick/automaton.rs.html#678-680">source</a><a href="#method.match_kind" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.match_kind" class="fn">match_kind</a>(&amp;self) -&gt; <a class="enum" href="../enum.MatchKind.html" title="enum aho_corasick::MatchKind">MatchKind</a></h4></section><section id="method.match_len" class="method trait-impl"><a class="src rightside" href="../../src/aho_corasick/automaton.rs.html#683-685">source</a><a href="#method.match_len" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.match_len" class="fn">match_len</a>(&amp;self, sid: <a class="struct" href="struct.StateID.html" title="struct aho_corasick::automaton::StateID">StateID</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a></h4></section><section id="method.match_pattern" class="method trait-impl"><a class="src rightside" href="../../src/aho_corasick/automaton.rs.html#688-690">source</a><a href="#method.match_pattern" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.match_pattern" class="fn">match_pattern</a>(&amp;self, sid: <a class="struct" href="struct.StateID.html" title="struct aho_corasick::automaton::StateID">StateID</a>, index: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="struct" href="../struct.PatternID.html" title="struct aho_corasick::PatternID">PatternID</a></h4></section><section id="method.patterns_len" class="method trait-impl"><a class="src rightside" href="../../src/aho_corasick/automaton.rs.html#693-695">source</a><a href="#method.patterns_len" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.patterns_len" class="fn">patterns_len</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a></h4></section><section id="method.pattern_len" class="method trait-impl"><a class="src rightside" href="../../src/aho_corasick/automaton.rs.html#698-700">source</a><a href="#method.pattern_len" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.pattern_len" class="fn">pattern_len</a>(&amp;self, pid: <a class="struct" href="../struct.PatternID.html" title="struct aho_corasick::PatternID">PatternID</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a></h4></section><section id="method.min_pattern_len" class="method trait-impl"><a class="src rightside" href="../../src/aho_corasick/automaton.rs.html#703-705">source</a><a href="#method.min_pattern_len" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.min_pattern_len" class="fn">min_pattern_len</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a></h4></section><section id="method.max_pattern_len" class="method trait-impl"><a class="src rightside" href="../../src/aho_corasick/automaton.rs.html#708-710">source</a><a href="#method.max_pattern_len" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.max_pattern_len" class="fn">max_pattern_len</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a></h4></section><section id="method.memory_usage" class="method trait-impl"><a class="src rightside" href="../../src/aho_corasick/automaton.rs.html#713-715">source</a><a href="#method.memory_usage" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.memory_usage" class="fn">memory_usage</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a></h4></section><section id="method.prefilter" class="method trait-impl"><a class="src rightside" href="../../src/aho_corasick/automaton.rs.html#718-720">source</a><a href="#method.prefilter" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.prefilter" class="fn">prefilter</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;<a class="struct" href="struct.Prefilter.html" title="struct aho_corasick::automaton::Prefilter">Prefilter</a>&gt;</h4></section></div></details><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><section id="impl-Automaton-for-DFA" class="impl"><a class="src rightside" href="../../src/aho_corasick/dfa.rs.html#190-303">source</a><a href="#impl-Automaton-for-DFA" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.Automaton.html" title="trait aho_corasick::automaton::Automaton">Automaton</a> for <a class="struct" href="../dfa/struct.DFA.html" title="struct aho_corasick::dfa::DFA">DFA</a></h3></section><section id="impl-Automaton-for-NFA" class="impl"><a class="src rightside" href="../../src/aho_corasick/nfa/contiguous.rs.html#176-322">source</a><a href="#impl-Automaton-for-NFA" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.Automaton.html" title="trait aho_corasick::automaton::Automaton">Automaton</a> for aho_corasick::nfa::contiguous::<a class="struct" href="../nfa/contiguous/struct.NFA.html" title="struct aho_corasick::nfa::contiguous::NFA">NFA</a></h3></section><section id="impl-Automaton-for-NFA-1" class="impl"><a class="src rightside" href="../../src/aho_corasick/nfa/noncontiguous.rs.html#591-702">source</a><a href="#impl-Automaton-for-NFA-1" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.Automaton.html" title="trait aho_corasick::automaton::Automaton">Automaton</a> for aho_corasick::nfa::noncontiguous::<a class="struct" href="../nfa/noncontiguous/struct.NFA.html" title="struct aho_corasick::nfa::noncontiguous::NFA">NFA</a></h3></section></div><script src="../../trait.impl/aho_corasick/automaton/trait.Automaton.js" async></script></section></div></main></body></html>

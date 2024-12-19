@@ -1,0 +1,47 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Per-object thread-local storage"><title>thread_local - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="thread_local" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../thread_local/index.html">thread_local</a><span class="version">1.1.8</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#structs">Structs</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">thread_local</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/thread_local/lib.rs.html#8-683">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Per-object thread-local storage</p>
+<p>This library provides the <code>ThreadLocal</code> type which allows a separate copy of
+an object to be used for each thread. This allows for per-object
+thread-local storage, unlike the standard library’s <code>thread_local!</code> macro
+which only allows static thread-local storage.</p>
+<p>Per-thread objects are not destroyed when a thread exits. Instead, objects
+are only destroyed when the <code>ThreadLocal</code> containing them is destroyed.</p>
+<p>You can also iterate over the thread-local values of all thread in a
+<code>ThreadLocal</code> object using the <code>iter_mut</code> and <code>into_iter</code> methods. This can
+only be done if you have mutable access to the <code>ThreadLocal</code> object, which
+guarantees that you are the only thread currently accessing it.</p>
+<p>Note that since thread IDs are recycled when a thread exits, it is possible
+for one thread to retrieve the object of another thread. Since this can only
+occur after a thread has exited this does not lead to any race conditions.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Basic usage of <code>ThreadLocal</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>thread_local::ThreadLocal;
+<span class="kw">let </span>tls: ThreadLocal&lt;u32&gt; = ThreadLocal::new();
+<span class="macro">assert_eq!</span>(tls.get(), <span class="prelude-val">None</span>);
+<span class="macro">assert_eq!</span>(tls.get_or(|| <span class="number">5</span>), <span class="kw-2">&amp;</span><span class="number">5</span>);
+<span class="macro">assert_eq!</span>(tls.get(), <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span><span class="number">5</span>));</code></pre></div>
+<p>Combining thread-local values into a single result:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>thread_local::ThreadLocal;
+<span class="kw">use </span>std::sync::Arc;
+<span class="kw">use </span>std::cell::Cell;
+<span class="kw">use </span>std::thread;
+
+<span class="kw">let </span>tls = Arc::new(ThreadLocal::new());
+
+<span class="comment">// Create a bunch of threads to do stuff
+</span><span class="kw">for _ in </span><span class="number">0</span>..<span class="number">5 </span>{
+    <span class="kw">let </span>tls2 = tls.clone();
+    thread::spawn(<span class="kw">move </span>|| {
+        <span class="comment">// Increment a counter to count some event...
+        </span><span class="kw">let </span>cell = tls2.get_or(|| Cell::new(<span class="number">0</span>));
+        cell.set(cell.get() + <span class="number">1</span>);
+    }).join().unwrap();
+}
+
+<span class="comment">// Once all threads are done, collect the counter values and return the
+// sum of all thread-local counter values.
+</span><span class="kw">let </span>tls = Arc::try_unwrap(tls).unwrap();
+<span class="kw">let </span>total = tls.into_iter().fold(<span class="number">0</span>, |x, y| x + y.get());
+<span class="macro">assert_eq!</span>(total, <span class="number">5</span>);</code></pre></div>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.CachedIntoIter.html" title="struct thread_local::CachedIntoIter">CachedIntoIter</a><span class="stab deprecated" title="">Deprecated</span></div><div class="desc docblock-short">An iterator that moves out of a <code>CachedThreadLocal</code>.</div></li><li><div class="item-name"><a class="struct" href="struct.CachedIterMut.html" title="struct thread_local::CachedIterMut">CachedIterMut</a><span class="stab deprecated" title="">Deprecated</span></div><div class="desc docblock-short">Mutable iterator over the contents of a <code>CachedThreadLocal</code>.</div></li><li><div class="item-name"><a class="struct" href="struct.CachedThreadLocal.html" title="struct thread_local::CachedThreadLocal">CachedThreadLocal</a><span class="stab deprecated" title="">Deprecated</span></div><div class="desc docblock-short">Wrapper around <a href="struct.ThreadLocal.html" title="struct thread_local::ThreadLocal"><code>ThreadLocal</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.IntoIter.html" title="struct thread_local::IntoIter">IntoIter</a></div><div class="desc docblock-short">An iterator that moves out of a <code>ThreadLocal</code>.</div></li><li><div class="item-name"><a class="struct" href="struct.Iter.html" title="struct thread_local::Iter">Iter</a></div><div class="desc docblock-short">Iterator over the contents of a <code>ThreadLocal</code>.</div></li><li><div class="item-name"><a class="struct" href="struct.IterMut.html" title="struct thread_local::IterMut">IterMut</a></div><div class="desc docblock-short">Mutable iterator over the contents of a <code>ThreadLocal</code>.</div></li><li><div class="item-name"><a class="struct" href="struct.ThreadLocal.html" title="struct thread_local::ThreadLocal">ThreadLocal</a></div><div class="desc docblock-short">Thread-local variable wrapper</div></li></ul></section></div></main></body></html>

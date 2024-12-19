@@ -1,0 +1,586 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="encoding_rs is a Gecko-oriented Free Software / Open Source implementation of the Encoding Standard in Rust. Gecko-oriented means that converting to and from UTF-16 is supported in addition to converting to and from UTF-8, that the performance and streamability goals are browser-oriented, and that FFI-friendliness is a goal."><title>encoding_rs - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="encoding_rs" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../encoding_rs/index.html">encoding_rs</a><span class="version">0.8.34</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#statics">Statics</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">encoding_rs</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/encoding_rs/lib.rs.html#10-6122">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>encoding_rs is a Gecko-oriented Free Software / Open Source implementation
+of the <a href="https://encoding.spec.whatwg.org/">Encoding Standard</a> in Rust.
+Gecko-oriented means that converting to and from UTF-16 is supported in
+addition to converting to and from UTF-8, that the performance and
+streamability goals are browser-oriented, and that FFI-friendliness is a
+goal.</p>
+<p>Additionally, the <code>mem</code> module provides functions that are useful for
+applications that need to be able to deal with legacy in-memory
+representations of Unicode.</p>
+<p>For expectation setting, please be sure to read the sections
+<a href="#utf-16le-utf-16be-and-unicode-encoding-schemes"><em>UTF-16LE, UTF-16BE and Unicode Encoding Schemes</em></a>,
+<a href="#iso-8859-1"><em>ISO-8859-1</em></a> and <a href="#web--browser-focus"><em>Web / Browser Focus</em></a> below.</p>
+<p>There is a <a href="https://hsivonen.fi/encoding_rs/">long-form write-up</a> about the
+design and internals of the crate.</p>
+<h2 id="availability"><a class="doc-anchor" href="#availability">§</a>Availability</h2>
+<p>The code is available under the
+<a href="https://www.apache.org/licenses/LICENSE-2.0">Apache license, Version 2.0</a>
+or the <a href="https://opensource.org/licenses/MIT">MIT license</a>, at your option.
+See the
+<a href="https://github.com/hsivonen/encoding_rs/blob/master/COPYRIGHT"><code>COPYRIGHT</code></a>
+file for details.
+The <a href="https://github.com/hsivonen/encoding_rs">repository is on GitHub</a>. The
+<a href="https://crates.io/crates/encoding_rs">crate is available on crates.io</a>.</p>
+<h2 id="integration-with-stdio"><a class="doc-anchor" href="#integration-with-stdio">§</a>Integration with <code>std::io</code></h2>
+<p>This crate doesn’t implement traits from <code>std::io</code>. However, for the case of
+wrapping a <code>std::io::Read</code> in a decoder that implements <code>std::io::Read</code> and
+presents the data from the wrapped <code>std::io::Read</code> as UTF-8 is addressed by
+the <a href="https://docs.rs/encoding_rs_io/"><code>encoding_rs_io</code></a> crate.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Example programs:</p>
+<ul>
+<li><a href="https://github.com/hsivonen/recode_rs">Rust</a></li>
+<li><a href="https://github.com/hsivonen/recode_c">C</a></li>
+<li><a href="https://github.com/hsivonen/recode_cpp">C++</a></li>
+</ul>
+<p>Decode using the non-streaming API:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[cfg(feature = <span class="string">"alloc"</span>)] </span>{
+<span class="kw">use </span>encoding_rs::<span class="kw-2">*</span>;
+
+<span class="kw">let </span>expectation = <span class="string">"\u{30CF}\u{30ED}\u{30FC}\u{30FB}\u{30EF}\u{30FC}\u{30EB}\u{30C9}"</span>;
+<span class="kw">let </span>bytes = <span class="string">b"\x83n\x83\x8D\x81[\x81E\x83\x8F\x81[\x83\x8B\x83h"</span>;
+
+<span class="kw">let </span>(cow, encoding_used, had_errors) = SHIFT_JIS.decode(bytes);
+<span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span>cow[..], expectation);
+<span class="macro">assert_eq!</span>(encoding_used, SHIFT_JIS);
+<span class="macro">assert!</span>(!had_errors);
+}</code></pre></div>
+<p>Decode using the streaming API with minimal <code>unsafe</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>encoding_rs::<span class="kw-2">*</span>;
+
+<span class="kw">let </span>expectation = <span class="string">"\u{30CF}\u{30ED}\u{30FC}\u{30FB}\u{30EF}\u{30FC}\u{30EB}\u{30C9}"</span>;
+
+<span class="comment">// Use an array of byte slices to demonstrate content arriving piece by
+// piece from the network.
+</span><span class="kw">let </span>bytes: [<span class="kw-2">&amp;</span><span class="lifetime">'static </span>[u8]; <span class="number">4</span>] = [<span class="string">b"\x83"</span>,
+                                 <span class="string">b"n\x83\x8D\x81"</span>,
+                                 <span class="string">b"[\x81E\x83\x8F\x81[\x83"</span>,
+                                 <span class="string">b"\x8B\x83h"</span>];
+
+<span class="comment">// Very short output buffer to demonstrate the output buffer getting full.
+// Normally, you'd use something like `[0u8; 2048]`.
+</span><span class="kw">let </span><span class="kw-2">mut </span>buffer_bytes = [<span class="number">0u8</span>; <span class="number">8</span>];
+<span class="kw">let </span><span class="kw-2">mut </span>buffer: <span class="kw-2">&amp;mut </span>str = std::str::from_utf8_mut(<span class="kw-2">&amp;mut </span>buffer_bytes[..]).unwrap();
+
+<span class="comment">// How many bytes in the buffer currently hold significant data.
+</span><span class="kw">let </span><span class="kw-2">mut </span>bytes_in_buffer = <span class="number">0usize</span>;
+
+<span class="comment">// Collect the output to a string for demonstration purposes.
+</span><span class="kw">let </span><span class="kw-2">mut </span>output = String::new();
+
+<span class="comment">// The `Decoder`
+</span><span class="kw">let </span><span class="kw-2">mut </span>decoder = SHIFT_JIS.new_decoder();
+
+<span class="comment">// Track whether we see errors.
+</span><span class="kw">let </span><span class="kw-2">mut </span>total_had_errors = <span class="bool-val">false</span>;
+
+<span class="comment">// Decode using a fixed-size intermediate buffer (for demonstrating the
+// use of a fixed-size buffer; normally when the output of an incremental
+// decode goes to a `String` one would use `Decoder.decode_to_string()` to
+// avoid the intermediate buffer).
+</span><span class="kw">for </span>input <span class="kw">in </span><span class="kw-2">&amp;</span>bytes[..] {
+    <span class="comment">// The number of bytes already read from current `input` in total.
+    </span><span class="kw">let </span><span class="kw-2">mut </span>total_read_from_current_input = <span class="number">0usize</span>;
+
+    <span class="kw">loop </span>{
+        <span class="kw">let </span>(result, read, written, had_errors) =
+            decoder.decode_to_str(<span class="kw-2">&amp;</span>input[total_read_from_current_input..],
+                                  <span class="kw-2">&amp;mut </span>buffer[bytes_in_buffer..],
+                                  <span class="bool-val">false</span>);
+        total_read_from_current_input += read;
+        bytes_in_buffer += written;
+        total_had_errors |= had_errors;
+        <span class="kw">match </span>result {
+            CoderResult::InputEmpty =&gt; {
+                <span class="comment">// We have consumed the current input buffer. Break out of
+                // the inner loop to get the next input buffer from the
+                // outer loop.
+                </span><span class="kw">break</span>;
+            },
+            CoderResult::OutputFull =&gt; {
+                <span class="comment">// Write the current buffer out and consider the buffer
+                // empty.
+                </span>output.push_str(<span class="kw-2">&amp;</span>buffer[..bytes_in_buffer]);
+                bytes_in_buffer = <span class="number">0usize</span>;
+                <span class="kw">continue</span>;
+            }
+        }
+    }
+}
+
+<span class="comment">// Process EOF
+</span><span class="kw">loop </span>{
+    <span class="kw">let </span>(result, <span class="kw">_</span>, written, had_errors) =
+        decoder.decode_to_str(<span class="string">b""</span>,
+                              <span class="kw-2">&amp;mut </span>buffer[bytes_in_buffer..],
+                              <span class="bool-val">true</span>);
+    bytes_in_buffer += written;
+    total_had_errors |= had_errors;
+    <span class="comment">// Write the current buffer out and consider the buffer empty.
+    // Need to do this here for both `match` arms, because we exit the
+    // loop on `CoderResult::InputEmpty`.
+    </span>output.push_str(<span class="kw-2">&amp;</span>buffer[..bytes_in_buffer]);
+    bytes_in_buffer = <span class="number">0usize</span>;
+    <span class="kw">match </span>result {
+        CoderResult::InputEmpty =&gt; {
+            <span class="comment">// Done!
+            </span><span class="kw">break</span>;
+        },
+        CoderResult::OutputFull =&gt; {
+            <span class="kw">continue</span>;
+        }
+    }
+}
+
+<span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span>output[..], expectation);
+<span class="macro">assert!</span>(!total_had_errors);</code></pre></div>
+<h3 id="utf-16le-utf-16be-and-unicode-encoding-schemes"><a class="doc-anchor" href="#utf-16le-utf-16be-and-unicode-encoding-schemes">§</a>UTF-16LE, UTF-16BE and Unicode Encoding Schemes</h3>
+<p>The Encoding Standard doesn’t specify encoders for UTF-16LE and UTF-16BE,
+<strong>so this crate does not provide encoders for those encodings</strong>!
+Along with the replacement encoding, their <em>output encoding</em> (i.e. the
+encoding used for form submission and error handling in the query string
+of URLs) is UTF-8, so you get an UTF-8 encoder if you request an encoder
+for them.</p>
+<p>Additionally, the Encoding Standard factors BOM handling into wrapper
+algorithms so that BOM handling isn’t part of the definition of the
+encodings themselves. The Unicode <em>encoding schemes</em> in the Unicode
+Standard define BOM handling or lack thereof as part of the encoding
+scheme.</p>
+<p>When used with the <code>_without_bom_handling</code> entry points, the UTF-16LE
+and UTF-16BE <em>encodings</em> match the same-named <em>encoding schemes</em> from
+the Unicode Standard.</p>
+<p>When used with the <code>_with_bom_removal</code> entry points, the UTF-8
+<em>encoding</em> matches the UTF-8 <em>encoding scheme</em> from the Unicode
+Standard.</p>
+<p>This crate does not provide a mode that matches the UTF-16 <em>encoding
+scheme</em> from the Unicode Stardard. The UTF-16BE encoding used with
+the entry points without <code>_bom_</code> qualifiers is the closest match,
+but in that case, the UTF-8 BOM triggers UTF-8 decoding, which is
+not part of the behavior of the UTF-16 <em>encoding scheme</em> per the
+Unicode Standard.</p>
+<p>The UTF-32 family of Unicode encoding schemes is not supported
+by this crate. The Encoding Standard doesn’t define any UTF-32
+family encodings, since they aren’t necessary for consuming Web
+content.</p>
+<p>While gb18030 is capable of representing U+FEFF, the Encoding
+Standard does not treat the gb18030 byte representation of U+FEFF
+as a BOM, so neither does this crate.</p>
+<h3 id="iso-8859-1"><a class="doc-anchor" href="#iso-8859-1">§</a>ISO-8859-1</h3>
+<p>ISO-8859-1 does not exist as a distinct encoding from windows-1252 in
+the Encoding Standard. Therefore, an encoding that maps the unsigned
+byte value to the same Unicode scalar value is not available via
+<code>Encoding</code> in this crate.</p>
+<p>However, the functions whose name starts with <code>convert</code> and contains
+<code>latin1</code> in the <code>mem</code> module support such conversions, which are known as
+<a href="https://infra.spec.whatwg.org/#isomorphic-decode"><em>isomorphic decode</em></a>
+and <a href="https://infra.spec.whatwg.org/#isomorphic-encode"><em>isomorphic encode</em></a>
+in the <a href="https://infra.spec.whatwg.org/">Infra Standard</a>.</p>
+<h3 id="web--browser-focus"><a class="doc-anchor" href="#web--browser-focus">§</a>Web / Browser Focus</h3>
+<p>Both in terms of scope and performance, the focus is on the Web. For scope,
+this means that encoding_rs implements the Encoding Standard fully and
+doesn’t implement encodings that are not specified in the Encoding
+Standard. For performance, this means that decoding performance is
+important as well as performance for encoding into UTF-8 or encoding the
+Basic Latin range (ASCII) into legacy encodings. Non-Basic Latin needs to
+be encoded into legacy encodings in only two places in the Web platform: in
+the query part of URLs, in which case it’s a matter of relatively rare
+error handling, and in form submission, in which case the user action and
+networking tend to hide the performance of the encoder.</p>
+<p>Deemphasizing performance of encoding non-Basic Latin text into legacy
+encodings enables smaller code size thanks to the encoder side using the
+decode-optimized data tables without having encode-optimized data tables at
+all. Even in decoders, smaller lookup table size is preferred over avoiding
+multiplication operations.</p>
+<p>Additionally, performance is a non-goal for the ASCII-incompatible
+ISO-2022-JP encoding, which are rarely used on the Web. Instead of
+performance, the decoder for ISO-2022-JP optimizes for ease/clarity
+of implementation.</p>
+<p>Despite the browser focus, the hope is that non-browser applications
+that wish to consume Web content or submit Web forms in a Web-compatible
+way will find encoding_rs useful. While encoding_rs does not try to match
+Windows behavior, many of the encodings are close enough to legacy
+encodings implemented by Windows that applications that need to consume
+data in legacy Windows encodins may find encoding_rs useful. The
+<a href="https://crates.io/crates/codepage">codepage</a> crate maps from Windows
+code page identifiers onto encoding_rs <code>Encoding</code>s and vice versa.</p>
+<p>For decoding email, UTF-7 support is needed (unfortunately) in additition
+to the encodings defined in the Encoding Standard. The
+<a href="https://crates.io/crates/charset">charset</a> wraps encoding_rs and adds
+UTF-7 decoding for email purposes.</p>
+<p>For single-byte DOS encodings beyond the ones supported by the Encoding
+Standard, there is the <a href="https://crates.io/crates/oem_cp"><code>oem_cp</code></a> crate.</p>
+<h2 id="preparing-text-for-the-encoders"><a class="doc-anchor" href="#preparing-text-for-the-encoders">§</a>Preparing Text for the Encoders</h2>
+<p>Normalizing text into Unicode Normalization Form C prior to encoding text
+into a legacy encoding minimizes unmappable characters. Text can be
+normalized to Unicode Normalization Form C using the
+<a href="https://crates.io/crates/icu_normalizer"><code>icu_normalizer</code></a> crate, which
+is part of <a href="https://icu4x.unicode.org/">ICU4X</a>.</p>
+<p>The exception is windows-1258, which after normalizing to Unicode
+Normalization Form C requires tone marks to be decomposed in order to
+minimize unmappable characters. Vietnamese tone marks can be decomposed
+using the <a href="https://crates.io/crates/detone"><code>detone</code></a> crate.</p>
+<h2 id="streaming--non-streaming-rust--cc"><a class="doc-anchor" href="#streaming--non-streaming-rust--cc">§</a>Streaming &amp; Non-Streaming; Rust &amp; C/C++</h2>
+<p>The API in Rust has two modes of operation: streaming and non-streaming.
+The streaming API is the foundation of the implementation and should be
+used when processing data that arrives piecemeal from an i/o stream. The
+streaming API has an FFI wrapper (as a <a href="https://github.com/hsivonen/encoding_c">separate crate</a>) that exposes it
+to C callers. The non-streaming part of the API is for Rust callers only and
+is smart about borrowing instead of copying when possible. When
+streamability is not needed, the non-streaming API should be preferrer in
+order to avoid copying data when a borrow suffices.</p>
+<p>There is no analogous C API exposed via FFI, mainly because C doesn’t have
+standard types for growable byte buffers and Unicode strings that know
+their length.</p>
+<p>The C API (header file generated at <code>target/include/encoding_rs.h</code> when
+building encoding_rs) can, in turn, be wrapped for use from C++. Such a
+C++ wrapper can re-create the non-streaming API in C++ for C++ callers.
+The C binding comes with a <a href="https://github.com/hsivonen/encoding_c/blob/master/include/encoding_rs_cpp.h">C++17 wrapper</a> that uses standard library +
+<a href="https://github.com/Microsoft/GSL/">GSL</a> types and that recreates the non-streaming API in C++ on top of
+the streaming API. A C++ wrapper with XPCOM/MFBT types is available as
+<a href="https://searchfox.org/mozilla-central/source/intl/Encoding.h"><code>mozilla::Encoding</code></a>.</p>
+<p>The <code>Encoding</code> type is common to both the streaming and non-streaming
+modes. In the streaming mode, decoding operations are performed with a
+<code>Decoder</code> and encoding operations with an <code>Encoder</code> object obtained via
+<code>Encoding</code>. In the non-streaming mode, decoding and encoding operations are
+performed using methods on <code>Encoding</code> objects themselves, so the <code>Decoder</code>
+and <code>Encoder</code> objects are not used at all.</p>
+<h2 id="memory-management"><a class="doc-anchor" href="#memory-management">§</a>Memory management</h2>
+<p>The non-streaming mode never performs heap allocations (even the methods
+that write into a <code>Vec&lt;u8&gt;</code> or a <code>String</code> by taking them as arguments do
+not reallocate the backing buffer of the <code>Vec&lt;u8&gt;</code> or the <code>String</code>). That
+is, the non-streaming mode uses caller-allocated buffers exclusively.</p>
+<p>The methods of the streaming mode that return a <code>Vec&lt;u8&gt;</code> or a <code>String</code>
+perform heap allocations but only to allocate the backing buffer of the
+<code>Vec&lt;u8&gt;</code> or the <code>String</code>.</p>
+<p><code>Encoding</code> is always statically allocated. <code>Decoder</code> and <code>Encoder</code> need no
+<code>Drop</code> cleanup.</p>
+<h2 id="buffer-reading-and-writing-behavior"><a class="doc-anchor" href="#buffer-reading-and-writing-behavior">§</a>Buffer reading and writing behavior</h2>
+<p>Based on experience gained with the <code>java.nio.charset</code> encoding converter
+API and with the Gecko uconv encoding converter API, the buffer reading
+and writing behaviors of encoding_rs are asymmetric: input buffers are
+fully drained but output buffers are not always fully filled.</p>
+<p>When reading from an input buffer, encoding_rs always consumes all input
+up to the next error or to the end of the buffer. In particular, when
+decoding, even if the input buffer ends in the middle of a byte sequence
+for a character, the decoder consumes all input. This has the benefit that
+the caller of the API can always fill the next buffer from the start from
+whatever source the bytes come from and never has to first copy the last
+bytes of the previous buffer to the start of the next buffer. However, when
+encoding, the UTF-8 input buffers have to end at a character boundary, which
+is a requirement for the Rust <code>str</code> type anyway, and UTF-16 input buffer
+boundaries falling in the middle of a surrogate pair result in both
+suggorates being treated individually as unpaired surrogates.</p>
+<p>Additionally, decoders guarantee that they can be fed even one byte at a
+time and encoders guarantee that they can be fed even one code point at a
+time. This has the benefit of not placing restrictions on the size of
+chunks the content arrives e.g. from network.</p>
+<p>When writing into an output buffer, encoding_rs makes sure that the code
+unit sequence for a character is never split across output buffer
+boundaries. This may result in wasted space at the end of an output buffer,
+but the advantages are that the output side of both decoders and encoders
+is greatly simplified compared to designs that attempt to fill output
+buffers exactly even when that entails splitting a code unit sequence and
+when encoding_rs methods return to the caller, the output produces thus
+far is always valid taken as whole. (In the case of encoding to ISO-2022-JP,
+the output needs to be considered as a whole, because the latest output
+buffer taken alone might not be valid taken alone if the transition away
+from the ASCII state occurred in an earlier output buffer. However, since
+the ISO-2022-JP decoder doesn’t treat streams that don’t end in the ASCII
+state as being in error despite the encoder generating a transition to the
+ASCII state at the end, the claim about the partial output taken as a whole
+being valid is true even for ISO-2022-JP.)</p>
+<h2 id="error-reporting"><a class="doc-anchor" href="#error-reporting">§</a>Error Reporting</h2>
+<p>Based on experience gained with the <code>java.nio.charset</code> encoding converter
+API and with the Gecko uconv encoding converter API, the error reporting
+behaviors of encoding_rs are asymmetric: decoder errors include offsets
+that leave it up to the caller to extract the erroneous bytes from the
+input stream if the caller wishes to do so but encoder errors provide the
+code point associated with the error without requiring the caller to
+extract it from the input on its own.</p>
+<p>On the encoder side, an error is always triggered by the most recently
+pushed Unicode scalar, which makes it simple to pass the <code>char</code> to the
+caller. Also, it’s very typical for the caller to wish to do something with
+this data: generate a numeric escape for the character. Additionally, the
+ISO-2022-JP encoder reports U+FFFD instead of the actual input character in
+certain cases, so requiring the caller to extract the character from the
+input buffer would require the caller to handle ISO-2022-JP details.
+Furthermore, requiring the caller to extract the character from the input
+buffer would require the caller to implement UTF-8 or UTF-16 math, which is
+the job of an encoding conversion library.</p>
+<p>On the decoder side, errors are triggered in more complex ways. For
+example, when decoding the sequence ESC, ‘$’, <em>buffer boundary</em>, ‘A’ as
+ISO-2022-JP, the ESC byte is in error, but this is discovered only after
+the buffer boundary when processing ‘A’. Thus, the bytes in error might not
+be the ones most recently pushed to the decoder and the error might not even
+be in the current buffer.</p>
+<p>Some encoding conversion APIs address the problem by not acknowledging
+trailing bytes of an input buffer as consumed if it’s still possible for
+future bytes to cause the trailing bytes to be in error. This way, error
+reporting can always refer to the most recently pushed buffer. This has the
+problem that the caller of the API has to copy the unconsumed trailing
+bytes to the start of the next buffer before being able to fill the rest
+of the next buffer. This is annoying, error-prone and inefficient.</p>
+<p>A possible solution would be making the decoder remember recently consumed
+bytes in order to be able to include a copy of the erroneous bytes when
+reporting an error. This has two problem: First, callers a rarely
+interested in the erroneous bytes, so attempts to identify them are most
+often just overhead anyway. Second, the rare applications that are
+interested typically care about the location of the error in the input
+stream.</p>
+<p>To keep the API convenient for common uses and the overhead low while making
+it possible to develop applications, such as HTML validators, that care
+about which bytes were in error, encoding_rs reports the length of the
+erroneous sequence and the number of bytes consumed after the erroneous
+sequence. As long as the caller doesn’t discard the 6 most recent bytes,
+this makes it possible for callers that care about the erroneous bytes to
+locate them.</p>
+<h2 id="no-convenience-api-for-custom-replacements"><a class="doc-anchor" href="#no-convenience-api-for-custom-replacements">§</a>No Convenience API for Custom Replacements</h2>
+<p>The Web Platform and, therefore, the Encoding Standard supports only one
+error recovery mode for decoders and only one error recovery mode for
+encoders. The supported error recovery mode for decoders is emitting the
+REPLACEMENT CHARACTER on error. The supported error recovery mode for
+encoders is emitting an HTML decimal numeric character reference for
+unmappable characters.</p>
+<p>Since encoding_rs is Web-focused, these are the only error recovery modes
+for which convenient support is provided. Moreover, on the decoder side,
+there aren’t really good alternatives for emitting the REPLACEMENT CHARACTER
+on error (other than treating errors as fatal). In particular, simply
+ignoring errors is a
+<a href="http://www.unicode.org/reports/tr36/#Substituting_for_Ill_Formed_Subsequences">security problem</a>,
+so it would be a bad idea for encoding_rs to provide a mode that encouraged
+callers to ignore errors.</p>
+<p>On the encoder side, there are plausible alternatives for HTML decimal
+numeric character references. For example, when outputting CSS, CSS-style
+escapes would seem to make sense. However, instead of facilitating the
+output of CSS, JS, etc. in non-UTF-8 encodings, encoding_rs takes the design
+position that you shouldn’t generate output in encodings other than UTF-8,
+except where backward compatibility with interacting with the legacy Web
+requires it. The legacy Web requires it only when parsing the query strings
+of URLs and when submitting forms, and those two both use HTML decimal
+numeric character references.</p>
+<p>While encoding_rs doesn’t make encoder replacements other than HTML decimal
+numeric character references easy, it does make them <em>possible</em>.
+<code>encode_from_utf8()</code>, which emits HTML decimal numeric character references
+for unmappable characters, is implemented on top of
+<code>encode_from_utf8_without_replacement()</code>. Applications that really, really
+want other replacement schemes for unmappable characters can likewise
+implement them on top of <code>encode_from_utf8_without_replacement()</code>.</p>
+<h2 id="no-extensibility-by-design"><a class="doc-anchor" href="#no-extensibility-by-design">§</a>No Extensibility by Design</h2>
+<p>The set of encodings supported by encoding_rs is not extensible by design.
+That is, <code>Encoding</code>, <code>Decoder</code> and <code>Encoder</code> are intentionally <code>struct</code>s
+rather than <code>trait</code>s. encoding_rs takes the design position that all future
+text interchange should be done using UTF-8, which can represent all of
+Unicode. (It is, in fact, the only encoding supported by the Encoding
+Standard and encoding_rs that can represent all of Unicode and that has
+encoder support. UTF-16LE and UTF-16BE don’t have encoder support, and
+gb18030 cannot encode U+E5E5.) The other encodings are supported merely for
+legacy compatibility and not due to non-UTF-8 encodings having benefits
+other than being able to consume legacy content.</p>
+<p>Considering that UTF-8 can represent all of Unicode and is already supported
+by all Web browsers, introducing a new encoding wouldn’t add to the
+expressiveness but would add to compatibility problems. In that sense,
+adding new encodings to the Web Platform doesn’t make sense, and, in fact,
+post-UTF-8 attempts at encodings, such as BOCU-1, have been rejected from
+the Web Platform. On the other hand, the set of legacy encodings that must
+be supported for a Web browser to be able to be successful is not going to
+expand. Empirically, the set of encodings specified in the Encoding Standard
+is already sufficient and the set of legacy encodings won’t grow
+retroactively.</p>
+<p>Since extensibility doesn’t make sense considering the Web focus of
+encoding_rs and adding encodings to Web clients would be actively harmful,
+it makes sense to make the set of encodings that encoding_rs supports
+non-extensible and to take the (admittedly small) benefits arising from
+that, such as the size of <code>Decoder</code> and <code>Encoder</code> objects being known ahead
+of time, which enables stack allocation thereof.</p>
+<p>This does have downsides for applications that might want to put encoding_rs
+to non-Web uses if those non-Web uses involve legacy encodings that aren’t
+needed for Web uses. The needs of such applications should not complicate
+encoding_rs itself, though. It is up to those applications to provide a
+framework that delegates the operations with encodings that encoding_rs
+supports to encoding_rs and operations with other encodings to something
+else (as opposed to encoding_rs itself providing an extensibility
+framework).</p>
+<h2 id="panics"><a class="doc-anchor" href="#panics">§</a>Panics</h2>
+<p>Methods in encoding_rs can panic if the API is used against the requirements
+stated in the documentation, if a state that’s supposed to be impossible
+is reached due to an internal bug or on integer overflow. When used
+according to documentation with buffer sizes that stay below integer
+overflow, in the absence of internal bugs, encoding_rs does not panic.</p>
+<p>Panics arising from API misuse aren’t documented beyond this on individual
+methods.</p>
+<h2 id="at-risk-parts-of-the-api"><a class="doc-anchor" href="#at-risk-parts-of-the-api">§</a>At-Risk Parts of the API</h2>
+<p>The foreseeable source of partially backward-incompatible API change is the
+way the instances of <code>Encoding</code> are made available.</p>
+<p>If Rust changes to allow the entries of <code>[&amp;'static Encoding; N]</code> to be
+initialized with <code>static</code>s of type <code>&amp;'static Encoding</code>, the non-reference
+<code>FOO_INIT</code> public <code>Encoding</code> instances will be removed from the public API.</p>
+<p>If Rust changes to make the referent of <code>pub const FOO: &amp;'static Encoding</code>
+unique when the constant is used in different crates, the reference-typed
+<code>static</code>s for the encoding instances will be changed from <code>static</code> to
+<code>const</code> and the non-reference-typed <code>_INIT</code> instances will be removed.</p>
+<h2 id="mapping-spec-concepts-onto-the-api"><a class="doc-anchor" href="#mapping-spec-concepts-onto-the-api">§</a>Mapping Spec Concepts onto the API</h2><table>
+<thead>
+<tr><th>Spec Concept</th><th>Streaming</th><th>Non-Streaming</th></tr>
+</thead>
+<tbody>
+<tr><td><a href="https://encoding.spec.whatwg.org/#encoding">encoding</a></td><td><code>&amp;'static Encoding</code></td><td><code>&amp;'static Encoding</code></td></tr>
+<tr><td><a href="https://encoding.spec.whatwg.org/#utf-8">UTF-8 encoding</a></td><td><code>UTF_8</code></td><td><code>UTF_8</code></td></tr>
+<tr><td><a href="https://encoding.spec.whatwg.org/#concept-encoding-get">get an encoding</a></td><td><code>Encoding::for_label(<var>label</var>)</code></td><td><code>Encoding::for_label(<var>label</var>)</code></td></tr>
+<tr><td><a href="https://encoding.spec.whatwg.org/#name">name</a></td><td><code><var>encoding</var>.name()</code></td><td><code><var>encoding</var>.name()</code></td></tr>
+<tr><td><a href="https://encoding.spec.whatwg.org/#get-an-output-encoding">get an output encoding</a></td><td><code><var>encoding</var>.output_encoding()</code></td><td><code><var>encoding</var>.output_encoding()</code></td></tr>
+<tr><td><a href="https://encoding.spec.whatwg.org/#decode">decode</a></td><td><code>let d = <var>encoding</var>.new_decoder();<br>let res = d.decode_to_<var>*</var>(<var>src</var>, <var>dst</var>, false);<br>// &hellip;</br>let last_res = d.decode_to_<var>*</var>(<var>src</var>, <var>dst</var>, true);</code></td><td><code><var>encoding</var>.decode(<var>src</var>)</code></td></tr>
+<tr><td><a href="https://encoding.spec.whatwg.org/#utf-8-decode">UTF-8 decode</a></td><td><code>let d = UTF_8.new_decoder_with_bom_removal();<br>let res = d.decode_to_<var>*</var>(<var>src</var>, <var>dst</var>, false);<br>// &hellip;</br>let last_res = d.decode_to_<var>*</var>(<var>src</var>, <var>dst</var>, true);</code></td><td><code>UTF_8.decode_with_bom_removal(<var>src</var>)</code></td></tr>
+<tr><td><a href="https://encoding.spec.whatwg.org/#utf-8-decode-without-bom">UTF-8 decode without BOM</a></td><td><code>let d = UTF_8.new_decoder_without_bom_handling();<br>let res = d.decode_to_<var>*</var>(<var>src</var>, <var>dst</var>, false);<br>// &hellip;</br>let last_res = d.decode_to_<var>*</var>(<var>src</var>, <var>dst</var>, true);</code></td><td><code>UTF_8.decode_without_bom_handling(<var>src</var>)</code></td></tr>
+<tr><td><a href="https://encoding.spec.whatwg.org/#utf-8-decode-without-bom-or-fail">UTF-8 decode without BOM or fail</a></td><td><code>let d = UTF_8.new_decoder_without_bom_handling();<br>let res = d.decode_to_<var>*</var>_without_replacement(<var>src</var>, <var>dst</var>, false);<br>// &hellip; (fail if malformed)</br>let last_res = d.decode_to_<var>*</var>_without_replacement(<var>src</var>, <var>dst</var>, true);<br>// (fail if malformed)</code></td><td><code>UTF_8.decode_without_bom_handling_and_without_replacement(<var>src</var>)</code></td></tr>
+<tr><td><a href="https://encoding.spec.whatwg.org/#encode">encode</a></td><td><code>let e = <var>encoding</var>.new_encoder();<br>let res = e.encode_to_<var>*</var>(<var>src</var>, <var>dst</var>, false);<br>// &hellip;</br>let last_res = e.encode_to_<var>*</var>(<var>src</var>, <var>dst</var>, true);</code></td><td><code><var>encoding</var>.encode(<var>src</var>)</code></td></tr>
+<tr><td><a href="https://encoding.spec.whatwg.org/#utf-8-encode">UTF-8 encode</a></td><td>Use the UTF-8 nature of Rust strings directly:<br><code><var>write</var>(<var>src</var>.as_bytes());<br>// refill src<br><var>write</var>(<var>src</var>.as_bytes());<br>// refill src<br><var>write</var>(<var>src</var>.as_bytes());<br>// &hellip;</code></td><td>Use the UTF-8 nature of Rust strings directly:<br><code><var>src</var>.as_bytes()</code></td></tr>
+</tbody>
+</table>
+<h2 id="compatibility-with-the-rust-encoding-api"><a class="doc-anchor" href="#compatibility-with-the-rust-encoding-api">§</a>Compatibility with the rust-encoding API</h2>
+<p>The crate
+<a href="https://github.com/hsivonen/encoding_rs_compat/">encoding_rs_compat</a>
+is a drop-in replacement for rust-encoding 0.2.32 that implements (most of)
+the API of rust-encoding 0.2.32 on top of encoding_rs.</p>
+<h2 id="mapping-rust-encoding-concepts-to-encoding_rs-concepts"><a class="doc-anchor" href="#mapping-rust-encoding-concepts-to-encoding_rs-concepts">§</a>Mapping rust-encoding concepts to encoding_rs concepts</h2>
+<p>The following table provides a mapping from rust-encoding constructs to
+encoding_rs ones.</p>
+<table>
+<thead>
+<tr><th>rust-encoding</th><th>encoding_rs</th></tr>
+</thead>
+<tbody>
+<tr><td><code>encoding::EncodingRef</code></td><td><code>&amp;'static encoding_rs::Encoding</code></td></tr>
+<tr><td><code>encoding::all::<var>WINDOWS_31J</var></code> (not based on the WHATWG name for some encodings)</td><td><code>encoding_rs::<var>SHIFT_JIS</var></code> (always the WHATWG name uppercased and hyphens replaced with underscores)</td></tr>
+<tr><td><code>encoding::all::ERROR</code></td><td>Not available because not in the Encoding Standard</td></tr>
+<tr><td><code>encoding::all::ASCII</code></td><td>Not available because not in the Encoding Standard</td></tr>
+<tr><td><code>encoding::all::ISO_8859_1</code></td><td>Not available because not in the Encoding Standard</td></tr>
+<tr><td><code>encoding::all::HZ</code></td><td>Not available because not in the Encoding Standard</td></tr>
+<tr><td><code>encoding::label::encoding_from_whatwg_label(<var>string</var>)</code></td><td><code>encoding_rs::Encoding::for_label(<var>string</var>)</code></td></tr>
+<tr><td><code><var>enc</var>.whatwg_name()</code> (always lower case)</td><td><code><var>enc</var>.name()</code> (potentially mixed case)</td></tr>
+<tr><td><code><var>enc</var>.name()</code></td><td>Not available because not in the Encoding Standard</td></tr>
+<tr><td><code>encoding::decode(<var>bytes</var>, encoding::DecoderTrap::Replace, <var>enc</var>)</code></td><td><code><var>enc</var>.decode(<var>bytes</var>)</code></td></tr>
+<tr><td><code><var>enc</var>.decode(<var>bytes</var>, encoding::DecoderTrap::Replace)</code></td><td><code><var>enc</var>.decode_without_bom_handling(<var>bytes</var>)</code></td></tr>
+<tr><td><code><var>enc</var>.encode(<var>string</var>, encoding::EncoderTrap::NcrEscape)</code></td><td><code><var>enc</var>.encode(<var>string</var>)</code></td></tr>
+<tr><td><code><var>enc</var>.raw_decoder()</code></td><td><code><var>enc</var>.new_decoder_without_bom_handling()</code></td></tr>
+<tr><td><code><var>enc</var>.raw_encoder()</code></td><td><code><var>enc</var>.new_encoder()</code></td></tr>
+<tr><td><code>encoding::RawDecoder</code></td><td><code>encoding_rs::Decoder</code></td></tr>
+<tr><td><code>encoding::RawEncoder</code></td><td><code>encoding_rs::Encoder</code></td></tr>
+<tr><td><code><var>raw_decoder</var>.raw_feed(<var>src</var>, <var>dst_string</var>)</code></td><td><code><var>dst_string</var>.reserve(<var>decoder</var>.max_utf8_buffer_length_without_replacement(<var>src</var>.len()));<br><var>decoder</var>.decode_to_string_without_replacement(<var>src</var>, <var>dst_string</var>, false)</code></td></tr>
+<tr><td><code><var>raw_encoder</var>.raw_feed(<var>src</var>, <var>dst_vec</var>)</code></td><td><code><var>dst_vec</var>.reserve(<var>encoder</var>.max_buffer_length_from_utf8_without_replacement(<var>src</var>.len()));<br><var>encoder</var>.encode_from_utf8_to_vec_without_replacement(<var>src</var>, <var>dst_vec</var>, false)</code></td></tr>
+<tr><td><code><var>raw_decoder</var>.raw_finish(<var>dst</var>)</code></td><td><code><var>dst_string</var>.reserve(<var>decoder</var>.max_utf8_buffer_length_without_replacement(0));<br><var>decoder</var>.decode_to_string_without_replacement(b"", <var>dst</var>, true)</code></td></tr>
+<tr><td><code><var>raw_encoder</var>.raw_finish(<var>dst</var>)</code></td><td><code><var>dst_vec</var>.reserve(<var>encoder</var>.max_buffer_length_from_utf8_without_replacement(0));<br><var>encoder</var>.encode_from_utf8_to_vec_without_replacement("", <var>dst</var>, true)</code></td></tr>
+<tr><td><code>encoding::DecoderTrap::Strict</code></td><td><code>decode*</code> methods that have <code>_without_replacement</code> in their name (and treating the `Malformed` result as fatal).</td></tr>
+<tr><td><code>encoding::DecoderTrap::Replace</code></td><td><code>decode*</code> methods that <i>do not</i> have <code>_without_replacement</code> in their name.</td></tr>
+<tr><td><code>encoding::DecoderTrap::Ignore</code></td><td>It is a bad idea to ignore errors due to security issues, but this could be implemented using <code>decode*</code> methods that have <code>_without_replacement</code> in their name.</td></tr>
+<tr><td><code>encoding::DecoderTrap::Call(DecoderTrapFunc)</code></td><td>Can be implemented using <code>decode*</code> methods that have <code>_without_replacement</code> in their name.</td></tr>
+<tr><td><code>encoding::EncoderTrap::Strict</code></td><td><code>encode*</code> methods that have <code>_without_replacement</code> in their name (and treating the `Unmappable` result as fatal).</td></tr>
+<tr><td><code>encoding::EncoderTrap::Replace</code></td><td>Can be implemented using <code>encode*</code> methods that have <code>_without_replacement</code> in their name.</td></tr>
+<tr><td><code>encoding::EncoderTrap::Ignore</code></td><td>It is a bad idea to ignore errors due to security issues, but this could be implemented using <code>encode*</code> methods that have <code>_without_replacement</code> in their name.</td></tr>
+<tr><td><code>encoding::EncoderTrap::NcrEscape</code></td><td><code>encode*</code> methods that <i>do not</i> have <code>_without_replacement</code> in their name.</td></tr>
+<tr><td><code>encoding::EncoderTrap::Call(EncoderTrapFunc)</code></td><td>Can be implemented using <code>encode*</code> methods that have <code>_without_replacement</code> in their name.</td></tr>
+</tbody>
+</table>
+<h2 id="relationship-with-windows-code-pages"><a class="doc-anchor" href="#relationship-with-windows-code-pages">§</a>Relationship with Windows Code Pages</h2>
+<p>Despite the Web and browser focus, the encodings defined by the Encoding
+Standard and implemented by this crate may be useful for decoding legacy
+data that uses Windows code pages. The following table names the single-byte
+encodings
+that have a closely related Windows code page, the number of the closest
+code page, a column indicating whether Windows maps unassigned code points
+to the Unicode Private Use Area instead of U+FFFD and a remark number
+indicating remarks in the list after the table.</p>
+<table>
+<thead>
+<tr><th>Encoding</th><th>Code Page</th><th>PUA</th><th>Remarks</th></tr>
+</thead>
+<tbody>
+<tr><td>Shift_JIS</td><td>932</td><td></td><td></td></tr>
+<tr><td>GBK</td><td>936</td><td></td><td></td></tr>
+<tr><td>EUC-KR</td><td>949</td><td></td><td></td></tr>
+<tr><td>Big5</td><td>950</td><td></td><td></td></tr>
+<tr><td>IBM866</td><td>866</td><td></td><td></td></tr>
+<tr><td>windows-874</td><td>874</td><td>&bullet;</td><td></td></tr>
+<tr><td>UTF-16LE</td><td>1200</td><td></td><td></td></tr>
+<tr><td>UTF-16BE</td><td>1201</td><td></td><td></td></tr>
+<tr><td>windows-1250</td><td>1250</td><td></td><td></td></tr>
+<tr><td>windows-1251</td><td>1251</td><td></td><td></td></tr>
+<tr><td>windows-1252</td><td>1252</td><td></td><td></td></tr>
+<tr><td>windows-1253</td><td>1253</td><td>&bullet;</td><td></td></tr>
+<tr><td>windows-1254</td><td>1254</td><td></td><td></td></tr>
+<tr><td>windows-1255</td><td>1255</td><td>&bullet;</td><td></td></tr>
+<tr><td>windows-1256</td><td>1256</td><td></td><td></td></tr>
+<tr><td>windows-1257</td><td>1257</td><td>&bullet;</td><td></td></tr>
+<tr><td>windows-1258</td><td>1258</td><td></td><td></td></tr>
+<tr><td>macintosh</td><td>10000</td><td></td><td>1</td></tr>
+<tr><td>x-mac-cyrillic</td><td>10017</td><td></td><td>2</td></tr>
+<tr><td>KOI8-R</td><td>20866</td><td></td><td></td></tr>
+<tr><td>EUC-JP</td><td>20932</td><td></td><td></td></tr>
+<tr><td>KOI8-U</td><td>21866</td><td></td><td></td></tr>
+<tr><td>ISO-8859-2</td><td>28592</td><td></td><td></td></tr>
+<tr><td>ISO-8859-3</td><td>28593</td><td></td><td></td></tr>
+<tr><td>ISO-8859-4</td><td>28594</td><td></td><td></td></tr>
+<tr><td>ISO-8859-5</td><td>28595</td><td></td><td></td></tr>
+<tr><td>ISO-8859-6</td><td>28596</td><td>&bullet;</td><td></td></tr>
+<tr><td>ISO-8859-7</td><td>28597</td><td>&bullet;</td><td>3</td></tr>
+<tr><td>ISO-8859-8</td><td>28598</td><td>&bullet;</td><td>4</td></tr>
+<tr><td>ISO-8859-13</td><td>28603</td><td>&bullet;</td><td></td></tr>
+<tr><td>ISO-8859-15</td><td>28605</td><td></td><td></td></tr>
+<tr><td>ISO-8859-8-I</td><td>38598</td><td></td><td>5</td></tr>
+<tr><td>ISO-2022-JP</td><td>50220</td><td></td><td></td></tr>
+<tr><td>gb18030</td><td>54936</td><td></td><td></td></tr>
+<tr><td>UTF-8</td><td>65001</td><td></td><td></td></tr>
+</tbody>
+</table>
+<ol>
+<li>Windows decodes 0xBD to U+2126 OHM SIGN instead of U+03A9 GREEK CAPITAL LETTER OMEGA.</li>
+<li>Windows decodes 0xFF to U+00A4 CURRENCY SIGN instead of U+20AC EURO SIGN.</li>
+<li>Windows decodes the currency signs at 0xA4 and 0xA5 as well as 0xAA,
+which should be U+037A GREEK YPOGEGRAMMENI, to PUA code points. Windows
+decodes 0xA1 to U+02BD MODIFIER LETTER REVERSED COMMA instead of U+2018
+LEFT SINGLE QUOTATION MARK and 0xA2 to U+02BC MODIFIER LETTER APOSTROPHE
+instead of U+2019 RIGHT SINGLE QUOTATION MARK.</li>
+<li>Windows decodes 0xAF to OVERLINE instead of MACRON and 0xFE and 0xFD to PUA instead
+of LRM and RLM.</li>
+<li>Remarks from the previous item apply.</li>
+</ol>
+<p>The differences between this crate and Windows in the case of multibyte encodings
+are not yet fully documented here. The lack of remarks above should not be taken
+as indication of lack of differences.</p>
+<h2 id="notable-differences-from-iana-naming"><a class="doc-anchor" href="#notable-differences-from-iana-naming">§</a>Notable Differences from IANA Naming</h2>
+<p>In some cases, the Encoding Standard specifies the popular unextended encoding
+name where in IANA terms one of the other labels would be more precise considering
+the extensions that the Encoding Standard has unified into the encoding.</p>
+<table>
+<thead>
+<tr><th>Encoding</th><th>IANA</th></tr>
+</thead>
+<tbody>
+<tr><td>Big5</td><td>Big5-HKSCS</td></tr>
+<tr><td>EUC-KR</td><td>windows-949</td></tr>
+<tr><td>Shift_JIS</td><td>windows-31j</td></tr>
+<tr><td>x-mac-cyrillic</td><td>x-mac-ukrainian</td></tr>
+</tbody>
+</table>
+<p>In other cases where the Encoding Standard unifies unextended and extended
+variants of an encoding, the encoding gets the name of the extended
+variant.</p>
+<table>
+<thead>
+<tr><th>IANA</th><th>Unified into Encoding</th></tr>
+</thead>
+<tbody>
+<tr><td>ISO-8859-1</td><td>windows-1252</td></tr>
+<tr><td>ISO-8859-9</td><td>windows-1254</td></tr>
+<tr><td>TIS-620</td><td>windows-874</td></tr>
+</tbody>
+</table>
+<p>See the section <a href="#utf-16le-utf-16be-and-unicode-encoding-schemes"><em>UTF-16LE, UTF-16BE and Unicode Encoding Schemes</em></a>
+for discussion about the UTF-16 family.</p>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="mem/index.html" title="mod encoding_rs::mem">mem</a></div><div class="desc docblock-short">Functions for converting between different in-RAM representations of text
+and for quickly checking if the Unicode Bidirectional Algorithm can be
+avoided.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Decoder.html" title="struct encoding_rs::Decoder">Decoder</a></div><div class="desc docblock-short">A converter that decodes a byte stream into Unicode according to a
+character encoding in a streaming (incremental) manner.</div></li><li><div class="item-name"><a class="struct" href="struct.Encoder.html" title="struct encoding_rs::Encoder">Encoder</a></div><div class="desc docblock-short">A converter that encodes a Unicode stream into bytes according to a
+character encoding in a streaming (incremental) manner.</div></li><li><div class="item-name"><a class="struct" href="struct.Encoding.html" title="struct encoding_rs::Encoding">Encoding</a></div><div class="desc docblock-short">An encoding as defined in the <a href="https://encoding.spec.whatwg.org/">Encoding Standard</a>.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.CoderResult.html" title="enum encoding_rs::CoderResult">CoderResult</a></div><div class="desc docblock-short">Result of a (potentially partial) decode or encode operation with
+replacement.</div></li><li><div class="item-name"><a class="enum" href="enum.DecoderResult.html" title="enum encoding_rs::DecoderResult">DecoderResult</a></div><div class="desc docblock-short">Result of a (potentially partial) decode operation without replacement.</div></li><li><div class="item-name"><a class="enum" href="enum.EncoderResult.html" title="enum encoding_rs::EncoderResult">EncoderResult</a></div><div class="desc docblock-short">Result of a (potentially partial) encode operation without replacement.</div></li></ul><h2 id="statics" class="section-header">Statics<a href="#statics" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="static" href="static.BIG5.html" title="static encoding_rs::BIG5">BIG5</a></div><div class="desc docblock-short">The Big5 encoding.</div></li><li><div class="item-name"><a class="static" href="static.BIG5_INIT.html" title="static encoding_rs::BIG5_INIT">BIG5_INIT</a></div><div class="desc docblock-short">The initializer for the <a href="static.BIG5.html">Big5</a> encoding.</div></li><li><div class="item-name"><a class="static" href="static.EUC_JP.html" title="static encoding_rs::EUC_JP">EUC_JP</a></div><div class="desc docblock-short">The EUC-JP encoding.</div></li><li><div class="item-name"><a class="static" href="static.EUC_JP_INIT.html" title="static encoding_rs::EUC_JP_INIT">EUC_JP_INIT</a></div><div class="desc docblock-short">The initializer for the <a href="static.EUC_JP.html">EUC-JP</a> encoding.</div></li><li><div class="item-name"><a class="static" href="static.EUC_KR.html" title="static encoding_rs::EUC_KR">EUC_KR</a></div><div class="desc docblock-short">The EUC-KR encoding.</div></li><li><div class="item-name"><a class="static" href="static.EUC_KR_INIT.html" title="static encoding_rs::EUC_KR_INIT">EUC_KR_INIT</a></div><div class="desc docblock-short">The initializer for the <a href="static.EUC_KR.html">EUC-KR</a> encoding.</div></li><li><div class="item-name"><a class="static" href="static.GB18030.html" title="static encoding_rs::GB18030">GB18030</a></div><div class="desc docblock-short">The gb18030 encoding.</div></li><li><div class="item-name"><a class="static" href="static.GB18030_INIT.html" title="static encoding_rs::GB18030_INIT">GB18030_INIT</a></div><div class="desc docblock-short">The initializer for the <a href="static.GB18030.html">gb18030</a> encoding.</div></li><li><div class="item-name"><a class="static" href="static.GBK.html" title="static encoding_rs::GBK">GBK</a></div><div class="desc docblock-short">The GBK encoding.</div></li><li><div class="item-name"><a class="static" href="static.GBK_INIT.html" title="static encoding_rs::GBK_INIT">GBK_INIT</a></div><div class="desc docblock-short">The initializer for the <a href="static.GBK.html">GBK</a> encoding.</div></li><li><div class="item-name"><a class="static" href="static.IBM866.html" title="static encoding_rs::IBM866">IBM866</a></div><div class="desc docblock-short">The IBM866 encoding.</div></li><li><div class="item-name"><a class="static" href="static.IBM866_INIT.html" title="static encoding_rs::IBM866_INIT">IBM866_INIT</a></div><div class="desc docblock-short">The initializer for the <a href="static.IBM866.html">IBM866</a> encoding.</div></li><li><div class="item-name"><a class="static" href="static.ISO_2022_JP.html" title="static encoding_rs::ISO_2022_JP">ISO_2022_JP</a></div><div class="desc docblock-short">The ISO-2022-JP encoding.</div></li><li><div class="item-name"><a class="static" href="static.ISO_2022_JP_INIT.html" title="static encoding_rs::ISO_2022_JP_INIT">ISO_2022_JP_INIT</a></div><div class="desc docblock-short">The initializer for the <a href="static.ISO_2022_JP.html">ISO-2022-JP</a> encoding.</div></li><li><div class="item-name"><a class="static" href="static.ISO_8859_2.html" title="static encoding_rs::ISO_8859_2">ISO_8859_2</a></div><div class="desc docblock-short">The ISO-8859-2 encoding.</div></li><li><div class="item-name"><a class="static" href="static.ISO_8859_3.html" title="static encoding_rs::ISO_8859_3">ISO_8859_3</a></div><div class="desc docblock-short">The ISO-8859-3 encoding.</div></li><li><div class="item-name"><a class="static" href="static.ISO_8859_4.html" title="static encoding_rs::ISO_8859_4">ISO_8859_4</a></div><div class="desc docblock-short">The ISO-8859-4 encoding.</div></li><li><div class="item-name"><a class="static" href="static.ISO_8859_5.html" title="static encoding_rs::ISO_8859_5">ISO_8859_5</a></div><div class="desc docblock-short">The ISO-8859-5 encoding.</div></li><li><div class="item-name"><a class="static" href="static.ISO_8859_6.html" title="static encoding_rs::ISO_8859_6">ISO_8859_6</a></div><div class="desc docblock-short">The ISO-8859-6 encoding.</div></li><li><div class="item-name"><a class="static" href="static.ISO_8859_7.html" title="static encoding_rs::ISO_8859_7">ISO_8859_7</a></div><div class="desc docblock-short">The ISO-8859-7 encoding.</div></li><li><div class="item-name"><a class="static" href="static.ISO_8859_8.html" title="static encoding_rs::ISO_8859_8">ISO_8859_8</a></div><div class="desc docblock-short">The ISO-8859-8 encoding.</div></li><li><div class="item-name"><a class="static" href="static.ISO_8859_2_INIT.html" title="static encoding_rs::ISO_8859_2_INIT">ISO_8859_2_INIT</a></div><div class="desc docblock-short">The initializer for the <a href="static.ISO_8859_2.html">ISO-8859-2</a> encoding.</div></li><li><div class="item-name"><a class="static" href="static.ISO_8859_3_INIT.html" title="static encoding_rs::ISO_8859_3_INIT">ISO_8859_3_INIT</a></div><div class="desc docblock-short">The initializer for the <a href="static.ISO_8859_3.html">ISO-8859-3</a> encoding.</div></li><li><div class="item-name"><a class="static" href="static.ISO_8859_4_INIT.html" title="static encoding_rs::ISO_8859_4_INIT">ISO_8859_4_INIT</a></div><div class="desc docblock-short">The initializer for the <a href="static.ISO_8859_4.html">ISO-8859-4</a> encoding.</div></li><li><div class="item-name"><a class="static" href="static.ISO_8859_5_INIT.html" title="static encoding_rs::ISO_8859_5_INIT">ISO_8859_5_INIT</a></div><div class="desc docblock-short">The initializer for the <a href="static.ISO_8859_5.html">ISO-8859-5</a> encoding.</div></li><li><div class="item-name"><a class="static" href="static.ISO_8859_6_INIT.html" title="static encoding_rs::ISO_8859_6_INIT">ISO_8859_6_INIT</a></div><div class="desc docblock-short">The initializer for the <a href="static.ISO_8859_6.html">ISO-8859-6</a> encoding.</div></li><li><div class="item-name"><a class="static" href="static.ISO_8859_7_INIT.html" title="static encoding_rs::ISO_8859_7_INIT">ISO_8859_7_INIT</a></div><div class="desc docblock-short">The initializer for the <a href="static.ISO_8859_7.html">ISO-8859-7</a> encoding.</div></li><li><div class="item-name"><a class="static" href="static.ISO_8859_8_I.html" title="static encoding_rs::ISO_8859_8_I">ISO_8859_8_I</a></div><div class="desc docblock-short">The ISO-8859-8-I encoding.</div></li><li><div class="item-name"><a class="static" href="static.ISO_8859_8_INIT.html" title="static encoding_rs::ISO_8859_8_INIT">ISO_8859_8_INIT</a></div><div class="desc docblock-short">The initializer for the <a href="static.ISO_8859_8.html">ISO-8859-8</a> encoding.</div></li><li><div class="item-name"><a class="static" href="static.ISO_8859_8_I_INIT.html" title="static encoding_rs::ISO_8859_8_I_INIT">ISO_8859_8_I_INIT</a></div><div class="desc docblock-short">The initializer for the <a href="static.ISO_8859_8_I.html">ISO-8859-8-I</a> encoding.</div></li><li><div class="item-name"><a class="static" href="static.ISO_8859_10.html" title="static encoding_rs::ISO_8859_10">ISO_8859_10</a></div><div class="desc docblock-short">The ISO-8859-10 encoding.</div></li><li><div class="item-name"><a class="static" href="static.ISO_8859_13.html" title="static encoding_rs::ISO_8859_13">ISO_8859_13</a></div><div class="desc docblock-short">The ISO-8859-13 encoding.</div></li><li><div class="item-name"><a class="static" href="static.ISO_8859_14.html" title="static encoding_rs::ISO_8859_14">ISO_8859_14</a></div><div class="desc docblock-short">The ISO-8859-14 encoding.</div></li><li><div class="item-name"><a class="static" href="static.ISO_8859_15.html" title="static encoding_rs::ISO_8859_15">ISO_8859_15</a></div><div class="desc docblock-short">The ISO-8859-15 encoding.</div></li><li><div class="item-name"><a class="static" href="static.ISO_8859_16.html" title="static encoding_rs::ISO_8859_16">ISO_8859_16</a></div><div class="desc docblock-short">The ISO-8859-16 encoding.</div></li><li><div class="item-name"><a class="static" href="static.ISO_8859_10_INIT.html" title="static encoding_rs::ISO_8859_10_INIT">ISO_8859_10_INIT</a></div><div class="desc docblock-short">The initializer for the <a href="static.ISO_8859_10.html">ISO-8859-10</a> encoding.</div></li><li><div class="item-name"><a class="static" href="static.ISO_8859_13_INIT.html" title="static encoding_rs::ISO_8859_13_INIT">ISO_8859_13_INIT</a></div><div class="desc docblock-short">The initializer for the <a href="static.ISO_8859_13.html">ISO-8859-13</a> encoding.</div></li><li><div class="item-name"><a class="static" href="static.ISO_8859_14_INIT.html" title="static encoding_rs::ISO_8859_14_INIT">ISO_8859_14_INIT</a></div><div class="desc docblock-short">The initializer for the <a href="static.ISO_8859_14.html">ISO-8859-14</a> encoding.</div></li><li><div class="item-name"><a class="static" href="static.ISO_8859_15_INIT.html" title="static encoding_rs::ISO_8859_15_INIT">ISO_8859_15_INIT</a></div><div class="desc docblock-short">The initializer for the <a href="static.ISO_8859_15.html">ISO-8859-15</a> encoding.</div></li><li><div class="item-name"><a class="static" href="static.ISO_8859_16_INIT.html" title="static encoding_rs::ISO_8859_16_INIT">ISO_8859_16_INIT</a></div><div class="desc docblock-short">The initializer for the <a href="static.ISO_8859_16.html">ISO-8859-16</a> encoding.</div></li><li><div class="item-name"><a class="static" href="static.KOI8_R.html" title="static encoding_rs::KOI8_R">KOI8_R</a></div><div class="desc docblock-short">The KOI8-R encoding.</div></li><li><div class="item-name"><a class="static" href="static.KOI8_R_INIT.html" title="static encoding_rs::KOI8_R_INIT">KOI8_R_INIT</a></div><div class="desc docblock-short">The initializer for the <a href="static.KOI8_R.html">KOI8-R</a> encoding.</div></li><li><div class="item-name"><a class="static" href="static.KOI8_U.html" title="static encoding_rs::KOI8_U">KOI8_U</a></div><div class="desc docblock-short">The KOI8-U encoding.</div></li><li><div class="item-name"><a class="static" href="static.KOI8_U_INIT.html" title="static encoding_rs::KOI8_U_INIT">KOI8_U_INIT</a></div><div class="desc docblock-short">The initializer for the <a href="static.KOI8_U.html">KOI8-U</a> encoding.</div></li><li><div class="item-name"><a class="static" href="static.MACINTOSH.html" title="static encoding_rs::MACINTOSH">MACINTOSH</a></div><div class="desc docblock-short">The macintosh encoding.</div></li><li><div class="item-name"><a class="static" href="static.MACINTOSH_INIT.html" title="static encoding_rs::MACINTOSH_INIT">MACINTOSH_INIT</a></div><div class="desc docblock-short">The initializer for the <a href="static.MACINTOSH.html">macintosh</a> encoding.</div></li><li><div class="item-name"><a class="static" href="static.REPLACEMENT.html" title="static encoding_rs::REPLACEMENT">REPLACEMENT</a></div><div class="desc docblock-short">The replacement encoding.</div></li><li><div class="item-name"><a class="static" href="static.REPLACEMENT_INIT.html" title="static encoding_rs::REPLACEMENT_INIT">REPLACEMENT_INIT</a></div><div class="desc docblock-short">The initializer for the <a href="static.REPLACEMENT.html">replacement</a> encoding.</div></li><li><div class="item-name"><a class="static" href="static.SHIFT_JIS.html" title="static encoding_rs::SHIFT_JIS">SHIFT_JIS</a></div><div class="desc docblock-short">The Shift_JIS encoding.</div></li><li><div class="item-name"><a class="static" href="static.SHIFT_JIS_INIT.html" title="static encoding_rs::SHIFT_JIS_INIT">SHIFT_JIS_INIT</a></div><div class="desc docblock-short">The initializer for the <a href="static.SHIFT_JIS.html">Shift_JIS</a> encoding.</div></li><li><div class="item-name"><a class="static" href="static.UTF_8.html" title="static encoding_rs::UTF_8">UTF_8</a></div><div class="desc docblock-short">The UTF-8 encoding.</div></li><li><div class="item-name"><a class="static" href="static.UTF_8_INIT.html" title="static encoding_rs::UTF_8_INIT">UTF_8_INIT</a></div><div class="desc docblock-short">The initializer for the <a href="static.UTF_8.html">UTF-8</a> encoding.</div></li><li><div class="item-name"><a class="static" href="static.UTF_16BE.html" title="static encoding_rs::UTF_16BE">UTF_16BE</a></div><div class="desc docblock-short">The UTF-16BE encoding.</div></li><li><div class="item-name"><a class="static" href="static.UTF_16BE_INIT.html" title="static encoding_rs::UTF_16BE_INIT">UTF_16BE_INIT</a></div><div class="desc docblock-short">The initializer for the <a href="static.UTF_16BE.html">UTF-16BE</a> encoding.</div></li><li><div class="item-name"><a class="static" href="static.UTF_16LE.html" title="static encoding_rs::UTF_16LE">UTF_16LE</a></div><div class="desc docblock-short">The UTF-16LE encoding.</div></li><li><div class="item-name"><a class="static" href="static.UTF_16LE_INIT.html" title="static encoding_rs::UTF_16LE_INIT">UTF_16LE_INIT</a></div><div class="desc docblock-short">The initializer for the <a href="static.UTF_16LE.html">UTF-16LE</a> encoding.</div></li><li><div class="item-name"><a class="static" href="static.WINDOWS_874.html" title="static encoding_rs::WINDOWS_874">WINDOWS_874</a></div><div class="desc docblock-short">The windows-874 encoding.</div></li><li><div class="item-name"><a class="static" href="static.WINDOWS_874_INIT.html" title="static encoding_rs::WINDOWS_874_INIT">WINDOWS_874_INIT</a></div><div class="desc docblock-short">The initializer for the <a href="static.WINDOWS_874.html">windows-874</a> encoding.</div></li><li><div class="item-name"><a class="static" href="static.WINDOWS_1250.html" title="static encoding_rs::WINDOWS_1250">WINDOWS_1250</a></div><div class="desc docblock-short">The windows-1250 encoding.</div></li><li><div class="item-name"><a class="static" href="static.WINDOWS_1251.html" title="static encoding_rs::WINDOWS_1251">WINDOWS_1251</a></div><div class="desc docblock-short">The windows-1251 encoding.</div></li><li><div class="item-name"><a class="static" href="static.WINDOWS_1252.html" title="static encoding_rs::WINDOWS_1252">WINDOWS_1252</a></div><div class="desc docblock-short">The windows-1252 encoding.</div></li><li><div class="item-name"><a class="static" href="static.WINDOWS_1253.html" title="static encoding_rs::WINDOWS_1253">WINDOWS_1253</a></div><div class="desc docblock-short">The windows-1253 encoding.</div></li><li><div class="item-name"><a class="static" href="static.WINDOWS_1254.html" title="static encoding_rs::WINDOWS_1254">WINDOWS_1254</a></div><div class="desc docblock-short">The windows-1254 encoding.</div></li><li><div class="item-name"><a class="static" href="static.WINDOWS_1255.html" title="static encoding_rs::WINDOWS_1255">WINDOWS_1255</a></div><div class="desc docblock-short">The windows-1255 encoding.</div></li><li><div class="item-name"><a class="static" href="static.WINDOWS_1256.html" title="static encoding_rs::WINDOWS_1256">WINDOWS_1256</a></div><div class="desc docblock-short">The windows-1256 encoding.</div></li><li><div class="item-name"><a class="static" href="static.WINDOWS_1257.html" title="static encoding_rs::WINDOWS_1257">WINDOWS_1257</a></div><div class="desc docblock-short">The windows-1257 encoding.</div></li><li><div class="item-name"><a class="static" href="static.WINDOWS_1258.html" title="static encoding_rs::WINDOWS_1258">WINDOWS_1258</a></div><div class="desc docblock-short">The windows-1258 encoding.</div></li><li><div class="item-name"><a class="static" href="static.WINDOWS_1250_INIT.html" title="static encoding_rs::WINDOWS_1250_INIT">WINDOWS_1250_INIT</a></div><div class="desc docblock-short">The initializer for the <a href="static.WINDOWS_1250.html">windows-1250</a> encoding.</div></li><li><div class="item-name"><a class="static" href="static.WINDOWS_1251_INIT.html" title="static encoding_rs::WINDOWS_1251_INIT">WINDOWS_1251_INIT</a></div><div class="desc docblock-short">The initializer for the <a href="static.WINDOWS_1251.html">windows-1251</a> encoding.</div></li><li><div class="item-name"><a class="static" href="static.WINDOWS_1252_INIT.html" title="static encoding_rs::WINDOWS_1252_INIT">WINDOWS_1252_INIT</a></div><div class="desc docblock-short">The initializer for the <a href="static.WINDOWS_1252.html">windows-1252</a> encoding.</div></li><li><div class="item-name"><a class="static" href="static.WINDOWS_1253_INIT.html" title="static encoding_rs::WINDOWS_1253_INIT">WINDOWS_1253_INIT</a></div><div class="desc docblock-short">The initializer for the <a href="static.WINDOWS_1253.html">windows-1253</a> encoding.</div></li><li><div class="item-name"><a class="static" href="static.WINDOWS_1254_INIT.html" title="static encoding_rs::WINDOWS_1254_INIT">WINDOWS_1254_INIT</a></div><div class="desc docblock-short">The initializer for the <a href="static.WINDOWS_1254.html">windows-1254</a> encoding.</div></li><li><div class="item-name"><a class="static" href="static.WINDOWS_1255_INIT.html" title="static encoding_rs::WINDOWS_1255_INIT">WINDOWS_1255_INIT</a></div><div class="desc docblock-short">The initializer for the <a href="static.WINDOWS_1255.html">windows-1255</a> encoding.</div></li><li><div class="item-name"><a class="static" href="static.WINDOWS_1256_INIT.html" title="static encoding_rs::WINDOWS_1256_INIT">WINDOWS_1256_INIT</a></div><div class="desc docblock-short">The initializer for the <a href="static.WINDOWS_1256.html">windows-1256</a> encoding.</div></li><li><div class="item-name"><a class="static" href="static.WINDOWS_1257_INIT.html" title="static encoding_rs::WINDOWS_1257_INIT">WINDOWS_1257_INIT</a></div><div class="desc docblock-short">The initializer for the <a href="static.WINDOWS_1257.html">windows-1257</a> encoding.</div></li><li><div class="item-name"><a class="static" href="static.WINDOWS_1258_INIT.html" title="static encoding_rs::WINDOWS_1258_INIT">WINDOWS_1258_INIT</a></div><div class="desc docblock-short">The initializer for the <a href="static.WINDOWS_1258.html">windows-1258</a> encoding.</div></li><li><div class="item-name"><a class="static" href="static.X_MAC_CYRILLIC.html" title="static encoding_rs::X_MAC_CYRILLIC">X_MAC_CYRILLIC</a></div><div class="desc docblock-short">The x-mac-cyrillic encoding.</div></li><li><div class="item-name"><a class="static" href="static.X_MAC_CYRILLIC_INIT.html" title="static encoding_rs::X_MAC_CYRILLIC_INIT">X_MAC_CYRILLIC_INIT</a></div><div class="desc docblock-short">The initializer for the <a href="static.X_MAC_CYRILLIC.html">x-mac-cyrillic</a> encoding.</div></li><li><div class="item-name"><a class="static" href="static.X_USER_DEFINED.html" title="static encoding_rs::X_USER_DEFINED">X_USER_DEFINED</a></div><div class="desc docblock-short">The x-user-defined encoding.</div></li><li><div class="item-name"><a class="static" href="static.X_USER_DEFINED_INIT.html" title="static encoding_rs::X_USER_DEFINED_INIT">X_USER_DEFINED_INIT</a></div><div class="desc docblock-short">The initializer for the <a href="static.X_USER_DEFINED.html">x-user-defined</a> encoding.</div></li></ul></section></div></main></body></html>

@@ -1,0 +1,57 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Performance characteristics."><title>arc_swap::docs::performance - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="arc_swap" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../arc_swap/index.html">arc_swap</a><span class="version">1.7.1</span></h2></div><h2 class="location"><a href="#">Module performance</a></h2><div class="sidebar-elems"><h2><a href="../index.html">In arc_swap::docs</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../../index.html">arc_swap</a>::<wbr><a href="../index.html">docs</a>::<wbr><a class="mod" href="#">performance</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/arc_swap/docs/performance.rs.html#1-87">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Performance characteristics.</p>
+<p>There are several performance advantages of <a href="../../type.ArcSwap.html" title="type arc_swap::ArcSwap"><code>ArcSwap</code></a> over <a href="https://doc.rust-lang.org/1.81.0/std/sync/rwlock/struct.RwLock.html" title="struct std::sync::rwlock::RwLock"><code>RwLock</code></a>.</p>
+<h3 id="lock-free-readers"><a class="doc-anchor" href="#lock-free-readers">§</a>Lock-free readers</h3>
+<p>All the read operations are always <a href="https://en.wikipedia.org/wiki/Non-blocking_algorithm#Lock-freedom">lock-free</a>. Most of the time, they are actually
+<a href="https://en.wikipedia.org/wiki/Non-blocking_algorithm#Wait-freedom">wait-free</a>. They are <a href="https://en.wikipedia.org/wiki/Non-blocking_algorithm#Lock-freedom">lock-free</a> from time to time, with at least <code>usize::MAX / 4</code> accesses
+that are <a href="https://en.wikipedia.org/wiki/Non-blocking_algorithm#Wait-freedom">wait-free</a> in between.</p>
+<p>Writers are <a href="https://en.wikipedia.org/wiki/Non-blocking_algorithm#Lock-freedom">lock-free</a>.</p>
+<p>Whenever the documentation talks about <em>contention</em> in the context of <a href="../../type.ArcSwap.html" title="type arc_swap::ArcSwap"><code>ArcSwap</code></a>, it talks
+about contention on the CPU level ‒ multiple cores having to deal with accessing the same cache
+line. This slows things down (compared to each one accessing its own cache line), but an
+eventual progress is still guaranteed and the cost is significantly lower than parking threads
+as with mutex-style contention.</p>
+<h3 id="speeds"><a class="doc-anchor" href="#speeds">§</a>Speeds</h3>
+<p>The base line speed of read operations is similar to using an <em>uncontended</em> <a href="https://doc.rust-lang.org/1.81.0/std/sync/mutex/struct.Mutex.html" title="struct std::sync::mutex::Mutex"><code>Mutex</code></a>.
+However, <a href="../../struct.ArcSwapAny.html#method.load" title="method arc_swap::ArcSwapAny::load"><code>load</code></a> suffers no contention from any other read operations and only slight
+ones during updates. The <a href="../../struct.ArcSwapAny.html#method.load_full" title="method arc_swap::ArcSwapAny::load_full"><code>load_full</code></a> operation is additionally contended only on
+the reference count of the <a href="https://doc.rust-lang.org/1.81.0/alloc/sync/struct.Arc.html" title="struct alloc::sync::Arc"><code>Arc</code></a> inside ‒ so, in general, while <a href="https://doc.rust-lang.org/1.81.0/std/sync/mutex/struct.Mutex.html" title="struct std::sync::mutex::Mutex"><code>Mutex</code></a> rapidly
+loses its performance when being in active use by multiple threads at once and
+<a href="https://doc.rust-lang.org/1.81.0/std/sync/rwlock/struct.RwLock.html" title="struct std::sync::rwlock::RwLock"><code>RwLock</code></a> is slow to start with, <a href="../../type.ArcSwap.html" title="type arc_swap::ArcSwap"><code>ArcSwap</code></a> mostly keeps its performance even when read by
+many threads in parallel.</p>
+<p>Write operations are considered expensive. A write operation is more expensive than access to
+an <em>uncontended</em> <a href="https://doc.rust-lang.org/1.81.0/std/sync/mutex/struct.Mutex.html" title="struct std::sync::mutex::Mutex"><code>Mutex</code></a> and on some architectures even slower than uncontended
+<a href="https://doc.rust-lang.org/1.81.0/std/sync/rwlock/struct.RwLock.html" title="struct std::sync::rwlock::RwLock"><code>RwLock</code></a>. However, it is faster than either under contention.</p>
+<p>There are some (very unscientific) <a href="https://github.com/vorner/arc-swap/tree/master/benchmarks">benchmarks</a> within the source code of the library, and the
+<a href="../../strategy/type.DefaultStrategy.html" title="type arc_swap::strategy::DefaultStrategy"><code>DefaultStrategy</code></a> has some numbers measured on my computer.</p>
+<p>The exact numbers are highly dependant on the machine used (both absolute numbers and relative
+between different data structures). Not only architectures have a huge impact (eg. x86 vs ARM),
+but even AMD vs. Intel or two different Intel processors. Therefore, if what matters is more
+the speed than the wait-free guarantees, you’re advised to do your own measurements.</p>
+<p>Further speed improvements may be gained by the use of the <a href="../../cache/struct.Cache.html" title="struct arc_swap::cache::Cache"><code>Cache</code></a>.</p>
+<h3 id="consistency"><a class="doc-anchor" href="#consistency">§</a>Consistency</h3>
+<p>The combination of <a href="https://en.wikipedia.org/wiki/Non-blocking_algorithm#Wait-freedom">wait-free</a> guarantees of readers and no contention between concurrent
+<a href="../../struct.ArcSwapAny.html#method.load" title="method arc_swap::ArcSwapAny::load"><code>load</code></a>s provides <em>consistent</em> performance characteristics of the synchronization mechanism.
+This might be important for soft-realtime applications (the CPU-level contention caused by a
+recent update/write operation might be problematic for some hard-realtime cases, though).</p>
+<h3 id="choosing-the-right-reading-operation"><a class="doc-anchor" href="#choosing-the-right-reading-operation">§</a>Choosing the right reading operation</h3>
+<p>There are several load operations available. While the general go-to one should be
+<a href="../../struct.ArcSwapAny.html#method.load" title="method arc_swap::ArcSwapAny::load"><code>load</code></a>, there may be situations in which the others are a better match.</p>
+<p>The <a href="../../struct.ArcSwapAny.html#method.load" title="method arc_swap::ArcSwapAny::load"><code>load</code></a> usually only borrows the instance from the shared <a href="../../type.ArcSwap.html" title="type arc_swap::ArcSwap"><code>ArcSwap</code></a>. This makes
+it faster, because different threads don’t contend on the reference count. There are two
+situations when this borrow isn’t possible. If the content gets changed, all existing
+<a href="../../struct.Guard.html" title="struct arc_swap::Guard"><code>Guard</code></a>s are promoted to contain an owned instance. The promotion is done by the
+writer, but the readers still need to decrement the reference counts of the old instance when
+they no longer use it, contending on the count.</p>
+<p>The other situation derives from internal implementation. The number of borrows each thread can
+have at each time (across all <a href="../../struct.Guard.html" title="struct arc_swap::Guard"><code>Guard</code></a>s) is limited. If this limit is exceeded, an owned
+instance is created instead.</p>
+<p>Therefore, if you intend to hold onto the loaded value for extended time span, you may prefer
+<a href="../../struct.ArcSwapAny.html#method.load_full" title="method arc_swap::ArcSwapAny::load_full"><code>load_full</code></a>. It loads the pointer instance (<a href="https://doc.rust-lang.org/1.81.0/alloc/sync/struct.Arc.html" title="struct alloc::sync::Arc"><code>Arc</code></a>) without borrowing, which is
+slower (because of the possible contention on the reference count), but doesn’t consume one of
+the borrow slots, which will make it more likely for following <a href="../../struct.ArcSwapAny.html#method.load" title="method arc_swap::ArcSwapAny::load"><code>load</code></a>s to have a slot
+available. Similarly, if some API needs an owned <code>Arc</code>, <a href="../../struct.ArcSwapAny.html#method.load_full" title="method arc_swap::ArcSwapAny::load_full"><code>load_full</code></a> is more convenient and
+potentially faster then first <a href="../../struct.ArcSwapAny.html#method.load" title="method arc_swap::ArcSwapAny::load"><code>load</code></a>ing and then cloning that <a href="https://doc.rust-lang.org/1.81.0/alloc/sync/struct.Arc.html" title="struct alloc::sync::Arc"><code>Arc</code></a>.</p>
+<p>Additionally, it is possible to use a <a href="../../cache/struct.Cache.html" title="struct arc_swap::cache::Cache"><code>Cache</code></a> to get further speed improvement at the
+cost of less comfortable API and possibly keeping the older values alive for longer than
+necessary.</p>
+</div></details></section></div></main></body></html>

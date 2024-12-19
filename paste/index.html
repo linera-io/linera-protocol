@@ -1,0 +1,104 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="github crates-io docs-rs"><title>paste - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="paste" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../paste/index.html">paste</a><span class="version">1.0.15</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#macros">Macros</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">paste</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/paste/lib.rs.html#1-454">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><a href="https://github.com/dtolnay/paste"><img src="https://img.shields.io/badge/github-8da0cb?style=for-the-badge&amp;labelColor=555555&amp;logo=github" alt="github" /></a> <a href="https://crates.io/crates/paste"><img src="https://img.shields.io/badge/crates.io-fc8d62?style=for-the-badge&amp;labelColor=555555&amp;logo=rust" alt="crates-io" /></a> <a href="https://docs.rs/paste"><img src="https://img.shields.io/badge/docs.rs-66c2a5?style=for-the-badge&amp;labelColor=555555&amp;logo=docs.rs" alt="docs-rs" /></a></p>
+<br>
+<p>The nightly-only <a href="https://doc.rust-lang.org/std/macro.concat_idents.html"><code>concat_idents!</code></a> macro in the Rust standard library is
+notoriously underpowered in that its concatenated identifiers can only refer to
+existing items, they can never be used to define something new.</p>
+<p>This crate provides a flexible way to paste together identifiers in a macro,
+including using pasted identifiers to define new items.</p>
+<p>This approach works with any Rust compiler 1.31+.</p>
+<br>
+<h2 id="pasting-identifiers"><a class="doc-anchor" href="#pasting-identifiers">§</a>Pasting identifiers</h2>
+<p>Within the <code>paste!</code> macro, identifiers inside <code>[&lt;</code>…<code>&gt;]</code> are pasted
+together to form a single identifier.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>paste::paste;
+
+<span class="macro">paste!</span> {
+    <span class="comment">// Defines a const called `QRST`.
+    </span><span class="kw">const </span>[&lt;Q R S T&gt;]: <span class="kw-2">&amp;</span>str = <span class="string">"success!"</span>;
+}
+
+<span class="kw">fn </span>main() {
+    <span class="macro">assert_eq!</span>(
+        <span class="macro">paste!</span> { [&lt;Q R S T&gt;].len() },
+        <span class="number">8</span>,
+    );
+}</code></pre></div>
+<p><br><br></p>
+<h2 id="more-elaborate-example"><a class="doc-anchor" href="#more-elaborate-example">§</a>More elaborate example</h2>
+<p>The next example shows a macro that generates accessor methods for some
+struct fields. It demonstrates how you might find it useful to bundle a
+paste invocation inside of a macro_rules macro.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>paste::paste;
+
+<span class="macro">macro_rules!</span> make_a_struct_and_getters {
+    (<span class="macro-nonterminal">$name</span>:ident { $(<span class="macro-nonterminal">$field</span>:ident),* }) =&gt; {
+        <span class="comment">// Define a struct. This expands to:
+        //
+        //     pub struct S {
+        //         a: String,
+        //         b: String,
+        //         c: String,
+        //     }
+        </span><span class="kw">pub struct </span><span class="macro-nonterminal">$name </span>{
+            $(
+                <span class="macro-nonterminal">$field</span>: String,
+            )*
+        }
+
+        <span class="comment">// Build an impl block with getters. This expands to:
+        //
+        //     impl S {
+        //         pub fn get_a(&amp;self) -&gt; &amp;str { &amp;self.a }
+        //         pub fn get_b(&amp;self) -&gt; &amp;str { &amp;self.b }
+        //         pub fn get_c(&amp;self) -&gt; &amp;str { &amp;self.c }
+        //     }
+        </span><span class="macro">paste!</span> {
+            <span class="kw">impl </span><span class="macro-nonterminal">$name </span>{
+                $(
+                    <span class="kw">pub fn </span>[&lt;get_ <span class="macro-nonterminal">$field</span>&gt;](<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>str {
+                        <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="macro-nonterminal">$field
+                    </span>}
+                )*
+            }
+        }
+    }
+}
+
+<span class="macro">make_a_struct_and_getters!</span>(S { a, b, c });
+
+<span class="kw">fn </span>call_some_getters(s: <span class="kw-2">&amp;</span>S) -&gt; bool {
+    s.get_a() == s.get_b() &amp;&amp; s.get_c().is_empty()
+}</code></pre></div>
+<p><br><br></p>
+<h2 id="case-conversion"><a class="doc-anchor" href="#case-conversion">§</a>Case conversion</h2>
+<p>Use <code>$var:lower</code> or <code>$var:upper</code> in the segment list to convert an
+interpolated segment to lower- or uppercase as part of the paste. For
+example, <code>[&lt;ld_ $reg:lower _expr&gt;]</code> would paste to <code>ld_bc_expr</code> if invoked
+with $reg=<code>Bc</code>.</p>
+<p>Use <code>$var:snake</code> to convert CamelCase input to snake_case.
+Use <code>$var:camel</code> to convert snake_case to CamelCase.
+These compose, so for example <code>$var:snake:upper</code> would give you SCREAMING_CASE.</p>
+<p>The precise Unicode conversions are as defined by <a href="https://doc.rust-lang.org/std/primitive.str.html#method.to_lowercase"><code>str::to_lowercase</code></a> and
+<a href="https://doc.rust-lang.org/std/primitive.str.html#method.to_uppercase"><code>str::to_uppercase</code></a>.</p>
+<br>
+<h2 id="pasting-documentation-strings"><a class="doc-anchor" href="#pasting-documentation-strings">§</a>Pasting documentation strings</h2>
+<p>Within the <code>paste!</code> macro, arguments to a #[doc …] attribute are
+implicitly concatenated together to form a coherent documentation string.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>paste::paste;
+
+<span class="macro">macro_rules!</span> method_new {
+    (<span class="macro-nonterminal">$ret</span>:ident) =&gt; {
+        <span class="macro">paste!</span> {
+            <span class="attr">#[doc = <span class="string">"Create a new `" </span><span class="macro-nonterminal">$ret </span><span class="string">"` object."</span>]
+            </span><span class="kw">pub fn </span>new() -&gt; <span class="macro-nonterminal">$ret </span>{ <span class="macro">todo!</span>() }
+        }
+    };
+}
+
+<span class="kw">pub struct </span>Paste {}
+
+<span class="macro">method_new!</span>(Paste);  <span class="comment">// expands to #[doc = "Create a new `Paste` object"]</span></code></pre></div>
+</div></details><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="macro" href="macro.paste.html" title="macro paste::paste">paste</a></div></li></ul></section></div></main></body></html>

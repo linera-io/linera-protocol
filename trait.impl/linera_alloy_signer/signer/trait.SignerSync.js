@@ -1,0 +1,5 @@
+(function() {var implementors = {
+"linera_alloy":[],
+"linera_alloy_signer":[],
+"linera_alloy_signer_wallet":[["impl&lt;D: <a class=\"trait\" href=\"signature/hazmat/trait.PrehashSigner.html\" title=\"trait signature::hazmat::PrehashSigner\">PrehashSigner</a>&lt;(<a class=\"type\" href=\"k256/ecdsa/type.Signature.html\" title=\"type k256::ecdsa::Signature\">Signature</a>, <a class=\"struct\" href=\"ecdsa/recovery/struct.RecoveryId.html\" title=\"struct ecdsa::recovery::RecoveryId\">RecoveryId</a>)&gt;&gt; <a class=\"trait\" href=\"linera_alloy_signer/signer/trait.SignerSync.html\" title=\"trait linera_alloy_signer::signer::SignerSync\">SignerSync</a> for <a class=\"struct\" href=\"linera_alloy_signer_wallet/struct.Wallet.html\" title=\"struct linera_alloy_signer_wallet::Wallet\">Wallet</a>&lt;D&gt;"]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

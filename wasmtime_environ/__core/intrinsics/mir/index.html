@@ -1,0 +1,236 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Rustc internal tooling for hand-writing MIR."><title>wasmtime_environ::__core::intrinsics::mir - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="wasmtime_environ" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../../wasmtime_environ/index.html">wasmtime_environ</a><span class="version">25.0.1</span></h2></div><h2 class="location"><a href="#">Module mir</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#macros">Macros</a></li><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#functions">Functions</a></li></ul></section><h2><a href="../index.html">In wasmtime_environ::__core::intrinsics</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../../../index.html">wasmtime_environ</a>::<wbr><a href="../../index.html">__core</a>::<wbr><a href="../index.html">intrinsics</a>::<wbr><a class="mod" href="#">mir</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/intrinsics.rs.html#71">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>custom_mir</code>)</span></div></span><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Rustc internal tooling for hand-writing MIR.</p>
+<p>If for some reasons you are not writing rustc tests and have found yourself considering using
+this feature, turn back. This is <em>exceptionally</em> unstable. There is no attempt at all to make
+anything work besides those things which the rustc test suite happened to need. If you make a
+typo you’ll probably ICE. Really, this is not the solution to your problems. Consider instead
+supporting the <a href="https://github.com/rust-lang/project-stable-mir">stable MIR project group</a>.</p>
+<p>The documentation for this module describes how to use this feature. If you are interested in
+hacking on the implementation, most of that documentation lives at
+<code>rustc_mir_build/src/build/custom/mod.rs</code>.</p>
+<p>Typical usage will look like this:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(core_intrinsics, custom_mir)]
+#![allow(internal_features)]
+
+</span><span class="kw">use </span>core::intrinsics::mir::<span class="kw-2">*</span>;
+
+<span class="attr">#[custom_mir(dialect = <span class="string">"built"</span>)]
+</span><span class="kw">pub fn </span>simple(x: i32) -&gt; i32 {
+    <span class="macro">mir!</span> {
+        <span class="kw">let </span>temp2: i32;
+
+        {
+            <span class="kw">let </span>temp1 = x;
+            Goto(my_second_block)
+        }
+
+        my_second_block = {
+            temp2 = Move(temp1);
+            RET = temp2;
+            Return()
+        }
+    }
+}</code></pre></div>
+<p>The <code>custom_mir</code> attribute tells the compiler to treat the function as being custom MIR. This
+attribute only works on functions - there is no way to insert custom MIR into the middle of
+another function. The <code>dialect</code> and <code>phase</code> parameters indicate which <a href="https://doc.rust-lang.org/nightly/nightly-rustc/rustc_middle/mir/enum.MirPhase.html">version of MIR</a> you are inserting here. Generally you’ll want to use <code>#![custom_mir(dialect = "built")]</code>
+if you want your MIR to be modified by the full MIR pipeline, or <code>#![custom_mir(dialect = "runtime", phase = "optimized")]</code> if you don’t.</p>
+<p>The input to the <a href="macro.mir.html" title="macro wasmtime_environ::__core::intrinsics::mir::mir"><code>mir!</code></a> macro is:</p>
+<ul>
+<li>An optional return type annotation in the form of <code>type RET = ...;</code>. This may be required
+if the compiler cannot infer the type of RET.</li>
+<li>A possibly empty list of local declarations. Locals can also be declared inline on
+assignments via <code>let</code>. Type inference generally works. Shadowing does not.</li>
+<li>A list of basic blocks. The first of these is the start block and is where execution begins.
+All blocks other than the start block need to be given a name, so that they can be referred
+to later.
+<ul>
+<li>Each block is a list of semicolon terminated statements, followed by a terminator. The
+syntax for the various statements and terminators is designed to be as similar as possible
+to the syntax for analogous concepts in native Rust. See below for a list.</li>
+</ul>
+</li>
+</ul>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(core_intrinsics, custom_mir)]
+#![allow(internal_features)]
+#![allow(unused_assignments)]
+
+</span><span class="kw">use </span>core::intrinsics::mir::<span class="kw-2">*</span>;
+
+<span class="attr">#[custom_mir(dialect = <span class="string">"built"</span>)]
+</span><span class="kw">pub fn </span>choose_load(a: <span class="kw-2">&amp;</span>i32, b: <span class="kw-2">&amp;</span>i32, c: bool) -&gt; i32 {
+    <span class="macro">mir!</span> {
+        {
+            <span class="kw">match </span>c {
+                <span class="bool-val">true </span>=&gt; t,
+                <span class="kw">_ </span>=&gt; f,
+            }
+        }
+
+        t = {
+            <span class="kw">let </span>temp = a;
+            Goto(load_and_exit)
+        }
+
+        f = {
+            temp = b;
+            Goto(load_and_exit)
+        }
+
+        load_and_exit = {
+            RET = <span class="kw-2">*</span>temp;
+            Return()
+        }
+    }
+}
+
+<span class="attr">#[custom_mir(dialect = <span class="string">"built"</span>)]
+</span><span class="kw">fn </span>unwrap_unchecked&lt;T&gt;(opt: <span class="prelude-ty">Option</span>&lt;T&gt;) -&gt; T {
+    <span class="macro">mir!</span> {
+        {
+            RET = Move(Field(Variant(opt, <span class="number">1</span>), <span class="number">0</span>));
+            Return()
+        }
+    }
+}
+
+<span class="attr">#[custom_mir(dialect = <span class="string">"runtime"</span>, phase = <span class="string">"optimized"</span>)]
+</span><span class="kw">fn </span>push_and_pop&lt;T&gt;(v: <span class="kw-2">&amp;mut </span>Vec&lt;T&gt;, value: T) {
+    <span class="macro">mir!</span> {
+        <span class="kw">let </span>_unused;
+        <span class="kw">let </span>popped;
+
+        {
+            Call(_unused = Vec::push(v, value), ReturnTo(pop), UnwindContinue())
+        }
+
+        pop = {
+            Call(popped = Vec::pop(v), ReturnTo(drop), UnwindContinue())
+        }
+
+        drop = {
+            Drop(popped, ReturnTo(ret), UnwindContinue())
+        }
+
+        ret = {
+            Return()
+        }
+    }
+}
+
+<span class="attr">#[custom_mir(dialect = <span class="string">"runtime"</span>, phase = <span class="string">"optimized"</span>)]
+</span><span class="kw">fn </span>annotated_return_type() -&gt; (i32, bool) {
+    <span class="macro">mir!</span> {
+        <span class="kw">type </span>RET = (i32, bool);
+        {
+            RET.<span class="number">0 </span>= <span class="number">1</span>;
+            RET.<span class="number">1 </span>= <span class="bool-val">true</span>;
+            Return()
+        }
+    }
+}</code></pre></div>
+<p>We can also set off compilation failures that happen in sufficiently late stages of the
+compiler:</p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(core_intrinsics, custom_mir)]
+
+</span><span class="kw">extern crate </span>core;
+<span class="kw">use </span>core::intrinsics::mir::<span class="kw-2">*</span>;
+
+<span class="attr">#[custom_mir(dialect = <span class="string">"built"</span>)]
+</span><span class="kw">fn </span>borrow_error(should_init: bool) -&gt; i32 {
+    <span class="macro">mir!</span> {
+        <span class="kw">let </span>temp: i32;
+
+        {
+            <span class="kw">match </span>should_init {
+                <span class="bool-val">true </span>=&gt; init,
+                <span class="kw">_ </span>=&gt; use_temp,
+            }
+        }
+
+        init = {
+            temp = <span class="number">0</span>;
+            Goto(use_temp)
+        }
+
+        use_temp = {
+            RET = temp;
+            Return()
+        }
+    }
+}</code></pre></div>
+<div class="example-wrap"><pre class="language-text"><code>error[E0381]: used binding is possibly-uninitialized
+  --&gt; test.rs:24:13
+   |
+8  | /     mir! {
+9  | |         let temp: i32;
+10 | |
+11 | |         {
+...  |
+19 | |             temp = 0;
+   | |             -------- binding initialized here in some conditions
+...  |
+24 | |             RET = temp;
+   | |             ^^^^^^^^^^ value used here but it is possibly-uninitialized
+25 | |             Return()
+26 | |         }
+27 | |     }
+   | |_____- binding declared here but left uninitialized
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0381`.
+</code></pre></div><h2 id="syntax"><a class="doc-anchor" href="#syntax">§</a>Syntax</h2>
+<p>The lists below are an exhaustive description of how various MIR constructs can be created.
+Anything missing from the list should be assumed to not be supported, PRs welcome.</p>
+<h5 id="locals"><a class="doc-anchor" href="#locals">§</a>Locals</h5>
+<ul>
+<li>The <code>_0</code> return local can always be accessed via <code>RET</code>.</li>
+<li>Arguments can be accessed via their regular name.</li>
+<li>All other locals need to be declared with <code>let</code> somewhere and then can be accessed by name.</li>
+</ul>
+<h5 id="places"><a class="doc-anchor" href="#places">§</a>Places</h5>
+<ul>
+<li>Locals implicit convert to places.</li>
+<li>Field accesses, derefs, and indexing work normally.</li>
+<li>Fields in variants can be accessed via the <a href="fn.Variant.html" title="fn wasmtime_environ::__core::intrinsics::mir::Variant"><code>Variant</code></a> and <a href="fn.Field.html" title="fn wasmtime_environ::__core::intrinsics::mir::Field"><code>Field</code></a> associated functions,
+see their documentation for details.</li>
+</ul>
+<h5 id="operands"><a class="doc-anchor" href="#operands">§</a>Operands</h5>
+<ul>
+<li>Places implicitly convert to <code>Copy</code> operands.</li>
+<li><code>Move</code> operands can be created via <a href="fn.Move.html" title="fn wasmtime_environ::__core::intrinsics::mir::Move"><code>Move</code></a>.</li>
+<li>Const blocks, literals, named constants, and const params all just work.</li>
+<li><a href="fn.Static.html" title="fn wasmtime_environ::__core::intrinsics::mir::Static"><code>Static</code></a> and <a href="fn.StaticMut.html" title="fn wasmtime_environ::__core::intrinsics::mir::StaticMut"><code>StaticMut</code></a> can be used to create <code>&amp;T</code> and <code>*mut T</code>s to statics. These are
+constants in MIR and the only way to access statics.</li>
+</ul>
+<h5 id="statements"><a class="doc-anchor" href="#statements">§</a>Statements</h5>
+<ul>
+<li>Assign statements work via normal Rust assignment.</li>
+<li><a href="fn.Retag.html" title="fn wasmtime_environ::__core::intrinsics::mir::Retag"><code>Retag</code></a>, <a href="fn.StorageLive.html" title="fn wasmtime_environ::__core::intrinsics::mir::StorageLive"><code>StorageLive</code></a>, <a href="fn.StorageDead.html" title="fn wasmtime_environ::__core::intrinsics::mir::StorageDead"><code>StorageDead</code></a>, <a href="fn.Deinit.html" title="fn wasmtime_environ::__core::intrinsics::mir::Deinit"><code>Deinit</code></a> statements have an associated function.</li>
+</ul>
+<h5 id="rvalues"><a class="doc-anchor" href="#rvalues">§</a>Rvalues</h5>
+<ul>
+<li>Operands implicitly convert to <code>Use</code> rvalues.</li>
+<li><code>&amp;</code>, <code>&amp;mut</code>, <code>addr_of!</code>, and <code>addr_of_mut!</code> all work to create their associated rvalue.</li>
+<li><a href="fn.Discriminant.html" title="fn wasmtime_environ::__core::intrinsics::mir::Discriminant"><code>Discriminant</code></a>, <a href="fn.Len.html" title="fn wasmtime_environ::__core::intrinsics::mir::Len"><code>Len</code></a>, and <a href="fn.CopyForDeref.html" title="fn wasmtime_environ::__core::intrinsics::mir::CopyForDeref"><code>CopyForDeref</code></a> have associated functions.</li>
+<li>Unary and binary operations use their normal Rust syntax - <code>a * b</code>, <code>!c</code>, etc.</li>
+<li>The binary operation <code>Offset</code> can be created via <a href="fn.Offset.html" title="fn wasmtime_environ::__core::intrinsics::mir::Offset"><code>Offset</code></a>.</li>
+<li>Checked binary operations are represented by wrapping the associated binop in <a href="fn.Checked.html" title="fn wasmtime_environ::__core::intrinsics::mir::Checked"><code>Checked</code></a>.</li>
+<li>Array repetition syntax (<code>[foo; 10]</code>) creates the associated rvalue.</li>
+</ul>
+<h5 id="terminators"><a class="doc-anchor" href="#terminators">§</a>Terminators</h5>
+<ul>
+<li><a href="fn.Goto.html" title="fn wasmtime_environ::__core::intrinsics::mir::Goto"><code>Goto</code></a>, <a href="fn.Return.html" title="fn wasmtime_environ::__core::intrinsics::mir::Return"><code>Return</code></a>, <a href="fn.Unreachable.html" title="fn wasmtime_environ::__core::intrinsics::mir::Unreachable"><code>Unreachable</code></a> and <a href="fn.Drop.html" title="fn wasmtime_environ::__core::intrinsics::mir::Drop"><code>Drop</code></a> have associated functions.</li>
+<li><code>match some_int_operand</code> becomes a <code>SwitchInt</code>. Each arm should be <code>literal =&gt; basic_block</code>
+<ul>
+<li>The exception is the last arm, which must be <code>_ =&gt; basic_block</code> and corresponds to the
+otherwise branch.</li>
+</ul>
+</li>
+<li><a href="fn.Call.html" title="fn wasmtime_environ::__core::intrinsics::mir::Call"><code>Call</code></a> has an associated function as well, with special syntax:
+<code>Call(ret_val = function(arg1, arg2, ...), ReturnTo(next_block), UnwindContinue())</code>.</li>
+</ul>
+</div></details><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="macro" href="macro.mir.html" title="macro wasmtime_environ::__core::intrinsics::mir::mir">mir</a><span class="stab unstable" title="">Experimental</span></div><div class="desc docblock-short">Macro for generating custom MIR.</div></li><li><div class="item-name"><a class="macro" href="macro.place.html" title="macro wasmtime_environ::__core::intrinsics::mir::place">place</a><span class="stab unstable" title="">Experimental</span></div><div class="desc docblock-short">Helper macro that allows you to treat a value expression like a place expression.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.ReturnToArg.html" title="struct wasmtime_environ::__core::intrinsics::mir::ReturnToArg">ReturnToArg</a><span class="stab unstable" title="">Experimental</span></div></li><li><div class="item-name"><a class="struct" href="struct.UnwindActionArg.html" title="struct wasmtime_environ::__core::intrinsics::mir::UnwindActionArg">UnwindActionArg</a><span class="stab unstable" title="">Experimental</span></div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.BasicBlock.html" title="enum wasmtime_environ::__core::intrinsics::mir::BasicBlock">BasicBlock</a><span class="stab unstable" title="">Experimental</span></div><div class="desc docblock-short">Type representing basic blocks.</div></li><li><div class="item-name"><a class="enum" href="enum.UnwindTerminateReason.html" title="enum wasmtime_environ::__core::intrinsics::mir::UnwindTerminateReason">UnwindTerminateReason</a><span class="stab unstable" title="">Experimental</span></div><div class="desc docblock-short">The reason we are terminating the process during unwinding.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.Assume.html" title="fn wasmtime_environ::__core::intrinsics::mir::Assume">Assume</a><span class="stab unstable" title="">Experimental</span></div></li><li><div class="item-name"><a class="fn" href="fn.Call.html" title="fn wasmtime_environ::__core::intrinsics::mir::Call">Call</a><span class="stab unstable" title="">Experimental</span></div><div class="desc docblock-short">Call a function.</div></li><li><div class="item-name"><a class="fn" href="fn.CastPtrToPtr.html" title="fn wasmtime_environ::__core::intrinsics::mir::CastPtrToPtr">CastPtrToPtr</a><span class="stab unstable" title="">Experimental</span></div><div class="desc docblock-short">Emits a <code>CastKind::PtrToPtr</code> cast.</div></li><li><div class="item-name"><a class="fn" href="fn.CastTransmute.html" title="fn wasmtime_environ::__core::intrinsics::mir::CastTransmute">CastTransmute</a><span class="stab unstable" title="">Experimental</span></div><div class="desc docblock-short">Emits a <code>CastKind::Transmute</code> cast.</div></li><li><div class="item-name"><a class="fn" href="fn.Checked.html" title="fn wasmtime_environ::__core::intrinsics::mir::Checked">Checked</a><span class="stab unstable" title="">Experimental</span></div></li><li><div class="item-name"><a class="fn" href="fn.CopyForDeref.html" title="fn wasmtime_environ::__core::intrinsics::mir::CopyForDeref">CopyForDeref</a><span class="stab unstable" title="">Experimental</span></div></li><li><div class="item-name"><a class="fn" href="fn.Deinit.html" title="fn wasmtime_environ::__core::intrinsics::mir::Deinit">Deinit</a><span class="stab unstable" title="">Experimental</span></div></li><li><div class="item-name"><a class="fn" href="fn.Discriminant.html" title="fn wasmtime_environ::__core::intrinsics::mir::Discriminant">Discriminant</a><span class="stab unstable" title="">Experimental</span></div><div class="desc docblock-short">Gets the discriminant of a place.</div></li><li><div class="item-name"><a class="fn" href="fn.Drop.html" title="fn wasmtime_environ::__core::intrinsics::mir::Drop">Drop</a><span class="stab unstable" title="">Experimental</span></div><div class="desc docblock-short">Drop the contents of a place.</div></li><li><div class="item-name"><a class="fn" href="fn.Field.html" title="fn wasmtime_environ::__core::intrinsics::mir::Field">Field</a><span class="stab unstable" title="">Experimental</span></div><div class="desc docblock-short">Access the field with the given index of some place.</div></li><li><div class="item-name"><a class="fn" href="fn.Goto.html" title="fn wasmtime_environ::__core::intrinsics::mir::Goto">Goto</a><span class="stab unstable" title="">Experimental</span></div></li><li><div class="item-name"><a class="fn" href="fn.Len.html" title="fn wasmtime_environ::__core::intrinsics::mir::Len">Len</a><span class="stab unstable" title="">Experimental</span></div></li><li><div class="item-name"><a class="fn" href="fn.Move.html" title="fn wasmtime_environ::__core::intrinsics::mir::Move">Move</a><span class="stab unstable" title="">Experimental</span></div></li><li><div class="item-name"><a class="fn" href="fn.Offset.html" title="fn wasmtime_environ::__core::intrinsics::mir::Offset">Offset</a><span class="stab unstable" title="">Experimental</span></div></li><li><div class="item-name"><a class="fn" href="fn.PtrMetadata.html" title="fn wasmtime_environ::__core::intrinsics::mir::PtrMetadata">PtrMetadata</a><span class="stab unstable" title="">Experimental</span></div></li><li><div class="item-name"><a class="fn" href="fn.Retag.html" title="fn wasmtime_environ::__core::intrinsics::mir::Retag">Retag</a><span class="stab unstable" title="">Experimental</span></div></li><li><div class="item-name"><a class="fn" href="fn.Return.html" title="fn wasmtime_environ::__core::intrinsics::mir::Return">Return</a><span class="stab unstable" title="">Experimental</span></div></li><li><div class="item-name"><a class="fn" href="fn.ReturnTo.html" title="fn wasmtime_environ::__core::intrinsics::mir::ReturnTo">ReturnTo</a><span class="stab unstable" title="">Experimental</span></div></li><li><div class="item-name"><a class="fn" href="fn.SetDiscriminant.html" title="fn wasmtime_environ::__core::intrinsics::mir::SetDiscriminant">SetDiscriminant</a><span class="stab unstable" title="">Experimental</span></div></li><li><div class="item-name"><a class="fn" href="fn.Static.html" title="fn wasmtime_environ::__core::intrinsics::mir::Static">Static</a><span class="stab unstable" title="">Experimental</span></div></li><li><div class="item-name"><a class="fn" href="fn.StaticMut.html" title="fn wasmtime_environ::__core::intrinsics::mir::StaticMut">StaticMut</a><span class="stab unstable" title="">Experimental</span></div></li><li><div class="item-name"><a class="fn" href="fn.StorageDead.html" title="fn wasmtime_environ::__core::intrinsics::mir::StorageDead">StorageDead</a><span class="stab unstable" title="">Experimental</span></div></li><li><div class="item-name"><a class="fn" href="fn.StorageLive.html" title="fn wasmtime_environ::__core::intrinsics::mir::StorageLive">StorageLive</a><span class="stab unstable" title="">Experimental</span></div></li><li><div class="item-name"><a class="fn" href="fn.Unreachable.html" title="fn wasmtime_environ::__core::intrinsics::mir::Unreachable">Unreachable</a><span class="stab unstable" title="">Experimental</span></div></li><li><div class="item-name"><a class="fn" href="fn.UnwindCleanup.html" title="fn wasmtime_environ::__core::intrinsics::mir::UnwindCleanup">UnwindCleanup</a><span class="stab unstable" title="">Experimental</span></div><div class="desc docblock-short">An unwind action that continues execution in a given basic blok.</div></li><li><div class="item-name"><a class="fn" href="fn.UnwindContinue.html" title="fn wasmtime_environ::__core::intrinsics::mir::UnwindContinue">UnwindContinue</a><span class="stab unstable" title="">Experimental</span></div><div class="desc docblock-short">An unwind action that continues unwinding.</div></li><li><div class="item-name"><a class="fn" href="fn.UnwindResume.html" title="fn wasmtime_environ::__core::intrinsics::mir::UnwindResume">UnwindResume</a><span class="stab unstable" title="">Experimental</span></div><div class="desc docblock-short">A terminator that resumes the unwinding.</div></li><li><div class="item-name"><a class="fn" href="fn.UnwindTerminate.html" title="fn wasmtime_environ::__core::intrinsics::mir::UnwindTerminate">UnwindTerminate</a><span class="stab unstable" title="">Experimental</span></div><div class="desc docblock-short">An unwind action that terminates the execution.</div></li><li><div class="item-name"><a class="fn" href="fn.UnwindUnreachable.html" title="fn wasmtime_environ::__core::intrinsics::mir::UnwindUnreachable">UnwindUnreachable</a><span class="stab unstable" title="">Experimental</span></div><div class="desc docblock-short">An unwind action that triggers undefined behaviour.</div></li><li><div class="item-name"><a class="fn" href="fn.Variant.html" title="fn wasmtime_environ::__core::intrinsics::mir::Variant">Variant</a><span class="stab unstable" title="">Experimental</span></div><div class="desc docblock-short">Adds a variant projection with the given index to the place.</div></li></ul></section></div></main></body></html>

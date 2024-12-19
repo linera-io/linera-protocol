@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Definition","OperationDefinition","Selection","Type","TypeCondition","Value"],"fn":["consume_definition","parse_query"],"struct":["Directive","Document","Field","FragmentDefinition","FragmentSpread","InlineFragment","Mutation","Number","ParseError","Query","SelectionSet","Subscription","VariableDefinition"],"trait":["Text"]};

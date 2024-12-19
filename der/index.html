@@ -1,0 +1,307 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="RustCrypto: ASN.1 DER"><title>der - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="der" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="icon" href="https://raw.githubusercontent.com/RustCrypto/media/6ee8e381/logo.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../der/index.html"><img src="https://raw.githubusercontent.com/RustCrypto/media/6ee8e381/logo.svg" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../der/index.html"><img src="https://raw.githubusercontent.com/RustCrypto/media/6ee8e381/logo.svg" alt="logo"></a><h2><a href="../der/index.html">der</a><span class="version">0.7.9</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#traits">Traits</a></li><li><a href="#types">Type Aliases</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">der</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/der/lib.rs.html#1-402">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="rustcrypto-asn1-der"><a class="doc-anchor" href="#rustcrypto-asn1-der">§</a><a href="https://github.com/rustcrypto">RustCrypto</a>: ASN.1 DER</h2>
+<p><a href="https://crates.io/crates/der"><img src="https://buildstats.info/crate/der" alt="Crate" /></a>
+<a href="https://docs.rs/der/"><img src="https://docs.rs/der/badge.svg" alt="Docs" /></a>
+<a href="https://github.com/RustCrypto/formats/actions/workflows/der.yml"><img src="https://github.com/RustCrypto/formats/actions/workflows/der.yml/badge.svg" alt="Build Status" /></a>
+<img src="https://img.shields.io/badge/license-Apache2.0/MIT-blue.svg" alt="Apache2/MIT licensed" />
+<img src="https://img.shields.io/badge/rustc-1.65+-blue.svg" alt="Rust Version" />
+<a href="https://rustcrypto.zulipchat.com/#narrow/stream/300570-formats"><img src="https://img.shields.io/badge/zulip-join_chat-blue.svg" alt="Project Chat" /></a></p>
+<p>Pure Rust embedded-friendly implementation of the Distinguished Encoding Rules (DER)
+for Abstract Syntax Notation One (ASN.1) as described in ITU X.690.</p>
+<p><a href="https://docs.rs/der/">Documentation</a></p>
+<h3 id="about"><a class="doc-anchor" href="#about">§</a>About</h3>
+<p>This crate provides a <code>no_std</code>-friendly implementation of a subset of ASN.1 DER
+necessary for decoding/encoding the following cryptography-related formats
+implemented as crates maintained by the <a href="https://github.com/rustcrypto">RustCrypto</a> project:</p>
+<ul>
+<li><a href="https://github.com/RustCrypto/formats/tree/master/pkcs1"><code>pkcs1</code></a>: RSA Cryptography Specifications</li>
+<li><a href="https://github.com/RustCrypto/formats/tree/master/pkcs5"><code>pkcs5</code></a>: Password-Based Cryptography Specification</li>
+<li><a href="https://github.com/RustCrypto/formats/tree/master/pkcs7"><code>pkcs7</code></a>: Cryptographic Message Syntax</li>
+<li><a href="https://github.com/RustCrypto/formats/tree/master/pkcs8"><code>pkcs8</code></a>: Private-Key Information Syntax Specification</li>
+<li><a href="https://github.com/RustCrypto/formats/tree/master/pkcs10"><code>pkcs10</code></a>: Certification Request Syntax Specification</li>
+<li><a href="https://github.com/RustCrypto/formats/tree/master/sec1"><code>sec1</code></a>: Elliptic Curve Cryptography</li>
+<li><a href="https://github.com/RustCrypto/formats/tree/master/spki"><code>spki</code></a>: X.509 Subject Public Key Info</li>
+<li><a href="https://github.com/RustCrypto/formats/tree/master/x501"><code>x501</code></a>: Directory Services Types</li>
+<li><a href="https://github.com/RustCrypto/formats/tree/master/x509"><code>x509</code></a>: Public Key Infrastructure Certificate</li>
+</ul>
+<p>The core implementation avoids any heap usage (with convenience methods
+that allocate gated under the off-by-default <code>alloc</code> feature).</p>
+<p>The DER decoder in this crate performs checks to ensure that the input document
+is in canonical form, and will return errors if non-canonical productions are
+encountered. There is currently no way to disable these checks.</p>
+<h4 id="features"><a class="doc-anchor" href="#features">§</a>Features</h4>
+<ul>
+<li>Rich support for ASN.1 types used by PKCS/PKIX documents</li>
+<li>Performs DER canonicalization checks at decoding time</li>
+<li><code>no_std</code> friendly: supports “heapless” usage</li>
+<li>Optionally supports <code>alloc</code> and <code>std</code> if desired</li>
+<li>No hard dependencies! Self-contained implementation with optional
+integrations with the following crates, all of which are <code>no_std</code> friendly:
+<ul>
+<li><code>const-oid</code>: const-friendly OID implementation</li>
+<li><code>pem-rfc7468</code>: PKCS/PKIX-flavored PEM library with constant-time decoder/encoders</li>
+<li><code>time</code> crate: date/time library</li>
+</ul>
+</li>
+</ul>
+<h3 id="minimum-supported-rust-version"><a class="doc-anchor" href="#minimum-supported-rust-version">§</a>Minimum Supported Rust Version</h3>
+<p>This crate requires <strong>Rust 1.65</strong> at a minimum.</p>
+<p>We may change the MSRV in the future, but it will be accompanied by a minor
+version bump.</p>
+<h3 id="license"><a class="doc-anchor" href="#license">§</a>License</h3>
+<p>Licensed under either of:</p>
+<ul>
+<li><a href="http://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a></li>
+<li><a href="http://opensource.org/licenses/MIT">MIT license</a></li>
+</ul>
+<p>at your option.</p>
+<h4 id="contribution"><a class="doc-anchor" href="#contribution">§</a>Contribution</h4>
+<p>Unless you explicitly state otherwise, any contribution intentionally submitted
+for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
+dual licensed as above, without any additional terms or conditions.</p>
+<h2 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h2><h3 id="decode-and-encode-traits"><a class="doc-anchor" href="#decode-and-encode-traits">§</a><a href="trait.Decode.html" title="trait der::Decode"><code>Decode</code></a> and <a href="trait.Encode.html" title="trait der::Encode"><code>Encode</code></a> traits</h3>
+<p>The <a href="trait.Decode.html" title="trait der::Decode"><code>Decode</code></a> and <a href="trait.Encode.html" title="trait der::Encode"><code>Encode</code></a> traits provide the decoding/encoding API
+respectively, and are designed to work in conjunction with concrete ASN.1
+types, including all types which impl the <a href="asn1/trait.Sequence.html" title="trait der::asn1::Sequence"><code>Sequence</code></a> trait.</p>
+<p>The traits are impl’d for the following Rust core types:</p>
+<ul>
+<li><code>()</code>: ASN.1 <code>NULL</code>. See also <a href="asn1/struct.Null.html" title="struct der::asn1::Null"><code>Null</code></a>.</li>
+<li><a href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html" title="primitive bool"><code>bool</code></a>: ASN.1 <code>BOOLEAN</code>.</li>
+<li><a href="https://doc.rust-lang.org/1.81.0/std/primitive.i8.html" title="primitive i8"><code>i8</code></a>, <a href="https://doc.rust-lang.org/1.81.0/std/primitive.i16.html" title="primitive i16"><code>i16</code></a>, <a href="https://doc.rust-lang.org/1.81.0/std/primitive.i32.html" title="primitive i32"><code>i32</code></a>, <a href="https://doc.rust-lang.org/1.81.0/std/primitive.i64.html" title="primitive i64"><code>i64</code></a>, <a href="https://doc.rust-lang.org/1.81.0/std/primitive.i128.html" title="primitive i128"><code>i128</code></a>: ASN.1 <code>INTEGER</code>.</li>
+<li><a href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html" title="primitive u8"><code>u8</code></a>, <a href="https://doc.rust-lang.org/1.81.0/std/primitive.u16.html" title="primitive u16"><code>u16</code></a>, <a href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html" title="primitive u32"><code>u32</code></a>, <a href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html" title="primitive u64"><code>u64</code></a>, <a href="https://doc.rust-lang.org/1.81.0/std/primitive.u128.html" title="primitive u128"><code>u128</code></a>: ASN.1 <code>INTEGER</code>.</li>
+<li><a href="https://doc.rust-lang.org/1.81.0/std/primitive.f64.html" title="primitive f64"><code>f64</code></a>: ASN.1 <code>REAL</code> (gated on <code>real</code> crate feature)</li>
+<li><a href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html" title="primitive str"><code>str</code></a>, <a href="https://doc.rust-lang.org/1.81.0/alloc/string/struct.String.html" title="struct alloc::string::String"><code>String</code></a>: ASN.1 <code>UTF8String</code>.
+<code>String</code> requires <code>alloc</code> feature. See also <a href="asn1/struct.Utf8StringRef.html" title="struct der::asn1::Utf8StringRef"><code>Utf8StringRef</code></a>.</li>
+<li><a href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option"><code>Option</code></a>: ASN.1 <code>OPTIONAL</code>.</li>
+<li><a href="https://doc.rust-lang.org/1.81.0/std/time/struct.SystemTime.html" title="struct std::time::SystemTime"><code>SystemTime</code></a>: ASN.1 <code>GeneralizedTime</code>. Requires <code>std</code> feature.</li>
+<li><a href="https://doc.rust-lang.org/1.81.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec"><code>Vec</code></a>: ASN.1 <code>SEQUENCE OF</code>. Requires <code>alloc</code> feature.</li>
+<li><code>[T; N]</code>: ASN.1 <code>SEQUENCE OF</code>. See also <a href="asn1/struct.SequenceOf.html" title="struct der::asn1::SequenceOf"><code>SequenceOf</code></a>.</li>
+</ul>
+<p>The following ASN.1 types provided by this crate also impl these traits:</p>
+<ul>
+<li><a href="asn1/struct.Any.html" title="struct der::asn1::Any"><code>Any</code></a>, <a href="asn1/struct.AnyRef.html" title="struct der::asn1::AnyRef"><code>AnyRef</code></a>: ASN.1 <code>ANY</code>.</li>
+<li><a href="asn1/struct.BitString.html" title="struct der::asn1::BitString"><code>BitString</code></a>, <a href="asn1/struct.BitStringRef.html" title="struct der::asn1::BitStringRef"><code>BitStringRef</code></a>: ASN.1 <code>BIT STRING</code></li>
+<li><a href="asn1/struct.GeneralizedTime.html" title="struct der::asn1::GeneralizedTime"><code>GeneralizedTime</code></a>: ASN.1 <code>GeneralizedTime</code>.</li>
+<li><a href="asn1/struct.Ia5StringRef.html" title="struct der::asn1::Ia5StringRef"><code>Ia5StringRef</code></a>: ASN.1 <code>IA5String</code>.</li>
+<li><a href="asn1/struct.Null.html" title="struct der::asn1::Null"><code>Null</code></a>: ASN.1 <code>NULL</code>.</li>
+<li><a href="asn1/struct.ObjectIdentifier.html" title="struct der::asn1::ObjectIdentifier"><code>ObjectIdentifier</code></a>: ASN.1 <code>OBJECT IDENTIFIER</code>.</li>
+<li><a href="asn1/struct.OctetString.html" title="struct der::asn1::OctetString"><code>OctetString</code></a>, <a href="asn1/struct.OctetStringRef.html" title="struct der::asn1::OctetStringRef"><code>OctetStringRef</code></a>: ASN.1 <code>OCTET STRING</code>.</li>
+<li><a href="asn1/struct.PrintableStringRef.html" title="struct der::asn1::PrintableStringRef"><code>PrintableStringRef</code></a>: ASN.1 <code>PrintableString</code> (ASCII subset).</li>
+<li><a href="asn1/struct.TeletexStringRef.html" title="struct der::asn1::TeletexStringRef"><code>TeletexStringRef</code></a>: ASN.1 <code>TeletexString</code>.</li>
+<li><a href="asn1/struct.VideotexStringRef.html" title="struct der::asn1::VideotexStringRef"><code>VideotexStringRef</code></a>: ASN.1 <code>VideotexString</code>.</li>
+<li><a href="asn1/struct.SequenceOf.html" title="struct der::asn1::SequenceOf"><code>SequenceOf</code></a>: ASN.1 <code>SEQUENCE OF</code>.</li>
+<li><a href="asn1/struct.SetOf.html" title="struct der::asn1::SetOf"><code>SetOf</code></a>, <a href="asn1/struct.SetOfVec.html" title="struct der::asn1::SetOfVec"><code>SetOfVec</code></a>: ASN.1 <code>SET OF</code>.</li>
+<li><a href="asn1/struct.UintRef.html" title="struct der::asn1::UintRef"><code>UintRef</code></a>: ASN.1 unsigned <code>INTEGER</code> with raw access to encoded bytes.</li>
+<li><a href="asn1/struct.UtcTime.html" title="struct der::asn1::UtcTime"><code>UtcTime</code></a>: ASN.1 <code>UTCTime</code>.</li>
+<li><a href="asn1/struct.Utf8StringRef.html" title="struct der::asn1::Utf8StringRef"><code>Utf8StringRef</code></a>: ASN.1 <code>UTF8String</code>.</li>
+</ul>
+<p>Context specific fields can be modeled using these generic types:</p>
+<ul>
+<li><a href="asn1/struct.ContextSpecific.html" title="struct der::asn1::ContextSpecific"><code>ContextSpecific</code></a>: decoder/encoder for owned context-specific fields</li>
+<li><a href="asn1/struct.ContextSpecificRef.html" title="struct der::asn1::ContextSpecificRef"><code>ContextSpecificRef</code></a>: encode-only type for references to context-specific fields</li>
+</ul>
+<h3 id="example"><a class="doc-anchor" href="#example">§</a>Example</h3>
+<p>The following example implements X.509’s <code>AlgorithmIdentifier</code> message type
+as defined in <a href="https://tools.ietf.org/html/rfc5280#section-4.1.1.2">RFC 5280 Section 4.1.1.2</a>.</p>
+<p>The ASN.1 schema for this message type is as follows:</p>
+<div class="example-wrap"><pre class="language-text"><code>AlgorithmIdentifier  ::=  SEQUENCE  {
+     algorithm               OBJECT IDENTIFIER,
+     parameters              ANY DEFINED BY algorithm OPTIONAL  }
+</code></pre></div>
+<p>Structured ASN.1 messages are typically encoded as a <code>SEQUENCE</code>, which
+this crate maps to a Rust struct using the <a href="asn1/trait.Sequence.html" title="trait der::asn1::Sequence"><code>Sequence</code></a> trait. This
+trait is bounded on the <a href="trait.Decode.html" title="trait der::Decode"><code>Decode</code></a> trait and provides a blanket impl
+of the <a href="trait.Encode.html" title="trait der::Encode"><code>Encode</code></a> trait, so any type which impls <a href="asn1/trait.Sequence.html" title="trait der::asn1::Sequence"><code>Sequence</code></a> can be
+used for both decoding and encoding.</p>
+<p>The following code example shows how to define a struct which maps to the
+above schema, as well as impl the <a href="asn1/trait.Sequence.html" title="trait der::asn1::Sequence"><code>Sequence</code></a> trait for that struct:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// Note: the following example does not require the `std` feature at all.
+// It does leverage the `alloc` feature, but also provides instructions for
+// "heapless" usage when the `alloc` feature is disabled.
+</span><span class="kw">use </span>der::{
+    asn1::{AnyRef, ObjectIdentifier},
+    DecodeValue, Decode, SliceReader, Encode, Header, Reader, Sequence
+};
+
+<span class="doccomment">/// X.509 `AlgorithmIdentifier`.
+</span><span class="attr">#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+</span><span class="kw">pub struct </span>AlgorithmIdentifier&lt;<span class="lifetime">'a</span>&gt; {
+    <span class="doccomment">/// This field contains an ASN.1 `OBJECT IDENTIFIER`, a.k.a. OID.
+    </span><span class="kw">pub </span>algorithm: ObjectIdentifier,
+
+    <span class="doccomment">/// This field is `OPTIONAL` and contains the ASN.1 `ANY` type, which
+    /// in this example allows arbitrary algorithm-defined parameters.
+    </span><span class="kw">pub </span>parameters: <span class="prelude-ty">Option</span>&lt;AnyRef&lt;<span class="lifetime">'a</span>&gt;&gt;
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; DecodeValue&lt;<span class="lifetime">'a</span>&gt; <span class="kw">for </span>AlgorithmIdentifier&lt;<span class="lifetime">'a</span>&gt; {
+    <span class="kw">fn </span>decode_value&lt;R: Reader&lt;<span class="lifetime">'a</span>&gt;&gt;(reader: <span class="kw-2">&amp;mut </span>R, _header: Header) -&gt; der::Result&lt;<span class="self">Self</span>&gt; {
+       <span class="comment">// The `der::Decoder::Decode` method can be used to decode any
+       // type which impls the `Decode` trait, which is impl'd for
+       // all of the ASN.1 built-in types in the `der` crate.
+       //
+       // Note that if your struct's fields don't contain an ASN.1
+       // built-in type specifically, there are also helper methods
+       // for all of the built-in types supported by this library
+       // which can be used to select a specific type.
+       //
+       // For example, another way of decoding this particular field,
+       // which contains an ASN.1 `OBJECT IDENTIFIER`, is by calling
+       // `decoder.oid()`. Similar methods are defined for other
+       // ASN.1 built-in types.
+       </span><span class="kw">let </span>algorithm = reader.decode()<span class="question-mark">?</span>;
+
+       <span class="comment">// This field contains an ASN.1 `OPTIONAL` type. The `der` crate
+       // maps this directly to Rust's `Option` type and provides
+       // impls of the `Decode` and `Encode` traits for `Option`.
+       // To explicitly request an `OPTIONAL` type be decoded, use the
+       // `decoder.optional()` method.
+       </span><span class="kw">let </span>parameters = reader.decode()<span class="question-mark">?</span>;
+
+       <span class="comment">// The value returned from the provided `FnOnce` will be
+       // returned from the `any.sequence(...)` call above.
+       // Note that the entire sequence body *MUST* be consumed
+       // or an error will be returned.
+       </span><span class="prelude-val">Ok</span>(<span class="self">Self </span>{ algorithm, parameters })
+    }
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; ::der::EncodeValue <span class="kw">for </span>AlgorithmIdentifier&lt;<span class="lifetime">'a</span>&gt; {
+    <span class="kw">fn </span>value_len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ::der::Result&lt;::der::Length&gt; {
+        <span class="self">self</span>.algorithm.encoded_len()<span class="question-mark">? </span>+ <span class="self">self</span>.parameters.encoded_len()<span class="question-mark">?
+    </span>}
+
+    <span class="kw">fn </span>encode_value(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span><span class="kw">impl </span>::der::Writer) -&gt; ::der::Result&lt;()&gt; {
+        <span class="self">self</span>.algorithm.encode(writer)<span class="question-mark">?</span>;
+        <span class="self">self</span>.parameters.encode(writer)<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(())
+    }
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; Sequence&lt;<span class="lifetime">'a</span>&gt; <span class="kw">for </span>AlgorithmIdentifier&lt;<span class="lifetime">'a</span>&gt; {}
+
+<span class="comment">// Example parameters value: OID for the NIST P-256 elliptic curve.
+</span><span class="kw">let </span>parameters = <span class="string">"1.2.840.10045.3.1.7"</span>.parse::&lt;ObjectIdentifier&gt;().unwrap();
+
+<span class="comment">// We need to convert `parameters` into an `Any&lt;'a&gt;` type, which wraps a
+// `&amp;'a [u8]` byte slice.
+//
+// To do that, we need owned DER-encoded data so that we can have
+// `AnyRef` borrow a reference to it, so we have to serialize the OID.
+//
+// When the `alloc` feature of this crate is enabled, any type that impls
+// the `Encode` trait including all ASN.1 built-in types and any type
+// which impls `Sequence` can be serialized by calling `Encode::to_der()`.
+//
+// If you would prefer to avoid allocations, you can create a byte array
+// as backing storage instead, pass that to `der::Encoder::new`, and then
+// encode the `parameters` value using `encoder.encode(parameters)`.
+</span><span class="kw">let </span>der_encoded_parameters = parameters.to_der().unwrap();
+
+<span class="kw">let </span>algorithm_identifier = AlgorithmIdentifier {
+    <span class="comment">// OID for `id-ecPublicKey`, if you're curious
+    </span>algorithm: <span class="string">"1.2.840.10045.2.1"</span>.parse().unwrap(),
+
+    <span class="comment">// `Any&lt;'a&gt;` impls `TryFrom&lt;&amp;'a [u8]&gt;`, which parses the provided
+    // slice as an ASN.1 DER-encoded message.
+    </span>parameters: <span class="prelude-val">Some</span>(der_encoded_parameters.as_slice().try_into().unwrap())
+};
+
+<span class="comment">// Serialize the `AlgorithmIdentifier` created above as ASN.1 DER,
+// allocating a `Vec&lt;u8&gt;` for storage.
+//
+// As mentioned earlier, if you don't have the `alloc` feature enabled you
+// can create a fix-sized array instead, then call `Encoder::new` with a
+// reference to it, then encode the message using
+// `encoder.encode(algorithm_identifier)`, then finally `encoder.finish()`
+// to obtain a byte slice containing the encoded message.
+</span><span class="kw">let </span>der_encoded_algorithm_identifier = algorithm_identifier.to_der().unwrap();
+
+<span class="comment">// Deserialize the `AlgorithmIdentifier` we just serialized from ASN.1 DER
+// using `der::Decode::from_bytes`.
+</span><span class="kw">let </span>decoded_algorithm_identifier = AlgorithmIdentifier::from_der(
+    <span class="kw-2">&amp;</span>der_encoded_algorithm_identifier
+).unwrap();
+
+<span class="comment">// Ensure the original `AlgorithmIdentifier` is the same as the one we just
+// decoded from ASN.1 DER.
+</span><span class="macro">assert_eq!</span>(algorithm_identifier, decoded_algorithm_identifier);</code></pre></div>
+<h3 id="custom-derive-support"><a class="doc-anchor" href="#custom-derive-support">§</a>Custom derive support</h3>
+<p>When the <code>derive</code> feature of this crate is enabled, the following custom
+derive macros are available:</p>
+<ul>
+<li><a href="asn1/trait.Choice.html" title="trait der::asn1::Choice"><code>Choice</code></a>: derive for <code>CHOICE</code> enum (see [<code>der_derive::Choice</code>])</li>
+<li>[<code>Enumerated</code>]: derive for <code>ENUMERATED</code> enum (see [<code>der_derive::Enumerated</code>])</li>
+<li><a href="asn1/trait.Sequence.html" title="trait der::asn1::Sequence"><code>Sequence</code></a>: derive for <code>SEQUENCE</code> struct (see [<code>der_derive::Sequence</code>])</li>
+</ul>
+<h4 id="derive-sequence-for-struct"><a class="doc-anchor" href="#derive-sequence-for-struct">§</a>Derive <a href="asn1/trait.Sequence.html" title="trait der::asn1::Sequence"><code>Sequence</code></a> for struct</h4>
+<p>The following is a code example of how to use the <a href="asn1/trait.Sequence.html" title="trait der::asn1::Sequence"><code>Sequence</code></a> custom derive:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>der::{asn1::{AnyRef, ObjectIdentifier}, Encode, Decode, Sequence};
+
+<span class="doccomment">/// X.509 `AlgorithmIdentifier` (same as above)
+</span><span class="attr">#[derive(Copy, Clone, Debug, Eq, PartialEq, Sequence)] </span><span class="comment">// NOTE: added `Sequence`
+</span><span class="kw">pub struct </span>AlgorithmIdentifier&lt;<span class="lifetime">'a</span>&gt; {
+    <span class="doccomment">/// This field contains an ASN.1 `OBJECT IDENTIFIER`, a.k.a. OID.
+    </span><span class="kw">pub </span>algorithm: ObjectIdentifier,
+
+    <span class="doccomment">/// This field is `OPTIONAL` and contains the ASN.1 `ANY` type, which
+    /// in this example allows arbitrary algorithm-defined parameters.
+    </span><span class="kw">pub </span>parameters: <span class="prelude-ty">Option</span>&lt;AnyRef&lt;<span class="lifetime">'a</span>&gt;&gt;
+}
+
+<span class="comment">// Example parameters value: OID for the NIST P-256 elliptic curve.
+</span><span class="kw">let </span>parameters_oid = <span class="string">"1.2.840.10045.3.1.7"</span>.parse::&lt;ObjectIdentifier&gt;().unwrap();
+
+<span class="kw">let </span>algorithm_identifier = AlgorithmIdentifier {
+    <span class="comment">// OID for `id-ecPublicKey`, if you're curious
+    </span>algorithm: <span class="string">"1.2.840.10045.2.1"</span>.parse().unwrap(),
+
+    <span class="comment">// `Any&lt;'a&gt;` impls `From&lt;&amp;'a ObjectIdentifier&gt;`, allowing OID constants to
+    // be directly converted to an `AnyRef` type for this use case.
+    </span>parameters: <span class="prelude-val">Some</span>(AnyRef::from(<span class="kw-2">&amp;</span>parameters_oid))
+};
+
+<span class="comment">// Encode
+</span><span class="kw">let </span>der_encoded_algorithm_identifier = algorithm_identifier.to_der().unwrap();
+
+<span class="comment">// Decode
+</span><span class="kw">let </span>decoded_algorithm_identifier = AlgorithmIdentifier::from_der(
+    <span class="kw-2">&amp;</span>der_encoded_algorithm_identifier
+).unwrap();
+
+<span class="macro">assert_eq!</span>(algorithm_identifier, decoded_algorithm_identifier);</code></pre></div>
+<p>For fields which don’t directly impl <a href="trait.Decode.html" title="trait der::Decode"><code>Decode</code></a> and <a href="trait.Encode.html" title="trait der::Encode"><code>Encode</code></a>,
+you can add annotations to convert to an intermediate ASN.1 type
+first, so long as that type impls <code>TryFrom</code> and <code>Into</code> for the
+ASN.1 type.</p>
+<p>For example, structs containing <code>&amp;'a [u8]</code> fields may want them encoded
+as either a <code>BIT STRING</code> or <code>OCTET STRING</code>. By using the
+<code>#[asn1(type = "BIT STRING")]</code> annotation it’s possible to select which
+ASN.1 type should be used.</p>
+<p>Building off the above example:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="doccomment">/// X.509 `SubjectPublicKeyInfo` (SPKI)
+</span><span class="attr">#[derive(Copy, Clone, Debug, Eq, PartialEq, Sequence)]
+</span><span class="kw">pub struct </span>SubjectPublicKeyInfo&lt;<span class="lifetime">'a</span>&gt; {
+    <span class="doccomment">/// X.509 `AlgorithmIdentifier`
+    </span><span class="kw">pub </span>algorithm: AlgorithmIdentifier&lt;<span class="lifetime">'a</span>&gt;,
+
+    <span class="doccomment">/// Public key data
+    </span><span class="kw">pub </span>subject_public_key: BitStringRef&lt;<span class="lifetime">'a</span>&gt;,
+}</code></pre></div>
+<h2 id="see-also"><a class="doc-anchor" href="#see-also">§</a>See also</h2>
+<p>For more information about ASN.1 DER we recommend the following guides:</p>
+<ul>
+<li><a href="https://luca.ntop.org/Teaching/Appunti/asn1.html">A Layman’s Guide to a Subset of ASN.1, BER, and DER</a> (RSA Laboratories)</li>
+<li><a href="https://letsencrypt.org/docs/a-warm-welcome-to-asn1-and-der/">A Warm Welcome to ASN.1 and DER</a> (Let’s Encrypt)</li>
+</ul>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.AnyRef"><code>pub use crate::asn1::<a class="struct" href="asn1/struct.AnyRef.html" title="struct der::asn1::AnyRef">AnyRef</a>;</code></div></li><li><div class="item-name" id="reexport.Choice"><code>pub use crate::asn1::<a class="trait" href="asn1/trait.Choice.html" title="trait der::asn1::Choice">Choice</a>;</code></div></li><li><div class="item-name" id="reexport.Sequence"><code>pub use crate::asn1::<a class="trait" href="asn1/trait.Sequence.html" title="trait der::asn1::Sequence">Sequence</a>;</code></div></li><li><div class="item-name" id="reexport.Any"><code>pub use crate::asn1::<a class="struct" href="asn1/struct.Any.html" title="struct der::asn1::Any">Any</a>;</code></div></li><li><div class="item-name" id="reexport.oid"><code>pub use <a class="mod" href="../const_oid/index.html" title="mod const_oid">const_oid</a> as oid;</code></div></li><li><div class="item-name" id="reexport.zeroize"><code>pub use <a class="mod" href="../zeroize/index.html" title="mod zeroize">zeroize</a>;</code></div></li></ul><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="asn1/index.html" title="mod der::asn1">asn1</a></div><div class="desc docblock-short">Module containing all of the various ASN.1 built-in types supported by
+this library.</div></li><li><div class="item-name"><a class="mod" href="referenced/index.html" title="mod der::referenced">referenced</a></div><div class="desc docblock-short">A module for working with referenced data.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.DateTime.html" title="struct der::DateTime">DateTime</a></div><div class="desc docblock-short">Date-and-time type shared by multiple ASN.1 types
+(e.g. <code>GeneralizedTime</code>, <code>UTCTime</code>).</div></li><li><div class="item-name"><a class="struct" href="struct.Document.html" title="struct der::Document">Document</a></div><div class="desc docblock-short">ASN.1 DER-encoded document.</div></li><li><div class="item-name"><a class="struct" href="struct.EncodeRef.html" title="struct der::EncodeRef">EncodeRef</a></div><div class="desc docblock-short">Reference encoder: wrapper type which impls <code>Encode</code> for any reference to a
+type which impls the same.</div></li><li><div class="item-name"><a class="struct" href="struct.EncodeValueRef.html" title="struct der::EncodeValueRef">EncodeValueRef</a></div><div class="desc docblock-short">Reference value encoder: wrapper type which impls <code>EncodeValue</code> and <code>Tagged</code>
+for any reference type which impls the same.</div></li><li><div class="item-name"><a class="struct" href="struct.Error.html" title="struct der::Error">Error</a></div><div class="desc docblock-short">Error type.</div></li><li><div class="item-name"><a class="struct" href="struct.Header.html" title="struct der::Header">Header</a></div><div class="desc docblock-short">ASN.1 DER headers: tag + length component of TLV-encoded values</div></li><li><div class="item-name"><a class="struct" href="struct.IndefiniteLength.html" title="struct der::IndefiniteLength">IndefiniteLength</a></div><div class="desc docblock-short">Length type with support for indefinite lengths as used by ASN.1 BER,
+as described in X.690 Section 8.1.3.6:</div></li><li><div class="item-name"><a class="struct" href="struct.Length.html" title="struct der::Length">Length</a></div><div class="desc docblock-short">ASN.1-encoded length.</div></li><li><div class="item-name"><a class="struct" href="struct.NestedReader.html" title="struct der::NestedReader">NestedReader</a></div><div class="desc docblock-short">Reader type used by <a href="trait.Reader.html#method.read_nested" title="method der::Reader::read_nested"><code>Reader::read_nested</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.SecretDocument.html" title="struct der::SecretDocument">SecretDocument</a></div><div class="desc docblock-short">Secret <a href="struct.Document.html" title="struct der::Document"><code>Document</code></a> type.</div></li><li><div class="item-name"><a class="struct" href="struct.SliceReader.html" title="struct der::SliceReader">SliceReader</a></div><div class="desc docblock-short"><a href="trait.Reader.html" title="trait der::Reader"><code>Reader</code></a> which consumes an input byte slice.</div></li><li><div class="item-name"><a class="struct" href="struct.SliceWriter.html" title="struct der::SliceWriter">SliceWriter</a></div><div class="desc docblock-short"><a href="trait.Writer.html" title="trait der::Writer"><code>Writer</code></a> which encodes DER into a mutable output byte slice.</div></li><li><div class="item-name"><a class="struct" href="struct.TagNumber.html" title="struct der::TagNumber">TagNumber</a></div><div class="desc docblock-short">ASN.1 tag numbers (i.e. lower 5 bits of a <a href="enum.Tag.html" title="enum der::Tag"><code>Tag</code></a>).</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.Class.html" title="enum der::Class">Class</a></div><div class="desc docblock-short">Class of an ASN.1 tag.</div></li><li><div class="item-name"><a class="enum" href="enum.ErrorKind.html" title="enum der::ErrorKind">ErrorKind</a></div><div class="desc docblock-short">Error type.</div></li><li><div class="item-name"><a class="enum" href="enum.Tag.html" title="enum der::Tag">Tag</a></div><div class="desc docblock-short">ASN.1 tags.</div></li><li><div class="item-name"><a class="enum" href="enum.TagMode.html" title="enum der::TagMode">TagMode</a></div><div class="desc docblock-short">Tagging modes: <code>EXPLICIT</code> versus <code>IMPLICIT</code>.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.Decode.html" title="trait der::Decode">Decode</a></div><div class="desc docblock-short">Decoding trait.</div></li><li><div class="item-name"><a class="trait" href="trait.DecodeOwned.html" title="trait der::DecodeOwned">DecodeOwned</a></div><div class="desc docblock-short">Marker trait for data structures that can be decoded from DER without
+borrowing any data from the decoder.</div></li><li><div class="item-name"><a class="trait" href="trait.DecodeValue.html" title="trait der::DecodeValue">DecodeValue</a></div><div class="desc docblock-short">Decode the value part of a Tag-Length-Value encoded field, sans the <a href="enum.Tag.html" title="enum der::Tag"><code>Tag</code></a>
+and <a href="struct.Length.html" title="struct der::Length"><code>Length</code></a>.</div></li><li><div class="item-name"><a class="trait" href="trait.DerOrd.html" title="trait der::DerOrd">DerOrd</a></div><div class="desc docblock-short">DER ordering trait.</div></li><li><div class="item-name"><a class="trait" href="trait.Encode.html" title="trait der::Encode">Encode</a></div><div class="desc docblock-short">Encoding trait.</div></li><li><div class="item-name"><a class="trait" href="trait.EncodeValue.html" title="trait der::EncodeValue">EncodeValue</a></div><div class="desc docblock-short">Encode the value part of a Tag-Length-Value encoded field, sans the <a href="enum.Tag.html" title="enum der::Tag"><code>Tag</code></a>
+and <a href="struct.Length.html" title="struct der::Length"><code>Length</code></a>.</div></li><li><div class="item-name"><a class="trait" href="trait.FixedTag.html" title="trait der::FixedTag">FixedTag</a></div><div class="desc docblock-short">Types which have a constant ASN.1 <a href="enum.Tag.html" title="enum der::Tag"><code>Tag</code></a>.</div></li><li><div class="item-name"><a class="trait" href="trait.Reader.html" title="trait der::Reader">Reader</a></div><div class="desc docblock-short">Reader trait which reads DER-encoded input.</div></li><li><div class="item-name"><a class="trait" href="trait.Tagged.html" title="trait der::Tagged">Tagged</a></div><div class="desc docblock-short">Types which have an ASN.1 <a href="enum.Tag.html" title="enum der::Tag"><code>Tag</code></a>.</div></li><li><div class="item-name"><a class="trait" href="trait.ValueOrd.html" title="trait der::ValueOrd">ValueOrd</a></div><div class="desc docblock-short">DER value ordering trait.</div></li><li><div class="item-name"><a class="trait" href="trait.Writer.html" title="trait der::Writer">Writer</a></div><div class="desc docblock-short">Writer trait which outputs encoded DER.</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.Result.html" title="type der::Result">Result</a></div><div class="desc docblock-short">Result type.</div></li></ul></section></div></main></body></html>

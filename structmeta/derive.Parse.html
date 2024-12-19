@@ -1,0 +1,215 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Derive `syn::parse::Parse` for syntax tree node."><title>Parse in structmeta - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="structmeta" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc derive"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../structmeta/index.html">structmeta</a><span class="version">0.2.0</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Derive Macro <a href="index.html">structmeta</a>::<wbr><a class="derive" href="#">Parse</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/structmeta_derive/lib.rs.html#22">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>#[derive(Parse)]
+{
+    <span class="comment">// Attributes available to this derive:</span>
+    #[to_tokens]
+    #[parse]
+}
+</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Derive <a href="https://docs.rs/syn/2.0.77/syn/parse/trait.Parse.html" title="trait syn::parse::Parse"><code>syn::parse::Parse</code></a> for syntax tree node.</p>
+<ul>
+<li><a href="#example">Example</a></li>
+<li><a href="#helper-attributes">Helper attributes</a>
+<ul>
+<li><a href="#to_tokens-----"><code>#[to_tokens("[", "]", "(", ")", "{", "}")]</code></a></li>
+<li><a href="#parsepeek"><code>#[parse(peek)]</code></a></li>
+<li><a href="#parseany"><code>#[parse(any)]</code></a></li>
+<li><a href="#parseterminated"><code>#[parse(terminated)]</code></a></li>
+<li><a href="#parsedump"><code>#[parse(dump)]</code></a></li>
+</ul>
+</li>
+</ul>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<p><code>#[derive(Parse)]</code> generates an implementation of <code>Parse</code> that calls <a href="https://docs.rs/syn/2.0.77/syn/parse/trait.Parse.html#tymethod.parse" title="associated function syn::parse::Parse::parse"><code>Parse::parse</code></a> for each field.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>syn::{LitInt, LitStr};
+
+<span class="attr">#[derive(structmeta::Parse)]
+</span><span class="kw">struct </span>Example(LitInt, LitStr);</code></pre></div>
+<p>Code like this will be generated:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">impl </span>syn::parse::Parse <span class="kw">for </span>Example {
+    <span class="kw">fn </span>parse(input: syn::parse::ParseStream) -&gt; syn::Result&lt;<span class="self">Self</span>&gt; {
+        <span class="kw">let </span>_0 = input.parse()<span class="question-mark">?</span>;
+        <span class="kw">let </span>_1 = input.parse()<span class="question-mark">?</span>;
+        <span class="kw">return </span><span class="prelude-val">Ok</span>(Example(_0, _1));
+    }
+}</code></pre></div>
+<p><code>#[derive(Parse)]</code> can also be specified for enum.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>syn::{LitInt, LitStr};
+
+<span class="attr">#[derive(structmeta::Parse)]
+</span><span class="kw">enum </span>Example {
+    A(LitInt, LitInt),
+    B(LitStr),
+}</code></pre></div>
+<p>Code like this will be generated:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>syn::parse::discouraged::Speculative;
+<span class="kw">impl </span>syn::parse::Parse <span class="kw">for </span>Example {
+    <span class="kw">fn </span>parse(input: syn::parse::ParseStream) -&gt; syn::Result&lt;<span class="self">Self</span>&gt; {
+        <span class="kw">let </span>fork = input.fork();
+        <span class="kw">if let </span><span class="prelude-val">Ok</span>(value) = fork.call(|input| <span class="prelude-val">Ok</span>(Example::A(input.parse()<span class="question-mark">?</span>, input.parse()<span class="question-mark">?</span>))) {
+            input.advance_to(<span class="kw-2">&amp;</span>fork);
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(value);
+        }
+
+        <span class="kw">let </span>fork = input.fork();
+        <span class="kw">if let </span><span class="prelude-val">Ok</span>(value) = fork.call(|input| <span class="prelude-val">Ok</span>(Example::B(input.parse()<span class="question-mark">?</span>))) {
+            input.advance_to(<span class="kw-2">&amp;</span>fork);
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(value);
+        }
+
+        <span class="prelude-val">Err</span>(input.error(<span class="string">"parse failed."</span>))
+    }
+}</code></pre></div>
+<h2 id="helper-attributes"><a class="doc-anchor" href="#helper-attributes">§</a>Helper attributes</h2><div><table><thead><tr><th></th><th>struct</th><th>enum</th><th>varaint</th><th>field</th></tr></thead><tbody>
+<tr><td><a href="#to_tokens-----"><code>#[to_tokens("[", "]", "(", ")", "{", "}")]</code></a></td><td></td><td></td><td></td><td>✔</td></tr>
+<tr><td><a href="#parsepeek"><code>#[parse(peek)]</code></a></td><td></td><td></td><td></td><td>✔</td></tr>
+<tr><td><a href="#parseany"><code>#[parse(any)]</code></a></td><td></td><td></td><td></td><td>✔</td></tr>
+<tr><td><a href="#parseterminated"><code>#[parse(terminated)]</code></a></td><td></td><td></td><td></td><td>✔</td></tr>
+<tr><td><a href="#parsedump"><code>#[parse(dump)]</code></a></td><td>✔</td><td>✔</td><td></td><td></td></tr>
+</tbody></table>
+</div><h3 id="to_tokens-----"><a class="doc-anchor" href="#to_tokens-----">§</a><code>#[to_tokens("[", "]", "(", ")", "{", "}")]</code></h3>
+<p>By specifying <code>#[to_tokens("[")]</code> or <code>#[to_tokens("(")]</code> or <code>#[to_tokens("[")]</code> , subsequent tokens will be enclosed in <code>[]</code> or <code>()</code> or <code>{}</code>.</p>
+<p>By default, all subsequent fields are enclosed.
+To restrict the enclosing fields, specify <code>#[to_tokens("]")]</code> or <code>#[to_tokens(")")]</code> or <code>#[to_tokens("}")]</code> for the field after the end of the enclosure.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>syn::{token, LitInt};
+
+<span class="attr">#[derive(structmeta::Parse)]
+</span><span class="kw">struct </span>Example {
+    x: LitInt,
+    <span class="attr">#[to_tokens(<span class="string">"["</span>)]
+    </span>bracket_token: token::Bracket,
+    y: LitInt,
+    <span class="attr">#[to_tokens(<span class="string">"]"</span>)]
+    </span>z: LitInt,
+}</code></pre></div>
+<p>Code like this will be generated:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">impl </span>syn::parse::Parse <span class="kw">for </span>Example {
+    <span class="kw">fn </span>parse(input: syn::parse::ParseStream) -&gt; syn::Result&lt;<span class="self">Self</span>&gt; {
+        <span class="kw">let </span>x = input.parse()<span class="question-mark">?</span>;
+        <span class="kw">let </span>content;
+        <span class="kw">let </span>bracket_token = <span class="macro">syn::bracketed!</span>(content <span class="kw">in </span>input);
+        <span class="kw">let </span>y = content.parse()<span class="question-mark">?</span>;
+        <span class="kw">let </span>z = input.parse()<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
+            x,
+            bracket_token,
+            y,
+            z,
+        })
+    }
+}</code></pre></div>
+<p>If the field type is <code>Braket</code> or <code>Paren</code> or <code>Brace</code>, the symbol corresponding to the token type must be specified.</p>
+<p>If the field type is <code>MacroDelimiter</code>, any symbol can be used and there is no difference in behavior. (Three types of parentheses are available, no matter which symbol is specified.)</p>
+<div><table><thead><tr><th>field type</th><th>start</th><th>end</th></tr></thead><tbody>
+<tr><td><a href="https://docs.rs/syn/2.0.77/syn/token/struct.Bracket.html" title="struct syn::token::Bracket"><code>syn::token::Bracket</code></a></td><td><code>"["</code></td><td><code>"]"</code></td></tr>
+<tr><td><a href="https://docs.rs/syn/2.0.77/syn/token/struct.Paren.html" title="struct syn::token::Paren"><code>syn::token::Paren</code></a></td><td><code>"("</code></td><td><code>")"</code></td></tr>
+<tr><td><a href="https://docs.rs/syn/2.0.77/syn/token/struct.Brace.html" title="struct syn::token::Brace"><code>syn::token::Brace</code></a></td><td><code>"{"</code></td><td><code>"}"</code></td></tr>
+<tr><td><a href="https://docs.rs/syn/2.0.77/syn/mac/enum.MacroDelimiter.html" title="enum syn::mac::MacroDelimiter"><code>syn::MacroDelimiter</code></a></td><td><code>"["</code> or <code>"("</code> or <code>"{"</code></td><td><code>"]"</code> or <code>")"</code> or <code>"}"</code></td></tr>
+</tbody></table>
+</div><h3 id="parsepeek"><a class="doc-anchor" href="#parsepeek">§</a><code>#[parse(peek)]</code></h3>
+<p>When parsing an enum, it will peek the field with this attribute set,
+and if successful, will parse the variant containing the field.
+If the peek succeeds, the subsequent variant will not be parsed even if the parse failed.</p>
+<p>Variant where <code>#[parse(peek)]</code> is not specified will fork input and parse.</p>
+<p>If the peek fails or the parsing of the forked input fails, the subsequent variant will be parsed.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>syn::{LitInt, LitStr};
+<span class="attr">#[derive(structmeta::Parse)]
+</span><span class="kw">enum </span>Example {
+    A(<span class="attr">#[parse(peek)] </span>LitInt, LitInt),
+    B(LitStr),
+}</code></pre></div>
+<p>Code like this will be generated:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">impl </span>syn::parse::Parse <span class="kw">for </span>Example {
+    <span class="kw">fn </span>parse(input: syn::parse::ParseStream) -&gt; syn::Result&lt;<span class="self">Self</span>&gt; {
+        <span class="kw">if </span>input.peek(LitInt) {
+            <span class="kw">let </span>a_0 = input.parse()<span class="question-mark">?</span>;
+            <span class="kw">let </span>a_1 = input.parse()<span class="question-mark">?</span>;
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(Example::A(a_0, a_1));
+        }
+        <span class="kw">let </span>b_0 = input.parse()<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(Example::B(b_0))
+    }
+}</code></pre></div>
+<p><code>#[parse(peek)]</code> can be specified on the first three <code>TokenTree</code> for each variant.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>syn::{LitInt, LitStr};
+<span class="attr">#[derive(structmeta::Parse)]
+</span><span class="kw">enum </span>Example {
+    A(<span class="attr">#[parse(peek)] </span>LitInt, <span class="attr">#[parse(peek)]</span>LitInt, <span class="attr">#[parse(peek)]</span>LitInt),
+    B(<span class="attr">#[parse(peek)] </span>LitStr),
+}</code></pre></div>
+<p>Since the tokens enclosed by the delimiter is treated as a single token tree, you can also specify <code>#[parse(peek)]</code> to the field with <code>#[to_tokens("]")]</code>, <code>#[to_tokens("}")]</code>, <code>#[to_tokens(")")]</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>syn::{token, LitInt, LitStr};
+<span class="attr">#[derive(structmeta::Parse)]
+</span><span class="kw">enum </span>Example {
+    A {
+        <span class="attr">#[parse(peek)]
+        #[to_tokens(<span class="string">"{"</span>)]
+        </span>a: token::Brace,
+        b: LitInt,
+        c: LitInt,
+        <span class="attr">#[to_tokens(<span class="string">"}"</span>)]
+        #[parse(peek)]
+        </span>d: LitInt,
+    },
+}</code></pre></div>
+<p>To use <code>#[parse(peek)]</code> for a field that type is <code>Ident</code>, use <code>syn::Ident</code> insted of <code>proc_macro2::Ident</code>.</p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(structmeta::Parse)]
+</span><span class="kw">enum </span>ExampleNg {
+    A(<span class="attr">#[parse(peek)] </span>proc_macro2::Ident),
+}</code></pre></div>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(structmeta::Parse)]
+</span><span class="kw">enum </span>ExampleOk {
+    A(<span class="attr">#[parse(peek)] </span>syn::Ident),
+}</code></pre></div>
+<h3 id="parseany"><a class="doc-anchor" href="#parseany">§</a><code>#[parse(any)]</code></h3>
+<p>When parsing <code>Ident</code>, allow values that cannot be used as identifiers, such as keywords.</p>
+<p>In other words, <code>Ident::parse_any</code> and <code>Ident::peek_any</code> was generated instead of <code>Ident::parse</code> and <code>Ident::peek</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>quote::quote;
+<span class="kw">use </span>structmeta::Parse;
+<span class="kw">use </span>syn::{parse2, Ident};
+
+<span class="attr">#[derive(Parse)]
+</span><span class="kw">struct </span>WithAny(<span class="attr">#[parse(any)] </span>Ident);
+
+<span class="attr">#[derive(Parse)]
+</span><span class="kw">struct </span>WithoutAny(Ident);
+
+<span class="macro">assert_eq!</span>(parse2::&lt;WithAny&gt;(<span class="macro">quote!</span>(<span class="self">self</span>)).is_ok(), <span class="bool-val">true</span>);
+<span class="macro">assert_eq!</span>(parse2::&lt;WithoutAny&gt;(<span class="macro">quote!</span>(<span class="self">self</span>)).is_ok(), <span class="bool-val">false</span>);</code></pre></div>
+<h3 id="parseterminated"><a class="doc-anchor" href="#parseterminated">§</a><code>#[parse(terminated)]</code></h3>
+<p>Use <a href="https://docs.rs/syn/2.0.77/syn/punctuated/struct.Punctuated.html#method.parse_terminated" title="associated function syn::punctuated::Punctuated::parse_terminated"><code>Punctuated::parse_terminated</code></a> to parse.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>quote::quote;
+<span class="kw">use </span>structmeta::Parse;
+<span class="kw">use </span>syn::{parse2, punctuated::Punctuated, Ident, Token};
+<span class="attr">#[derive(Parse)]
+</span><span class="kw">struct </span>Example(<span class="attr">#[parse(terminated)] </span>Punctuated&lt;Ident, <span class="macro">Token!</span>[,]&gt;);
+<span class="macro">assert_eq!</span>(parse2::&lt;Example&gt;(<span class="macro">quote!</span>(a, b, c)).is_ok(), <span class="bool-val">true</span>);</code></pre></div>
+<p><code>terminated</code> can also be used with <code>any</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>quote::quote;
+<span class="kw">use </span>structmeta::Parse;
+<span class="kw">use </span>syn::{parse2, punctuated::Punctuated, Ident, Token};
+
+<span class="attr">#[derive(Parse)]
+</span><span class="kw">struct </span>WithAny(<span class="attr">#[parse(terminated, any)] </span>Punctuated&lt;Ident, <span class="macro">Token!</span>[,]&gt;);
+
+<span class="attr">#[derive(Parse)]
+</span><span class="kw">struct </span>WithoutAny(<span class="attr">#[parse(terminated)] </span>Punctuated&lt;Ident, <span class="macro">Token!</span>[,]&gt;);
+
+<span class="macro">assert_eq!</span>(parse2::&lt;WithAny&gt;(<span class="macro">quote!</span>(<span class="self">self</span>, <span class="self">self</span>)).is_ok(), <span class="bool-val">true</span>);
+<span class="macro">assert_eq!</span>(parse2::&lt;WithoutAny&gt;(<span class="macro">quote!</span>(<span class="self">self</span>, <span class="self">self</span>)).is_ok(), <span class="bool-val">false</span>);</code></pre></div>
+<h3 id="parsedump"><a class="doc-anchor" href="#parsedump">§</a><code>#[parse(dump)]</code></h3>
+<p>Causes a compile error and outputs the code generated by <code>#[derive(Parse)]</code> as an error message.</p>
+</div></details></section></div></main></body></html>

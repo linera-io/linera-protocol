@@ -1,0 +1,118 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Convenience to define functions which produce new strategies."><title>prop_compose in proptest::prelude - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="proptest" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../proptest/index.html">proptest</a><span class="version">1.5.0</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In proptest::prelude</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="../index.html">proptest</a>::<wbr><a href="index.html">prelude</a>::<wbr><a class="macro" href="#">prop_compose</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/proptest/sugar.rs.html#623-701">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><span class="macro">macro_rules!</span> prop_compose {
+    ($(<span class="attr">#[<span class="macro-nonterminal">$meta</span>:meta]</span>)*
+     <span class="macro-nonterminal">$vis</span>:vis
+     $([$(<span class="macro-nonterminal">$modi</span>:tt)<span class="kw-2">*</span>])<span class="question-mark">? </span><span class="kw">fn </span><span class="macro-nonterminal">$name</span>:ident <span class="macro-nonterminal">$params</span>:tt
+     ($(<span class="macro-nonterminal">$var</span>:pat <span class="kw">in </span><span class="macro-nonterminal">$strategy</span>:expr),+ $(,)<span class="question-mark">?</span>)
+       -&gt; <span class="macro-nonterminal">$return_type</span>:ty <span class="macro-nonterminal">$body</span>:block) =&gt; { ... };
+    ($(<span class="attr">#[<span class="macro-nonterminal">$meta</span>:meta]</span>)*
+     <span class="macro-nonterminal">$vis</span>:vis
+     $([$(<span class="macro-nonterminal">$modi</span>:tt)<span class="kw-2">*</span>])<span class="question-mark">? </span><span class="kw">fn </span><span class="macro-nonterminal">$name</span>:ident <span class="macro-nonterminal">$params</span>:tt
+     ($(<span class="macro-nonterminal">$var</span>:pat <span class="kw">in </span><span class="macro-nonterminal">$strategy</span>:expr),+ $(,)<span class="question-mark">?</span>)
+     ($(<span class="macro-nonterminal">$var2</span>:pat <span class="kw">in </span><span class="macro-nonterminal">$strategy2</span>:expr),+ $(,)<span class="question-mark">?</span>)
+       -&gt; <span class="macro-nonterminal">$return_type</span>:ty <span class="macro-nonterminal">$body</span>:block) =&gt; { ... };
+    ($(<span class="attr">#[<span class="macro-nonterminal">$meta</span>:meta]</span>)*
+     <span class="macro-nonterminal">$vis</span>:vis
+     $([$(<span class="macro-nonterminal">$modi</span>:tt)<span class="kw-2">*</span>])<span class="question-mark">? </span><span class="kw">fn </span><span class="macro-nonterminal">$name</span>:ident <span class="macro-nonterminal">$params</span>:tt
+     ($(<span class="macro-nonterminal">$arg</span>:tt)+)
+       -&gt; <span class="macro-nonterminal">$return_type</span>:ty <span class="macro-nonterminal">$body</span>:block) =&gt; { ... };
+    ($(<span class="attr">#[<span class="macro-nonterminal">$meta</span>:meta]</span>)*
+     <span class="macro-nonterminal">$vis</span>:vis
+     $([$(<span class="macro-nonterminal">$modi</span>:tt)<span class="kw-2">*</span>])<span class="question-mark">? </span><span class="kw">fn </span><span class="macro-nonterminal">$name</span>:ident <span class="macro-nonterminal">$params</span>:tt
+     ($(<span class="macro-nonterminal">$arg</span>:tt)+ $(,)<span class="question-mark">?</span>)
+     ($(<span class="macro-nonterminal">$arg2</span>:tt)+ $(,)<span class="question-mark">?</span>)
+       -&gt; <span class="macro-nonterminal">$return_type</span>:ty <span class="macro-nonterminal">$body</span>:block) =&gt; { ... };
+}</pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Convenience to define functions which produce new strategies.</p>
+<p>The macro has two general forms. In the first, you define a function with
+two argument lists. The first argument list uses the usual syntax and
+becomes exactly the argument list of the defined function. The second
+argument list uses the <code>in strategy</code> syntax as with <code>proptest!</code>, and is
+used to generate the other inputs for the function. The second argument
+list has access to all arguments in the first. The return type indicates
+the type of value being generated; the final return type of the function is
+<code>impl Strategy&lt;Value = $type&gt;</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>proptest::prelude::<span class="kw-2">*</span>;
+
+<span class="attr">#[derive(Clone, Debug)]
+</span><span class="kw">struct </span>MyStruct {
+  integer: u32,
+  string: String,
+}
+
+<span class="macro">prop_compose!</span> {
+  <span class="kw">fn </span>my_struct_strategy(max_integer: u32)
+                       (integer <span class="kw">in </span><span class="number">0</span>..max_integer, string <span class="kw">in </span><span class="string">".*"</span>)
+                       -&gt; MyStruct {
+    MyStruct { integer, string }
+  }
+}</code></pre></div>
+<p>This form is simply sugar around making a tuple and then calling <code>prop_map</code>
+on it. You can also use <code>arg: type</code> as in <code>proptest! { .. }</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code>
+<span class="macro">prop_compose!</span> {
+  <span class="kw">fn </span>my_struct_strategy(max_integer: u32)
+                       (integer <span class="kw">in </span><span class="number">0</span>..max_integer, string: String)
+                       -&gt; MyStruct {
+    MyStruct { integer, string }
+  }
+}</code></pre></div>
+<p>The second form is mostly the same, except that it takes <em>three</em> argument
+lists. The third argument list can see all values in both prior, which
+permits producing strategies based on other strategies.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>proptest::prelude::<span class="kw-2">*</span>;
+
+<span class="macro">prop_compose!</span> {
+  <span class="kw">fn </span>nearby_numbers()(centre <span class="kw">in </span>-<span class="number">1000</span>..<span class="number">1000</span>)
+                   (a <span class="kw">in </span>centre-<span class="number">10</span>..centre+<span class="number">10</span>,
+                    b <span class="kw">in </span>centre-<span class="number">10</span>..centre+<span class="number">10</span>)
+                   -&gt; (i32, i32) {
+    (a, b)
+  }
+}</code></pre></div>
+<p>However, the body of the function does <em>not</em> have access to the second
+argument list. If the body needs access to those values, they must be
+passed through explicitly.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>proptest::prelude::<span class="kw-2">*</span>;
+
+<span class="macro">prop_compose!</span> {
+  <span class="kw">fn </span>vec_and_index
+    (max_length: usize)
+    (vec <span class="kw">in </span>prop::collection::vec(<span class="number">1</span>..<span class="number">10</span>, <span class="number">1</span>..max_length))
+    (index <span class="kw">in </span><span class="number">0</span>..vec.len(), vec <span class="kw">in </span>Just(vec))
+    -&gt; (Vec&lt;i32&gt;, usize)
+  {
+    (vec, index)
+  }
+}</code></pre></div>
+<p>The second form is sugar around making a strategy tuple, calling
+<code>prop_flat_map()</code>, then <code>prop_map()</code>.</p>
+<p>To give the function any modifier which isn’t a visibility modifier, put it
+in brackets before the <code>fn</code> token but after any visibility modifier.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>proptest::prelude::<span class="kw-2">*</span>;
+
+<span class="macro">prop_compose!</span> {
+  <span class="kw">pub</span>(<span class="kw">crate</span>) [<span class="kw">unsafe</span>] <span class="kw">fn </span>pointer()(v <span class="kw">in </span>prop::num::usize::ANY)
+                                -&gt; <span class="kw-2">*const </span>() {
+    v <span class="kw">as </span><span class="kw-2">*const </span>()
+  }
+}</code></pre></div>
+<h3 id="comparison-with-hypothesis-composite"><a class="doc-anchor" href="#comparison-with-hypothesis-composite">§</a>Comparison with Hypothesis’ <code>@composite</code></h3>
+<p><code>prop_compose!</code> makes it easy to do a lot of things you can do with
+<a href="https://hypothesis.readthedocs.io/en/latest/data.html#composite-strategies">Hypothesis’ <code>@composite</code></a>,
+but not everything.</p>
+<ul>
+<li>
+<p>You can’t filter via this macro. For filtering, you need to make the
+strategy the “normal” way and use <code>prop_filter()</code>.</p>
+</li>
+<li>
+<p>More than two layers of strategies or arbitrary logic between the two
+layers. If you need either of these, you can achieve them by calling
+<code>prop_flat_map()</code> by hand.</p>
+</li>
+</ul>
+</div></details></section></div></main></body></html>

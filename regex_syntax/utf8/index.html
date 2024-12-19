@@ -1,0 +1,59 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Converts ranges of Unicode scalar values to equivalent ranges of UTF-8 bytes."><title>regex_syntax::utf8 - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="regex_syntax" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../regex_syntax/index.html">regex_syntax</a><span class="version">0.8.4</span></h2></div><h2 class="location"><a href="#">Module utf8</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li></ul></section><h2><a href="../index.html">In crate regex_syntax</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">regex_syntax</a>::<wbr><a class="mod" href="#">utf8</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/regex_syntax/utf8.rs.html#1-592">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Converts ranges of Unicode scalar values to equivalent ranges of UTF-8 bytes.</p>
+<p>This is sub-module is useful for constructing byte based automatons that need
+to embed UTF-8 decoding. The most common use of this module is in conjunction
+with the <a href="../hir/struct.ClassUnicodeRange.html" title="struct regex_syntax::hir::ClassUnicodeRange"><code>hir::ClassUnicodeRange</code></a> type.</p>
+<p>See the documentation on the <code>Utf8Sequences</code> iterator for more details and
+an example.</p>
+<h2 id="wait-what-is-this"><a class="doc-anchor" href="#wait-what-is-this">§</a>Wait, what is this?</h2>
+<p>This is simplest to explain with an example. Let’s say you wanted to test
+whether a particular byte sequence was a Cyrillic character. One possible
+scalar value range is <code>[0400-04FF]</code>. The set of allowed bytes for this
+range can be expressed as a sequence of byte ranges:</p>
+<div class="example-wrap"><pre class="language-text"><code>[D0-D3][80-BF]
+</code></pre></div>
+<p>This is simple enough: simply encode the boundaries, <code>0400</code> encodes to
+<code>D0 80</code> and <code>04FF</code> encodes to <code>D3 BF</code>, and create ranges from each
+corresponding pair of bytes: <code>D0</code> to <code>D3</code> and <code>80</code> to <code>BF</code>.</p>
+<p>However, what if you wanted to add the Cyrillic Supplementary characters to
+your range? Your range might then become <code>[0400-052F]</code>. The same procedure
+as above doesn’t quite work because <code>052F</code> encodes to <code>D4 AF</code>. The byte ranges
+you’d get from the previous transformation would be <code>[D0-D4][80-AF]</code>. However,
+this isn’t quite correct because this range doesn’t capture many characters,
+for example, <code>04FF</code> (because its last byte, <code>BF</code> isn’t in the range <code>80-AF</code>).</p>
+<p>Instead, you need multiple sequences of byte ranges:</p>
+<div class="example-wrap"><pre class="language-text"><code>[D0-D3][80-BF]  # matches codepoints 0400-04FF
+[D4][80-AF]     # matches codepoints 0500-052F
+</code></pre></div>
+<p>This gets even more complicated if you want bigger ranges, particularly if
+they naively contain surrogate codepoints. For example, the sequence of byte
+ranges for the basic multilingual plane (<code>[0000-FFFF]</code>) look like this:</p>
+<div class="example-wrap"><pre class="language-text"><code>[0-7F]
+[C2-DF][80-BF]
+[E0][A0-BF][80-BF]
+[E1-EC][80-BF][80-BF]
+[ED][80-9F][80-BF]
+[EE-EF][80-BF][80-BF]
+</code></pre></div>
+<p>Note that the byte ranges above will <em>not</em> match any erroneous encoding of
+UTF-8, including encodings of surrogate codepoints.</p>
+<p>And, of course, for all of Unicode (<code>[000000-10FFFF]</code>):</p>
+<div class="example-wrap"><pre class="language-text"><code>[0-7F]
+[C2-DF][80-BF]
+[E0][A0-BF][80-BF]
+[E1-EC][80-BF][80-BF]
+[ED][80-9F][80-BF]
+[EE-EF][80-BF][80-BF]
+[F0][90-BF][80-BF][80-BF]
+[F1-F3][80-BF][80-BF][80-BF]
+[F4][80-8F][80-BF][80-BF]
+</code></pre></div>
+<p>This module automates the process of creating these byte ranges from ranges of
+Unicode scalar values.</p>
+<h2 id="lineage"><a class="doc-anchor" href="#lineage">§</a>Lineage</h2>
+<p>I got the idea and general implementation strategy from Russ Cox in his
+<a href="https://web.archive.org/web/20160404141123/https://swtch.com/~rsc/regexp/regexp3.html">article on regexps</a> and RE2.
+Russ Cox got it from Ken Thompson’s <code>grep</code> (no source, folk lore?).
+I also got the idea from
+<a href="https://github.com/apache/lucene-solr/blob/ae93f4e7ac6a3908046391de35d4f50a0d3c59ca/lucene/core/src/java/org/apache/lucene/util/automaton/UTF32ToUTF8.java">Lucene</a>,
+which uses it for executing automata on their term index.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Utf8Range.html" title="struct regex_syntax::utf8::Utf8Range">Utf8Range</a></div><div class="desc docblock-short">A single inclusive range of UTF-8 bytes.</div></li><li><div class="item-name"><a class="struct" href="struct.Utf8Sequences.html" title="struct regex_syntax::utf8::Utf8Sequences">Utf8Sequences</a></div><div class="desc docblock-short">An iterator over ranges of matching UTF-8 byte sequences.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.Utf8Sequence.html" title="enum regex_syntax::utf8::Utf8Sequence">Utf8Sequence</a></div><div class="desc docblock-short">Utf8Sequence represents a sequence of byte ranges.</div></li></ul></section></div></main></body></html>

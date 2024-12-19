@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["GeneratorState"],"macro":["generator_mut","rc_producer","sync_producer","unsafe_create_generator","yield_"],"mod":["rc","stack","sync"],"trait":["Coroutine","Generator"]};

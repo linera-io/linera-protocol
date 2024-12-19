@@ -1,0 +1,696 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A one-pass DFA for executing a subset of anchored regex searches while resolving capturing groups."><title>DFA in regex_automata::dfa::onepass - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="regex_automata" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc struct"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../regex_automata/index.html">regex_automata</a><span class="version">0.4.7</span></h2></div><h2 class="location"><a href="#">DFA</a></h2><div class="sidebar-elems"><section><h3><a href="#implementations">Methods</a></h3><ul class="block method"><li><a href="#method.alphabet_len">alphabet_len</a></li><li><a href="#method.always_match">always_match</a></li><li><a href="#method.builder">builder</a></li><li><a href="#method.captures">captures</a></li><li><a href="#method.config">config</a></li><li><a href="#method.create_cache">create_cache</a></li><li><a href="#method.create_captures">create_captures</a></li><li><a href="#method.find">find</a></li><li><a href="#method.get_config">get_config</a></li><li><a href="#method.get_nfa">get_nfa</a></li><li><a href="#method.is_match">is_match</a></li><li><a href="#method.memory_usage">memory_usage</a></li><li><a href="#method.never_match">never_match</a></li><li><a href="#method.new">new</a></li><li><a href="#method.new_from_nfa">new_from_nfa</a></li><li><a href="#method.new_many">new_many</a></li><li><a href="#method.pattern_len">pattern_len</a></li><li><a href="#method.reset_cache">reset_cache</a></li><li><a href="#method.state_len">state_len</a></li><li><a href="#method.stride">stride</a></li><li><a href="#method.stride2">stride2</a></li><li><a href="#method.try_search">try_search</a></li><li><a href="#method.try_search_slots">try_search_slots</a></li></ul><h3><a href="#trait-implementations">Trait Implementations</a></h3><ul class="block trait-implementation"><li><a href="#impl-Clone-for-DFA">Clone</a></li><li><a href="#impl-Debug-for-DFA">Debug</a></li></ul><h3><a href="#synthetic-implementations">Auto Trait Implementations</a></h3><ul class="block synthetic-implementation"><li><a href="#impl-Freeze-for-DFA">Freeze</a></li><li><a href="#impl-RefUnwindSafe-for-DFA">RefUnwindSafe</a></li><li><a href="#impl-Send-for-DFA">Send</a></li><li><a href="#impl-Sync-for-DFA">Sync</a></li><li><a href="#impl-Unpin-for-DFA">Unpin</a></li><li><a href="#impl-UnwindSafe-for-DFA">UnwindSafe</a></li></ul><h3><a href="#blanket-implementations">Blanket Implementations</a></h3><ul class="block blanket-implementation"><li><a href="#impl-Any-for-T">Any</a></li><li><a href="#impl-Borrow%3CT%3E-for-T">Borrow&lt;T&gt;</a></li><li><a href="#impl-BorrowMut%3CT%3E-for-T">BorrowMut&lt;T&gt;</a></li><li><a href="#impl-CloneToUninit-for-T">CloneToUninit</a></li><li><a href="#impl-From%3CT%3E-for-T">From&lt;T&gt;</a></li><li><a href="#impl-Into%3CU%3E-for-T">Into&lt;U&gt;</a></li><li><a href="#impl-ToOwned-for-T">ToOwned</a></li><li><a href="#impl-TryFrom%3CU%3E-for-T">TryFrom&lt;U&gt;</a></li><li><a href="#impl-TryInto%3CU%3E-for-T">TryInto&lt;U&gt;</a></li></ul></section><h2><a href="index.html">In regex_automata::dfa::onepass</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Struct <a href="../../index.html">regex_automata</a>::<wbr><a href="../index.html">dfa</a>::<wbr><a href="index.html">onepass</a>::<wbr><a class="struct" href="#">DFA</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/regex_automata/dfa/onepass.rs.html#1075-1144">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub struct DFA { <span class="comment">/* private fields */</span> }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A one-pass DFA for executing a subset of anchored regex searches while
+resolving capturing groups.</p>
+<p>A one-pass DFA can be built from an NFA that is one-pass. An NFA is
+one-pass when there is never any ambiguity about how to continue a search.
+For example, <code>a*a</code> is not one-pass becuase during a search, it’s not
+possible to know whether to continue matching the <code>a*</code> or to move on to
+the single <code>a</code>. However, <code>a*b</code> is one-pass, because for every byte in the
+input, it’s always clear when to move on from <code>a*</code> to <code>b</code>.</p>
+<h2 id="only-anchored-searches-are-supported"><a class="doc-anchor" href="#only-anchored-searches-are-supported">§</a>Only anchored searches are supported</h2>
+<p>In this crate, especially for DFAs, unanchored searches are implemented by
+treating the pattern as if it had a <code>(?s-u:.)*?</code> prefix. While the prefix
+is one-pass on its own, adding anything after it, e.g., <code>(?s-u:.)*?a</code> will
+make the overall pattern not one-pass. Why? Because the <code>(?s-u:.)</code> matches
+any byte, and there is therefore ambiguity as to when the prefix should
+stop matching and something else should start matching.</p>
+<p>Therefore, one-pass DFAs do not support unanchored searches. In addition
+to many regexes simply not being one-pass, it implies that one-pass DFAs
+have limited utility. With that said, when a one-pass DFA can be used, it
+can potentially provide a dramatic speed up over alternatives like the
+<a href="../../nfa/thompson/backtrack/struct.BoundedBacktracker.html" title="struct regex_automata::nfa::thompson::backtrack::BoundedBacktracker"><code>BoundedBacktracker</code></a>
+and the <a href="../../nfa/thompson/pikevm/struct.PikeVM.html" title="struct regex_automata::nfa::thompson::pikevm::PikeVM"><code>PikeVM</code></a>. In particular,
+a one-pass DFA is the only DFA capable of reporting the spans of matching
+capturing groups.</p>
+<p>To clarify, when we say that unanchored searches are not supported, what
+that actually means is:</p>
+<ul>
+<li>The high level routines, <a href="struct.DFA.html#method.is_match" title="method regex_automata::dfa::onepass::DFA::is_match"><code>DFA::is_match</code></a> and <a href="struct.DFA.html#method.captures" title="method regex_automata::dfa::onepass::DFA::captures"><code>DFA::captures</code></a>, always
+do anchored searches.</li>
+<li>Since iterators are most useful in the context of unanchored searches,
+there is no <code>DFA::captures_iter</code> method.</li>
+<li>For lower level routines like <a href="struct.DFA.html#method.try_search" title="method regex_automata::dfa::onepass::DFA::try_search"><code>DFA::try_search</code></a>, an error will be
+returned if the given <a href="../../struct.Input.html" title="struct regex_automata::Input"><code>Input</code></a> is configured to do an unanchored search or
+search for an invalid pattern ID. (Note that an <a href="../../struct.Input.html" title="struct regex_automata::Input"><code>Input</code></a> is configured to
+do an unanchored search by default, so just giving a <code>Input::new</code> is
+guaranteed to return an error.)</li>
+</ul>
+<h2 id="other-limitations"><a class="doc-anchor" href="#other-limitations">§</a>Other limitations</h2>
+<p>In addition to the <a href="struct.Config.html#method.size_limit" title="method regex_automata::dfa::onepass::Config::size_limit">configurable heap limit</a> and
+the requirement that a regex pattern be one-pass, there are some other
+limitations:</p>
+<ul>
+<li>There is an internal limit on the total number of explicit capturing
+groups that appear across all patterns. It is somewhat small and there is
+no way to configure it. If your pattern(s) exceed this limit, then building
+a one-pass DFA will fail.</li>
+<li>If the number of patterns exceeds an internal unconfigurable limit, then
+building a one-pass DFA will fail. This limit is quite large and you’re
+unlikely to hit it.</li>
+<li>If the total number of states exceeds an internal unconfigurable limit,
+then building a one-pass DFA will fail. This limit is quite large and
+you’re unlikely to hit it.</li>
+</ul>
+<h2 id="other-examples-of-regexes-that-arent-one-pass"><a class="doc-anchor" href="#other-examples-of-regexes-that-arent-one-pass">§</a>Other examples of regexes that aren’t one-pass</h2>
+<p>One particularly unfortunate example is that enabling Unicode can cause
+regexes that were one-pass to no longer be one-pass. Consider the regex
+<code>(?-u)\w*\s</code> for example. It is one-pass because there is exactly no
+overlap between the ASCII definitions of <code>\w</code> and <code>\s</code>. But <code>\w*\s</code>
+(i.e., with Unicode enabled) is <em>not</em> one-pass because <code>\w</code> and <code>\s</code> get
+translated to UTF-8 automatons. And while the <em>codepoints</em> in <code>\w</code> and <code>\s</code>
+do not overlap, the underlying UTF-8 encodings do. Indeed, because of the
+overlap between UTF-8 automata, the use of Unicode character classes will
+tend to vastly increase the likelihood of a regex not being one-pass.</p>
+<h2 id="how-does-one-know-if-a-regex-is-one-pass-or-not"><a class="doc-anchor" href="#how-does-one-know-if-a-regex-is-one-pass-or-not">§</a>How does one know if a regex is one-pass or not?</h2>
+<p>At the time of writing, the only way to know is to try and build a one-pass
+DFA. The one-pass property is checked while constructing the DFA.</p>
+<p>This does mean that you might potentially waste some CPU cycles and memory
+by optimistically trying to build a one-pass DFA. But this is currently the
+only way. In the future, building a one-pass DFA might be able to use some
+heuristics to detect common violations of the one-pass property and bail
+more quickly.</p>
+<h2 id="resource-usage"><a class="doc-anchor" href="#resource-usage">§</a>Resource usage</h2>
+<p>Unlike a general DFA, a one-pass DFA has stricter bounds on its resource
+usage. Namely, construction of a one-pass DFA has a time and space
+complexity of <code>O(n)</code>, where <code>n ~ nfa.states().len()</code>. (A general DFA’s time
+and space complexity is <code>O(2^n)</code>.) This smaller time bound is achieved
+because there is at most one DFA state created for each NFA state. If
+additional DFA states would be required, then the pattern is not one-pass
+and construction will fail.</p>
+<p>Note though that currently, this DFA uses a fully dense representation.
+This means that while its space complexity is no worse than an NFA, it may
+in practice use more memory because of higher constant factors. The reason
+for this trade off is two-fold. Firstly, a dense representation makes the
+search faster. Secondly, the bigger an NFA, the more unlikely it is to be
+one-pass. Therefore, most one-pass DFAs are usually pretty small.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<p>This example shows that the one-pass DFA implements Unicode word boundaries
+correctly while simultaneously reporting spans for capturing groups that
+participate in a match. (This is the only DFA that implements full support
+for Unicode word boundaries.)</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{dfa::onepass::DFA, Match, Span};
+
+<span class="kw">let </span>re = DFA::new(<span class="string">r"\b(?P&lt;first&gt;\w+)[[:space:]]+(?P&lt;last&gt;\w+)\b"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>(<span class="kw-2">mut </span>cache, <span class="kw-2">mut </span>caps) = (re.create_cache(), re.create_captures());
+
+re.captures(<span class="kw-2">&amp;mut </span>cache, <span class="string">"Шерлок Холмс"</span>, <span class="kw-2">&amp;mut </span>caps);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Match::must(<span class="number">0</span>, <span class="number">0</span>..<span class="number">23</span>)), caps.get_match());
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Span::from(<span class="number">0</span>..<span class="number">12</span>)), caps.get_group_by_name(<span class="string">"first"</span>));
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Span::from(<span class="number">13</span>..<span class="number">23</span>)), caps.get_group_by_name(<span class="string">"last"</span>));</code></pre></div>
+<h2 id="example-iteration"><a class="doc-anchor" href="#example-iteration">§</a>Example: iteration</h2>
+<p>Unlike other regex engines in this crate, this one does not provide
+iterator search functions. This is because a one-pass DFA only supports
+anchored searches, and so iterator functions are generally not applicable.</p>
+<p>However, if you know that all of your matches are
+directly adjacent, then an iterator can be used. The
+<a href="../../util/iter/struct.Searcher.html" title="struct regex_automata::util::iter::Searcher"><code>util::iter::Searcher</code></a> type can be used for
+this purpose:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    dfa::onepass::DFA,
+    util::iter::Searcher,
+    Anchored, Input, Span,
+};
+
+<span class="kw">let </span>re = DFA::new(<span class="string">r"\w(\d)\w"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>(<span class="kw-2">mut </span>cache, caps) = (re.create_cache(), re.create_captures());
+<span class="kw">let </span>input = Input::new(<span class="string">"a1zb2yc3x"</span>).anchored(Anchored::Yes);
+
+<span class="kw">let </span><span class="kw-2">mut </span>it = Searcher::new(input).into_captures_iter(caps, |input, caps| {
+    <span class="prelude-val">Ok</span>(re.try_search(<span class="kw-2">&amp;mut </span>cache, input, caps)<span class="question-mark">?</span>)
+}).infallible();
+<span class="kw">let </span>caps0 = it.next().unwrap();
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Span::from(<span class="number">1</span>..<span class="number">2</span>)), caps0.get_group(<span class="number">1</span>));
+</code></pre></div>
+</div></details><h2 id="implementations" class="section-header">Implementations<a href="#implementations" class="anchor">§</a></h2><div id="implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-DFA" class="impl"><a class="src rightside" href="../../../src/regex_automata/dfa/onepass.rs.html#1146-1540">source</a><a href="#impl-DFA" class="anchor">§</a><h3 class="code-header">impl <a class="struct" href="struct.DFA.html" title="struct regex_automata::dfa::onepass::DFA">DFA</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.new" class="method"><a class="src rightside" href="../../../src/regex_automata/dfa/onepass.rs.html#1167-1169">source</a><h4 class="code-header">pub fn <a href="#method.new" class="fn">new</a>(pattern: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="struct.DFA.html" title="struct regex_automata::dfa::onepass::DFA">DFA</a>, <a class="struct" href="struct.BuildError.html" title="struct regex_automata::dfa::onepass::BuildError">BuildError</a>&gt;</h4></section></summary><div class="docblock"><p>Parse the given regular expression using the default configuration and
+return the corresponding one-pass DFA.</p>
+<p>If you want a non-default configuration, then use the <a href="struct.Builder.html" title="struct regex_automata::dfa::onepass::Builder"><code>Builder</code></a> to
+set your own configuration.</p>
+<h5 id="example-1"><a class="doc-anchor" href="#example-1">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{dfa::onepass::DFA, Match};
+
+<span class="kw">let </span>re = DFA::new(<span class="string">"foo[0-9]+bar"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>(<span class="kw-2">mut </span>cache, <span class="kw-2">mut </span>caps) = (re.create_cache(), re.create_captures());
+
+re.captures(<span class="kw-2">&amp;mut </span>cache, <span class="string">"foo12345barzzz"</span>, <span class="kw-2">&amp;mut </span>caps);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Match::must(<span class="number">0</span>, <span class="number">0</span>..<span class="number">11</span>)), caps.get_match());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.new_many" class="method"><a class="src rightside" href="../../../src/regex_automata/dfa/onepass.rs.html#1192-1194">source</a><h4 class="code-header">pub fn <a href="#method.new_many" class="fn">new_many</a>&lt;P: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>&gt;&gt;(patterns: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.slice.html">[P]</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="struct.DFA.html" title="struct regex_automata::dfa::onepass::DFA">DFA</a>, <a class="struct" href="struct.BuildError.html" title="struct regex_automata::dfa::onepass::BuildError">BuildError</a>&gt;</h4></section></summary><div class="docblock"><p>Like <code>new</code>, but parses multiple patterns into a single “multi regex.”
+This similarly uses the default regex configuration.</p>
+<h5 id="example-2"><a class="doc-anchor" href="#example-2">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{dfa::onepass::DFA, Match};
+
+<span class="kw">let </span>re = DFA::new_many(<span class="kw-2">&amp;</span>[<span class="string">"[a-z]+"</span>, <span class="string">"[0-9]+"</span>])<span class="question-mark">?</span>;
+<span class="kw">let </span>(<span class="kw-2">mut </span>cache, <span class="kw-2">mut </span>caps) = (re.create_cache(), re.create_captures());
+
+re.captures(<span class="kw-2">&amp;mut </span>cache, <span class="string">"abc123"</span>, <span class="kw-2">&amp;mut </span>caps);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Match::must(<span class="number">0</span>, <span class="number">0</span>..<span class="number">3</span>)), caps.get_match());
+
+re.captures(<span class="kw-2">&amp;mut </span>cache, <span class="string">"123abc"</span>, <span class="kw-2">&amp;mut </span>caps);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Match::must(<span class="number">1</span>, <span class="number">0</span>..<span class="number">3</span>)), caps.get_match());
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.new_from_nfa" class="method"><a class="src rightside" href="../../../src/regex_automata/dfa/onepass.rs.html#1231-1233">source</a><h4 class="code-header">pub fn <a href="#method.new_from_nfa" class="fn">new_from_nfa</a>(nfa: <a class="struct" href="../../nfa/thompson/struct.NFA.html" title="struct regex_automata::nfa::thompson::NFA">NFA</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="struct.DFA.html" title="struct regex_automata::dfa::onepass::DFA">DFA</a>, <a class="struct" href="struct.BuildError.html" title="struct regex_automata::dfa::onepass::BuildError">BuildError</a>&gt;</h4></section></summary><div class="docblock"><p>Like <code>new</code>, but builds a one-pass DFA directly from an NFA. This is
+useful if you already have an NFA, or even if you hand-assembled the
+NFA.</p>
+<h5 id="example-3"><a class="doc-anchor" href="#example-3">§</a>Example</h5>
+<p>This shows how to hand assemble a regular expression via its HIR,
+compile an NFA from it and build a one-pass DFA from the NFA.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    dfa::onepass::DFA,
+    nfa::thompson::NFA,
+    Match,
+};
+<span class="kw">use </span>regex_syntax::hir::{Hir, Class, ClassBytes, ClassBytesRange};
+
+<span class="kw">let </span>hir = Hir::class(Class::Bytes(ClassBytes::new(<span class="macro">vec!</span>[
+    ClassBytesRange::new(<span class="string">b'0'</span>, <span class="string">b'9'</span>),
+    ClassBytesRange::new(<span class="string">b'A'</span>, <span class="string">b'Z'</span>),
+    ClassBytesRange::new(<span class="string">b'_'</span>, <span class="string">b'_'</span>),
+    ClassBytesRange::new(<span class="string">b'a'</span>, <span class="string">b'z'</span>),
+])));
+
+<span class="kw">let </span>config = NFA::config().nfa_size_limit(<span class="prelude-val">Some</span>(<span class="number">1_000</span>));
+<span class="kw">let </span>nfa = NFA::compiler().configure(config).build_from_hir(<span class="kw-2">&amp;</span>hir)<span class="question-mark">?</span>;
+
+<span class="kw">let </span>re = DFA::new_from_nfa(nfa)<span class="question-mark">?</span>;
+<span class="kw">let </span>(<span class="kw-2">mut </span>cache, <span class="kw-2">mut </span>caps) = (re.create_cache(), re.create_captures());
+<span class="kw">let </span>expected = <span class="prelude-val">Some</span>(Match::must(<span class="number">0</span>, <span class="number">0</span>..<span class="number">1</span>));
+re.captures(<span class="kw-2">&amp;mut </span>cache, <span class="string">"A"</span>, <span class="kw-2">&amp;mut </span>caps);
+<span class="macro">assert_eq!</span>(expected, caps.get_match());
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.always_match" class="method"><a class="src rightside" href="../../../src/regex_automata/dfa/onepass.rs.html#1253-1256">source</a><h4 class="code-header">pub fn <a href="#method.always_match" class="fn">always_match</a>() -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="struct.DFA.html" title="struct regex_automata::dfa::onepass::DFA">DFA</a>, <a class="struct" href="struct.BuildError.html" title="struct regex_automata::dfa::onepass::BuildError">BuildError</a>&gt;</h4></section></summary><div class="docblock"><p>Create a new one-pass DFA that matches every input.</p>
+<h5 id="example-4"><a class="doc-anchor" href="#example-4">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{dfa::onepass::DFA, Match};
+
+<span class="kw">let </span>dfa = DFA::always_match()<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = dfa.create_cache();
+<span class="kw">let </span><span class="kw-2">mut </span>caps = dfa.create_captures();
+
+<span class="kw">let </span>expected = Match::must(<span class="number">0</span>, <span class="number">0</span>..<span class="number">0</span>);
+dfa.captures(<span class="kw-2">&amp;mut </span>cache, <span class="string">""</span>, <span class="kw-2">&amp;mut </span>caps);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(expected), caps.get_match());
+dfa.captures(<span class="kw-2">&amp;mut </span>cache, <span class="string">"foo"</span>, <span class="kw-2">&amp;mut </span>caps);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(expected), caps.get_match());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.never_match" class="method"><a class="src rightside" href="../../../src/regex_automata/dfa/onepass.rs.html#1275-1278">source</a><h4 class="code-header">pub fn <a href="#method.never_match" class="fn">never_match</a>() -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="struct.DFA.html" title="struct regex_automata::dfa::onepass::DFA">DFA</a>, <a class="struct" href="struct.BuildError.html" title="struct regex_automata::dfa::onepass::BuildError">BuildError</a>&gt;</h4></section></summary><div class="docblock"><p>Create a new one-pass DFA that never matches any input.</p>
+<h5 id="example-5"><a class="doc-anchor" href="#example-5">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::dfa::onepass::DFA;
+
+<span class="kw">let </span>dfa = DFA::never_match()<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = dfa.create_cache();
+<span class="kw">let </span><span class="kw-2">mut </span>caps = dfa.create_captures();
+
+dfa.captures(<span class="kw-2">&amp;mut </span>cache, <span class="string">""</span>, <span class="kw-2">&amp;mut </span>caps);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, caps.get_match());
+dfa.captures(<span class="kw-2">&amp;mut </span>cache, <span class="string">"foo"</span>, <span class="kw-2">&amp;mut </span>caps);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, caps.get_match());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.config" class="method"><a class="src rightside" href="../../../src/regex_automata/dfa/onepass.rs.html#1309-1311">source</a><h4 class="code-header">pub fn <a href="#method.config" class="fn">config</a>() -&gt; <a class="struct" href="struct.Config.html" title="struct regex_automata::dfa::onepass::Config">Config</a></h4></section></summary><div class="docblock"><p>Return a default configuration for a DFA.</p>
+<p>This is a convenience routine to avoid needing to import the <code>Config</code>
+type when customizing the construction of a DFA.</p>
+<h5 id="example-6"><a class="doc-anchor" href="#example-6">§</a>Example</h5>
+<p>This example shows how to change the match semantics of this DFA from
+its default “leftmost first” to “all.” When using “all,” non-greediness
+doesn’t apply and neither does preference order matching. Instead, the
+longest match possible is always returned. (Although, by construction,
+it’s impossible for a one-pass DFA to have a different answer for
+“preference order” vs “longest match.”)</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{dfa::onepass::DFA, Match, MatchKind};
+
+<span class="kw">let </span>re = DFA::builder()
+    .configure(DFA::config().match_kind(MatchKind::All))
+    .build(<span class="string">r"(abc)+?"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = re.create_cache();
+<span class="kw">let </span><span class="kw-2">mut </span>caps = re.create_captures();
+
+re.captures(<span class="kw-2">&amp;mut </span>cache, <span class="string">"abcabc"</span>, <span class="kw-2">&amp;mut </span>caps);
+<span class="comment">// Normally, the non-greedy repetition would give us a 0..3 match.
+</span><span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Match::must(<span class="number">0</span>, <span class="number">0</span>..<span class="number">6</span>)), caps.get_match());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.builder" class="method"><a class="src rightside" href="../../../src/regex_automata/dfa/onepass.rs.html#1345-1347">source</a><h4 class="code-header">pub fn <a href="#method.builder" class="fn">builder</a>() -&gt; <a class="struct" href="struct.Builder.html" title="struct regex_automata::dfa::onepass::Builder">Builder</a></h4></section></summary><div class="docblock"><p>Return a builder for configuring the construction of a DFA.</p>
+<p>This is a convenience routine to avoid needing to import the
+<a href="struct.Builder.html" title="struct regex_automata::dfa::onepass::Builder"><code>Builder</code></a> type in common cases.</p>
+<h5 id="example-7"><a class="doc-anchor" href="#example-7">§</a>Example</h5>
+<p>This example shows how to use the builder to disable UTF-8 mode.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    dfa::onepass::DFA,
+    nfa::thompson,
+    util::syntax,
+    Match,
+};
+
+<span class="kw">let </span>re = DFA::builder()
+    .syntax(syntax::Config::new().utf8(<span class="bool-val">false</span>))
+    .thompson(thompson::Config::new().utf8(<span class="bool-val">false</span>))
+    .build(<span class="string">r"foo(?-u:[^b])ar.*"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>(<span class="kw-2">mut </span>cache, <span class="kw-2">mut </span>caps) = (re.create_cache(), re.create_captures());
+
+<span class="kw">let </span>haystack = <span class="string">b"foo\xFFarzz\xE2\x98\xFF\n"</span>;
+<span class="kw">let </span>expected = <span class="prelude-val">Some</span>(Match::must(<span class="number">0</span>, <span class="number">0</span>..<span class="number">8</span>));
+re.captures(<span class="kw-2">&amp;mut </span>cache, haystack, <span class="kw-2">&amp;mut </span>caps);
+<span class="macro">assert_eq!</span>(expected, caps.get_match());
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.create_captures" class="method"><a class="src rightside" href="../../../src/regex_automata/dfa/onepass.rs.html#1360-1362">source</a><h4 class="code-header">pub fn <a href="#method.create_captures" class="fn">create_captures</a>(&amp;self) -&gt; <a class="struct" href="../../util/captures/struct.Captures.html" title="struct regex_automata::util::captures::Captures">Captures</a></h4></section></summary><div class="docblock"><p>Create a new empty set of capturing groups that is guaranteed to be
+valid for the search APIs on this DFA.</p>
+<p>A <code>Captures</code> value created for a specific DFA cannot be used with any
+other DFA.</p>
+<p>This is a convenience function for <a href="../../util/captures/struct.Captures.html#method.all" title="associated function regex_automata::util::captures::Captures::all"><code>Captures::all</code></a>. See the
+<a href="../../util/captures/struct.Captures.html" title="struct regex_automata::util::captures::Captures"><code>Captures</code></a> documentation for an explanation of its alternative
+constructors that permit the DFA to do less work during a search, and
+thus might make it faster.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.create_cache" class="method"><a class="src rightside" href="../../../src/regex_automata/dfa/onepass.rs.html#1371-1373">source</a><h4 class="code-header">pub fn <a href="#method.create_cache" class="fn">create_cache</a>(&amp;self) -&gt; <a class="struct" href="struct.Cache.html" title="struct regex_automata::dfa::onepass::Cache">Cache</a></h4></section></summary><div class="docblock"><p>Create a new cache for this DFA.</p>
+<p>The cache returned should only be used for searches for this
+DFA. If you want to reuse the cache for another DFA, then you
+must call <a href="struct.Cache.html#method.reset" title="method regex_automata::dfa::onepass::Cache::reset"><code>Cache::reset</code></a> with that DFA (or, equivalently,
+<a href="struct.DFA.html#method.reset_cache" title="method regex_automata::dfa::onepass::DFA::reset_cache"><code>DFA::reset_cache</code></a>).</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.reset_cache" class="method"><a class="src rightside" href="../../../src/regex_automata/dfa/onepass.rs.html#1415-1417">source</a><h4 class="code-header">pub fn <a href="#method.reset_cache" class="fn">reset_cache</a>(&amp;self, cache: &amp;mut <a class="struct" href="struct.Cache.html" title="struct regex_automata::dfa::onepass::Cache">Cache</a>)</h4></section></summary><div class="docblock"><p>Reset the given cache such that it can be used for searching with the
+this DFA (and only this DFA).</p>
+<p>A cache reset permits reusing memory already allocated in this cache
+with a different DFA.</p>
+<h5 id="example-8"><a class="doc-anchor" href="#example-8">§</a>Example</h5>
+<p>This shows how to re-purpose a cache for use with a different DFA.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{dfa::onepass::DFA, Match};
+
+<span class="kw">let </span>re1 = DFA::new(<span class="string">r"\w"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>re2 = DFA::new(<span class="string">r"\W"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>caps1 = re1.create_captures();
+<span class="kw">let </span><span class="kw-2">mut </span>caps2 = re2.create_captures();
+
+<span class="kw">let </span><span class="kw-2">mut </span>cache = re1.create_cache();
+<span class="macro">assert_eq!</span>(
+    <span class="prelude-val">Some</span>(Match::must(<span class="number">0</span>, <span class="number">0</span>..<span class="number">2</span>)),
+    { re1.captures(<span class="kw-2">&amp;mut </span>cache, <span class="string">"Δ"</span>, <span class="kw-2">&amp;mut </span>caps1); caps1.get_match() },
+);
+
+<span class="comment">// Using 'cache' with re2 is not allowed. It may result in panics or
+// incorrect results. In order to re-purpose the cache, we must reset
+// it with the one-pass DFA we'd like to use it with.
+//
+// Similarly, after this reset, using the cache with 're1' is also not
+// allowed.
+</span>re2.reset_cache(<span class="kw-2">&amp;mut </span>cache);
+<span class="macro">assert_eq!</span>(
+    <span class="prelude-val">Some</span>(Match::must(<span class="number">0</span>, <span class="number">0</span>..<span class="number">3</span>)),
+    { re2.captures(<span class="kw-2">&amp;mut </span>cache, <span class="string">"☃"</span>, <span class="kw-2">&amp;mut </span>caps2); caps2.get_match() },
+);
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_config" class="method"><a class="src rightside" href="../../../src/regex_automata/dfa/onepass.rs.html#1421-1423">source</a><h4 class="code-header">pub fn <a href="#method.get_config" class="fn">get_config</a>(&amp;self) -&gt; &amp;<a class="struct" href="struct.Config.html" title="struct regex_automata::dfa::onepass::Config">Config</a></h4></section></summary><div class="docblock"><p>Return the config for this one-pass DFA.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_nfa" class="method"><a class="src rightside" href="../../../src/regex_automata/dfa/onepass.rs.html#1427-1429">source</a><h4 class="code-header">pub fn <a href="#method.get_nfa" class="fn">get_nfa</a>(&amp;self) -&gt; &amp;<a class="struct" href="../../nfa/thompson/struct.NFA.html" title="struct regex_automata::nfa::thompson::NFA">NFA</a></h4></section></summary><div class="docblock"><p>Returns a reference to the underlying NFA.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.pattern_len" class="method"><a class="src rightside" href="../../../src/regex_automata/dfa/onepass.rs.html#1435-1437">source</a><h4 class="code-header">pub fn <a href="#method.pattern_len" class="fn">pattern_len</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a></h4></section></summary><div class="docblock"><p>Returns the total number of patterns compiled into this DFA.</p>
+<p>In the case of a DFA that contains no patterns, this returns <code>0</code>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.state_len" class="method"><a class="src rightside" href="../../../src/regex_automata/dfa/onepass.rs.html#1445-1447">source</a><h4 class="code-header">pub fn <a href="#method.state_len" class="fn">state_len</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a></h4></section></summary><div class="docblock"><p>Returns the total number of states in this one-pass DFA.</p>
+<p>Note that unlike dense or sparse DFAs, a one-pass DFA does not expose
+a low level DFA API. Therefore, this routine has little use other than
+being informational.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.alphabet_len" class="method"><a class="src rightside" href="../../../src/regex_automata/dfa/onepass.rs.html#1477-1479">source</a><h4 class="code-header">pub fn <a href="#method.alphabet_len" class="fn">alphabet_len</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a></h4></section></summary><div class="docblock"><p>Returns the total number of elements in the alphabet for this DFA.</p>
+<p>That is, this returns the total number of transitions that each
+state in this DFA must have. The maximum alphabet size is 256, which
+corresponds to each possible byte value.</p>
+<p>The alphabet size may be less than 256 though, and unless
+<a href="struct.Config.html#method.byte_classes" title="method regex_automata::dfa::onepass::Config::byte_classes"><code>Config::byte_classes</code></a> is disabled, it is typically must less than
+256. Namely, bytes are grouped into equivalence classes such that no
+two bytes in the same class can distinguish a match from a non-match.
+For example, in the regex <code>^[a-z]+$</code>, the ASCII bytes <code>a-z</code> could
+all be in the same equivalence class. This leads to a massive space
+savings.</p>
+<p>Note though that the alphabet length does <em>not</em> necessarily equal the
+total stride space taken up by a single DFA state in the transition
+table. Namely, for performance reasons, the stride is always the
+smallest power of two that is greater than or equal to the alphabet
+length. For this reason, <a href="struct.DFA.html#method.stride" title="method regex_automata::dfa::onepass::DFA::stride"><code>DFA::stride</code></a> or <a href="struct.DFA.html#method.stride2" title="method regex_automata::dfa::onepass::DFA::stride2"><code>DFA::stride2</code></a> are
+often more useful. The alphabet length is typically useful only for
+informational purposes.</p>
+<p>Note also that unlike dense or sparse DFAs, a one-pass DFA does
+not have a special end-of-input (EOI) transition. This is because
+a one-pass DFA handles look-around assertions explicitly (like the
+<a href="../../nfa/thompson/pikevm/struct.PikeVM.html" title="struct regex_automata::nfa::thompson::pikevm::PikeVM"><code>PikeVM</code></a>) and does not build
+them into the transitions of the DFA.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.stride2" class="method"><a class="src rightside" href="../../../src/regex_automata/dfa/onepass.rs.html#1506-1508">source</a><h4 class="code-header">pub fn <a href="#method.stride2" class="fn">stride2</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a></h4></section></summary><div class="docblock"><p>Returns the total stride for every state in this DFA, expressed as the
+exponent of a power of 2. The stride is the amount of space each state
+takes up in the transition table, expressed as a number of transitions.
+(Unused transitions map to dead states.)</p>
+<p>The stride of a DFA is always equivalent to the smallest power of
+2 that is greater than or equal to the DFA’s alphabet length. This
+definition uses extra space, but possibly permits faster translation
+between state identifiers and their corresponding offsets in this DFA’s
+transition table.</p>
+<p>For example, if the DFA’s stride is 16 transitions, then its <code>stride2</code>
+is <code>4</code> since <code>2^4 = 16</code>.</p>
+<p>The minimum <code>stride2</code> value is <code>1</code> (corresponding to a stride of <code>2</code>)
+while the maximum <code>stride2</code> value is <code>9</code> (corresponding to a stride
+of <code>512</code>). The maximum in theory should be <code>8</code>, but because of some
+implementation quirks that may be relaxed in the future, it is one more
+than <code>8</code>. (Do note that a maximal stride is incredibly rare, as it
+would imply that there is almost no redundant in the regex pattern.)</p>
+<p>Note that unlike dense or sparse DFAs, a one-pass DFA does not expose
+a low level DFA API. Therefore, this routine has little use other than
+being informational.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.stride" class="method"><a class="src rightside" href="../../../src/regex_automata/dfa/onepass.rs.html#1522-1524">source</a><h4 class="code-header">pub fn <a href="#method.stride" class="fn">stride</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a></h4></section></summary><div class="docblock"><p>Returns the total stride for every state in this DFA. This corresponds
+to the total number of transitions used by each state in this DFA’s
+transition table.</p>
+<p>Please see <a href="struct.DFA.html#method.stride2" title="method regex_automata::dfa::onepass::DFA::stride2"><code>DFA::stride2</code></a> for more information. In particular, this
+returns the stride as the number of transitions, where as <code>stride2</code>
+returns it as the exponent of a power of 2.</p>
+<p>Note that unlike dense or sparse DFAs, a one-pass DFA does not expose
+a low level DFA API. Therefore, this routine has little use other than
+being informational.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.memory_usage" class="method"><a class="src rightside" href="../../../src/regex_automata/dfa/onepass.rs.html#1534-1539">source</a><h4 class="code-header">pub fn <a href="#method.memory_usage" class="fn">memory_usage</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a></h4></section></summary><div class="docblock"><p>Returns the memory usage, in bytes, of this DFA.</p>
+<p>The memory usage is computed based on the number of bytes used to
+represent this DFA.</p>
+<p>This does <strong>not</strong> include the stack size used up by this DFA. To
+compute that, use <code>std::mem::size_of::&lt;onepass::DFA&gt;()</code>.</p>
+</div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-DFA-1" class="impl"><a class="src rightside" href="../../../src/regex_automata/dfa/onepass.rs.html#1542-2037">source</a><a href="#impl-DFA-1" class="anchor">§</a><h3 class="code-header">impl <a class="struct" href="struct.DFA.html" title="struct regex_automata::dfa::onepass::DFA">DFA</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.is_match" class="method"><a class="src rightside" href="../../../src/regex_automata/dfa/onepass.rs.html#1621-1631">source</a><h4 class="code-header">pub fn <a href="#method.is_match" class="fn">is_match</a>&lt;'h, I: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="struct" href="../../struct.Input.html" title="struct regex_automata::Input">Input</a>&lt;'h&gt;&gt;&gt;(
+    &amp;self,
+    cache: &amp;mut <a class="struct" href="struct.Cache.html" title="struct regex_automata::dfa::onepass::Cache">Cache</a>,
+    input: I,
+) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Executes an anchored leftmost forward search, and returns true if and
+only if this one-pass DFA matches the given haystack.</p>
+<p>This routine may short circuit if it knows that scanning future
+input will never lead to a different result. In particular, if the
+underlying DFA enters a match state, then this routine will return
+<code>true</code> immediately without inspecting any future input. (Consider how
+this might make a difference given the regex <code>a+</code> on the haystack
+<code>aaaaaaaaaaaaaaa</code>. This routine can stop after it sees the first <code>a</code>,
+but routines like <code>find</code> need to continue searching because <code>+</code> is
+greedy by default.)</p>
+<p>The given <code>Input</code> is forcefully set to use <a href="../../enum.Anchored.html#variant.Yes" title="variant regex_automata::Anchored::Yes"><code>Anchored::Yes</code></a> if the
+given configuration was <a href="../../enum.Anchored.html#variant.No" title="variant regex_automata::Anchored::No"><code>Anchored::No</code></a> (which is the default).</p>
+<h5 id="panics"><a class="doc-anchor" href="#panics">§</a>Panics</h5>
+<p>This routine panics if the search could not complete. This can occur
+in the following circumstances:</p>
+<ul>
+<li>When the provided <code>Input</code> configuration is not supported. For
+example, by providing an unsupported anchor mode. Concretely,
+this occurs when using <a href="../../enum.Anchored.html#variant.Pattern" title="variant regex_automata::Anchored::Pattern"><code>Anchored::Pattern</code></a> without enabling
+<a href="struct.Config.html#method.starts_for_each_pattern" title="method regex_automata::dfa::onepass::Config::starts_for_each_pattern"><code>Config::starts_for_each_pattern</code></a>.</li>
+</ul>
+<p>When a search panics, callers cannot know whether a match exists or
+not.</p>
+<p>Use <a href="struct.DFA.html#method.try_search" title="method regex_automata::dfa::onepass::DFA::try_search"><code>DFA::try_search</code></a> if you want to handle these panics as error
+values instead.</p>
+<h5 id="example-9"><a class="doc-anchor" href="#example-9">§</a>Example</h5>
+<p>This shows basic usage:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::dfa::onepass::DFA;
+
+<span class="kw">let </span>re = DFA::new(<span class="string">"foo[0-9]+bar"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = re.create_cache();
+
+<span class="macro">assert!</span>(re.is_match(<span class="kw-2">&amp;mut </span>cache, <span class="string">"foo12345bar"</span>));
+<span class="macro">assert!</span>(!re.is_match(<span class="kw-2">&amp;mut </span>cache, <span class="string">"foobar"</span>));</code></pre></div>
+<h5 id="example-consistency-with-search-apis"><a class="doc-anchor" href="#example-consistency-with-search-apis">§</a>Example: consistency with search APIs</h5>
+<p><code>is_match</code> is guaranteed to return <code>true</code> whenever <code>captures</code> returns
+a match. This includes searches that are executed entirely within a
+codepoint:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{dfa::onepass::DFA, Input};
+
+<span class="kw">let </span>re = DFA::new(<span class="string">"a*"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = re.create_cache();
+
+<span class="macro">assert!</span>(!re.is_match(<span class="kw-2">&amp;mut </span>cache, Input::new(<span class="string">"☃"</span>).span(<span class="number">1</span>..<span class="number">2</span>)));</code></pre></div>
+<p>Notice that when UTF-8 mode is disabled, then the above reports a
+match because the restriction against zero-width matches that split a
+codepoint has been lifted:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{dfa::onepass::DFA, nfa::thompson::NFA, Input};
+
+<span class="kw">let </span>re = DFA::builder()
+    .thompson(NFA::config().utf8(<span class="bool-val">false</span>))
+    .build(<span class="string">"a*"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = re.create_cache();
+
+<span class="macro">assert!</span>(re.is_match(<span class="kw-2">&amp;mut </span>cache, Input::new(<span class="string">"☃"</span>).span(<span class="number">1</span>..<span class="number">2</span>)));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.find" class="method"><a class="src rightside" href="../../../src/regex_automata/dfa/onepass.rs.html#1692-1716">source</a><h4 class="code-header">pub fn <a href="#method.find" class="fn">find</a>&lt;'h, I: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="struct" href="../../struct.Input.html" title="struct regex_automata::Input">Input</a>&lt;'h&gt;&gt;&gt;(
+    &amp;self,
+    cache: &amp;mut <a class="struct" href="struct.Cache.html" title="struct regex_automata::dfa::onepass::Cache">Cache</a>,
+    input: I,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../../struct.Match.html" title="struct regex_automata::Match">Match</a>&gt;</h4></section></summary><div class="docblock"><p>Executes an anchored leftmost forward search, and returns a <code>Match</code> if
+and only if this one-pass DFA matches the given haystack.</p>
+<p>This routine only includes the overall match span. To get access to the
+individual spans of each capturing group, use <a href="struct.DFA.html#method.captures" title="method regex_automata::dfa::onepass::DFA::captures"><code>DFA::captures</code></a>.</p>
+<p>The given <code>Input</code> is forcefully set to use <a href="../../enum.Anchored.html#variant.Yes" title="variant regex_automata::Anchored::Yes"><code>Anchored::Yes</code></a> if the
+given configuration was <a href="../../enum.Anchored.html#variant.No" title="variant regex_automata::Anchored::No"><code>Anchored::No</code></a> (which is the default).</p>
+<h5 id="panics-1"><a class="doc-anchor" href="#panics-1">§</a>Panics</h5>
+<p>This routine panics if the search could not complete. This can occur
+in the following circumstances:</p>
+<ul>
+<li>When the provided <code>Input</code> configuration is not supported. For
+example, by providing an unsupported anchor mode. Concretely,
+this occurs when using <a href="../../enum.Anchored.html#variant.Pattern" title="variant regex_automata::Anchored::Pattern"><code>Anchored::Pattern</code></a> without enabling
+<a href="struct.Config.html#method.starts_for_each_pattern" title="method regex_automata::dfa::onepass::Config::starts_for_each_pattern"><code>Config::starts_for_each_pattern</code></a>.</li>
+</ul>
+<p>When a search panics, callers cannot know whether a match exists or
+not.</p>
+<p>Use <a href="struct.DFA.html#method.try_search" title="method regex_automata::dfa::onepass::DFA::try_search"><code>DFA::try_search</code></a> if you want to handle these panics as error
+values instead.</p>
+<h5 id="example-10"><a class="doc-anchor" href="#example-10">§</a>Example</h5>
+<p>Leftmost first match semantics corresponds to the match with the
+smallest starting offset, but where the end offset is determined by
+preferring earlier branches in the original regular expression. For
+example, <code>Sam|Samwise</code> will match <code>Sam</code> in <code>Samwise</code>, but <code>Samwise|Sam</code>
+will match <code>Samwise</code> in <code>Samwise</code>.</p>
+<p>Generally speaking, the “leftmost first” match is how most backtracking
+regular expressions tend to work. This is in contrast to POSIX-style
+regular expressions that yield “leftmost longest” matches. Namely,
+both <code>Sam|Samwise</code> and <code>Samwise|Sam</code> match <code>Samwise</code> when using
+leftmost longest semantics. (This crate does not currently support
+leftmost longest semantics.)</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{dfa::onepass::DFA, Match};
+
+<span class="kw">let </span>re = DFA::new(<span class="string">"foo[0-9]+"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = re.create_cache();
+<span class="kw">let </span>expected = Match::must(<span class="number">0</span>, <span class="number">0</span>..<span class="number">8</span>);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(expected), re.find(<span class="kw-2">&amp;mut </span>cache, <span class="string">"foo12345"</span>));
+
+<span class="comment">// Even though a match is found after reading the first byte (`a`),
+// the leftmost first match semantics demand that we find the earliest
+// match that prefers earlier parts of the pattern over later parts.
+</span><span class="kw">let </span>re = DFA::new(<span class="string">"abc|a"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = re.create_cache();
+<span class="kw">let </span>expected = Match::must(<span class="number">0</span>, <span class="number">0</span>..<span class="number">3</span>);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(expected), re.find(<span class="kw-2">&amp;mut </span>cache, <span class="string">"abc"</span>));
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.captures" class="method"><a class="src rightside" href="../../../src/regex_automata/dfa/onepass.rs.html#1765-1776">source</a><h4 class="code-header">pub fn <a href="#method.captures" class="fn">captures</a>&lt;'h, I: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="struct" href="../../struct.Input.html" title="struct regex_automata::Input">Input</a>&lt;'h&gt;&gt;&gt;(
+    &amp;self,
+    cache: &amp;mut <a class="struct" href="struct.Cache.html" title="struct regex_automata::dfa::onepass::Cache">Cache</a>,
+    input: I,
+    caps: &amp;mut <a class="struct" href="../../util/captures/struct.Captures.html" title="struct regex_automata::util::captures::Captures">Captures</a>,
+)</h4></section></summary><div class="docblock"><p>Executes an anchored leftmost forward search and writes the spans
+of capturing groups that participated in a match into the provided
+<a href="../../util/captures/struct.Captures.html" title="struct regex_automata::util::captures::Captures"><code>Captures</code></a> value. If no match was found, then <a href="../../util/captures/struct.Captures.html#method.is_match" title="method regex_automata::util::captures::Captures::is_match"><code>Captures::is_match</code></a>
+is guaranteed to return <code>false</code>.</p>
+<p>The given <code>Input</code> is forcefully set to use <a href="../../enum.Anchored.html#variant.Yes" title="variant regex_automata::Anchored::Yes"><code>Anchored::Yes</code></a> if the
+given configuration was <a href="../../enum.Anchored.html#variant.No" title="variant regex_automata::Anchored::No"><code>Anchored::No</code></a> (which is the default).</p>
+<h5 id="panics-2"><a class="doc-anchor" href="#panics-2">§</a>Panics</h5>
+<p>This routine panics if the search could not complete. This can occur
+in the following circumstances:</p>
+<ul>
+<li>When the provided <code>Input</code> configuration is not supported. For
+example, by providing an unsupported anchor mode. Concretely,
+this occurs when using <a href="../../enum.Anchored.html#variant.Pattern" title="variant regex_automata::Anchored::Pattern"><code>Anchored::Pattern</code></a> without enabling
+<a href="struct.Config.html#method.starts_for_each_pattern" title="method regex_automata::dfa::onepass::Config::starts_for_each_pattern"><code>Config::starts_for_each_pattern</code></a>.</li>
+</ul>
+<p>When a search panics, callers cannot know whether a match exists or
+not.</p>
+<p>Use <a href="struct.DFA.html#method.try_search" title="method regex_automata::dfa::onepass::DFA::try_search"><code>DFA::try_search</code></a> if you want to handle these panics as error
+values instead.</p>
+<h5 id="example-11"><a class="doc-anchor" href="#example-11">§</a>Example</h5>
+<p>This shows a simple example of a one-pass regex that extracts
+capturing group spans.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{dfa::onepass::DFA, Match, Span};
+
+<span class="kw">let </span>re = DFA::new(
+    <span class="comment">// Notice that we use ASCII here. The corresponding Unicode regex
+    // is sadly not one-pass.
+    </span><span class="string">"(?P&lt;first&gt;[[:alpha:]]+)[[:space:]]+(?P&lt;last&gt;[[:alpha:]]+)"</span>,
+)<span class="question-mark">?</span>;
+<span class="kw">let </span>(<span class="kw-2">mut </span>cache, <span class="kw-2">mut </span>caps) = (re.create_cache(), re.create_captures());
+
+re.captures(<span class="kw-2">&amp;mut </span>cache, <span class="string">"Bruce Springsteen"</span>, <span class="kw-2">&amp;mut </span>caps);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Match::must(<span class="number">0</span>, <span class="number">0</span>..<span class="number">17</span>)), caps.get_match());
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Span::from(<span class="number">0</span>..<span class="number">5</span>)), caps.get_group(<span class="number">1</span>));
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Span::from(<span class="number">6</span>..<span class="number">17</span>)), caps.get_group_by_name(<span class="string">"last"</span>));
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_search" class="method"><a class="src rightside" href="../../../src/regex_automata/dfa/onepass.rs.html#1887-1896">source</a><h4 class="code-header">pub fn <a href="#method.try_search" class="fn">try_search</a>(
+    &amp;self,
+    cache: &amp;mut <a class="struct" href="struct.Cache.html" title="struct regex_automata::dfa::onepass::Cache">Cache</a>,
+    input: &amp;<a class="struct" href="../../struct.Input.html" title="struct regex_automata::Input">Input</a>&lt;'_&gt;,
+    caps: &amp;mut <a class="struct" href="../../util/captures/struct.Captures.html" title="struct regex_automata::util::captures::Captures">Captures</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="struct" href="../../struct.MatchError.html" title="struct regex_automata::MatchError">MatchError</a>&gt;</h4></section></summary><div class="docblock"><p>Executes an anchored leftmost forward search and writes the spans
+of capturing groups that participated in a match into the provided
+<a href="../../util/captures/struct.Captures.html" title="struct regex_automata::util::captures::Captures"><code>Captures</code></a> value. If no match was found, then <a href="../../util/captures/struct.Captures.html#method.is_match" title="method regex_automata::util::captures::Captures::is_match"><code>Captures::is_match</code></a>
+is guaranteed to return <code>false</code>.</p>
+<p>The differences with <a href="struct.DFA.html#method.captures" title="method regex_automata::dfa::onepass::DFA::captures"><code>DFA::captures</code></a> are:</p>
+<ol>
+<li>This returns an error instead of panicking if the search fails.</li>
+<li>Accepts an <code>&amp;Input</code> instead of a <code>Into&lt;Input&gt;</code>. This permits reusing
+the same input for multiple searches, which <em>may</em> be important for
+latency.</li>
+<li>This does not automatically change the <a href="../../enum.Anchored.html" title="enum regex_automata::Anchored"><code>Anchored</code></a> mode from <code>No</code>
+to <code>Yes</code>. Instead, if <a href="../../struct.Input.html#method.anchored" title="method regex_automata::Input::anchored"><code>Input::anchored</code></a> is <code>Anchored::No</code>, then an
+error is returned.</li>
+</ol>
+<h5 id="errors"><a class="doc-anchor" href="#errors">§</a>Errors</h5>
+<p>This routine errors if the search could not complete. This can occur
+in the following circumstances:</p>
+<ul>
+<li>When the provided <code>Input</code> configuration is not supported. For
+example, by providing an unsupported anchor mode. Concretely,
+this occurs when using <a href="../../enum.Anchored.html#variant.Pattern" title="variant regex_automata::Anchored::Pattern"><code>Anchored::Pattern</code></a> without enabling
+<a href="struct.Config.html#method.starts_for_each_pattern" title="method regex_automata::dfa::onepass::Config::starts_for_each_pattern"><code>Config::starts_for_each_pattern</code></a>.</li>
+</ul>
+<p>When a search returns an error, callers cannot know whether a match
+exists or not.</p>
+<h5 id="example-specific-pattern-search"><a class="doc-anchor" href="#example-specific-pattern-search">§</a>Example: specific pattern search</h5>
+<p>This example shows how to build a multi-regex that permits searching
+for specific patterns. Note that this is somewhat less useful than
+in other regex engines, since a one-pass DFA by definition has no
+ambiguity about which pattern can match at a position. That is, if it
+were possible for two different patterns to match at the same starting
+position, then the multi-regex would not be one-pass and construction
+would have failed.</p>
+<p>Nevertheless, this can still be useful if you only care about matches
+for a specific pattern, and want the DFA to report “no match” even if
+some other pattern would have matched.</p>
+<p>Note that in order to make use of this functionality,
+<a href="struct.Config.html#method.starts_for_each_pattern" title="method regex_automata::dfa::onepass::Config::starts_for_each_pattern"><code>Config::starts_for_each_pattern</code></a> must be enabled. It is disabled
+by default since it may result in higher memory usage.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    dfa::onepass::DFA, Anchored, Input, Match, PatternID,
+};
+
+<span class="kw">let </span>re = DFA::builder()
+    .configure(DFA::config().starts_for_each_pattern(<span class="bool-val">true</span>))
+    .build_many(<span class="kw-2">&amp;</span>[<span class="string">"[a-z]+"</span>, <span class="string">"[0-9]+"</span>])<span class="question-mark">?</span>;
+<span class="kw">let </span>(<span class="kw-2">mut </span>cache, <span class="kw-2">mut </span>caps) = (re.create_cache(), re.create_captures());
+<span class="kw">let </span>haystack = <span class="string">"123abc"</span>;
+<span class="kw">let </span>input = Input::new(haystack).anchored(Anchored::Yes);
+
+<span class="comment">// A normal multi-pattern search will show pattern 1 matches.
+</span>re.try_search(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>input, <span class="kw-2">&amp;mut </span>caps)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Match::must(<span class="number">1</span>, <span class="number">0</span>..<span class="number">3</span>)), caps.get_match());
+
+<span class="comment">// If we only want to report pattern 0 matches, then we'll get no
+// match here.
+</span><span class="kw">let </span>input = input.anchored(Anchored::Pattern(PatternID::must(<span class="number">0</span>)));
+re.try_search(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>input, <span class="kw-2">&amp;mut </span>caps)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, caps.get_match());
+</code></pre></div>
+<h5 id="example-specifying-the-bounds-of-a-search"><a class="doc-anchor" href="#example-specifying-the-bounds-of-a-search">§</a>Example: specifying the bounds of a search</h5>
+<p>This example shows how providing the bounds of a search can produce
+different results than simply sub-slicing the haystack.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{dfa::onepass::DFA, Anchored, Input, Match};
+
+<span class="comment">// one-pass DFAs fully support Unicode word boundaries!
+// A sad joke is that a Unicode aware regex like \w+\s is not one-pass.
+// :-(
+</span><span class="kw">let </span>re = DFA::new(<span class="string">r"\b[0-9]{3}\b"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>(<span class="kw-2">mut </span>cache, <span class="kw-2">mut </span>caps) = (re.create_cache(), re.create_captures());
+<span class="kw">let </span>haystack = <span class="string">"foo123bar"</span>;
+
+<span class="comment">// Since we sub-slice the haystack, the search doesn't know about
+// the larger context and assumes that `123` is surrounded by word
+// boundaries. And of course, the match position is reported relative
+// to the sub-slice as well, which means we get `0..3` instead of
+// `3..6`.
+</span><span class="kw">let </span>expected = <span class="prelude-val">Some</span>(Match::must(<span class="number">0</span>, <span class="number">0</span>..<span class="number">3</span>));
+<span class="kw">let </span>input = Input::new(<span class="kw-2">&amp;</span>haystack[<span class="number">3</span>..<span class="number">6</span>]).anchored(Anchored::Yes);
+re.try_search(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>input, <span class="kw-2">&amp;mut </span>caps)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(expected, caps.get_match());
+
+<span class="comment">// But if we provide the bounds of the search within the context of the
+// entire haystack, then the search can take the surrounding context
+// into account. (And if we did find a match, it would be reported
+// as a valid offset into `haystack` instead of its sub-slice.)
+</span><span class="kw">let </span>expected = <span class="prelude-val">None</span>;
+<span class="kw">let </span>input = Input::new(haystack).range(<span class="number">3</span>..<span class="number">6</span>).anchored(Anchored::Yes);
+re.try_search(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>input, <span class="kw-2">&amp;mut </span>caps)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(expected, caps.get_match());
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_search_slots" class="method"><a class="src rightside" href="../../../src/regex_automata/dfa/onepass.rs.html#1971-2000">source</a><h4 class="code-header">pub fn <a href="#method.try_search_slots" class="fn">try_search_slots</a>(
+    &amp;self,
+    cache: &amp;mut <a class="struct" href="struct.Cache.html" title="struct regex_automata::dfa::onepass::Cache">Cache</a>,
+    input: &amp;<a class="struct" href="../../struct.Input.html" title="struct regex_automata::Input">Input</a>&lt;'_&gt;,
+    slots: &amp;mut [<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../../util/primitives/struct.NonMaxUsize.html" title="struct regex_automata::util::primitives::NonMaxUsize">NonMaxUsize</a>&gt;],
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../../struct.PatternID.html" title="struct regex_automata::PatternID">PatternID</a>&gt;, <a class="struct" href="../../struct.MatchError.html" title="struct regex_automata::MatchError">MatchError</a>&gt;</h4></section></summary><div class="docblock"><p>Executes an anchored leftmost forward search and writes the spans
+of capturing groups that participated in a match into the provided
+<code>slots</code>, and returns the matching pattern ID. The contents of the
+slots for patterns other than the matching pattern are unspecified. If
+no match was found, then <code>None</code> is returned and the contents of all
+<code>slots</code> is unspecified.</p>
+<p>This is like <a href="struct.DFA.html#method.try_search" title="method regex_automata::dfa::onepass::DFA::try_search"><code>DFA::try_search</code></a>, but it accepts a raw slots slice
+instead of a <code>Captures</code> value. This is useful in contexts where you
+don’t want or need to allocate a <code>Captures</code>.</p>
+<p>It is legal to pass <em>any</em> number of slots to this routine. If the regex
+engine would otherwise write a slot offset that doesn’t fit in the
+provided slice, then it is simply skipped. In general though, there are
+usually three slice lengths you might want to use:</p>
+<ul>
+<li>An empty slice, if you only care about which pattern matched.</li>
+<li>A slice with
+<a href="struct.DFA.html#method.pattern_len" title="method regex_automata::dfa::onepass::DFA::pattern_len"><code>pattern_len() * 2</code></a>
+slots, if you only care about the overall match spans for each matching
+pattern.</li>
+<li>A slice with
+<a href="../../util/captures/struct.GroupInfo.html#method.slot_len" title="method regex_automata::util::captures::GroupInfo::slot_len"><code>slot_len()</code></a> slots, which
+permits recording match offsets for every capturing group in every
+pattern.</li>
+</ul>
+<h5 id="errors-1"><a class="doc-anchor" href="#errors-1">§</a>Errors</h5>
+<p>This routine errors if the search could not complete. This can occur
+in the following circumstances:</p>
+<ul>
+<li>When the provided <code>Input</code> configuration is not supported. For
+example, by providing an unsupported anchor mode. Concretely,
+this occurs when using <a href="../../enum.Anchored.html#variant.Pattern" title="variant regex_automata::Anchored::Pattern"><code>Anchored::Pattern</code></a> without enabling
+<a href="struct.Config.html#method.starts_for_each_pattern" title="method regex_automata::dfa::onepass::Config::starts_for_each_pattern"><code>Config::starts_for_each_pattern</code></a>.</li>
+</ul>
+<p>When a search returns an error, callers cannot know whether a match
+exists or not.</p>
+<h5 id="example-12"><a class="doc-anchor" href="#example-12">§</a>Example</h5>
+<p>This example shows how to find the overall match offsets in a
+multi-pattern search without allocating a <code>Captures</code> value. Indeed, we
+can put our slots right on the stack.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{dfa::onepass::DFA, Anchored, Input, PatternID};
+
+<span class="kw">let </span>re = DFA::new_many(<span class="kw-2">&amp;</span>[
+    <span class="string">r"[a-zA-Z]+"</span>,
+    <span class="string">r"[0-9]+"</span>,
+])<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = re.create_cache();
+<span class="kw">let </span>input = Input::new(<span class="string">"123"</span>).anchored(Anchored::Yes);
+
+<span class="comment">// We only care about the overall match offsets here, so we just
+// allocate two slots for each pattern. Each slot records the start
+// and end of the match.
+</span><span class="kw">let </span><span class="kw-2">mut </span>slots = [<span class="prelude-val">None</span>; <span class="number">4</span>];
+<span class="kw">let </span>pid = re.try_search_slots(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>input, <span class="kw-2">&amp;mut </span>slots)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(PatternID::must(<span class="number">1</span>)), pid);
+
+<span class="comment">// The overall match offsets are always at 'pid * 2' and 'pid * 2 + 1'.
+// See 'GroupInfo' for more details on the mapping between groups and
+// slot indices.
+</span><span class="kw">let </span>slot_start = pid.unwrap().as_usize() * <span class="number">2</span>;
+<span class="kw">let </span>slot_end = slot_start + <span class="number">1</span>;
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="number">0</span>), slots[slot_start].map(|s| s.get()));
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="number">3</span>), slots[slot_end].map(|s| s.get()));
+</code></pre></div>
+</div></details></div></details></div><h2 id="trait-implementations" class="section-header">Trait Implementations<a href="#trait-implementations" class="anchor">§</a></h2><div id="trait-implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-Clone-for-DFA" class="impl"><a class="src rightside" href="../../../src/regex_automata/dfa/onepass.rs.html#1074">source</a><a href="#impl-Clone-for-DFA" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a> for <a class="struct" href="struct.DFA.html" title="struct regex_automata::dfa::onepass::DFA">DFA</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.clone" class="method trait-impl"><a class="src rightside" href="../../../src/regex_automata/dfa/onepass.rs.html#1074">source</a><a href="#method.clone" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#tymethod.clone" class="fn">clone</a>(&amp;self) -&gt; <a class="struct" href="struct.DFA.html" title="struct regex_automata::dfa::onepass::DFA">DFA</a></h4></section></summary><div class='docblock'>Returns a copy of the value. <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#tymethod.clone">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.clone_from" class="method trait-impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#172">source</a></span><a href="#method.clone_from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#method.clone_from" class="fn">clone_from</a>(&amp;mut self, source: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;Self</a>)</h4></section></summary><div class='docblock'>Performs copy-assignment from <code>source</code>. <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#method.clone_from">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Debug-for-DFA" class="impl"><a class="src rightside" href="../../../src/regex_automata/dfa/onepass.rs.html#2358-2435">source</a><a href="#impl-Debug-for-DFA" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html" title="trait core::fmt::Debug">Debug</a> for <a class="struct" href="struct.DFA.html" title="struct regex_automata::dfa::onepass::DFA">DFA</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.fmt" class="method trait-impl"><a class="src rightside" href="../../../src/regex_automata/dfa/onepass.rs.html#2359-2434">source</a><a href="#method.fmt" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html#tymethod.fmt" class="fn">fmt</a>(&amp;self, f: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/fmt/struct.Formatter.html" title="struct core::fmt::Formatter">Formatter</a>&lt;'_&gt;) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a></h4></section></summary><div class='docblock'>Formats the value using the given formatter. <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html#tymethod.fmt">Read more</a></div></details></div></details></div><h2 id="synthetic-implementations" class="section-header">Auto Trait Implementations<a href="#synthetic-implementations" class="anchor">§</a></h2><div id="synthetic-implementations-list"><section id="impl-Freeze-for-DFA" class="impl"><a href="#impl-Freeze-for-DFA" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Freeze.html" title="trait core::marker::Freeze">Freeze</a> for <a class="struct" href="struct.DFA.html" title="struct regex_automata::dfa::onepass::DFA">DFA</a></h3></section><section id="impl-RefUnwindSafe-for-DFA" class="impl"><a href="#impl-RefUnwindSafe-for-DFA" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/panic/unwind_safe/trait.RefUnwindSafe.html" title="trait core::panic::unwind_safe::RefUnwindSafe">RefUnwindSafe</a> for <a class="struct" href="struct.DFA.html" title="struct regex_automata::dfa::onepass::DFA">DFA</a></h3></section><section id="impl-Send-for-DFA" class="impl"><a href="#impl-Send-for-DFA" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> for <a class="struct" href="struct.DFA.html" title="struct regex_automata::dfa::onepass::DFA">DFA</a></h3></section><section id="impl-Sync-for-DFA" class="impl"><a href="#impl-Sync-for-DFA" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> for <a class="struct" href="struct.DFA.html" title="struct regex_automata::dfa::onepass::DFA">DFA</a></h3></section><section id="impl-Unpin-for-DFA" class="impl"><a href="#impl-Unpin-for-DFA" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a> for <a class="struct" href="struct.DFA.html" title="struct regex_automata::dfa::onepass::DFA">DFA</a></h3></section><section id="impl-UnwindSafe-for-DFA" class="impl"><a href="#impl-UnwindSafe-for-DFA" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/panic/unwind_safe/trait.UnwindSafe.html" title="trait core::panic::unwind_safe::UnwindSafe">UnwindSafe</a> for <a class="struct" href="struct.DFA.html" title="struct regex_automata::dfa::onepass::DFA">DFA</a></h3></section></div><h2 id="blanket-implementations" class="section-header">Blanket Implementations<a href="#blanket-implementations" class="anchor">§</a></h2><div id="blanket-implementations-list"><details class="toggle implementors-toggle"><summary><section id="impl-Any-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#140">source</a><a href="#impl-Any-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html" title="trait core::any::Any">Any</a> for T<div class="where">where
+    T: 'static + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.type_id" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#141">source</a><a href="#method.type_id" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html#tymethod.type_id" class="fn">type_id</a>(&amp;self) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/any/struct.TypeId.html" title="struct core::any::TypeId">TypeId</a></h4></section></summary><div class='docblock'>Gets the <code>TypeId</code> of <code>self</code>. <a href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html#tymethod.type_id">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Borrow%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#209">source</a><a href="#impl-Borrow%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html" title="trait core::borrow::Borrow">Borrow</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#211">source</a><a href="#method.borrow" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html#tymethod.borrow" class="fn">borrow</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a></h4></section></summary><div class='docblock'>Immutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html#tymethod.borrow">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-BorrowMut%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#217">source</a><a href="#impl-BorrowMut%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html" title="trait core::borrow::BorrowMut">BorrowMut</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow_mut" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#218">source</a><a href="#method.borrow_mut" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut" class="fn">borrow_mut</a>(&amp;mut self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a></h4></section></summary><div class='docblock'>Mutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-CloneToUninit-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#271">source</a><a href="#impl-CloneToUninit-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.CloneToUninit.html" title="trait core::clone::CloneToUninit">CloneToUninit</a> for T<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.clone_to_uninit" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#272">source</a><a href="#method.clone_to_uninit" class="anchor">§</a><h4 class="code-header">default unsafe fn <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.CloneToUninit.html#tymethod.clone_to_uninit" class="fn">clone_to_uninit</a>(&amp;self, dst: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.pointer.html">*mut T</a>)</h4></section></summary><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>clone_to_uninit</code>)</span></div></span><div class='docblock'>Performs copy-assignment from <code>self</code> to <code>dst</code>. <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.CloneToUninit.html#tymethod.clone_to_uninit">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-From%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#765">source</a><a href="#impl-From%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for T</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#768">source</a><a href="#method.from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html#tymethod.from" class="fn">from</a>(t: T) -&gt; T</h4></section></summary><div class="docblock"><p>Returns the argument unchanged.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Into%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#748-750">source</a><a href="#impl-Into%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#758">source</a><a href="#method.into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html#tymethod.into" class="fn">into</a>(self) -&gt; U</h4></section></summary><div class="docblock"><p>Calls <code>U::from(self)</code>.</p>
+<p>That is, this conversion is whatever the implementation of
+<code><a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for U</code> chooses to do.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-ToOwned-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#83-85">source</a><a href="#impl-ToOwned-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html" title="trait alloc::borrow::ToOwned">ToOwned</a> for T<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Owned" class="associatedtype trait-impl"><a href="#associatedtype.Owned" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#associatedtype.Owned" class="associatedtype">Owned</a> = T</h4></section></summary><div class='docblock'>The resulting type after obtaining ownership.</div></details><details class="toggle method-toggle" open><summary><section id="method.to_owned" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#88">source</a><a href="#method.to_owned" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#tymethod.to_owned" class="fn">to_owned</a>(&amp;self) -&gt; T</h4></section></summary><div class='docblock'>Creates owned data from borrowed data, usually by cloning. <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#tymethod.to_owned">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.clone_into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#92">source</a><a href="#method.clone_into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#method.clone_into" class="fn">clone_into</a>(&amp;self, target: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a>)</h4></section></summary><div class='docblock'>Uses borrowed data to replace owned data, usually by cloning. <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#method.clone_into">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryFrom%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#805-807">source</a><a href="#impl-TryFrom%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error" class="associatedtype trait-impl"><a href="#associatedtype.Error" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" class="associatedtype">Error</a> = <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/convert/enum.Infallible.html" title="enum core::convert::Infallible">Infallible</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#812">source</a><a href="#method.try_from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#tymethod.try_from" class="fn">try_from</a>(value: U) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, &lt;T as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryInto%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#790-792">source</a><a href="#impl-TryInto%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html" title="trait core::convert::TryInto">TryInto</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error-1" class="associatedtype trait-impl"><a href="#associatedtype.Error-1" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html#associatedtype.Error" class="associatedtype">Error</a> = &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#797">source</a><a href="#method.try_into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html#tymethod.try_into" class="fn">try_into</a>(self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;U, &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details></div></section></div></main></body></html>

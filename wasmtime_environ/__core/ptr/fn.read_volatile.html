@@ -1,0 +1,48 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Performs a volatile read of the value from `src` without moving it. This leaves the memory in `src` unchanged."><title>read_volatile in wasmtime_environ::__core::ptr - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="wasmtime_environ" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../wasmtime_environ/index.html">wasmtime_environ</a><span class="version">25.0.1</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In wasmtime_environ::__core::ptr</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../../index.html">wasmtime_environ</a>::<wbr><a href="../index.html">__core</a>::<wbr><a href="index.html">ptr</a>::<wbr><a class="fn" href="#">read_volatile</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><span class="since" title="Stable since Rust version 1.9.0">1.9.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/ptr/mod.rs.html#1695">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub unsafe fn read_volatile&lt;T&gt;(src: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.pointer.html">*const T</a>) -&gt; T</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Performs a volatile read of the value from <code>src</code> without moving it. This
+leaves the memory in <code>src</code> unchanged.</p>
+<p>Volatile operations are intended to act on I/O memory, and are guaranteed
+to not be elided or reordered by the compiler across other volatile
+operations.</p>
+<h2 id="notes"><a class="doc-anchor" href="#notes">§</a>Notes</h2>
+<p>Rust does not currently have a rigorously and formally defined memory model,
+so the precise semantics of what “volatile” means here is subject to change
+over time. That being said, the semantics will almost always end up pretty
+similar to <a href="http://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf">C11’s definition of volatile</a>.</p>
+<p>The compiler shouldn’t change the relative order or number of volatile
+memory operations. However, volatile memory operations on zero-sized types
+(e.g., if a zero-sized type is passed to <code>read_volatile</code>) are noops
+and may be ignored.</p>
+<h2 id="safety"><a class="doc-anchor" href="#safety">§</a>Safety</h2>
+<p>Behavior is undefined if any of the following conditions are violated:</p>
+<ul>
+<li>
+<p><code>src</code> must be <a href="index.html#safety" title="mod wasmtime_environ::__core::ptr">valid</a> for reads.</p>
+</li>
+<li>
+<p><code>src</code> must be properly aligned.</p>
+</li>
+<li>
+<p><code>src</code> must point to a properly initialized value of type <code>T</code>.</p>
+</li>
+</ul>
+<p>Like <a href="fn.read.html" title="fn wasmtime_environ::__core::ptr::read"><code>read</code></a>, <code>read_volatile</code> creates a bitwise copy of <code>T</code>, regardless of
+whether <code>T</code> is <a href="../marker/trait.Copy.html" title="trait wasmtime_environ::__core::marker::Copy"><code>Copy</code></a>. If <code>T</code> is not <a href="../marker/trait.Copy.html" title="trait wasmtime_environ::__core::marker::Copy"><code>Copy</code></a>, using both the returned
+value and the value at <code>*src</code> can <a href="fn.read.html#ownership-of-the-returned-value" title="fn wasmtime_environ::__core::ptr::read">violate memory safety</a>.
+However, storing non-<a href="../marker/trait.Copy.html" title="trait wasmtime_environ::__core::marker::Copy"><code>Copy</code></a> types in volatile memory is almost certainly
+incorrect.</p>
+<p>Note that even if <code>T</code> has size <code>0</code>, the pointer must be non-null and properly aligned.</p>
+<p>Just like in C, whether an operation is volatile has no bearing whatsoever
+on questions involving concurrent access from multiple threads. Volatile
+accesses behave exactly like non-atomic accesses in that regard. In particular,
+a race between a <code>read_volatile</code> and any write operation to the same location
+is undefined behavior.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Basic usage:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>x = <span class="number">12</span>;
+<span class="kw">let </span>y = <span class="kw-2">&amp;</span>x <span class="kw">as </span><span class="kw-2">*const </span>i32;
+
+<span class="kw">unsafe </span>{
+    <span class="macro">assert_eq!</span>(std::ptr::read_volatile(y), <span class="number">12</span>);
+}</code></pre></div>
+</div></details></section></div></main></body></html>

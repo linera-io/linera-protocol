@@ -1,0 +1,277 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Match multiple, possibly overlapping, regexes in a single search."><title>RegexSet in regex::bytes - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="regex" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc struct"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../regex/index.html">regex</a><span class="version">1.10.6</span></h2></div><h2 class="location"><a href="#">RegexSet</a></h2><div class="sidebar-elems"><section><h3><a href="#implementations">Methods</a></h3><ul class="block method"><li><a href="#method.empty">empty</a></li><li><a href="#method.is_empty">is_empty</a></li><li><a href="#method.is_match">is_match</a></li><li><a href="#method.is_match_at">is_match_at</a></li><li><a href="#method.len">len</a></li><li><a href="#method.matches">matches</a></li><li><a href="#method.matches_at">matches_at</a></li><li><a href="#method.new">new</a></li><li><a href="#method.patterns">patterns</a></li></ul><h3><a href="#trait-implementations">Trait Implementations</a></h3><ul class="block trait-implementation"><li><a href="#impl-Clone-for-RegexSet">Clone</a></li><li><a href="#impl-Debug-for-RegexSet">Debug</a></li><li><a href="#impl-Default-for-RegexSet">Default</a></li></ul><h3><a href="#synthetic-implementations">Auto Trait Implementations</a></h3><ul class="block synthetic-implementation"><li><a href="#impl-Freeze-for-RegexSet">Freeze</a></li><li><a href="#impl-RefUnwindSafe-for-RegexSet">RefUnwindSafe</a></li><li><a href="#impl-Send-for-RegexSet">Send</a></li><li><a href="#impl-Sync-for-RegexSet">Sync</a></li><li><a href="#impl-Unpin-for-RegexSet">Unpin</a></li><li><a href="#impl-UnwindSafe-for-RegexSet">UnwindSafe</a></li></ul><h3><a href="#blanket-implementations">Blanket Implementations</a></h3><ul class="block blanket-implementation"><li><a href="#impl-Any-for-T">Any</a></li><li><a href="#impl-Borrow%3CT%3E-for-T">Borrow&lt;T&gt;</a></li><li><a href="#impl-BorrowMut%3CT%3E-for-T">BorrowMut&lt;T&gt;</a></li><li><a href="#impl-CloneToUninit-for-T">CloneToUninit</a></li><li><a href="#impl-From%3CT%3E-for-T">From&lt;T&gt;</a></li><li><a href="#impl-Into%3CU%3E-for-T">Into&lt;U&gt;</a></li><li><a href="#impl-ToOwned-for-T">ToOwned</a></li><li><a href="#impl-TryFrom%3CU%3E-for-T">TryFrom&lt;U&gt;</a></li><li><a href="#impl-TryInto%3CU%3E-for-T">TryInto&lt;U&gt;</a></li></ul></section><h2><a href="index.html">In regex::bytes</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Struct <a href="../index.html">regex</a>::<wbr><a href="index.html">bytes</a>::<wbr><a class="struct" href="#">RegexSet</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/regex/regexset/bytes.rs.html#136-139">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub struct RegexSet { <span class="comment">/* private fields */</span> }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Match multiple, possibly overlapping, regexes in a single search.</p>
+<p>A regex set corresponds to the union of zero or more regular expressions.
+That is, a regex set will match a haystack when at least one of its
+constituent regexes matches. A regex set as its formulated here provides a
+touch more power: it will also report <em>which</em> regular expressions in the
+set match. Indeed, this is the key difference between regex sets and a
+single <code>Regex</code> with many alternates, since only one alternate can match at
+a time.</p>
+<p>For example, consider regular expressions to match email addresses and
+domains: <code>[a-z]+@[a-z]+\.(com|org|net)</code> and <code>[a-z]+\.(com|org|net)</code>. If a
+regex set is constructed from those regexes, then searching the haystack
+<code>foo@example.com</code> will report both regexes as matching. Of course, one
+could accomplish this by compiling each regex on its own and doing two
+searches over the haystack. The key advantage of using a regex set is
+that it will report the matching regexes using a <em>single pass through the
+haystack</em>. If one has hundreds or thousands of regexes to match repeatedly
+(like a URL router for a complex web application or a user agent matcher),
+then a regex set <em>can</em> realize huge performance gains.</p>
+<p>Unlike the top-level <a href="../struct.RegexSet.html" title="struct regex::RegexSet"><code>RegexSet</code></a>, this <code>RegexSet</code>
+searches haystacks with type <code>&amp;[u8]</code> instead of <code>&amp;str</code>. Consequently, this
+<code>RegexSet</code> is permitted to match invalid UTF-8.</p>
+<h2 id="limitations"><a class="doc-anchor" href="#limitations">§</a>Limitations</h2>
+<p>Regex sets are limited to answering the following two questions:</p>
+<ol>
+<li>Does any regex in the set match?</li>
+<li>If so, which regexes in the set match?</li>
+</ol>
+<p>As with the main <a href="struct.Regex.html" title="struct regex::bytes::Regex"><code>Regex</code></a> type, it is cheaper to ask
+(1) instead of (2) since the matching engines can stop after the first
+match is found.</p>
+<p>You cannot directly extract <a href="struct.Match.html" title="struct regex::bytes::Match"><code>Match</code></a> or
+<a href="struct.Captures.html" title="struct regex::bytes::Captures"><code>Captures</code></a> objects from a regex set. If you need
+these operations, the recommended approach is to compile each pattern in
+the set independently and scan the exact same haystack a second time with
+those independently compiled patterns:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex::bytes::{Regex, RegexSet};
+
+<span class="kw">let </span>patterns = [<span class="string">"foo"</span>, <span class="string">"bar"</span>];
+<span class="comment">// Both patterns will match different ranges of this string.
+</span><span class="kw">let </span>hay = <span class="string">b"barfoo"</span>;
+
+<span class="comment">// Compile a set matching any of our patterns.
+</span><span class="kw">let </span>set = RegexSet::new(patterns).unwrap();
+<span class="comment">// Compile each pattern independently.
+</span><span class="kw">let </span>regexes: Vec&lt;<span class="kw">_</span>&gt; = set
+    .patterns()
+    .iter()
+    .map(|pat| Regex::new(pat).unwrap())
+    .collect();
+
+<span class="comment">// Match against the whole set first and identify the individual
+// matching patterns.
+</span><span class="kw">let </span>matches: Vec&lt;<span class="kw-2">&amp;</span>[u8]&gt; = set
+    .matches(hay)
+    .into_iter()
+    <span class="comment">// Dereference the match index to get the corresponding
+    // compiled pattern.
+    </span>.map(|index| <span class="kw-2">&amp;</span>regexes[index])
+    <span class="comment">// To get match locations or any other info, we then have to search the
+    // exact same haystack again, using our separately-compiled pattern.
+    </span>.map(|re| re.find(hay).unwrap().as_bytes())
+    .collect();
+
+<span class="comment">// Matches arrive in the order the constituent patterns were declared,
+// not the order they appear in the haystack.
+</span><span class="macro">assert_eq!</span>(<span class="macro">vec!</span>[<span class="kw-2">&amp;</span><span class="string">b"foo"</span>[..], <span class="kw-2">&amp;</span><span class="string">b"bar"</span>[..]], matches);</code></pre></div>
+<h2 id="performance"><a class="doc-anchor" href="#performance">§</a>Performance</h2>
+<p>A <code>RegexSet</code> has the same performance characteristics as <code>Regex</code>. Namely,
+search takes <code>O(m * n)</code> time, where <code>m</code> is proportional to the size of the
+regex set and <code>n</code> is proportional to the length of the haystack.</p>
+<h2 id="trait-implementations-1"><a class="doc-anchor" href="#trait-implementations-1">§</a>Trait implementations</h2>
+<p>The <code>Default</code> trait is implemented for <code>RegexSet</code>. The default value
+is an empty set. An empty set can also be explicitly constructed via
+<a href="struct.RegexSet.html#method.empty" title="associated function regex::bytes::RegexSet::empty"><code>RegexSet::empty</code></a>.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<p>This shows how the above two regexes (for matching email addresses and
+domains) might work:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex::bytes::RegexSet;
+
+<span class="kw">let </span>set = RegexSet::new(<span class="kw-2">&amp;</span>[
+    <span class="string">r"[a-z]+@[a-z]+\.(com|org|net)"</span>,
+    <span class="string">r"[a-z]+\.(com|org|net)"</span>,
+]).unwrap();
+
+<span class="comment">// Ask whether any regexes in the set match.
+</span><span class="macro">assert!</span>(set.is_match(<span class="string">b"foo@example.com"</span>));
+
+<span class="comment">// Identify which regexes in the set match.
+</span><span class="kw">let </span>matches: Vec&lt;<span class="kw">_</span>&gt; = set.matches(<span class="string">b"foo@example.com"</span>).into_iter().collect();
+<span class="macro">assert_eq!</span>(<span class="macro">vec!</span>[<span class="number">0</span>, <span class="number">1</span>], matches);
+
+<span class="comment">// Try again, but with a haystack that only matches one of the regexes.
+</span><span class="kw">let </span>matches: Vec&lt;<span class="kw">_</span>&gt; = set.matches(<span class="string">b"example.com"</span>).into_iter().collect();
+<span class="macro">assert_eq!</span>(<span class="macro">vec!</span>[<span class="number">1</span>], matches);
+
+<span class="comment">// Try again, but with a haystack that doesn't match any regex in the set.
+</span><span class="kw">let </span>matches: Vec&lt;<span class="kw">_</span>&gt; = set.matches(<span class="string">b"example"</span>).into_iter().collect();
+<span class="macro">assert!</span>(matches.is_empty());</code></pre></div>
+<p>Note that it would be possible to adapt the above example to using <code>Regex</code>
+with an expression like:</p>
+<div class="example-wrap"><pre class="language-text"><code>(?P&lt;email&gt;[a-z]+@(?P&lt;email_domain&gt;[a-z]+[.](com|org|net)))|(?P&lt;domain&gt;[a-z]+[.](com|org|net))
+</code></pre></div>
+<p>After a match, one could then inspect the capture groups to figure out
+which alternates matched. The problem is that it is hard to make this
+approach scale when there are many regexes since the overlap between each
+alternate isn’t always obvious to reason about.</p>
+</div></details><h2 id="implementations" class="section-header">Implementations<a href="#implementations" class="anchor">§</a></h2><div id="implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-RegexSet" class="impl"><a class="src rightside" href="../../src/regex/regexset/bytes.rs.html#141-451">source</a><a href="#impl-RegexSet" class="anchor">§</a><h3 class="code-header">impl <a class="struct" href="struct.RegexSet.html" title="struct regex::bytes::RegexSet">RegexSet</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.new" class="method"><a class="src rightside" href="../../src/regex/regexset/bytes.rs.html#158-164">source</a><h4 class="code-header">pub fn <a href="#method.new" class="fn">new</a>&lt;I, S&gt;(exprs: I) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="struct.RegexSet.html" title="struct regex::bytes::RegexSet">RegexSet</a>, <a class="enum" href="../enum.Error.html" title="enum regex::Error">Error</a>&gt;<div class="where">where
+    S: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>&gt;,
+    I: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/iter/traits/collect/trait.IntoIterator.html" title="trait core::iter::traits::collect::IntoIterator">IntoIterator</a>&lt;Item = S&gt;,</div></h4></section></summary><div class="docblock"><p>Create a new regex set with the given regular expressions.</p>
+<p>This takes an iterator of <code>S</code>, where <code>S</code> is something that can produce
+a <code>&amp;str</code>. If any of the strings in the iterator are not valid regular
+expressions, then an error is returned.</p>
+<h5 id="example-1"><a class="doc-anchor" href="#example-1">§</a>Example</h5>
+<p>Create a new regex set from an iterator of strings:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex::bytes::RegexSet;
+
+<span class="kw">let </span>set = RegexSet::new([<span class="string">r"\w+"</span>, <span class="string">r"\d+"</span>]).unwrap();
+<span class="macro">assert!</span>(set.is_match(<span class="string">b"foo"</span>));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.empty" class="method"><a class="src rightside" href="../../src/regex/regexset/bytes.rs.html#183-186">source</a><h4 class="code-header">pub fn <a href="#method.empty" class="fn">empty</a>() -&gt; <a class="struct" href="struct.RegexSet.html" title="struct regex::bytes::RegexSet">RegexSet</a></h4></section></summary><div class="docblock"><p>Create a new empty regex set.</p>
+<p>An empty regex never matches anything.</p>
+<p>This is a convenience function for <code>RegexSet::new([])</code>, but doesn’t
+require one to specify the type of the input.</p>
+<h5 id="example-2"><a class="doc-anchor" href="#example-2">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex::bytes::RegexSet;
+
+<span class="kw">let </span>set = RegexSet::empty();
+<span class="macro">assert!</span>(set.is_empty());
+<span class="comment">// an empty set matches nothing
+</span><span class="macro">assert!</span>(!set.is_match(<span class="string">b""</span>));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.is_match" class="method"><a class="src rightside" href="../../src/regex/regexset/bytes.rs.html#214-216">source</a><h4 class="code-header">pub fn <a href="#method.is_match" class="fn">is_match</a>(&amp;self, haystack: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns true if and only if one of the regexes in this set matches
+the haystack given.</p>
+<p>This method should be preferred if you only need to test whether any
+of the regexes in the set should match, but don’t care about <em>which</em>
+regexes matched. This is because the underlying matching engine will
+quit immediately after seeing the first match instead of continuing to
+find all matches.</p>
+<p>Note that as with searches using <a href="struct.Regex.html" title="struct regex::bytes::Regex"><code>Regex</code></a>, the
+expression is unanchored by default. That is, if the regex does not
+start with <code>^</code> or <code>\A</code>, or end with <code>$</code> or <code>\z</code>, then it is permitted
+to match anywhere in the haystack.</p>
+<h5 id="example-3"><a class="doc-anchor" href="#example-3">§</a>Example</h5>
+<p>Tests whether a set matches somewhere in a haystack:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex::bytes::RegexSet;
+
+<span class="kw">let </span>set = RegexSet::new([<span class="string">r"\w+"</span>, <span class="string">r"\d+"</span>]).unwrap();
+<span class="macro">assert!</span>(set.is_match(<span class="string">b"foo"</span>));
+<span class="macro">assert!</span>(!set.is_match(<span class="string">"☃"</span>.as_bytes()));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.is_match_at" class="method"><a class="src rightside" href="../../src/regex/regexset/bytes.rs.html#248-250">source</a><h4 class="code-header">pub fn <a href="#method.is_match_at" class="fn">is_match_at</a>(&amp;self, haystack: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], start: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns true if and only if one of the regexes in this set matches the
+haystack given, with the search starting at the offset given.</p>
+<p>The significance of the starting point is that it takes the surrounding
+context into consideration. For example, the <code>\A</code> anchor can only
+match when <code>start == 0</code>.</p>
+<h5 id="panics"><a class="doc-anchor" href="#panics">§</a>Panics</h5>
+<p>This panics when <code>start &gt;= haystack.len() + 1</code>.</p>
+<h5 id="example-4"><a class="doc-anchor" href="#example-4">§</a>Example</h5>
+<p>This example shows the significance of <code>start</code>. Namely, consider a
+haystack <code>foobar</code> and a desire to execute a search starting at offset
+<code>3</code>. You could search a substring explicitly, but then the look-around
+assertions won’t work correctly. Instead, you can use this method to
+specify the start position of a search.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex::bytes::RegexSet;
+
+<span class="kw">let </span>set = RegexSet::new([<span class="string">r"\bbar\b"</span>, <span class="string">r"(?m)^bar$"</span>]).unwrap();
+<span class="kw">let </span>hay = <span class="string">b"foobar"</span>;
+<span class="comment">// We get a match here, but it's probably not intended.
+</span><span class="macro">assert!</span>(set.is_match(<span class="kw-2">&amp;</span>hay[<span class="number">3</span>..]));
+<span class="comment">// No match because the  assertions take the context into account.
+</span><span class="macro">assert!</span>(!set.is_match_at(hay, <span class="number">3</span>));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.matches" class="method"><a class="src rightside" href="../../src/regex/regexset/bytes.rs.html#291-293">source</a><h4 class="code-header">pub fn <a href="#method.matches" class="fn">matches</a>(&amp;self, haystack: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="struct" href="struct.SetMatches.html" title="struct regex::bytes::SetMatches">SetMatches</a></h4></section></summary><div class="docblock"><p>Returns the set of regexes that match in the given haystack.</p>
+<p>The set returned contains the index of each regex that matches in
+the given haystack. The index is in correspondence with the order of
+regular expressions given to <code>RegexSet</code>’s constructor.</p>
+<p>The set can also be used to iterate over the matched indices. The order
+of iteration is always ascending with respect to the matching indices.</p>
+<p>Note that as with searches using <a href="struct.Regex.html" title="struct regex::bytes::Regex"><code>Regex</code></a>, the
+expression is unanchored by default. That is, if the regex does not
+start with <code>^</code> or <code>\A</code>, or end with <code>$</code> or <code>\z</code>, then it is permitted
+to match anywhere in the haystack.</p>
+<h5 id="example-5"><a class="doc-anchor" href="#example-5">§</a>Example</h5>
+<p>Tests which regular expressions match the given haystack:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex::bytes::RegexSet;
+
+<span class="kw">let </span>set = RegexSet::new([
+    <span class="string">r"\w+"</span>,
+    <span class="string">r"\d+"</span>,
+    <span class="string">r"\pL+"</span>,
+    <span class="string">r"foo"</span>,
+    <span class="string">r"bar"</span>,
+    <span class="string">r"barfoo"</span>,
+    <span class="string">r"foobar"</span>,
+]).unwrap();
+<span class="kw">let </span>matches: Vec&lt;<span class="kw">_</span>&gt; = set.matches(<span class="string">b"foobar"</span>).into_iter().collect();
+<span class="macro">assert_eq!</span>(matches, <span class="macro">vec!</span>[<span class="number">0</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">6</span>]);
+
+<span class="comment">// You can also test whether a particular regex matched:
+</span><span class="kw">let </span>matches = set.matches(<span class="string">b"foobar"</span>);
+<span class="macro">assert!</span>(!matches.matched(<span class="number">5</span>));
+<span class="macro">assert!</span>(matches.matched(<span class="number">6</span>));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.matches_at" class="method"><a class="src rightside" href="../../src/regex/regexset/bytes.rs.html#329-334">source</a><h4 class="code-header">pub fn <a href="#method.matches_at" class="fn">matches_at</a>(&amp;self, haystack: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], start: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="struct" href="struct.SetMatches.html" title="struct regex::bytes::SetMatches">SetMatches</a></h4></section></summary><div class="docblock"><p>Returns the set of regexes that match in the given haystack.</p>
+<p>The set returned contains the index of each regex that matches in
+the given haystack. The index is in correspondence with the order of
+regular expressions given to <code>RegexSet</code>’s constructor.</p>
+<p>The set can also be used to iterate over the matched indices. The order
+of iteration is always ascending with respect to the matching indices.</p>
+<p>The significance of the starting point is that it takes the surrounding
+context into consideration. For example, the <code>\A</code> anchor can only
+match when <code>start == 0</code>.</p>
+<h5 id="panics-1"><a class="doc-anchor" href="#panics-1">§</a>Panics</h5>
+<p>This panics when <code>start &gt;= haystack.len() + 1</code>.</p>
+<h5 id="example-6"><a class="doc-anchor" href="#example-6">§</a>Example</h5>
+<p>Tests which regular expressions match the given haystack:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex::bytes::RegexSet;
+
+<span class="kw">let </span>set = RegexSet::new([<span class="string">r"\bbar\b"</span>, <span class="string">r"(?m)^bar$"</span>]).unwrap();
+<span class="kw">let </span>hay = <span class="string">b"foobar"</span>;
+<span class="comment">// We get matches here, but it's probably not intended.
+</span><span class="kw">let </span>matches: Vec&lt;<span class="kw">_</span>&gt; = set.matches(<span class="kw-2">&amp;</span>hay[<span class="number">3</span>..]).into_iter().collect();
+<span class="macro">assert_eq!</span>(matches, <span class="macro">vec!</span>[<span class="number">0</span>, <span class="number">1</span>]);
+<span class="comment">// No matches because the  assertions take the context into account.
+</span><span class="kw">let </span>matches: Vec&lt;<span class="kw">_</span>&gt; = set.matches_at(hay, <span class="number">3</span>).into_iter().collect();
+<span class="macro">assert_eq!</span>(matches, <span class="macro">vec!</span>[]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.len" class="method"><a class="src rightside" href="../../src/regex/regexset/bytes.rs.html#400-402">source</a><h4 class="code-header">pub fn <a href="#method.len" class="fn">len</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a></h4></section></summary><div class="docblock"><p>Returns the total number of regexes in this set.</p>
+<h5 id="example-7"><a class="doc-anchor" href="#example-7">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex::bytes::RegexSet;
+
+<span class="macro">assert_eq!</span>(<span class="number">0</span>, RegexSet::empty().len());
+<span class="macro">assert_eq!</span>(<span class="number">1</span>, RegexSet::new([<span class="string">r"[0-9]"</span>]).unwrap().len());
+<span class="macro">assert_eq!</span>(<span class="number">2</span>, RegexSet::new([<span class="string">r"[0-9]"</span>, <span class="string">r"[a-z]"</span>]).unwrap().len());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.is_empty" class="method"><a class="src rightside" href="../../src/regex/regexset/bytes.rs.html#415-417">source</a><h4 class="code-header">pub fn <a href="#method.is_empty" class="fn">is_empty</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns <code>true</code> if this set contains no regexes.</p>
+<h5 id="example-8"><a class="doc-anchor" href="#example-8">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex::bytes::RegexSet;
+
+<span class="macro">assert!</span>(RegexSet::empty().is_empty());
+<span class="macro">assert!</span>(!RegexSet::new([<span class="string">r"[0-9]"</span>]).unwrap().is_empty());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.patterns" class="method"><a class="src rightside" href="../../src/regex/regexset/bytes.rs.html#448-450">source</a><h4 class="code-header">pub fn <a href="#method.patterns" class="fn">patterns</a>(&amp;self) -&gt; &amp;[<a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>]</h4></section></summary><div class="docblock"><p>Returns the regex patterns that this regex set was constructed from.</p>
+<p>This function can be used to determine the pattern for a match. The
+slice returned has exactly as many patterns givens to this regex set,
+and the order of the slice is the same as the order of the patterns
+provided to the set.</p>
+<h5 id="example-9"><a class="doc-anchor" href="#example-9">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex::bytes::RegexSet;
+
+<span class="kw">let </span>set = RegexSet::new(<span class="kw-2">&amp;</span>[
+    <span class="string">r"\w+"</span>,
+    <span class="string">r"\d+"</span>,
+    <span class="string">r"\pL+"</span>,
+    <span class="string">r"foo"</span>,
+    <span class="string">r"bar"</span>,
+    <span class="string">r"barfoo"</span>,
+    <span class="string">r"foobar"</span>,
+]).unwrap();
+<span class="kw">let </span>matches: Vec&lt;<span class="kw">_</span>&gt; = set
+    .matches(<span class="string">b"foobar"</span>)
+    .into_iter()
+    .map(|index| <span class="kw-2">&amp;</span>set.patterns()[index])
+    .collect();
+<span class="macro">assert_eq!</span>(matches, <span class="macro">vec!</span>[<span class="string">r"\w+"</span>, <span class="string">r"\pL+"</span>, <span class="string">r"foo"</span>, <span class="string">r"bar"</span>, <span class="string">r"foobar"</span>]);</code></pre></div>
+</div></details></div></details></div><h2 id="trait-implementations" class="section-header">Trait Implementations<a href="#trait-implementations" class="anchor">§</a></h2><div id="trait-implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-Clone-for-RegexSet" class="impl"><a class="src rightside" href="../../src/regex/regexset/bytes.rs.html#135">source</a><a href="#impl-Clone-for-RegexSet" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a> for <a class="struct" href="struct.RegexSet.html" title="struct regex::bytes::RegexSet">RegexSet</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.clone" class="method trait-impl"><a class="src rightside" href="../../src/regex/regexset/bytes.rs.html#135">source</a><a href="#method.clone" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#tymethod.clone" class="fn">clone</a>(&amp;self) -&gt; <a class="struct" href="struct.RegexSet.html" title="struct regex::bytes::RegexSet">RegexSet</a></h4></section></summary><div class='docblock'>Returns a copy of the value. <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#tymethod.clone">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.clone_from" class="method trait-impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#172">source</a></span><a href="#method.clone_from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#method.clone_from" class="fn">clone_from</a>(&amp;mut self, source: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;Self</a>)</h4></section></summary><div class='docblock'>Performs copy-assignment from <code>source</code>. <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#method.clone_from">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Debug-for-RegexSet" class="impl"><a class="src rightside" href="../../src/regex/regexset/bytes.rs.html#706-710">source</a><a href="#impl-Debug-for-RegexSet" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html" title="trait core::fmt::Debug">Debug</a> for <a class="struct" href="struct.RegexSet.html" title="struct regex::bytes::RegexSet">RegexSet</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.fmt" class="method trait-impl"><a class="src rightside" href="../../src/regex/regexset/bytes.rs.html#707-709">source</a><a href="#method.fmt" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html#tymethod.fmt" class="fn">fmt</a>(&amp;self, f: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/fmt/struct.Formatter.html" title="struct core::fmt::Formatter">Formatter</a>&lt;'_&gt;) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a></h4></section></summary><div class='docblock'>Formats the value using the given formatter. <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html#tymethod.fmt">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Default-for-RegexSet" class="impl"><a class="src rightside" href="../../src/regex/regexset/bytes.rs.html#453-457">source</a><a href="#impl-Default-for-RegexSet" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/default/trait.Default.html" title="trait core::default::Default">Default</a> for <a class="struct" href="struct.RegexSet.html" title="struct regex::bytes::RegexSet">RegexSet</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.default" class="method trait-impl"><a class="src rightside" href="../../src/regex/regexset/bytes.rs.html#454-456">source</a><a href="#method.default" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/default/trait.Default.html#tymethod.default" class="fn">default</a>() -&gt; Self</h4></section></summary><div class='docblock'>Returns the “default value” for a type. <a href="https://doc.rust-lang.org/1.81.0/core/default/trait.Default.html#tymethod.default">Read more</a></div></details></div></details></div><h2 id="synthetic-implementations" class="section-header">Auto Trait Implementations<a href="#synthetic-implementations" class="anchor">§</a></h2><div id="synthetic-implementations-list"><section id="impl-Freeze-for-RegexSet" class="impl"><a href="#impl-Freeze-for-RegexSet" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Freeze.html" title="trait core::marker::Freeze">Freeze</a> for <a class="struct" href="struct.RegexSet.html" title="struct regex::bytes::RegexSet">RegexSet</a></h3></section><section id="impl-RefUnwindSafe-for-RegexSet" class="impl"><a href="#impl-RefUnwindSafe-for-RegexSet" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/panic/unwind_safe/trait.RefUnwindSafe.html" title="trait core::panic::unwind_safe::RefUnwindSafe">RefUnwindSafe</a> for <a class="struct" href="struct.RegexSet.html" title="struct regex::bytes::RegexSet">RegexSet</a></h3></section><section id="impl-Send-for-RegexSet" class="impl"><a href="#impl-Send-for-RegexSet" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> for <a class="struct" href="struct.RegexSet.html" title="struct regex::bytes::RegexSet">RegexSet</a></h3></section><section id="impl-Sync-for-RegexSet" class="impl"><a href="#impl-Sync-for-RegexSet" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> for <a class="struct" href="struct.RegexSet.html" title="struct regex::bytes::RegexSet">RegexSet</a></h3></section><section id="impl-Unpin-for-RegexSet" class="impl"><a href="#impl-Unpin-for-RegexSet" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a> for <a class="struct" href="struct.RegexSet.html" title="struct regex::bytes::RegexSet">RegexSet</a></h3></section><section id="impl-UnwindSafe-for-RegexSet" class="impl"><a href="#impl-UnwindSafe-for-RegexSet" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/panic/unwind_safe/trait.UnwindSafe.html" title="trait core::panic::unwind_safe::UnwindSafe">UnwindSafe</a> for <a class="struct" href="struct.RegexSet.html" title="struct regex::bytes::RegexSet">RegexSet</a></h3></section></div><h2 id="blanket-implementations" class="section-header">Blanket Implementations<a href="#blanket-implementations" class="anchor">§</a></h2><div id="blanket-implementations-list"><details class="toggle implementors-toggle"><summary><section id="impl-Any-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#140">source</a><a href="#impl-Any-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html" title="trait core::any::Any">Any</a> for T<div class="where">where
+    T: 'static + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.type_id" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#141">source</a><a href="#method.type_id" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html#tymethod.type_id" class="fn">type_id</a>(&amp;self) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/any/struct.TypeId.html" title="struct core::any::TypeId">TypeId</a></h4></section></summary><div class='docblock'>Gets the <code>TypeId</code> of <code>self</code>. <a href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html#tymethod.type_id">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Borrow%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#209">source</a><a href="#impl-Borrow%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html" title="trait core::borrow::Borrow">Borrow</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#211">source</a><a href="#method.borrow" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html#tymethod.borrow" class="fn">borrow</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a></h4></section></summary><div class='docblock'>Immutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html#tymethod.borrow">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-BorrowMut%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#217">source</a><a href="#impl-BorrowMut%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html" title="trait core::borrow::BorrowMut">BorrowMut</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow_mut" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#218">source</a><a href="#method.borrow_mut" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut" class="fn">borrow_mut</a>(&amp;mut self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a></h4></section></summary><div class='docblock'>Mutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-CloneToUninit-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#271">source</a><a href="#impl-CloneToUninit-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.CloneToUninit.html" title="trait core::clone::CloneToUninit">CloneToUninit</a> for T<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.clone_to_uninit" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#272">source</a><a href="#method.clone_to_uninit" class="anchor">§</a><h4 class="code-header">default unsafe fn <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.CloneToUninit.html#tymethod.clone_to_uninit" class="fn">clone_to_uninit</a>(&amp;self, dst: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.pointer.html">*mut T</a>)</h4></section></summary><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>clone_to_uninit</code>)</span></div></span><div class='docblock'>Performs copy-assignment from <code>self</code> to <code>dst</code>. <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.CloneToUninit.html#tymethod.clone_to_uninit">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-From%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#765">source</a><a href="#impl-From%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for T</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#768">source</a><a href="#method.from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html#tymethod.from" class="fn">from</a>(t: T) -&gt; T</h4></section></summary><div class="docblock"><p>Returns the argument unchanged.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Into%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#748-750">source</a><a href="#impl-Into%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#758">source</a><a href="#method.into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html#tymethod.into" class="fn">into</a>(self) -&gt; U</h4></section></summary><div class="docblock"><p>Calls <code>U::from(self)</code>.</p>
+<p>That is, this conversion is whatever the implementation of
+<code><a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for U</code> chooses to do.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-ToOwned-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#83-85">source</a><a href="#impl-ToOwned-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html" title="trait alloc::borrow::ToOwned">ToOwned</a> for T<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Owned" class="associatedtype trait-impl"><a href="#associatedtype.Owned" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#associatedtype.Owned" class="associatedtype">Owned</a> = T</h4></section></summary><div class='docblock'>The resulting type after obtaining ownership.</div></details><details class="toggle method-toggle" open><summary><section id="method.to_owned" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#88">source</a><a href="#method.to_owned" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#tymethod.to_owned" class="fn">to_owned</a>(&amp;self) -&gt; T</h4></section></summary><div class='docblock'>Creates owned data from borrowed data, usually by cloning. <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#tymethod.to_owned">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.clone_into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#92">source</a><a href="#method.clone_into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#method.clone_into" class="fn">clone_into</a>(&amp;self, target: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a>)</h4></section></summary><div class='docblock'>Uses borrowed data to replace owned data, usually by cloning. <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#method.clone_into">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryFrom%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#805-807">source</a><a href="#impl-TryFrom%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error" class="associatedtype trait-impl"><a href="#associatedtype.Error" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" class="associatedtype">Error</a> = <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/convert/enum.Infallible.html" title="enum core::convert::Infallible">Infallible</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#812">source</a><a href="#method.try_from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#tymethod.try_from" class="fn">try_from</a>(value: U) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, &lt;T as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryInto%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#790-792">source</a><a href="#impl-TryInto%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html" title="trait core::convert::TryInto">TryInto</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error-1" class="associatedtype trait-impl"><a href="#associatedtype.Error-1" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html#associatedtype.Error" class="associatedtype">Error</a> = &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#797">source</a><a href="#method.try_into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html#tymethod.try_into" class="fn">try_into</a>(self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;U, &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details></div></section></div></main></body></html>

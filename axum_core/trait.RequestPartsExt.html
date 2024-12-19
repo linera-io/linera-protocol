@@ -1,0 +1,107 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Extension trait that adds additional methods to `Parts`."><title>RequestPartsExt in axum_core - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="axum_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../axum_core/index.html">axum_core</a><span class="version">0.4.4</span></h2></div><h2 class="location"><a href="#">RequestPartsExt</a></h2><div class="sidebar-elems"><section><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.extract">extract</a></li><li><a href="#tymethod.extract_with_state">extract_with_state</a></li></ul><h3><a href="#foreign-impls">Implementations on Foreign Types</a></h3><ul class="block"><li><a href="#impl-RequestPartsExt-for-Parts">Parts</a></li></ul><h3><a href="#object-safety">Object Safety</a></h3><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In crate axum_core</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="index.html">axum_core</a>::<wbr><a class="trait" href="#">RequestPartsExt</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/axum_core/ext_traits/request_parts.rs.html#11-120">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub trait RequestPartsExt: Sealed + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a> {
+    // Required methods
+    fn <a href="#tymethod.extract" class="fn">extract</a>&lt;E&gt;(&amp;mut self) -&gt; <a class="type" href="../futures_core/future/type.BoxFuture.html" title="type futures_core::future::BoxFuture">BoxFuture</a>&lt;'_, <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;E, E::<a class="associatedtype" href="extract/trait.FromRequestParts.html#associatedtype.Rejection" title="type axum_core::extract::FromRequestParts::Rejection">Rejection</a>&gt;&gt;
+       <span class="where">where E: <a class="trait" href="extract/trait.FromRequestParts.html" title="trait axum_core::extract::FromRequestParts">FromRequestParts</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt; + 'static</span>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.extract_with_state" class="fn">extract_with_state</a>&lt;'a, E, S&gt;(
+        &amp;'a mut self,
+        state: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;'a S</a>,
+    ) -&gt; <a class="type" href="../futures_core/future/type.BoxFuture.html" title="type futures_core::future::BoxFuture">BoxFuture</a>&lt;'a, <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;E, E::<a class="associatedtype" href="extract/trait.FromRequestParts.html#associatedtype.Rejection" title="type axum_core::extract::FromRequestParts::Rejection">Rejection</a>&gt;&gt;
+       <span class="where">where E: <a class="trait" href="extract/trait.FromRequestParts.html" title="trait axum_core::extract::FromRequestParts">FromRequestParts</a>&lt;S&gt; + 'static,
+             S: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a></span>;
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Extension trait that adds additional methods to <a href="../http/request/struct.Parts.html" title="struct http::request::Parts"><code>Parts</code></a>.</p>
+</div></details><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.extract" class="method"><a class="src rightside" href="../src/axum_core/ext_traits/request_parts.rs.html#57-59">source</a><h4 class="code-header">fn <a href="#tymethod.extract" class="fn">extract</a>&lt;E&gt;(&amp;mut self) -&gt; <a class="type" href="../futures_core/future/type.BoxFuture.html" title="type futures_core::future::BoxFuture">BoxFuture</a>&lt;'_, <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;E, E::<a class="associatedtype" href="extract/trait.FromRequestParts.html#associatedtype.Rejection" title="type axum_core::extract::FromRequestParts::Rejection">Rejection</a>&gt;&gt;<div class="where">where
+    E: <a class="trait" href="extract/trait.FromRequestParts.html" title="trait axum_core::extract::FromRequestParts">FromRequestParts</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt; + 'static,</div></h4></section></summary><div class="docblock"><p>Apply an extractor to this <code>Parts</code>.</p>
+<p>This is just a convenience for <code>E::from_request_parts(parts, &amp;())</code>.</p>
+<h5 id="example"><a class="doc-anchor" href="#example">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>axum::{
+    extract::{Query, Path, FromRequestParts},
+    response::{Response, IntoResponse},
+    http::request::Parts,
+    RequestPartsExt,
+    async_trait,
+};
+<span class="kw">use </span>std::collections::HashMap;
+
+<span class="kw">struct </span>MyExtractor {
+    path_params: HashMap&lt;String, String&gt;,
+    query_params: HashMap&lt;String, String&gt;,
+}
+
+<span class="attr">#[async_trait]
+</span><span class="kw">impl</span>&lt;S&gt; FromRequestParts&lt;S&gt; <span class="kw">for </span>MyExtractor
+<span class="kw">where
+    </span>S: Send + Sync,
+{
+    <span class="kw">type </span>Rejection = Response;
+
+    <span class="kw">async fn </span>from_request_parts(parts: <span class="kw-2">&amp;mut </span>Parts, state: <span class="kw-2">&amp;</span>S) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Rejection&gt; {
+        <span class="kw">let </span>path_params = parts
+            .extract::&lt;Path&lt;HashMap&lt;String, String&gt;&gt;&gt;()
+            .<span class="kw">await
+            </span>.map(|Path(path_params)| path_params)
+            .map_err(|err| err.into_response())<span class="question-mark">?</span>;
+
+        <span class="kw">let </span>query_params = parts
+            .extract::&lt;Query&lt;HashMap&lt;String, String&gt;&gt;&gt;()
+            .<span class="kw">await
+            </span>.map(|Query(params)| params)
+            .map_err(|err| err.into_response())<span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>(MyExtractor { path_params, query_params })
+    }
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.extract_with_state" class="method"><a class="src rightside" href="../src/axum_core/ext_traits/request_parts.rs.html#113-119">source</a><h4 class="code-header">fn <a href="#tymethod.extract_with_state" class="fn">extract_with_state</a>&lt;'a, E, S&gt;(
+    &amp;'a mut self,
+    state: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;'a S</a>,
+) -&gt; <a class="type" href="../futures_core/future/type.BoxFuture.html" title="type futures_core::future::BoxFuture">BoxFuture</a>&lt;'a, <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;E, E::<a class="associatedtype" href="extract/trait.FromRequestParts.html#associatedtype.Rejection" title="type axum_core::extract::FromRequestParts::Rejection">Rejection</a>&gt;&gt;<div class="where">where
+    E: <a class="trait" href="extract/trait.FromRequestParts.html" title="trait axum_core::extract::FromRequestParts">FromRequestParts</a>&lt;S&gt; + 'static,
+    S: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a>,</div></h4></section></summary><div class="docblock"><p>Apply an extractor that requires some state to this <code>Parts</code>.</p>
+<p>This is just a convenience for <code>E::from_request_parts(parts, state)</code>.</p>
+<h5 id="example-1"><a class="doc-anchor" href="#example-1">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>axum::{
+    extract::{FromRef, FromRequestParts},
+    response::{Response, IntoResponse},
+    http::request::Parts,
+    RequestPartsExt,
+    async_trait,
+};
+
+<span class="kw">struct </span>MyExtractor {
+    requires_state: RequiresState,
+}
+
+<span class="attr">#[async_trait]
+</span><span class="kw">impl</span>&lt;S&gt; FromRequestParts&lt;S&gt; <span class="kw">for </span>MyExtractor
+<span class="kw">where
+    </span>String: FromRef&lt;S&gt;,
+    S: Send + Sync,
+{
+    <span class="kw">type </span>Rejection = std::convert::Infallible;
+
+    <span class="kw">async fn </span>from_request_parts(parts: <span class="kw-2">&amp;mut </span>Parts, state: <span class="kw-2">&amp;</span>S) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Rejection&gt; {
+        <span class="kw">let </span>requires_state = parts
+            .extract_with_state::&lt;RequiresState, <span class="kw">_</span>&gt;(state)
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>(MyExtractor { requires_state })
+    }
+}
+
+<span class="kw">struct </span>RequiresState { <span class="comment">/* ... */ </span>}
+
+<span class="comment">// some extractor that requires a `String` in the state
+</span><span class="attr">#[async_trait]
+</span><span class="kw">impl</span>&lt;S&gt; FromRequestParts&lt;S&gt; <span class="kw">for </span>RequiresState
+<span class="kw">where
+    </span>String: FromRef&lt;S&gt;,
+    S: Send + Sync,
+{
+    <span class="comment">// ...
+</span>}</code></pre></div>
+</div></details></div><h2 id="object-safety" class="section-header">Object Safety<a href="#object-safety" class="anchor">§</a></h2><div class="object-safety-info">This trait is <b>not</b> <a href="https://doc.rust-lang.org/1.81.0/reference/items/traits.html#object-safety">object safe</a>.</div><h2 id="foreign-impls" class="section-header">Implementations on Foreign Types<a href="#foreign-impls" class="anchor">§</a></h2><details class="toggle implementors-toggle"><summary><section id="impl-RequestPartsExt-for-Parts" class="impl"><a class="src rightside" href="../src/axum_core/ext_traits/request_parts.rs.html#122-140">source</a><a href="#impl-RequestPartsExt-for-Parts" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.RequestPartsExt.html" title="trait axum_core::RequestPartsExt">RequestPartsExt</a> for <a class="struct" href="../http/request/struct.Parts.html" title="struct http::request::Parts">Parts</a></h3></section></summary><div class="impl-items"><section id="method.extract" class="method trait-impl"><a class="src rightside" href="../src/axum_core/ext_traits/request_parts.rs.html#123-128">source</a><a href="#method.extract" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.extract" class="fn">extract</a>&lt;E&gt;(&amp;mut self) -&gt; <a class="type" href="../futures_core/future/type.BoxFuture.html" title="type futures_core::future::BoxFuture">BoxFuture</a>&lt;'_, <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;E, E::<a class="associatedtype" href="extract/trait.FromRequestParts.html#associatedtype.Rejection" title="type axum_core::extract::FromRequestParts::Rejection">Rejection</a>&gt;&gt;<div class="where">where
+    E: <a class="trait" href="extract/trait.FromRequestParts.html" title="trait axum_core::extract::FromRequestParts">FromRequestParts</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt; + 'static,</div></h4></section><section id="method.extract_with_state" class="method trait-impl"><a class="src rightside" href="../src/axum_core/ext_traits/request_parts.rs.html#130-139">source</a><a href="#method.extract_with_state" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.extract_with_state" class="fn">extract_with_state</a>&lt;'a, E, S&gt;(
+    &amp;'a mut self,
+    state: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;'a S</a>,
+) -&gt; <a class="type" href="../futures_core/future/type.BoxFuture.html" title="type futures_core::future::BoxFuture">BoxFuture</a>&lt;'a, <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;E, E::<a class="associatedtype" href="extract/trait.FromRequestParts.html#associatedtype.Rejection" title="type axum_core::extract::FromRequestParts::Rejection">Rejection</a>&gt;&gt;<div class="where">where
+    E: <a class="trait" href="extract/trait.FromRequestParts.html" title="trait axum_core::extract::FromRequestParts">FromRequestParts</a>&lt;S&gt; + 'static,
+    S: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a>,</div></h4></section></div></details><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"></div><script src="../trait.impl/axum_core/ext_traits/request_parts/trait.RequestPartsExt.js" data-ignore-extern-crates="http" async></script></section></div></main></body></html>

@@ -1,0 +1,3 @@
+(function() {var implementors = {
+"linera_alloy_sol_macro_expander":[["impl&lt;'ast&gt; <a class=\"trait\" href=\"linera_alloy_syn_solidity/visit/trait.Visit.html\" title=\"trait linera_alloy_syn_solidity::visit::Visit\">Visit</a>&lt;'ast&gt; for <a class=\"struct\" href=\"linera_alloy_sol_macro_expander/expand/struct.ExpCtxt.html\" title=\"struct linera_alloy_sol_macro_expander::expand::ExpCtxt\">ExpCtxt</a>&lt;'ast&gt;"]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

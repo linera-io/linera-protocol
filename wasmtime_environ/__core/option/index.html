@@ -1,0 +1,396 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Optional values."><title>wasmtime_environ::__core::option - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="wasmtime_environ" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../wasmtime_environ/index.html">wasmtime_environ</a><span class="version">25.0.1</span></h2></div><h2 class="location"><a href="#">Module option</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li></ul></section><h2><a href="../index.html">In wasmtime_environ::__core</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../../index.html">wasmtime_environ</a>::<wbr><a href="../index.html">__core</a>::<wbr><a class="mod" href="#">option</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/lib.rs.html#391">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Optional values.</p>
+<p>Type <a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option</code></a> represents an optional value: every <a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option</code></a>
+is either <a href="enum.Option.html#variant.Some" title="variant wasmtime_environ::__core::option::Option::Some"><code>Some</code></a> and contains a value, or <a href="enum.Option.html#variant.None" title="variant wasmtime_environ::__core::option::Option::None"><code>None</code></a>, and
+does not. <a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option</code></a> types are very common in Rust code, as
+they have a number of uses:</p>
+<ul>
+<li>Initial values</li>
+<li>Return values for functions that are not defined
+over their entire input range (partial functions)</li>
+<li>Return value for otherwise reporting simple errors, where <a href="enum.Option.html#variant.None" title="variant wasmtime_environ::__core::option::Option::None"><code>None</code></a> is
+returned on error</li>
+<li>Optional struct fields</li>
+<li>Struct fields that can be loaned or “taken”</li>
+<li>Optional function arguments</li>
+<li>Nullable pointers</li>
+<li>Swapping things out of difficult situations</li>
+</ul>
+<p><a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option</code></a>s are commonly paired with pattern matching to query the presence
+of a value and take action, always accounting for the <a href="enum.Option.html#variant.None" title="variant wasmtime_environ::__core::option::Option::None"><code>None</code></a> case.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>divide(numerator: f64, denominator: f64) -&gt; <span class="prelude-ty">Option</span>&lt;f64&gt; {
+    <span class="kw">if </span>denominator == <span class="number">0.0 </span>{
+        <span class="prelude-val">None
+    </span>} <span class="kw">else </span>{
+        <span class="prelude-val">Some</span>(numerator / denominator)
+    }
+}
+
+<span class="comment">// The return value of the function is an option
+</span><span class="kw">let </span>result = divide(<span class="number">2.0</span>, <span class="number">3.0</span>);
+
+<span class="comment">// Pattern match to retrieve the value
+</span><span class="kw">match </span>result {
+    <span class="comment">// The division was valid
+    </span><span class="prelude-val">Some</span>(x) =&gt; <span class="macro">println!</span>(<span class="string">"Result: {x}"</span>),
+    <span class="comment">// The division was invalid
+    </span><span class="prelude-val">None    </span>=&gt; <span class="macro">println!</span>(<span class="string">"Cannot divide by 0"</span>),
+}</code></pre></div>
+<h2 id="options-and-pointers-nullable-pointers"><a class="doc-anchor" href="#options-and-pointers-nullable-pointers">§</a>Options and pointers (“nullable” pointers)</h2>
+<p>Rust’s pointer types must always point to a valid location; there are
+no “null” references. Instead, Rust has <em>optional</em> pointers, like
+the optional owned box, <code><a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option">Option</a>&lt;<a href="../../std/boxed/struct.Box.html">Box&lt;T&gt;</a>&gt;</code>.</p>
+<p>The following example uses <a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option</code></a> to create an optional box of
+<a href="https://doc.rust-lang.org/1.81.0/std/primitive.i32.html" title="primitive i32"><code>i32</code></a>. Notice that in order to use the inner <a href="https://doc.rust-lang.org/1.81.0/std/primitive.i32.html" title="primitive i32"><code>i32</code></a> value, the
+<code>check_optional</code> function first needs to use pattern matching to
+determine whether the box has a value (i.e., it is <a href="enum.Option.html#variant.Some" title="variant wasmtime_environ::__core::option::Option::Some"><code>Some(...)</code></a>) or
+not (<a href="enum.Option.html#variant.None" title="variant wasmtime_environ::__core::option::Option::None"><code>None</code></a>).</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>optional = <span class="prelude-val">None</span>;
+check_optional(optional);
+
+<span class="kw">let </span>optional = <span class="prelude-val">Some</span>(Box::new(<span class="number">9000</span>));
+check_optional(optional);
+
+<span class="kw">fn </span>check_optional(optional: <span class="prelude-ty">Option</span>&lt;Box&lt;i32&gt;&gt;) {
+    <span class="kw">match </span>optional {
+        <span class="prelude-val">Some</span>(p) =&gt; <span class="macro">println!</span>(<span class="string">"has value {p}"</span>),
+        <span class="prelude-val">None </span>=&gt; <span class="macro">println!</span>(<span class="string">"has no value"</span>),
+    }
+}</code></pre></div>
+<h2 id="the-question-mark-operator-"><a class="doc-anchor" href="#the-question-mark-operator-">§</a>The question mark operator, <code>?</code></h2>
+<p>Similar to the <a href="../result/enum.Result.html" title="enum wasmtime_environ::__core::result::Result"><code>Result</code></a> type, when writing code that calls many functions that return the
+<a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option</code></a> type, handling <code>Some</code>/<code>None</code> can be tedious. The question mark
+operator, <a href="../ops/trait.Try.html" title="trait wasmtime_environ::__core::ops::Try"><code>?</code></a>, hides some of the boilerplate of propagating values
+up the call stack.</p>
+<p>It replaces this:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>add_last_numbers(stack: <span class="kw-2">&amp;mut </span>Vec&lt;i32&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;i32&gt; {
+    <span class="kw">let </span>a = stack.pop();
+    <span class="kw">let </span>b = stack.pop();
+
+    <span class="kw">match </span>(a, b) {
+        (<span class="prelude-val">Some</span>(x), <span class="prelude-val">Some</span>(y)) =&gt; <span class="prelude-val">Some</span>(x + y),
+        <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
+    }
+}
+</code></pre></div>
+<p>With this:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>add_last_numbers(stack: <span class="kw-2">&amp;mut </span>Vec&lt;i32&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;i32&gt; {
+    <span class="prelude-val">Some</span>(stack.pop()<span class="question-mark">? </span>+ stack.pop()<span class="question-mark">?</span>)
+}</code></pre></div>
+<p><em>It’s much nicer!</em></p>
+<p>Ending the expression with <a href="../ops/trait.Try.html" title="trait wasmtime_environ::__core::ops::Try"><code>?</code></a> will result in the <a href="enum.Option.html#variant.Some" title="variant wasmtime_environ::__core::option::Option::Some"><code>Some</code></a>’s unwrapped value, unless the
+result is <a href="enum.Option.html#variant.None" title="variant wasmtime_environ::__core::option::Option::None"><code>None</code></a>, in which case <a href="enum.Option.html#variant.None" title="variant wasmtime_environ::__core::option::Option::None"><code>None</code></a> is returned early from the enclosing function.</p>
+<p><a href="../ops/trait.Try.html" title="trait wasmtime_environ::__core::ops::Try"><code>?</code></a> can be used in functions that return <a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option</code></a> because of the
+early return of <a href="enum.Option.html#variant.None" title="variant wasmtime_environ::__core::option::Option::None"><code>None</code></a> that it provides.</p>
+<h2 id="representation"><a class="doc-anchor" href="#representation">§</a>Representation</h2>
+<p>Rust guarantees to optimize the following types <code>T</code> such that
+<a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option&lt;T&gt;</code></a> has the same size, alignment, and <a href="../primitive.fn.html#abi-compatibility">function call ABI</a> as <code>T</code>. In some
+of these cases, Rust further guarantees that
+<code>transmute::&lt;_, Option&lt;T&gt;&gt;([0u8; size_of::&lt;T&gt;()])</code> is sound and
+produces <code>Option::&lt;T&gt;::None</code>. These cases are identified by the
+second column:</p>
+<div><table><thead><tr><th><code>T</code></th><th><code>transmute::&lt;_, Option&lt;T&gt;&gt;([0u8; size_of::&lt;T&gt;()])</code> sound?</th></tr></thead><tbody>
+<tr><td><a href="../../std/boxed/struct.Box.html"><code>Box&lt;U&gt;</code></a> (specifically, only <code>Box&lt;U, Global&gt;</code>)</td><td>when <code>U: Sized</code></td></tr>
+<tr><td><code>&amp;U</code></td><td>when <code>U: Sized</code></td></tr>
+<tr><td><code>&amp;mut U</code></td><td>when <code>U: Sized</code></td></tr>
+<tr><td><code>fn</code>, <code>extern "C" fn</code><sup id="fnref1"><a href="#fn1">1</a></sup></td><td>always</td></tr>
+<tr><td><a href="../num/index.html" title="mod wasmtime_environ::__core::num"><code>num::NonZero*</code></a></td><td>always</td></tr>
+<tr><td><a href="../ptr/struct.NonNull.html" title="struct wasmtime_environ::__core::ptr::NonNull"><code>ptr::NonNull&lt;U&gt;</code></a></td><td>when <code>U: Sized</code></td></tr>
+<tr><td><code>#[repr(transparent)]</code> struct around one of the types in this list.</td><td>when it holds for the inner type</td></tr>
+</tbody></table>
+</div>
+<p>Under some conditions the above types <code>T</code> are also null pointer optimized when wrapped in a <a href="../result/index.html#representation" title="mod wasmtime_environ::__core::result"><code>Result</code></a>.</p>
+<p>This is called the “null pointer optimization” or NPO.</p>
+<p>It is further guaranteed that, for the cases above, one can
+<a href="../mem/fn.transmute.html" title="fn wasmtime_environ::__core::mem::transmute"><code>mem::transmute</code></a> from all valid values of <code>T</code> to <code>Option&lt;T&gt;</code> and
+from <code>Some::&lt;T&gt;(_)</code> to <code>T</code> (but transmuting <code>None::&lt;T&gt;</code> to <code>T</code>
+is undefined behaviour).</p>
+<h2 id="method-overview"><a class="doc-anchor" href="#method-overview">§</a>Method overview</h2>
+<p>In addition to working with pattern matching, <a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option</code></a> provides a wide
+variety of different methods.</p>
+<h3 id="querying-the-variant"><a class="doc-anchor" href="#querying-the-variant">§</a>Querying the variant</h3>
+<p>The <a href="enum.Option.html#method.is_some" title="method wasmtime_environ::__core::option::Option::is_some"><code>is_some</code></a> and <a href="enum.Option.html#method.is_none" title="method wasmtime_environ::__core::option::Option::is_none"><code>is_none</code></a> methods return <a href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html" title="primitive bool"><code>true</code></a> if the <a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option</code></a>
+is <a href="enum.Option.html#variant.Some" title="variant wasmtime_environ::__core::option::Option::Some"><code>Some</code></a> or <a href="enum.Option.html#variant.None" title="variant wasmtime_environ::__core::option::Option::None"><code>None</code></a>, respectively.</p>
+<h3 id="adapters-for-working-with-references"><a class="doc-anchor" href="#adapters-for-working-with-references">§</a>Adapters for working with references</h3>
+<ul>
+<li><a href="enum.Option.html#method.as_ref" title="method wasmtime_environ::__core::option::Option::as_ref"><code>as_ref</code></a> converts from <code><a href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html" title="shared reference">&amp;</a><a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option">Option</a>&lt;T&gt;</code> to <code><a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option">Option</a>&lt;<a href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html" title="shared reference">&amp;</a>T&gt;</code></li>
+<li><a href="enum.Option.html#method.as_mut" title="method wasmtime_environ::__core::option::Option::as_mut"><code>as_mut</code></a> converts from <code><a href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html" title="mutable reference">&amp;mut</a> <a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option">Option</a>&lt;T&gt;</code> to <code><a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option">Option</a>&lt;<a href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html" title="mutable reference">&amp;mut</a> T&gt;</code></li>
+<li><a href="enum.Option.html#method.as_deref" title="method wasmtime_environ::__core::option::Option::as_deref"><code>as_deref</code></a> converts from <code><a href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html" title="shared reference">&amp;</a><a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option">Option</a>&lt;T&gt;</code> to
+<code><a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option">Option</a>&lt;<a href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html" title="shared reference">&amp;</a>T::<a href="../ops/trait.Deref.html#associatedtype.Target" title="ops::Deref::Target">Target</a>&gt;</code></li>
+<li><a href="enum.Option.html#method.as_deref_mut" title="method wasmtime_environ::__core::option::Option::as_deref_mut"><code>as_deref_mut</code></a> converts from <code><a href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html" title="mutable reference">&amp;mut</a> <a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option">Option</a>&lt;T&gt;</code> to
+<code><a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option">Option</a>&lt;<a href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html" title="mutable reference">&amp;mut</a> T::<a href="../ops/trait.Deref.html#associatedtype.Target" title="ops::Deref::Target">Target</a>&gt;</code></li>
+<li><a href="enum.Option.html#method.as_pin_ref" title="method wasmtime_environ::__core::option::Option::as_pin_ref"><code>as_pin_ref</code></a> converts from <code><a href="../pin/struct.Pin.html" title="struct wasmtime_environ::__core::pin::Pin">Pin</a>&lt;<a href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html" title="shared reference">&amp;</a><a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option">Option</a>&lt;T&gt;&gt;</code> to
+<code><a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option">Option</a>&lt;<a href="../pin/struct.Pin.html" title="struct wasmtime_environ::__core::pin::Pin">Pin</a>&lt;<a href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html" title="shared reference">&amp;</a>T&gt;&gt;</code></li>
+<li><a href="enum.Option.html#method.as_pin_mut" title="method wasmtime_environ::__core::option::Option::as_pin_mut"><code>as_pin_mut</code></a> converts from <code><a href="../pin/struct.Pin.html" title="struct wasmtime_environ::__core::pin::Pin">Pin</a>&lt;<a href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html" title="mutable reference">&amp;mut</a> <a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option">Option</a>&lt;T&gt;&gt;</code> to
+<code><a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option">Option</a>&lt;<a href="../pin/struct.Pin.html" title="struct wasmtime_environ::__core::pin::Pin">Pin</a>&lt;<a href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html" title="mutable reference">&amp;mut</a> T&gt;&gt;</code></li>
+</ul>
+<h3 id="extracting-the-contained-value"><a class="doc-anchor" href="#extracting-the-contained-value">§</a>Extracting the contained value</h3>
+<p>These methods extract the contained value in an <a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option&lt;T&gt;</code></a> when it
+is the <a href="enum.Option.html#variant.Some" title="variant wasmtime_environ::__core::option::Option::Some"><code>Some</code></a> variant. If the <a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option</code></a> is <a href="enum.Option.html#variant.None" title="variant wasmtime_environ::__core::option::Option::None"><code>None</code></a>:</p>
+<ul>
+<li><a href="enum.Option.html#method.expect" title="method wasmtime_environ::__core::option::Option::expect"><code>expect</code></a> panics with a provided custom message</li>
+<li><a href="enum.Option.html#method.unwrap" title="method wasmtime_environ::__core::option::Option::unwrap"><code>unwrap</code></a> panics with a generic message</li>
+<li><a href="enum.Option.html#method.unwrap_or" title="method wasmtime_environ::__core::option::Option::unwrap_or"><code>unwrap_or</code></a> returns the provided default value</li>
+<li><a href="enum.Option.html#method.unwrap_or_default" title="method wasmtime_environ::__core::option::Option::unwrap_or_default"><code>unwrap_or_default</code></a> returns the default value of the type <code>T</code>
+(which must implement the <a href="../default/trait.Default.html" title="trait wasmtime_environ::__core::default::Default"><code>Default</code></a> trait)</li>
+<li><a href="enum.Option.html#method.unwrap_or_else" title="method wasmtime_environ::__core::option::Option::unwrap_or_else"><code>unwrap_or_else</code></a> returns the result of evaluating the provided
+function</li>
+</ul>
+<h3 id="transforming-contained-values"><a class="doc-anchor" href="#transforming-contained-values">§</a>Transforming contained values</h3>
+<p>These methods transform <a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option</code></a> to <a href="../result/enum.Result.html" title="enum wasmtime_environ::__core::result::Result"><code>Result</code></a>:</p>
+<ul>
+<li><a href="enum.Option.html#method.ok_or" title="method wasmtime_environ::__core::option::Option::ok_or"><code>ok_or</code></a> transforms <a href="enum.Option.html#variant.Some" title="variant wasmtime_environ::__core::option::Option::Some"><code>Some(v)</code></a> to <a href="../result/enum.Result.html#variant.Ok" title="variant wasmtime_environ::__core::result::Result::Ok"><code>Ok(v)</code></a>, and <a href="enum.Option.html#variant.None" title="variant wasmtime_environ::__core::option::Option::None"><code>None</code></a> to
+<a href="../result/enum.Result.html#variant.Err" title="variant wasmtime_environ::__core::result::Result::Err"><code>Err(err)</code></a> using the provided default <code>err</code> value</li>
+<li><a href="enum.Option.html#method.ok_or_else" title="method wasmtime_environ::__core::option::Option::ok_or_else"><code>ok_or_else</code></a> transforms <a href="enum.Option.html#variant.Some" title="variant wasmtime_environ::__core::option::Option::Some"><code>Some(v)</code></a> to <a href="../result/enum.Result.html#variant.Ok" title="variant wasmtime_environ::__core::result::Result::Ok"><code>Ok(v)</code></a>, and <a href="enum.Option.html#variant.None" title="variant wasmtime_environ::__core::option::Option::None"><code>None</code></a> to
+a value of <a href="../result/enum.Result.html#variant.Err" title="variant wasmtime_environ::__core::result::Result::Err"><code>Err</code></a> using the provided function</li>
+<li><a href="enum.Option.html#method.transpose" title="method wasmtime_environ::__core::option::Option::transpose"><code>transpose</code></a> transposes an <a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option</code></a> of a <a href="../result/enum.Result.html" title="enum wasmtime_environ::__core::result::Result"><code>Result</code></a> into a
+<a href="../result/enum.Result.html" title="enum wasmtime_environ::__core::result::Result"><code>Result</code></a> of an <a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option</code></a></li>
+</ul>
+<p>These methods transform the <a href="enum.Option.html#variant.Some" title="variant wasmtime_environ::__core::option::Option::Some"><code>Some</code></a> variant:</p>
+<ul>
+<li><a href="enum.Option.html#method.filter" title="method wasmtime_environ::__core::option::Option::filter"><code>filter</code></a> calls the provided predicate function on the contained
+value <code>t</code> if the <a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option</code></a> is <a href="enum.Option.html#variant.Some" title="variant wasmtime_environ::__core::option::Option::Some"><code>Some(t)</code></a>, and returns <a href="enum.Option.html#variant.Some" title="variant wasmtime_environ::__core::option::Option::Some"><code>Some(t)</code></a>
+if the function returns <code>true</code>; otherwise, returns <a href="enum.Option.html#variant.None" title="variant wasmtime_environ::__core::option::Option::None"><code>None</code></a></li>
+<li><a href="enum.Option.html#method.flatten" title="method wasmtime_environ::__core::option::Option::flatten"><code>flatten</code></a> removes one level of nesting from an
+<a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option&lt;Option&lt;T&gt;&gt;</code></a></li>
+<li><a href="enum.Option.html#method.map" title="method wasmtime_environ::__core::option::Option::map"><code>map</code></a> transforms <a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option&lt;T&gt;</code></a> to <a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option&lt;U&gt;</code></a> by applying the
+provided function to the contained value of <a href="enum.Option.html#variant.Some" title="variant wasmtime_environ::__core::option::Option::Some"><code>Some</code></a> and leaving
+<a href="enum.Option.html#variant.None" title="variant wasmtime_environ::__core::option::Option::None"><code>None</code></a> values unchanged</li>
+</ul>
+<p>These methods transform <a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option&lt;T&gt;</code></a> to a value of a possibly
+different type <code>U</code>:</p>
+<ul>
+<li><a href="enum.Option.html#method.map_or" title="method wasmtime_environ::__core::option::Option::map_or"><code>map_or</code></a> applies the provided function to the contained value of
+<a href="enum.Option.html#variant.Some" title="variant wasmtime_environ::__core::option::Option::Some"><code>Some</code></a>, or returns the provided default value if the <a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option</code></a> is
+<a href="enum.Option.html#variant.None" title="variant wasmtime_environ::__core::option::Option::None"><code>None</code></a></li>
+<li><a href="enum.Option.html#method.map_or_else" title="method wasmtime_environ::__core::option::Option::map_or_else"><code>map_or_else</code></a> applies the provided function to the contained value
+of <a href="enum.Option.html#variant.Some" title="variant wasmtime_environ::__core::option::Option::Some"><code>Some</code></a>, or returns the result of evaluating the provided
+fallback function if the <a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option</code></a> is <a href="enum.Option.html#variant.None" title="variant wasmtime_environ::__core::option::Option::None"><code>None</code></a></li>
+</ul>
+<p>These methods combine the <a href="enum.Option.html#variant.Some" title="variant wasmtime_environ::__core::option::Option::Some"><code>Some</code></a> variants of two <a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option</code></a> values:</p>
+<ul>
+<li><a href="enum.Option.html#method.zip" title="method wasmtime_environ::__core::option::Option::zip"><code>zip</code></a> returns <a href="enum.Option.html#variant.Some" title="variant wasmtime_environ::__core::option::Option::Some"><code>Some((s, o))</code></a> if <code>self</code> is <a href="enum.Option.html#variant.Some" title="variant wasmtime_environ::__core::option::Option::Some"><code>Some(s)</code></a> and the
+provided <a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option</code></a> value is <a href="enum.Option.html#variant.Some" title="variant wasmtime_environ::__core::option::Option::Some"><code>Some(o)</code></a>; otherwise, returns <a href="enum.Option.html#variant.None" title="variant wasmtime_environ::__core::option::Option::None"><code>None</code></a></li>
+<li><a href="enum.Option.html#method.zip_with" title="method wasmtime_environ::__core::option::Option::zip_with"><code>zip_with</code></a> calls the provided function <code>f</code> and returns
+<a href="enum.Option.html#variant.Some" title="variant wasmtime_environ::__core::option::Option::Some"><code>Some(f(s, o))</code></a> if <code>self</code> is <a href="enum.Option.html#variant.Some" title="variant wasmtime_environ::__core::option::Option::Some"><code>Some(s)</code></a> and the provided
+<a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option</code></a> value is <a href="enum.Option.html#variant.Some" title="variant wasmtime_environ::__core::option::Option::Some"><code>Some(o)</code></a>; otherwise, returns <a href="enum.Option.html#variant.None" title="variant wasmtime_environ::__core::option::Option::None"><code>None</code></a></li>
+</ul>
+<h3 id="boolean-operators"><a class="doc-anchor" href="#boolean-operators">§</a>Boolean operators</h3>
+<p>These methods treat the <a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option</code></a> as a boolean value, where <a href="enum.Option.html#variant.Some" title="variant wasmtime_environ::__core::option::Option::Some"><code>Some</code></a>
+acts like <a href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html" title="primitive bool"><code>true</code></a> and <a href="enum.Option.html#variant.None" title="variant wasmtime_environ::__core::option::Option::None"><code>None</code></a> acts like <a href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html" title="primitive bool"><code>false</code></a>. There are two
+categories of these methods: ones that take an <a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option</code></a> as input, and
+ones that take a function as input (to be lazily evaluated).</p>
+<p>The <a href="enum.Option.html#method.and" title="method wasmtime_environ::__core::option::Option::and"><code>and</code></a>, <a href="enum.Option.html#method.or" title="method wasmtime_environ::__core::option::Option::or"><code>or</code></a>, and <a href="enum.Option.html#method.xor" title="method wasmtime_environ::__core::option::Option::xor"><code>xor</code></a> methods take another <a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option</code></a> as
+input, and produce an <a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option</code></a> as output. Only the <a href="enum.Option.html#method.and" title="method wasmtime_environ::__core::option::Option::and"><code>and</code></a> method can
+produce an <a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option&lt;U&gt;</code></a> value having a different inner type <code>U</code> than
+<a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option&lt;T&gt;</code></a>.</p>
+<div><table><thead><tr><th>method</th><th>self</th><th>input</th><th>output</th></tr></thead><tbody>
+<tr><td><a href="enum.Option.html#method.and" title="method wasmtime_environ::__core::option::Option::and"><code>and</code></a></td><td><code>None</code></td><td>(ignored)</td><td><code>None</code></td></tr>
+<tr><td><a href="enum.Option.html#method.and" title="method wasmtime_environ::__core::option::Option::and"><code>and</code></a></td><td><code>Some(x)</code></td><td><code>None</code></td><td><code>None</code></td></tr>
+<tr><td><a href="enum.Option.html#method.and" title="method wasmtime_environ::__core::option::Option::and"><code>and</code></a></td><td><code>Some(x)</code></td><td><code>Some(y)</code></td><td><code>Some(y)</code></td></tr>
+<tr><td><a href="enum.Option.html#method.or" title="method wasmtime_environ::__core::option::Option::or"><code>or</code></a></td><td><code>None</code></td><td><code>None</code></td><td><code>None</code></td></tr>
+<tr><td><a href="enum.Option.html#method.or" title="method wasmtime_environ::__core::option::Option::or"><code>or</code></a></td><td><code>None</code></td><td><code>Some(y)</code></td><td><code>Some(y)</code></td></tr>
+<tr><td><a href="enum.Option.html#method.or" title="method wasmtime_environ::__core::option::Option::or"><code>or</code></a></td><td><code>Some(x)</code></td><td>(ignored)</td><td><code>Some(x)</code></td></tr>
+<tr><td><a href="enum.Option.html#method.xor" title="method wasmtime_environ::__core::option::Option::xor"><code>xor</code></a></td><td><code>None</code></td><td><code>None</code></td><td><code>None</code></td></tr>
+<tr><td><a href="enum.Option.html#method.xor" title="method wasmtime_environ::__core::option::Option::xor"><code>xor</code></a></td><td><code>None</code></td><td><code>Some(y)</code></td><td><code>Some(y)</code></td></tr>
+<tr><td><a href="enum.Option.html#method.xor" title="method wasmtime_environ::__core::option::Option::xor"><code>xor</code></a></td><td><code>Some(x)</code></td><td><code>None</code></td><td><code>Some(x)</code></td></tr>
+<tr><td><a href="enum.Option.html#method.xor" title="method wasmtime_environ::__core::option::Option::xor"><code>xor</code></a></td><td><code>Some(x)</code></td><td><code>Some(y)</code></td><td><code>None</code></td></tr>
+</tbody></table>
+</div>
+<p>The <a href="enum.Option.html#method.and_then" title="method wasmtime_environ::__core::option::Option::and_then"><code>and_then</code></a> and <a href="enum.Option.html#method.or_else" title="method wasmtime_environ::__core::option::Option::or_else"><code>or_else</code></a> methods take a function as input, and
+only evaluate the function when they need to produce a new value. Only
+the <a href="enum.Option.html#method.and_then" title="method wasmtime_environ::__core::option::Option::and_then"><code>and_then</code></a> method can produce an <a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option&lt;U&gt;</code></a> value having a
+different inner type <code>U</code> than <a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option&lt;T&gt;</code></a>.</p>
+<div><table><thead><tr><th>method</th><th>self</th><th>function input</th><th>function result</th><th>output</th></tr></thead><tbody>
+<tr><td><a href="enum.Option.html#method.and_then" title="method wasmtime_environ::__core::option::Option::and_then"><code>and_then</code></a></td><td><code>None</code></td><td>(not provided)</td><td>(not evaluated)</td><td><code>None</code></td></tr>
+<tr><td><a href="enum.Option.html#method.and_then" title="method wasmtime_environ::__core::option::Option::and_then"><code>and_then</code></a></td><td><code>Some(x)</code></td><td><code>x</code></td><td><code>None</code></td><td><code>None</code></td></tr>
+<tr><td><a href="enum.Option.html#method.and_then" title="method wasmtime_environ::__core::option::Option::and_then"><code>and_then</code></a></td><td><code>Some(x)</code></td><td><code>x</code></td><td><code>Some(y)</code></td><td><code>Some(y)</code></td></tr>
+<tr><td><a href="enum.Option.html#method.or_else" title="method wasmtime_environ::__core::option::Option::or_else"><code>or_else</code></a></td><td><code>None</code></td><td>(not provided)</td><td><code>None</code></td><td><code>None</code></td></tr>
+<tr><td><a href="enum.Option.html#method.or_else" title="method wasmtime_environ::__core::option::Option::or_else"><code>or_else</code></a></td><td><code>None</code></td><td>(not provided)</td><td><code>Some(y)</code></td><td><code>Some(y)</code></td></tr>
+<tr><td><a href="enum.Option.html#method.or_else" title="method wasmtime_environ::__core::option::Option::or_else"><code>or_else</code></a></td><td><code>Some(x)</code></td><td>(not provided)</td><td>(not evaluated)</td><td><code>Some(x)</code></td></tr>
+</tbody></table>
+</div>
+<p>This is an example of using methods like <a href="enum.Option.html#method.and_then" title="method wasmtime_environ::__core::option::Option::and_then"><code>and_then</code></a> and <a href="enum.Option.html#method.or" title="method wasmtime_environ::__core::option::Option::or"><code>or</code></a> in a
+pipeline of method calls. Early stages of the pipeline pass failure
+values (<a href="enum.Option.html#variant.None" title="variant wasmtime_environ::__core::option::Option::None"><code>None</code></a>) through unchanged, and continue processing on
+success values (<a href="enum.Option.html#variant.Some" title="variant wasmtime_environ::__core::option::Option::Some"><code>Some</code></a>). Toward the end, <a href="enum.Option.html#method.or" title="method wasmtime_environ::__core::option::Option::or"><code>or</code></a> substitutes an error
+message if it receives <a href="enum.Option.html#variant.None" title="variant wasmtime_environ::__core::option::Option::None"><code>None</code></a>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span><span class="kw-2">mut </span>bt = BTreeMap::new();
+bt.insert(<span class="number">20u8</span>, <span class="string">"foo"</span>);
+bt.insert(<span class="number">42u8</span>, <span class="string">"bar"</span>);
+<span class="kw">let </span>res = [<span class="number">0u8</span>, <span class="number">1</span>, <span class="number">11</span>, <span class="number">200</span>, <span class="number">22</span>]
+    .into_iter()
+    .map(|x| {
+        <span class="comment">// `checked_sub()` returns `None` on error
+        </span>x.checked_sub(<span class="number">1</span>)
+            <span class="comment">// same with `checked_mul()`
+            </span>.and_then(|x| x.checked_mul(<span class="number">2</span>))
+            <span class="comment">// `BTreeMap::get` returns `None` on error
+            </span>.and_then(|x| bt.get(<span class="kw-2">&amp;</span>x))
+            <span class="comment">// Substitute an error message if we have `None` so far
+            </span>.or(<span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span><span class="string">"error!"</span>))
+            .copied()
+            <span class="comment">// Won't panic because we unconditionally used `Some` above
+            </span>.unwrap()
+    })
+    .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+<span class="macro">assert_eq!</span>(res, [<span class="string">"error!"</span>, <span class="string">"error!"</span>, <span class="string">"foo"</span>, <span class="string">"error!"</span>, <span class="string">"bar"</span>]);</code></pre></div>
+<h3 id="comparison-operators"><a class="doc-anchor" href="#comparison-operators">§</a>Comparison operators</h3>
+<p>If <code>T</code> implements <a href="../cmp/trait.PartialOrd.html" title="trait wasmtime_environ::__core::cmp::PartialOrd"><code>PartialOrd</code></a> then <a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option&lt;T&gt;</code></a> will derive its
+<a href="../cmp/trait.PartialOrd.html" title="trait wasmtime_environ::__core::cmp::PartialOrd"><code>PartialOrd</code></a> implementation.  With this order, <a href="enum.Option.html#variant.None" title="variant wasmtime_environ::__core::option::Option::None"><code>None</code></a> compares as
+less than any <a href="enum.Option.html#variant.Some" title="variant wasmtime_environ::__core::option::Option::Some"><code>Some</code></a>, and two <a href="enum.Option.html#variant.Some" title="variant wasmtime_environ::__core::option::Option::Some"><code>Some</code></a> compare the same way as their
+contained values would in <code>T</code>.  If <code>T</code> also implements
+<a href="../cmp/trait.Ord.html" title="trait wasmtime_environ::__core::cmp::Ord"><code>Ord</code></a>, then so does <a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option&lt;T&gt;</code></a>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">assert!</span>(<span class="prelude-val">None </span>&lt; <span class="prelude-val">Some</span>(<span class="number">0</span>));
+<span class="macro">assert!</span>(<span class="prelude-val">Some</span>(<span class="number">0</span>) &lt; <span class="prelude-val">Some</span>(<span class="number">1</span>));</code></pre></div>
+<h3 id="iterating-over-option"><a class="doc-anchor" href="#iterating-over-option">§</a>Iterating over <code>Option</code></h3>
+<p>An <a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option</code></a> can be iterated over. This can be helpful if you need an
+iterator that is conditionally empty. The iterator will either produce
+a single value (when the <a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option</code></a> is <a href="enum.Option.html#variant.Some" title="variant wasmtime_environ::__core::option::Option::Some"><code>Some</code></a>), or produce no values
+(when the <a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option</code></a> is <a href="enum.Option.html#variant.None" title="variant wasmtime_environ::__core::option::Option::None"><code>None</code></a>). For example, <a href="enum.Option.html#method.into_iter" title="method wasmtime_environ::__core::option::Option::into_iter"><code>into_iter</code></a> acts like
+<a href="../iter/fn.once.html" title="fn wasmtime_environ::__core::iter::once"><code>once(v)</code></a> if the <a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option</code></a> is <a href="enum.Option.html#variant.Some" title="variant wasmtime_environ::__core::option::Option::Some"><code>Some(v)</code></a>, and like <a href="../iter/fn.empty.html" title="fn wasmtime_environ::__core::iter::empty"><code>empty()</code></a> if
+the <a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option</code></a> is <a href="enum.Option.html#variant.None" title="variant wasmtime_environ::__core::option::Option::None"><code>None</code></a>.</p>
+<p>Iterators over <a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option&lt;T&gt;</code></a> come in three types:</p>
+<ul>
+<li><a href="enum.Option.html#method.into_iter" title="method wasmtime_environ::__core::option::Option::into_iter"><code>into_iter</code></a> consumes the <a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option</code></a> and produces the contained
+value</li>
+<li><a href="enum.Option.html#method.iter" title="method wasmtime_environ::__core::option::Option::iter"><code>iter</code></a> produces an immutable reference of type <code>&amp;T</code> to the
+contained value</li>
+<li><a href="enum.Option.html#method.iter_mut" title="method wasmtime_environ::__core::option::Option::iter_mut"><code>iter_mut</code></a> produces a mutable reference of type <code>&amp;mut T</code> to the
+contained value</li>
+</ul>
+<p>An iterator over <a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option</code></a> can be useful when chaining iterators, for
+example, to conditionally insert items. (It’s not always necessary to
+explicitly call an iterator constructor: many <a href="../iter/trait.Iterator.html" title="trait wasmtime_environ::__core::iter::Iterator"><code>Iterator</code></a> methods that
+accept other iterators will also accept iterable types that implement
+<a href="../iter/trait.IntoIterator.html" title="trait wasmtime_environ::__core::iter::IntoIterator"><code>IntoIterator</code></a>, which includes <a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option</code></a>.)</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>yep = <span class="prelude-val">Some</span>(<span class="number">42</span>);
+<span class="kw">let </span>nope = <span class="prelude-val">None</span>;
+<span class="comment">// chain() already calls into_iter(), so we don't have to do so
+</span><span class="kw">let </span>nums: Vec&lt;i32&gt; = (<span class="number">0</span>..<span class="number">4</span>).chain(yep).chain(<span class="number">4</span>..<span class="number">8</span>).collect();
+<span class="macro">assert_eq!</span>(nums, [<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">42</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>, <span class="number">7</span>]);
+<span class="kw">let </span>nums: Vec&lt;i32&gt; = (<span class="number">0</span>..<span class="number">4</span>).chain(nope).chain(<span class="number">4</span>..<span class="number">8</span>).collect();
+<span class="macro">assert_eq!</span>(nums, [<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>, <span class="number">7</span>]);</code></pre></div>
+<p>One reason to chain iterators in this way is that a function returning
+<code>impl Iterator</code> must have all possible return values be of the same
+concrete type. Chaining an iterated <a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option</code></a> can help with that.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>make_iter(do_insert: bool) -&gt; <span class="kw">impl </span>Iterator&lt;Item = i32&gt; {
+    <span class="comment">// Explicit returns to illustrate return types matching
+    </span><span class="kw">match </span>do_insert {
+        <span class="bool-val">true </span>=&gt; <span class="kw">return </span>(<span class="number">0</span>..<span class="number">4</span>).chain(<span class="prelude-val">Some</span>(<span class="number">42</span>)).chain(<span class="number">4</span>..<span class="number">8</span>),
+        <span class="bool-val">false </span>=&gt; <span class="kw">return </span>(<span class="number">0</span>..<span class="number">4</span>).chain(<span class="prelude-val">None</span>).chain(<span class="number">4</span>..<span class="number">8</span>),
+    }
+}
+<span class="macro">println!</span>(<span class="string">"{:?}"</span>, make_iter(<span class="bool-val">true</span>).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;());
+<span class="macro">println!</span>(<span class="string">"{:?}"</span>, make_iter(<span class="bool-val">false</span>).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;());</code></pre></div>
+<p>If we try to do the same thing, but using <a href="../iter/fn.once.html" title="fn wasmtime_environ::__core::iter::once"><code>once()</code></a> and <a href="../iter/fn.empty.html" title="fn wasmtime_environ::__core::iter::empty"><code>empty()</code></a>,
+we can’t return <code>impl Iterator</code> anymore because the concrete types of
+the return values differ.</p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="comment">// This won't compile because all possible returns from the function
+// must have the same concrete type.
+</span><span class="kw">fn </span>make_iter(do_insert: bool) -&gt; <span class="kw">impl </span>Iterator&lt;Item = i32&gt; {
+    <span class="comment">// Explicit returns to illustrate return types not matching
+    </span><span class="kw">match </span>do_insert {
+        <span class="bool-val">true </span>=&gt; <span class="kw">return </span>(<span class="number">0</span>..<span class="number">4</span>).chain(once(<span class="number">42</span>)).chain(<span class="number">4</span>..<span class="number">8</span>),
+        <span class="bool-val">false </span>=&gt; <span class="kw">return </span>(<span class="number">0</span>..<span class="number">4</span>).chain(empty()).chain(<span class="number">4</span>..<span class="number">8</span>),
+    }
+}</code></pre></div>
+<h3 id="collecting-into-option"><a class="doc-anchor" href="#collecting-into-option">§</a>Collecting into <code>Option</code></h3>
+<p><a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option</code></a> implements the <a href="enum.Option.html#impl-FromIterator%3COption%3CA%3E%3E-for-Option%3CV%3E" title="enum wasmtime_environ::__core::option::Option"><code>FromIterator</code></a> trait,
+which allows an iterator over <a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option</code></a> values to be collected into an
+<a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option</code></a> of a collection of each contained value of the original
+<a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option</code></a> values, or <a href="enum.Option.html#variant.None" title="variant wasmtime_environ::__core::option::Option::None"><code>None</code></a> if any of the elements was <a href="enum.Option.html#variant.None" title="variant wasmtime_environ::__core::option::Option::None"><code>None</code></a>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>v = [<span class="prelude-val">Some</span>(<span class="number">2</span>), <span class="prelude-val">Some</span>(<span class="number">4</span>), <span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(<span class="number">8</span>)];
+<span class="kw">let </span>res: <span class="prelude-ty">Option</span>&lt;Vec&lt;<span class="kw">_</span>&gt;&gt; = v.into_iter().collect();
+<span class="macro">assert_eq!</span>(res, <span class="prelude-val">None</span>);
+<span class="kw">let </span>v = [<span class="prelude-val">Some</span>(<span class="number">2</span>), <span class="prelude-val">Some</span>(<span class="number">4</span>), <span class="prelude-val">Some</span>(<span class="number">8</span>)];
+<span class="kw">let </span>res: <span class="prelude-ty">Option</span>&lt;Vec&lt;<span class="kw">_</span>&gt;&gt; = v.into_iter().collect();
+<span class="macro">assert_eq!</span>(res, <span class="prelude-val">Some</span>(<span class="macro">vec!</span>[<span class="number">2</span>, <span class="number">4</span>, <span class="number">8</span>]));</code></pre></div>
+<p><a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option</code></a> also implements the <a href="enum.Option.html#impl-Product%3COption%3CU%3E%3E-for-Option%3CT%3E" title="enum wasmtime_environ::__core::option::Option"><code>Product</code></a> and
+<a href="enum.Option.html#impl-Sum%3COption%3CU%3E%3E-for-Option%3CT%3E" title="enum wasmtime_environ::__core::option::Option"><code>Sum</code></a> traits, allowing an iterator over <a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option</code></a> values
+to provide the <a href="../iter/trait.Iterator.html#method.product" title="method wasmtime_environ::__core::iter::Iterator::product"><code>product</code></a> and
+<a href="../iter/trait.Iterator.html#method.sum" title="method wasmtime_environ::__core::iter::Iterator::sum"><code>sum</code></a> methods.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>v = [<span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(<span class="number">1</span>), <span class="prelude-val">Some</span>(<span class="number">2</span>), <span class="prelude-val">Some</span>(<span class="number">3</span>)];
+<span class="kw">let </span>res: <span class="prelude-ty">Option</span>&lt;i32&gt; = v.into_iter().sum();
+<span class="macro">assert_eq!</span>(res, <span class="prelude-val">None</span>);
+<span class="kw">let </span>v = [<span class="prelude-val">Some</span>(<span class="number">1</span>), <span class="prelude-val">Some</span>(<span class="number">2</span>), <span class="prelude-val">Some</span>(<span class="number">21</span>)];
+<span class="kw">let </span>res: <span class="prelude-ty">Option</span>&lt;i32&gt; = v.into_iter().product();
+<span class="macro">assert_eq!</span>(res, <span class="prelude-val">Some</span>(<span class="number">42</span>));</code></pre></div>
+<h3 id="modifying-an-option-in-place"><a class="doc-anchor" href="#modifying-an-option-in-place">§</a>Modifying an <a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option</code></a> in-place</h3>
+<p>These methods return a mutable reference to the contained value of an
+<a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option&lt;T&gt;</code></a>:</p>
+<ul>
+<li><a href="enum.Option.html#method.insert" title="method wasmtime_environ::__core::option::Option::insert"><code>insert</code></a> inserts a value, dropping any old contents</li>
+<li><a href="enum.Option.html#method.get_or_insert" title="method wasmtime_environ::__core::option::Option::get_or_insert"><code>get_or_insert</code></a> gets the current value, inserting a provided
+default value if it is <a href="enum.Option.html#variant.None" title="variant wasmtime_environ::__core::option::Option::None"><code>None</code></a></li>
+<li><a href="enum.Option.html#method.get_or_insert_default" title="method wasmtime_environ::__core::option::Option::get_or_insert_default"><code>get_or_insert_default</code></a> gets the current value, inserting the
+default value of type <code>T</code> (which must implement <a href="../default/trait.Default.html" title="trait wasmtime_environ::__core::default::Default"><code>Default</code></a>) if it is
+<a href="enum.Option.html#variant.None" title="variant wasmtime_environ::__core::option::Option::None"><code>None</code></a></li>
+<li><a href="enum.Option.html#method.get_or_insert_with" title="method wasmtime_environ::__core::option::Option::get_or_insert_with"><code>get_or_insert_with</code></a> gets the current value, inserting a default
+computed by the provided function if it is <a href="enum.Option.html#variant.None" title="variant wasmtime_environ::__core::option::Option::None"><code>None</code></a></li>
+</ul>
+<p>These methods transfer ownership of the contained value of an
+<a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option</code></a>:</p>
+<ul>
+<li><a href="enum.Option.html#method.take" title="method wasmtime_environ::__core::option::Option::take"><code>take</code></a> takes ownership of the contained value of an <a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option</code></a>, if
+any, replacing the <a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option</code></a> with <a href="enum.Option.html#variant.None" title="variant wasmtime_environ::__core::option::Option::None"><code>None</code></a></li>
+<li><a href="enum.Option.html#method.replace" title="method wasmtime_environ::__core::option::Option::replace"><code>replace</code></a> takes ownership of the contained value of an <a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option</code></a>,
+if any, replacing the <a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option</code></a> with a <a href="enum.Option.html#variant.Some" title="variant wasmtime_environ::__core::option::Option::Some"><code>Some</code></a> containing the
+provided value</li>
+</ul>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Basic pattern matching on <a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option</code></a>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>msg = <span class="prelude-val">Some</span>(<span class="string">"howdy"</span>);
+
+<span class="comment">// Take a reference to the contained string
+</span><span class="kw">if let </span><span class="prelude-val">Some</span>(m) = <span class="kw-2">&amp;</span>msg {
+    <span class="macro">println!</span>(<span class="string">"{}"</span>, <span class="kw-2">*</span>m);
+}
+
+<span class="comment">// Remove the contained string, destroying the Option
+</span><span class="kw">let </span>unwrapped_msg = msg.unwrap_or(<span class="string">"default message"</span>);</code></pre></div>
+<p>Initialize a result to <a href="enum.Option.html#variant.None" title="variant wasmtime_environ::__core::option::Option::None"><code>None</code></a> before a loop:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">enum </span>Kingdom { Plant(u32, <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str), Animal(u32, <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str) }
+
+<span class="comment">// A list of data to search through.
+</span><span class="kw">let </span>all_the_big_things = [
+    Kingdom::Plant(<span class="number">250</span>, <span class="string">"redwood"</span>),
+    Kingdom::Plant(<span class="number">230</span>, <span class="string">"noble fir"</span>),
+    Kingdom::Plant(<span class="number">229</span>, <span class="string">"sugar pine"</span>),
+    Kingdom::Animal(<span class="number">25</span>, <span class="string">"blue whale"</span>),
+    Kingdom::Animal(<span class="number">19</span>, <span class="string">"fin whale"</span>),
+    Kingdom::Animal(<span class="number">15</span>, <span class="string">"north pacific right whale"</span>),
+];
+
+<span class="comment">// We're going to search for the name of the biggest animal,
+// but to start with we've just got `None`.
+</span><span class="kw">let </span><span class="kw-2">mut </span>name_of_biggest_animal = <span class="prelude-val">None</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>size_of_biggest_animal = <span class="number">0</span>;
+<span class="kw">for </span>big_thing <span class="kw">in </span><span class="kw-2">&amp;</span>all_the_big_things {
+    <span class="kw">match </span><span class="kw-2">*</span>big_thing {
+        Kingdom::Animal(size, name) <span class="kw">if </span>size &gt; size_of_biggest_animal =&gt; {
+            <span class="comment">// Now we've found the name of some big animal
+            </span>size_of_biggest_animal = size;
+            name_of_biggest_animal = <span class="prelude-val">Some</span>(name);
+        }
+        Kingdom::Animal(..) | Kingdom::Plant(..) =&gt; ()
+    }
+}
+
+<span class="kw">match </span>name_of_biggest_animal {
+    <span class="prelude-val">Some</span>(name) =&gt; <span class="macro">println!</span>(<span class="string">"the biggest animal is {name}"</span>),
+    <span class="prelude-val">None </span>=&gt; <span class="macro">println!</span>(<span class="string">"there are no animals :("</span>),
+}</code></pre></div>
+<div class="footnotes"><hr><ol><li id="fn1"><p>this remains true for any argument/return types and any other ABI: <code>extern "abi" fn</code> (<em>e.g.</em>, <code>extern "system" fn</code>)&nbsp;<a href="#fnref1">↩</a></p></li></ol></div></div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.IntoIter.html" title="struct wasmtime_environ::__core::option::IntoIter">IntoIter</a></div><div class="desc docblock-short">An iterator over the value in <a href="enum.Option.html#variant.Some" title="variant wasmtime_environ::__core::option::Option::Some"><code>Some</code></a> variant of an <a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.Iter.html" title="struct wasmtime_environ::__core::option::Iter">Iter</a></div><div class="desc docblock-short">An iterator over a reference to the <a href="enum.Option.html#variant.Some" title="variant wasmtime_environ::__core::option::Option::Some"><code>Some</code></a> variant of an <a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.IterMut.html" title="struct wasmtime_environ::__core::option::IterMut">IterMut</a></div><div class="desc docblock-short">An iterator over a mutable reference to the <a href="enum.Option.html#variant.Some" title="variant wasmtime_environ::__core::option::Option::Some"><code>Some</code></a> variant of an <a href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option</code></a>.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.Option.html" title="enum wasmtime_environ::__core::option::Option">Option</a></div><div class="desc docblock-short">The <code>Option</code> type. See <a href="index.html" title="mod wasmtime_environ::__core::option">the module level documentation</a> for more.</div></li></ul></section></div></main></body></html>

@@ -1,0 +1,94 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Reads the value from `src` without moving it. This leaves the memory in `src` unchanged."><title>read in wasmtime_environ::__core::ptr - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="wasmtime_environ" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../wasmtime_environ/index.html">wasmtime_environ</a><span class="version">25.0.1</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In wasmtime_environ::__core::ptr</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../../index.html">wasmtime_environ</a>::<wbr><a href="../index.html">__core</a>::<wbr><a href="index.html">ptr</a>::<wbr><a class="fn" href="#">read</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><span class="since" title="Stable since Rust version 1.0.0, const since 1.71.0">1.0.0 (const: 1.71.0)</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/ptr/mod.rs.html#1287">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub const unsafe fn read&lt;T&gt;(src: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.pointer.html">*const T</a>) -&gt; T</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Reads the value from <code>src</code> without moving it. This leaves the
+memory in <code>src</code> unchanged.</p>
+<h2 id="safety"><a class="doc-anchor" href="#safety">§</a>Safety</h2>
+<p>Behavior is undefined if any of the following conditions are violated:</p>
+<ul>
+<li>
+<p><code>src</code> must be <a href="index.html#safety" title="mod wasmtime_environ::__core::ptr">valid</a> for reads.</p>
+</li>
+<li>
+<p><code>src</code> must be properly aligned. Use <a href="fn.read_unaligned.html" title="fn wasmtime_environ::__core::ptr::read_unaligned"><code>read_unaligned</code></a> if this is not the
+case.</p>
+</li>
+<li>
+<p><code>src</code> must point to a properly initialized value of type <code>T</code>.</p>
+</li>
+</ul>
+<p>Note that even if <code>T</code> has size <code>0</code>, the pointer must be non-null and properly aligned.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Basic usage:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>x = <span class="number">12</span>;
+<span class="kw">let </span>y = <span class="kw-2">&amp;</span>x <span class="kw">as </span><span class="kw-2">*const </span>i32;
+
+<span class="kw">unsafe </span>{
+    <span class="macro">assert_eq!</span>(std::ptr::read(y), <span class="number">12</span>);
+}</code></pre></div>
+<p>Manually implement <a href="../mem/fn.swap.html" title="fn wasmtime_environ::__core::mem::swap"><code>mem::swap</code></a>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::ptr;
+
+<span class="kw">fn </span>swap&lt;T&gt;(a: <span class="kw-2">&amp;mut </span>T, b: <span class="kw-2">&amp;mut </span>T) {
+    <span class="kw">unsafe </span>{
+        <span class="comment">// Create a bitwise copy of the value at `a` in `tmp`.
+        </span><span class="kw">let </span>tmp = ptr::read(a);
+
+        <span class="comment">// Exiting at this point (either by explicitly returning or by
+        // calling a function which panics) would cause the value in `tmp` to
+        // be dropped while the same value is still referenced by `a`. This
+        // could trigger undefined behavior if `T` is not `Copy`.
+
+        // Create a bitwise copy of the value at `b` in `a`.
+        // This is safe because mutable references cannot alias.
+        </span>ptr::copy_nonoverlapping(b, a, <span class="number">1</span>);
+
+        <span class="comment">// As above, exiting here could trigger undefined behavior because
+        // the same value is referenced by `a` and `b`.
+
+        // Move `tmp` into `b`.
+        </span>ptr::write(b, tmp);
+
+        <span class="comment">// `tmp` has been moved (`write` takes ownership of its second argument),
+        // so nothing is dropped implicitly here.
+    </span>}
+}
+
+<span class="kw">let </span><span class="kw-2">mut </span>foo = <span class="string">"foo"</span>.to_owned();
+<span class="kw">let </span><span class="kw-2">mut </span>bar = <span class="string">"bar"</span>.to_owned();
+
+swap(<span class="kw-2">&amp;mut </span>foo, <span class="kw-2">&amp;mut </span>bar);
+
+<span class="macro">assert_eq!</span>(foo, <span class="string">"bar"</span>);
+<span class="macro">assert_eq!</span>(bar, <span class="string">"foo"</span>);</code></pre></div>
+<h3 id="ownership-of-the-returned-value"><a class="doc-anchor" href="#ownership-of-the-returned-value">§</a>Ownership of the Returned Value</h3>
+<p><code>read</code> creates a bitwise copy of <code>T</code>, regardless of whether <code>T</code> is <a href="../marker/trait.Copy.html" title="trait wasmtime_environ::__core::marker::Copy"><code>Copy</code></a>.
+If <code>T</code> is not <a href="../marker/trait.Copy.html" title="trait wasmtime_environ::__core::marker::Copy"><code>Copy</code></a>, using both the returned value and the value at
+<code>*src</code> can violate memory safety. Note that assigning to <code>*src</code> counts as a
+use because it will attempt to drop the value at <code>*src</code>.</p>
+<p><a href="fn.write.html" title="fn wasmtime_environ::__core::ptr::write"><code>write()</code></a> can be used to overwrite data without causing it to be dropped.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::ptr;
+
+<span class="kw">let </span><span class="kw-2">mut </span>s = String::from(<span class="string">"foo"</span>);
+<span class="kw">unsafe </span>{
+    <span class="comment">// `s2` now points to the same underlying memory as `s`.
+    </span><span class="kw">let </span><span class="kw-2">mut </span>s2: String = ptr::read(<span class="kw-2">&amp;</span>s);
+
+    <span class="macro">assert_eq!</span>(s2, <span class="string">"foo"</span>);
+
+    <span class="comment">// Assigning to `s2` causes its original value to be dropped. Beyond
+    // this point, `s` must no longer be used, as the underlying memory has
+    // been freed.
+    </span>s2 = String::default();
+    <span class="macro">assert_eq!</span>(s2, <span class="string">""</span>);
+
+    <span class="comment">// Assigning to `s` would cause the old value to be dropped again,
+    // resulting in undefined behavior.
+    // s = String::from("bar"); // ERROR
+
+    // `ptr::write` can be used to overwrite a value without dropping it.
+    </span>ptr::write(<span class="kw-2">&amp;mut </span>s, String::from(<span class="string">"bar"</span>));
+}
+
+<span class="macro">assert_eq!</span>(s, <span class="string">"bar"</span>);</code></pre></div>
+</div></details></section></div></main></body></html>

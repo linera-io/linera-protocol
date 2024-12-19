@@ -1,0 +1,48 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Creates new `Interval` that yields with interval of `period`. The first tick completes immediately. The default `MissedTickBehavior` is `Burst`, but this can be configured by calling `set_missed_tick_behavior`."><title>interval in linera_base::time::timer - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="linera_base" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../linera_base/index.html">linera_base</a><span class="version">0.14.0</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In linera_base::time::timer</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../../index.html">linera_base</a>::<wbr><a href="../index.html">time</a>::<wbr><a href="index.html">timer</a>::<wbr><a class="fn" href="#">interval</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/tokio/time/interval.rs.html#74">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn interval(period: <a class="struct" href="../struct.Duration.html" title="struct linera_base::time::Duration">Duration</a>) -&gt; <a class="struct" href="struct.Interval.html" title="struct linera_base::time::timer::Interval">Interval</a></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Creates new <a href="struct.Interval.html" title="struct linera_base::time::timer::Interval"><code>Interval</code></a> that yields with interval of <code>period</code>. The first
+tick completes immediately. The default <a href="enum.MissedTickBehavior.html" title="enum linera_base::time::timer::MissedTickBehavior"><code>MissedTickBehavior</code></a> is
+<a href="enum.MissedTickBehavior.html#variant.Burst" title="variant linera_base::time::timer::MissedTickBehavior::Burst"><code>Burst</code></a>, but this can be configured
+by calling <a href="struct.Interval.html#method.set_missed_tick_behavior" title="method linera_base::time::timer::Interval::set_missed_tick_behavior"><code>set_missed_tick_behavior</code></a>.</p>
+<p>An interval will tick indefinitely. At any time, the <a href="struct.Interval.html" title="struct linera_base::time::timer::Interval"><code>Interval</code></a> value can
+be dropped. This cancels the interval.</p>
+<p>This function is equivalent to
+<a href="fn.interval_at.html" title="fn linera_base::time::timer::interval_at"><code>interval_at(Instant::now(), period)</code></a>.</p>
+<h2 id="panics"><a class="doc-anchor" href="#panics">§</a>Panics</h2>
+<p>This function panics if <code>period</code> is zero.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::time::{<span class="self">self</span>, Duration};
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
+    <span class="kw">let </span><span class="kw-2">mut </span>interval = time::interval(Duration::from_millis(<span class="number">10</span>));
+
+    interval.tick().<span class="kw">await</span>; <span class="comment">// ticks immediately
+    </span>interval.tick().<span class="kw">await</span>; <span class="comment">// ticks after 10ms
+    </span>interval.tick().<span class="kw">await</span>; <span class="comment">// ticks after 10ms
+
+    // approximately 20ms have elapsed.
+</span>}</code></pre></div>
+<p>A simple example using <code>interval</code> to execute a task every two seconds.</p>
+<p>The difference between <code>interval</code> and <a href="fn.sleep.html" title="fn linera_base::time::timer::sleep"><code>sleep</code></a> is that an <a href="struct.Interval.html" title="struct linera_base::time::timer::Interval"><code>Interval</code></a>
+measures the time since the last tick, which means that <a href="struct.Interval.html#method.tick" title="method linera_base::time::timer::Interval::tick"><code>.tick().await</code></a>
+may wait for a shorter time than the duration specified for the interval
+if some time has passed between calls to <a href="struct.Interval.html#method.tick" title="method linera_base::time::timer::Interval::tick"><code>.tick().await</code></a>.</p>
+<p>If the tick in the example below was replaced with <a href="fn.sleep.html" title="fn linera_base::time::timer::sleep"><code>sleep</code></a>, the task
+would only be executed once every three seconds, and not every two
+seconds.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::time;
+
+<span class="kw">async fn </span>task_that_takes_a_second() {
+    <span class="macro">println!</span>(<span class="string">"hello"</span>);
+    time::sleep(time::Duration::from_secs(<span class="number">1</span>)).<span class="kw">await
+</span>}
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
+    <span class="kw">let </span><span class="kw-2">mut </span>interval = time::interval(time::Duration::from_secs(<span class="number">2</span>));
+    <span class="kw">for </span>_i <span class="kw">in </span><span class="number">0</span>..<span class="number">5 </span>{
+        interval.tick().<span class="kw">await</span>;
+        task_that_takes_a_second().<span class="kw">await</span>;
+    }
+}</code></pre></div>
+</div></details></section></div></main></body></html>

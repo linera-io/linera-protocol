@@ -1,0 +1,95 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Waits on multiple concurrent branches, returning when all branches complete with `Ok(_)` or on the first `Err(_)`."><title>try_join in tokio - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="tokio" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../tokio/index.html">tokio</a><span class="version">1.40.0</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="index.html">tokio</a>::<wbr><a class="macro" href="#">try_join</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/tokio/macros/try_join.rs.html#103-218">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><span class="macro">macro_rules!</span> try_join {
+    (@ {
+        <span class="comment">// One `_` for each branch in the `try_join!` macro. This is not used once
+        // normalization is complete.
+        </span>( $(<span class="macro-nonterminal">$count</span>:tt)* )
+
+        <span class="comment">// The expression `0+1+1+ ... +1` equal to the number of branches.
+        </span>( $(<span class="macro-nonterminal">$total</span>:tt)* )
+
+        <span class="comment">// Normalized try_join! branches
+        </span>$( ( $(<span class="macro-nonterminal">$skip</span>:tt)* ) <span class="macro-nonterminal">$e</span>:expr, )*
+
+    }) =&gt; { ... };
+    (@ { ( $(<span class="macro-nonterminal">$s</span>:tt)* ) ( $(<span class="macro-nonterminal">$n</span>:tt)* ) $(<span class="macro-nonterminal">$t</span>:tt)* } <span class="macro-nonterminal">$e</span>:expr, $(<span class="macro-nonterminal">$r</span>:tt)* ) =&gt; { ... };
+    ( $(<span class="macro-nonterminal">$e</span>:expr),+ $(,)<span class="question-mark">?</span>) =&gt; { ... };
+    () =&gt; { ... };
+}</pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Waits on multiple concurrent branches, returning when <strong>all</strong> branches
+complete with <code>Ok(_)</code> or on the first <code>Err(_)</code>.</p>
+<p>The <code>try_join!</code> macro must be used inside of async functions, closures, and
+blocks.</p>
+<p>Similar to <a href="macro.join.html" title="macro tokio::join"><code>join!</code></a>, the <code>try_join!</code> macro takes a list of async
+expressions and evaluates them concurrently on the same task. Each async
+expression evaluates to a future and the futures from each expression are
+multiplexed on the current task. The <code>try_join!</code> macro returns when <strong>all</strong>
+branches return with <code>Ok</code> or when the <strong>first</strong> branch returns with <code>Err</code>.</p>
+<h2 id="notes"><a class="doc-anchor" href="#notes">§</a>Notes</h2>
+<p>The supplied futures are stored inline and do not require allocating a
+<code>Vec</code>.</p>
+<h4 id="runtime-characteristics"><a class="doc-anchor" href="#runtime-characteristics">§</a>Runtime characteristics</h4>
+<p>By running all async expressions on the current task, the expressions are
+able to run <strong>concurrently</strong> but not in <strong>parallel</strong>. This means all
+expressions are run on the same thread and if one branch blocks the thread,
+all other expressions will be unable to continue. If parallelism is
+required, spawn each async expression using <a href="task/fn.spawn.html" title="fn tokio::task::spawn"><code>tokio::spawn</code></a> and pass the
+join handle to <code>try_join!</code>.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Basic <code>try_join</code> with two branches.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">async fn </span>do_stuff_async() -&gt; <span class="prelude-ty">Result</span>&lt;(), <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str&gt; {
+    <span class="comment">// async work
+</span>}
+
+<span class="kw">async fn </span>more_async_work() -&gt; <span class="prelude-ty">Result</span>&lt;(), <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str&gt; {
+    <span class="comment">// more here
+</span>}
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
+    <span class="kw">let </span>res = <span class="macro">tokio::try_join!</span>(
+        do_stuff_async(),
+        more_async_work());
+
+    <span class="kw">match </span>res {
+         <span class="prelude-val">Ok</span>((first, second)) =&gt; {
+             <span class="comment">// do something with the values
+         </span>}
+         <span class="prelude-val">Err</span>(err) =&gt; {
+            <span class="macro">println!</span>(<span class="string">"processing failed; error = {}"</span>, err);
+         }
+    }
+}</code></pre></div>
+<p>Using <code>try_join!</code> with spawned tasks.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::task::JoinHandle;
+
+<span class="kw">async fn </span>do_stuff_async() -&gt; <span class="prelude-ty">Result</span>&lt;(), <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str&gt; {
+    <span class="comment">// async work
+</span>}
+
+<span class="kw">async fn </span>more_async_work() -&gt; <span class="prelude-ty">Result</span>&lt;(), <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str&gt; {
+    <span class="comment">// more here
+</span>}
+
+<span class="kw">async fn </span>flatten&lt;T&gt;(handle: JoinHandle&lt;<span class="prelude-ty">Result</span>&lt;T, <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str&gt;&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;T, <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str&gt; {
+    <span class="kw">match </span>handle.<span class="kw">await </span>{
+        <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(result)) =&gt; <span class="prelude-val">Ok</span>(result),
+        <span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(err)) =&gt; <span class="prelude-val">Err</span>(err),
+        <span class="prelude-val">Err</span>(err) =&gt; <span class="prelude-val">Err</span>(<span class="string">"handling failed"</span>),
+    }
+}
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
+    <span class="kw">let </span>handle1 = tokio::spawn(do_stuff_async());
+    <span class="kw">let </span>handle2 = tokio::spawn(more_async_work());
+    <span class="kw">match </span><span class="macro">tokio::try_join!</span>(flatten(handle1), flatten(handle2)) {
+        <span class="prelude-val">Ok</span>(val) =&gt; {
+            <span class="comment">// do something with the values
+        </span>}
+        <span class="prelude-val">Err</span>(err) =&gt; {
+            <span class="macro">println!</span>(<span class="string">"Failed with {}."</span>, err);
+        }
+    }
+}</code></pre></div>
+</div></details></section></div></main></body></html>

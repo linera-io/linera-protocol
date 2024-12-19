@@ -1,0 +1,68 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Panics the current thread."><title>panic in wasmtime_environ::__core - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="wasmtime_environ" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../wasmtime_environ/index.html">wasmtime_environ</a><span class="version">25.0.1</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In wasmtime_environ::__core</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="../index.html">wasmtime_environ</a>::<wbr><a href="index.html">__core</a>::<wbr><a class="macro" href="#">panic</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><span class="since" title="Stable since Rust version 1.6.0">1.6.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/macros/mod.rs.html#7">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><span class="macro">macro_rules!</span> panic {
+    ($(<span class="macro-nonterminal">$arg</span>:tt)<span class="kw-2">*</span>) =&gt; { ... };
+}</pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Panics the current thread.</p>
+<p>This allows a program to terminate immediately and provide feedback
+to the caller of the program.</p>
+<p>This macro is the perfect way to assert conditions in example code and in
+tests. <code>panic!</code> is closely tied with the <code>unwrap</code> method of both
+<a href="option/enum.Option.html#method.unwrap" title="method wasmtime_environ::__core::option::Option::unwrap"><code>Option</code></a> and <a href="result/enum.Result.html#method.unwrap" title="method wasmtime_environ::__core::result::Result::unwrap"><code>Result</code></a> enums. Both implementations call
+<code>panic!</code> when they are set to <a href="option/enum.Option.html#variant.None" title="variant wasmtime_environ::__core::option::Option::None"><code>None</code></a> or <a href="result/enum.Result.html#variant.Err" title="variant wasmtime_environ::__core::result::Result::Err"><code>Err</code></a> variants.</p>
+<p>When using <code>panic!()</code> you can specify a string payload that is built using
+<a href="../std/fmt/index.html">formatting syntax</a>. That payload is used when injecting the panic into
+the calling Rust thread, causing the thread to panic entirely.</p>
+<p>The behavior of the default <code>std</code> hook, i.e. the code that runs directly
+after the panic is invoked, is to print the message payload to
+<code>stderr</code> along with the file/line/column information of the <code>panic!()</code>
+call. You can override the panic hook using <a href="../std/panic/fn.set_hook.html"><code>std::panic::set_hook()</code></a>.
+Inside the hook a panic can be accessed as a <code>&amp;dyn Any + Send</code>,
+which contains either a <code>&amp;str</code> or <code>String</code> for regular <code>panic!()</code> invocations.
+(Whether a particular invocation contains the payload at type <code>&amp;str</code> or <code>String</code> is unspecified and can change.)
+To panic with a value of another other type, <a href="../std/panic/fn.panic_any.html"><code>panic_any</code></a> can be used.</p>
+<p>See also the macro <a href="macro.compile_error.html" title="macro wasmtime_environ::__core::compile_error"><code>compile_error!</code></a>, for raising errors during compilation.</p>
+<h2 id="when-to-use-panic-vs-result"><a class="doc-anchor" href="#when-to-use-panic-vs-result">§</a>When to use <code>panic!</code> vs <code>Result</code></h2>
+<p>The Rust language provides two complementary systems for constructing /
+representing, reporting, propagating, reacting to, and discarding errors. These
+responsibilities are collectively known as “error handling.” <code>panic!</code> and
+<code>Result</code> are similar in that they are each the primary interface of their
+respective error handling systems; however, the meaning these interfaces attach
+to their errors and the responsibilities they fulfill within their respective
+error handling systems differ.</p>
+<p>The <code>panic!</code> macro is used to construct errors that represent a bug that has
+been detected in your program. With <code>panic!</code> you provide a message that
+describes the bug and the language then constructs an error with that message,
+reports it, and propagates it for you.</p>
+<p><code>Result</code> on the other hand is used to wrap other types that represent either
+the successful result of some computation, <code>Ok(T)</code>, or error types that
+represent an anticipated runtime failure mode of that computation, <code>Err(E)</code>.
+<code>Result</code> is used alongside user defined types which represent the various
+anticipated runtime failure modes that the associated computation could
+encounter. <code>Result</code> must be propagated manually, often with the help of the
+<code>?</code> operator and <code>Try</code> trait, and they must be reported manually, often with
+the help of the <code>Error</code> trait.</p>
+<p>For more detailed information about error handling check out the <a href="../book/ch09-00-error-handling.html">book</a> or the
+<a href="../std/result/index.html"><code>std::result</code></a> module docs.</p>
+<h2 id="current-implementation"><a class="doc-anchor" href="#current-implementation">§</a>Current implementation</h2>
+<p>If the main thread panics it will terminate all your threads and end your
+program with code <code>101</code>.</p>
+<h2 id="editions"><a class="doc-anchor" href="#editions">§</a>Editions</h2>
+<p>Behavior of the panic macros changed over editions.</p>
+<h3 id="2021-and-later"><a class="doc-anchor" href="#2021-and-later">§</a>2021 and later</h3>
+<p>In Rust 2021 and later, <code>panic!</code> always requires a format string and
+the applicable format arguments, and is the same in <code>core</code> and <code>std</code>.
+Use <a href="../std/panic/fn.panic_any.html"><code>std::panic::panic_any(x)</code></a> to
+panic with an arbitrary payload.</p>
+<h3 id="2018-and-2015"><a class="doc-anchor" href="#2018-and-2015">§</a>2018 and 2015</h3>
+<p>In Rust Editions prior to 2021, <code>std::panic!(x)</code> with a single
+argument directly uses that argument as a payload.
+This is true even if the argument is a string literal.
+For example, <code>panic!("problem: {reason}")</code> panics with a
+payload of literally <code>"problem: {reason}"</code> (a <code>&amp;'static str</code>).</p>
+<p><code>core::panic!(x)</code> with a single argument requires that <code>x</code> be <code>&amp;str</code>,
+but otherwise behaves like <code>std::panic!</code>. In particular, the string
+need not be a literal, and is not interpreted as a format string.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap should_panic"><a href="#" class="tooltip" title="This example panics">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="macro">panic!</span>();
+<span class="macro">panic!</span>(<span class="string">"this is a terrible mistake!"</span>);
+<span class="macro">panic!</span>(<span class="string">"this is a {} {message}"</span>, <span class="string">"fancy"</span>, message = <span class="string">"message"</span>);
+std::panic::panic_any(<span class="number">4</span>); <span class="comment">// panic with the value of 4 to be collected elsewhere</span></code></pre></div>
+</div></details></section></div></main></body></html>

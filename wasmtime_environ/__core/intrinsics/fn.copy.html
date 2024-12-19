@@ -1,0 +1,55 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Copies `count * size_of::&lt;T&gt;()` bytes from `src` to `dst`. The source and destination may overlap."><title>copy in wasmtime_environ::__core::intrinsics - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="wasmtime_environ" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../wasmtime_environ/index.html">wasmtime_environ</a><span class="version">25.0.1</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In wasmtime_environ::__core::intrinsics</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../../index.html">wasmtime_environ</a>::<wbr><a href="../index.html">__core</a>::<wbr><a href="index.html">intrinsics</a>::<wbr><a class="fn" href="#">copy</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><span class="since" title="Stable since Rust version 1.0.0, const unstable">1.0.0 (const: <a href="https://github.com/rust-lang/rust/issues/80697" title="Tracking issue for const_intrinsic_copy">unstable</a>)</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/intrinsics.rs.html#3138">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub unsafe fn copy&lt;T&gt;(src: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.pointer.html">*const T</a>, dst: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.pointer.html">*mut T</a>, count: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>)</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Copies <code>count * size_of::&lt;T&gt;()</code> bytes from <code>src</code> to <code>dst</code>. The source
+and destination may overlap.</p>
+<p>If the source and destination will <em>never</em> overlap,
+<a href="../ptr/fn.copy_nonoverlapping.html" title="fn wasmtime_environ::__core::ptr::copy_nonoverlapping"><code>copy_nonoverlapping</code></a> can be used instead.</p>
+<p><code>copy</code> is semantically equivalent to C’s <a href="https://en.cppreference.com/w/c/string/byte/memmove"><code>memmove</code></a>, but with the argument
+order swapped. Copying takes place as if the bytes were copied from <code>src</code>
+to a temporary array and then copied from the array to <code>dst</code>.</p>
+<p>The copy is “untyped” in the sense that data may be uninitialized or otherwise violate the
+requirements of <code>T</code>. The initialization state is preserved exactly.</p>
+<h2 id="safety"><a class="doc-anchor" href="#safety">§</a>Safety</h2>
+<p>Behavior is undefined if any of the following conditions are violated:</p>
+<ul>
+<li>
+<p><code>src</code> must be <a href="../ptr/index.html#safety" title="mod wasmtime_environ::__core::ptr">valid</a> for reads of <code>count * size_of::&lt;T&gt;()</code> bytes, and must remain valid even
+when <code>dst</code> is written for <code>count * size_of::&lt;T&gt;()</code> bytes. (This means if the memory ranges
+overlap, the two pointers must not be subject to aliasing restrictions relative to each
+other.)</p>
+</li>
+<li>
+<p><code>dst</code> must be <a href="../ptr/index.html#safety" title="mod wasmtime_environ::__core::ptr">valid</a> for writes of <code>count * size_of::&lt;T&gt;()</code> bytes, and must remain valid even
+when <code>src</code> is read for <code>count * size_of::&lt;T&gt;()</code> bytes.</p>
+</li>
+<li>
+<p>Both <code>src</code> and <code>dst</code> must be properly aligned.</p>
+</li>
+</ul>
+<p>Like <a href="../ptr/fn.read.html" title="fn wasmtime_environ::__core::ptr::read"><code>read</code></a>, <code>copy</code> creates a bitwise copy of <code>T</code>, regardless of
+whether <code>T</code> is <a href="../marker/trait.Copy.html" title="trait wasmtime_environ::__core::marker::Copy"><code>Copy</code></a>. If <code>T</code> is not <a href="../marker/trait.Copy.html" title="trait wasmtime_environ::__core::marker::Copy"><code>Copy</code></a>, using both the values
+in the region beginning at <code>*src</code> and the region beginning at <code>*dst</code> can
+<a href="../ptr/fn.read.html#ownership-of-the-returned-value" title="fn wasmtime_environ::__core::ptr::read">violate memory safety</a>.</p>
+<p>Note that even if the effectively copied size (<code>count * size_of::&lt;T&gt;()</code>) is
+<code>0</code>, the pointers must be non-null and properly aligned.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Efficiently create a Rust vector from an unsafe buffer:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::ptr;
+
+<span class="doccomment">/// # Safety
+///
+/// * `ptr` must be correctly aligned for its type and non-zero.
+/// * `ptr` must be valid for reads of `elts` contiguous elements of type `T`.
+/// * Those elements must not be used after calling this function unless `T: Copy`.
+</span><span class="kw">unsafe fn </span>from_buf_raw&lt;T&gt;(ptr: <span class="kw-2">*const </span>T, elts: usize) -&gt; Vec&lt;T&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>dst = Vec::with_capacity(elts);
+
+    <span class="comment">// SAFETY: Our precondition ensures the source is aligned and valid,
+    // and `Vec::with_capacity` ensures that we have usable space to write them.
+    </span>ptr::copy(ptr, dst.as_mut_ptr(), elts);
+
+    <span class="comment">// SAFETY: We created it with this much capacity earlier,
+    // and the previous `copy` has initialized these elements.
+    </span>dst.set_len(elts);
+    dst
+}</code></pre></div>
+</div></details></section></div></main></body></html>

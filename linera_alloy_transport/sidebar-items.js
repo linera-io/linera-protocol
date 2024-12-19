@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Authorization","RpcError"],"macro":["impl_future"],"mod":["utils"],"struct":["BoxTransport"],"trait":["BoxTransportConnect","Transport","TransportConnect"],"type":["BoxFuture","Pbf","RpcFut","RpcResult","TransportError","TransportFut","TransportResult"]};

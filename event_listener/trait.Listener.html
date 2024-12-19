@@ -1,0 +1,77 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A handle that is listening to an `Event`."><title>Listener in event_listener - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="event_listener" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="icon" href="https://raw.githubusercontent.com/smol-rs/smol/master/assets/images/logo_fullsize_transparent.png"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../event_listener/index.html"><img src="https://raw.githubusercontent.com/smol-rs/smol/master/assets/images/logo_fullsize_transparent.png" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../event_listener/index.html"><img src="https://raw.githubusercontent.com/smol-rs/smol/master/assets/images/logo_fullsize_transparent.png" alt="logo"></a><h2><a href="../event_listener/index.html">event_listener</a><span class="version">5.3.1</span></h2></div><h2 class="location"><a href="#">Listener</a></h2><div class="sidebar-elems"><section><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.discard">discard</a></li><li><a href="#tymethod.listens_to">listens_to</a></li><li><a href="#tymethod.same_event">same_event</a></li><li><a href="#tymethod.wait">wait</a></li><li><a href="#tymethod.wait_deadline">wait_deadline</a></li><li><a href="#tymethod.wait_timeout">wait_timeout</a></li></ul><h3><a href="#object-safety">Object Safety</a></h3><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In crate event_listener</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="index.html">event_listener</a>::<wbr><a class="trait" href="#">Listener</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/event_listener/lib.rs.html#736-843">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub trait Listener&lt;T = <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = T&gt; + Sealed {
+    // Required methods
+    fn <a href="#tymethod.wait" class="fn">wait</a>(self) -&gt; T;
+<span class="item-spacer"></span>    fn <a href="#tymethod.wait_timeout" class="fn">wait_timeout</a>(self, timeout: <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/time/struct.Duration.html" title="struct core::time::Duration">Duration</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;T&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.wait_deadline" class="fn">wait_deadline</a>(self, deadline: <a class="struct" href="https://doc.rust-lang.org/1.81.0/std/time/struct.Instant.html" title="struct std::time::Instant">Instant</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;T&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.discard" class="fn">discard</a>(self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.listens_to" class="fn">listens_to</a>(&amp;self, event: &amp;<a class="struct" href="struct.Event.html" title="struct event_listener::Event">Event</a>&lt;T&gt;) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.same_event" class="fn">same_event</a>(&amp;self, other: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;Self</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>;
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A handle that is listening to an <a href="struct.Event.html" title="struct event_listener::Event"><code>Event</code></a>.</p>
+<p>This trait represents a type waiting for a notification from an <a href="struct.Event.html" title="struct event_listener::Event"><code>Event</code></a>. See the
+<a href="struct.EventListener.html" title="struct event_listener::EventListener"><code>EventListener</code></a> type for more documentation on this trait’s usage.</p>
+</div></details><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.wait" class="method"><a class="src rightside" href="../src/event_listener/lib.rs.html#754">source</a><h4 class="code-header">fn <a href="#tymethod.wait" class="fn">wait</a>(self) -&gt; T</h4></section></summary><div class="docblock"><p>Blocks until a notification is received.</p>
+<h5 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>event_listener::{Event, Listener};
+
+<span class="kw">let </span>event = Event::new();
+<span class="kw">let </span><span class="kw-2">mut </span>listener = event.listen();
+
+<span class="comment">// Notify `listener`.
+</span>event.notify(<span class="number">1</span>);
+
+<span class="comment">// Receive the notification.
+</span>listener.wait();</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.wait_timeout" class="method"><a class="src rightside" href="../src/event_listener/lib.rs.html#773">source</a><h4 class="code-header">fn <a href="#tymethod.wait_timeout" class="fn">wait_timeout</a>(self, timeout: <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/time/struct.Duration.html" title="struct core::time::Duration">Duration</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;T&gt;</h4></section></summary><div class="docblock"><p>Blocks until a notification is received or a timeout is reached.</p>
+<p>Returns <code>true</code> if a notification was received.</p>
+<h5 id="examples-1"><a class="doc-anchor" href="#examples-1">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::time::Duration;
+<span class="kw">use </span>event_listener::{Event, Listener};
+
+<span class="kw">let </span>event = Event::new();
+<span class="kw">let </span><span class="kw-2">mut </span>listener = event.listen();
+
+<span class="comment">// There are no notification so this times out.
+</span><span class="macro">assert!</span>(listener.wait_timeout(Duration::from_secs(<span class="number">1</span>)).is_none());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.wait_deadline" class="method"><a class="src rightside" href="../src/event_listener/lib.rs.html#792">source</a><h4 class="code-header">fn <a href="#tymethod.wait_deadline" class="fn">wait_deadline</a>(self, deadline: <a class="struct" href="https://doc.rust-lang.org/1.81.0/std/time/struct.Instant.html" title="struct std::time::Instant">Instant</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;T&gt;</h4></section></summary><div class="docblock"><p>Blocks until a notification is received or a deadline is reached.</p>
+<p>Returns <code>true</code> if a notification was received.</p>
+<h5 id="examples-2"><a class="doc-anchor" href="#examples-2">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::time::{Duration, Instant};
+<span class="kw">use </span>event_listener::{Event, Listener};
+
+<span class="kw">let </span>event = Event::new();
+<span class="kw">let </span><span class="kw-2">mut </span>listener = event.listen();
+
+<span class="comment">// There are no notification so this times out.
+</span><span class="macro">assert!</span>(listener.wait_deadline(Instant::now() + Duration::from_secs(<span class="number">1</span>)).is_none());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.discard" class="method"><a class="src rightside" href="../src/event_listener/lib.rs.html#813">source</a><h4 class="code-header">fn <a href="#tymethod.discard" class="fn">discard</a>(self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Drops this listener and discards its notification (if any) without notifying another
+active listener.</p>
+<p>Returns <code>true</code> if a notification was discarded.</p>
+<h5 id="examples-3"><a class="doc-anchor" href="#examples-3">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>event_listener::{Event, Listener};
+
+<span class="kw">let </span>event = Event::new();
+<span class="kw">let </span><span class="kw-2">mut </span>listener1 = event.listen();
+<span class="kw">let </span><span class="kw-2">mut </span>listener2 = event.listen();
+
+event.notify(<span class="number">1</span>);
+
+<span class="macro">assert!</span>(listener1.discard());
+<span class="macro">assert!</span>(!listener2.discard());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.listens_to" class="method"><a class="src rightside" href="../src/event_listener/lib.rs.html#827">source</a><h4 class="code-header">fn <a href="#tymethod.listens_to" class="fn">listens_to</a>(&amp;self, event: &amp;<a class="struct" href="struct.Event.html" title="struct event_listener::Event">Event</a>&lt;T&gt;) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns <code>true</code> if this listener listens to the given <code>Event</code>.</p>
+<h5 id="examples-4"><a class="doc-anchor" href="#examples-4">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>event_listener::{Event, Listener};
+
+<span class="kw">let </span>event = Event::new();
+<span class="kw">let </span>listener = event.listen();
+
+<span class="macro">assert!</span>(listener.listens_to(<span class="kw-2">&amp;</span>event));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.same_event" class="method"><a class="src rightside" href="../src/event_listener/lib.rs.html#842">source</a><h4 class="code-header">fn <a href="#tymethod.same_event" class="fn">same_event</a>(&amp;self, other: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;Self</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns <code>true</code> if both listeners listen to the same <code>Event</code>.</p>
+<h5 id="examples-5"><a class="doc-anchor" href="#examples-5">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>event_listener::{Event, Listener};
+
+<span class="kw">let </span>event = Event::new();
+<span class="kw">let </span>listener1 = event.listen();
+<span class="kw">let </span>listener2 = event.listen();
+
+<span class="macro">assert!</span>(listener1.same_event(<span class="kw-2">&amp;</span>listener2));</code></pre></div>
+</div></details></div><h2 id="object-safety" class="section-header">Object Safety<a href="#object-safety" class="anchor">§</a></h2><div class="object-safety-info">This trait is <b>not</b> <a href="https://doc.rust-lang.org/1.81.0/reference/items/traits.html#object-safety">object safe</a>.</div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><section id="impl-Listener%3CT%3E-for-EventListener%3CT%3E" class="impl"><a class="src rightside" href="../src/event_listener/lib.rs.html#937">source</a><a href="#impl-Listener%3CT%3E-for-EventListener%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="trait.Listener.html" title="trait event_listener::Listener">Listener</a>&lt;T&gt; for <a class="struct" href="struct.EventListener.html" title="struct event_listener::EventListener">EventListener</a>&lt;T&gt;</h3></section></div><script src="../trait.impl/event_listener/trait.Listener.js" async></script></section></div></main></body></html>

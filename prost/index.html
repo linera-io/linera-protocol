@@ -1,0 +1,383 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="continuous integration Documentation Crate Dependency Status Discord"><title>prost - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="prost" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../prost/index.html">prost</a><span class="version">0.13.3</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#structs">Structs</a></li><li><a href="#traits">Traits</a></li><li><a href="#functions">Functions</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">prost</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/prost/lib.rs.html#1-42">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><a href="https://github.com/tokio-rs/prost/actions/workflows/ci.yml?query=branch%3Amaster"><img src="https://github.com/tokio-rs/prost/actions/workflows/ci.yml/badge.svg?branch=master" alt="continuous integration" /></a>
+<a href="https://docs.rs/prost/"><img src="https://docs.rs/prost/badge.svg" alt="Documentation" /></a>
+<a href="https://crates.io/crates/prost"><img src="https://img.shields.io/crates/v/prost.svg" alt="Crate" /></a>
+<a href="https://deps.rs/repo/github/tokio-rs/prost"><img src="https://deps.rs/repo/github/tokio-rs/prost/status.svg" alt="Dependency Status" /></a>
+<a href="https://discord.gg/tokio"><img src="https://img.shields.io/discord/500028886025895936" alt="Discord" /></a></p>
+<h2 id="prost"><a class="doc-anchor" href="#prost">§</a><em>PROST!</em></h2>
+<p><code>prost</code> is a <a href="https://developers.google.com/protocol-buffers/">Protocol Buffers</a>
+implementation for the <a href="https://www.rust-lang.org/">Rust Language</a>. <code>prost</code>
+generates simple, idiomatic Rust code from <code>proto2</code> and <code>proto3</code> files.</p>
+<p>Compared to other Protocol Buffers implementations, <code>prost</code></p>
+<ul>
+<li>Generates simple, idiomatic, and readable Rust types by taking advantage of
+Rust <code>derive</code> attributes.</li>
+<li>Retains comments from <code>.proto</code> files in generated Rust code.</li>
+<li>Allows existing Rust types (not generated from a <code>.proto</code>) to be serialized
+and deserialized by adding attributes.</li>
+<li>Uses the <a href="https://github.com/carllerche/bytes"><code>bytes::{Buf, BufMut}</code></a>
+abstractions for serialization instead of <code>std::io::{Read, Write}</code>.</li>
+<li>Respects the Protobuf <code>package</code> specifier when organizing generated code
+into Rust modules.</li>
+<li>Preserves unknown enum values during deserialization.</li>
+<li>Does not include support for runtime reflection or message descriptors.</li>
+</ul>
+<h3 id="using-prost-in-a-cargo-project"><a class="doc-anchor" href="#using-prost-in-a-cargo-project">§</a>Using <code>prost</code> in a Cargo Project</h3>
+<p>First, add <code>prost</code> and its public dependencies to your <code>Cargo.toml</code>:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code>[dependencies]
+prost = <span class="string">"0.13"
+</span>prost-types = <span class="string">"0.13"</span></code></pre></div>
+<p>The recommended way to add <code>.proto</code> compilation to a Cargo project is to use the
+<code>prost-build</code> library. See the <a href="https://docs.rs/prost-build/latest/prost_build/"><code>prost-build</code> documentation</a> for
+more details and examples.</p>
+<p>See the <a href="https://github.com/danburkert/snazzy">snazzy repository</a> for a simple start-to-finish example.</p>
+<h4 id="msrv"><a class="doc-anchor" href="#msrv">§</a>MSRV</h4>
+<p><code>prost</code> follows the <code>tokio-rs</code> project’s MSRV model and supports 1.70. For more
+information on the tokio msrv policy you can check it out <a href="https://github.com/tokio-rs/tokio/#supported-rust-versions">here</a></p>
+<h3 id="generated-code"><a class="doc-anchor" href="#generated-code">§</a>Generated Code</h3>
+<p><code>prost</code> generates Rust code from source <code>.proto</code> files using the <code>proto2</code> or
+<code>proto3</code> syntax. <code>prost</code>’s goal is to make the generated code as simple as
+possible.</p>
+<h4 id="protoc"><a class="doc-anchor" href="#protoc">§</a><code>protoc</code></h4>
+<p>With <code>prost-build</code> v0.11 release, <code>protoc</code> will be required to invoke
+<code>compile_protos</code> (unless <code>skip_protoc</code> is enabled). Prost will no longer provide
+bundled <code>protoc</code> or attempt to compile <code>protoc</code> for users. For install
+instructions for <code>protoc</code>, please check out the <a href="https://github.com/protocolbuffers/protobuf#protobuf-compiler-installation">protobuf install</a> instructions.</p>
+<h4 id="packages"><a class="doc-anchor" href="#packages">§</a>Packages</h4>
+<p>Prost can now generate code for <code>.proto</code> files that don’t have a package spec.
+<code>prost</code> will translate the Protobuf package into
+a Rust module. For example, given the <code>package</code> specifier:</p>
+<div class="example-wrap"><pre class="language-protobuf"><code>package foo.bar;
+</code></pre></div>
+<p>All Rust types generated from the file will be in the <code>foo::bar</code> module.</p>
+<h4 id="messages"><a class="doc-anchor" href="#messages">§</a>Messages</h4>
+<p>Given a simple message declaration:</p>
+<div class="example-wrap"><pre class="language-protobuf"><code>// Sample message.
+message Foo {
+}
+</code></pre></div>
+<p><code>prost</code> will generate the following Rust struct:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="doccomment">/// Sample message.
+</span><span class="attr">#[derive(Clone, Debug, PartialEq, Message)]
+</span><span class="kw">pub struct </span>Foo {
+}</code></pre></div>
+<h4 id="fields-1"><a class="doc-anchor" href="#fields-1">§</a>Fields</h4>
+<p>Fields in Protobuf messages are translated into Rust as public struct fields of the
+corresponding type.</p>
+<h5 id="scalar-values"><a class="doc-anchor" href="#scalar-values">§</a>Scalar Values</h5>
+<p>Scalar value types are converted as follows:</p>
+<div><table><thead><tr><th>Protobuf Type</th><th>Rust Type</th></tr></thead><tbody>
+<tr><td><code>double</code></td><td><code>f64</code></td></tr>
+<tr><td><code>float</code></td><td><code>f32</code></td></tr>
+<tr><td><code>int32</code></td><td><code>i32</code></td></tr>
+<tr><td><code>int64</code></td><td><code>i64</code></td></tr>
+<tr><td><code>uint32</code></td><td><code>u32</code></td></tr>
+<tr><td><code>uint64</code></td><td><code>u64</code></td></tr>
+<tr><td><code>sint32</code></td><td><code>i32</code></td></tr>
+<tr><td><code>sint64</code></td><td><code>i64</code></td></tr>
+<tr><td><code>fixed32</code></td><td><code>u32</code></td></tr>
+<tr><td><code>fixed64</code></td><td><code>u64</code></td></tr>
+<tr><td><code>sfixed32</code></td><td><code>i32</code></td></tr>
+<tr><td><code>sfixed64</code></td><td><code>i64</code></td></tr>
+<tr><td><code>bool</code></td><td><code>bool</code></td></tr>
+<tr><td><code>string</code></td><td><code>String</code></td></tr>
+<tr><td><code>bytes</code></td><td><code>Vec&lt;u8&gt;</code></td></tr>
+</tbody></table>
+</div><h5 id="enumerations"><a class="doc-anchor" href="#enumerations">§</a>Enumerations</h5>
+<p>All <code>.proto</code> enumeration types convert to the Rust <code>i32</code> type. Additionally,
+each enumeration type gets a corresponding Rust <code>enum</code> type. For example, this
+<code>proto</code> enum:</p>
+<div class="example-wrap"><pre class="language-protobuf"><code>enum PhoneType {
+  MOBILE = 0;
+  HOME = 1;
+  WORK = 2;
+}
+</code></pre></div>
+<p>gets this corresponding Rust enum <sup id="fnref1"><a href="#fn1">1</a></sup>:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">pub enum </span>PhoneType {
+    Mobile = <span class="number">0</span>,
+    Home = <span class="number">1</span>,
+    Work = <span class="number">2</span>,
+}</code></pre></div>
+<p>You can convert a <code>PhoneType</code> value to an <code>i32</code> by doing:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code>PhoneType::Mobile <span class="kw">as </span>i32</code></pre></div>
+<p>The <code>#[derive(::prost::Enumeration)]</code> annotation added to the generated
+<code>PhoneType</code> adds these associated functions to the type:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">impl </span>PhoneType {
+    <span class="kw">pub fn </span>is_valid(value: i32) -&gt; bool { ... }
+    <span class="attr">#[deprecated]
+    </span><span class="kw">pub fn </span>from_i32(value: i32) -&gt; <span class="prelude-ty">Option</span>&lt;PhoneType&gt; { ... }
+}</code></pre></div>
+<p>It also adds an <code>impl TryFrom&lt;i32&gt; for PhoneType</code>, so you can convert an <code>i32</code> to its corresponding <code>PhoneType</code> value by doing,
+for example:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">let </span>phone_type = <span class="number">2i32</span>;
+
+<span class="kw">match </span>PhoneType::try_from(phone_type) {
+    <span class="prelude-val">Ok</span>(PhoneType::Mobile) =&gt; ...,
+    <span class="prelude-val">Ok</span>(PhoneType::Home) =&gt; ...,
+    <span class="prelude-val">Ok</span>(PhoneType::Work) =&gt; ...,
+    <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; ...,
+}</code></pre></div>
+<p>Additionally, wherever a <code>proto</code> enum is used as a field in a <code>Message</code>, the
+message will have ‘accessor’ methods to get/set the value of the field as the
+Rust enum type. For instance, this proto <code>PhoneNumber</code> message that has a field
+named <code>type</code> of type <code>PhoneType</code>:</p>
+<div class="example-wrap"><pre class="language-protobuf"><code>message PhoneNumber {
+  string number = 1;
+  PhoneType type = 2;
+}
+</code></pre></div>
+<p>will become the following Rust type <sup id="fnref2"><a href="#fn2">2</a></sup> with methods <code>type</code> and <code>set_type</code>:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">pub struct </span>PhoneNumber {
+    <span class="kw">pub </span>number: String,
+    <span class="kw">pub </span>r#type: i32, <span class="comment">// the `r#` is needed because `type` is a Rust keyword
+</span>}
+
+<span class="kw">impl </span>PhoneNumber {
+    <span class="kw">pub fn </span>r#type(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; PhoneType { ... }
+    <span class="kw">pub fn </span>set_type(<span class="kw-2">&amp;mut </span><span class="self">self</span>, value: PhoneType) { ... }
+}</code></pre></div>
+<p>Note that the getter methods will return the Rust enum’s default value if the
+field has an invalid <code>i32</code> value.</p>
+<p>The <code>enum</code> type isn’t used directly as a field, because the Protobuf spec
+mandates that enumerations values are ‘open’, and decoding unrecognized
+enumeration values must be possible.</p>
+<h5 id="field-modifiers"><a class="doc-anchor" href="#field-modifiers">§</a>Field Modifiers</h5>
+<p>Protobuf scalar value and enumeration message fields can have a modifier
+depending on the Protobuf version. Modifiers change the corresponding type of
+the Rust field:</p>
+<div><table><thead><tr><th><code>.proto</code> Version</th><th>Modifier</th><th>Rust Type</th></tr></thead><tbody>
+<tr><td><code>proto2</code></td><td><code>optional</code></td><td><code>Option&lt;T&gt;</code></td></tr>
+<tr><td><code>proto2</code></td><td><code>required</code></td><td><code>T</code></td></tr>
+<tr><td><code>proto3</code></td><td>default</td><td><code>T</code> for scalar types, <code>Option&lt;T&gt;</code> otherwise</td></tr>
+<tr><td><code>proto3</code></td><td><code>optional</code></td><td><code>Option&lt;T&gt;</code></td></tr>
+<tr><td><code>proto2</code>/<code>proto3</code></td><td><code>repeated</code></td><td><code>Vec&lt;T&gt;</code></td></tr>
+</tbody></table>
+</div>
+<p>Note that in <code>proto3</code> the default representation for all user-defined message
+types is <code>Option&lt;T&gt;</code>, and for scalar types just <code>T</code> (during decoding, a missing
+value is populated by <code>T::default()</code>). If you need a witness of the presence of
+a scalar type <code>T</code>, use the <code>optional</code> modifier to enforce an <code>Option&lt;T&gt;</code>
+representation in the generated Rust struct.</p>
+<h5 id="map-fields"><a class="doc-anchor" href="#map-fields">§</a>Map Fields</h5>
+<p>Map fields are converted to a Rust <code>HashMap</code> with key and value type converted
+from the Protobuf key and value types.</p>
+<h5 id="message-fields"><a class="doc-anchor" href="#message-fields">§</a>Message Fields</h5>
+<p>Message fields are converted to the corresponding struct type. The table of
+field modifiers above applies to message fields, except that <code>proto3</code> message
+fields without a modifier (the default) will be wrapped in an <code>Option</code>.
+Typically message fields are unboxed. <code>prost</code> will automatically box a message
+field if the field type and the parent type are recursively nested in order to
+avoid an infinite sized struct.</p>
+<h5 id="oneof-fields"><a class="doc-anchor" href="#oneof-fields">§</a>Oneof Fields</h5>
+<p>Oneof fields convert to a Rust enum. Protobuf <code>oneof</code>s types are not named, so
+<code>prost</code> uses the name of the <code>oneof</code> field for the resulting Rust enum, and
+defines the enum in a module under the struct. For example, a <code>proto3</code> message
+such as:</p>
+<div class="example-wrap"><pre class="language-protobuf"><code>message Foo {
+  oneof widget {
+    int32 quux = 1;
+    string bar = 2;
+  }
+}
+</code></pre></div>
+<p>generates the following Rust<sup id="fnref3"><a href="#fn3">3</a></sup>:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">pub struct </span>Foo {
+    <span class="kw">pub </span>widget: <span class="prelude-ty">Option</span>&lt;foo::Widget&gt;,
+}
+<span class="kw">pub mod </span>foo {
+    <span class="kw">pub enum </span>Widget {
+        Quux(i32),
+        Bar(String),
+    }
+}</code></pre></div>
+<p><code>oneof</code> fields are always wrapped in an <code>Option</code>.</p>
+<h4 id="services"><a class="doc-anchor" href="#services">§</a>Services</h4>
+<p><code>prost-build</code> allows a custom code-generator to be used for processing <code>service</code>
+definitions. This can be used to output Rust traits according to an
+application’s specific needs.</p>
+<h4 id="generated-code-example"><a class="doc-anchor" href="#generated-code-example">§</a>Generated Code Example</h4>
+<p>Example <code>.proto</code> file:</p>
+<div class="example-wrap"><pre class="language-protobuf"><code>syntax = &quot;proto3&quot;;
+package tutorial;
+
+message Person {
+  string name = 1;
+  int32 id = 2;  // Unique ID number for this person.
+  string email = 3;
+
+  enum PhoneType {
+    MOBILE = 0;
+    HOME = 1;
+    WORK = 2;
+  }
+
+  message PhoneNumber {
+    string number = 1;
+    PhoneType type = 2;
+  }
+
+  repeated PhoneNumber phones = 4;
+}
+
+// Our address book file is just one of these.
+message AddressBook {
+  repeated Person people = 1;
+}
+</code></pre></div>
+<p>and the generated Rust code (<code>tutorial.rs</code>):</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Clone, PartialEq, ::prost::Message)]
+</span><span class="kw">pub struct </span>Person {
+    <span class="attr">#[prost(string, tag=<span class="string">"1"</span>)]
+    </span><span class="kw">pub </span>name: ::prost::alloc::string::String,
+    <span class="doccomment">/// Unique ID number for this person.
+    </span><span class="attr">#[prost(int32, tag=<span class="string">"2"</span>)]
+    </span><span class="kw">pub </span>id: i32,
+    <span class="attr">#[prost(string, tag=<span class="string">"3"</span>)]
+    </span><span class="kw">pub </span>email: ::prost::alloc::string::String,
+    <span class="attr">#[prost(message, repeated, tag=<span class="string">"4"</span>)]
+    </span><span class="kw">pub </span>phones: ::prost::alloc::vec::Vec&lt;person::PhoneNumber&gt;,
+}
+<span class="doccomment">/// Nested message and enum types in `Person`.
+</span><span class="kw">pub mod </span>person {
+    <span class="attr">#[derive(Clone, PartialEq, ::prost::Message)]
+    </span><span class="kw">pub struct </span>PhoneNumber {
+        <span class="attr">#[prost(string, tag=<span class="string">"1"</span>)]
+        </span><span class="kw">pub </span>number: ::prost::alloc::string::String,
+        <span class="attr">#[prost(enumeration=<span class="string">"PhoneType"</span>, tag=<span class="string">"2"</span>)]
+        </span><span class="kw">pub </span>r#type: i32,
+    }
+    <span class="attr">#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+    #[repr(i32)]
+    </span><span class="kw">pub enum </span>PhoneType {
+        Mobile = <span class="number">0</span>,
+        Home = <span class="number">1</span>,
+        Work = <span class="number">2</span>,
+    }
+}
+<span class="doccomment">/// Our address book file is just one of these.
+</span><span class="attr">#[derive(Clone, PartialEq, ::prost::Message)]
+</span><span class="kw">pub struct </span>AddressBook {
+    <span class="attr">#[prost(message, repeated, tag=<span class="string">"1"</span>)]
+    </span><span class="kw">pub </span>people: ::prost::alloc::vec::Vec&lt;Person&gt;,
+}</code></pre></div>
+<h3 id="accessing-the-protoc-filedescriptorset"><a class="doc-anchor" href="#accessing-the-protoc-filedescriptorset">§</a>Accessing the <code>protoc</code> <code>FileDescriptorSet</code></h3>
+<p>The <code>prost_build::Config::file_descriptor_set_path</code> option can be used to emit a file descriptor set
+during the build &amp; code generation step. When used in conjunction with the <code>std::include_bytes</code>
+macro and the <code>prost_types::FileDescriptorSet</code> type, applications and libraries using Prost can
+implement introspection capabilities requiring details from the original <code>.proto</code> files.</p>
+<h3 id="using-prost-in-a-no_std-crate"><a class="doc-anchor" href="#using-prost-in-a-no_std-crate">§</a>Using <code>prost</code> in a <code>no_std</code> Crate</h3>
+<p><code>prost</code> is compatible with <code>no_std</code> crates. To enable <code>no_std</code> support, disable
+the <code>std</code> features in <code>prost</code> and <code>prost-types</code>:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code>[dependencies]
+prost = { version = <span class="string">"0.13.3"</span>, default-features = <span class="bool-val">false</span>, features = [<span class="string">"prost-derive"</span>] }
+prost-types = { version = <span class="string">"0.13.3"</span>, default-features = <span class="bool-val">false </span>}</code></pre></div>
+<p>Additionally, configure <code>prost-build</code> to output <code>BTreeMap</code>s instead of <code>HashMap</code>s
+for all Protobuf <code>map</code> fields in your <code>build.rs</code>:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">let </span><span class="kw-2">mut </span>config = prost_build::Config::new();
+config.btree_map(<span class="kw-2">&amp;</span>[<span class="string">"."</span>]);</code></pre></div>
+<p>When using edition 2015, it may be necessary to add an <code>extern crate core;</code>
+directive to the crate which includes <code>prost</code>-generated code.</p>
+<h3 id="serializing-existing-types"><a class="doc-anchor" href="#serializing-existing-types">§</a>Serializing Existing Types</h3>
+<p><code>prost</code> uses a custom derive macro to handle encoding and decoding types, which
+means that if your existing Rust type is compatible with Protobuf types, you can
+serialize and deserialize it by adding the appropriate derive and field
+annotations.</p>
+<p>Currently the best documentation on adding annotations is to look at the
+generated code examples above.</p>
+<h4 id="tag-inference-for-existing-types"><a class="doc-anchor" href="#tag-inference-for-existing-types">§</a>Tag Inference for Existing Types</h4>
+<p>Prost automatically infers tags for the struct.</p>
+<p>Fields are tagged sequentially in the order they
+are specified, starting with <code>1</code>.</p>
+<p>You may skip tags which have been reserved, or where there are gaps between
+sequentially occurring tag values by specifying the tag number to skip to with
+the <code>tag</code> attribute on the first field after the gap. The following fields will
+be tagged sequentially starting from the next number.</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>prost;
+<span class="kw">use </span>prost::{Enumeration, Message};
+
+<span class="attr">#[derive(Clone, PartialEq, Message)]
+</span><span class="kw">struct </span>Person {
+    <span class="attr">#[prost(string, tag = <span class="string">"1"</span>)]
+    </span><span class="kw">pub </span>id: String, <span class="comment">// tag=1
+    // NOTE: Old "name" field has been removed
+    // pub name: String, // tag=2 (Removed)
+    </span><span class="attr">#[prost(string, tag = <span class="string">"6"</span>)]
+    </span><span class="kw">pub </span>given_name: String, <span class="comment">// tag=6
+    </span><span class="attr">#[prost(string)]
+    </span><span class="kw">pub </span>family_name: String, <span class="comment">// tag=7
+    </span><span class="attr">#[prost(string)]
+    </span><span class="kw">pub </span>formatted_name: String, <span class="comment">// tag=8
+    </span><span class="attr">#[prost(uint32, tag = <span class="string">"3"</span>)]
+    </span><span class="kw">pub </span>age: u32, <span class="comment">// tag=3
+    </span><span class="attr">#[prost(uint32)]
+    </span><span class="kw">pub </span>height: u32, <span class="comment">// tag=4
+    </span><span class="attr">#[prost(enumeration = <span class="string">"Gender"</span>)]
+    </span><span class="kw">pub </span>gender: i32, <span class="comment">// tag=5
+    // NOTE: Skip to less commonly occurring fields
+    </span><span class="attr">#[prost(string, tag = <span class="string">"16"</span>)]
+    </span><span class="kw">pub </span>name_prefix: String, <span class="comment">// tag=16  (eg. mr/mrs/ms)
+    </span><span class="attr">#[prost(string)]
+    </span><span class="kw">pub </span>name_suffix: String, <span class="comment">// tag=17  (eg. jr/esq)
+    </span><span class="attr">#[prost(string)]
+    </span><span class="kw">pub </span>maiden_name: String, <span class="comment">// tag=18
+</span>}
+
+<span class="attr">#[derive(Clone, Copy, Debug, PartialEq, Eq, Enumeration)]
+</span><span class="kw">pub enum </span>Gender {
+    Unknown = <span class="number">0</span>,
+    Female = <span class="number">1</span>,
+    Male = <span class="number">2</span>,
+}</code></pre></div>
+<h3 id="nix"><a class="doc-anchor" href="#nix">§</a>Nix</h3>
+<p>The prost project maintains flakes support for local development. Once you have
+nix and nix flakes setup you can just run <code>nix develop</code> to get a shell
+configured with the required dependencies to compile the whole project.</p>
+<h3 id="feature-flags"><a class="doc-anchor" href="#feature-flags">§</a>Feature Flags</h3>
+<ul>
+<li><code>std</code>: Enable integration with standard library. Disable this feature for <code>no_std</code> support. This feature is enabled by default.</li>
+<li><code>derive</code>: Enable integration with <code>prost-derive</code>. Disable this feature to reduce compile times. This feature is enabled by default.</li>
+<li><code>prost-derive</code>: Deprecated. Alias for <code>derive</code> feature.</li>
+<li><code>no-recursion-limit</code>: Disable the recursion limit. The recursion limit is 100 and cannot be customized.</li>
+</ul>
+<h3 id="faq"><a class="doc-anchor" href="#faq">§</a>FAQ</h3>
+<ol>
+<li><strong>Could <code>prost</code> be implemented as a serializer for <a href="https://serde.rs/">Serde</a>?</strong></li>
+</ol>
+<p>Probably not, however I would like to hear from a Serde expert on the matter.
+There are two complications with trying to serialize Protobuf messages with
+Serde:</p>
+<ul>
+<li>Protobuf fields require a numbered tag, and currently there appears to be no
+mechanism suitable for this in <code>serde</code>.</li>
+<li>The mapping of Protobuf type to Rust type is not 1-to-1. As a result,
+trait-based approaches to dispatching don’t work very well. Example: six
+different Protobuf field types correspond to a Rust <code>Vec&lt;i32&gt;</code>: <code>repeated int32</code>, <code>repeated sint32</code>, <code>repeated sfixed32</code>, and their packed
+counterparts.</li>
+</ul>
+<p>But it is possible to place <code>serde</code> derive tags onto the generated types, so
+the same structure can support both <code>prost</code> and <code>Serde</code>.</p>
+<ol start="2">
+<li><strong>I get errors when trying to run <code>cargo test</code> on MacOS</strong></li>
+</ol>
+<p>If the errors are about missing <code>autoreconf</code> or similar, you can probably fix
+them by running</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code>brew install automake
+brew install libtool</code></pre></div>
+<h3 id="license"><a class="doc-anchor" href="#license">§</a>License</h3>
+<p><code>prost</code> is distributed under the terms of the Apache License (Version 2.0).</p>
+<p>See <a href="https://github.com/tokio-rs/prost/blob/master/LICENSE">LICENSE</a> for details.</p>
+<p>Copyright 2022 Dan Burkert &amp; Tokio Contributors</p>
+<div class="footnotes"><hr><ol><li id="fn1"><p>Annotations have been elided for clarity. See below for a full example.&nbsp;<a href="#fnref1">↩</a></p></li><li id="fn2"><p>Annotations have been elided for clarity. See below for a full example.&nbsp;<a href="#fnref2">↩</a></p></li><li id="fn3"><p>Annotations have been elided for clarity. See below for a full example.&nbsp;<a href="#fnref3">↩</a></p></li></ol></div></div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.bytes"><code>pub use <a class="mod" href="../bytes/index.html" title="mod bytes">bytes</a>;</code></div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.DecodeError.html" title="struct prost::DecodeError">DecodeError</a></div><div class="desc docblock-short">A Protobuf message decoding error.</div></li><li><div class="item-name"><a class="struct" href="struct.EncodeError.html" title="struct prost::EncodeError">EncodeError</a></div><div class="desc docblock-short">A Protobuf message encoding error.</div></li><li><div class="item-name"><a class="struct" href="struct.UnknownEnumValue.html" title="struct prost::UnknownEnumValue">UnknownEnumValue</a></div><div class="desc docblock-short">An error indicating that an unknown enumeration value was encountered.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.Message.html" title="trait prost::Message">Message</a></div><div class="desc docblock-short">A Protocol Buffers message.</div></li><li><div class="item-name"><a class="trait" href="trait.Name.html" title="trait prost::Name">Name</a></div><div class="desc docblock-short">Associate a type name with a <a href="trait.Message.html" title="trait prost::Message"><code>Message</code></a> type.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.decode_length_delimiter.html" title="fn prost::decode_length_delimiter">decode_length_delimiter</a></div><div class="desc docblock-short">Decodes a length delimiter from the buffer.</div></li><li><div class="item-name"><a class="fn" href="fn.encode_length_delimiter.html" title="fn prost::encode_length_delimiter">encode_length_delimiter</a></div><div class="desc docblock-short">Encodes a length delimiter to the buffer.</div></li><li><div class="item-name"><a class="fn" href="fn.length_delimiter_len.html" title="fn prost::length_delimiter_len">length_delimiter_len</a></div><div class="desc docblock-short">Returns the encoded length of a length delimiter.</div></li></ul></section></div></main></body></html>

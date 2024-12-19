@@ -1,0 +1,83 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Deserialize an instance of type `T` from an I/O stream of JSON."><title>from_reader in serde_json - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="serde_json" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../serde_json/index.html">serde_json</a><span class="version">1.0.128</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="index.html">serde_json</a>::<wbr><a class="fn" href="#">from_reader</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/serde_json/de.rs.html#2593-2599">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn from_reader&lt;R, T&gt;(rdr: R) -&gt; <a class="type" href="type.Result.html" title="type serde_json::Result">Result</a>&lt;T&gt;<div class="where">where
+    R: <a class="trait" href="https://doc.rust-lang.org/1.81.0/std/io/trait.Read.html" title="trait std::io::Read">Read</a>,
+    T: <a class="trait" href="../serde/de/trait.DeserializeOwned.html" title="trait serde::de::DeserializeOwned">DeserializeOwned</a>,</div></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Deserialize an instance of type <code>T</code> from an I/O stream of JSON.</p>
+<p>The content of the I/O stream is deserialized directly from the stream
+without being buffered in memory by serde_json.</p>
+<p>When reading from a source against which short reads are not efficient, such
+as a <a href="https://doc.rust-lang.org/std/fs/struct.File.html"><code>File</code></a>, you will want to apply your own buffering because serde_json
+will not buffer the input. See <a href="https://doc.rust-lang.org/std/io/struct.BufReader.html"><code>std::io::BufReader</code></a>.</p>
+<p>It is expected that the input stream ends after the deserialized object.
+If the stream does not end, such as in the case of a persistent socket connection,
+this function will not return. It is possible instead to deserialize from a prefix of an input
+stream without looking for EOF by managing your own <a href="struct.Deserializer.html" title="struct serde_json::Deserializer"><code>Deserializer</code></a>.</p>
+<p>Note that counter to intuition, this function is usually slower than
+reading a file completely into memory and then applying <a href="./fn.from_str.html"><code>from_str</code></a>
+or <a href="./fn.from_slice.html"><code>from_slice</code></a> on it. See <a href="https://github.com/serde-rs/json/issues/160">issue #160</a>.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<p>Reading the contents of a file.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>serde::Deserialize;
+
+<span class="kw">use </span>std::error::Error;
+<span class="kw">use </span>std::fs::File;
+<span class="kw">use </span>std::io::BufReader;
+<span class="kw">use </span>std::path::Path;
+
+<span class="attr">#[derive(Deserialize, Debug)]
+</span><span class="kw">struct </span>User {
+    fingerprint: String,
+    location: String,
+}
+
+<span class="kw">fn </span>read_user_from_file&lt;P: AsRef&lt;Path&gt;&gt;(path: P) -&gt; <span class="prelude-ty">Result</span>&lt;User, Box&lt;<span class="kw">dyn </span>Error&gt;&gt; {
+    <span class="comment">// Open the file in read-only mode with buffer.
+    </span><span class="kw">let </span>file = File::open(path)<span class="question-mark">?</span>;
+    <span class="kw">let </span>reader = BufReader::new(file);
+
+    <span class="comment">// Read the JSON contents of the file as an instance of `User`.
+    </span><span class="kw">let </span>u = serde_json::from_reader(reader)<span class="question-mark">?</span>;
+
+    <span class="comment">// Return the `User`.
+    </span><span class="prelude-val">Ok</span>(u)
+}
+
+<span class="kw">fn </span>main() {
+    <span class="kw">let </span>u = read_user_from_file(<span class="string">"test.json"</span>).unwrap();
+    <span class="macro">println!</span>(<span class="string">"{:#?}"</span>, u);
+}</code></pre></div>
+<p>Reading from a persistent socket connection.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>serde::Deserialize;
+
+<span class="kw">use </span>std::error::Error;
+<span class="kw">use </span>std::net::{TcpListener, TcpStream};
+
+<span class="attr">#[derive(Deserialize, Debug)]
+</span><span class="kw">struct </span>User {
+    fingerprint: String,
+    location: String,
+}
+
+<span class="kw">fn </span>read_user_from_stream(tcp_stream: TcpStream) -&gt; <span class="prelude-ty">Result</span>&lt;User, Box&lt;<span class="kw">dyn </span>Error&gt;&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>de = serde_json::Deserializer::from_reader(tcp_stream);
+    <span class="kw">let </span>u = User::deserialize(<span class="kw-2">&amp;mut </span>de)<span class="question-mark">?</span>;
+
+    <span class="prelude-val">Ok</span>(u)
+}
+
+<span class="kw">fn </span>main() {
+    <span class="kw">let </span>listener = TcpListener::bind(<span class="string">"127.0.0.1:4000"</span>).unwrap();
+
+    <span class="kw">for </span>stream <span class="kw">in </span>listener.incoming() {
+        <span class="macro">println!</span>(<span class="string">"{:#?}"</span>, read_user_from_stream(stream.unwrap()));
+    }
+}</code></pre></div>
+<h2 id="errors"><a class="doc-anchor" href="#errors">§</a>Errors</h2>
+<p>This conversion can fail if the structure of the input does not match the
+structure expected by <code>T</code>, for example if <code>T</code> is a struct type but the input
+contains something other than a JSON map. It can also fail if the structure
+is correct but <code>T</code>’s implementation of <code>Deserialize</code> decides that something
+is wrong with the data, for example required struct fields are missing from
+the JSON map or some number is too big to fit in the expected primitive
+type.</p>
+</div></details></section></div></main></body></html>

@@ -1,0 +1,601 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Represents information about capturing groups in a compiled regex."><title>GroupInfo in regex_automata::util::captures - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="regex_automata" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc struct"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../regex_automata/index.html">regex_automata</a><span class="version">0.4.7</span></h2></div><h2 class="location"><a href="#">GroupInfo</a></h2><div class="sidebar-elems"><section><h3><a href="#implementations">Methods</a></h3><ul class="block method"><li><a href="#method.all_group_len">all_group_len</a></li><li><a href="#method.all_names">all_names</a></li><li><a href="#method.empty">empty</a></li><li><a href="#method.explicit_slot_len">explicit_slot_len</a></li><li><a href="#method.group_len">group_len</a></li><li><a href="#method.implicit_slot_len">implicit_slot_len</a></li><li><a href="#method.memory_usage">memory_usage</a></li><li><a href="#method.new">new</a></li><li><a href="#method.pattern_len">pattern_len</a></li><li><a href="#method.pattern_names">pattern_names</a></li><li><a href="#method.slot">slot</a></li><li><a href="#method.slot_len">slot_len</a></li><li><a href="#method.slots">slots</a></li><li><a href="#method.to_index">to_index</a></li><li><a href="#method.to_name">to_name</a></li></ul><h3><a href="#trait-implementations">Trait Implementations</a></h3><ul class="block trait-implementation"><li><a href="#impl-Clone-for-GroupInfo">Clone</a></li><li><a href="#impl-Debug-for-GroupInfo">Debug</a></li><li><a href="#impl-Default-for-GroupInfo">Default</a></li></ul><h3><a href="#synthetic-implementations">Auto Trait Implementations</a></h3><ul class="block synthetic-implementation"><li><a href="#impl-Freeze-for-GroupInfo">Freeze</a></li><li><a href="#impl-RefUnwindSafe-for-GroupInfo">RefUnwindSafe</a></li><li><a href="#impl-Send-for-GroupInfo">Send</a></li><li><a href="#impl-Sync-for-GroupInfo">Sync</a></li><li><a href="#impl-Unpin-for-GroupInfo">Unpin</a></li><li><a href="#impl-UnwindSafe-for-GroupInfo">UnwindSafe</a></li></ul><h3><a href="#blanket-implementations">Blanket Implementations</a></h3><ul class="block blanket-implementation"><li><a href="#impl-Any-for-T">Any</a></li><li><a href="#impl-Borrow%3CT%3E-for-T">Borrow&lt;T&gt;</a></li><li><a href="#impl-BorrowMut%3CT%3E-for-T">BorrowMut&lt;T&gt;</a></li><li><a href="#impl-CloneToUninit-for-T">CloneToUninit</a></li><li><a href="#impl-From%3CT%3E-for-T">From&lt;T&gt;</a></li><li><a href="#impl-Into%3CU%3E-for-T">Into&lt;U&gt;</a></li><li><a href="#impl-ToOwned-for-T">ToOwned</a></li><li><a href="#impl-TryFrom%3CU%3E-for-T">TryFrom&lt;U&gt;</a></li><li><a href="#impl-TryInto%3CU%3E-for-T">TryInto&lt;U&gt;</a></li></ul></section><h2><a href="index.html">In regex_automata::util::captures</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Struct <a href="../../index.html">regex_automata</a>::<wbr><a href="../index.html">util</a>::<wbr><a href="index.html">captures</a>::<wbr><a class="struct" href="#">GroupInfo</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/regex_automata/util/captures.rs.html#1451">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub struct GroupInfo(<span class="comment">/* private fields */</span>);</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Represents information about capturing groups in a compiled regex.</p>
+<p>The information encapsulated by this type consists of the following. For
+each pattern:</p>
+<ul>
+<li>A map from every capture group name to its corresponding capture group
+index.</li>
+<li>A map from every capture group index to its corresponding capture group
+name.</li>
+<li>A map from capture group index to its corresponding slot index. A slot
+refers to one half of a capturing group. That is, a capture slot is either
+the start or end of a capturing group. A slot is usually the mechanism
+by which a regex engine records offsets for each capturing group during a
+search.</li>
+</ul>
+<p>A <code>GroupInfo</code> uses reference counting internally and is thus cheap to
+clone.</p>
+<h2 id="mapping-from-capture-groups-to-slots"><a class="doc-anchor" href="#mapping-from-capture-groups-to-slots">§</a>Mapping from capture groups to slots</h2>
+<p>One of the main responsibilities of a <code>GroupInfo</code> is to build a mapping
+from <code>(PatternID, u32)</code> (where the <code>u32</code> is a capture index) to something
+called a “slot.” As mentioned above, a slot refers to one half of a
+capturing group. Both combined provide the start and end offsets of
+a capturing group that participated in a match.</p>
+<p><strong>The mapping between group indices and slots is an API guarantee.</strong> That
+is, the mapping won’t change within a semver compatible release.</p>
+<p>Slots exist primarily because this is a convenient mechanism by which
+regex engines report group offsets at search time. For example, the
+<a href="../../nfa/thompson/enum.State.html#variant.Capture" title="variant regex_automata::nfa::thompson::State::Capture"><code>nfa::thompson::State::Capture</code></a>
+NFA state includes the slot index. When a regex engine transitions through
+this state, it will likely use the slot index to write the current haystack
+offset to some region of memory. When a match is found, those slots are
+then reported to the caller, typically via a convenient abstraction like a
+<a href="struct.Captures.html" title="struct regex_automata::util::captures::Captures"><code>Captures</code></a> value.</p>
+<p>Because this crate provides first class support for multi-pattern regexes,
+and because of some performance related reasons, the mapping between
+capturing groups and slots is a little complex. However, in the case of a
+single pattern, the mapping can be described very simply: for all capture
+group indices <code>i</code>, its corresponding slots are at <code>i * 2</code> and <code>i * 2 + 1</code>.
+Notice that the pattern ID isn’t involved at all here, because it only
+applies to a single-pattern regex, it is therefore always <code>0</code>.</p>
+<p>In the multi-pattern case, the mapping is a bit more complicated. To talk
+about it, we must define what we mean by “implicit” vs “explicit”
+capturing groups:</p>
+<ul>
+<li>An <strong>implicit</strong> capturing group refers to the capturing group that is
+present for every pattern automatically, and corresponds to the overall
+match of a pattern. Every pattern has precisely one implicit capturing
+group. It is always unnamed and it always corresponds to the capture group
+index <code>0</code>.</li>
+<li>An <strong>explicit</strong> capturing group refers to any capturing group that
+appears in the concrete syntax of the pattern. (Or, if an NFA was hand
+built without any concrete syntax, it refers to any capturing group with an
+index greater than <code>0</code>.)</li>
+</ul>
+<p>Some examples:</p>
+<ul>
+<li><code>\w+</code> has one implicit capturing group and zero explicit capturing
+groups.</li>
+<li><code>(\w+)</code> has one implicit group and one explicit group.</li>
+<li><code>foo(\d+)(?:\pL+)(\d+)</code> has one implicit group and two explicit groups.</li>
+</ul>
+<p>Turning back to the slot mapping, we can now state it as follows:</p>
+<ul>
+<li>Given a pattern ID <code>pid</code>, the slots for its implicit group are always
+at <code>pid * 2</code> and <code>pid * 2 + 1</code>.</li>
+<li>Given a pattern ID <code>0</code>, the slots for its explicit groups start
+at <code>group_info.pattern_len() * 2</code>.</li>
+<li>Given a pattern ID <code>pid &gt; 0</code>, the slots for its explicit groups start
+immediately following where the slots for the explicit groups of <code>pid - 1</code>
+end.</li>
+</ul>
+<p>In particular, while there is a concrete formula one can use to determine
+where the slots for the implicit group of any pattern are, there is no
+general formula for determining where the slots for explicit capturing
+groups are. This is because each pattern can contain a different number
+of groups.</p>
+<p>The intended way of getting the slots for a particular capturing group
+(whether implicit or explicit) is via the <a href="struct.GroupInfo.html#method.slot" title="method regex_automata::util::captures::GroupInfo::slot"><code>GroupInfo::slot</code></a> or
+<a href="struct.GroupInfo.html#method.slots" title="method regex_automata::util::captures::GroupInfo::slots"><code>GroupInfo::slots</code></a> method.</p>
+<p>See below for a concrete example of how capturing groups get mapped to
+slots.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<p>This example shows how to build a new <code>GroupInfo</code> and query it for
+information.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::util::{captures::GroupInfo, primitives::PatternID};
+
+<span class="kw">let </span>info = GroupInfo::new(<span class="macro">vec!</span>[
+    <span class="macro">vec!</span>[<span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(<span class="string">"foo"</span>)],
+    <span class="macro">vec!</span>[<span class="prelude-val">None</span>],
+    <span class="macro">vec!</span>[<span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(<span class="string">"bar"</span>), <span class="prelude-val">None</span>],
+    <span class="macro">vec!</span>[<span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(<span class="string">"foo"</span>)],
+])<span class="question-mark">?</span>;
+<span class="comment">// The number of patterns being tracked.
+</span><span class="macro">assert_eq!</span>(<span class="number">4</span>, info.pattern_len());
+<span class="comment">// We can query the number of groups for any pattern.
+</span><span class="macro">assert_eq!</span>(<span class="number">2</span>, info.group_len(PatternID::must(<span class="number">0</span>)));
+<span class="macro">assert_eq!</span>(<span class="number">1</span>, info.group_len(PatternID::must(<span class="number">1</span>)));
+<span class="macro">assert_eq!</span>(<span class="number">5</span>, info.group_len(PatternID::must(<span class="number">2</span>)));
+<span class="macro">assert_eq!</span>(<span class="number">3</span>, info.group_len(PatternID::must(<span class="number">3</span>)));
+<span class="comment">// An invalid pattern always has zero groups.
+</span><span class="macro">assert_eq!</span>(<span class="number">0</span>, info.group_len(PatternID::must(<span class="number">999</span>)));
+<span class="comment">// 2 slots per group
+</span><span class="macro">assert_eq!</span>(<span class="number">22</span>, info.slot_len());
+
+<span class="comment">// We can map a group index for a particular pattern to its name, if
+// one exists.
+</span><span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="string">"foo"</span>), info.to_name(PatternID::must(<span class="number">3</span>), <span class="number">2</span>));
+<span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, info.to_name(PatternID::must(<span class="number">2</span>), <span class="number">4</span>));
+<span class="comment">// Or map a name to its group index.
+</span><span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="number">1</span>), info.to_index(PatternID::must(<span class="number">0</span>), <span class="string">"foo"</span>));
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="number">2</span>), info.to_index(PatternID::must(<span class="number">3</span>), <span class="string">"foo"</span>));
+</code></pre></div>
+<h2 id="example-mapping-from-capture-groups-to-slots"><a class="doc-anchor" href="#example-mapping-from-capture-groups-to-slots">§</a>Example: mapping from capture groups to slots</h2>
+<p>This example shows the specific mapping from capture group indices for
+each pattern to their corresponding slots. The slot values shown in this
+example are considered an API guarantee.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::util::{captures::GroupInfo, primitives::PatternID};
+
+<span class="kw">let </span>info = GroupInfo::new(<span class="macro">vec!</span>[
+    <span class="macro">vec!</span>[<span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(<span class="string">"foo"</span>)],
+    <span class="macro">vec!</span>[<span class="prelude-val">None</span>],
+    <span class="macro">vec!</span>[<span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(<span class="string">"bar"</span>), <span class="prelude-val">None</span>],
+    <span class="macro">vec!</span>[<span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(<span class="string">"foo"</span>)],
+])<span class="question-mark">?</span>;
+
+<span class="comment">// We first show the slots for each pattern's implicit group.
+</span><span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>((<span class="number">0</span>, <span class="number">1</span>)), info.slots(PatternID::must(<span class="number">0</span>), <span class="number">0</span>));
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>((<span class="number">2</span>, <span class="number">3</span>)), info.slots(PatternID::must(<span class="number">1</span>), <span class="number">0</span>));
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>((<span class="number">4</span>, <span class="number">5</span>)), info.slots(PatternID::must(<span class="number">2</span>), <span class="number">0</span>));
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>((<span class="number">6</span>, <span class="number">7</span>)), info.slots(PatternID::must(<span class="number">3</span>), <span class="number">0</span>));
+
+<span class="comment">// And now we show the slots for each pattern's explicit group.
+</span><span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>((<span class="number">8</span>, <span class="number">9</span>)), info.slots(PatternID::must(<span class="number">0</span>), <span class="number">1</span>));
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>((<span class="number">10</span>, <span class="number">11</span>)), info.slots(PatternID::must(<span class="number">2</span>), <span class="number">1</span>));
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>((<span class="number">12</span>, <span class="number">13</span>)), info.slots(PatternID::must(<span class="number">2</span>), <span class="number">2</span>));
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>((<span class="number">14</span>, <span class="number">15</span>)), info.slots(PatternID::must(<span class="number">2</span>), <span class="number">3</span>));
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>((<span class="number">16</span>, <span class="number">17</span>)), info.slots(PatternID::must(<span class="number">2</span>), <span class="number">4</span>));
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>((<span class="number">18</span>, <span class="number">19</span>)), info.slots(PatternID::must(<span class="number">3</span>), <span class="number">1</span>));
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>((<span class="number">20</span>, <span class="number">21</span>)), info.slots(PatternID::must(<span class="number">3</span>), <span class="number">2</span>));
+
+<span class="comment">// Asking for the slots for an invalid pattern ID or even for an invalid
+// group index for a specific pattern will return None. So for example,
+// you're guaranteed to not get the slots for a different pattern than the
+// one requested.
+</span><span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, info.slots(PatternID::must(<span class="number">5</span>), <span class="number">0</span>));
+<span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, info.slots(PatternID::must(<span class="number">1</span>), <span class="number">1</span>));
+</code></pre></div>
+</div></details><h2 id="implementations" class="section-header">Implementations<a href="#implementations" class="anchor">§</a></h2><div id="implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-GroupInfo" class="impl"><a class="src rightside" href="../../../src/regex_automata/util/captures.rs.html#1453-2153">source</a><a href="#impl-GroupInfo" class="anchor">§</a><h3 class="code-header">impl <a class="struct" href="struct.GroupInfo.html" title="struct regex_automata::util::captures::GroupInfo">GroupInfo</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.new" class="method"><a class="src rightside" href="../../../src/regex_automata/util/captures.rs.html#1569-1610">source</a><h4 class="code-header">pub fn <a href="#method.new" class="fn">new</a>&lt;P, G, N&gt;(pattern_groups: P) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="struct.GroupInfo.html" title="struct regex_automata::util::captures::GroupInfo">GroupInfo</a>, <a class="struct" href="struct.GroupInfoError.html" title="struct regex_automata::util::captures::GroupInfoError">GroupInfoError</a>&gt;<div class="where">where
+    P: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/iter/traits/collect/trait.IntoIterator.html" title="trait core::iter::traits::collect::IntoIterator">IntoIterator</a>&lt;Item = G&gt;,
+    G: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/iter/traits/collect/trait.IntoIterator.html" title="trait core::iter::traits::collect::IntoIterator">IntoIterator</a>&lt;Item = <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;N&gt;&gt;,
+    N: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>&gt;,</div></h4></section></summary><div class="docblock"><p>Creates a new group info from a sequence of patterns, where each
+sequence of patterns yields a sequence of possible group names. The
+index of each pattern in the sequence corresponds to its <code>PatternID</code>,
+and the index of each group in each pattern’s sequence corresponds to
+its corresponding group index.</p>
+<p>While this constructor is very generic and therefore perhaps hard to
+chew on, an example of a valid concrete type that can be passed to
+this constructor is <code>Vec&lt;Vec&lt;Option&lt;String&gt;&gt;&gt;</code>. The outer <code>Vec</code>
+corresponds to the patterns, i.e., one <code>Vec&lt;Option&lt;String&gt;&gt;</code> per
+pattern. The inner <code>Vec</code> corresponds to the capturing groups for
+each pattern. The <code>Option&lt;String&gt;</code> corresponds to the name of the
+capturing group, if present.</p>
+<p>It is legal to pass an empty iterator to this constructor. It will
+return an empty group info with zero slots. An empty group info is
+useful for cases where you have no patterns or for cases where slots
+aren’t being used at all (e.g., for most DFAs in this crate).</p>
+<h5 id="errors"><a class="doc-anchor" href="#errors">§</a>Errors</h5>
+<p>This constructor returns an error if the given capturing groups are
+invalid in some way. Those reasons include, but are not necessarily
+limited to:</p>
+<ul>
+<li>Too many patterns (i.e., <code>PatternID</code> would overflow).</li>
+<li>Too many capturing groups (e.g., <code>u32</code> would overflow).</li>
+<li>A pattern is given that has no capturing groups. (All patterns must
+have at least an implicit capturing group at index <code>0</code>.)</li>
+<li>The capturing group at index <code>0</code> has a name. It must be unnamed.</li>
+<li>There are duplicate capturing group names within the same pattern.
+(Multiple capturing groups with the same name may exist, but they
+must be in different patterns.)</li>
+</ul>
+<p>An example below shows how to trigger some of the above error
+conditions.</p>
+<h5 id="example-1"><a class="doc-anchor" href="#example-1">§</a>Example</h5>
+<p>This example shows how to build a new <code>GroupInfo</code> and query it for
+information.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::util::captures::GroupInfo;
+
+<span class="kw">let </span>info = GroupInfo::new(<span class="macro">vec!</span>[
+    <span class="macro">vec!</span>[<span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(<span class="string">"foo"</span>)],
+    <span class="macro">vec!</span>[<span class="prelude-val">None</span>],
+    <span class="macro">vec!</span>[<span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(<span class="string">"bar"</span>), <span class="prelude-val">None</span>],
+    <span class="macro">vec!</span>[<span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(<span class="string">"foo"</span>)],
+])<span class="question-mark">?</span>;
+<span class="comment">// The number of patterns being tracked.
+</span><span class="macro">assert_eq!</span>(<span class="number">4</span>, info.pattern_len());
+<span class="comment">// 2 slots per group
+</span><span class="macro">assert_eq!</span>(<span class="number">22</span>, info.slot_len());
+</code></pre></div>
+<h5 id="example-empty-groupinfo"><a class="doc-anchor" href="#example-empty-groupinfo">§</a>Example: empty <code>GroupInfo</code></h5>
+<p>This example shows how to build a new <code>GroupInfo</code> and query it for
+information.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::util::captures::GroupInfo;
+
+<span class="kw">let </span>info = GroupInfo::empty();
+<span class="comment">// Everything is zero.
+</span><span class="macro">assert_eq!</span>(<span class="number">0</span>, info.pattern_len());
+<span class="macro">assert_eq!</span>(<span class="number">0</span>, info.slot_len());
+</code></pre></div>
+<h5 id="example-error-conditions"><a class="doc-anchor" href="#example-error-conditions">§</a>Example: error conditions</h5>
+<p>This example shows how to provoke some of the ways in which building
+a <code>GroupInfo</code> can fail.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::util::captures::GroupInfo;
+
+<span class="comment">// Either the group info is empty, or all patterns must have at least
+// one capturing group.
+</span><span class="macro">assert!</span>(GroupInfo::new(<span class="macro">vec!</span>[
+    <span class="macro">vec!</span>[<span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(<span class="string">"a"</span>)], <span class="comment">// ok
+    </span><span class="macro">vec!</span>[<span class="prelude-val">None</span>], <span class="comment">// ok
+    </span><span class="macro">vec!</span>[], <span class="comment">// not ok
+</span>]).is_err());
+<span class="comment">// Note that building an empty group info is OK.
+</span><span class="macro">assert!</span>(GroupInfo::new(Vec::&lt;Vec&lt;<span class="prelude-ty">Option</span>&lt;String&gt;&gt;&gt;::new()).is_ok());
+
+<span class="comment">// The first group in each pattern must correspond to an implicit
+// anonymous group. i.e., One that is not named. By convention, this
+// group corresponds to the overall match of a regex. Every other group
+// in a pattern is explicit and optional.
+</span><span class="macro">assert!</span>(GroupInfo::new(<span class="macro">vec!</span>[<span class="macro">vec!</span>[<span class="prelude-val">Some</span>(<span class="string">"foo"</span>)]]).is_err());
+
+<span class="comment">// There must not be duplicate group names within the same pattern.
+</span><span class="macro">assert!</span>(GroupInfo::new(<span class="macro">vec!</span>[
+    <span class="macro">vec!</span>[<span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(<span class="string">"foo"</span>), <span class="prelude-val">Some</span>(<span class="string">"foo"</span>)],
+]).is_err());
+<span class="comment">// But duplicate names across distinct patterns is OK.
+</span><span class="macro">assert!</span>(GroupInfo::new(<span class="macro">vec!</span>[
+    <span class="macro">vec!</span>[<span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(<span class="string">"foo"</span>)],
+    <span class="macro">vec!</span>[<span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(<span class="string">"foo"</span>)],
+]).is_ok());
+</code></pre></div>
+<p>There are other ways for building a <code>GroupInfo</code> to fail but are
+difficult to show. For example, if the number of patterns given would
+overflow <code>PatternID</code>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.empty" class="method"><a class="src rightside" href="../../../src/regex_automata/util/captures.rs.html#1633-1636">source</a><h4 class="code-header">pub fn <a href="#method.empty" class="fn">empty</a>() -&gt; <a class="struct" href="struct.GroupInfo.html" title="struct regex_automata::util::captures::GroupInfo">GroupInfo</a></h4></section></summary><div class="docblock"><p>This creates an empty <code>GroupInfo</code>.</p>
+<p>This is a convenience routine for calling <code>GroupInfo::new</code> with an
+iterator that yields no elements.</p>
+<h5 id="example-2"><a class="doc-anchor" href="#example-2">§</a>Example</h5>
+<p>This example shows how to build a new empty <code>GroupInfo</code> and query it
+for information.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::util::captures::GroupInfo;
+
+<span class="kw">let </span>info = GroupInfo::empty();
+<span class="comment">// Everything is zero.
+</span><span class="macro">assert_eq!</span>(<span class="number">0</span>, info.pattern_len());
+<span class="macro">assert_eq!</span>(<span class="number">0</span>, info.all_group_len());
+<span class="macro">assert_eq!</span>(<span class="number">0</span>, info.slot_len());
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.to_index" class="method"><a class="src rightside" href="../../../src/regex_automata/util/captures.rs.html#1682-1685">source</a><h4 class="code-header">pub fn <a href="#method.to_index" class="fn">to_index</a>(&amp;self, pid: <a class="struct" href="../../struct.PatternID.html" title="struct regex_automata::PatternID">PatternID</a>, name: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>&gt;</h4></section></summary><div class="docblock"><p>Return the capture group index corresponding to the given name in the
+given pattern. If no such capture group name exists in the given
+pattern, then this returns <code>None</code>.</p>
+<p>If the given pattern ID is invalid, then this returns <code>None</code>.</p>
+<p>This also returns <code>None</code> for all inputs if these captures are empty
+(e.g., built from an empty <a href="struct.GroupInfo.html" title="struct regex_automata::util::captures::GroupInfo"><code>GroupInfo</code></a>). To check whether captures
+are present for a specific pattern, use <a href="struct.GroupInfo.html#method.group_len" title="method regex_automata::util::captures::GroupInfo::group_len"><code>GroupInfo::group_len</code></a>.</p>
+<h5 id="example-3"><a class="doc-anchor" href="#example-3">§</a>Example</h5>
+<p>This example shows how to find the capture index for the given pattern
+and group name.</p>
+<p>Remember that capture indices are relative to the pattern, such that
+the same capture index value may refer to different capturing groups
+for distinct patterns.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{nfa::thompson::NFA, PatternID};
+
+<span class="kw">let </span>(pid0, pid1) = (PatternID::must(<span class="number">0</span>), PatternID::must(<span class="number">1</span>));
+
+<span class="kw">let </span>nfa = NFA::new_many(<span class="kw-2">&amp;</span>[
+    <span class="string">r"a(?P&lt;quux&gt;\w+)z(?P&lt;foo&gt;\s+)"</span>,
+    <span class="string">r"a(?P&lt;foo&gt;\d+)z"</span>,
+])<span class="question-mark">?</span>;
+<span class="kw">let </span>groups = nfa.group_info();
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="number">2</span>), groups.to_index(pid0, <span class="string">"foo"</span>));
+<span class="comment">// Recall that capture index 0 is always unnamed and refers to the
+// entire pattern. So the first capturing group present in the pattern
+// itself always starts at index 1.
+</span><span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="number">1</span>), groups.to_index(pid1, <span class="string">"foo"</span>));
+
+<span class="comment">// And if a name does not exist for a particular pattern, None is
+// returned.
+</span><span class="macro">assert!</span>(groups.to_index(pid0, <span class="string">"quux"</span>).is_some());
+<span class="macro">assert!</span>(groups.to_index(pid1, <span class="string">"quux"</span>).is_none());
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.to_name" class="method"><a class="src rightside" href="../../../src/regex_automata/util/captures.rs.html#1730-1733">source</a><h4 class="code-header">pub fn <a href="#method.to_name" class="fn">to_name</a>(&amp;self, pid: <a class="struct" href="../../struct.PatternID.html" title="struct regex_automata::PatternID">PatternID</a>, group_index: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>&gt;</h4></section></summary><div class="docblock"><p>Return the capture name for the given index and given pattern. If the
+corresponding group does not have a name, then this returns <code>None</code>.</p>
+<p>If the pattern ID is invalid, then this returns <code>None</code>.</p>
+<p>If the group index is invalid for the given pattern, then this returns
+<code>None</code>. A group <code>index</code> is valid for a pattern <code>pid</code> in an <code>nfa</code> if and
+only if <code>index &lt; nfa.pattern_capture_len(pid)</code>.</p>
+<p>This also returns <code>None</code> for all inputs if these captures are empty
+(e.g., built from an empty <a href="struct.GroupInfo.html" title="struct regex_automata::util::captures::GroupInfo"><code>GroupInfo</code></a>). To check whether captures
+are present for a specific pattern, use <a href="struct.GroupInfo.html#method.group_len" title="method regex_automata::util::captures::GroupInfo::group_len"><code>GroupInfo::group_len</code></a>.</p>
+<h5 id="example-4"><a class="doc-anchor" href="#example-4">§</a>Example</h5>
+<p>This example shows how to find the capture group name for the given
+pattern and group index.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{nfa::thompson::NFA, PatternID};
+
+<span class="kw">let </span>(pid0, pid1) = (PatternID::must(<span class="number">0</span>), PatternID::must(<span class="number">1</span>));
+
+<span class="kw">let </span>nfa = NFA::new_many(<span class="kw-2">&amp;</span>[
+    <span class="string">r"a(?P&lt;foo&gt;\w+)z(\s+)x(\d+)"</span>,
+    <span class="string">r"a(\d+)z(?P&lt;foo&gt;\s+)"</span>,
+])<span class="question-mark">?</span>;
+<span class="kw">let </span>groups = nfa.group_info();
+<span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, groups.to_name(pid0, <span class="number">0</span>));
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="string">"foo"</span>), groups.to_name(pid0, <span class="number">1</span>));
+<span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, groups.to_name(pid0, <span class="number">2</span>));
+<span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, groups.to_name(pid0, <span class="number">3</span>));
+
+<span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, groups.to_name(pid1, <span class="number">0</span>));
+<span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, groups.to_name(pid1, <span class="number">1</span>));
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="string">"foo"</span>), groups.to_name(pid1, <span class="number">2</span>));
+<span class="comment">// '3' is not a valid capture index for the second pattern.
+</span><span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, groups.to_name(pid1, <span class="number">3</span>));
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.pattern_names" class="method"><a class="src rightside" href="../../../src/regex_automata/util/captures.rs.html#1768-1777">source</a><h4 class="code-header">pub fn <a href="#method.pattern_names" class="fn">pattern_names</a>(&amp;self, pid: <a class="struct" href="../../struct.PatternID.html" title="struct regex_automata::PatternID">PatternID</a>) -&gt; <a class="struct" href="struct.GroupInfoPatternNames.html" title="struct regex_automata::util::captures::GroupInfoPatternNames">GroupInfoPatternNames</a>&lt;'_&gt; <a href="#" class="tooltip" data-notable-ty="GroupInfoPatternNames&lt;&#39;_&gt;">ⓘ</a></h4></section></summary><div class="docblock"><p>Return an iterator of all capture groups and their names (if present)
+for a particular pattern.</p>
+<p>If the given pattern ID is invalid or if this <code>GroupInfo</code> is empty,
+then the iterator yields no elements.</p>
+<p>The number of elements yielded by this iterator is always equal to
+the result of calling <a href="struct.GroupInfo.html#method.group_len" title="method regex_automata::util::captures::GroupInfo::group_len"><code>GroupInfo::group_len</code></a> with the same
+<code>PatternID</code>.</p>
+<h5 id="example-5"><a class="doc-anchor" href="#example-5">§</a>Example</h5>
+<p>This example shows how to get a list of all capture group names for
+a particular pattern.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{nfa::thompson::NFA, PatternID};
+
+<span class="kw">let </span>nfa = NFA::new(<span class="string">r"(a)(?P&lt;foo&gt;b)(c)(d)(?P&lt;bar&gt;e)"</span>)<span class="question-mark">?</span>;
+<span class="comment">// The first is the implicit group that is always unnammed. The next
+// 5 groups are the explicit groups found in the concrete syntax above.
+</span><span class="kw">let </span>expected = <span class="macro">vec!</span>[<span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(<span class="string">"foo"</span>), <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(<span class="string">"bar"</span>)];
+<span class="kw">let </span>got: Vec&lt;<span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>str&gt;&gt; =
+    nfa.group_info().pattern_names(PatternID::ZERO).collect();
+<span class="macro">assert_eq!</span>(expected, got);
+
+<span class="comment">// Using an invalid pattern ID will result in nothing yielded.
+</span><span class="kw">let </span>got = nfa.group_info().pattern_names(PatternID::must(<span class="number">999</span>)).count();
+<span class="macro">assert_eq!</span>(<span class="number">0</span>, got);
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.all_names" class="method"><a class="src rightside" href="../../../src/regex_automata/util/captures.rs.html#1829-1836">source</a><h4 class="code-header">pub fn <a href="#method.all_names" class="fn">all_names</a>(&amp;self) -&gt; <a class="struct" href="struct.GroupInfoAllNames.html" title="struct regex_automata::util::captures::GroupInfoAllNames">GroupInfoAllNames</a>&lt;'_&gt; <a href="#" class="tooltip" data-notable-ty="GroupInfoAllNames&lt;&#39;_&gt;">ⓘ</a></h4></section></summary><div class="docblock"><p>Return an iterator of all capture groups for all patterns supported by
+this <code>GroupInfo</code>. Each item yielded is a triple of the group’s pattern
+ID, index in the pattern and the group’s name, if present.</p>
+<h5 id="example-6"><a class="doc-anchor" href="#example-6">§</a>Example</h5>
+<p>This example shows how to get a list of all capture groups found in
+one NFA, potentially spanning multiple patterns.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{nfa::thompson::NFA, PatternID};
+
+<span class="kw">let </span>nfa = NFA::new_many(<span class="kw-2">&amp;</span>[
+    <span class="string">r"(?P&lt;foo&gt;a)"</span>,
+    <span class="string">r"a"</span>,
+    <span class="string">r"(a)"</span>,
+])<span class="question-mark">?</span>;
+<span class="kw">let </span>expected = <span class="macro">vec!</span>[
+    (PatternID::must(<span class="number">0</span>), <span class="number">0</span>, <span class="prelude-val">None</span>),
+    (PatternID::must(<span class="number">0</span>), <span class="number">1</span>, <span class="prelude-val">Some</span>(<span class="string">"foo"</span>)),
+    (PatternID::must(<span class="number">1</span>), <span class="number">0</span>, <span class="prelude-val">None</span>),
+    (PatternID::must(<span class="number">2</span>), <span class="number">0</span>, <span class="prelude-val">None</span>),
+    (PatternID::must(<span class="number">2</span>), <span class="number">1</span>, <span class="prelude-val">None</span>),
+];
+<span class="kw">let </span>got: Vec&lt;(PatternID, usize, <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>str&gt;)&gt; =
+    nfa.group_info().all_names().collect();
+<span class="macro">assert_eq!</span>(expected, got);
+</code></pre></div>
+<p>Unlike other capturing group related routines, this routine doesn’t
+panic even if captures aren’t enabled on this NFA:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::nfa::thompson::{NFA, WhichCaptures};
+
+<span class="kw">let </span>nfa = NFA::compiler()
+    .configure(NFA::config().which_captures(WhichCaptures::None))
+    .build_many(<span class="kw-2">&amp;</span>[
+        <span class="string">r"(?P&lt;foo&gt;a)"</span>,
+        <span class="string">r"a"</span>,
+        <span class="string">r"(a)"</span>,
+    ])<span class="question-mark">?</span>;
+<span class="comment">// When captures aren't enabled, there's nothing to return.
+</span><span class="macro">assert_eq!</span>(<span class="number">0</span>, nfa.group_info().all_names().count());
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.slots" class="method"><a class="src rightside" href="../../../src/regex_automata/util/captures.rs.html#1869-1878">source</a><h4 class="code-header">pub fn <a href="#method.slots" class="fn">slots</a>(
+    &amp;self,
+    pid: <a class="struct" href="../../struct.PatternID.html" title="struct regex_automata::PatternID">PatternID</a>,
+    group_index: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>, <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>)&gt;</h4></section></summary><div class="docblock"><p>Returns the starting and ending slot corresponding to the given
+capturing group for the given pattern. The ending slot is always one
+more than the starting slot returned.</p>
+<p>Note that this is like <a href="struct.GroupInfo.html#method.slot" title="method regex_automata::util::captures::GroupInfo::slot"><code>GroupInfo::slot</code></a>, except that it also returns
+the ending slot value for convenience.</p>
+<p>If either the pattern ID or the capture index is invalid, then this
+returns None.</p>
+<h5 id="example-7"><a class="doc-anchor" href="#example-7">§</a>Example</h5>
+<p>This example shows that the starting slots for the first capturing
+group of each pattern are distinct.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{nfa::thompson::NFA, PatternID};
+
+<span class="kw">let </span>nfa = NFA::new_many(<span class="kw-2">&amp;</span>[<span class="string">"a"</span>, <span class="string">"b"</span>])<span class="question-mark">?</span>;
+<span class="macro">assert_ne!</span>(
+    nfa.group_info().slots(PatternID::must(<span class="number">0</span>), <span class="number">0</span>),
+    nfa.group_info().slots(PatternID::must(<span class="number">1</span>), <span class="number">0</span>),
+);
+
+<span class="comment">// Also, the start and end slot values are never equivalent.
+</span><span class="kw">let </span>(start, end) = nfa.group_info().slots(PatternID::ZERO, <span class="number">0</span>).unwrap();
+<span class="macro">assert_ne!</span>(start, end);
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.slot" class="method"><a class="src rightside" href="../../../src/regex_automata/util/captures.rs.html#1904-1921">source</a><h4 class="code-header">pub fn <a href="#method.slot" class="fn">slot</a>(&amp;self, pid: <a class="struct" href="../../struct.PatternID.html" title="struct regex_automata::PatternID">PatternID</a>, group_index: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>&gt;</h4></section></summary><div class="docblock"><p>Returns the starting slot corresponding to the given capturing group
+for the given pattern. The ending slot is always one more than the
+value returned.</p>
+<p>If either the pattern ID or the capture index is invalid, then this
+returns None.</p>
+<h5 id="example-8"><a class="doc-anchor" href="#example-8">§</a>Example</h5>
+<p>This example shows that the starting slots for the first capturing
+group of each pattern are distinct.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{nfa::thompson::NFA, PatternID};
+
+<span class="kw">let </span>nfa = NFA::new_many(<span class="kw-2">&amp;</span>[<span class="string">"a"</span>, <span class="string">"b"</span>])<span class="question-mark">?</span>;
+<span class="macro">assert_ne!</span>(
+    nfa.group_info().slot(PatternID::must(<span class="number">0</span>), <span class="number">0</span>),
+    nfa.group_info().slot(PatternID::must(<span class="number">1</span>), <span class="number">0</span>),
+);
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.pattern_len" class="method"><a class="src rightside" href="../../../src/regex_automata/util/captures.rs.html#1948-1950">source</a><h4 class="code-header">pub fn <a href="#method.pattern_len" class="fn">pattern_len</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a></h4></section></summary><div class="docblock"><p>Returns the total number of patterns in this <code>GroupInfo</code>.</p>
+<p>This may return zero if the <code>GroupInfo</code> was constructed with no
+patterns.</p>
+<p>This is guaranteed to be no bigger than <a href="../../struct.PatternID.html#associatedconstant.LIMIT" title="associated constant regex_automata::PatternID::LIMIT"><code>PatternID::LIMIT</code></a> because
+<code>GroupInfo</code> construction will fail if too many patterns are added.</p>
+<h5 id="example-9"><a class="doc-anchor" href="#example-9">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::nfa::thompson::NFA;
+
+<span class="kw">let </span>nfa = NFA::new_many(<span class="kw-2">&amp;</span>[<span class="string">"[0-9]+"</span>, <span class="string">"[a-z]+"</span>, <span class="string">"[A-Z]+"</span>])<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(<span class="number">3</span>, nfa.group_info().pattern_len());
+
+<span class="kw">let </span>nfa = NFA::never_match();
+<span class="macro">assert_eq!</span>(<span class="number">0</span>, nfa.group_info().pattern_len());
+
+<span class="kw">let </span>nfa = NFA::always_match();
+<span class="macro">assert_eq!</span>(<span class="number">1</span>, nfa.group_info().pattern_len());
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.group_len" class="method"><a class="src rightside" href="../../../src/regex_automata/util/captures.rs.html#1989-1991">source</a><h4 class="code-header">pub fn <a href="#method.group_len" class="fn">group_len</a>(&amp;self, pid: <a class="struct" href="../../struct.PatternID.html" title="struct regex_automata::PatternID">PatternID</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a></h4></section></summary><div class="docblock"><p>Return the number of capture groups in a pattern.</p>
+<p>If the pattern ID is invalid, then this returns <code>0</code>.</p>
+<h5 id="example-10"><a class="doc-anchor" href="#example-10">§</a>Example</h5>
+<p>This example shows how the values returned by this routine may vary
+for different patterns and NFA configurations.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{nfa::thompson::{NFA, WhichCaptures}, PatternID};
+
+<span class="kw">let </span>nfa = NFA::new(<span class="string">r"(a)(b)(c)"</span>)<span class="question-mark">?</span>;
+<span class="comment">// There are 3 explicit groups in the pattern's concrete syntax and
+// 1 unnamed and implicit group spanning the entire pattern.
+</span><span class="macro">assert_eq!</span>(<span class="number">4</span>, nfa.group_info().group_len(PatternID::ZERO));
+
+<span class="kw">let </span>nfa = NFA::new(<span class="string">r"abc"</span>)<span class="question-mark">?</span>;
+<span class="comment">// There is just the unnamed implicit group.
+</span><span class="macro">assert_eq!</span>(<span class="number">1</span>, nfa.group_info().group_len(PatternID::ZERO));
+
+<span class="kw">let </span>nfa = NFA::compiler()
+    .configure(NFA::config().which_captures(WhichCaptures::None))
+    .build(<span class="string">r"abc"</span>)<span class="question-mark">?</span>;
+<span class="comment">// We disabled capturing groups, so there are none.
+</span><span class="macro">assert_eq!</span>(<span class="number">0</span>, nfa.group_info().group_len(PatternID::ZERO));
+
+<span class="kw">let </span>nfa = NFA::compiler()
+    .configure(NFA::config().which_captures(WhichCaptures::None))
+    .build(<span class="string">r"(a)(b)(c)"</span>)<span class="question-mark">?</span>;
+<span class="comment">// We disabled capturing groups, so there are none, even if there are
+// explicit groups in the concrete syntax.
+</span><span class="macro">assert_eq!</span>(<span class="number">0</span>, nfa.group_info().group_len(PatternID::ZERO));
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.all_group_len" class="method"><a class="src rightside" href="../../../src/regex_automata/util/captures.rs.html#2036-2038">source</a><h4 class="code-header">pub fn <a href="#method.all_group_len" class="fn">all_group_len</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a></h4></section></summary><div class="docblock"><p>Return the total number of capture groups across all patterns.</p>
+<p>This includes implicit groups that represent the entire match of a
+pattern.</p>
+<h5 id="example-11"><a class="doc-anchor" href="#example-11">§</a>Example</h5>
+<p>This example shows how the values returned by this routine may vary
+for different patterns and NFA configurations.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{nfa::thompson::{NFA, WhichCaptures}, PatternID};
+
+<span class="kw">let </span>nfa = NFA::new(<span class="string">r"(a)(b)(c)"</span>)<span class="question-mark">?</span>;
+<span class="comment">// There are 3 explicit groups in the pattern's concrete syntax and
+// 1 unnamed and implicit group spanning the entire pattern.
+</span><span class="macro">assert_eq!</span>(<span class="number">4</span>, nfa.group_info().all_group_len());
+
+<span class="kw">let </span>nfa = NFA::new(<span class="string">r"abc"</span>)<span class="question-mark">?</span>;
+<span class="comment">// There is just the unnamed implicit group.
+</span><span class="macro">assert_eq!</span>(<span class="number">1</span>, nfa.group_info().all_group_len());
+
+<span class="kw">let </span>nfa = NFA::new_many(<span class="kw-2">&amp;</span>[<span class="string">"(a)"</span>, <span class="string">"b"</span>, <span class="string">"(c)"</span>])<span class="question-mark">?</span>;
+<span class="comment">// Each pattern has one implicit groups, and two
+// patterns have one explicit group each.
+</span><span class="macro">assert_eq!</span>(<span class="number">5</span>, nfa.group_info().all_group_len());
+
+<span class="kw">let </span>nfa = NFA::compiler()
+    .configure(NFA::config().which_captures(WhichCaptures::None))
+    .build(<span class="string">r"abc"</span>)<span class="question-mark">?</span>;
+<span class="comment">// We disabled capturing groups, so there are none.
+</span><span class="macro">assert_eq!</span>(<span class="number">0</span>, nfa.group_info().all_group_len());
+
+<span class="kw">let </span>nfa = NFA::compiler()
+    .configure(NFA::config().which_captures(WhichCaptures::None))
+    .build(<span class="string">r"(a)(b)(c)"</span>)<span class="question-mark">?</span>;
+<span class="comment">// We disabled capturing groups, so there are none, even if there are
+// explicit groups in the concrete syntax.
+</span><span class="macro">assert_eq!</span>(<span class="number">0</span>, nfa.group_info().group_len(PatternID::ZERO));
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.slot_len" class="method"><a class="src rightside" href="../../../src/regex_automata/util/captures.rs.html#2067-2069">source</a><h4 class="code-header">pub fn <a href="#method.slot_len" class="fn">slot_len</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a></h4></section></summary><div class="docblock"><p>Returns the total number of slots in this <code>GroupInfo</code> across all
+patterns.</p>
+<p>The total number of slots is always twice the total number of capturing
+groups, including both implicit and explicit groups.</p>
+<h5 id="example-12"><a class="doc-anchor" href="#example-12">§</a>Example</h5>
+<p>This example shows the relationship between the number of capturing
+groups and slots.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::util::captures::GroupInfo;
+
+<span class="comment">// There are 11 total groups here.
+</span><span class="kw">let </span>info = GroupInfo::new(<span class="macro">vec!</span>[
+    <span class="macro">vec!</span>[<span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(<span class="string">"foo"</span>)],
+    <span class="macro">vec!</span>[<span class="prelude-val">None</span>],
+    <span class="macro">vec!</span>[<span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(<span class="string">"bar"</span>), <span class="prelude-val">None</span>],
+    <span class="macro">vec!</span>[<span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(<span class="string">"foo"</span>)],
+])<span class="question-mark">?</span>;
+<span class="comment">// 2 slots per group gives us 11*2=22 slots.
+</span><span class="macro">assert_eq!</span>(<span class="number">22</span>, info.slot_len());
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.implicit_slot_len" class="method"><a class="src rightside" href="../../../src/regex_automata/util/captures.rs.html#2099-2101">source</a><h4 class="code-header">pub fn <a href="#method.implicit_slot_len" class="fn">implicit_slot_len</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a></h4></section></summary><div class="docblock"><p>Returns the total number of slots for implicit capturing groups.</p>
+<p>This is like <a href="struct.GroupInfo.html#method.slot_len" title="method regex_automata::util::captures::GroupInfo::slot_len"><code>GroupInfo::slot_len</code></a>, except it doesn’t include the
+explicit slots for each pattern. Since there are always exactly 2
+implicit slots for each pattern, the number of implicit slots is always
+equal to twice the number of patterns.</p>
+<h5 id="example-13"><a class="doc-anchor" href="#example-13">§</a>Example</h5>
+<p>This example shows the relationship between the number of capturing
+groups, implicit slots and explicit slots.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::util::captures::GroupInfo;
+
+<span class="comment">// There are 11 total groups here.
+</span><span class="kw">let </span>info = GroupInfo::new(<span class="macro">vec!</span>[<span class="macro">vec!</span>[<span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(<span class="string">"foo"</span>), <span class="prelude-val">Some</span>(<span class="string">"bar"</span>)]])<span class="question-mark">?</span>;
+<span class="comment">// 2 slots per group gives us 11*2=22 slots.
+</span><span class="macro">assert_eq!</span>(<span class="number">6</span>, info.slot_len());
+<span class="comment">// 2 implicit slots per pattern gives us 2 implicit slots since there
+// is 1 pattern.
+</span><span class="macro">assert_eq!</span>(<span class="number">2</span>, info.implicit_slot_len());
+<span class="comment">// 2 explicit capturing groups gives us 2*2=4 explicit slots.
+</span><span class="macro">assert_eq!</span>(<span class="number">4</span>, info.explicit_slot_len());
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.explicit_slot_len" class="method"><a class="src rightside" href="../../../src/regex_automata/util/captures.rs.html#2135-2137">source</a><h4 class="code-header">pub fn <a href="#method.explicit_slot_len" class="fn">explicit_slot_len</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a></h4></section></summary><div class="docblock"><p>Returns the total number of slots for explicit capturing groups.</p>
+<p>This is like <a href="struct.GroupInfo.html#method.slot_len" title="method regex_automata::util::captures::GroupInfo::slot_len"><code>GroupInfo::slot_len</code></a>, except it doesn’t include the
+implicit slots for each pattern. (There are always 2 implicit slots for
+each pattern.)</p>
+<p>For a non-empty <code>GroupInfo</code>, it is always the case that <code>slot_len</code> is
+strictly greater than <code>explicit_slot_len</code>. For an empty <code>GroupInfo</code>,
+both the total number of slots and the number of explicit slots is
+<code>0</code>.</p>
+<h5 id="example-14"><a class="doc-anchor" href="#example-14">§</a>Example</h5>
+<p>This example shows the relationship between the number of capturing
+groups, implicit slots and explicit slots.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::util::captures::GroupInfo;
+
+<span class="comment">// There are 11 total groups here.
+</span><span class="kw">let </span>info = GroupInfo::new(<span class="macro">vec!</span>[<span class="macro">vec!</span>[<span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(<span class="string">"foo"</span>), <span class="prelude-val">Some</span>(<span class="string">"bar"</span>)]])<span class="question-mark">?</span>;
+<span class="comment">// 2 slots per group gives us 11*2=22 slots.
+</span><span class="macro">assert_eq!</span>(<span class="number">6</span>, info.slot_len());
+<span class="comment">// 2 implicit slots per pattern gives us 2 implicit slots since there
+// is 1 pattern.
+</span><span class="macro">assert_eq!</span>(<span class="number">2</span>, info.implicit_slot_len());
+<span class="comment">// 2 explicit capturing groups gives us 2*2=4 explicit slots.
+</span><span class="macro">assert_eq!</span>(<span class="number">4</span>, info.explicit_slot_len());
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.memory_usage" class="method"><a class="src rightside" href="../../../src/regex_automata/util/captures.rs.html#2144-2152">source</a><h4 class="code-header">pub fn <a href="#method.memory_usage" class="fn">memory_usage</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a></h4></section></summary><div class="docblock"><p>Returns the memory usage, in bytes, of this <code>GroupInfo</code>.</p>
+<p>This does <strong>not</strong> include the stack size used up by this <code>GroupInfo</code>.
+To compute that, use <code>std::mem::size_of::&lt;GroupInfo&gt;()</code>.</p>
+</div></details></div></details></div><h2 id="trait-implementations" class="section-header">Trait Implementations<a href="#trait-implementations" class="anchor">§</a></h2><div id="trait-implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-Clone-for-GroupInfo" class="impl"><a class="src rightside" href="../../../src/regex_automata/util/captures.rs.html#1450">source</a><a href="#impl-Clone-for-GroupInfo" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a> for <a class="struct" href="struct.GroupInfo.html" title="struct regex_automata::util::captures::GroupInfo">GroupInfo</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.clone" class="method trait-impl"><a class="src rightside" href="../../../src/regex_automata/util/captures.rs.html#1450">source</a><a href="#method.clone" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#tymethod.clone" class="fn">clone</a>(&amp;self) -&gt; <a class="struct" href="struct.GroupInfo.html" title="struct regex_automata::util::captures::GroupInfo">GroupInfo</a></h4></section></summary><div class='docblock'>Returns a copy of the value. <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#tymethod.clone">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.clone_from" class="method trait-impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#172">source</a></span><a href="#method.clone_from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#method.clone_from" class="fn">clone_from</a>(&amp;mut self, source: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;Self</a>)</h4></section></summary><div class='docblock'>Performs copy-assignment from <code>source</code>. <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#method.clone_from">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Debug-for-GroupInfo" class="impl"><a class="src rightside" href="../../../src/regex_automata/util/captures.rs.html#1450">source</a><a href="#impl-Debug-for-GroupInfo" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html" title="trait core::fmt::Debug">Debug</a> for <a class="struct" href="struct.GroupInfo.html" title="struct regex_automata::util::captures::GroupInfo">GroupInfo</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.fmt" class="method trait-impl"><a class="src rightside" href="../../../src/regex_automata/util/captures.rs.html#1450">source</a><a href="#method.fmt" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html#tymethod.fmt" class="fn">fmt</a>(&amp;self, f: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/fmt/struct.Formatter.html" title="struct core::fmt::Formatter">Formatter</a>&lt;'_&gt;) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a></h4></section></summary><div class='docblock'>Formats the value using the given formatter. <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html#tymethod.fmt">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Default-for-GroupInfo" class="impl"><a class="src rightside" href="../../../src/regex_automata/util/captures.rs.html#1450">source</a><a href="#impl-Default-for-GroupInfo" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/default/trait.Default.html" title="trait core::default::Default">Default</a> for <a class="struct" href="struct.GroupInfo.html" title="struct regex_automata::util::captures::GroupInfo">GroupInfo</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.default" class="method trait-impl"><a class="src rightside" href="../../../src/regex_automata/util/captures.rs.html#1450">source</a><a href="#method.default" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/default/trait.Default.html#tymethod.default" class="fn">default</a>() -&gt; <a class="struct" href="struct.GroupInfo.html" title="struct regex_automata::util::captures::GroupInfo">GroupInfo</a></h4></section></summary><div class='docblock'>Returns the “default value” for a type. <a href="https://doc.rust-lang.org/1.81.0/core/default/trait.Default.html#tymethod.default">Read more</a></div></details></div></details></div><h2 id="synthetic-implementations" class="section-header">Auto Trait Implementations<a href="#synthetic-implementations" class="anchor">§</a></h2><div id="synthetic-implementations-list"><section id="impl-Freeze-for-GroupInfo" class="impl"><a href="#impl-Freeze-for-GroupInfo" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Freeze.html" title="trait core::marker::Freeze">Freeze</a> for <a class="struct" href="struct.GroupInfo.html" title="struct regex_automata::util::captures::GroupInfo">GroupInfo</a></h3></section><section id="impl-RefUnwindSafe-for-GroupInfo" class="impl"><a href="#impl-RefUnwindSafe-for-GroupInfo" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/panic/unwind_safe/trait.RefUnwindSafe.html" title="trait core::panic::unwind_safe::RefUnwindSafe">RefUnwindSafe</a> for <a class="struct" href="struct.GroupInfo.html" title="struct regex_automata::util::captures::GroupInfo">GroupInfo</a></h3></section><section id="impl-Send-for-GroupInfo" class="impl"><a href="#impl-Send-for-GroupInfo" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> for <a class="struct" href="struct.GroupInfo.html" title="struct regex_automata::util::captures::GroupInfo">GroupInfo</a></h3></section><section id="impl-Sync-for-GroupInfo" class="impl"><a href="#impl-Sync-for-GroupInfo" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> for <a class="struct" href="struct.GroupInfo.html" title="struct regex_automata::util::captures::GroupInfo">GroupInfo</a></h3></section><section id="impl-Unpin-for-GroupInfo" class="impl"><a href="#impl-Unpin-for-GroupInfo" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a> for <a class="struct" href="struct.GroupInfo.html" title="struct regex_automata::util::captures::GroupInfo">GroupInfo</a></h3></section><section id="impl-UnwindSafe-for-GroupInfo" class="impl"><a href="#impl-UnwindSafe-for-GroupInfo" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/panic/unwind_safe/trait.UnwindSafe.html" title="trait core::panic::unwind_safe::UnwindSafe">UnwindSafe</a> for <a class="struct" href="struct.GroupInfo.html" title="struct regex_automata::util::captures::GroupInfo">GroupInfo</a></h3></section></div><h2 id="blanket-implementations" class="section-header">Blanket Implementations<a href="#blanket-implementations" class="anchor">§</a></h2><div id="blanket-implementations-list"><details class="toggle implementors-toggle"><summary><section id="impl-Any-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#140">source</a><a href="#impl-Any-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html" title="trait core::any::Any">Any</a> for T<div class="where">where
+    T: 'static + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.type_id" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#141">source</a><a href="#method.type_id" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html#tymethod.type_id" class="fn">type_id</a>(&amp;self) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/any/struct.TypeId.html" title="struct core::any::TypeId">TypeId</a></h4></section></summary><div class='docblock'>Gets the <code>TypeId</code> of <code>self</code>. <a href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html#tymethod.type_id">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Borrow%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#209">source</a><a href="#impl-Borrow%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html" title="trait core::borrow::Borrow">Borrow</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#211">source</a><a href="#method.borrow" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html#tymethod.borrow" class="fn">borrow</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a></h4></section></summary><div class='docblock'>Immutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html#tymethod.borrow">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-BorrowMut%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#217">source</a><a href="#impl-BorrowMut%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html" title="trait core::borrow::BorrowMut">BorrowMut</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow_mut" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#218">source</a><a href="#method.borrow_mut" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut" class="fn">borrow_mut</a>(&amp;mut self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a></h4></section></summary><div class='docblock'>Mutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-CloneToUninit-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#271">source</a><a href="#impl-CloneToUninit-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.CloneToUninit.html" title="trait core::clone::CloneToUninit">CloneToUninit</a> for T<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.clone_to_uninit" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#272">source</a><a href="#method.clone_to_uninit" class="anchor">§</a><h4 class="code-header">default unsafe fn <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.CloneToUninit.html#tymethod.clone_to_uninit" class="fn">clone_to_uninit</a>(&amp;self, dst: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.pointer.html">*mut T</a>)</h4></section></summary><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>clone_to_uninit</code>)</span></div></span><div class='docblock'>Performs copy-assignment from <code>self</code> to <code>dst</code>. <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.CloneToUninit.html#tymethod.clone_to_uninit">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-From%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#765">source</a><a href="#impl-From%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for T</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#768">source</a><a href="#method.from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html#tymethod.from" class="fn">from</a>(t: T) -&gt; T</h4></section></summary><div class="docblock"><p>Returns the argument unchanged.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Into%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#748-750">source</a><a href="#impl-Into%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#758">source</a><a href="#method.into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html#tymethod.into" class="fn">into</a>(self) -&gt; U</h4></section></summary><div class="docblock"><p>Calls <code>U::from(self)</code>.</p>
+<p>That is, this conversion is whatever the implementation of
+<code><a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for U</code> chooses to do.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-ToOwned-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#83-85">source</a><a href="#impl-ToOwned-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html" title="trait alloc::borrow::ToOwned">ToOwned</a> for T<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Owned" class="associatedtype trait-impl"><a href="#associatedtype.Owned" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#associatedtype.Owned" class="associatedtype">Owned</a> = T</h4></section></summary><div class='docblock'>The resulting type after obtaining ownership.</div></details><details class="toggle method-toggle" open><summary><section id="method.to_owned" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#88">source</a><a href="#method.to_owned" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#tymethod.to_owned" class="fn">to_owned</a>(&amp;self) -&gt; T</h4></section></summary><div class='docblock'>Creates owned data from borrowed data, usually by cloning. <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#tymethod.to_owned">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.clone_into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#92">source</a><a href="#method.clone_into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#method.clone_into" class="fn">clone_into</a>(&amp;self, target: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a>)</h4></section></summary><div class='docblock'>Uses borrowed data to replace owned data, usually by cloning. <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#method.clone_into">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryFrom%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#805-807">source</a><a href="#impl-TryFrom%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error" class="associatedtype trait-impl"><a href="#associatedtype.Error" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" class="associatedtype">Error</a> = <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/convert/enum.Infallible.html" title="enum core::convert::Infallible">Infallible</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#812">source</a><a href="#method.try_from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#tymethod.try_from" class="fn">try_from</a>(value: U) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, &lt;T as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryInto%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#790-792">source</a><a href="#impl-TryInto%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html" title="trait core::convert::TryInto">TryInto</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error-1" class="associatedtype trait-impl"><a href="#associatedtype.Error-1" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html#associatedtype.Error" class="associatedtype">Error</a> = &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#797">source</a><a href="#method.try_into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html#tymethod.try_into" class="fn">try_into</a>(self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;U, &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details></div><script type="text/json" id="notable-traits-data">{"GroupInfoAllNames<'_>":"<h3>Notable traits for <code><a class=\"struct\" href=\"struct.GroupInfoAllNames.html\" title=\"struct regex_automata::util::captures::GroupInfoAllNames\">GroupInfoAllNames</a>&lt;'a&gt;</code></h3><pre><code><div class=\"where\">impl&lt;'a&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/1.81.0/core/iter/traits/iterator/trait.Iterator.html\" title=\"trait core::iter::traits::iterator::Iterator\">Iterator</a> for <a class=\"struct\" href=\"struct.GroupInfoAllNames.html\" title=\"struct regex_automata::util::captures::GroupInfoAllNames\">GroupInfoAllNames</a>&lt;'a&gt;</div><div class=\"where\">    type <a href=\"https://doc.rust-lang.org/1.81.0/core/iter/traits/iterator/trait.Iterator.html#associatedtype.Item\" class=\"associatedtype\">Item</a> = (<a class=\"struct\" href=\"../../struct.PatternID.html\" title=\"struct regex_automata::PatternID\">PatternID</a>, <a class=\"primitive\" href=\"https://doc.rust-lang.org/1.81.0/std/primitive.usize.html\">usize</a>, <a class=\"enum\" href=\"https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html\" title=\"enum core::option::Option\">Option</a>&lt;&amp;'a <a class=\"primitive\" href=\"https://doc.rust-lang.org/1.81.0/std/primitive.str.html\">str</a>&gt;);</div>","GroupInfoPatternNames<'_>":"<h3>Notable traits for <code><a class=\"struct\" href=\"struct.GroupInfoPatternNames.html\" title=\"struct regex_automata::util::captures::GroupInfoPatternNames\">GroupInfoPatternNames</a>&lt;'a&gt;</code></h3><pre><code><div class=\"where\">impl&lt;'a&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/1.81.0/core/iter/traits/iterator/trait.Iterator.html\" title=\"trait core::iter::traits::iterator::Iterator\">Iterator</a> for <a class=\"struct\" href=\"struct.GroupInfoPatternNames.html\" title=\"struct regex_automata::util::captures::GroupInfoPatternNames\">GroupInfoPatternNames</a>&lt;'a&gt;</div><div class=\"where\">    type <a href=\"https://doc.rust-lang.org/1.81.0/core/iter/traits/iterator/trait.Iterator.html#associatedtype.Item\" class=\"associatedtype\">Item</a> = <a class=\"enum\" href=\"https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html\" title=\"enum core::option::Option\">Option</a>&lt;&amp;'a <a class=\"primitive\" href=\"https://doc.rust-lang.org/1.81.0/std/primitive.str.html\">str</a>&gt;;</div>"}</script></section></div></main></body></html>

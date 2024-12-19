@@ -1,0 +1,65 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Concurrent work-stealing deques."><title>crossbeam_deque - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="crossbeam_deque" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../crossbeam_deque/index.html">crossbeam_deque</a><span class="version">0.8.5</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">crossbeam_deque</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/crossbeam_deque/lib.rs.html#1-103">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Concurrent work-stealing deques.</p>
+<p>These data structures are most commonly used in work-stealing schedulers. The typical setup
+involves a number of threads, each having its own FIFO or LIFO queue (<em>worker</em>). There is also
+one global FIFO queue (<em>injector</em>) and a list of references to <em>worker</em> queues that are able to
+steal tasks (<em>stealers</em>).</p>
+<p>We spawn a new task onto the scheduler by pushing it into the <em>injector</em> queue. Each worker
+thread waits in a loop until it finds the next task to run and then runs it. To find a task, it
+first looks into its local <em>worker</em> queue, and then into the <em>injector</em> and <em>stealers</em>.</p>
+<h2 id="queues"><a class="doc-anchor" href="#queues">§</a>Queues</h2>
+<p><a href="struct.Injector.html" title="struct crossbeam_deque::Injector"><code>Injector</code></a> is a FIFO queue, where tasks are pushed and stolen from opposite ends. It is
+shared among threads and is usually the entry point for new tasks.</p>
+<p><a href="struct.Worker.html" title="struct crossbeam_deque::Worker"><code>Worker</code></a> has two constructors:</p>
+<ul>
+<li><a href="struct.Worker.html#method.new_fifo" title="associated function crossbeam_deque::Worker::new_fifo"><code>new_fifo()</code></a> - Creates a FIFO queue, in which tasks are pushed and popped from opposite
+ends.</li>
+<li><a href="struct.Worker.html#method.new_lifo" title="associated function crossbeam_deque::Worker::new_lifo"><code>new_lifo()</code></a> - Creates a LIFO queue, in which tasks are pushed and popped from the same
+end.</li>
+</ul>
+<p>Each <a href="struct.Worker.html" title="struct crossbeam_deque::Worker"><code>Worker</code></a> is owned by a single thread and supports only push and pop operations.</p>
+<p>Method <a href="struct.Worker.html#method.stealer" title="method crossbeam_deque::Worker::stealer"><code>stealer()</code></a> creates a <a href="struct.Stealer.html" title="struct crossbeam_deque::Stealer"><code>Stealer</code></a> that may be shared among threads and can only steal
+tasks from its <a href="struct.Worker.html" title="struct crossbeam_deque::Worker"><code>Worker</code></a>. Tasks are stolen from the end opposite to where they get pushed.</p>
+<h2 id="stealing"><a class="doc-anchor" href="#stealing">§</a>Stealing</h2>
+<p>Steal operations come in three flavors:</p>
+<ol>
+<li><a href="struct.Stealer.html#method.steal" title="method crossbeam_deque::Stealer::steal"><code>steal()</code></a> - Steals one task.</li>
+<li><a href="struct.Stealer.html#method.steal_batch" title="method crossbeam_deque::Stealer::steal_batch"><code>steal_batch()</code></a> - Steals a batch of tasks and moves them into another worker.</li>
+<li><a href="struct.Stealer.html#method.steal_batch_and_pop" title="method crossbeam_deque::Stealer::steal_batch_and_pop"><code>steal_batch_and_pop()</code></a> - Steals a batch of tasks, moves them into another queue, and pops
+one task from that worker.</li>
+</ol>
+<p>In contrast to push and pop operations, stealing can spuriously fail with <a href="enum.Steal.html#variant.Retry" title="variant crossbeam_deque::Steal::Retry"><code>Steal::Retry</code></a>, in
+which case the steal operation needs to be retried.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Suppose a thread in a work-stealing scheduler is idle and looking for the next task to run. To
+find an available task, it might do the following:</p>
+<ol>
+<li>Try popping one task from the local worker queue.</li>
+<li>Try stealing a batch of tasks from the global injector queue.</li>
+<li>Try stealing one task from another thread using the stealer list.</li>
+</ol>
+<p>An implementation of this work-stealing strategy:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>crossbeam_deque::{Injector, Stealer, Worker};
+<span class="kw">use </span>std::iter;
+
+<span class="kw">fn </span>find_task&lt;T&gt;(
+    local: <span class="kw-2">&amp;</span>Worker&lt;T&gt;,
+    global: <span class="kw-2">&amp;</span>Injector&lt;T&gt;,
+    stealers: <span class="kw-2">&amp;</span>[Stealer&lt;T&gt;],
+) -&gt; <span class="prelude-ty">Option</span>&lt;T&gt; {
+    <span class="comment">// Pop a task from the local queue, if not empty.
+    </span>local.pop().or_else(|| {
+        <span class="comment">// Otherwise, we need to look for a task elsewhere.
+        </span>iter::repeat_with(|| {
+            <span class="comment">// Try stealing a batch of tasks from the global queue.
+            </span>global.steal_batch_and_pop(local)
+                <span class="comment">// Or try stealing a task from one of the other threads.
+                </span>.or_else(|| stealers.iter().map(|s| s.steal()).collect())
+        })
+        <span class="comment">// Loop while no task was stolen and any steal operation needs to be retried.
+        </span>.find(|s| !s.is_retry())
+        <span class="comment">// Extract the stolen task, if there is one.
+        </span>.and_then(|s| s.success())
+    })
+}</code></pre></div>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Injector.html" title="struct crossbeam_deque::Injector">Injector</a></div><div class="desc docblock-short">An injector queue.</div></li><li><div class="item-name"><a class="struct" href="struct.Stealer.html" title="struct crossbeam_deque::Stealer">Stealer</a></div><div class="desc docblock-short">A stealer handle of a worker queue.</div></li><li><div class="item-name"><a class="struct" href="struct.Worker.html" title="struct crossbeam_deque::Worker">Worker</a></div><div class="desc docblock-short">A worker queue.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.Steal.html" title="enum crossbeam_deque::Steal">Steal</a></div><div class="desc docblock-short">Possible outcomes of a steal operation.</div></li></ul></section></div></main></body></html>

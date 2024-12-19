@@ -1,0 +1,556 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A path to a named temporary file without an open file handle."><title>TempPath in tempfile - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="tempfile" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="icon" href="https://www.rust-lang.org/favicon.ico"></head><body class="rustdoc struct"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../tempfile/index.html"><img src="https://www.rust-lang.org/logos/rust-logo-128x128-blk-v2.png" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../tempfile/index.html"><img src="https://www.rust-lang.org/logos/rust-logo-128x128-blk-v2.png" alt="logo"></a><h2><a href="../tempfile/index.html">tempfile</a><span class="version">3.12.0</span></h2></div><h2 class="location"><a href="#">TempPath</a></h2><div class="sidebar-elems"><section><h3><a href="#implementations">Methods</a></h3><ul class="block method"><li><a href="#method.close">close</a></li><li><a href="#method.from_path">from_path</a></li><li><a href="#method.keep">keep</a></li><li><a href="#method.persist">persist</a></li><li><a href="#method.persist_noclobber">persist_noclobber</a></li></ul><h3><a href="#deref-methods-Path">Methods from Deref&lt;Target=Path&gt;</a></h3><ul class="block deref-methods"><li><a href="#method.ancestors">ancestors</a></li><li><a href="#method.as_os_str">as_os_str</a></li><li><a href="#method.canonicalize">canonicalize</a></li><li><a href="#method.components">components</a></li><li><a href="#method.display">display</a></li><li><a href="#method.ends_with">ends_with</a></li><li><a href="#method.exists">exists</a></li><li><a href="#method.extension">extension</a></li><li><a href="#method.file_name">file_name</a></li><li><a href="#method.file_prefix">file_prefix</a></li><li><a href="#method.file_stem">file_stem</a></li><li><a href="#method.has_root">has_root</a></li><li><a href="#method.is_absolute">is_absolute</a></li><li><a href="#method.is_dir">is_dir</a></li><li><a href="#method.is_file">is_file</a></li><li><a href="#method.is_relative">is_relative</a></li><li><a href="#method.is_symlink">is_symlink</a></li><li><a href="#method.iter">iter</a></li><li><a href="#method.join">join</a></li><li><a href="#method.metadata">metadata</a></li><li><a href="#method.parent">parent</a></li><li><a href="#method.read_dir">read_dir</a></li><li><a href="#method.read_link">read_link</a></li><li><a href="#method.starts_with">starts_with</a></li><li><a href="#method.strip_prefix">strip_prefix</a></li><li><a href="#method.symlink_metadata">symlink_metadata</a></li><li><a href="#method.to_path_buf">to_path_buf</a></li><li><a href="#method.to_str">to_str</a></li><li><a href="#method.to_string_lossy">to_string_lossy</a></li><li><a href="#method.try_exists">try_exists</a></li><li><a href="#method.with_added_extension">with_added_extension</a></li><li><a href="#method.with_extension">with_extension</a></li><li><a href="#method.with_file_name">with_file_name</a></li></ul><h3><a href="#trait-implementations">Trait Implementations</a></h3><ul class="block trait-implementation"><li><a href="#impl-AsRef%3COsStr%3E-for-TempPath">AsRef&lt;OsStr&gt;</a></li><li><a href="#impl-AsRef%3CPath%3E-for-TempPath">AsRef&lt;Path&gt;</a></li><li><a href="#impl-Debug-for-TempPath">Debug</a></li><li><a href="#impl-Deref-for-TempPath">Deref</a></li><li><a href="#impl-Drop-for-TempPath">Drop</a></li><li><a href="#impl-From%3CPathPersistError%3E-for-TempPath">From&lt;PathPersistError&gt;</a></li></ul><h3><a href="#synthetic-implementations">Auto Trait Implementations</a></h3><ul class="block synthetic-implementation"><li><a href="#impl-Freeze-for-TempPath">Freeze</a></li><li><a href="#impl-RefUnwindSafe-for-TempPath">RefUnwindSafe</a></li><li><a href="#impl-Send-for-TempPath">Send</a></li><li><a href="#impl-Sync-for-TempPath">Sync</a></li><li><a href="#impl-Unpin-for-TempPath">Unpin</a></li><li><a href="#impl-UnwindSafe-for-TempPath">UnwindSafe</a></li></ul><h3><a href="#blanket-implementations">Blanket Implementations</a></h3><ul class="block blanket-implementation"><li><a href="#impl-Any-for-T">Any</a></li><li><a href="#impl-Borrow%3CT%3E-for-T">Borrow&lt;T&gt;</a></li><li><a href="#impl-BorrowMut%3CT%3E-for-T">BorrowMut&lt;T&gt;</a></li><li><a href="#impl-From%3CT%3E-for-T">From&lt;T&gt;</a></li><li><a href="#impl-Into%3CU%3E-for-T">Into&lt;U&gt;</a></li><li><a href="#impl-TryFrom%3CU%3E-for-T">TryFrom&lt;U&gt;</a></li><li><a href="#impl-TryInto%3CU%3E-for-T">TryInto&lt;U&gt;</a></li></ul></section><h2><a href="index.html">In crate tempfile</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Struct <a href="index.html">tempfile</a>::<wbr><a class="struct" href="#">TempPath</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/tempfile/file/mod.rs.html#129-132">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub struct TempPath { <span class="comment">/* private fields */</span> }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A path to a named temporary file without an open file handle.</p>
+<p>This is useful when the temporary file needs to be used by a child process,
+for example.</p>
+<p>When dropped, the temporary file is deleted unless <code>keep(true)</code> was called
+on the builder that constructed this value.</p>
+</div></details><h2 id="implementations" class="section-header">Implementations<a href="#implementations" class="anchor">§</a></h2><div id="implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-TempPath" class="impl"><a class="src rightside" href="../src/tempfile/file/mod.rs.html#134-334">source</a><a href="#impl-TempPath" class="anchor">§</a><h3 class="code-header">impl <a class="struct" href="struct.TempPath.html" title="struct tempfile::TempPath">TempPath</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.close" class="method"><a class="src rightside" href="../src/tempfile/file/mod.rs.html#160-165">source</a><h4 class="code-header">pub fn <a href="#method.close" class="fn">close</a>(self) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Close and remove the temporary file.</p>
+<p>Use this if you want to detect errors in deleting the file.</p>
+<h5 id="errors"><a class="doc-anchor" href="#errors">§</a>Errors</h5>
+<p>If the file cannot be deleted, <code>Err</code> is returned.</p>
+<h5 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tempfile::NamedTempFile;
+
+<span class="kw">let </span>file = NamedTempFile::new()<span class="question-mark">?</span>;
+
+<span class="comment">// Close the file, but keep the path to it around.
+</span><span class="kw">let </span>path = file.into_temp_path();
+
+<span class="comment">// By closing the `TempPath` explicitly, we can check that it has
+// been deleted successfully. If we don't close it explicitly, the
+// file will still be deleted when `file` goes out of scope, but we
+// won't know whether deleting the file succeeded.
+</span>path.close()<span class="question-mark">?</span>;</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.persist" class="method"><a class="src rightside" href="../src/tempfile/file/mod.rs.html#203-218">source</a><h4 class="code-header">pub fn <a href="#method.persist" class="fn">persist</a>&lt;P: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/std/path/struct.Path.html" title="struct std::path::Path">Path</a>&gt;&gt;(
+    self,
+    new_path: P,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="struct" href="struct.PathPersistError.html" title="struct tempfile::PathPersistError">PathPersistError</a>&gt;</h4></section></summary><div class="docblock"><p>Persist the temporary file at the target path.</p>
+<p>If a file exists at the target path, persist will atomically replace it.
+If this method fails, it will return <code>self</code> in the resulting
+<a href="struct.PathPersistError.html"><code>PathPersistError</code></a>.</p>
+<p>Note: Temporary files cannot be persisted across filesystems. Also
+neither the file contents nor the containing directory are
+synchronized, so the update may not yet have reached the disk when
+<code>persist</code> returns.</p>
+<h5 id="security"><a class="doc-anchor" href="#security">§</a>Security</h5>
+<p>Only use this method if you’re positive that a temporary file cleaner
+won’t have deleted your file. Otherwise, you might end up persisting an
+attacker controlled file.</p>
+<h5 id="errors-1"><a class="doc-anchor" href="#errors-1">§</a>Errors</h5>
+<p>If the file cannot be moved to the new location, <code>Err</code> is returned.</p>
+<h5 id="examples-1"><a class="doc-anchor" href="#examples-1">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io::Write;
+<span class="kw">use </span>tempfile::NamedTempFile;
+
+<span class="kw">let </span><span class="kw-2">mut </span>file = NamedTempFile::new()<span class="question-mark">?</span>;
+<span class="macro">writeln!</span>(file, <span class="string">"Brian was here. Briefly."</span>)<span class="question-mark">?</span>;
+
+<span class="kw">let </span>path = file.into_temp_path();
+path.persist(<span class="string">"./saved_file.txt"</span>)<span class="question-mark">?</span>;</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.persist_noclobber" class="method"><a class="src rightside" href="../src/tempfile/file/mod.rs.html#255-273">source</a><h4 class="code-header">pub fn <a href="#method.persist_noclobber" class="fn">persist_noclobber</a>&lt;P: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/std/path/struct.Path.html" title="struct std::path::Path">Path</a>&gt;&gt;(
+    self,
+    new_path: P,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="struct" href="struct.PathPersistError.html" title="struct tempfile::PathPersistError">PathPersistError</a>&gt;</h4></section></summary><div class="docblock"><p>Persist the temporary file at the target path if and only if no file exists there.</p>
+<p>If a file exists at the target path, fail. If this method fails, it will
+return <code>self</code> in the resulting <a href="struct.PathPersistError.html"><code>PathPersistError</code></a>.</p>
+<p>Note: Temporary files cannot be persisted across filesystems. Also Note:
+This method is not atomic. It can leave the original link to the
+temporary file behind.</p>
+<h5 id="security-1"><a class="doc-anchor" href="#security-1">§</a>Security</h5>
+<p>Only use this method if you’re positive that a temporary file cleaner
+won’t have deleted your file. Otherwise, you might end up persisting an
+attacker controlled file.</p>
+<h5 id="errors-2"><a class="doc-anchor" href="#errors-2">§</a>Errors</h5>
+<p>If the file cannot be moved to the new location or a file already exists
+there, <code>Err</code> is returned.</p>
+<h5 id="examples-2"><a class="doc-anchor" href="#examples-2">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tempfile::NamedTempFile;
+<span class="kw">use </span>std::io::Write;
+
+<span class="kw">let </span><span class="kw-2">mut </span>file = NamedTempFile::new()<span class="question-mark">?</span>;
+<span class="macro">writeln!</span>(file, <span class="string">"Brian was here. Briefly."</span>)<span class="question-mark">?</span>;
+
+<span class="kw">let </span>path = file.into_temp_path();
+path.persist_noclobber(<span class="string">"./saved_file.txt"</span>)<span class="question-mark">?</span>;</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.keep" class="method"><a class="src rightside" href="../src/tempfile/file/mod.rs.html#298-313">source</a><h4 class="code-header">pub fn <a href="#method.keep" class="fn">keep</a>(self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/std/path/struct.PathBuf.html" title="struct std::path::PathBuf">PathBuf</a>, <a class="struct" href="struct.PathPersistError.html" title="struct tempfile::PathPersistError">PathPersistError</a>&gt;</h4></section></summary><div class="docblock"><p>Keep the temporary file from being deleted. This function will turn the
+temporary file into a non-temporary file without moving it.</p>
+<h5 id="errors-3"><a class="doc-anchor" href="#errors-3">§</a>Errors</h5>
+<p>On some platforms (e.g., Windows), we need to mark the file as
+non-temporary. This operation could fail.</p>
+<h5 id="examples-3"><a class="doc-anchor" href="#examples-3">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io::Write;
+<span class="kw">use </span>tempfile::NamedTempFile;
+
+<span class="kw">let </span><span class="kw-2">mut </span>file = NamedTempFile::new()<span class="question-mark">?</span>;
+<span class="macro">writeln!</span>(file, <span class="string">"Brian was here. Briefly."</span>)<span class="question-mark">?</span>;
+
+<span class="kw">let </span>path = file.into_temp_path();
+<span class="kw">let </span>path = path.keep()<span class="question-mark">?</span>;</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.from_path" class="method"><a class="src rightside" href="../src/tempfile/file/mod.rs.html#321-326">source</a><h4 class="code-header">pub fn <a href="#method.from_path" class="fn">from_path</a>(path: impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/std/path/struct.PathBuf.html" title="struct std::path::PathBuf">PathBuf</a>&gt;) -&gt; Self</h4></section></summary><div class="docblock"><p>Create a new TempPath from an existing path. This can be done even if no
+file exists at the given path.</p>
+<p>This is mostly useful for interacting with libraries and external
+components that provide files to be consumed or expect a path with no
+existing file to be given.</p>
+</div></details></div></details></div><h2 id="deref-methods-Path" class="section-header"><span>Methods from <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/deref/trait.Deref.html" title="trait core::ops::deref::Deref">Deref</a>&lt;Target = <a class="struct" href="https://doc.rust-lang.org/1.81.0/std/path/struct.Path.html" title="struct std::path::Path">Path</a>&gt;</span><a href="#deref-methods-Path" class="anchor">§</a></h2><div id="deref-methods-Path-1" class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.as_os_str" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/std/path.rs.html#2157">source</a></span><h4 class="code-header">pub fn <a href="#method.as_os_str" class="fn">as_os_str</a>(&amp;self) -&gt; &amp;<a class="struct" href="https://doc.rust-lang.org/1.81.0/std/ffi/os_str/struct.OsStr.html" title="struct std::ffi::os_str::OsStr">OsStr</a></h4></section></summary><div class="docblock"><p>Yields the underlying <a href="https://doc.rust-lang.org/1.81.0/std/ffi/os_str/struct.OsStr.html" title="struct std::ffi::os_str::OsStr"><code>OsStr</code></a> slice.</p>
+<h5 id="examples-4"><a class="doc-anchor" href="#examples-4">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::path::Path;
+
+<span class="kw">let </span>os_str = Path::new(<span class="string">"foo.txt"</span>).as_os_str();
+<span class="macro">assert_eq!</span>(os_str, std::ffi::OsStr::new(<span class="string">"foo.txt"</span>));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.to_str" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/std/path.rs.html#2202">source</a></span><h4 class="code-header">pub fn <a href="#method.to_str" class="fn">to_str</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>&gt;</h4></section></summary><div class="docblock"><p>Yields a <a href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html" title="primitive str"><code>&amp;str</code></a> slice if the <code>Path</code> is valid unicode.</p>
+<p>This conversion may entail doing a check for UTF-8 validity.
+Note that validation is performed because non-UTF-8 strings are
+perfectly valid for some OS.</p>
+<h5 id="examples-5"><a class="doc-anchor" href="#examples-5">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::path::Path;
+
+<span class="kw">let </span>path = Path::new(<span class="string">"foo.txt"</span>);
+<span class="macro">assert_eq!</span>(path.to_str(), <span class="prelude-val">Some</span>(<span class="string">"foo.txt"</span>));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.to_string_lossy" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/std/path.rs.html#2230">source</a></span><h4 class="code-header">pub fn <a href="#method.to_string_lossy" class="fn">to_string_lossy</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/alloc/borrow/enum.Cow.html" title="enum alloc::borrow::Cow">Cow</a>&lt;'_, <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>&gt;</h4></section></summary><div class="docblock"><p>Converts a <code>Path</code> to a <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/enum.Cow.html" title="enum alloc::borrow::Cow"><code>Cow&lt;str&gt;</code></a>.</p>
+<p>Any non-Unicode sequences are replaced with
+<a href="https://doc.rust-lang.org/1.81.0/core/char/constant.REPLACEMENT_CHARACTER.html" title="constant core::char::REPLACEMENT_CHARACTER"><code>U+FFFD REPLACEMENT CHARACTER</code></a>.</p>
+<h5 id="examples-6"><a class="doc-anchor" href="#examples-6">§</a>Examples</h5>
+<p>Calling <code>to_string_lossy</code> on a <code>Path</code> with valid unicode:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::path::Path;
+
+<span class="kw">let </span>path = Path::new(<span class="string">"foo.txt"</span>);
+<span class="macro">assert_eq!</span>(path.to_string_lossy(), <span class="string">"foo.txt"</span>);</code></pre></div>
+<p>Had <code>path</code> contained invalid unicode, the <code>to_string_lossy</code> call might
+have returned <code>"fo�.txt"</code>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.to_path_buf" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/std/path.rs.html#2248">source</a></span><h4 class="code-header">pub fn <a href="#method.to_path_buf" class="fn">to_path_buf</a>(&amp;self) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/std/path/struct.PathBuf.html" title="struct std::path::PathBuf">PathBuf</a></h4></section></summary><div class="docblock"><p>Converts a <code>Path</code> to an owned <a href="https://doc.rust-lang.org/1.81.0/std/path/struct.PathBuf.html" title="struct std::path::PathBuf"><code>PathBuf</code></a>.</p>
+<h5 id="examples-7"><a class="doc-anchor" href="#examples-7">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::path::{Path, PathBuf};
+
+<span class="kw">let </span>path_buf = Path::new(<span class="string">"foo.txt"</span>).to_path_buf();
+<span class="macro">assert_eq!</span>(path_buf, PathBuf::from(<span class="string">"foo.txt"</span>));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.is_absolute" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/std/path.rs.html#2273">source</a></span><h4 class="code-header">pub fn <a href="#method.is_absolute" class="fn">is_absolute</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns <code>true</code> if the <code>Path</code> is absolute, i.e., if it is independent of
+the current directory.</p>
+<ul>
+<li>
+<p>On Unix, a path is absolute if it starts with the root, so
+<code>is_absolute</code> and <a href="https://doc.rust-lang.org/1.81.0/std/path/struct.Path.html#method.has_root" title="method std::path::Path::has_root"><code>has_root</code></a> are equivalent.</p>
+</li>
+<li>
+<p>On Windows, a path is absolute if it has a prefix and starts with the
+root: <code>c:\windows</code> is absolute, while <code>c:temp</code> and <code>\temp</code> are not.</p>
+</li>
+</ul>
+<h5 id="examples-8"><a class="doc-anchor" href="#examples-8">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::path::Path;
+
+<span class="macro">assert!</span>(!Path::new(<span class="string">"foo.txt"</span>).is_absolute());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.is_relative" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/std/path.rs.html#2298">source</a></span><h4 class="code-header">pub fn <a href="#method.is_relative" class="fn">is_relative</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns <code>true</code> if the <code>Path</code> is relative, i.e., not absolute.</p>
+<p>See <a href="https://doc.rust-lang.org/1.81.0/std/path/struct.Path.html#method.is_absolute" title="method std::path::Path::is_absolute"><code>is_absolute</code></a>’s documentation for more details.</p>
+<h5 id="examples-9"><a class="doc-anchor" href="#examples-9">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::path::Path;
+
+<span class="macro">assert!</span>(Path::new(<span class="string">"foo.txt"</span>).is_relative());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.has_root" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/std/path.rs.html#2325">source</a></span><h4 class="code-header">pub fn <a href="#method.has_root" class="fn">has_root</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns <code>true</code> if the <code>Path</code> has a root.</p>
+<ul>
+<li>
+<p>On Unix, a path has a root if it begins with <code>/</code>.</p>
+</li>
+<li>
+<p>On Windows, a path has a root if it:</p>
+<ul>
+<li>has no prefix and begins with a separator, e.g., <code>\windows</code></li>
+<li>has a prefix followed by a separator, e.g., <code>c:\windows</code> but not <code>c:windows</code></li>
+<li>has any non-disk prefix, e.g., <code>\\server\share</code></li>
+</ul>
+</li>
+</ul>
+<h5 id="examples-10"><a class="doc-anchor" href="#examples-10">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::path::Path;
+
+<span class="macro">assert!</span>(Path::new(<span class="string">"/etc/passwd"</span>).has_root());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.parent" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/std/path.rs.html#2360">source</a></span><h4 class="code-header">pub fn <a href="#method.parent" class="fn">parent</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;<a class="struct" href="https://doc.rust-lang.org/1.81.0/std/path/struct.Path.html" title="struct std::path::Path">Path</a>&gt;</h4></section></summary><div class="docblock"><p>Returns the <code>Path</code> without its final component, if there is one.</p>
+<p>This means it returns <code>Some("")</code> for relative paths with one component.</p>
+<p>Returns <a href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html#variant.None" title="variant core::option::Option::None"><code>None</code></a> if the path terminates in a root or prefix, or if it’s
+the empty string.</p>
+<h5 id="examples-11"><a class="doc-anchor" href="#examples-11">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::path::Path;
+
+<span class="kw">let </span>path = Path::new(<span class="string">"/foo/bar"</span>);
+<span class="kw">let </span>parent = path.parent().unwrap();
+<span class="macro">assert_eq!</span>(parent, Path::new(<span class="string">"/foo"</span>));
+
+<span class="kw">let </span>grand_parent = parent.parent().unwrap();
+<span class="macro">assert_eq!</span>(grand_parent, Path::new(<span class="string">"/"</span>));
+<span class="macro">assert_eq!</span>(grand_parent.parent(), <span class="prelude-val">None</span>);
+
+<span class="kw">let </span>relative_path = Path::new(<span class="string">"foo/bar"</span>);
+<span class="kw">let </span>parent = relative_path.parent();
+<span class="macro">assert_eq!</span>(parent, <span class="prelude-val">Some</span>(Path::new(<span class="string">"foo"</span>)));
+<span class="kw">let </span>grand_parent = parent.and_then(Path::parent);
+<span class="macro">assert_eq!</span>(grand_parent, <span class="prelude-val">Some</span>(Path::new(<span class="string">""</span>)));
+<span class="kw">let </span>great_grand_parent = grand_parent.and_then(Path::parent);
+<span class="macro">assert_eq!</span>(great_grand_parent, <span class="prelude-val">None</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.ancestors" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.28.0">1.28.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/std/path.rs.html#2400">source</a></span><h4 class="code-header">pub fn <a href="#method.ancestors" class="fn">ancestors</a>(&amp;self) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/std/path/struct.Ancestors.html" title="struct std::path::Ancestors">Ancestors</a>&lt;'_&gt;</h4></section></summary><div class="docblock"><p>Produces an iterator over <code>Path</code> and its ancestors.</p>
+<p>The iterator will yield the <code>Path</code> that is returned if the <a href="https://doc.rust-lang.org/1.81.0/std/path/struct.Path.html#method.parent" title="method std::path::Path::parent"><code>parent</code></a> method is used zero
+or more times. If the <a href="https://doc.rust-lang.org/1.81.0/std/path/struct.Path.html#method.parent" title="method std::path::Path::parent"><code>parent</code></a> method returns <a href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html#variant.None" title="variant core::option::Option::None"><code>None</code></a>, the iterator will do likewise.
+The iterator will always yield at least one value, namely <code>Some(&amp;self)</code>. Next it will yield
+<code>&amp;self.parent()</code>, <code>&amp;self.parent().and_then(Path::parent)</code> and so on.</p>
+<h5 id="examples-12"><a class="doc-anchor" href="#examples-12">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::path::Path;
+
+<span class="kw">let </span><span class="kw-2">mut </span>ancestors = Path::new(<span class="string">"/foo/bar"</span>).ancestors();
+<span class="macro">assert_eq!</span>(ancestors.next(), <span class="prelude-val">Some</span>(Path::new(<span class="string">"/foo/bar"</span>)));
+<span class="macro">assert_eq!</span>(ancestors.next(), <span class="prelude-val">Some</span>(Path::new(<span class="string">"/foo"</span>)));
+<span class="macro">assert_eq!</span>(ancestors.next(), <span class="prelude-val">Some</span>(Path::new(<span class="string">"/"</span>)));
+<span class="macro">assert_eq!</span>(ancestors.next(), <span class="prelude-val">None</span>);
+
+<span class="kw">let </span><span class="kw-2">mut </span>ancestors = Path::new(<span class="string">"../foo/bar"</span>).ancestors();
+<span class="macro">assert_eq!</span>(ancestors.next(), <span class="prelude-val">Some</span>(Path::new(<span class="string">"../foo/bar"</span>)));
+<span class="macro">assert_eq!</span>(ancestors.next(), <span class="prelude-val">Some</span>(Path::new(<span class="string">"../foo"</span>)));
+<span class="macro">assert_eq!</span>(ancestors.next(), <span class="prelude-val">Some</span>(Path::new(<span class="string">".."</span>)));
+<span class="macro">assert_eq!</span>(ancestors.next(), <span class="prelude-val">Some</span>(Path::new(<span class="string">""</span>)));
+<span class="macro">assert_eq!</span>(ancestors.next(), <span class="prelude-val">None</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.file_name" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/std/path.rs.html#2427">source</a></span><h4 class="code-header">pub fn <a href="#method.file_name" class="fn">file_name</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;<a class="struct" href="https://doc.rust-lang.org/1.81.0/std/ffi/os_str/struct.OsStr.html" title="struct std::ffi::os_str::OsStr">OsStr</a>&gt;</h4></section></summary><div class="docblock"><p>Returns the final component of the <code>Path</code>, if there is one.</p>
+<p>If the path is a normal file, this is the file name. If it’s the path of a directory, this
+is the directory name.</p>
+<p>Returns <a href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html#variant.None" title="variant core::option::Option::None"><code>None</code></a> if the path terminates in <code>..</code>.</p>
+<h5 id="examples-13"><a class="doc-anchor" href="#examples-13">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::path::Path;
+<span class="kw">use </span>std::ffi::OsStr;
+
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(OsStr::new(<span class="string">"bin"</span>)), Path::new(<span class="string">"/usr/bin/"</span>).file_name());
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(OsStr::new(<span class="string">"foo.txt"</span>)), Path::new(<span class="string">"tmp/foo.txt"</span>).file_name());
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(OsStr::new(<span class="string">"foo.txt"</span>)), Path::new(<span class="string">"foo.txt/."</span>).file_name());
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(OsStr::new(<span class="string">"foo.txt"</span>)), Path::new(<span class="string">"foo.txt/.//"</span>).file_name());
+<span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, Path::new(<span class="string">"foo.txt/.."</span>).file_name());
+<span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, Path::new(<span class="string">"/"</span>).file_name());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.strip_prefix" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.7.0">1.7.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/std/path.rs.html#2463-2465">source</a></span><h4 class="code-header">pub fn <a href="#method.strip_prefix" class="fn">strip_prefix</a>&lt;P&gt;(&amp;self, base: P) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;&amp;<a class="struct" href="https://doc.rust-lang.org/1.81.0/std/path/struct.Path.html" title="struct std::path::Path">Path</a>, <a class="struct" href="https://doc.rust-lang.org/1.81.0/std/path/struct.StripPrefixError.html" title="struct std::path::StripPrefixError">StripPrefixError</a>&gt;<div class="where">where
+    P: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/std/path/struct.Path.html" title="struct std::path::Path">Path</a>&gt;,</div></h4></section></summary><div class="docblock"><p>Returns a path that, when joined onto <code>base</code>, yields <code>self</code>.</p>
+<h5 id="errors-4"><a class="doc-anchor" href="#errors-4">§</a>Errors</h5>
+<p>If <code>base</code> is not a prefix of <code>self</code> (i.e., <a href="https://doc.rust-lang.org/1.81.0/std/path/struct.Path.html#method.starts_with" title="method std::path::Path::starts_with"><code>starts_with</code></a>
+returns <code>false</code>), returns <a href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html#variant.Err" title="variant core::result::Result::Err"><code>Err</code></a>.</p>
+<h5 id="examples-14"><a class="doc-anchor" href="#examples-14">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::path::{Path, PathBuf};
+
+<span class="kw">let </span>path = Path::new(<span class="string">"/test/haha/foo.txt"</span>);
+
+<span class="macro">assert_eq!</span>(path.strip_prefix(<span class="string">"/"</span>), <span class="prelude-val">Ok</span>(Path::new(<span class="string">"test/haha/foo.txt"</span>)));
+<span class="macro">assert_eq!</span>(path.strip_prefix(<span class="string">"/test"</span>), <span class="prelude-val">Ok</span>(Path::new(<span class="string">"haha/foo.txt"</span>)));
+<span class="macro">assert_eq!</span>(path.strip_prefix(<span class="string">"/test/"</span>), <span class="prelude-val">Ok</span>(Path::new(<span class="string">"haha/foo.txt"</span>)));
+<span class="macro">assert_eq!</span>(path.strip_prefix(<span class="string">"/test/haha/foo.txt"</span>), <span class="prelude-val">Ok</span>(Path::new(<span class="string">""</span>)));
+<span class="macro">assert_eq!</span>(path.strip_prefix(<span class="string">"/test/haha/foo.txt/"</span>), <span class="prelude-val">Ok</span>(Path::new(<span class="string">""</span>)));
+
+<span class="macro">assert!</span>(path.strip_prefix(<span class="string">"test"</span>).is_err());
+<span class="macro">assert!</span>(path.strip_prefix(<span class="string">"/haha"</span>).is_err());
+
+<span class="kw">let </span>prefix = PathBuf::from(<span class="string">"/test/"</span>);
+<span class="macro">assert_eq!</span>(path.strip_prefix(prefix), <span class="prelude-val">Ok</span>(Path::new(<span class="string">"haha/foo.txt"</span>)));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.starts_with" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/std/path.rs.html#2500">source</a></span><h4 class="code-header">pub fn <a href="#method.starts_with" class="fn">starts_with</a>&lt;P&gt;(&amp;self, base: P) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a><div class="where">where
+    P: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/std/path/struct.Path.html" title="struct std::path::Path">Path</a>&gt;,</div></h4></section></summary><div class="docblock"><p>Determines whether <code>base</code> is a prefix of <code>self</code>.</p>
+<p>Only considers whole path components to match.</p>
+<h5 id="examples-15"><a class="doc-anchor" href="#examples-15">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::path::Path;
+
+<span class="kw">let </span>path = Path::new(<span class="string">"/etc/passwd"</span>);
+
+<span class="macro">assert!</span>(path.starts_with(<span class="string">"/etc"</span>));
+<span class="macro">assert!</span>(path.starts_with(<span class="string">"/etc/"</span>));
+<span class="macro">assert!</span>(path.starts_with(<span class="string">"/etc/passwd"</span>));
+<span class="macro">assert!</span>(path.starts_with(<span class="string">"/etc/passwd/"</span>)); <span class="comment">// extra slash is okay
+</span><span class="macro">assert!</span>(path.starts_with(<span class="string">"/etc/passwd///"</span>)); <span class="comment">// multiple extra slashes are okay
+
+</span><span class="macro">assert!</span>(!path.starts_with(<span class="string">"/e"</span>));
+<span class="macro">assert!</span>(!path.starts_with(<span class="string">"/etc/passwd.txt"</span>));
+
+<span class="macro">assert!</span>(!Path::new(<span class="string">"/etc/foo.rs"</span>).starts_with(<span class="string">"/etc/foo"</span>));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.ends_with" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/std/path.rs.html#2528">source</a></span><h4 class="code-header">pub fn <a href="#method.ends_with" class="fn">ends_with</a>&lt;P&gt;(&amp;self, child: P) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a><div class="where">where
+    P: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/std/path/struct.Path.html" title="struct std::path::Path">Path</a>&gt;,</div></h4></section></summary><div class="docblock"><p>Determines whether <code>child</code> is a suffix of <code>self</code>.</p>
+<p>Only considers whole path components to match.</p>
+<h5 id="examples-16"><a class="doc-anchor" href="#examples-16">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::path::Path;
+
+<span class="kw">let </span>path = Path::new(<span class="string">"/etc/resolv.conf"</span>);
+
+<span class="macro">assert!</span>(path.ends_with(<span class="string">"resolv.conf"</span>));
+<span class="macro">assert!</span>(path.ends_with(<span class="string">"etc/resolv.conf"</span>));
+<span class="macro">assert!</span>(path.ends_with(<span class="string">"/etc/resolv.conf"</span>));
+
+<span class="macro">assert!</span>(!path.ends_with(<span class="string">"/resolv.conf"</span>));
+<span class="macro">assert!</span>(!path.ends_with(<span class="string">"conf"</span>)); <span class="comment">// use .extension() instead</span></code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.file_stem" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/std/path.rs.html#2564">source</a></span><h4 class="code-header">pub fn <a href="#method.file_stem" class="fn">file_stem</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;<a class="struct" href="https://doc.rust-lang.org/1.81.0/std/ffi/os_str/struct.OsStr.html" title="struct std::ffi::os_str::OsStr">OsStr</a>&gt;</h4></section></summary><div class="docblock"><p>Extracts the stem (non-extension) portion of <a href="https://doc.rust-lang.org/1.81.0/std/path/struct.Path.html#method.file_name" title="method std::path::Path::file_name"><code>self.file_name</code></a>.</p>
+<p>The stem is:</p>
+<ul>
+<li><a href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html#variant.None" title="variant core::option::Option::None"><code>None</code></a>, if there is no file name;</li>
+<li>The entire file name if there is no embedded <code>.</code>;</li>
+<li>The entire file name if the file name begins with <code>.</code> and has no other <code>.</code>s within;</li>
+<li>Otherwise, the portion of the file name before the final <code>.</code></li>
+</ul>
+<h5 id="examples-17"><a class="doc-anchor" href="#examples-17">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::path::Path;
+
+<span class="macro">assert_eq!</span>(<span class="string">"foo"</span>, Path::new(<span class="string">"foo.rs"</span>).file_stem().unwrap());
+<span class="macro">assert_eq!</span>(<span class="string">"foo.tar"</span>, Path::new(<span class="string">"foo.tar.gz"</span>).file_stem().unwrap());</code></pre></div>
+<h5 id="see-also"><a class="doc-anchor" href="#see-also">§</a>See Also</h5>
+<p>This method is similar to <a href="https://doc.rust-lang.org/1.81.0/std/path/struct.Path.html#method.file_prefix" title="method std::path::Path::file_prefix"><code>Path::file_prefix</code></a>, which extracts the portion of the file name
+before the <em>first</em> <code>.</code></p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.file_prefix" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/std/path.rs.html#2598">source</a><h4 class="code-header">pub fn <a href="#method.file_prefix" class="fn">file_prefix</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;<a class="struct" href="https://doc.rust-lang.org/1.81.0/std/ffi/os_str/struct.OsStr.html" title="struct std::ffi::os_str::OsStr">OsStr</a>&gt;</h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>path_file_prefix</code>)</span></div></span></summary><div class="docblock"><p>Extracts the prefix of <a href="https://doc.rust-lang.org/1.81.0/std/path/struct.Path.html#method.file_name" title="method std::path::Path::file_name"><code>self.file_name</code></a>.</p>
+<p>The prefix is:</p>
+<ul>
+<li><a href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html#variant.None" title="variant core::option::Option::None"><code>None</code></a>, if there is no file name;</li>
+<li>The entire file name if there is no embedded <code>.</code>;</li>
+<li>The portion of the file name before the first non-beginning <code>.</code>;</li>
+<li>The entire file name if the file name begins with <code>.</code> and has no other <code>.</code>s within;</li>
+<li>The portion of the file name before the second <code>.</code> if the file name begins with <code>.</code></li>
+</ul>
+<h5 id="examples-18"><a class="doc-anchor" href="#examples-18">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::path::Path;
+
+<span class="macro">assert_eq!</span>(<span class="string">"foo"</span>, Path::new(<span class="string">"foo.rs"</span>).file_prefix().unwrap());
+<span class="macro">assert_eq!</span>(<span class="string">"foo"</span>, Path::new(<span class="string">"foo.tar.gz"</span>).file_prefix().unwrap());</code></pre></div>
+<h5 id="see-also-1"><a class="doc-anchor" href="#see-also-1">§</a>See Also</h5>
+<p>This method is similar to <a href="https://doc.rust-lang.org/1.81.0/std/path/struct.Path.html#method.file_stem" title="method std::path::Path::file_stem"><code>Path::file_stem</code></a>, which extracts the portion of the file name
+before the <em>last</em> <code>.</code></p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.extension" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/std/path.rs.html#2623">source</a></span><h4 class="code-header">pub fn <a href="#method.extension" class="fn">extension</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;<a class="struct" href="https://doc.rust-lang.org/1.81.0/std/ffi/os_str/struct.OsStr.html" title="struct std::ffi::os_str::OsStr">OsStr</a>&gt;</h4></section></summary><div class="docblock"><p>Extracts the extension (without the leading dot) of <a href="https://doc.rust-lang.org/1.81.0/std/path/struct.Path.html#method.file_name" title="method std::path::Path::file_name"><code>self.file_name</code></a>, if possible.</p>
+<p>The extension is:</p>
+<ul>
+<li><a href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html#variant.None" title="variant core::option::Option::None"><code>None</code></a>, if there is no file name;</li>
+<li><a href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html#variant.None" title="variant core::option::Option::None"><code>None</code></a>, if there is no embedded <code>.</code>;</li>
+<li><a href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html#variant.None" title="variant core::option::Option::None"><code>None</code></a>, if the file name begins with <code>.</code> and has no other <code>.</code>s within;</li>
+<li>Otherwise, the portion of the file name after the final <code>.</code></li>
+</ul>
+<h5 id="examples-19"><a class="doc-anchor" href="#examples-19">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::path::Path;
+
+<span class="macro">assert_eq!</span>(<span class="string">"rs"</span>, Path::new(<span class="string">"foo.rs"</span>).extension().unwrap());
+<span class="macro">assert_eq!</span>(<span class="string">"gz"</span>, Path::new(<span class="string">"foo.tar.gz"</span>).extension().unwrap());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.join" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/std/path.rs.html#2643">source</a></span><h4 class="code-header">pub fn <a href="#method.join" class="fn">join</a>&lt;P&gt;(&amp;self, path: P) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/std/path/struct.PathBuf.html" title="struct std::path::PathBuf">PathBuf</a><div class="where">where
+    P: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/std/path/struct.Path.html" title="struct std::path::Path">Path</a>&gt;,</div></h4></section></summary><div class="docblock"><p>Creates an owned <a href="https://doc.rust-lang.org/1.81.0/std/path/struct.PathBuf.html" title="struct std::path::PathBuf"><code>PathBuf</code></a> with <code>path</code> adjoined to <code>self</code>.</p>
+<p>If <code>path</code> is absolute, it replaces the current path.</p>
+<p>See <a href="https://doc.rust-lang.org/1.81.0/std/path/struct.PathBuf.html#method.push" title="method std::path::PathBuf::push"><code>PathBuf::push</code></a> for more details on what it means to adjoin a path.</p>
+<h5 id="examples-20"><a class="doc-anchor" href="#examples-20">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::path::{Path, PathBuf};
+
+<span class="macro">assert_eq!</span>(Path::new(<span class="string">"/etc"</span>).join(<span class="string">"passwd"</span>), PathBuf::from(<span class="string">"/etc/passwd"</span>));
+<span class="macro">assert_eq!</span>(Path::new(<span class="string">"/etc"</span>).join(<span class="string">"/bin/sh"</span>), PathBuf::from(<span class="string">"/bin/sh"</span>));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.with_file_name" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/std/path.rs.html#2671">source</a></span><h4 class="code-header">pub fn <a href="#method.with_file_name" class="fn">with_file_name</a>&lt;S&gt;(&amp;self, file_name: S) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/std/path/struct.PathBuf.html" title="struct std::path::PathBuf">PathBuf</a><div class="where">where
+    S: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/std/ffi/os_str/struct.OsStr.html" title="struct std::ffi::os_str::OsStr">OsStr</a>&gt;,</div></h4></section></summary><div class="docblock"><p>Creates an owned <a href="https://doc.rust-lang.org/1.81.0/std/path/struct.PathBuf.html" title="struct std::path::PathBuf"><code>PathBuf</code></a> like <code>self</code> but with the given file name.</p>
+<p>See <a href="https://doc.rust-lang.org/1.81.0/std/path/struct.PathBuf.html#method.set_file_name" title="method std::path::PathBuf::set_file_name"><code>PathBuf::set_file_name</code></a> for more details.</p>
+<h5 id="examples-21"><a class="doc-anchor" href="#examples-21">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::path::{Path, PathBuf};
+
+<span class="kw">let </span>path = Path::new(<span class="string">"/tmp/foo.png"</span>);
+<span class="macro">assert_eq!</span>(path.with_file_name(<span class="string">"bar"</span>), PathBuf::from(<span class="string">"/tmp/bar"</span>));
+<span class="macro">assert_eq!</span>(path.with_file_name(<span class="string">"bar.txt"</span>), PathBuf::from(<span class="string">"/tmp/bar.txt"</span>));
+
+<span class="kw">let </span>path = Path::new(<span class="string">"/tmp"</span>);
+<span class="macro">assert_eq!</span>(path.with_file_name(<span class="string">"var"</span>), PathBuf::from(<span class="string">"/var"</span>));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.with_extension" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/std/path.rs.html#2699">source</a></span><h4 class="code-header">pub fn <a href="#method.with_extension" class="fn">with_extension</a>&lt;S&gt;(&amp;self, extension: S) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/std/path/struct.PathBuf.html" title="struct std::path::PathBuf">PathBuf</a><div class="where">where
+    S: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/std/ffi/os_str/struct.OsStr.html" title="struct std::ffi::os_str::OsStr">OsStr</a>&gt;,</div></h4></section></summary><div class="docblock"><p>Creates an owned <a href="https://doc.rust-lang.org/1.81.0/std/path/struct.PathBuf.html" title="struct std::path::PathBuf"><code>PathBuf</code></a> like <code>self</code> but with the given extension.</p>
+<p>See <a href="https://doc.rust-lang.org/1.81.0/std/path/struct.PathBuf.html#method.set_extension" title="method std::path::PathBuf::set_extension"><code>PathBuf::set_extension</code></a> for more details.</p>
+<h5 id="examples-22"><a class="doc-anchor" href="#examples-22">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::path::{Path, PathBuf};
+
+<span class="kw">let </span>path = Path::new(<span class="string">"foo.rs"</span>);
+<span class="macro">assert_eq!</span>(path.with_extension(<span class="string">"txt"</span>), PathBuf::from(<span class="string">"foo.txt"</span>));
+
+<span class="kw">let </span>path = Path::new(<span class="string">"foo.tar.gz"</span>);
+<span class="macro">assert_eq!</span>(path.with_extension(<span class="string">""</span>), PathBuf::from(<span class="string">"foo.tar"</span>));
+<span class="macro">assert_eq!</span>(path.with_extension(<span class="string">"xz"</span>), PathBuf::from(<span class="string">"foo.tar.xz"</span>));
+<span class="macro">assert_eq!</span>(path.with_extension(<span class="string">""</span>).with_extension(<span class="string">"txt"</span>), PathBuf::from(<span class="string">"foo.txt"</span>));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.with_added_extension" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/std/path.rs.html#2747">source</a><h4 class="code-header">pub fn <a href="#method.with_added_extension" class="fn">with_added_extension</a>&lt;S&gt;(&amp;self, extension: S) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/std/path/struct.PathBuf.html" title="struct std::path::PathBuf">PathBuf</a><div class="where">where
+    S: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/std/ffi/os_str/struct.OsStr.html" title="struct std::ffi::os_str::OsStr">OsStr</a>&gt;,</div></h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>path_add_extension</code>)</span></div></span></summary><div class="docblock"><p>Creates an owned <a href="https://doc.rust-lang.org/1.81.0/std/path/struct.PathBuf.html" title="struct std::path::PathBuf"><code>PathBuf</code></a> like <code>self</code> but with the extension added.</p>
+<p>See <a href="https://doc.rust-lang.org/1.81.0/std/path/struct.PathBuf.html#method.add_extension" title="method std::path::PathBuf::add_extension"><code>PathBuf::add_extension</code></a> for more details.</p>
+<h5 id="examples-23"><a class="doc-anchor" href="#examples-23">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(path_add_extension)]
+
+</span><span class="kw">use </span>std::path::{Path, PathBuf};
+
+<span class="kw">let </span>path = Path::new(<span class="string">"foo.rs"</span>);
+<span class="macro">assert_eq!</span>(path.with_added_extension(<span class="string">"txt"</span>), PathBuf::from(<span class="string">"foo.rs.txt"</span>));
+
+<span class="kw">let </span>path = Path::new(<span class="string">"foo.tar.gz"</span>);
+<span class="macro">assert_eq!</span>(path.with_added_extension(<span class="string">""</span>), PathBuf::from(<span class="string">"foo.tar.gz"</span>));
+<span class="macro">assert_eq!</span>(path.with_added_extension(<span class="string">"xz"</span>), PathBuf::from(<span class="string">"foo.tar.gz.xz"</span>));
+<span class="macro">assert_eq!</span>(path.with_added_extension(<span class="string">""</span>).with_added_extension(<span class="string">"txt"</span>), PathBuf::from(<span class="string">"foo.tar.gz.txt"</span>));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.components" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/std/path.rs.html#2787">source</a></span><h4 class="code-header">pub fn <a href="#method.components" class="fn">components</a>(&amp;self) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/std/path/struct.Components.html" title="struct std::path::Components">Components</a>&lt;'_&gt;</h4></section></summary><div class="docblock"><p>Produces an iterator over the <a href="https://doc.rust-lang.org/1.81.0/std/path/enum.Component.html" title="enum std::path::Component"><code>Component</code></a>s of the path.</p>
+<p>When parsing the path, there is a small amount of normalization:</p>
+<ul>
+<li>
+<p>Repeated separators are ignored, so <code>a/b</code> and <code>a//b</code> both have
+<code>a</code> and <code>b</code> as components.</p>
+</li>
+<li>
+<p>Occurrences of <code>.</code> are normalized away, except if they are at the
+beginning of the path. For example, <code>a/./b</code>, <code>a/b/</code>, <code>a/b/.</code> and
+<code>a/b</code> all have <code>a</code> and <code>b</code> as components, but <code>./a/b</code> starts with
+an additional <a href="https://doc.rust-lang.org/1.81.0/std/path/enum.Component.html#variant.CurDir" title="variant std::path::Component::CurDir"><code>CurDir</code></a> component.</p>
+</li>
+<li>
+<p>A trailing slash is normalized away, <code>/a/b</code> and <code>/a/b/</code> are equivalent.</p>
+</li>
+</ul>
+<p>Note that no other normalization takes place; in particular, <code>a/c</code>
+and <code>a/b/../c</code> are distinct, to account for the possibility that <code>b</code>
+is a symbolic link (so its parent isn’t <code>a</code>).</p>
+<h5 id="examples-24"><a class="doc-anchor" href="#examples-24">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::path::{Path, Component};
+<span class="kw">use </span>std::ffi::OsStr;
+
+<span class="kw">let </span><span class="kw-2">mut </span>components = Path::new(<span class="string">"/tmp/foo.txt"</span>).components();
+
+<span class="macro">assert_eq!</span>(components.next(), <span class="prelude-val">Some</span>(Component::RootDir));
+<span class="macro">assert_eq!</span>(components.next(), <span class="prelude-val">Some</span>(Component::Normal(OsStr::new(<span class="string">"tmp"</span>))));
+<span class="macro">assert_eq!</span>(components.next(), <span class="prelude-val">Some</span>(Component::Normal(OsStr::new(<span class="string">"foo.txt"</span>))));
+<span class="macro">assert_eq!</span>(components.next(), <span class="prelude-val">None</span>)</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.iter" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/std/path.rs.html#2821">source</a></span><h4 class="code-header">pub fn <a href="#method.iter" class="fn">iter</a>(&amp;self) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/std/path/struct.Iter.html" title="struct std::path::Iter">Iter</a>&lt;'_&gt;</h4></section></summary><div class="docblock"><p>Produces an iterator over the path’s components viewed as <a href="https://doc.rust-lang.org/1.81.0/std/ffi/os_str/struct.OsStr.html" title="struct std::ffi::os_str::OsStr"><code>OsStr</code></a>
+slices.</p>
+<p>For more information about the particulars of how the path is separated
+into components, see <a href="https://doc.rust-lang.org/1.81.0/std/path/struct.Path.html#method.components" title="method std::path::Path::components"><code>components</code></a>.</p>
+<h5 id="examples-25"><a class="doc-anchor" href="#examples-25">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::path::{<span class="self">self</span>, Path};
+<span class="kw">use </span>std::ffi::OsStr;
+
+<span class="kw">let </span><span class="kw-2">mut </span>it = Path::new(<span class="string">"/tmp/foo.txt"</span>).iter();
+<span class="macro">assert_eq!</span>(it.next(), <span class="prelude-val">Some</span>(OsStr::new(<span class="kw-2">&amp;</span>path::MAIN_SEPARATOR.to_string())));
+<span class="macro">assert_eq!</span>(it.next(), <span class="prelude-val">Some</span>(OsStr::new(<span class="string">"tmp"</span>)));
+<span class="macro">assert_eq!</span>(it.next(), <span class="prelude-val">Some</span>(OsStr::new(<span class="string">"foo.txt"</span>)));
+<span class="macro">assert_eq!</span>(it.next(), <span class="prelude-val">None</span>)</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.display" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/std/path.rs.html#2846">source</a></span><h4 class="code-header">pub fn <a href="#method.display" class="fn">display</a>(&amp;self) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/std/path/struct.Display.html" title="struct std::path::Display">Display</a>&lt;'_&gt;</h4></section></summary><div class="docblock"><p>Returns an object that implements <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Display.html" title="trait core::fmt::Display"><code>Display</code></a> for safely printing paths
+that may contain non-Unicode data. This may perform lossy conversion,
+depending on the platform.  If you would like an implementation which
+escapes the path please use <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html" title="trait core::fmt::Debug"><code>Debug</code></a> instead.</p>
+<h5 id="examples-26"><a class="doc-anchor" href="#examples-26">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::path::Path;
+
+<span class="kw">let </span>path = Path::new(<span class="string">"/tmp/foo.rs"</span>);
+
+<span class="macro">println!</span>(<span class="string">"{}"</span>, path.display());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.metadata" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.5.0">1.5.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/std/path.rs.html#2868">source</a></span><h4 class="code-header">pub fn <a href="#method.metadata" class="fn">metadata</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/std/fs/struct.Metadata.html" title="struct std::fs::Metadata">Metadata</a>, <a class="struct" href="https://doc.rust-lang.org/1.81.0/std/io/error/struct.Error.html" title="struct std::io::error::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Queries the file system to get information about a file, directory, etc.</p>
+<p>This function will traverse symbolic links to query information about the
+destination file.</p>
+<p>This is an alias to <a href="https://doc.rust-lang.org/1.81.0/std/fs/fn.metadata.html" title="fn std::fs::metadata"><code>fs::metadata</code></a>.</p>
+<h5 id="examples-27"><a class="doc-anchor" href="#examples-27">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::path::Path;
+
+<span class="kw">let </span>path = Path::new(<span class="string">"/Minas/tirith"</span>);
+<span class="kw">let </span>metadata = path.metadata().expect(<span class="string">"metadata call failed"</span>);
+<span class="macro">println!</span>(<span class="string">"{:?}"</span>, metadata.file_type());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.symlink_metadata" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.5.0">1.5.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/std/path.rs.html#2887">source</a></span><h4 class="code-header">pub fn <a href="#method.symlink_metadata" class="fn">symlink_metadata</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/std/fs/struct.Metadata.html" title="struct std::fs::Metadata">Metadata</a>, <a class="struct" href="https://doc.rust-lang.org/1.81.0/std/io/error/struct.Error.html" title="struct std::io::error::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Queries the metadata about a file without following symlinks.</p>
+<p>This is an alias to <a href="https://doc.rust-lang.org/1.81.0/std/fs/fn.symlink_metadata.html" title="fn std::fs::symlink_metadata"><code>fs::symlink_metadata</code></a>.</p>
+<h5 id="examples-28"><a class="doc-anchor" href="#examples-28">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::path::Path;
+
+<span class="kw">let </span>path = Path::new(<span class="string">"/Minas/tirith"</span>);
+<span class="kw">let </span>metadata = path.symlink_metadata().expect(<span class="string">"symlink_metadata call failed"</span>);
+<span class="macro">println!</span>(<span class="string">"{:?}"</span>, metadata.file_type());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.canonicalize" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.5.0">1.5.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/std/path.rs.html#2906">source</a></span><h4 class="code-header">pub fn <a href="#method.canonicalize" class="fn">canonicalize</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/std/path/struct.PathBuf.html" title="struct std::path::PathBuf">PathBuf</a>, <a class="struct" href="https://doc.rust-lang.org/1.81.0/std/io/error/struct.Error.html" title="struct std::io::error::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Returns the canonical, absolute form of the path with all intermediate
+components normalized and symbolic links resolved.</p>
+<p>This is an alias to <a href="https://doc.rust-lang.org/1.81.0/std/fs/fn.canonicalize.html" title="fn std::fs::canonicalize"><code>fs::canonicalize</code></a>.</p>
+<h5 id="examples-29"><a class="doc-anchor" href="#examples-29">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::path::{Path, PathBuf};
+
+<span class="kw">let </span>path = Path::new(<span class="string">"/foo/test/../test/bar.rs"</span>);
+<span class="macro">assert_eq!</span>(path.canonicalize().unwrap(), PathBuf::from(<span class="string">"/foo/test/bar.rs"</span>));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_link" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.5.0">1.5.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/std/path.rs.html#2924">source</a></span><h4 class="code-header">pub fn <a href="#method.read_link" class="fn">read_link</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/std/path/struct.PathBuf.html" title="struct std::path::PathBuf">PathBuf</a>, <a class="struct" href="https://doc.rust-lang.org/1.81.0/std/io/error/struct.Error.html" title="struct std::io::error::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Reads a symbolic link, returning the file that the link points to.</p>
+<p>This is an alias to <a href="https://doc.rust-lang.org/1.81.0/std/fs/fn.read_link.html" title="fn std::fs::read_link"><code>fs::read_link</code></a>.</p>
+<h5 id="examples-30"><a class="doc-anchor" href="#examples-30">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::path::Path;
+
+<span class="kw">let </span>path = Path::new(<span class="string">"/laputa/sky_castle.rs"</span>);
+<span class="kw">let </span>path_link = path.read_link().expect(<span class="string">"read_link call failed"</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_dir" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.5.0">1.5.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/std/path.rs.html#2949">source</a></span><h4 class="code-header">pub fn <a href="#method.read_dir" class="fn">read_dir</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/std/fs/struct.ReadDir.html" title="struct std::fs::ReadDir">ReadDir</a>, <a class="struct" href="https://doc.rust-lang.org/1.81.0/std/io/error/struct.Error.html" title="struct std::io::error::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Returns an iterator over the entries within a directory.</p>
+<p>The iterator will yield instances of <code><a href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">io::Result</a>&lt;<a href="https://doc.rust-lang.org/1.81.0/std/fs/struct.DirEntry.html" title="struct std::fs::DirEntry">fs::DirEntry</a>&gt;</code>. New
+errors may be encountered after an iterator is initially constructed.</p>
+<p>This is an alias to <a href="https://doc.rust-lang.org/1.81.0/std/fs/fn.read_dir.html" title="fn std::fs::read_dir"><code>fs::read_dir</code></a>.</p>
+<h5 id="examples-31"><a class="doc-anchor" href="#examples-31">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::path::Path;
+
+<span class="kw">let </span>path = Path::new(<span class="string">"/laputa"</span>);
+<span class="kw">for </span>entry <span class="kw">in </span>path.read_dir().expect(<span class="string">"read_dir call failed"</span>) {
+    <span class="kw">if let </span><span class="prelude-val">Ok</span>(entry) = entry {
+        <span class="macro">println!</span>(<span class="string">"{:?}"</span>, entry.path());
+    }
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.exists" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.5.0">1.5.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/std/path.rs.html#2980">source</a></span><h4 class="code-header">pub fn <a href="#method.exists" class="fn">exists</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns <code>true</code> if the path points at an existing entity.</p>
+<p>Warning: this method may be error-prone, consider using <a href="https://doc.rust-lang.org/1.81.0/std/path/struct.Path.html#method.try_exists" title="method std::path::Path::try_exists"><code>try_exists()</code></a> instead!
+It also has a risk of introducing time-of-check to time-of-use (TOCTOU) bugs.</p>
+<p>This function will traverse symbolic links to query information about the
+destination file.</p>
+<p>If you cannot access the metadata of the file, e.g. because of a
+permission error or broken symbolic links, this will return <code>false</code>.</p>
+<h5 id="examples-32"><a class="doc-anchor" href="#examples-32">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::path::Path;
+<span class="macro">assert!</span>(!Path::new(<span class="string">"does_not_exist.txt"</span>).exists());</code></pre></div>
+<h5 id="see-also-2"><a class="doc-anchor" href="#see-also-2">§</a>See Also</h5>
+<p>This is a convenience function that coerces errors to false. If you want to
+check errors, call <a href="https://doc.rust-lang.org/1.81.0/std/path/struct.Path.html#method.try_exists" title="method std::path::Path::try_exists"><code>Path::try_exists</code></a>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_exists" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.63.0">1.63.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/std/path.rs.html#3012">source</a></span><h4 class="code-header">pub fn <a href="#method.try_exists" class="fn">try_exists</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>, <a class="struct" href="https://doc.rust-lang.org/1.81.0/std/io/error/struct.Error.html" title="struct std::io::error::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Returns <code>Ok(true)</code> if the path points at an existing entity.</p>
+<p>This function will traverse symbolic links to query information about the
+destination file. In case of broken symbolic links this will return <code>Ok(false)</code>.</p>
+<p><a href="https://doc.rust-lang.org/1.81.0/std/path/struct.Path.html#method.exists" title="method std::path::Path::exists"><code>Path::exists()</code></a> only checks whether or not a path was both found and readable. By
+contrast, <code>try_exists</code> will return <code>Ok(true)</code> or <code>Ok(false)</code>, respectively, if the path
+was <em>verified</em> to exist or not exist. If its existence can neither be confirmed nor
+denied, it will propagate an <code>Err(_)</code> instead. This can be the case if e.g. listing
+permission is denied on one of the parent directories.</p>
+<p>Note that while this avoids some pitfalls of the <code>exists()</code> method, it still can not
+prevent time-of-check to time-of-use (TOCTOU) bugs. You should only use it in scenarios
+where those bugs are not an issue.</p>
+<p>This is an alias for <a href="https://doc.rust-lang.org/1.81.0/std/fs/fn.exists.html" title="fn std::fs::exists"><code>std::fs::exists</code></a>.</p>
+<h5 id="examples-33"><a class="doc-anchor" href="#examples-33">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::path::Path;
+<span class="macro">assert!</span>(!Path::new(<span class="string">"does_not_exist.txt"</span>).try_exists().expect(<span class="string">"Can't check existence of file does_not_exist.txt"</span>));
+<span class="macro">assert!</span>(Path::new(<span class="string">"/root/secret_file.txt"</span>).try_exists().is_err());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.is_file" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.5.0">1.5.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/std/path.rs.html#3045">source</a></span><h4 class="code-header">pub fn <a href="#method.is_file" class="fn">is_file</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns <code>true</code> if the path exists on disk and is pointing at a regular file.</p>
+<p>This function will traverse symbolic links to query information about the
+destination file.</p>
+<p>If you cannot access the metadata of the file, e.g. because of a
+permission error or broken symbolic links, this will return <code>false</code>.</p>
+<h5 id="examples-34"><a class="doc-anchor" href="#examples-34">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::path::Path;
+<span class="macro">assert_eq!</span>(Path::new(<span class="string">"./is_a_directory/"</span>).is_file(), <span class="bool-val">false</span>);
+<span class="macro">assert_eq!</span>(Path::new(<span class="string">"a_file.txt"</span>).is_file(), <span class="bool-val">true</span>);</code></pre></div>
+<h5 id="see-also-3"><a class="doc-anchor" href="#see-also-3">§</a>See Also</h5>
+<p>This is a convenience function that coerces errors to false. If you want to
+check errors, call <a href="https://doc.rust-lang.org/1.81.0/std/fs/fn.metadata.html" title="fn std::fs::metadata"><code>fs::metadata</code></a> and handle its <a href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result"><code>Result</code></a>. Then call
+<a href="https://doc.rust-lang.org/1.81.0/std/fs/struct.Metadata.html#method.is_file" title="method std::fs::Metadata::is_file"><code>fs::Metadata::is_file</code></a> if it was <a href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html#variant.Ok" title="variant core::result::Result::Ok"><code>Ok</code></a>.</p>
+<p>When the goal is simply to read from (or write to) the source, the most
+reliable way to test the source can be read (or written to) is to open
+it. Only using <code>is_file</code> can break workflows like <code>diff &lt;( prog_a )</code> on
+a Unix-like system for example. See <a href="https://doc.rust-lang.org/1.81.0/std/fs/struct.File.html#method.open" title="associated function std::fs::File::open"><code>fs::File::open</code></a> or
+<a href="https://doc.rust-lang.org/1.81.0/std/fs/struct.OpenOptions.html#method.open" title="method std::fs::OpenOptions::open"><code>fs::OpenOptions::open</code></a> for more information.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.is_dir" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.5.0">1.5.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/std/path.rs.html#3072">source</a></span><h4 class="code-header">pub fn <a href="#method.is_dir" class="fn">is_dir</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns <code>true</code> if the path exists on disk and is pointing at a directory.</p>
+<p>This function will traverse symbolic links to query information about the
+destination file.</p>
+<p>If you cannot access the metadata of the file, e.g. because of a
+permission error or broken symbolic links, this will return <code>false</code>.</p>
+<h5 id="examples-35"><a class="doc-anchor" href="#examples-35">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::path::Path;
+<span class="macro">assert_eq!</span>(Path::new(<span class="string">"./is_a_directory/"</span>).is_dir(), <span class="bool-val">true</span>);
+<span class="macro">assert_eq!</span>(Path::new(<span class="string">"a_file.txt"</span>).is_dir(), <span class="bool-val">false</span>);</code></pre></div>
+<h5 id="see-also-4"><a class="doc-anchor" href="#see-also-4">§</a>See Also</h5>
+<p>This is a convenience function that coerces errors to false. If you want to
+check errors, call <a href="https://doc.rust-lang.org/1.81.0/std/fs/fn.metadata.html" title="fn std::fs::metadata"><code>fs::metadata</code></a> and handle its <a href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result"><code>Result</code></a>. Then call
+<a href="https://doc.rust-lang.org/1.81.0/std/fs/struct.Metadata.html#method.is_dir" title="method std::fs::Metadata::is_dir"><code>fs::Metadata::is_dir</code></a> if it was <a href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html#variant.Ok" title="variant core::result::Result::Ok"><code>Ok</code></a>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.is_symlink" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.58.0">1.58.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/std/path.rs.html#3104">source</a></span><h4 class="code-header">pub fn <a href="#method.is_symlink" class="fn">is_symlink</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns <code>true</code> if the path exists on disk and is pointing at a symbolic link.</p>
+<p>This function will not traverse symbolic links.
+In case of a broken symbolic link this will also return true.</p>
+<p>If you cannot access the directory containing the file, e.g., because of a
+permission error, this will return false.</p>
+<h5 id="examples-36"><a class="doc-anchor" href="#examples-36">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::path::Path;
+<span class="kw">use </span>std::os::unix::fs::symlink;
+
+<span class="kw">let </span>link_path = Path::new(<span class="string">"link"</span>);
+symlink(<span class="string">"/origin_does_not_exist/"</span>, link_path).unwrap();
+<span class="macro">assert_eq!</span>(link_path.is_symlink(), <span class="bool-val">true</span>);
+<span class="macro">assert_eq!</span>(link_path.exists(), <span class="bool-val">false</span>);</code></pre></div>
+<h5 id="see-also-5"><a class="doc-anchor" href="#see-also-5">§</a>See Also</h5>
+<p>This is a convenience function that coerces errors to false. If you want to
+check errors, call <a href="https://doc.rust-lang.org/1.81.0/std/fs/fn.symlink_metadata.html" title="fn std::fs::symlink_metadata"><code>fs::symlink_metadata</code></a> and handle its <a href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result"><code>Result</code></a>. Then call
+<a href="https://doc.rust-lang.org/1.81.0/std/fs/struct.Metadata.html#method.is_symlink" title="method std::fs::Metadata::is_symlink"><code>fs::Metadata::is_symlink</code></a> if it was <a href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html#variant.Ok" title="variant core::result::Result::Ok"><code>Ok</code></a>.</p>
+</div></details></div><h2 id="trait-implementations" class="section-header">Trait Implementations<a href="#trait-implementations" class="anchor">§</a></h2><div id="trait-implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-AsRef%3COsStr%3E-for-TempPath" class="impl"><a class="src rightside" href="../src/tempfile/file/mod.rs.html#364-368">source</a><a href="#impl-AsRef%3COsStr%3E-for-TempPath" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/std/ffi/os_str/struct.OsStr.html" title="struct std::ffi::os_str::OsStr">OsStr</a>&gt; for <a class="struct" href="struct.TempPath.html" title="struct tempfile::TempPath">TempPath</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.as_ref" class="method trait-impl"><a class="src rightside" href="../src/tempfile/file/mod.rs.html#365-367">source</a><a href="#method.as_ref" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html#tymethod.as_ref" class="fn">as_ref</a>(&amp;self) -&gt; &amp;<a class="struct" href="https://doc.rust-lang.org/1.81.0/std/ffi/os_str/struct.OsStr.html" title="struct std::ffi::os_str::OsStr">OsStr</a></h4></section></summary><div class='docblock'>Converts this type into a shared reference of the (usually inferred) input type.</div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-AsRef%3CPath%3E-for-TempPath" class="impl"><a class="src rightside" href="../src/tempfile/file/mod.rs.html#358-362">source</a><a href="#impl-AsRef%3CPath%3E-for-TempPath" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/std/path/struct.Path.html" title="struct std::path::Path">Path</a>&gt; for <a class="struct" href="struct.TempPath.html" title="struct tempfile::TempPath">TempPath</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.as_ref-1" class="method trait-impl"><a class="src rightside" href="../src/tempfile/file/mod.rs.html#359-361">source</a><a href="#method.as_ref-1" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html#tymethod.as_ref" class="fn">as_ref</a>(&amp;self) -&gt; &amp;<a class="struct" href="https://doc.rust-lang.org/1.81.0/std/path/struct.Path.html" title="struct std::path::Path">Path</a></h4></section></summary><div class='docblock'>Converts this type into a shared reference of the (usually inferred) input type.</div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Debug-for-TempPath" class="impl"><a class="src rightside" href="../src/tempfile/file/mod.rs.html#336-340">source</a><a href="#impl-Debug-for-TempPath" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html" title="trait core::fmt::Debug">Debug</a> for <a class="struct" href="struct.TempPath.html" title="struct tempfile::TempPath">TempPath</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.fmt" class="method trait-impl"><a class="src rightside" href="../src/tempfile/file/mod.rs.html#337-339">source</a><a href="#method.fmt" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html#tymethod.fmt" class="fn">fmt</a>(&amp;self, f: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/fmt/struct.Formatter.html" title="struct core::fmt::Formatter">Formatter</a>&lt;'_&gt;) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a></h4></section></summary><div class='docblock'>Formats the value using the given formatter. <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html#tymethod.fmt">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Deref-for-TempPath" class="impl"><a class="src rightside" href="../src/tempfile/file/mod.rs.html#350-356">source</a><a href="#impl-Deref-for-TempPath" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/deref/trait.Deref.html" title="trait core::ops::deref::Deref">Deref</a> for <a class="struct" href="struct.TempPath.html" title="struct tempfile::TempPath">TempPath</a></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Target" class="associatedtype trait-impl"><a href="#associatedtype.Target" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/core/ops/deref/trait.Deref.html#associatedtype.Target" class="associatedtype">Target</a> = <a class="struct" href="https://doc.rust-lang.org/1.81.0/std/path/struct.Path.html" title="struct std::path::Path">Path</a></h4></section></summary><div class='docblock'>The resulting type after dereferencing.</div></details><details class="toggle method-toggle" open><summary><section id="method.deref" class="method trait-impl"><a class="src rightside" href="../src/tempfile/file/mod.rs.html#353-355">source</a><a href="#method.deref" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/ops/deref/trait.Deref.html#tymethod.deref" class="fn">deref</a>(&amp;self) -&gt; &amp;<a class="struct" href="https://doc.rust-lang.org/1.81.0/std/path/struct.Path.html" title="struct std::path::Path">Path</a></h4></section></summary><div class='docblock'>Dereferences the value.</div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Drop-for-TempPath" class="impl"><a class="src rightside" href="../src/tempfile/file/mod.rs.html#342-348">source</a><a href="#impl-Drop-for-TempPath" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/drop/trait.Drop.html" title="trait core::ops::drop::Drop">Drop</a> for <a class="struct" href="struct.TempPath.html" title="struct tempfile::TempPath">TempPath</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.drop" class="method trait-impl"><a class="src rightside" href="../src/tempfile/file/mod.rs.html#343-347">source</a><a href="#method.drop" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/ops/drop/trait.Drop.html#tymethod.drop" class="fn">drop</a>(&amp;mut self)</h4></section></summary><div class='docblock'>Executes the destructor for this type. <a href="https://doc.rust-lang.org/1.81.0/core/ops/drop/trait.Drop.html#tymethod.drop">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-From%3CPathPersistError%3E-for-TempPath" class="impl"><a class="src rightside" href="../src/tempfile/file/mod.rs.html#103-108">source</a><a href="#impl-From%3CPathPersistError%3E-for-TempPath" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;<a class="struct" href="struct.PathPersistError.html" title="struct tempfile::PathPersistError">PathPersistError</a>&gt; for <a class="struct" href="struct.TempPath.html" title="struct tempfile::TempPath">TempPath</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.from" class="method trait-impl"><a class="src rightside" href="../src/tempfile/file/mod.rs.html#105-107">source</a><a href="#method.from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html#tymethod.from" class="fn">from</a>(error: <a class="struct" href="struct.PathPersistError.html" title="struct tempfile::PathPersistError">PathPersistError</a>) -&gt; <a class="struct" href="struct.TempPath.html" title="struct tempfile::TempPath">TempPath</a></h4></section></summary><div class='docblock'>Converts to this type from the input type.</div></details></div></details></div><h2 id="synthetic-implementations" class="section-header">Auto Trait Implementations<a href="#synthetic-implementations" class="anchor">§</a></h2><div id="synthetic-implementations-list"><section id="impl-Freeze-for-TempPath" class="impl"><a href="#impl-Freeze-for-TempPath" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Freeze.html" title="trait core::marker::Freeze">Freeze</a> for <a class="struct" href="struct.TempPath.html" title="struct tempfile::TempPath">TempPath</a></h3></section><section id="impl-RefUnwindSafe-for-TempPath" class="impl"><a href="#impl-RefUnwindSafe-for-TempPath" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/panic/unwind_safe/trait.RefUnwindSafe.html" title="trait core::panic::unwind_safe::RefUnwindSafe">RefUnwindSafe</a> for <a class="struct" href="struct.TempPath.html" title="struct tempfile::TempPath">TempPath</a></h3></section><section id="impl-Send-for-TempPath" class="impl"><a href="#impl-Send-for-TempPath" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> for <a class="struct" href="struct.TempPath.html" title="struct tempfile::TempPath">TempPath</a></h3></section><section id="impl-Sync-for-TempPath" class="impl"><a href="#impl-Sync-for-TempPath" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> for <a class="struct" href="struct.TempPath.html" title="struct tempfile::TempPath">TempPath</a></h3></section><section id="impl-Unpin-for-TempPath" class="impl"><a href="#impl-Unpin-for-TempPath" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a> for <a class="struct" href="struct.TempPath.html" title="struct tempfile::TempPath">TempPath</a></h3></section><section id="impl-UnwindSafe-for-TempPath" class="impl"><a href="#impl-UnwindSafe-for-TempPath" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/panic/unwind_safe/trait.UnwindSafe.html" title="trait core::panic::unwind_safe::UnwindSafe">UnwindSafe</a> for <a class="struct" href="struct.TempPath.html" title="struct tempfile::TempPath">TempPath</a></h3></section></div><h2 id="blanket-implementations" class="section-header">Blanket Implementations<a href="#blanket-implementations" class="anchor">§</a></h2><div id="blanket-implementations-list"><details class="toggle implementors-toggle"><summary><section id="impl-Any-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#140">source</a><a href="#impl-Any-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html" title="trait core::any::Any">Any</a> for T<div class="where">where
+    T: 'static + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.type_id" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#141">source</a><a href="#method.type_id" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html#tymethod.type_id" class="fn">type_id</a>(&amp;self) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/any/struct.TypeId.html" title="struct core::any::TypeId">TypeId</a></h4></section></summary><div class='docblock'>Gets the <code>TypeId</code> of <code>self</code>. <a href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html#tymethod.type_id">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Borrow%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#209">source</a><a href="#impl-Borrow%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html" title="trait core::borrow::Borrow">Borrow</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#211">source</a><a href="#method.borrow" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html#tymethod.borrow" class="fn">borrow</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a></h4></section></summary><div class='docblock'>Immutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html#tymethod.borrow">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-BorrowMut%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#217">source</a><a href="#impl-BorrowMut%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html" title="trait core::borrow::BorrowMut">BorrowMut</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow_mut" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#218">source</a><a href="#method.borrow_mut" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut" class="fn">borrow_mut</a>(&amp;mut self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a></h4></section></summary><div class='docblock'>Mutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-From%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#765">source</a><a href="#impl-From%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for T</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.from-1" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#768">source</a><a href="#method.from-1" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html#tymethod.from" class="fn">from</a>(t: T) -&gt; T</h4></section></summary><div class="docblock"><p>Returns the argument unchanged.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Into%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#748-750">source</a><a href="#impl-Into%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#758">source</a><a href="#method.into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html#tymethod.into" class="fn">into</a>(self) -&gt; U</h4></section></summary><div class="docblock"><p>Calls <code>U::from(self)</code>.</p>
+<p>That is, this conversion is whatever the implementation of
+<code><a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for U</code> chooses to do.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryFrom%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#805-807">source</a><a href="#impl-TryFrom%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error" class="associatedtype trait-impl"><a href="#associatedtype.Error" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" class="associatedtype">Error</a> = <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/convert/enum.Infallible.html" title="enum core::convert::Infallible">Infallible</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#812">source</a><a href="#method.try_from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#tymethod.try_from" class="fn">try_from</a>(value: U) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, &lt;T as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryInto%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#790-792">source</a><a href="#impl-TryInto%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html" title="trait core::convert::TryInto">TryInto</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error-1" class="associatedtype trait-impl"><a href="#associatedtype.Error-1" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html#associatedtype.Error" class="associatedtype">Error</a> = &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#797">source</a><a href="#method.try_into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html#tymethod.try_into" class="fn">try_into</a>(self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;U, &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details></div></section></div></main></body></html>

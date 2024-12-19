@@ -1,0 +1,55 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A strategy for using the [`event-listener`] crate in both blocking and non-blocking contexts."><title>event_listener_strategy - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="event_listener_strategy" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="icon" href="https://raw.githubusercontent.com/smol-rs/smol/master/assets/images/logo_fullsize_transparent.png"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../event_listener_strategy/index.html"><img src="https://raw.githubusercontent.com/smol-rs/smol/master/assets/images/logo_fullsize_transparent.png" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../event_listener_strategy/index.html"><img src="https://raw.githubusercontent.com/smol-rs/smol/master/assets/images/logo_fullsize_transparent.png" alt="logo"></a><h2><a href="../event_listener_strategy/index.html">event_listener_strategy</a><span class="version">0.5.2</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#macros">Macros</a></li><li><a href="#structs">Structs</a></li><li><a href="#traits">Traits</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">event_listener_strategy</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/event_listener_strategy/lib.rs.html#2-549">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A strategy for using the [<code>event-listener</code>] crate in both blocking and non-blocking contexts.</p>
+<p>One of the stand-out features of the [<code>event-listener</code>] crate is the ability to use it in both
+asynchronous and synchronous contexts. However, sometimes using it like this causes a lot of
+boilerplate to be duplicated. This crate aims to reduce that boilerplate by providing an
+<a href="trait.EventListenerFuture.html" title="trait event_listener_strategy::EventListenerFuture"><code>EventListenerFuture</code></a> trait that implements both blocking and non-blocking functionality.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>event_listener_strategy::{
+   event_listener::{Event, EventListener},
+   EventListenerFuture, FutureWrapper, Strategy
+};
+
+<span class="kw">use </span>std::pin::Pin;
+<span class="kw">use </span>std::task::Poll;
+<span class="kw">use </span>std::thread;
+<span class="kw">use </span>std::sync::Arc;
+
+<span class="comment">// A future that waits three seconds for an event to be fired.
+</span><span class="kw">fn </span>wait_three_seconds() -&gt; WaitThreeSeconds {
+    <span class="kw">let </span>event = Event::new();
+    <span class="kw">let </span>listener = event.listen();
+
+    thread::spawn(<span class="kw">move </span>|| {
+        thread::sleep(std::time::Duration::from_secs(<span class="number">3</span>));
+        event.notify(<span class="number">1</span>);
+    });
+
+    WaitThreeSeconds { listener: <span class="prelude-val">Some</span>(listener) }
+}
+
+<span class="kw">struct </span>WaitThreeSeconds {
+    listener: <span class="prelude-ty">Option</span>&lt;EventListener&gt;,
+}
+
+<span class="kw">impl </span>EventListenerFuture <span class="kw">for </span>WaitThreeSeconds {
+    <span class="kw">type </span>Output = ();
+
+    <span class="kw">fn </span>poll_with_strategy&lt;<span class="lifetime">'a</span>, S: Strategy&lt;<span class="lifetime">'a</span>&gt;&gt;(
+        <span class="kw-2">mut </span><span class="self">self</span>: Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;,
+        strategy: <span class="kw-2">&amp;mut </span>S,
+        context: <span class="kw-2">&amp;mut </span>S::Context,
+    ) -&gt; Poll&lt;<span class="self">Self</span>::Output&gt; {
+        strategy.poll(<span class="kw-2">&amp;mut </span><span class="self">self</span>.listener, context)
+    }
+}
+
+<span class="comment">// Use the future in a blocking context.
+</span><span class="kw">let </span>future = wait_three_seconds();
+future.wait();
+
+<span class="comment">// Use the future in a non-blocking context.
+</span>futures_lite::future::block_on(<span class="kw">async </span>{
+    <span class="kw">let </span>future = FutureWrapper::new(wait_three_seconds());
+    future.<span class="kw">await</span>;
+});</code></pre></div>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.event_listener"><code>pub use <a class="mod" href="../event_listener/index.html" title="mod event_listener">event_listener</a>;</code></div></li></ul><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="macro" href="macro.easy_wrapper.html" title="macro event_listener_strategy::easy_wrapper">easy_wrapper</a></div><div class="desc docblock-short">A wrapper around an <a href="trait.EventListenerFuture.html" title="trait event_listener_strategy::EventListenerFuture"><code>EventListenerFuture</code></a> that can be easily exported for use.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Blocking.html" title="struct event_listener_strategy::Blocking">Blocking</a></div><div class="desc docblock-short">A strategy that blocks the current thread until the event is signalled.</div></li><li><div class="item-name"><a class="struct" href="struct.FutureWrapper.html" title="struct event_listener_strategy::FutureWrapper">FutureWrapper</a></div><div class="desc docblock-short">A wrapper around an <a href="trait.EventListenerFuture.html" title="trait event_listener_strategy::EventListenerFuture"><code>EventListenerFuture</code></a> that implements <a href="https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html" title="trait core::future::future::Future"><code>Future</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.NonBlocking.html" title="struct event_listener_strategy::NonBlocking">NonBlocking</a></div><div class="desc docblock-short">A strategy that uses polling to efficiently wait for an event.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.EventListenerFuture.html" title="trait event_listener_strategy::EventListenerFuture">EventListenerFuture</a></div><div class="desc docblock-short">A future that runs using the [<code>event-listener</code>] crate.</div></li><li><div class="item-name"><a class="trait" href="trait.Strategy.html" title="trait event_listener_strategy::Strategy">Strategy</a></div><div class="desc docblock-short">A strategy for polling an <a href="trait.EventListenerFuture.html" title="trait event_listener_strategy::EventListenerFuture"><code>EventListenerFuture</code></a> or an <a href="../event_listener/struct.EventListener.html" title="struct event_listener::EventListener"><code>EventListener</code></a>.</div></li></ul></section></div></main></body></html>

@@ -1,0 +1,117 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Polls multiple futures and streams simultaneously, executing the branch for the future that finishes first. Unlike `select!`, if multiple futures are ready, one will be selected in order of declaration. Futures directly passed to `select_biased!` must be `Unpin` and implement `FusedFuture`."><title>select_biased in futures_util - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="futures_util" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../futures_util/index.html">futures_util</a><span class="version">0.3.30</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="index.html">futures_util</a>::<wbr><a class="macro" href="#">select_biased</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/futures_util/async_await/select_mod.rs.html#328-335">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><span class="macro">macro_rules!</span> select_biased {
+    ($(<span class="macro-nonterminal">$tokens</span>:tt)<span class="kw-2">*</span>) =&gt; { ... };
+}</pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Polls multiple futures and streams simultaneously, executing the branch
+for the future that finishes first. Unlike <a href="macro.select.html"><code>select!</code></a>, if multiple futures are ready,
+one will be selected in order of declaration. Futures directly
+passed to <code>select_biased!</code> must be <code>Unpin</code> and implement <code>FusedFuture</code>.</p>
+<p>If an expression which yields a <code>Future</code> is passed to <code>select_biased!</code>
+(e.g. an <code>async fn</code> call) instead of a <code>Future</code> by name the <code>Unpin</code>
+requirement is relaxed, since the macro will pin the resulting <code>Future</code>
+on the stack. However the <code>Future</code> returned by the expression must
+still implement <code>FusedFuture</code>.</p>
+<p>Futures and streams which are not already fused can be fused using the
+<code>.fuse()</code> method. Note, though, that fusing a future or stream directly
+in the call to <code>select_biased!</code> will not be enough to prevent it from being
+polled after completion if the <code>select_biased!</code> call is in a loop, so when
+<code>select_biased!</code>ing in a loop, users should take care to <code>fuse()</code> outside of
+the loop.</p>
+<p><code>select_biased!</code> can be used as an expression and will return the return
+value of the selected branch. For this reason the return type of every
+branch in a <code>select_biased!</code> must be the same.</p>
+<p>This macro is only usable inside of async functions, closures, and blocks.
+It is also gated behind the <code>async-await</code> feature of this library, which is
+activated by default.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>futures::future;
+<span class="kw">use </span>futures::select_biased;
+<span class="kw">let </span><span class="kw-2">mut </span>a = future::ready(<span class="number">4</span>);
+<span class="kw">let </span><span class="kw-2">mut </span>b = future::pending::&lt;()&gt;();
+
+<span class="kw">let </span>res = <span class="macro">select_biased!</span> {
+    a_res = a =&gt; a_res + <span class="number">1</span>,
+    <span class="kw">_ </span>= b =&gt; <span class="number">0</span>,
+};
+<span class="macro">assert_eq!</span>(res, <span class="number">5</span>);</code></pre></div>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>futures::future;
+<span class="kw">use </span>futures::stream::{<span class="self">self</span>, StreamExt};
+<span class="kw">use </span>futures::select_biased;
+<span class="kw">let </span><span class="kw-2">mut </span>st = stream::iter(<span class="macro">vec!</span>[<span class="number">2</span>]).fuse();
+<span class="kw">let </span><span class="kw-2">mut </span>fut = future::pending::&lt;()&gt;();
+
+<span class="macro">select_biased!</span> {
+    x = st.next() =&gt; <span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="number">2</span>), x),
+    <span class="kw">_ </span>= fut =&gt; <span class="macro">panic!</span>(),
+};</code></pre></div>
+<p>As described earlier, <code>select_biased</code> can directly select on expressions
+which return <code>Future</code>s - even if those do not implement <code>Unpin</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>futures::future::FutureExt;
+<span class="kw">use </span>futures::select_biased;
+
+<span class="comment">// Calling the following async fn returns a Future which does not
+// implement Unpin
+</span><span class="kw">async fn </span>async_identity_fn(arg: usize) -&gt; usize {
+    arg
+}
+
+<span class="kw">let </span>res = <span class="macro">select_biased!</span> {
+    a_res = async_identity_fn(<span class="number">62</span>).fuse() =&gt; a_res + <span class="number">1</span>,
+    b_res = async_identity_fn(<span class="number">13</span>).fuse() =&gt; b_res,
+};
+<span class="macro">assert!</span>(res == <span class="number">63 </span>|| res == <span class="number">12</span>);</code></pre></div>
+<p>If a similar async function is called outside of <code>select_biased</code> to produce
+a <code>Future</code>, the <code>Future</code> must be pinned in order to be able to pass
+it to <code>select_biased</code>. This can be achieved via <code>Box::pin</code> for pinning a
+<code>Future</code> on the heap or the <code>pin_mut!</code> macro for pinning a <code>Future</code>
+on the stack.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>futures::future::FutureExt;
+<span class="kw">use </span>futures::select_biased;
+<span class="kw">use </span>futures::pin_mut;
+
+<span class="comment">// Calling the following async fn returns a Future which does not
+// implement Unpin
+</span><span class="kw">async fn </span>async_identity_fn(arg: usize) -&gt; usize {
+    arg
+}
+
+<span class="kw">let </span>fut_1 = async_identity_fn(<span class="number">1</span>).fuse();
+<span class="kw">let </span>fut_2 = async_identity_fn(<span class="number">2</span>).fuse();
+<span class="kw">let </span><span class="kw-2">mut </span>fut_1 = Box::pin(fut_1); <span class="comment">// Pins the Future on the heap
+</span><span class="macro">pin_mut!</span>(fut_2); <span class="comment">// Pins the Future on the stack
+
+</span><span class="kw">let </span>res = <span class="macro">select_biased!</span> {
+    a_res = fut_1 =&gt; a_res,
+    b_res = fut_2 =&gt; b_res,
+};
+<span class="macro">assert!</span>(res == <span class="number">1 </span>|| res == <span class="number">2</span>);</code></pre></div>
+<p><code>select_biased</code> also accepts a <code>complete</code> branch and a <code>default</code> branch.
+<code>complete</code> will run if all futures and streams have already been
+exhausted. <code>default</code> will run if no futures or streams are
+immediately ready. <code>complete</code> takes priority over <code>default</code> in
+the case where all futures have completed.
+A motivating use-case for passing <code>Future</code>s by name as well as for
+<code>complete</code> blocks is to call <code>select_biased!</code> in a loop, which is
+demonstrated in the following example:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>futures::future;
+<span class="kw">use </span>futures::select_biased;
+<span class="kw">let </span><span class="kw-2">mut </span>a_fut = future::ready(<span class="number">4</span>);
+<span class="kw">let </span><span class="kw-2">mut </span>b_fut = future::ready(<span class="number">6</span>);
+<span class="kw">let </span><span class="kw-2">mut </span>total = <span class="number">0</span>;
+
+<span class="kw">loop </span>{
+    <span class="macro">select_biased!</span> {
+        a = a_fut =&gt; total += a,
+        b = b_fut =&gt; total += b,
+        complete =&gt; <span class="kw">break</span>,
+        default =&gt; <span class="macro">panic!</span>(), <span class="comment">// never runs (futures run first, then complete)
+    </span>};
+}
+<span class="macro">assert_eq!</span>(total, <span class="number">10</span>);</code></pre></div>
+<p>Note that the futures that have been matched over can still be mutated
+from inside the <code>select_biased!</code> block’s branches. This can be used to implement
+more complex behavior such as timer resets or writing into the head of
+a stream.</p>
+</div></details></section></div></main></body></html>

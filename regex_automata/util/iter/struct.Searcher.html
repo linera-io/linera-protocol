@@ -1,0 +1,439 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A searcher for creating iterators and performing lower level iteration."><title>Searcher in regex_automata::util::iter - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="regex_automata" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc struct"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../regex_automata/index.html">regex_automata</a><span class="version">0.4.7</span></h2></div><h2 class="location"><a href="#">Searcher</a></h2><div class="sidebar-elems"><section><h3><a href="#implementations">Methods</a></h3><ul class="block method"><li><a href="#method.advance">advance</a></li><li><a href="#method.advance_half">advance_half</a></li><li><a href="#method.input">input</a></li><li><a href="#method.into_captures_iter">into_captures_iter</a></li><li><a href="#method.into_half_matches_iter">into_half_matches_iter</a></li><li><a href="#method.into_matches_iter">into_matches_iter</a></li><li><a href="#method.new">new</a></li><li><a href="#method.try_advance">try_advance</a></li><li><a href="#method.try_advance_half">try_advance_half</a></li></ul><h3><a href="#trait-implementations">Trait Implementations</a></h3><ul class="block trait-implementation"><li><a href="#impl-Clone-for-Searcher%3C'h%3E">Clone</a></li><li><a href="#impl-Debug-for-Searcher%3C'h%3E">Debug</a></li></ul><h3><a href="#synthetic-implementations">Auto Trait Implementations</a></h3><ul class="block synthetic-implementation"><li><a href="#impl-Freeze-for-Searcher%3C'h%3E">Freeze</a></li><li><a href="#impl-RefUnwindSafe-for-Searcher%3C'h%3E">RefUnwindSafe</a></li><li><a href="#impl-Send-for-Searcher%3C'h%3E">Send</a></li><li><a href="#impl-Sync-for-Searcher%3C'h%3E">Sync</a></li><li><a href="#impl-Unpin-for-Searcher%3C'h%3E">Unpin</a></li><li><a href="#impl-UnwindSafe-for-Searcher%3C'h%3E">UnwindSafe</a></li></ul><h3><a href="#blanket-implementations">Blanket Implementations</a></h3><ul class="block blanket-implementation"><li><a href="#impl-Any-for-T">Any</a></li><li><a href="#impl-Borrow%3CT%3E-for-T">Borrow&lt;T&gt;</a></li><li><a href="#impl-BorrowMut%3CT%3E-for-T">BorrowMut&lt;T&gt;</a></li><li><a href="#impl-CloneToUninit-for-T">CloneToUninit</a></li><li><a href="#impl-From%3CT%3E-for-T">From&lt;T&gt;</a></li><li><a href="#impl-Into%3CU%3E-for-T">Into&lt;U&gt;</a></li><li><a href="#impl-ToOwned-for-T">ToOwned</a></li><li><a href="#impl-TryFrom%3CU%3E-for-T">TryFrom&lt;U&gt;</a></li><li><a href="#impl-TryInto%3CU%3E-for-T">TryInto&lt;U&gt;</a></li></ul></section><h2><a href="index.html">In regex_automata::util::iter</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Struct <a href="../../index.html">regex_automata</a>::<wbr><a href="../index.html">util</a>::<wbr><a href="index.html">iter</a>::<wbr><a class="struct" href="#">Searcher</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/regex_automata/util/iter.rs.html#147-156">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub struct Searcher&lt;'h&gt; { <span class="comment">/* private fields */</span> }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A searcher for creating iterators and performing lower level iteration.</p>
+<p>This searcher encapsulates the logic required for finding all successive
+non-overlapping matches in a haystack. In theory, iteration would look
+something like this:</p>
+<ol>
+<li>Setting the start position to <code>0</code>.</li>
+<li>Execute a regex search. If no match, end iteration.</li>
+<li>Report the match and set the start position to the end of the match.</li>
+<li>Go back to (2).</li>
+</ol>
+<p>And if this were indeed the case, it’s likely that <code>Searcher</code> wouldn’t
+exist. Unfortunately, because a regex may match the empty string, the above
+logic won’t work for all possible regexes. Namely, if an empty match is
+found, then step (3) would set the start position of the search to the
+position it was at. Thus, iteration would never end.</p>
+<p>Instead, a <code>Searcher</code> knows how to detect these cases and forcefully
+advance iteration in the case of an empty match that overlaps with a
+previous match.</p>
+<p>If you know that your regex cannot match any empty string, then the simple
+algorithm described above will work correctly.</p>
+<p>When possible, prefer the iterators defined on the regex engine you’re
+using. This tries to abstract over the regex engine and is thus a bit more
+unwieldy to use.</p>
+<p>In particular, a <code>Searcher</code> is not itself an iterator. Instead, it provides
+<code>advance</code> routines that permit moving the search along explicitly. It also
+provides various routines, like <a href="struct.Searcher.html#method.into_matches_iter" title="method regex_automata::util::iter::Searcher::into_matches_iter"><code>Searcher::into_matches_iter</code></a>, that
+accept a closure (representing how a regex engine executes a search) and
+returns a conventional iterator.</p>
+<p>The lifetime parameters come from the <a href="../../struct.Input.html" title="struct regex_automata::Input"><code>Input</code></a> type passed to
+<a href="struct.Searcher.html#method.new" title="associated function regex_automata::util::iter::Searcher::new"><code>Searcher::new</code></a>:</p>
+<ul>
+<li><code>'h</code> is the lifetime of the underlying haystack.</li>
+</ul>
+<h2 id="searcher-vs-iterator"><a class="doc-anchor" href="#searcher-vs-iterator">§</a>Searcher vs Iterator</h2>
+<p>Why does a search type with “advance” APIs exist at all when we also have
+iterators? Unfortunately, the reasoning behind this split is a complex
+combination of the following things:</p>
+<ol>
+<li>While many of the regex engines expose their own iterators, it is also
+nice to expose this lower level iteration helper because it permits callers
+to provide their own <code>Input</code> configuration. Moreover, a <code>Searcher</code> can work
+with <em>any</em> regex engine instead of only the ones defined in this crate.
+This way, everyone benefits from a shared iteration implementation.</li>
+<li>There are many different regex engines that, while they have the same
+match semantics, they have slightly different APIs. Iteration is just
+complex enough to want to share code, and so we need a way of abstracting
+over those different regex engines. While we could define a new trait that
+describes any regex engine search API, it would wind up looking very close
+to a closure. While there may still be reasons for the more generic trait
+to exist, for now and for the purposes of iteration, we use a closure.
+Closures also provide a lot of easy flexibility at the call site, in that
+they permit the caller to borrow any kind of state they want for use during
+each search call.</li>
+<li>As a result of using closures, and because closures are anonymous types
+that cannot be named, it is difficult to encapsulate them without both
+costs to speed and added complexity to the public API. For example, in
+defining an iterator type like
+<a href="crate::dfa::regex::FindMatches"><code>dfa::regex::FindMatches</code></a>,
+if we use a closure internally, it’s not possible to name this type in the
+return type of the iterator constructor. Thus, the only way around it is
+to erase the type by boxing it and turning it into a <code>Box&lt;dyn FnMut ...&gt;</code>.
+This boxed closure is unlikely to be inlined <em>and</em> it infects the public
+API in subtle ways. Namely, unless you declare the closure as implementing
+<code>Send</code> and <code>Sync</code>, then the resulting iterator type won’t implement it
+either. But there are practical issues with requiring the closure to
+implement <code>Send</code> and <code>Sync</code> that result in other API complexities that
+are beyond the scope of this already long exposition.</li>
+<li>Some regex engines expose more complex match information than just
+“which pattern matched” and “at what offsets.” For example, the PikeVM
+exposes match spans for each capturing group that participated in the
+match. In such cases, it can be quite beneficial to reuse the capturing
+group allocation on subsequent searches. A proper iterator doesn’t permit
+this API due to its interface, so it’s useful to have something a bit lower
+level that permits callers to amortize allocations while also reusing a
+shared implementation of iteration. (See the documentation for
+<a href="struct.Searcher.html#method.advance" title="method regex_automata::util::iter::Searcher::advance"><code>Searcher::advance</code></a> for an example of using the “advance” API with the
+PikeVM.)</li>
+</ol>
+<p>What this boils down to is that there are “advance” APIs which require
+handing a closure to it for every call, and there are also APIs to create
+iterators from a closure. The former are useful for <em>implementing</em>
+iterators or when you need more flexibility, while the latter are useful
+for conveniently writing custom iterators on-the-fly.</p>
+<h2 id="example-iterating-with-captures"><a class="doc-anchor" href="#example-iterating-with-captures">§</a>Example: iterating with captures</h2>
+<p>Several regex engines in this crate over convenient iterator APIs over
+<a href="../captures/struct.Captures.html" title="struct regex_automata::util::captures::Captures"><code>Captures</code></a> values. To do so, this requires allocating a new <code>Captures</code>
+value for each iteration step. This can perhaps be more costly than you
+might want. Instead of implementing your own iterator to avoid that
+cost (which can be a little subtle if you want to handle empty matches
+correctly), you can use this <code>Searcher</code> to do it for you:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    nfa::thompson::pikevm::PikeVM,
+    util::iter::Searcher,
+    Input, Span,
+};
+
+<span class="kw">let </span>re = PikeVM::new(<span class="string">"foo(?P&lt;numbers&gt;[0-9]+)"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>haystack = <span class="string">"foo1 foo12 foo123"</span>;
+
+<span class="kw">let </span><span class="kw-2">mut </span>caps = re.create_captures();
+<span class="kw">let </span><span class="kw-2">mut </span>cache = re.create_cache();
+<span class="kw">let </span><span class="kw-2">mut </span>matches = <span class="macro">vec!</span>[];
+<span class="kw">let </span><span class="kw-2">mut </span>searcher = Searcher::new(Input::new(haystack));
+<span class="kw">while let </span><span class="prelude-val">Some</span>(<span class="kw">_</span>) = searcher.advance(|input| {
+    re.search(<span class="kw-2">&amp;mut </span>cache, input, <span class="kw-2">&amp;mut </span>caps);
+    <span class="prelude-val">Ok</span>(caps.get_match())
+}) {
+    <span class="comment">// The unwrap is OK since 'numbers' matches if the pattern matches.
+    </span>matches.push(caps.get_group_by_name(<span class="string">"numbers"</span>).unwrap());
+}
+<span class="macro">assert_eq!</span>(matches, <span class="macro">vec!</span>[
+    Span::from(<span class="number">3</span>..<span class="number">4</span>),
+    Span::from(<span class="number">8</span>..<span class="number">10</span>),
+    Span::from(<span class="number">14</span>..<span class="number">17</span>),
+]);
+</code></pre></div>
+</div></details><h2 id="implementations" class="section-header">Implementations<a href="#implementations" class="anchor">§</a></h2><div id="implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-Searcher%3C'h%3E" class="impl"><a class="src rightside" href="../../../src/regex_automata/util/iter.rs.html#158-681">source</a><a href="#impl-Searcher%3C'h%3E" class="anchor">§</a><h3 class="code-header">impl&lt;'h&gt; <a class="struct" href="struct.Searcher.html" title="struct regex_automata::util::iter::Searcher">Searcher</a>&lt;'h&gt;</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.new" class="method"><a class="src rightside" href="../../../src/regex_automata/util/iter.rs.html#165-167">source</a><h4 class="code-header">pub fn <a href="#method.new" class="fn">new</a>(input: <a class="struct" href="../../struct.Input.html" title="struct regex_automata::Input">Input</a>&lt;'h&gt;) -&gt; <a class="struct" href="struct.Searcher.html" title="struct regex_automata::util::iter::Searcher">Searcher</a>&lt;'h&gt;</h4></section></summary><div class="docblock"><p>Create a new fallible non-overlapping matches iterator.</p>
+<p>The given <code>input</code> provides the parameters (including the haystack),
+while the <code>finder</code> represents a closure that calls the underlying regex
+engine. The closure may borrow any additional state that is needed,
+such as a prefilter scanner.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.input" class="method"><a class="src rightside" href="../../../src/regex_automata/util/iter.rs.html#174-176">source</a><h4 class="code-header">pub fn <a href="#method.input" class="fn">input</a>&lt;'s&gt;(&amp;'s self) -&gt; &amp;'s <a class="struct" href="../../struct.Input.html" title="struct regex_automata::Input">Input</a>&lt;'h&gt;</h4></section></summary><div class="docblock"><p>Returns the current <code>Input</code> used by this searcher.</p>
+<p>The <code>Input</code> returned is generally equivalent to the one given to
+<a href="struct.Searcher.html#method.new" title="associated function regex_automata::util::iter::Searcher::new"><code>Searcher::new</code></a>, but its start position may be different to reflect
+the start of the next search to be executed.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.advance_half" class="method"><a class="src rightside" href="../../../src/regex_automata/util/iter.rs.html#261-273">source</a><h4 class="code-header">pub fn <a href="#method.advance_half" class="fn">advance_half</a>&lt;F&gt;(&amp;mut self, finder: F) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../../struct.HalfMatch.html" title="struct regex_automata::HalfMatch">HalfMatch</a>&gt;<div class="where">where
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(&amp;<a class="struct" href="../../struct.Input.html" title="struct regex_automata::Input">Input</a>&lt;'_&gt;) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../../struct.HalfMatch.html" title="struct regex_automata::HalfMatch">HalfMatch</a>&gt;, <a class="struct" href="../../struct.MatchError.html" title="struct regex_automata::MatchError">MatchError</a>&gt;,</div></h4></section></summary><div class="docblock"><p>Return the next half match for an infallible search if one exists, and
+advance to the next position.</p>
+<p>This is like <code>try_advance_half</code>, except errors are converted into
+panics.</p>
+<h5 id="panics"><a class="doc-anchor" href="#panics">§</a>Panics</h5>
+<p>If the given closure returns an error, then this panics. This is useful
+when you know your underlying regex engine has been configured to not
+return an error.</p>
+<h5 id="example"><a class="doc-anchor" href="#example">§</a>Example</h5>
+<p>This example shows how to use a <code>Searcher</code> to iterate over all matches
+when using a DFA, which only provides “half” matches.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    hybrid::dfa::DFA,
+    util::iter::Searcher,
+    HalfMatch, Input,
+};
+
+<span class="kw">let </span>re = DFA::new(<span class="string">r"[0-9]{4}-[0-9]{2}-[0-9]{2}"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = re.create_cache();
+
+<span class="kw">let </span>input = Input::new(<span class="string">"2010-03-14 2016-10-08 2020-10-22"</span>);
+<span class="kw">let </span><span class="kw-2">mut </span>it = Searcher::new(input);
+
+<span class="kw">let </span>expected = <span class="prelude-val">Some</span>(HalfMatch::must(<span class="number">0</span>, <span class="number">10</span>));
+<span class="kw">let </span>got = it.advance_half(|input| re.try_search_fwd(<span class="kw-2">&amp;mut </span>cache, input));
+<span class="macro">assert_eq!</span>(expected, got);
+
+<span class="kw">let </span>expected = <span class="prelude-val">Some</span>(HalfMatch::must(<span class="number">0</span>, <span class="number">21</span>));
+<span class="kw">let </span>got = it.advance_half(|input| re.try_search_fwd(<span class="kw-2">&amp;mut </span>cache, input));
+<span class="macro">assert_eq!</span>(expected, got);
+
+<span class="kw">let </span>expected = <span class="prelude-val">Some</span>(HalfMatch::must(<span class="number">0</span>, <span class="number">32</span>));
+<span class="kw">let </span>got = it.advance_half(|input| re.try_search_fwd(<span class="kw-2">&amp;mut </span>cache, input));
+<span class="macro">assert_eq!</span>(expected, got);
+
+<span class="kw">let </span>expected = <span class="prelude-val">None</span>;
+<span class="kw">let </span>got = it.advance_half(|input| re.try_search_fwd(<span class="kw-2">&amp;mut </span>cache, input));
+<span class="macro">assert_eq!</span>(expected, got);
+</code></pre></div>
+<p>This correctly moves iteration forward even when an empty match occurs:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    hybrid::dfa::DFA,
+    util::iter::Searcher,
+    HalfMatch, Input,
+};
+
+<span class="kw">let </span>re = DFA::new(<span class="string">r"a|"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = re.create_cache();
+
+<span class="kw">let </span>input = Input::new(<span class="string">"abba"</span>);
+<span class="kw">let </span><span class="kw-2">mut </span>it = Searcher::new(input);
+
+<span class="kw">let </span>expected = <span class="prelude-val">Some</span>(HalfMatch::must(<span class="number">0</span>, <span class="number">1</span>));
+<span class="kw">let </span>got = it.advance_half(|input| re.try_search_fwd(<span class="kw-2">&amp;mut </span>cache, input));
+<span class="macro">assert_eq!</span>(expected, got);
+
+<span class="kw">let </span>expected = <span class="prelude-val">Some</span>(HalfMatch::must(<span class="number">0</span>, <span class="number">2</span>));
+<span class="kw">let </span>got = it.advance_half(|input| re.try_search_fwd(<span class="kw-2">&amp;mut </span>cache, input));
+<span class="macro">assert_eq!</span>(expected, got);
+
+<span class="kw">let </span>expected = <span class="prelude-val">Some</span>(HalfMatch::must(<span class="number">0</span>, <span class="number">4</span>));
+<span class="kw">let </span>got = it.advance_half(|input| re.try_search_fwd(<span class="kw-2">&amp;mut </span>cache, input));
+<span class="macro">assert_eq!</span>(expected, got);
+
+<span class="kw">let </span>expected = <span class="prelude-val">None</span>;
+<span class="kw">let </span>got = it.advance_half(|input| re.try_search_fwd(<span class="kw-2">&amp;mut </span>cache, input));
+<span class="macro">assert_eq!</span>(expected, got);
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.advance" class="method"><a class="src rightside" href="../../../src/regex_automata/util/iter.rs.html#376-388">source</a><h4 class="code-header">pub fn <a href="#method.advance" class="fn">advance</a>&lt;F&gt;(&amp;mut self, finder: F) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../../struct.Match.html" title="struct regex_automata::Match">Match</a>&gt;<div class="where">where
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(&amp;<a class="struct" href="../../struct.Input.html" title="struct regex_automata::Input">Input</a>&lt;'_&gt;) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../../struct.Match.html" title="struct regex_automata::Match">Match</a>&gt;, <a class="struct" href="../../struct.MatchError.html" title="struct regex_automata::MatchError">MatchError</a>&gt;,</div></h4></section></summary><div class="docblock"><p>Return the next match for an infallible search if one exists, and
+advance to the next position.</p>
+<p>The search is advanced even in the presence of empty matches by
+forbidding empty matches from overlapping with any other match.</p>
+<p>This is like <code>try_advance</code>, except errors are converted into panics.</p>
+<h5 id="panics-1"><a class="doc-anchor" href="#panics-1">§</a>Panics</h5>
+<p>If the given closure returns an error, then this panics. This is useful
+when you know your underlying regex engine has been configured to not
+return an error.</p>
+<h5 id="example-1"><a class="doc-anchor" href="#example-1">§</a>Example</h5>
+<p>This example shows how to use a <code>Searcher</code> to iterate over all matches
+when using a regex based on lazy DFAs:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    hybrid::regex::Regex,
+    util::iter::Searcher,
+    Match, Input,
+};
+
+<span class="kw">let </span>re = Regex::new(<span class="string">r"[0-9]{4}-[0-9]{2}-[0-9]{2}"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = re.create_cache();
+
+<span class="kw">let </span>input = Input::new(<span class="string">"2010-03-14 2016-10-08 2020-10-22"</span>);
+<span class="kw">let </span><span class="kw-2">mut </span>it = Searcher::new(input);
+
+<span class="kw">let </span>expected = <span class="prelude-val">Some</span>(Match::must(<span class="number">0</span>, <span class="number">0</span>..<span class="number">10</span>));
+<span class="kw">let </span>got = it.advance(|input| re.try_search(<span class="kw-2">&amp;mut </span>cache, input));
+<span class="macro">assert_eq!</span>(expected, got);
+
+<span class="kw">let </span>expected = <span class="prelude-val">Some</span>(Match::must(<span class="number">0</span>, <span class="number">11</span>..<span class="number">21</span>));
+<span class="kw">let </span>got = it.advance(|input| re.try_search(<span class="kw-2">&amp;mut </span>cache, input));
+<span class="macro">assert_eq!</span>(expected, got);
+
+<span class="kw">let </span>expected = <span class="prelude-val">Some</span>(Match::must(<span class="number">0</span>, <span class="number">22</span>..<span class="number">32</span>));
+<span class="kw">let </span>got = it.advance(|input| re.try_search(<span class="kw-2">&amp;mut </span>cache, input));
+<span class="macro">assert_eq!</span>(expected, got);
+
+<span class="kw">let </span>expected = <span class="prelude-val">None</span>;
+<span class="kw">let </span>got = it.advance(|input| re.try_search(<span class="kw-2">&amp;mut </span>cache, input));
+<span class="macro">assert_eq!</span>(expected, got);
+</code></pre></div>
+<p>This example shows the same as above, but with the PikeVM. This example
+is useful because it shows how to use this API even when the regex
+engine doesn’t directly return a <code>Match</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    nfa::thompson::pikevm::PikeVM,
+    util::iter::Searcher,
+    Match, Input,
+};
+
+<span class="kw">let </span>re = PikeVM::new(<span class="string">r"[0-9]{4}-[0-9]{2}-[0-9]{2}"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>(<span class="kw-2">mut </span>cache, <span class="kw-2">mut </span>caps) = (re.create_cache(), re.create_captures());
+
+<span class="kw">let </span>input = Input::new(<span class="string">"2010-03-14 2016-10-08 2020-10-22"</span>);
+<span class="kw">let </span><span class="kw-2">mut </span>it = Searcher::new(input);
+
+<span class="kw">let </span>expected = <span class="prelude-val">Some</span>(Match::must(<span class="number">0</span>, <span class="number">0</span>..<span class="number">10</span>));
+<span class="kw">let </span>got = it.advance(|input| {
+    re.search(<span class="kw-2">&amp;mut </span>cache, input, <span class="kw-2">&amp;mut </span>caps);
+    <span class="prelude-val">Ok</span>(caps.get_match())
+});
+<span class="comment">// Note that if we wanted to extract capturing group spans, we could
+// do that here with 'caps'.
+</span><span class="macro">assert_eq!</span>(expected, got);
+
+<span class="kw">let </span>expected = <span class="prelude-val">Some</span>(Match::must(<span class="number">0</span>, <span class="number">11</span>..<span class="number">21</span>));
+<span class="kw">let </span>got = it.advance(|input| {
+    re.search(<span class="kw-2">&amp;mut </span>cache, input, <span class="kw-2">&amp;mut </span>caps);
+    <span class="prelude-val">Ok</span>(caps.get_match())
+});
+<span class="macro">assert_eq!</span>(expected, got);
+
+<span class="kw">let </span>expected = <span class="prelude-val">Some</span>(Match::must(<span class="number">0</span>, <span class="number">22</span>..<span class="number">32</span>));
+<span class="kw">let </span>got = it.advance(|input| {
+    re.search(<span class="kw-2">&amp;mut </span>cache, input, <span class="kw-2">&amp;mut </span>caps);
+    <span class="prelude-val">Ok</span>(caps.get_match())
+});
+<span class="macro">assert_eq!</span>(expected, got);
+
+<span class="kw">let </span>expected = <span class="prelude-val">None</span>;
+<span class="kw">let </span>got = it.advance(|input| {
+    re.search(<span class="kw-2">&amp;mut </span>cache, input, <span class="kw-2">&amp;mut </span>caps);
+    <span class="prelude-val">Ok</span>(caps.get_match())
+});
+<span class="macro">assert_eq!</span>(expected, got);
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_advance_half" class="method"><a class="src rightside" href="../../../src/regex_automata/util/iter.rs.html#396-416">source</a><h4 class="code-header">pub fn <a href="#method.try_advance_half" class="fn">try_advance_half</a>&lt;F&gt;(
+    &amp;mut self,
+    finder: F,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../../struct.HalfMatch.html" title="struct regex_automata::HalfMatch">HalfMatch</a>&gt;, <a class="struct" href="../../struct.MatchError.html" title="struct regex_automata::MatchError">MatchError</a>&gt;<div class="where">where
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(&amp;<a class="struct" href="../../struct.Input.html" title="struct regex_automata::Input">Input</a>&lt;'_&gt;) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../../struct.HalfMatch.html" title="struct regex_automata::HalfMatch">HalfMatch</a>&gt;, <a class="struct" href="../../struct.MatchError.html" title="struct regex_automata::MatchError">MatchError</a>&gt;,</div></h4></section></summary><div class="docblock"><p>Return the next half match for a fallible search if one exists, and
+advance to the next position.</p>
+<p>This is like <code>advance_half</code>, except it permits callers to handle errors
+during iteration.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_advance" class="method"><a class="src rightside" href="../../../src/regex_automata/util/iter.rs.html#424-444">source</a><h4 class="code-header">pub fn <a href="#method.try_advance" class="fn">try_advance</a>&lt;F&gt;(&amp;mut self, finder: F) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../../struct.Match.html" title="struct regex_automata::Match">Match</a>&gt;, <a class="struct" href="../../struct.MatchError.html" title="struct regex_automata::MatchError">MatchError</a>&gt;<div class="where">where
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(&amp;<a class="struct" href="../../struct.Input.html" title="struct regex_automata::Input">Input</a>&lt;'_&gt;) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../../struct.Match.html" title="struct regex_automata::Match">Match</a>&gt;, <a class="struct" href="../../struct.MatchError.html" title="struct regex_automata::MatchError">MatchError</a>&gt;,</div></h4></section></summary><div class="docblock"><p>Return the next match for a fallible search if one exists, and advance
+to the next position.</p>
+<p>This is like <code>advance</code>, except it permits callers to handle errors
+during iteration.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.into_half_matches_iter" class="method"><a class="src rightside" href="../../../src/regex_automata/util/iter.rs.html#488-496">source</a><h4 class="code-header">pub fn <a href="#method.into_half_matches_iter" class="fn">into_half_matches_iter</a>&lt;F&gt;(self, finder: F) -&gt; <a class="struct" href="struct.TryHalfMatchesIter.html" title="struct regex_automata::util::iter::TryHalfMatchesIter">TryHalfMatchesIter</a>&lt;'h, F&gt; <a href="#" class="tooltip" data-notable-ty="TryHalfMatchesIter&lt;&#39;h, F&gt;">ⓘ</a><div class="where">where
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(&amp;<a class="struct" href="../../struct.Input.html" title="struct regex_automata::Input">Input</a>&lt;'_&gt;) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../../struct.HalfMatch.html" title="struct regex_automata::HalfMatch">HalfMatch</a>&gt;, <a class="struct" href="../../struct.MatchError.html" title="struct regex_automata::MatchError">MatchError</a>&gt;,</div></h4></section></summary><div class="docblock"><p>Given a closure that executes a single search, return an iterator over
+all successive non-overlapping half matches.</p>
+<p>The iterator returned yields result values. If the underlying regex
+engine is configured to never return an error, consider calling
+<a href="struct.TryHalfMatchesIter.html#method.infallible" title="method regex_automata::util::iter::TryHalfMatchesIter::infallible"><code>TryHalfMatchesIter::infallible</code></a> to convert errors into panics.</p>
+<h5 id="example-2"><a class="doc-anchor" href="#example-2">§</a>Example</h5>
+<p>This example shows how to use a <code>Searcher</code> to create a proper
+iterator over half matches.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    hybrid::dfa::DFA,
+    util::iter::Searcher,
+    HalfMatch, Input,
+};
+
+<span class="kw">let </span>re = DFA::new(<span class="string">r"[0-9]{4}-[0-9]{2}-[0-9]{2}"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = re.create_cache();
+
+<span class="kw">let </span>input = Input::new(<span class="string">"2010-03-14 2016-10-08 2020-10-22"</span>);
+<span class="kw">let </span><span class="kw-2">mut </span>it = Searcher::new(input).into_half_matches_iter(|input| {
+    re.try_search_fwd(<span class="kw-2">&amp;mut </span>cache, input)
+});
+
+<span class="kw">let </span>expected = <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(HalfMatch::must(<span class="number">0</span>, <span class="number">10</span>)));
+<span class="macro">assert_eq!</span>(expected, it.next());
+
+<span class="kw">let </span>expected = <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(HalfMatch::must(<span class="number">0</span>, <span class="number">21</span>)));
+<span class="macro">assert_eq!</span>(expected, it.next());
+
+<span class="kw">let </span>expected = <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(HalfMatch::must(<span class="number">0</span>, <span class="number">32</span>)));
+<span class="macro">assert_eq!</span>(expected, it.next());
+
+<span class="kw">let </span>expected = <span class="prelude-val">None</span>;
+<span class="macro">assert_eq!</span>(expected, it.next());
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.into_matches_iter" class="method"><a class="src rightside" href="../../../src/regex_automata/util/iter.rs.html#540-545">source</a><h4 class="code-header">pub fn <a href="#method.into_matches_iter" class="fn">into_matches_iter</a>&lt;F&gt;(self, finder: F) -&gt; <a class="struct" href="struct.TryMatchesIter.html" title="struct regex_automata::util::iter::TryMatchesIter">TryMatchesIter</a>&lt;'h, F&gt; <a href="#" class="tooltip" data-notable-ty="TryMatchesIter&lt;&#39;h, F&gt;">ⓘ</a><div class="where">where
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(&amp;<a class="struct" href="../../struct.Input.html" title="struct regex_automata::Input">Input</a>&lt;'_&gt;) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../../struct.Match.html" title="struct regex_automata::Match">Match</a>&gt;, <a class="struct" href="../../struct.MatchError.html" title="struct regex_automata::MatchError">MatchError</a>&gt;,</div></h4></section></summary><div class="docblock"><p>Given a closure that executes a single search, return an iterator over
+all successive non-overlapping matches.</p>
+<p>The iterator returned yields result values. If the underlying regex
+engine is configured to never return an error, consider calling
+<a href="struct.TryMatchesIter.html#method.infallible" title="method regex_automata::util::iter::TryMatchesIter::infallible"><code>TryMatchesIter::infallible</code></a> to convert errors into panics.</p>
+<h5 id="example-3"><a class="doc-anchor" href="#example-3">§</a>Example</h5>
+<p>This example shows how to use a <code>Searcher</code> to create a proper
+iterator over matches.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    hybrid::regex::Regex,
+    util::iter::Searcher,
+    Match, Input,
+};
+
+<span class="kw">let </span>re = Regex::new(<span class="string">r"[0-9]{4}-[0-9]{2}-[0-9]{2}"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = re.create_cache();
+
+<span class="kw">let </span>input = Input::new(<span class="string">"2010-03-14 2016-10-08 2020-10-22"</span>);
+<span class="kw">let </span><span class="kw-2">mut </span>it = Searcher::new(input).into_matches_iter(|input| {
+    re.try_search(<span class="kw-2">&amp;mut </span>cache, input)
+});
+
+<span class="kw">let </span>expected = <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(Match::must(<span class="number">0</span>, <span class="number">0</span>..<span class="number">10</span>)));
+<span class="macro">assert_eq!</span>(expected, it.next());
+
+<span class="kw">let </span>expected = <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(Match::must(<span class="number">0</span>, <span class="number">11</span>..<span class="number">21</span>)));
+<span class="macro">assert_eq!</span>(expected, it.next());
+
+<span class="kw">let </span>expected = <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(Match::must(<span class="number">0</span>, <span class="number">22</span>..<span class="number">32</span>)));
+<span class="macro">assert_eq!</span>(expected, it.next());
+
+<span class="kw">let </span>expected = <span class="prelude-val">None</span>;
+<span class="macro">assert_eq!</span>(expected, it.next());
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.into_captures_iter" class="method"><a class="src rightside" href="../../../src/regex_automata/util/iter.rs.html#607-616">source</a><h4 class="code-header">pub fn <a href="#method.into_captures_iter" class="fn">into_captures_iter</a>&lt;F&gt;(
+    self,
+    caps: <a class="struct" href="../captures/struct.Captures.html" title="struct regex_automata::util::captures::Captures">Captures</a>,
+    finder: F,
+) -&gt; <a class="struct" href="struct.TryCapturesIter.html" title="struct regex_automata::util::iter::TryCapturesIter">TryCapturesIter</a>&lt;'h, F&gt; <a href="#" class="tooltip" data-notable-ty="TryCapturesIter&lt;&#39;h, F&gt;">ⓘ</a><div class="where">where
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(&amp;<a class="struct" href="../../struct.Input.html" title="struct regex_automata::Input">Input</a>&lt;'_&gt;, &amp;mut <a class="struct" href="../captures/struct.Captures.html" title="struct regex_automata::util::captures::Captures">Captures</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="struct" href="../../struct.MatchError.html" title="struct regex_automata::MatchError">MatchError</a>&gt;,</div></h4></section></summary><div class="docblock"><p>Given a closure that executes a single search, return an iterator over
+all successive non-overlapping <code>Captures</code> values.</p>
+<p>The iterator returned yields result values. If the underlying regex
+engine is configured to never return an error, consider calling
+<a href="struct.TryCapturesIter.html#method.infallible" title="method regex_automata::util::iter::TryCapturesIter::infallible"><code>TryCapturesIter::infallible</code></a> to convert errors into panics.</p>
+<p>Unlike the other iterator constructors, this accepts an initial
+<code>Captures</code> value. This <code>Captures</code> value is reused for each search, and
+the iterator implementation clones it before returning it. The caller
+must provide this value because the iterator is purposely ignorant
+of the underlying regex engine and thus doesn’t know how to create
+one itself. More to the point, a <code>Captures</code> value itself has a few
+different constructors, which change which kind of information is
+available to query in exchange for search performance.</p>
+<h5 id="example-4"><a class="doc-anchor" href="#example-4">§</a>Example</h5>
+<p>This example shows how to use a <code>Searcher</code> to create a proper iterator
+over <code>Captures</code> values, which provides access to all capturing group
+spans for each match.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    nfa::thompson::pikevm::PikeVM,
+    util::iter::Searcher,
+    Input,
+};
+
+<span class="kw">let </span>re = PikeVM::new(
+    <span class="string">r"(?P&lt;y&gt;[0-9]{4})-(?P&lt;m&gt;[0-9]{2})-(?P&lt;d&gt;[0-9]{2})"</span>,
+)<span class="question-mark">?</span>;
+<span class="kw">let </span>(<span class="kw-2">mut </span>cache, caps) = (re.create_cache(), re.create_captures());
+
+<span class="kw">let </span>haystack = <span class="string">"2010-03-14 2016-10-08 2020-10-22"</span>;
+<span class="kw">let </span>input = Input::new(haystack);
+<span class="kw">let </span><span class="kw-2">mut </span>it = Searcher::new(input)
+    .into_captures_iter(caps, |input, caps| {
+        re.search(<span class="kw-2">&amp;mut </span>cache, input, caps);
+        <span class="prelude-val">Ok</span>(())
+    });
+
+<span class="kw">let </span>got = it.next().expect(<span class="string">"first date"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>year = got.get_group_by_name(<span class="string">"y"</span>).expect(<span class="string">"must match"</span>);
+<span class="macro">assert_eq!</span>(<span class="string">"2010"</span>, <span class="kw-2">&amp;</span>haystack[year]);
+
+<span class="kw">let </span>got = it.next().expect(<span class="string">"second date"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>month = got.get_group_by_name(<span class="string">"m"</span>).expect(<span class="string">"must match"</span>);
+<span class="macro">assert_eq!</span>(<span class="string">"10"</span>, <span class="kw-2">&amp;</span>haystack[month]);
+
+<span class="kw">let </span>got = it.next().expect(<span class="string">"third date"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>day = got.get_group_by_name(<span class="string">"d"</span>).expect(<span class="string">"must match"</span>);
+<span class="macro">assert_eq!</span>(<span class="string">"22"</span>, <span class="kw-2">&amp;</span>haystack[day]);
+
+<span class="macro">assert!</span>(it.next().is_none());
+</code></pre></div>
+</div></details></div></details></div><h2 id="trait-implementations" class="section-header">Trait Implementations<a href="#trait-implementations" class="anchor">§</a></h2><div id="trait-implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-Clone-for-Searcher%3C'h%3E" class="impl"><a class="src rightside" href="../../../src/regex_automata/util/iter.rs.html#146">source</a><a href="#impl-Clone-for-Searcher%3C'h%3E" class="anchor">§</a><h3 class="code-header">impl&lt;'h&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a> for <a class="struct" href="struct.Searcher.html" title="struct regex_automata::util::iter::Searcher">Searcher</a>&lt;'h&gt;</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.clone" class="method trait-impl"><a class="src rightside" href="../../../src/regex_automata/util/iter.rs.html#146">source</a><a href="#method.clone" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#tymethod.clone" class="fn">clone</a>(&amp;self) -&gt; <a class="struct" href="struct.Searcher.html" title="struct regex_automata::util::iter::Searcher">Searcher</a>&lt;'h&gt;</h4></section></summary><div class='docblock'>Returns a copy of the value. <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#tymethod.clone">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.clone_from" class="method trait-impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#172">source</a></span><a href="#method.clone_from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#method.clone_from" class="fn">clone_from</a>(&amp;mut self, source: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;Self</a>)</h4></section></summary><div class='docblock'>Performs copy-assignment from <code>source</code>. <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#method.clone_from">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Debug-for-Searcher%3C'h%3E" class="impl"><a class="src rightside" href="../../../src/regex_automata/util/iter.rs.html#146">source</a><a href="#impl-Debug-for-Searcher%3C'h%3E" class="anchor">§</a><h3 class="code-header">impl&lt;'h&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html" title="trait core::fmt::Debug">Debug</a> for <a class="struct" href="struct.Searcher.html" title="struct regex_automata::util::iter::Searcher">Searcher</a>&lt;'h&gt;</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.fmt" class="method trait-impl"><a class="src rightside" href="../../../src/regex_automata/util/iter.rs.html#146">source</a><a href="#method.fmt" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html#tymethod.fmt" class="fn">fmt</a>(&amp;self, f: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/fmt/struct.Formatter.html" title="struct core::fmt::Formatter">Formatter</a>&lt;'_&gt;) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a></h4></section></summary><div class='docblock'>Formats the value using the given formatter. <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html#tymethod.fmt">Read more</a></div></details></div></details></div><h2 id="synthetic-implementations" class="section-header">Auto Trait Implementations<a href="#synthetic-implementations" class="anchor">§</a></h2><div id="synthetic-implementations-list"><section id="impl-Freeze-for-Searcher%3C'h%3E" class="impl"><a href="#impl-Freeze-for-Searcher%3C'h%3E" class="anchor">§</a><h3 class="code-header">impl&lt;'h&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Freeze.html" title="trait core::marker::Freeze">Freeze</a> for <a class="struct" href="struct.Searcher.html" title="struct regex_automata::util::iter::Searcher">Searcher</a>&lt;'h&gt;</h3></section><section id="impl-RefUnwindSafe-for-Searcher%3C'h%3E" class="impl"><a href="#impl-RefUnwindSafe-for-Searcher%3C'h%3E" class="anchor">§</a><h3 class="code-header">impl&lt;'h&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/panic/unwind_safe/trait.RefUnwindSafe.html" title="trait core::panic::unwind_safe::RefUnwindSafe">RefUnwindSafe</a> for <a class="struct" href="struct.Searcher.html" title="struct regex_automata::util::iter::Searcher">Searcher</a>&lt;'h&gt;</h3></section><section id="impl-Send-for-Searcher%3C'h%3E" class="impl"><a href="#impl-Send-for-Searcher%3C'h%3E" class="anchor">§</a><h3 class="code-header">impl&lt;'h&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> for <a class="struct" href="struct.Searcher.html" title="struct regex_automata::util::iter::Searcher">Searcher</a>&lt;'h&gt;</h3></section><section id="impl-Sync-for-Searcher%3C'h%3E" class="impl"><a href="#impl-Sync-for-Searcher%3C'h%3E" class="anchor">§</a><h3 class="code-header">impl&lt;'h&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> for <a class="struct" href="struct.Searcher.html" title="struct regex_automata::util::iter::Searcher">Searcher</a>&lt;'h&gt;</h3></section><section id="impl-Unpin-for-Searcher%3C'h%3E" class="impl"><a href="#impl-Unpin-for-Searcher%3C'h%3E" class="anchor">§</a><h3 class="code-header">impl&lt;'h&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a> for <a class="struct" href="struct.Searcher.html" title="struct regex_automata::util::iter::Searcher">Searcher</a>&lt;'h&gt;</h3></section><section id="impl-UnwindSafe-for-Searcher%3C'h%3E" class="impl"><a href="#impl-UnwindSafe-for-Searcher%3C'h%3E" class="anchor">§</a><h3 class="code-header">impl&lt;'h&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/panic/unwind_safe/trait.UnwindSafe.html" title="trait core::panic::unwind_safe::UnwindSafe">UnwindSafe</a> for <a class="struct" href="struct.Searcher.html" title="struct regex_automata::util::iter::Searcher">Searcher</a>&lt;'h&gt;</h3></section></div><h2 id="blanket-implementations" class="section-header">Blanket Implementations<a href="#blanket-implementations" class="anchor">§</a></h2><div id="blanket-implementations-list"><details class="toggle implementors-toggle"><summary><section id="impl-Any-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#140">source</a><a href="#impl-Any-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html" title="trait core::any::Any">Any</a> for T<div class="where">where
+    T: 'static + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.type_id" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#141">source</a><a href="#method.type_id" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html#tymethod.type_id" class="fn">type_id</a>(&amp;self) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/any/struct.TypeId.html" title="struct core::any::TypeId">TypeId</a></h4></section></summary><div class='docblock'>Gets the <code>TypeId</code> of <code>self</code>. <a href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html#tymethod.type_id">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Borrow%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#209">source</a><a href="#impl-Borrow%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html" title="trait core::borrow::Borrow">Borrow</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#211">source</a><a href="#method.borrow" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html#tymethod.borrow" class="fn">borrow</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a></h4></section></summary><div class='docblock'>Immutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html#tymethod.borrow">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-BorrowMut%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#217">source</a><a href="#impl-BorrowMut%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html" title="trait core::borrow::BorrowMut">BorrowMut</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow_mut" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#218">source</a><a href="#method.borrow_mut" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut" class="fn">borrow_mut</a>(&amp;mut self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a></h4></section></summary><div class='docblock'>Mutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-CloneToUninit-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#271">source</a><a href="#impl-CloneToUninit-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.CloneToUninit.html" title="trait core::clone::CloneToUninit">CloneToUninit</a> for T<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.clone_to_uninit" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#272">source</a><a href="#method.clone_to_uninit" class="anchor">§</a><h4 class="code-header">default unsafe fn <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.CloneToUninit.html#tymethod.clone_to_uninit" class="fn">clone_to_uninit</a>(&amp;self, dst: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.pointer.html">*mut T</a>)</h4></section></summary><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>clone_to_uninit</code>)</span></div></span><div class='docblock'>Performs copy-assignment from <code>self</code> to <code>dst</code>. <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.CloneToUninit.html#tymethod.clone_to_uninit">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-From%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#765">source</a><a href="#impl-From%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for T</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#768">source</a><a href="#method.from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html#tymethod.from" class="fn">from</a>(t: T) -&gt; T</h4></section></summary><div class="docblock"><p>Returns the argument unchanged.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Into%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#748-750">source</a><a href="#impl-Into%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#758">source</a><a href="#method.into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html#tymethod.into" class="fn">into</a>(self) -&gt; U</h4></section></summary><div class="docblock"><p>Calls <code>U::from(self)</code>.</p>
+<p>That is, this conversion is whatever the implementation of
+<code><a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for U</code> chooses to do.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-ToOwned-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#83-85">source</a><a href="#impl-ToOwned-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html" title="trait alloc::borrow::ToOwned">ToOwned</a> for T<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Owned" class="associatedtype trait-impl"><a href="#associatedtype.Owned" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#associatedtype.Owned" class="associatedtype">Owned</a> = T</h4></section></summary><div class='docblock'>The resulting type after obtaining ownership.</div></details><details class="toggle method-toggle" open><summary><section id="method.to_owned" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#88">source</a><a href="#method.to_owned" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#tymethod.to_owned" class="fn">to_owned</a>(&amp;self) -&gt; T</h4></section></summary><div class='docblock'>Creates owned data from borrowed data, usually by cloning. <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#tymethod.to_owned">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.clone_into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#92">source</a><a href="#method.clone_into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#method.clone_into" class="fn">clone_into</a>(&amp;self, target: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a>)</h4></section></summary><div class='docblock'>Uses borrowed data to replace owned data, usually by cloning. <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#method.clone_into">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryFrom%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#805-807">source</a><a href="#impl-TryFrom%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error" class="associatedtype trait-impl"><a href="#associatedtype.Error" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" class="associatedtype">Error</a> = <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/convert/enum.Infallible.html" title="enum core::convert::Infallible">Infallible</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#812">source</a><a href="#method.try_from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#tymethod.try_from" class="fn">try_from</a>(value: U) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, &lt;T as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryInto%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#790-792">source</a><a href="#impl-TryInto%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html" title="trait core::convert::TryInto">TryInto</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error-1" class="associatedtype trait-impl"><a href="#associatedtype.Error-1" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html#associatedtype.Error" class="associatedtype">Error</a> = &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#797">source</a><a href="#method.try_into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html#tymethod.try_into" class="fn">try_into</a>(self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;U, &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details></div><script type="text/json" id="notable-traits-data">{"TryCapturesIter<'h, F>":"<h3>Notable traits for <code><a class=\"struct\" href=\"struct.TryCapturesIter.html\" title=\"struct regex_automata::util::iter::TryCapturesIter\">TryCapturesIter</a>&lt;'h, F&gt;</code></h3><pre><code><div class=\"where\">impl&lt;'h, F&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/1.81.0/core/iter/traits/iterator/trait.Iterator.html\" title=\"trait core::iter::traits::iterator::Iterator\">Iterator</a> for <a class=\"struct\" href=\"struct.TryCapturesIter.html\" title=\"struct regex_automata::util::iter::TryCapturesIter\">TryCapturesIter</a>&lt;'h, F&gt;<div class=\"where\">where\n    F: <a class=\"trait\" href=\"https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html\" title=\"trait core::ops::function::FnMut\">FnMut</a>(&amp;<a class=\"struct\" href=\"../../struct.Input.html\" title=\"struct regex_automata::Input\">Input</a>&lt;'_&gt;, &amp;mut <a class=\"struct\" href=\"../captures/struct.Captures.html\" title=\"struct regex_automata::util::captures::Captures\">Captures</a>) -&gt; <a class=\"enum\" href=\"https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html\" title=\"enum core::result::Result\">Result</a>&lt;<a class=\"primitive\" href=\"https://doc.rust-lang.org/1.81.0/std/primitive.unit.html\">()</a>, <a class=\"struct\" href=\"../../struct.MatchError.html\" title=\"struct regex_automata::MatchError\">MatchError</a>&gt;,</div></div><div class=\"where\">    type <a href=\"https://doc.rust-lang.org/1.81.0/core/iter/traits/iterator/trait.Iterator.html#associatedtype.Item\" class=\"associatedtype\">Item</a> = <a class=\"enum\" href=\"https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html\" title=\"enum core::result::Result\">Result</a>&lt;<a class=\"struct\" href=\"../captures/struct.Captures.html\" title=\"struct regex_automata::util::captures::Captures\">Captures</a>, <a class=\"struct\" href=\"../../struct.MatchError.html\" title=\"struct regex_automata::MatchError\">MatchError</a>&gt;;</div>","TryHalfMatchesIter<'h, F>":"<h3>Notable traits for <code><a class=\"struct\" href=\"struct.TryHalfMatchesIter.html\" title=\"struct regex_automata::util::iter::TryHalfMatchesIter\">TryHalfMatchesIter</a>&lt;'h, F&gt;</code></h3><pre><code><div class=\"where\">impl&lt;'h, F&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/1.81.0/core/iter/traits/iterator/trait.Iterator.html\" title=\"trait core::iter::traits::iterator::Iterator\">Iterator</a> for <a class=\"struct\" href=\"struct.TryHalfMatchesIter.html\" title=\"struct regex_automata::util::iter::TryHalfMatchesIter\">TryHalfMatchesIter</a>&lt;'h, F&gt;<div class=\"where\">where\n    F: <a class=\"trait\" href=\"https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html\" title=\"trait core::ops::function::FnMut\">FnMut</a>(&amp;<a class=\"struct\" href=\"../../struct.Input.html\" title=\"struct regex_automata::Input\">Input</a>&lt;'_&gt;) -&gt; <a class=\"enum\" href=\"https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html\" title=\"enum core::result::Result\">Result</a>&lt;<a class=\"enum\" href=\"https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html\" title=\"enum core::option::Option\">Option</a>&lt;<a class=\"struct\" href=\"../../struct.HalfMatch.html\" title=\"struct regex_automata::HalfMatch\">HalfMatch</a>&gt;, <a class=\"struct\" href=\"../../struct.MatchError.html\" title=\"struct regex_automata::MatchError\">MatchError</a>&gt;,</div></div><div class=\"where\">    type <a href=\"https://doc.rust-lang.org/1.81.0/core/iter/traits/iterator/trait.Iterator.html#associatedtype.Item\" class=\"associatedtype\">Item</a> = <a class=\"enum\" href=\"https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html\" title=\"enum core::result::Result\">Result</a>&lt;<a class=\"struct\" href=\"../../struct.HalfMatch.html\" title=\"struct regex_automata::HalfMatch\">HalfMatch</a>, <a class=\"struct\" href=\"../../struct.MatchError.html\" title=\"struct regex_automata::MatchError\">MatchError</a>&gt;;</div>","TryMatchesIter<'h, F>":"<h3>Notable traits for <code><a class=\"struct\" href=\"struct.TryMatchesIter.html\" title=\"struct regex_automata::util::iter::TryMatchesIter\">TryMatchesIter</a>&lt;'h, F&gt;</code></h3><pre><code><div class=\"where\">impl&lt;'h, F&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/1.81.0/core/iter/traits/iterator/trait.Iterator.html\" title=\"trait core::iter::traits::iterator::Iterator\">Iterator</a> for <a class=\"struct\" href=\"struct.TryMatchesIter.html\" title=\"struct regex_automata::util::iter::TryMatchesIter\">TryMatchesIter</a>&lt;'h, F&gt;<div class=\"where\">where\n    F: <a class=\"trait\" href=\"https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html\" title=\"trait core::ops::function::FnMut\">FnMut</a>(&amp;<a class=\"struct\" href=\"../../struct.Input.html\" title=\"struct regex_automata::Input\">Input</a>&lt;'_&gt;) -&gt; <a class=\"enum\" href=\"https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html\" title=\"enum core::result::Result\">Result</a>&lt;<a class=\"enum\" href=\"https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html\" title=\"enum core::option::Option\">Option</a>&lt;<a class=\"struct\" href=\"../../struct.Match.html\" title=\"struct regex_automata::Match\">Match</a>&gt;, <a class=\"struct\" href=\"../../struct.MatchError.html\" title=\"struct regex_automata::MatchError\">MatchError</a>&gt;,</div></div><div class=\"where\">    type <a href=\"https://doc.rust-lang.org/1.81.0/core/iter/traits/iterator/trait.Iterator.html#associatedtype.Item\" class=\"associatedtype\">Item</a> = <a class=\"enum\" href=\"https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html\" title=\"enum core::result::Result\">Result</a>&lt;<a class=\"struct\" href=\"../../struct.Match.html\" title=\"struct regex_automata::Match\">Match</a>, <a class=\"struct\" href=\"../../struct.MatchError.html\" title=\"struct regex_automata::MatchError\">MatchError</a>&gt;;</div>"}</script></section></div></main></body></html>
