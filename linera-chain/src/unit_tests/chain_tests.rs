@@ -12,6 +12,7 @@ use linera_base::{
         Amount, ApplicationPermissions, Blob, BlockHeight, Bytecode, Timestamp,
         UserApplicationDescription,
     },
+    hashed::Hashed,
     identifiers::{ApplicationId, BytecodeId, ChainId, MessageId},
     ownership::ChainOwnership,
 };
@@ -33,7 +34,6 @@ use crate::{
     block::ConfirmedBlock,
     data_types::{IncomingBundle, MessageAction, MessageBundle, Origin},
     test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt},
-    types::Hashed,
     ChainError, ChainExecutionContext, ChainStateView,
 };
 

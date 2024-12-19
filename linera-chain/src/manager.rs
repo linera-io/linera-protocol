@@ -76,6 +76,7 @@ use linera_base::{
     crypto::{KeyPair, PublicKey},
     data_types::{ArithmeticError, Blob, BlockHeight, Round, Timestamp},
     doc_scalar, ensure,
+    hashed::Hashed,
     identifiers::{BlobId, ChainId, Owner},
     ownership::ChainOwnership,
 };
@@ -87,7 +88,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     block::{ConfirmedBlock, Timeout, ValidatedBlock},
     data_types::{Block, BlockProposal, ExecutedBlock, LiteVote, Vote},
-    types::{Hashed, TimeoutCertificate, ValidatedBlockCertificate},
+    types::{TimeoutCertificate, ValidatedBlockCertificate},
     ChainError,
 };
 

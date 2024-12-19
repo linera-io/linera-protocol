@@ -7,7 +7,8 @@ use std::sync::Arc;
 
 use async_graphql::{EmptyMutation, EmptySubscription, ObjectType, Schema};
 use axum::Router;
-use linera_chain::types::{ConfirmedBlock, Hashed};
+use linera_base::hashed::Hashed;
+use linera_chain::types::ConfirmedBlock;
 use linera_views::{context::ViewContext, store::KeyValueStore, views::View};
 use tokio::sync::Mutex;
 

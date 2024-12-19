@@ -62,7 +62,8 @@ mod net_up_utils;
 
 #[cfg(feature = "benchmark")]
 use {
-    linera_chain::types::{ConfirmedBlock, Hashed},
+    linera_base::hashed::Hashed,
+    linera_chain::types::ConfirmedBlock,
     linera_core::data_types::ChainInfoResponse,
     linera_rpc::{HandleConfirmedCertificateRequest, RpcMessage},
     std::collections::HashSet,

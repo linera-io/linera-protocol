@@ -18,6 +18,7 @@ use linera_base::{
         ArithmeticError, Blob, BlockHeight, DecompressionError, Round, UserApplicationDescription,
     },
     doc_scalar,
+    hashed::Hashed,
     identifiers::{BlobId, ChainId, Owner, UserApplicationId},
     time::timer::{sleep, timeout},
 };
@@ -26,7 +27,7 @@ use linera_chain::{
         Block, BlockExecutionOutcome, BlockProposal, ExecutedBlock, MessageBundle, Origin, Target,
     },
     types::{
-        CertificateValueT, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate, Hashed,
+        CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate,
         LiteCertificate, Timeout, TimeoutCertificate, ValidatedBlock, ValidatedBlockCertificate,
     },
     ChainError, ChainStateView,
@@ -432,7 +433,7 @@ where
 
 #[allow(async_fn_in_trait)]
 #[cfg_attr(not(web), trait_variant::make(Send))]
-pub trait ProcessableCertificate: CertificateValueT + Sized + 'static {
+pub trait ProcessableCertificate: CertificateValue + Sized + 'static {
     async fn process_certificate<S: Storage + Clone + Send + Sync + 'static>(
         worker: &WorkerState<S>,
         certificate: GenericCertificate<Self>,

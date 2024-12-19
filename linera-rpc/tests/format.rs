@@ -4,13 +4,14 @@
 
 use linera_base::{
     data_types::{BlobContent, OracleResponse, Round},
+    hashed::Hashed,
     identifiers::{AccountOwner, BlobType, ChainDescription, Destination, GenericApplicationId},
     ownership::ChainOwnership,
 };
 use linera_chain::{
     data_types::{Medium, MessageAction},
     manager::ChainManagerInfo,
-    types::{Certificate, CertificateKind, ConfirmedBlock, Hashed, Timeout, ValidatedBlock},
+    types::{Certificate, CertificateKind, ConfirmedBlock, Timeout, ValidatedBlock},
 };
 use linera_core::{data_types::CrossChainRequest, node::NodeError};
 use linera_execution::{

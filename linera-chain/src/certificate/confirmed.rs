@@ -5,12 +5,13 @@
 use linera_base::{
     crypto::Signature,
     data_types::Round,
+    hashed::Hashed,
     identifiers::{BlobId, ChainId, MessageId},
 };
 use linera_execution::committee::{Epoch, ValidatorName};
 use serde::{ser::SerializeStruct, Deserialize, Deserializer, Serialize};
 
-use super::{generic::GenericCertificate, hashed::Hashed, Certificate};
+use super::{generic::GenericCertificate, Certificate};
 use crate::{
     block::{ConfirmedBlock, ConversionError},
     data_types::{ExecutedBlock, Medium, MessageBundle},

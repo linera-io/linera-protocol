@@ -13,11 +13,12 @@ use custom_debug_derive::Debug;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Blob, BlockHeight, Timestamp, UserApplicationDescription},
+    hashed::Hashed,
     identifiers::{ChainId, UserApplicationId},
 };
 use linera_chain::{
     data_types::{Block, BlockProposal, ExecutedBlock, MessageBundle, Origin, Target},
-    types::{ConfirmedBlockCertificate, Hashed, TimeoutCertificate, ValidatedBlockCertificate},
+    types::{ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
     ChainStateView,
 };
 use linera_execution::{

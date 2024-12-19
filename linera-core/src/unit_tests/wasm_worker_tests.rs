@@ -17,6 +17,7 @@ use linera_base::{
     data_types::{
         Amount, Blob, BlockHeight, Bytecode, OracleResponse, Timestamp, UserApplicationDescription,
     },
+    hashed::Hashed,
     identifiers::{
         BytecodeId, ChainDescription, ChainId, Destination, MessageId, UserApplicationId,
     },
@@ -25,7 +26,7 @@ use linera_base::{
 use linera_chain::{
     data_types::{BlockExecutionOutcome, OutgoingMessage},
     test::{make_child_block, make_first_block, BlockTestExt},
-    types::{ConfirmedBlock, Hashed},
+    types::ConfirmedBlock,
 };
 use linera_execution::{
     committee::Epoch,

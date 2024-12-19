@@ -14,7 +14,7 @@ use linera_base::{
 use linera_chain::{
     data_types::BlockProposal,
     types::{
-        CertificateValueT, ConfirmedBlockCertificate, GenericCertificate, LiteCertificate,
+        CertificateValue, ConfirmedBlockCertificate, GenericCertificate, LiteCertificate,
         TimeoutCertificate, ValidatedBlockCertificate,
     },
 };
@@ -322,7 +322,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
 
     /// Checks that requesting these blobs when trying to handle this certificate is legitimate,
     /// i.e. that there are no duplicates and the blobs are actually required.
-    pub fn check_blobs_not_found<T: CertificateValueT>(
+    pub fn check_blobs_not_found<T: CertificateValue>(
         &self,
         certificate: &GenericCertificate<T>,
         blob_ids: &[BlobId],
