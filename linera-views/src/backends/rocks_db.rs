@@ -257,7 +257,7 @@ pub struct RocksDbStoreInternal {
 }
 
 /// The initial configuration of the system
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct RocksDbStoreInternalConfig {
     /// The path to the storage containing the namespaces
     path_with_guard: PathWithGuard,
@@ -559,7 +559,7 @@ pub enum RocksDbStoreInternalError {
 }
 
 /// A path and the guard for the temporary directory if needed
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct PathWithGuard {
     /// The path to the data
     pub path_buf: PathBuf,
