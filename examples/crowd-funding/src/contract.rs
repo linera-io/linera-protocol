@@ -175,6 +175,7 @@ impl CrowdFundingContract {
         self.state
             .pledges
             .for_each_index_value(|pledger, amount| {
+                let amount = amount.into_owned();
                 pledges.push((pledger, amount));
                 Ok(())
             })
