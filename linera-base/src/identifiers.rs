@@ -186,10 +186,10 @@ impl FromStr for BlobType {
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash, Debug, WitType, WitStore, WitLoad)]
 #[cfg_attr(with_testing, derive(test_strategy::Arbitrary, Default))]
 pub struct BlobId {
-    /// The hash of the blob.
-    pub hash: CryptoHash,
     /// The type of the blob.
     pub blob_type: BlobType,
+    /// The hash of the blob.
+    pub hash: CryptoHash,
 }
 
 impl BlobId {
