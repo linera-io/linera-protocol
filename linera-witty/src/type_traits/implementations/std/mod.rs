@@ -97,6 +97,7 @@ mod primitives;
 mod rc;
 mod result;
 mod string;
+mod sync;
 mod time;
 mod tuples;
 mod vec;
