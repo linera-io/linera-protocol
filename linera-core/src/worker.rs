@@ -93,7 +93,7 @@ static NUM_BLOCKS: LazyLock<IntCounterVec> = LazyLock::new(|| {
 
 #[cfg(with_metrics)]
 static CERTIFICATES_SIGNED: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    register_int_counter_vec(
+    prometheus_util::register_int_counter_vec(
         "certificates_signed",
         "Number of confirmed block certificates signed by each validator",
         &["validator_name"],
