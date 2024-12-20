@@ -219,7 +219,7 @@ impl BlockBuilder {
 
         let value = Hashed::new(ConfirmedBlock::new(executed_block));
         let vote = LiteVote::new(
-            LiteValue::new(&value),
+            LiteValue::from(&value),
             Round::Fast,
             self.validator.key_pair(),
         );

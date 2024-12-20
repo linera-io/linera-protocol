@@ -115,7 +115,7 @@ impl<T> GenericCertificate<T> {
         T: CertificateValue,
     {
         crate::certificate::LiteCertificate {
-            value: LiteValue::new(&self.value),
+            value: LiteValue::from(&self.value),
             round: self.round,
             signatures: std::borrow::Cow::Borrowed(&self.signatures),
         }

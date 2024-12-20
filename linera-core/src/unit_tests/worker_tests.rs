@@ -165,7 +165,7 @@ where
     T: CertificateValue,
 {
     let vote = LiteVote::new(
-        LiteValue::new(&value),
+        LiteValue::from(&value),
         round,
         worker.chain_worker_config.key_pair().unwrap(),
     );
@@ -3332,7 +3332,7 @@ where
         .await?;
     let vote = response.info.manager.pending.as_ref().unwrap();
     let value = Hashed::new(ConfirmedBlock::new(executed_block1.clone()));
-    assert_eq!(vote.value, LiteValue::new(&value));
+    assert_eq!(vote.value, LiteValue::from(&value));
 
     // Instead of submitting the confirmed block certificate, let rounds 2 to 4 time out, too.
     let certificate_timeout = make_certificate_with_round(
@@ -3386,7 +3386,7 @@ where
         &key_pairs[1],
         Vec::new(),
     );
-    let lite_value2 = LiteValue::new(&value2);
+    let lite_value2 = LiteValue::from(&value2);
     let (_, _) = worker.handle_block_proposal(proposal).await?;
     let (response, _) = worker.handle_chain_info_query(query_values.clone()).await?;
     assert_eq!(
@@ -3618,7 +3618,7 @@ where
         &key_pairs[1],
         Vec::new(),
     );
-    let lite_value2 = LiteValue::new(&value2);
+    let lite_value2 = LiteValue::from(&value2);
     let (_, _) = worker.handle_block_proposal(proposal).await?;
     let query_values = ChainInfoQuery::new(chain_id).with_manager_values();
     let (response, _) = worker.handle_chain_info_query(query_values).await?;
