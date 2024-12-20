@@ -6,7 +6,7 @@
 #[path = "common/types.rs"]
 mod types;
 
-use std::{fmt::Debug, rc::Rc};
+use std::{fmt::Debug, rc::Rc, sync::Arc};
 
 use linera_witty::{hlist, InstanceWithMemory, Layout, MockInstance, WitStore};
 
@@ -458,7 +458,8 @@ fn test_lower_to_flat_layout<T>(
 {
     test_single_lower_to_flat_layout(&data, expected, expected_memory);
     test_single_lower_to_flat_layout(&Box::new(data.clone()), expected, expected_memory);
-    test_single_lower_to_flat_layout(&Rc::new(data), expected, expected_memory);
+    test_single_lower_to_flat_layout(&Rc::new(data.clone()), expected, expected_memory);
+    test_single_lower_to_flat_layout(&Arc::new(data), expected, expected_memory);
 }
 
 /// Tests that the `data` of type `T` can be lowered to its flat layout and that it matches the
