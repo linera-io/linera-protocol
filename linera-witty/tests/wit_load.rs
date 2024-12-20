@@ -6,7 +6,7 @@
 #[path = "common/types.rs"]
 mod types;
 
-use std::fmt::Debug;
+use std::{fmt::Debug, rc::Rc};
 
 use assert_matches::assert_matches;
 use linera_witty::{hlist, InstanceWithMemory, Layout, MockInstance, RuntimeError, WitLoad};
@@ -323,10 +323,11 @@ fn test_heap_allocated_fields() {
 /// bytes in memory and that it matches the `expected` value.
 fn test_load_from_memory<T>(input: &[u8], expected: T)
 where
-    T: Debug + Eq + WitLoad,
+    T: Clone + Debug + Eq + WitLoad,
 {
     test_single_load_from_memory(input, &expected);
-    test_single_load_from_memory(input, &Box::new(expected));
+    test_single_load_from_memory(input, &Box::new(expected.clone()));
+    test_single_load_from_memory(input, &Rc::new(expected));
 }
 
 /// Tests that the type `T` can be loaded from an `input` sequence of bytes in memory and that it
@@ -352,11 +353,12 @@ fn test_lift_from_flat_layout<T>(
     expected: T,
     initial_memory: &[u8],
 ) where
-    T: Debug + Eq + WitLoad,
+    T: Clone + Debug + Eq + WitLoad,
     <T::Layout as Layout>::Flat: Copy,
 {
     test_single_lift_from_flat_layout(input, &expected, initial_memory);
-    test_single_lift_from_flat_layout(input, &Box::new(expected), initial_memory);
+    test_single_lift_from_flat_layout(input, &Box::new(expected.clone()), initial_memory);
+    test_single_lift_from_flat_layout(input, &Rc::new(expected), initial_memory);
 }
 
 /// Tests that the type `T` can be lifted from an `input` flat layout and that they match the
