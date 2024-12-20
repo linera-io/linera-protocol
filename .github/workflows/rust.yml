@@ -40,7 +40,7 @@ permissions:
   contents: read
 
 jobs:
-  existing-net-test:
+  faucet-net-test:
     runs-on: ubuntu-latest-8-cores
     timeout-minutes: 40
 
@@ -65,9 +65,9 @@ jobs:
         cargo run --bin linera -- resource-control-policy --block 0.0000001
         cargo run --bin linera -- resource-control-policy --block 0.000000
         cargo run --bin linera -- faucet --amount 1000 --port 8079 69705f85ac4c9fef6c02b4d83426aaaf05154c645ec1c61665f8e450f0468bc0 &
-    - name: Run the existing-net tests
+    - name: Run the faucet-net tests
       run: |
-        cargo test -p linera-service existing_net_grpc --features existing-net
+        cargo test -p linera-service faucet_net_grpc --features faucet-net
 
   execution-wasmtime-test:
     runs-on: ubuntu-latest

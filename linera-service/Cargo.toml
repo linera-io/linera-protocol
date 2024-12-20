@@ -54,7 +54,7 @@ kubernetes = [
     "dep:pathdiff",
     "dep:fs_extra",
 ]
-existing-net = []
+faucet-net = []
 metrics = ["prometheus", "linera-base/metrics", "linera-client/metrics"]
 storage-service = ["linera-client/storage-service", "linera-storage-service"]
 
