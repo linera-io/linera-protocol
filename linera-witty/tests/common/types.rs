@@ -68,3 +68,9 @@ pub enum SpecializedGenericEnum<A, B> {
     First(A),
     MaybeSecond { maybe: Option<B> },
 }
+
+/// A struct that contains fields that are wrapped in smart pointer types.
+#[derive(Clone, Debug, Eq, PartialEq, WitType, WitLoad, WitStore)]
+pub struct StructWithHeapFields {
+    pub boxed: Box<SimpleWrapper>,
+}

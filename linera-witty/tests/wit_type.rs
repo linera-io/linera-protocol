@@ -12,7 +12,7 @@ use linera_witty::{HList, Layout, RegisterWitTypes, WitType};
 
 use self::types::{
     Branch, Enum, Leaf, RecordWithDoublePadding, SimpleWrapper, SpecializedGenericEnum,
-    SpecializedGenericStruct, TupleWithPadding, TupleWithoutPadding,
+    SpecializedGenericStruct, StructWithHeapFields, TupleWithPadding, TupleWithoutPadding,
 };
 
 /// Check the memory size, layout and WIT type declaration derived for a wrapper type.
@@ -176,6 +176,25 @@ fn test_specialized_generic_enum_type() {
     });
 }
 
+/// Check the memory size, layout and WIT declaration derived for a complex type that has heap
+/// allocated fields.
+#[test]
+fn test_heap_allocated_fields() {
+    test_wit_type_implementation::<StructWithHeapFields>(ExpectedMetadata {
+        size: 1,
+        alignment: 1,
+        flat_layout_length: 1,
+        declaration: concat!(
+            "    record simple-wrapper {\n",
+            "        inner0: bool,\n",
+            "    }\n\n",
+            "    record struct-with-heap-fields {\n",
+            "        boxed: simple-wrapper,\n",
+            "    }\n",
+        ),
+    });
+}
+
 /// Helper type to make visible what each metadata value is.
 #[derive(Clone, Copy, Debug)]
 struct ExpectedMetadata {
@@ -191,13 +210,8 @@ fn test_wit_type_implementation<T>(expected: ExpectedMetadata)
 where
     T: WitType,
 {
-    let expected_when_wrapped = ExpectedMetadata {
-        declaration: "",
-        ..expected
-    };
-
     test_single_wit_type_implementation::<T>(expected);
-    test_single_wit_type_implementation::<Box<T>>(expected_when_wrapped);
+    test_single_wit_type_implementation::<Box<T>>(expected);
 }
 
 /// Tests that a type `T` has the `expected` [`WitType`] metadata in its implementation.
