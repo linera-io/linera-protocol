@@ -181,10 +181,17 @@ fn test_specialized_generic_enum_type() {
 #[test]
 fn test_heap_allocated_fields() {
     test_wit_type_implementation::<StructWithHeapFields>(ExpectedMetadata {
-        size: 32,
+        size: 56,
         alignment: 8,
-        flat_layout_length: 4,
+        flat_layout_length: 15,
         declaration: concat!(
+            "    variant enum {\n",
+            "        empty,\n",
+            "        large-variant-with-loose-alignment(\
+                        tuple<s8, s8, s8, s8, s8, s8, s8, s8, s8, s8>\
+                     ),\n",
+            "        smaller-variant-with-strict-alignment(u64),\n",
+            "    }\n\n",
             "    record leaf {\n",
             "        first: bool,\n",
             "        second: u128,\n",
@@ -195,6 +202,7 @@ fn test_heap_allocated_fields() {
             "    record struct-with-heap-fields {\n",
             "        boxed: simple-wrapper,\n",
             "        rced: leaf,\n",
+            "        arced: enum,\n",
             "    }\n\n",
             "    type u128 = tuple<u64, u64>;\n",
         ),

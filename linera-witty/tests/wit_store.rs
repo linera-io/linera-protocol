@@ -363,13 +363,17 @@ fn test_heap_allocated_fields() {
             first: true,
             second: 0x7071_7273_7475_7677_7879_7a7b_7c7d_7e7f_u128,
         }),
+        arced: Arc::new(Enum::SmallerVariantWithStrictAlignment {
+            inner: 0x4041_4243_4445_4647_u64,
+        }),
     };
 
     test_store_in_memory(
         data.clone(),
         &[
             0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0x7f, 0x7e, 0x7d, 0x7c, 0x7b, 0x7a,
-            0x79, 0x78, 0x77, 0x76, 0x75, 0x74, 0x73, 0x72, 0x71, 0x70,
+            0x79, 0x78, 0x77, 0x76, 0x75, 0x74, 0x73, 0x72, 0x71, 0x70, 2, 0, 0, 0, 0, 0, 0, 0,
+            0x47, 0x46, 0x45, 0x44, 0x43, 0x42, 0x41, 0x40, 0, 0, 0, 0, 0, 0, 0, 0,
         ],
         &[],
     );
@@ -380,6 +384,17 @@ fn test_heap_allocated_fields() {
             1_i32,
             0x7879_7a7b_7c7d_7e7f_i64,
             0x7071_7273_7475_7677_i64,
+            2_i32,
+            0x4041_4243_4445_4647_i64,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
         ],
         &[],
     );

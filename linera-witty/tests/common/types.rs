@@ -3,7 +3,7 @@
 
 //! Dummy types used in tests.
 
-use std::rc::Rc;
+use std::{rc::Rc, sync::Arc};
 
 use linera_witty::{WitLoad, WitStore, WitType};
 
@@ -76,4 +76,5 @@ pub enum SpecializedGenericEnum<A, B> {
 pub struct StructWithHeapFields {
     pub boxed: Box<SimpleWrapper>,
     pub rced: Rc<Leaf>,
+    pub arced: Arc<Enum>,
 }

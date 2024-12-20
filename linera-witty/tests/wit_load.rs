@@ -317,12 +317,16 @@ fn test_heap_allocated_fields() {
             first: false,
             second: 0x201f_1e1d_1c1b_1a19_1817_1615_1413_1211_u128,
         }),
+        arced: Arc::new(Enum::SmallerVariantWithStrictAlignment {
+            inner: 0x2f2e_2d2c_2b2a_2928,
+        }),
     };
 
     test_load_from_memory(
         &[
             1, 2, 3, 4, 5, 6, 7, 8, 0, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
-            25, 26, 27, 28, 29, 30, 31, 32,
+            25, 26, 27, 28, 29, 30, 31, 32, 2, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45,
+            46, 47, 48,
         ],
         expected.clone(),
     );
@@ -332,6 +336,17 @@ fn test_heap_allocated_fields() {
             0_i32,
             0x1817_1615_1413_1211_i64,
             0x201f_1e1d_1c1b_1a19_i64,
+            2_i32,
+            0x2f2e_2d2c_2b2a_2928_i64,
+            0_i32,
+            0_i32,
+            0_i32,
+            0_i32,
+            0_i32,
+            0_i32,
+            0_i32,
+            0_i32,
+            0_i32,
         ],
         expected,
         &[],
