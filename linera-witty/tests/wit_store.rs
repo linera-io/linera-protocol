@@ -6,7 +6,7 @@
 #[path = "common/types.rs"]
 mod types;
 
-use std::fmt::Debug;
+use std::{fmt::Debug, rc::Rc};
 
 use linera_witty::{hlist, InstanceWithMemory, Layout, MockInstance, WitStore};
 
@@ -372,7 +372,7 @@ fn test_store_in_memory<T>(
     expected_without_allocation: &[u8],
     expected_additionally_allocated: &[u8],
 ) where
-    T: WitStore,
+    T: Clone + WitStore,
 {
     test_single_store_in_memory(
         &data,
@@ -380,7 +380,12 @@ fn test_store_in_memory<T>(
         expected_additionally_allocated,
     );
     test_single_store_in_memory(
-        &Box::new(data),
+        &Box::new(data.clone()),
+        expected_without_allocation,
+        expected_additionally_allocated,
+    );
+    test_single_store_in_memory(
+        &Rc::new(data),
         expected_without_allocation,
         expected_additionally_allocated,
     );
@@ -428,11 +433,12 @@ fn test_lower_to_flat_layout<T>(
     expected: <T::Layout as Layout>::Flat,
     expected_memory: &[u8],
 ) where
-    T: WitStore,
+    T: Clone + WitStore,
     <T::Layout as Layout>::Flat: Copy + Debug + Eq,
 {
     test_single_lower_to_flat_layout(&data, expected, expected_memory);
-    test_single_lower_to_flat_layout(&Box::new(data), expected, expected_memory);
+    test_single_lower_to_flat_layout(&Box::new(data.clone()), expected, expected_memory);
+    test_single_lower_to_flat_layout(&Rc::new(data), expected, expected_memory);
 }
 
 /// Tests that the `data` of type `T` can be lowered to its flat layout and that it matches the
