@@ -91,6 +91,16 @@ static NUM_BLOCKS: LazyLock<IntCounterVec> = LazyLock::new(|| {
         .expect("Counter creation should not fail")
 });
 
+#[cfg(with_metrics)]
+static CERTIFICATES_SIGNED: LazyLock<IntCounterVec> = LazyLock::new(|| {
+    prometheus_util::register_int_counter_vec(
+        "certificates_signed",
+        "Number of confirmed block certificates signed by each validator",
+        &["validator_name"],
+    )
+    .expect("Counter creation should not fail")
+});
+
 /// Instruct the networking layer to send cross-chain requests and/or push notifications.
 #[derive(Default, Debug)]
 pub struct NetworkActions {
@@ -762,6 +772,8 @@ where
             false,
         );
 
+        #[cfg(with_metrics)]
+        let certificate_signatures = certificate.signatures().clone();
         let (info, actions) = match certificate.value() {
             CertificateValue::ValidatedBlock { .. } => {
                 // Confirm the validated block.
@@ -805,6 +817,12 @@ where
                 TRANSACTION_COUNT
                     .with_label_values(&[])
                     .inc_by(confirmed_transactions);
+            }
+
+            for (validator_name, _) in certificate_signatures {
+                CERTIFICATES_SIGNED
+                    .with_label_values(&[&validator_name.to_string()])
+                    .inc();
             }
         }
         Ok((info, actions))
