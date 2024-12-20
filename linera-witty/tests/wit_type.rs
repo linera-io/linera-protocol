@@ -6,7 +6,7 @@
 #[path = "common/types.rs"]
 mod types;
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, rc::Rc};
 
 use linera_witty::{HList, Layout, RegisterWitTypes, WitType};
 
@@ -212,6 +212,7 @@ where
 {
     test_single_wit_type_implementation::<T>(expected);
     test_single_wit_type_implementation::<Box<T>>(expected);
+    test_single_wit_type_implementation::<Rc<T>>(expected);
 }
 
 /// Tests that a type `T` has the `expected` [`WitType`] metadata in its implementation.
