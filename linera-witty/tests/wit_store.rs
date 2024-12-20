@@ -12,7 +12,7 @@ use linera_witty::{hlist, InstanceWithMemory, Layout, MockInstance, WitStore};
 
 use self::types::{
     Branch, Enum, Leaf, RecordWithDoublePadding, SimpleWrapper, SpecializedGenericEnum,
-    SpecializedGenericStruct, TupleWithPadding, TupleWithoutPadding,
+    SpecializedGenericStruct, StructWithHeapFields, TupleWithPadding, TupleWithoutPadding,
 };
 
 /// Check that a wrapper type is properly stored in memory and lowered into its flat layout.
@@ -351,6 +351,18 @@ fn test_specialized_generic_enum_type() {
         hlist![0x0000_0002_i32, 0x0000_0001_i32, 0x0000_0009_i32],
         &[],
     );
+}
+
+/// Check that a type with fields stored in the heap is properly stored in memory and lowered into
+/// its flat layout.
+#[test]
+fn test_heap_allocated_fields() {
+    let data = StructWithHeapFields {
+        boxed: Box::new(SimpleWrapper(true)),
+    };
+
+    test_store_in_memory(data.clone(), &[1], &[]);
+    test_lower_to_flat_layout(data, hlist![1], &[]);
 }
 
 /// Tests that the `data` of type `T` and wrapped versions of it can be stored as a sequence of
