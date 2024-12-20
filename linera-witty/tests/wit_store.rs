@@ -358,11 +358,31 @@ fn test_specialized_generic_enum_type() {
 #[test]
 fn test_heap_allocated_fields() {
     let data = StructWithHeapFields {
-        boxed: Box::new(SimpleWrapper(true)),
+        boxed: Box::new(SimpleWrapper(false)),
+        rced: Rc::new(Leaf {
+            first: true,
+            second: 0x7071_7273_7475_7677_7879_7a7b_7c7d_7e7f_u128,
+        }),
     };
 
-    test_store_in_memory(data.clone(), &[1], &[]);
-    test_lower_to_flat_layout(data, hlist![1], &[]);
+    test_store_in_memory(
+        data.clone(),
+        &[
+            0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0x7f, 0x7e, 0x7d, 0x7c, 0x7b, 0x7a,
+            0x79, 0x78, 0x77, 0x76, 0x75, 0x74, 0x73, 0x72, 0x71, 0x70,
+        ],
+        &[],
+    );
+    test_lower_to_flat_layout(
+        data,
+        hlist![
+            0_i32,
+            1_i32,
+            0x7879_7a7b_7c7d_7e7f_i64,
+            0x7071_7273_7475_7677_i64,
+        ],
+        &[],
+    );
 }
 
 /// Tests that the `data` of type `T` and wrapped versions of it can be stored as a sequence of

@@ -181,16 +181,22 @@ fn test_specialized_generic_enum_type() {
 #[test]
 fn test_heap_allocated_fields() {
     test_wit_type_implementation::<StructWithHeapFields>(ExpectedMetadata {
-        size: 1,
-        alignment: 1,
-        flat_layout_length: 1,
+        size: 32,
+        alignment: 8,
+        flat_layout_length: 4,
         declaration: concat!(
+            "    record leaf {\n",
+            "        first: bool,\n",
+            "        second: u128,\n",
+            "    }\n\n",
             "    record simple-wrapper {\n",
             "        inner0: bool,\n",
             "    }\n\n",
             "    record struct-with-heap-fields {\n",
             "        boxed: simple-wrapper,\n",
-            "    }\n",
+            "        rced: leaf,\n",
+            "    }\n\n",
+            "    type u128 = tuple<u64, u64>;\n",
         ),
     });
 }

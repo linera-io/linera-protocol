@@ -3,6 +3,8 @@
 
 //! Dummy types used in tests.
 
+use std::rc::Rc;
+
 use linera_witty::{WitLoad, WitStore, WitType};
 
 /// A type that wraps a simple type.
@@ -73,4 +75,5 @@ pub enum SpecializedGenericEnum<A, B> {
 #[derive(Clone, Debug, Eq, PartialEq, WitType, WitLoad, WitStore)]
 pub struct StructWithHeapFields {
     pub boxed: Box<SimpleWrapper>,
+    pub rced: Rc<Leaf>,
 }

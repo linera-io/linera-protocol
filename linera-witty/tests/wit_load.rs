@@ -313,10 +313,29 @@ fn test_invalid_discriminant() {
 fn test_heap_allocated_fields() {
     let expected = StructWithHeapFields {
         boxed: Box::new(SimpleWrapper(true)),
+        rced: Rc::new(Leaf {
+            first: false,
+            second: 0x201f_1e1d_1c1b_1a19_1817_1615_1413_1211_u128,
+        }),
     };
 
-    test_load_from_memory(&[1], expected.clone());
-    test_lift_from_flat_layout(hlist![1], expected, &[]);
+    test_load_from_memory(
+        &[
+            1, 2, 3, 4, 5, 6, 7, 8, 0, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+            25, 26, 27, 28, 29, 30, 31, 32,
+        ],
+        expected.clone(),
+    );
+    test_lift_from_flat_layout(
+        hlist![
+            1_i32,
+            0_i32,
+            0x1817_1615_1413_1211_i64,
+            0x201f_1e1d_1c1b_1a19_i64,
+        ],
+        expected,
+        &[],
+    );
 }
 
 /// Tests that the type `T` and wrapped versions of it can be loaded from an `input` sequence of
