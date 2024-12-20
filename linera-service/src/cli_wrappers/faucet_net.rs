@@ -15,18 +15,18 @@ use super::{
     Network, OnClientDrop,
 };
 
-pub struct ExistingNetTestingConfig {
+pub struct FaucetNetTestingConfig {
     faucet: Faucet,
 }
 
-impl ExistingNetTestingConfig {
-    /// Creates a new [`ExistingNetTestingConfig`] for running tests with an existing Linera
-    /// network.
+impl FaucetNetTestingConfig {
+    /// Creates a new [`FaucetNetTestingConfig`] for running tests with a Linera
+    /// network that has a faucet.
     ///
     /// The `faucet_url` is used to connect to the network and obtain its configuration,
     /// as well as to create microchains used for testing. If the parameter is [`None`],
     /// then it falls back to the URL specified in the `LINERA_FAUCET_URL` environment
-    /// variable, or the default devnet faucet URL.
+    /// variable.
     pub fn new(faucet_url: Option<String>) -> Self {
         Self {
             faucet: Faucet::new(
@@ -39,14 +39,14 @@ impl ExistingNetTestingConfig {
 }
 
 #[async_trait]
-impl LineraNetConfig for ExistingNetTestingConfig {
-    type Net = ExistingNet;
+impl LineraNetConfig for FaucetNetTestingConfig {
+    type Net = FaucetNet;
 
     async fn instantiate(self) -> Result<(Self::Net, ClientWrapper)> {
         let seed = 37;
-        let mut net = ExistingNet::new(Some(seed), &self.faucet)
+        let mut net = FaucetNet::new(Some(seed), &self.faucet)
             .await
-            .expect("Creating ExistingNet should not fail");
+            .expect("Creating FaucetNet should not fail");
 
         let client = net.make_client().await;
         // The tests assume we've created a genesis config with 2
@@ -78,7 +78,7 @@ impl LineraNetConfig for ExistingNetTestingConfig {
 
 /// Remote net
 #[derive(Clone)]
-pub struct ExistingNet {
+pub struct FaucetNet {
     network: Network,
     testing_prng_seed: Option<u64>,
     next_client_id: usize,
@@ -86,7 +86,7 @@ pub struct ExistingNet {
 }
 
 #[async_trait]
-impl LineraNet for ExistingNet {
+impl LineraNet for FaucetNet {
     async fn ensure_is_running(&mut self) -> Result<()> {
         // Leaving this just returning for now.
         // We would have to connect to each validator in the existing net then run
@@ -118,7 +118,7 @@ impl LineraNet for ExistingNet {
     }
 }
 
-impl ExistingNet {
+impl FaucetNet {
     async fn new(testing_prng_seed: Option<u64>, faucet: &Faucet) -> Result<Self> {
         let tmp_dir = Arc::new(tempdir()?);
         // Write json config to disk
