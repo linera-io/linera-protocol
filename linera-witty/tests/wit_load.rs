@@ -6,7 +6,7 @@
 #[path = "common/types.rs"]
 mod types;
 
-use std::{fmt::Debug, rc::Rc};
+use std::{fmt::Debug, rc::Rc, sync::Arc};
 
 use assert_matches::assert_matches;
 use linera_witty::{hlist, InstanceWithMemory, Layout, MockInstance, RuntimeError, WitLoad};
@@ -346,7 +346,8 @@ where
 {
     test_single_load_from_memory(input, &expected);
     test_single_load_from_memory(input, &Box::new(expected.clone()));
-    test_single_load_from_memory(input, &Rc::new(expected));
+    test_single_load_from_memory(input, &Rc::new(expected.clone()));
+    test_single_load_from_memory(input, &Arc::new(expected));
 }
 
 /// Tests that the type `T` can be loaded from an `input` sequence of bytes in memory and that it
@@ -377,7 +378,8 @@ fn test_lift_from_flat_layout<T>(
 {
     test_single_lift_from_flat_layout(input, &expected, initial_memory);
     test_single_lift_from_flat_layout(input, &Box::new(expected.clone()), initial_memory);
-    test_single_lift_from_flat_layout(input, &Rc::new(expected), initial_memory);
+    test_single_lift_from_flat_layout(input, &Rc::new(expected.clone()), initial_memory);
+    test_single_lift_from_flat_layout(input, &Arc::new(expected), initial_memory);
 }
 
 /// Tests that the type `T` can be lifted from an `input` flat layout and that they match the
