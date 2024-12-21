@@ -86,7 +86,7 @@ impl<T: Clone> Clone for Hashed<T> {
 
 impl<T: async_graphql::OutputType> async_graphql::TypeName for Hashed<T> {
     fn type_name() -> Cow<'static, str> {
-        format!("Hashed{}", T::type_name(),).into()
+        format!("Hashed{}", T::type_name()).into()
     }
 }
 
