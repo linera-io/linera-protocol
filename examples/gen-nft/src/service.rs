@@ -94,6 +94,7 @@ impl QueryRoot {
         self.non_fungible_token
             .nfts
             .for_each_index_value(|_token_id, nft| {
+                let nft = nft.into_owned();
                 let nft_output = NftOutput::new(nft);
                 nfts.insert(nft_output.token_id.clone(), nft_output);
                 Ok(())
@@ -121,6 +122,7 @@ impl QueryRoot {
         self.non_fungible_token
             .owned_token_ids
             .for_each_index_value(|owner, token_ids| {
+                let token_ids = token_ids.into_owned();
                 let new_token_ids = token_ids
                     .into_iter()
                     .map(|token_id| STANDARD_NO_PAD.encode(token_id.id))
