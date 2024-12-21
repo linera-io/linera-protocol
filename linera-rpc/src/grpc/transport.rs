@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::NodeOptions;
+use std::time::Duration;
 
 #[derive(Clone, Debug, Default)]
 pub struct Options {
@@ -28,6 +29,7 @@ cfg_if::cfg_if! {
         }
     } else {
         pub use tonic::transport::{Channel, Error};
+        use crate::grpc::KEEPALIVE_TIME_MS;
 
         pub fn create_channel(
             address: String,
@@ -42,6 +44,7 @@ cfg_if::cfg_if! {
             if let Some(timeout) = options.timeout {
                 endpoint = endpoint.timeout(timeout);
             }
+            endpoint = endpoint.keep_alive_timeout(Duration::from_millis(KEEPALIVE_TIME_MS));
             Ok(endpoint.connect_lazy())
         }
     }
