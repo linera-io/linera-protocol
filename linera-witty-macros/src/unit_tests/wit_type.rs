@@ -484,3 +484,42 @@ fn enum_type_with_skipped_fields() {
 
     assert_eq!(output.to_string(), expected.to_string());
 }
+
+/// Check the generated code for the body of the implementation of `WitType` for a struct
+/// with a custom WIT type name.
+#[test]
+fn struct_with_a_custom_wit_name() {
+    let input: ItemStruct = parse_quote! {
+        #[witty(name = "renamed-type")]
+        struct Type(i16);
+    };
+    let wit_name = discover_wit_name(&input.attrs, &input.ident);
+    let output = derive_for_struct(wit_name, &input.fields);
+
+    let expected = quote! {
+        const SIZE: u32 = <linera_witty::HList![i16] as linera_witty::WitType>::SIZE;
+
+        type Layout = <linera_witty::HList![i16] as linera_witty::WitType>::Layout;
+        type Dependencies = linera_witty::HList![i16];
+
+        fn wit_type_name() -> std::borrow::Cow<'static, str> {
+            "renamed-type".into()
+        }
+
+        fn wit_type_declaration() -> std::borrow::Cow<'static, str> {
+            let mut wit_declaration =
+                String::from(concat!("    record " , "renamed-type" , " {\n"));
+
+            wit_declaration.push_str("        ");
+            wit_declaration.push_str("inner0");
+            wit_declaration.push_str(": ");
+            wit_declaration.push_str(&*<i16 as linera_witty::WitType>::wit_type_name());
+            wit_declaration.push_str(",\n");
+
+            wit_declaration.push_str("    }\n");
+            wit_declaration.into ()
+        }
+    };
+
+    assert_eq!(output.to_string(), expected.to_string());
+}
