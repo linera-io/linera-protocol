@@ -69,10 +69,9 @@ pub fn discover_wit_name(attributes: &[Attribute], rust_name: &Ident) -> LitStr 
 /// Returns the body of the `WitType` implementation for the Rust `struct` with the specified
 /// `fields`.
 pub fn derive_for_struct<'input>(
-    name: &Ident,
+    wit_name: LitStr,
     fields: impl Into<FieldsInformation<'input>>,
 ) -> TokenStream {
-    let wit_name = LitStr::new(&name.to_string().to_kebab_case(), name.span());
     let fields = fields.into();
     let fields_hlist = fields.hlist_type();
     let field_wit_names = fields.wit_names();
@@ -109,10 +108,9 @@ pub fn derive_for_struct<'input>(
 /// `variants`.
 pub fn derive_for_enum<'variants>(
     name: &Ident,
+    wit_name: LitStr,
     variants: impl DoubleEndedIterator<Item = &'variants Variant> + Clone,
 ) -> TokenStream {
-    let wit_name = LitStr::new(&name.to_string().to_kebab_case(), name.span());
-
     let variant_count = variants.clone().count();
     let variant_fields: Vec<_> = variants
         .clone()

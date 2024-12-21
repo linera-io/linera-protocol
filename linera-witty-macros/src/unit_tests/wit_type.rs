@@ -5,16 +5,17 @@
 
 #![cfg(test)]
 
-use quote::{format_ident, quote};
-use syn::{parse_quote, Fields, ItemEnum, ItemStruct};
+use proc_macro2::Span;
+use quote::quote;
+use syn::{parse_quote, Fields, ItemEnum, ItemStruct, LitStr};
 
-use super::{derive_for_enum, derive_for_struct};
+use super::{derive_for_enum, derive_for_struct, discover_wit_name};
 
 /// Check the generated code for the body of the implementation of `WitType` for a unit struct.
 #[test]
 fn zero_sized_type() {
     let input = Fields::Unit;
-    let output = derive_for_struct(&format_ident!("ZeroSizedType"), &input);
+    let output = derive_for_struct(LitStr::new("zero-sized-type", Span::call_site()), &input);
 
     let expected = quote! {
         const SIZE: u32 = <linera_witty::HList![] as linera_witty::WitType>::SIZE;
@@ -46,7 +47,8 @@ fn named_struct() {
             second: CustomType,
         }
     };
-    let output = derive_for_struct(&input.ident, &input.fields);
+    let wit_name = discover_wit_name(&[], &input.ident);
+    let output = derive_for_struct(wit_name, &input.fields);
 
     let expected = quote! {
         const SIZE: u32 = <linera_witty::HList![u8, CustomType] as linera_witty::WitType>::SIZE;
@@ -87,7 +89,8 @@ fn tuple_struct() {
     let input: ItemStruct = parse_quote! {
         struct Type(String, Vec<CustomType>, i64);
     };
-    let output = derive_for_struct(&input.ident, &input.fields);
+    let wit_name = discover_wit_name(&[], &input.ident);
+    let output = derive_for_struct(wit_name, &input.fields);
 
     let expected = quote! {
         const SIZE: u32 =
@@ -144,7 +147,8 @@ fn enum_type() {
             },
         }
     };
-    let output = derive_for_enum(&input.ident, input.variants.iter());
+    let wit_name = discover_wit_name(&[], &input.ident);
+    let output = derive_for_enum(&input.ident, wit_name, input.variants.iter());
 
     let expected = quote! {
         const SIZE: u32 = {
@@ -263,7 +267,8 @@ fn named_struct_with_skipped_fields() {
             ignored4: Vec<()>,
         }
     };
-    let output = derive_for_struct(&input.ident, &input.fields);
+    let wit_name = discover_wit_name(&[], &input.ident);
+    let output = derive_for_struct(wit_name, &input.fields);
 
     let expected = quote! {
         const SIZE: u32 = <linera_witty::HList![u8, CustomType] as linera_witty::WitType>::SIZE;
@@ -313,7 +318,8 @@ fn tuple_struct_with_skipped_fields() {
             i64,
         );
     };
-    let output = derive_for_struct(&input.ident, &input.fields);
+    let wit_name = discover_wit_name(&[], &input.ident);
+    let output = derive_for_struct(wit_name, &input.fields);
 
     let expected = quote! {
         const SIZE: u32 =
@@ -377,7 +383,8 @@ fn enum_type_with_skipped_fields() {
             },
         }
     };
-    let output = derive_for_enum(&input.ident, input.variants.iter());
+    let wit_name = discover_wit_name(&[], &input.ident);
+    let output = derive_for_enum(&input.ident, wit_name, input.variants.iter());
 
     let expected = quote! {
         const SIZE: u32 = {
