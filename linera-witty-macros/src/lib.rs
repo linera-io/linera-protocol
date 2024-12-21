@@ -34,10 +34,13 @@ pub fn derive_wit_type(input: TokenStream) -> TokenStream {
     let mut input = parse_macro_input!(input as DeriveInput);
 
     let specializations = apply_specialization_attribute(&mut input);
+    let wit_name = wit_type::discover_wit_name(&input.attrs, &input.ident);
 
     let body = match &input.data {
-        Data::Struct(struct_item) => wit_type::derive_for_struct(&input.ident, &struct_item.fields),
-        Data::Enum(enum_item) => wit_type::derive_for_enum(&input.ident, enum_item.variants.iter()),
+        Data::Struct(struct_item) => wit_type::derive_for_struct(wit_name, &struct_item.fields),
+        Data::Enum(enum_item) => {
+            wit_type::derive_for_enum(&input.ident, wit_name, enum_item.variants.iter())
+        }
         Data::Union(_union_item) => {
             abort!(input.ident, "Can't derive `WitType` for `union`s")
         }
