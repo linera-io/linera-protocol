@@ -19,6 +19,7 @@ cleanup() {
     rm wallet.json
     SCYLLA_VOLUME=docker_linera-scylla-data
     SHARED_VOLUME=docker_linera-shared
+    # The following commands can now safely use the SCYLLA_VOLUME and SHARED_VOLUME variables
     docker rm -f $(docker ps -a -q --filter volume=$SCYLLA_VOLUME)
     docker volume rm $SCYLLA_VOLUME
     docker rm -f $(docker ps -a -q --filter volume=$SHARED_VOLUME)
