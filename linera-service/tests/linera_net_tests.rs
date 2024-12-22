@@ -989,9 +989,12 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
 
     let client2 = net.make_client().await;
     client2.wallet_init(&[], FaucetOption::None).await?;
+    let client3 = net.make_client().await;
+    client3.wallet_init(&[], FaucetOption::None).await?;
 
     let chain1 = client1.load_wallet()?.default_chain().unwrap();
     let chain2 = client1.open_and_assign(&client2, Amount::ONE).await?;
+    let _chain3 = client1.open_and_assign(&client3, Amount::ZERO).await?;
 
     // The players
     let account_owner1 = get_fungible_account_owner(&client1);
@@ -1161,6 +1164,10 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
         hash: blob_hash,
         blob_type: BlobType::Data,
     };
+    let read_blob_ids = client3.list_all_blob_ids().await?;
+    for blob_id in &[blob_id1, blob_id2] {
+        assert!(read_blob_ids.contains(blob_id))
+    }
 
     let nft2_blob_hash = DataBlobHash(nft2_blob_hash);
 

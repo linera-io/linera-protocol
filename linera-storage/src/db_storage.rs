@@ -224,7 +224,6 @@ const INDEX_BLOB: u8 = 3;
 const INDEX_BLOB_STATE: u8 = 4;
 const BLOB_LENGTH: usize = std::mem::size_of::<BlobId>();
 
-
 impl BaseKey {
     /// We depend on the precise serialization to do queries and so we have to
     /// hardcode it.
@@ -234,17 +233,17 @@ impl BaseKey {
                 let mut vec = vec![INDEX_CHAIN_STATE];
                 vec.extend(bcs::to_bytes(&chain_id)?);
                 Ok(vec)
-            },
+            }
             BaseKey::Certificate(hash) => {
                 let mut vec = vec![INDEX_CERTIFICATE];
                 vec.extend(bcs::to_bytes(&hash)?);
                 Ok(vec)
-            },
+            }
             BaseKey::ConfirmedBlock(hash) => {
                 let mut vec = vec![INDEX_CONFIRMED_BLOCK];
                 vec.extend(bcs::to_bytes(&hash)?);
                 Ok(vec)
-            },
+            }
             BaseKey::Blob(blob_id) => {
                 let mut vec = vec![INDEX_BLOB];
                 vec.extend(bcs::to_bytes(&blob_id)?);
@@ -254,7 +253,7 @@ impl BaseKey {
                 let mut vec = vec![INDEX_BLOB_STATE];
                 vec.extend(bcs::to_bytes(&blob_id)?);
                 Ok(vec)
-            },
+            }
         }
     }
 }
@@ -414,7 +413,6 @@ where
             user_services: self.user_services.clone(),
         };
         let root_key = BaseKey::ChainState(chain_id).to_bytes()?;
-        println!("root_key={:?}", root_key);
         let store = self.store.clone_with_root_key(&root_key)?;
         let context = ViewContext::create_root_context(store, runtime_context).await?;
         ChainStateView::load(context).await
@@ -432,9 +430,7 @@ where
             let blob_id = bcs::from_bytes(key_red)?;
             blob_ids.insert(blob_id);
         }
-        let blob_ids = blob_ids.into_iter().collect::<Vec<_>>();
-        println!("db_storage, blob_ids={:?}", blob_ids);
-        Ok(blob_ids)
+        Ok(blob_ids.into_iter().collect::<Vec<_>>())
     }
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {

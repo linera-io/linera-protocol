@@ -393,7 +393,9 @@ impl Runnable for Job {
                 let node_provider = context.make_node_provider();
                 let node = node_provider.make_node(address)?;
                 let blob_ids = node.get_list_all_blob_ids().await?;
-                println!("{:?}", blob_ids);
+                for blob_id in blob_ids {
+                    println!("{blob_id}");
+                }
             }
 
             QueryValidator {

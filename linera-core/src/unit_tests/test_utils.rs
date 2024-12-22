@@ -176,10 +176,8 @@ where
     }
 
     async fn get_list_all_blob_ids(&self) -> Result<Vec<BlobId>, NodeError> {
-        self.spawn_and_receive(move |validator, sender| {
-            validator.do_list_all_blob_ids(sender)
-        })
-        .await
+        self.spawn_and_receive(move |validator, sender| validator.do_list_all_blob_ids(sender))
+            .await
     }
 
     async fn get_genesis_config_hash(&self) -> Result<CryptoHash, NodeError> {

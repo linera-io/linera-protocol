@@ -511,14 +511,14 @@ impl ClientWrapper {
         let mut command = self.command().await?;
         command.arg("list-all-blob-ids");
         let stdout = command.spawn_and_wait_for_stdout().await?;
-        println!("stdout={}", stdout.trim());
-        /*
-        let blob_ids = stdout
-            .trim()
-            .parse()
-        .context("error while parsing the result of `linera list-all-blob_ids`")?;
-        */
-        Ok(Vec::new())
+        let mut blob_ids = Vec::new();
+        for input in stdout.split('\n') {
+            if !input.is_empty() {
+                let blob_id = BlobId::from_str(input)?;
+                blob_ids.push(blob_id);
+            }
+        }
+        Ok(blob_ids)
     }
 
     /// Runs `linera query-validators`.
