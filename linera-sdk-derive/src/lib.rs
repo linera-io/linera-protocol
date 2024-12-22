@@ -84,11 +84,7 @@ fn generate_mutation_root_code(input: ItemEnum, crate_root: &str) -> TokenStream
 
         #[async_graphql::Object]
         impl #mutation_root_name {
-            #
-
-            (#methods)
-
-            *
+            #(#methods)*
         }
 
         impl #crate_root::graphql::GraphQLMutationRoot for #enum_name {
