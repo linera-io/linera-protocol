@@ -96,6 +96,7 @@ mod phantom_data;
 mod primitives;
 mod rc;
 mod result;
+mod slices;
 mod string;
 mod sync;
 mod time;
