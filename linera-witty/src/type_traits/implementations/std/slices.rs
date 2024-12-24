@@ -5,9 +5,12 @@
 
 use std::borrow::Cow;
 
-use frunk::HList;
+use frunk::{hlist, HList};
 
-use crate::WitType;
+use crate::{
+    GuestPointer, InstanceWithMemory, Layout, Memory, Runtime, RuntimeError, RuntimeMemory,
+    WitStore, WitType,
+};
 
 impl<T> WitType for [T]
 where
@@ -25,5 +28,52 @@ where
     fn wit_type_declaration() -> Cow<'static, str> {
         // The native `list` type doesn't need to be declared
         "".into()
+    }
+}
+
+impl<T> WitStore for [T]
+where
+    T: WitStore,
+{
+    fn store<Instance>(
+        &self,
+        memory: &mut Memory<'_, Instance>,
+        location: GuestPointer,
+    ) -> Result<(), RuntimeError>
+    where
+        Instance: InstanceWithMemory,
+        <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
+    {
+        let length = u32::try_from(self.len())?;
+        let size = length * T::SIZE;
+
+        let destination = memory.allocate(size, <T::Layout as Layout>::ALIGNMENT)?;
+
+        destination.store(memory, location)?;
+        length.store(memory, location.after::<GuestPointer>())?;
+
+        self.iter()
+            .zip(0..)
+            .try_for_each(|(element, index)| element.store(memory, destination.index::<T>(index)))
+    }
+
+    fn lower<Instance>(
+        &self,
+        memory: &mut Memory<'_, Instance>,
+    ) -> Result<Self::Layout, RuntimeError>
+    where
+        Instance: InstanceWithMemory,
+        <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
+    {
+        let length = u32::try_from(self.len())?;
+        let size = length * T::SIZE;
+
+        let destination = memory.allocate(size, <T::Layout as Layout>::ALIGNMENT)?;
+
+        self.iter().zip(0..).try_for_each(|(element, index)| {
+            element.store(memory, destination.index::<T>(index))
+        })?;
+
+        Ok(destination.lower(memory)? + hlist![length as i32])
     }
 }
