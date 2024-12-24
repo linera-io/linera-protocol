@@ -77,3 +77,21 @@ where
         Ok(destination.lower(memory)? + hlist![length as i32])
     }
 }
+
+impl<T> WitType for Box<[T]>
+where
+    T: WitType,
+{
+    const SIZE: u32 = <[T] as WitType>::SIZE;
+
+    type Layout = <[T] as WitType>::Layout;
+    type Dependencies = <[T] as WitType>::Dependencies;
+
+    fn wit_type_name() -> Cow<'static, str> {
+        <[T] as WitType>::wit_type_name()
+    }
+
+    fn wit_type_declaration() -> Cow<'static, str> {
+        <[T] as WitType>::wit_type_declaration()
+    }
+}
