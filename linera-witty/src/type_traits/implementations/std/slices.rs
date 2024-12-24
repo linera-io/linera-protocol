@@ -5,11 +5,11 @@
 
 use std::borrow::Cow;
 
-use frunk::{hlist, HList};
+use frunk::{hlist, hlist_pat, HList};
 
 use crate::{
     GuestPointer, InstanceWithMemory, Layout, Memory, Runtime, RuntimeError, RuntimeMemory,
-    WitStore, WitType,
+    WitLoad, WitStore, WitType,
 };
 
 impl<T> WitType for [T]
@@ -93,5 +93,42 @@ where
 
     fn wit_type_declaration() -> Cow<'static, str> {
         <[T] as WitType>::wit_type_declaration()
+    }
+}
+
+impl<T> WitLoad for Box<[T]>
+where
+    T: WitLoad,
+{
+    fn load<Instance>(
+        memory: &Memory<'_, Instance>,
+        location: GuestPointer,
+    ) -> Result<Self, RuntimeError>
+    where
+        Instance: InstanceWithMemory,
+        <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
+    {
+        let address = GuestPointer::load(memory, location)?;
+        let length = u32::load(memory, location.after::<GuestPointer>())?;
+
+        (0..length)
+            .map(|index| T::load(memory, address.index::<T>(index)))
+            .collect()
+    }
+
+    fn lift_from<Instance>(
+        hlist_pat![address, length]: <Self::Layout as Layout>::Flat,
+        memory: &Memory<'_, Instance>,
+    ) -> Result<Self, RuntimeError>
+    where
+        Instance: InstanceWithMemory,
+        <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
+    {
+        let address = GuestPointer(address.try_into()?);
+        let length = length as u32;
+
+        (0..length)
+            .map(|index| T::load(memory, address.index::<T>(index)))
+            .collect()
     }
 }
