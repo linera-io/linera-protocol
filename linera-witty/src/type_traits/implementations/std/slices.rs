@@ -3,7 +3,7 @@
 
 //! Implementations of the custom traits for slice types.
 
-use std::borrow::Cow;
+use std::{borrow::Cow, ops::Deref};
 
 use frunk::{hlist, hlist_pat, HList};
 
@@ -130,5 +130,33 @@ where
         (0..length)
             .map(|index| T::load(memory, address.index::<T>(index)))
             .collect()
+    }
+}
+
+impl<T> WitStore for Box<[T]>
+where
+    T: WitStore,
+{
+    fn store<Instance>(
+        &self,
+        memory: &mut Memory<'_, Instance>,
+        location: GuestPointer,
+    ) -> Result<(), RuntimeError>
+    where
+        Instance: InstanceWithMemory,
+        <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
+    {
+        self.deref().store(memory, location)
+    }
+
+    fn lower<Instance>(
+        &self,
+        memory: &mut Memory<'_, Instance>,
+    ) -> Result<Self::Layout, RuntimeError>
+    where
+        Instance: InstanceWithMemory,
+        <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
+    {
+        self.deref().lower(memory)
     }
 }
