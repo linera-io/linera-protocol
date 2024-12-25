@@ -12,6 +12,69 @@ use crate::{
     WitLoad, WitStore, WitType,
 };
 
+/// A macro to implement [`WitType`] for a slice wrapper type.
+///
+/// This assumes that:
+/// - The type is `$wrapper<[T]>`
+macro_rules! impl_wit_type_as_slice {
+    ($wrapper:ident) => {
+        impl<T> WitType for $wrapper<[T]>
+        where
+            T: WitType,
+        {
+            const SIZE: u32 = <[T] as WitType>::SIZE;
+
+            type Layout = <[T] as WitType>::Layout;
+            type Dependencies = <[T] as WitType>::Dependencies;
+
+            fn wit_type_name() -> Cow<'static, str> {
+                <[T] as WitType>::wit_type_name()
+            }
+
+            fn wit_type_declaration() -> Cow<'static, str> {
+                <[T] as WitType>::wit_type_declaration()
+            }
+        }
+    };
+}
+
+/// A macro to implement [`WitStore`] for a slice wrapper type.
+///
+/// This assumes that:
+/// - The type is `$wrapper<[T]>`
+/// - The type implements `Deref<Target = [T]>`
+macro_rules! impl_wit_store_as_slice {
+    ($wrapper:ident) => {
+        impl<T> WitStore for $wrapper<[T]>
+        where
+            T: WitStore,
+        {
+            fn store<Instance>(
+                &self,
+                memory: &mut Memory<'_, Instance>,
+                location: GuestPointer,
+            ) -> Result<(), RuntimeError>
+            where
+                Instance: InstanceWithMemory,
+                <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
+            {
+                self.deref().store(memory, location)
+            }
+
+            fn lower<Instance>(
+                &self,
+                memory: &mut Memory<'_, Instance>,
+            ) -> Result<Self::Layout, RuntimeError>
+            where
+                Instance: InstanceWithMemory,
+                <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
+            {
+                self.deref().lower(memory)
+            }
+        }
+    };
+}
+
 impl<T> WitType for [T]
 where
     T: WitType,
@@ -78,23 +141,8 @@ where
     }
 }
 
-impl<T> WitType for Box<[T]>
-where
-    T: WitType,
-{
-    const SIZE: u32 = <[T] as WitType>::SIZE;
-
-    type Layout = <[T] as WitType>::Layout;
-    type Dependencies = <[T] as WitType>::Dependencies;
-
-    fn wit_type_name() -> Cow<'static, str> {
-        <[T] as WitType>::wit_type_name()
-    }
-
-    fn wit_type_declaration() -> Cow<'static, str> {
-        <[T] as WitType>::wit_type_declaration()
-    }
-}
+impl_wit_type_as_slice!(Box);
+impl_wit_store_as_slice!(Box);
 
 impl<T> WitLoad for Box<[T]>
 where
@@ -130,33 +178,5 @@ where
         (0..length)
             .map(|index| T::load(memory, address.index::<T>(index)))
             .collect()
-    }
-}
-
-impl<T> WitStore for Box<[T]>
-where
-    T: WitStore,
-{
-    fn store<Instance>(
-        &self,
-        memory: &mut Memory<'_, Instance>,
-        location: GuestPointer,
-    ) -> Result<(), RuntimeError>
-    where
-        Instance: InstanceWithMemory,
-        <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
-    {
-        self.deref().store(memory, location)
-    }
-
-    fn lower<Instance>(
-        &self,
-        memory: &mut Memory<'_, Instance>,
-    ) -> Result<Self::Layout, RuntimeError>
-    where
-        Instance: InstanceWithMemory,
-        <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
-    {
-        self.deref().lower(memory)
     }
 }
