@@ -75,6 +75,42 @@ macro_rules! impl_wit_store_as_slice {
     };
 }
 
+/// A macro to implement [`WitLoad`] for a slice wrapper type.
+///
+/// This assumes that:
+/// - The type is `$wrapper<[T]>`
+/// - The type implements `From<Box<[T]>>`
+macro_rules! impl_wit_load_as_boxed_slice {
+    ($wrapper:ident) => {
+        impl<T> WitLoad for $wrapper<[T]>
+        where
+            T: WitLoad,
+        {
+            fn load<Instance>(
+                memory: &Memory<'_, Instance>,
+                location: GuestPointer,
+            ) -> Result<Self, RuntimeError>
+            where
+                Instance: InstanceWithMemory,
+                <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
+            {
+                <Box<[T]> as WitLoad>::load(memory, location).map($wrapper::from)
+            }
+
+            fn lift_from<Instance>(
+                flat_layout: <Self::Layout as Layout>::Flat,
+                memory: &Memory<'_, Instance>,
+            ) -> Result<Self, RuntimeError>
+            where
+                Instance: InstanceWithMemory,
+                <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
+            {
+                <Box<[T]> as WitLoad>::lift_from(flat_layout, memory).map($wrapper::from)
+            }
+        }
+    };
+}
+
 impl<T> WitType for [T]
 where
     T: WitType,
@@ -183,30 +219,4 @@ where
 
 impl_wit_type_as_slice!(Rc);
 impl_wit_store_as_slice!(Rc);
-
-impl<T> WitLoad for Rc<[T]>
-where
-    T: WitLoad,
-{
-    fn load<Instance>(
-        memory: &Memory<'_, Instance>,
-        location: GuestPointer,
-    ) -> Result<Self, RuntimeError>
-    where
-        Instance: InstanceWithMemory,
-        <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
-    {
-        <Box<[T]> as WitLoad>::load(memory, location).map(Rc::from)
-    }
-
-    fn lift_from<Instance>(
-        flat_layout: <Self::Layout as Layout>::Flat,
-        memory: &Memory<'_, Instance>,
-    ) -> Result<Self, RuntimeError>
-    where
-        Instance: InstanceWithMemory,
-        <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
-    {
-        <Box<[T]> as WitLoad>::lift_from(flat_layout, memory).map(Rc::from)
-    }
-}
+impl_wit_load_as_boxed_slice!(Rc);
