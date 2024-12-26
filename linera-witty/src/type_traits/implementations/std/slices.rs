@@ -12,6 +12,20 @@ use crate::{
     WitLoad, WitStore, WitType,
 };
 
+/// A macro to implement [`WitType`], [`WitLoad`] and [`WitStore`] for a slice wrapper type.
+///
+/// This assumes that:
+/// - The type is `$wrapper<[T]>`
+/// - The type implements `From<Box<[T]>>`
+/// - The type implements `Deref<Target = [T]>`
+macro_rules! impl_wit_traits_for_slice_wrapper {
+    ($wrapper:ident) => {
+        impl_wit_type_as_slice!($wrapper);
+        impl_wit_store_as_slice!($wrapper);
+        impl_wit_load_as_boxed_slice!($wrapper);
+    };
+}
+
 /// A macro to implement [`WitType`] for a slice wrapper type.
 ///
 /// This assumes that:
@@ -217,6 +231,4 @@ where
     }
 }
 
-impl_wit_type_as_slice!(Rc);
-impl_wit_store_as_slice!(Rc);
-impl_wit_load_as_boxed_slice!(Rc);
+impl_wit_traits_for_slice_wrapper!(Rc);
