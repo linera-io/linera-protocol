@@ -3,7 +3,7 @@
 
 //! Implementations of the custom traits for slice types.
 
-use std::{borrow::Cow, ops::Deref};
+use std::{borrow::Cow, ops::Deref, rc::Rc};
 
 use frunk::{hlist, hlist_pat, HList};
 
@@ -178,5 +178,35 @@ where
         (0..length)
             .map(|index| T::load(memory, address.index::<T>(index)))
             .collect()
+    }
+}
+
+impl_wit_type_as_slice!(Rc);
+impl_wit_store_as_slice!(Rc);
+
+impl<T> WitLoad for Rc<[T]>
+where
+    T: WitLoad,
+{
+    fn load<Instance>(
+        memory: &Memory<'_, Instance>,
+        location: GuestPointer,
+    ) -> Result<Self, RuntimeError>
+    where
+        Instance: InstanceWithMemory,
+        <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
+    {
+        <Box<[T]> as WitLoad>::load(memory, location).map(Rc::from)
+    }
+
+    fn lift_from<Instance>(
+        flat_layout: <Self::Layout as Layout>::Flat,
+        memory: &Memory<'_, Instance>,
+    ) -> Result<Self, RuntimeError>
+    where
+        Instance: InstanceWithMemory,
+        <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
+    {
+        <Box<[T]> as WitLoad>::lift_from(flat_layout, memory).map(Rc::from)
     }
 }
