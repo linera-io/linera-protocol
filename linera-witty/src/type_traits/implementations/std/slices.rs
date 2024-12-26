@@ -3,7 +3,7 @@
 
 //! Implementations of the custom traits for slice types.
 
-use std::{borrow::Cow, ops::Deref, rc::Rc};
+use std::{borrow::Cow, ops::Deref, rc::Rc, sync::Arc};
 
 use frunk::{hlist, hlist_pat, HList};
 
@@ -232,3 +232,4 @@ where
 }
 
 impl_wit_traits_for_slice_wrapper!(Rc);
+impl_wit_traits_for_slice_wrapper!(Arc);
