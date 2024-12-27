@@ -209,6 +209,21 @@ fn test_heap_allocated_fields() {
     });
 }
 
+/// Check the memory size, layout and WIT declaration derived for a [`Vec`] type.
+#[test]
+fn test_vec() {
+    test_wit_type_implementation::<Vec<SimpleWrapper>>(ExpectedMetadata {
+        size: 8,
+        alignment: 4,
+        flat_layout_length: 2,
+        declaration: concat!(
+            "    record simple-wrapper {\n",
+            "        inner0: bool,\n",
+            "    }\n"
+        ),
+    });
+}
+
 /// Helper type to make visible what each metadata value is.
 #[derive(Clone, Copy, Debug)]
 struct ExpectedMetadata {
