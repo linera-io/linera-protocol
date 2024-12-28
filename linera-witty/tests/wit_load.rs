@@ -353,6 +353,16 @@ fn test_heap_allocated_fields() {
     );
 }
 
+/// Check that a [`Vec`] type is properly loaded from memory and lifted from its flat
+/// layout.
+#[test]
+fn test_vec() {
+    let expected = vec![SimpleWrapper(false), SimpleWrapper(true)];
+
+    test_load_from_memory(&[8, 0, 0, 0, 2, 0, 0, 0, 0, 1], expected.clone());
+    test_lift_from_flat_layout(hlist![0_i32, 2_i32], expected, &[0, 1]);
+}
+
 /// Tests that the type `T` and wrapped versions of it can be loaded from an `input` sequence of
 /// bytes in memory and that it matches the `expected` value.
 fn test_load_from_memory<T>(input: &[u8], expected: T)
