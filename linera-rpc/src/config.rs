@@ -10,7 +10,7 @@ use crate::simple;
 
 #[derive(Clone, Debug, clap::Parser)]
 pub struct CrossChainConfig {
-    /// Number of cross-chains messages allowed before dropping them.
+    /// Number of cross-chain messages allowed before dropping them.
     #[arg(long = "cross-chain-queue-size", default_value = "1000")]
     pub(crate) queue_size: usize,
 
