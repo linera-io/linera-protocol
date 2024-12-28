@@ -13,7 +13,8 @@ use linera_witty::{hlist, InstanceWithMemory, Layout, MockInstance, RuntimeError
 
 use self::types::{
     Branch, Enum, Leaf, RecordWithDoublePadding, SimpleWrapper, SpecializedGenericEnum,
-    SpecializedGenericStruct, StructWithHeapFields, TupleWithPadding, TupleWithoutPadding,
+    SpecializedGenericStruct, StructWithHeapFields, StructWithLists, TupleWithPadding,
+    TupleWithoutPadding,
 };
 
 /// Check that a wrapper type is properly loaded from memory and lifted from its flat layout.
@@ -361,6 +362,22 @@ fn test_vec() {
 
     test_load_from_memory(&[8, 0, 0, 0, 2, 0, 0, 0, 0, 1], expected.clone());
     test_lift_from_flat_layout(hlist![0_i32, 2_i32], expected, &[0, 1]);
+}
+
+/// Check that a type with list fields is properly loaded from memory and lifted from its
+/// flat layout.
+#[test]
+fn test_list_fields() {
+    let expected = StructWithLists {
+        vec: vec![
+            SimpleWrapper(true),
+            SimpleWrapper(true),
+            SimpleWrapper(false),
+        ],
+    };
+
+    test_load_from_memory(&[8, 0, 0, 0, 3, 0, 0, 0, 1, 1, 0], expected.clone());
+    test_lift_from_flat_layout(hlist![0_i32, 3_i32], expected, &[1, 1, 0]);
 }
 
 /// Tests that the type `T` and wrapped versions of it can be loaded from an `input` sequence of
