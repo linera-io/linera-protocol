@@ -12,7 +12,8 @@ use linera_witty::{HList, Layout, RegisterWitTypes, WitType};
 
 use self::types::{
     Branch, Enum, Leaf, RecordWithDoublePadding, SimpleWrapper, SpecializedGenericEnum,
-    SpecializedGenericStruct, StructWithHeapFields, TupleWithPadding, TupleWithoutPadding,
+    SpecializedGenericStruct, StructWithHeapFields, StructWithLists, TupleWithPadding,
+    TupleWithoutPadding,
 };
 
 /// Check the memory size, layout and WIT type declaration derived for a wrapper type.
@@ -219,6 +220,25 @@ fn test_vec() {
         declaration: concat!(
             "    record simple-wrapper {\n",
             "        inner0: bool,\n",
+            "    }\n"
+        ),
+    });
+}
+
+/// Check the memory size, layout and WIT declaration derived for a type that has list
+/// fields.
+#[test]
+fn test_list_fields() {
+    test_wit_type_implementation::<StructWithLists>(ExpectedMetadata {
+        size: 8,
+        alignment: 4,
+        flat_layout_length: 2,
+        declaration: concat!(
+            "    record simple-wrapper {\n",
+            "        inner0: bool,\n",
+            "    }\n\n",
+            "    record struct-with-lists {\n",
+            "        vec: list<simple-wrapper>,\n",
             "    }\n"
         ),
     });

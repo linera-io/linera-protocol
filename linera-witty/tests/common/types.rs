@@ -78,3 +78,9 @@ pub struct StructWithHeapFields {
     pub rced: Rc<Leaf>,
     pub arced: Arc<Enum>,
 }
+
+/// A struct that contains fields that should all be represented as lists.
+#[derive(Clone, Debug, Eq, PartialEq, WitType, WitLoad, WitStore)]
+pub struct StructWithLists {
+    pub vec: Vec<SimpleWrapper>,
+}
