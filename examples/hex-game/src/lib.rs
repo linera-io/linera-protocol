@@ -142,7 +142,7 @@ Now the first player can make a move by navigating to the URL you get by running
 mutation { makeMove(x: 4, y: 4) }
 ```
 
-And the second player player at the URL you get by running `echo "http://localhost:8080/chains/$HEX_CHAIN/applications/$APP_ID"`:
+And the second player at the URL you get by running `echo "http://localhost:8080/chains/$HEX_CHAIN/applications/$APP_ID"`:
 
 ```gql,uri=http://localhost:8081/chains/$HEX_CHAIN/applications/$APP_ID
 mutation { makeMove(x: 4, y: 5) }
