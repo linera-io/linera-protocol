@@ -1,0 +1,707 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/linera-alloy-rpc-types-trace-0.1.0/src/geth/pre_state.rs`."><title>pre_state.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="linera_alloy_rpc_types_trace" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="icon" href="https://raw.githubusercontent.com/alloy-rs/core/main/assets/favicon.ico"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<a href="#2" id="2">2</a>
+<a href="#3" id="3">3</a>
+<a href="#4" id="4">4</a>
+<a href="#5" id="5">5</a>
+<a href="#6" id="6">6</a>
+<a href="#7" id="7">7</a>
+<a href="#8" id="8">8</a>
+<a href="#9" id="9">9</a>
+<a href="#10" id="10">10</a>
+<a href="#11" id="11">11</a>
+<a href="#12" id="12">12</a>
+<a href="#13" id="13">13</a>
+<a href="#14" id="14">14</a>
+<a href="#15" id="15">15</a>
+<a href="#16" id="16">16</a>
+<a href="#17" id="17">17</a>
+<a href="#18" id="18">18</a>
+<a href="#19" id="19">19</a>
+<a href="#20" id="20">20</a>
+<a href="#21" id="21">21</a>
+<a href="#22" id="22">22</a>
+<a href="#23" id="23">23</a>
+<a href="#24" id="24">24</a>
+<a href="#25" id="25">25</a>
+<a href="#26" id="26">26</a>
+<a href="#27" id="27">27</a>
+<a href="#28" id="28">28</a>
+<a href="#29" id="29">29</a>
+<a href="#30" id="30">30</a>
+<a href="#31" id="31">31</a>
+<a href="#32" id="32">32</a>
+<a href="#33" id="33">33</a>
+<a href="#34" id="34">34</a>
+<a href="#35" id="35">35</a>
+<a href="#36" id="36">36</a>
+<a href="#37" id="37">37</a>
+<a href="#38" id="38">38</a>
+<a href="#39" id="39">39</a>
+<a href="#40" id="40">40</a>
+<a href="#41" id="41">41</a>
+<a href="#42" id="42">42</a>
+<a href="#43" id="43">43</a>
+<a href="#44" id="44">44</a>
+<a href="#45" id="45">45</a>
+<a href="#46" id="46">46</a>
+<a href="#47" id="47">47</a>
+<a href="#48" id="48">48</a>
+<a href="#49" id="49">49</a>
+<a href="#50" id="50">50</a>
+<a href="#51" id="51">51</a>
+<a href="#52" id="52">52</a>
+<a href="#53" id="53">53</a>
+<a href="#54" id="54">54</a>
+<a href="#55" id="55">55</a>
+<a href="#56" id="56">56</a>
+<a href="#57" id="57">57</a>
+<a href="#58" id="58">58</a>
+<a href="#59" id="59">59</a>
+<a href="#60" id="60">60</a>
+<a href="#61" id="61">61</a>
+<a href="#62" id="62">62</a>
+<a href="#63" id="63">63</a>
+<a href="#64" id="64">64</a>
+<a href="#65" id="65">65</a>
+<a href="#66" id="66">66</a>
+<a href="#67" id="67">67</a>
+<a href="#68" id="68">68</a>
+<a href="#69" id="69">69</a>
+<a href="#70" id="70">70</a>
+<a href="#71" id="71">71</a>
+<a href="#72" id="72">72</a>
+<a href="#73" id="73">73</a>
+<a href="#74" id="74">74</a>
+<a href="#75" id="75">75</a>
+<a href="#76" id="76">76</a>
+<a href="#77" id="77">77</a>
+<a href="#78" id="78">78</a>
+<a href="#79" id="79">79</a>
+<a href="#80" id="80">80</a>
+<a href="#81" id="81">81</a>
+<a href="#82" id="82">82</a>
+<a href="#83" id="83">83</a>
+<a href="#84" id="84">84</a>
+<a href="#85" id="85">85</a>
+<a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
+<a href="#88" id="88">88</a>
+<a href="#89" id="89">89</a>
+<a href="#90" id="90">90</a>
+<a href="#91" id="91">91</a>
+<a href="#92" id="92">92</a>
+<a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
+<a href="#160" id="160">160</a>
+<a href="#161" id="161">161</a>
+<a href="#162" id="162">162</a>
+<a href="#163" id="163">163</a>
+<a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
+<a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
+<a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
+<a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a>
+<a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
+<a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a>
+<a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a>
+<a href="#210" id="210">210</a>
+<a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
+<a href="#234" id="234">234</a>
+<a href="#235" id="235">235</a>
+<a href="#236" id="236">236</a>
+<a href="#237" id="237">237</a>
+<a href="#238" id="238">238</a>
+<a href="#239" id="239">239</a>
+<a href="#240" id="240">240</a>
+<a href="#241" id="241">241</a>
+<a href="#242" id="242">242</a>
+<a href="#243" id="243">243</a>
+<a href="#244" id="244">244</a>
+<a href="#245" id="245">245</a>
+<a href="#246" id="246">246</a>
+<a href="#247" id="247">247</a>
+<a href="#248" id="248">248</a>
+<a href="#249" id="249">249</a>
+<a href="#250" id="250">250</a>
+<a href="#251" id="251">251</a>
+<a href="#252" id="252">252</a>
+<a href="#253" id="253">253</a>
+<a href="#254" id="254">254</a>
+<a href="#255" id="255">255</a>
+<a href="#256" id="256">256</a>
+<a href="#257" id="257">257</a>
+<a href="#258" id="258">258</a>
+<a href="#259" id="259">259</a>
+<a href="#260" id="260">260</a>
+<a href="#261" id="261">261</a>
+<a href="#262" id="262">262</a>
+<a href="#263" id="263">263</a>
+<a href="#264" id="264">264</a>
+<a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a>
+<a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
+<a href="#273" id="273">273</a>
+<a href="#274" id="274">274</a>
+<a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
+<a href="#279" id="279">279</a>
+<a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a>
+<a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
+<a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
+<a href="#318" id="318">318</a>
+<a href="#319" id="319">319</a>
+<a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a>
+<a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
+<a href="#325" id="325">325</a>
+<a href="#326" id="326">326</a>
+<a href="#327" id="327">327</a>
+<a href="#328" id="328">328</a>
+<a href="#329" id="329">329</a>
+<a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
+<a href="#336" id="336">336</a>
+<a href="#337" id="337">337</a>
+<a href="#338" id="338">338</a>
+<a href="#339" id="339">339</a>
+<a href="#340" id="340">340</a>
+<a href="#341" id="341">341</a>
+<a href="#342" id="342">342</a>
+<a href="#343" id="343">343</a>
+<a href="#344" id="344">344</a>
+<a href="#345" id="345">345</a>
+<a href="#346" id="346">346</a>
+<a href="#347" id="347">347</a>
+<a href="#348" id="348">348</a>
+<a href="#349" id="349">349</a>
+<a href="#350" id="350">350</a>
+<a href="#351" id="351">351</a>
+<a href="#352" id="352">352</a>
+<a href="#353" id="353">353</a>
+</pre></div><pre class="rust"><code><span class="doccomment">//! Pre-state Geth tracer types.
+
+</span><span class="kw">use </span>linera_alloy_primitives::{Address, Bytes, B256, U256};
+<span class="kw">use </span>serde::{Deserialize, Serialize};
+<span class="kw">use </span>std::collections::{btree_map, BTreeMap};
+
+<span class="doccomment">/// A tracer that records [AccountState]s.
+/// The prestate tracer has two modes: prestate and diff
+///
+/// &lt;https://github.com/ethereum/go-ethereum/blob/91cb6f863a965481e51d5d9c0e5ccd54796fd967/eth/tracers/native/prestate.go#L38&gt;
+</span><span class="attr">#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+</span><span class="kw">pub enum </span>PreStateFrame {
+    <span class="doccomment">/// The default mode returns the accounts necessary to execute a given transaction.
+    ///
+    /// It re-executes the given transaction and tracks every part of state that is touched.
+    </span>Default(PreStateMode),
+    <span class="doccomment">/// Diff mode returns the differences between the transaction's pre and post-state (i.e. what
+    /// changed because the transaction happened).
+    </span>Diff(DiffMode),
+}
+
+<span class="kw">impl </span>PreStateFrame {
+    <span class="doccomment">/// Returns true if this trace was requested without diffmode.
+    </span><span class="kw">pub const fn </span>is_default(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+        <span class="macro">matches!</span>(<span class="self">self</span>, <span class="self">Self</span>::Default(<span class="kw">_</span>))
+    }
+
+    <span class="doccomment">/// Returns true if this trace was requested with diffmode.
+    </span><span class="kw">pub const fn </span>is_diff(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+        <span class="macro">matches!</span>(<span class="self">self</span>, <span class="self">Self</span>::Diff(<span class="kw">_</span>))
+    }
+
+    <span class="doccomment">/// Returns the account states after the transaction is executed if this trace was requested
+    /// without diffmode.
+    </span><span class="kw">pub const fn </span>as_default(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>PreStateMode&gt; {
+        <span class="kw">match </span><span class="self">self </span>{
+            <span class="self">Self</span>::Default(mode) =&gt; <span class="prelude-val">Some</span>(mode),
+            <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
+        }
+    }
+
+    <span class="doccomment">/// Returns the account states before and after the transaction is executed if this trace was
+    /// requested with diffmode.
+    </span><span class="kw">pub const fn </span>as_diff(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>DiffMode&gt; {
+        <span class="kw">match </span><span class="self">self </span>{
+            <span class="self">Self</span>::Diff(mode) =&gt; <span class="prelude-val">Some</span>(mode),
+            <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
+        }
+    }
+}
+
+<span class="doccomment">/// Includes all the account states necessary to execute a given transaction.
+///
+/// This corresponds to the default mode of the [PreStateConfig].
+///
+/// The [AccountState]'s storage will include all touched slots of an account.
+</span><span class="attr">#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>PreStateMode(<span class="kw">pub </span>BTreeMap&lt;Address, AccountState&gt;);
+
+<span class="doccomment">/// Represents the account states before and after the transaction is executed.
+///
+/// This corresponds to the [DiffMode] of the [PreStateConfig].
+///
+/// This will only contain changed [AccountState]s, created accounts will not be included in the pre
+/// state and selfdestructed accounts will not be included in the post state.
+</span><span class="attr">#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+</span><span class="kw">pub struct </span>DiffMode {
+    <span class="doccomment">/// The account states after the transaction is executed.
+    </span><span class="kw">pub </span>post: BTreeMap&lt;Address, AccountState&gt;,
+    <span class="doccomment">/// The account states before the transaction is executed.
+    </span><span class="kw">pub </span>pre: BTreeMap&lt;Address, AccountState&gt;,
+}
+
+<span class="comment">// === impl DiffMode ===
+
+</span><span class="kw">impl </span>DiffMode {
+    <span class="doccomment">/// The sets of the [DiffMode] should only contain changed [AccountState]s.
+    ///
+    /// This will remove all unchanged [AccountState]s from the sets.
+    ///
+    /// In other words it removes entries that are equal (unchanged) in both the pre and post sets.
+    </span><span class="kw">pub fn </span>retain_changed(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self </span>{
+        <span class="self">self</span>.pre.retain(|address, pre| {
+            <span class="kw">if let </span>btree_map::Entry::Occupied(entry) = <span class="self">self</span>.post.entry(<span class="kw-2">*</span>address) {
+                <span class="kw">if </span>entry.get() == pre {
+                    <span class="comment">// remove unchanged account state from both sets
+                    </span>entry.remove();
+                    <span class="kw">return </span><span class="bool-val">false</span>;
+                }
+            }
+
+            <span class="bool-val">true
+        </span>});
+        <span class="self">self
+    </span>}
+
+    <span class="doccomment">/// Removes all zero values from the storage of the [AccountState]s.
+    </span><span class="kw">pub fn </span>remove_zero_storage_values(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+        <span class="kw">for </span>state <span class="kw">in </span><span class="self">self</span>.pre.values_mut().chain(<span class="self">self</span>.post.values_mut()) {
+            state.storage.retain(|<span class="kw">_</span>, value| <span class="kw-2">*</span>value != B256::ZERO);
+        }
+    }
+}
+
+<span class="doccomment">/// Helper type for [DiffMode] to represent a specific set
+</span><span class="attr">#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+</span><span class="kw">pub enum </span>DiffStateKind {
+    <span class="doccomment">/// Corresponds to the pre state of the [DiffMode]
+    </span>Pre,
+    <span class="doccomment">/// Corresponds to the post state of the [DiffMode]
+    </span>Post,
+}
+
+<span class="kw">impl </span>DiffStateKind {
+    <span class="doccomment">/// Returns true if this is the pre state of the [DiffMode]
+    </span><span class="kw">pub const fn </span>is_pre(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+        <span class="macro">matches!</span>(<span class="self">self</span>, <span class="self">Self</span>::Pre)
+    }
+
+    <span class="doccomment">/// Returns true if this is the post state of the [DiffMode]
+    </span><span class="kw">pub const fn </span>is_post(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+        <span class="macro">matches!</span>(<span class="self">self</span>, <span class="self">Self</span>::Post)
+    }
+}
+
+<span class="doccomment">/// Represents the state of an account.
+</span><span class="attr">#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>AccountState {
+    <span class="doccomment">/// The optional balance of the account.
+    </span><span class="attr">#[serde(default, skip_serializing_if = <span class="string">"Option::is_none"</span>)]
+    </span><span class="kw">pub </span>balance: <span class="prelude-ty">Option</span>&lt;U256&gt;,
+    <span class="doccomment">/// The optional code of the account.
+    </span><span class="attr">#[serde(default, skip_serializing_if = <span class="string">"Option::is_none"</span>)]
+    </span><span class="kw">pub </span>code: <span class="prelude-ty">Option</span>&lt;Bytes&gt;,
+    <span class="doccomment">/// The optional nonce of the account.
+    </span><span class="attr">#[serde(default, skip_serializing_if = <span class="string">"Option::is_none"</span>)]
+    </span><span class="kw">pub </span>nonce: <span class="prelude-ty">Option</span>&lt;u64&gt;,
+    <span class="doccomment">/// The storage of the account.
+    </span><span class="attr">#[serde(default, skip_serializing_if = <span class="string">"BTreeMap::is_empty"</span>)]
+    </span><span class="kw">pub </span>storage: BTreeMap&lt;B256, B256&gt;,
+}
+
+<span class="kw">impl </span>AccountState {
+    <span class="doccomment">/// Creates a new `AccountState` with the given account info.
+    ///
+    /// If balance is zero, it will be omitted.
+    /// If nonce is zero, it will be omitted.
+    /// If code is empty, it will be omitted.
+    </span><span class="kw">pub fn </span>from_account_info(nonce: u64, balance: U256, code: <span class="prelude-ty">Option</span>&lt;Bytes&gt;) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{
+            balance: <span class="prelude-val">Some</span>(balance),
+            code: code.filter(|code| !code.is_empty()),
+            nonce: (nonce != <span class="number">0</span>).then_some(nonce),
+            storage: Default::default(),
+        }
+    }
+
+    <span class="doccomment">/// Removes balance,nonce or code if they match the given account info.
+    ///
+    /// This is useful for comparing pre vs post state and only keep changed values in post state.
+    </span><span class="kw">pub fn </span>remove_matching_account_info(<span class="kw-2">&amp;mut </span><span class="self">self</span>, other: <span class="kw-2">&amp;</span><span class="self">Self</span>) {
+        <span class="kw">if </span><span class="self">self</span>.balance == other.balance {
+            <span class="self">self</span>.balance = <span class="prelude-val">None</span>;
+        }
+        <span class="kw">if </span><span class="self">self</span>.nonce == other.nonce {
+            <span class="self">self</span>.nonce = <span class="prelude-val">None</span>;
+        }
+        <span class="kw">if </span><span class="self">self</span>.code == other.code {
+            <span class="self">self</span>.code = <span class="prelude-val">None</span>;
+        }
+    }
+}
+
+<span class="doccomment">/// Helper type to track the kind of change of an [AccountState].
+</span><span class="attr">#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+</span><span class="kw">pub enum </span>AccountChangeKind {
+    <span class="doccomment">/// The account was modified.
+    </span><span class="attr">#[default]
+    </span>Modify,
+    <span class="doccomment">/// The account was created.
+    </span>Create,
+    <span class="doccomment">/// The account was selfdestructed.
+    </span>SelfDestruct,
+}
+
+<span class="kw">impl </span>AccountChangeKind {
+    <span class="doccomment">/// Returns true if the account was created
+    </span><span class="kw">pub const fn </span>is_created(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+        <span class="macro">matches!</span>(<span class="self">self</span>, <span class="self">Self</span>::Create)
+    }
+
+    <span class="doccomment">/// Returns true the account was modified
+    </span><span class="kw">pub const fn </span>is_modified(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+        <span class="macro">matches!</span>(<span class="self">self</span>, <span class="self">Self</span>::Modify)
+    }
+
+    <span class="doccomment">/// Returns true the account was modified
+    </span><span class="kw">pub const fn </span>is_selfdestruct(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+        <span class="macro">matches!</span>(<span class="self">self</span>, <span class="self">Self</span>::SelfDestruct)
+    }
+}
+
+<span class="doccomment">/// The config for the prestate tracer.
+</span><span class="attr">#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = <span class="string">"camelCase"</span>)]
+</span><span class="kw">pub struct </span>PreStateConfig {
+    <span class="doccomment">/// If `diffMode` is set to true, the response frame includes all the account and storage diffs
+    /// for the transaction. If it's missing or set to false it only returns the accounts and
+    /// storage necessary to execute the transaction.
+    </span><span class="attr">#[serde(default, skip_serializing_if = <span class="string">"Option::is_none"</span>)]
+    </span><span class="kw">pub </span>diff_mode: <span class="prelude-ty">Option</span>&lt;bool&gt;,
+}
+
+<span class="kw">impl </span>PreStateConfig {
+    <span class="doccomment">/// Returns true if this trace was requested with diffmode.
+    </span><span class="attr">#[inline]
+    </span><span class="kw">pub fn </span>is_diff_mode(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+        <span class="self">self</span>.diff_mode.unwrap_or_default()
+    }
+
+    <span class="doccomment">/// Is default mode if diff_mode is not set
+    </span><span class="attr">#[inline]
+    </span><span class="kw">pub fn </span>is_default_mode(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+        !<span class="self">self</span>.is_diff_mode()
+    }
+}
+
+<span class="attr">#[cfg(test)]
+</span><span class="kw">mod </span>tests {
+    <span class="kw">use super</span>::<span class="kw-2">*</span>;
+    <span class="kw">use </span><span class="kw">crate</span>::geth::<span class="kw-2">*</span>;
+
+    <span class="comment">// See &lt;https://github.com/ethereum/go-ethereum/tree/master/eth/tracers/internal/tracetest/testdata&gt;
+    </span><span class="kw">const </span>DEFAULT: <span class="kw-2">&amp;</span>str = <span class="macro">include_str!</span>(<span class="string">"../../test_data/pre_state_tracer/default.json"</span>);
+    <span class="kw">const </span>LEGACY: <span class="kw-2">&amp;</span>str = <span class="macro">include_str!</span>(<span class="string">"../../test_data/pre_state_tracer/legacy.json"</span>);
+    <span class="kw">const </span>DIFF_MODE: <span class="kw-2">&amp;</span>str = <span class="macro">include_str!</span>(<span class="string">"../../test_data/pre_state_tracer/diff_mode.json"</span>);
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>test_serialize_pre_state_trace() {
+        <span class="kw">let </span><span class="kw-2">mut </span>opts = GethDebugTracingCallOptions::default();
+        opts.tracing_options.config.disable_storage = <span class="prelude-val">Some</span>(<span class="bool-val">false</span>);
+        opts.tracing_options.tracer =
+            <span class="prelude-val">Some</span>(GethDebugTracerType::BuiltInTracer(GethDebugBuiltInTracerType::PreStateTracer));
+        opts.tracing_options.tracer_config =
+            serde_json::to_value(PreStateConfig { diff_mode: <span class="prelude-val">Some</span>(<span class="bool-val">true</span>) }).unwrap().into();
+
+        <span class="macro">assert_eq!</span>(
+            serde_json::to_string(<span class="kw-2">&amp;</span>opts).unwrap(),
+            <span class="string">r#"{"disableStorage":false,"tracer":"prestateTracer","tracerConfig":{"diffMode":true}}"#
+        </span>);
+    }
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>test_deserialize_pre_state_trace() {
+        <span class="kw">let </span>trace: PreStateFrame = serde_json::from_str(DEFAULT).unwrap();
+        <span class="kw">match </span>trace {
+            PreStateFrame::Default(PreStateMode(<span class="kw">_</span>)) =&gt; {}
+            <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(),
+        }
+        <span class="kw">let </span>_trace: PreStateFrame = serde_json::from_str(LEGACY).unwrap();
+        <span class="kw">let </span>trace: PreStateFrame = serde_json::from_str(DIFF_MODE).unwrap();
+        <span class="kw">match </span>trace {
+            PreStateFrame::Diff(DiffMode { pre: _pre, post: _post }) =&gt; {}
+            <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(),
+        }
+    }
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>test_is_diff_mode() {
+        <span class="macro">assert!</span>(PreStateConfig { diff_mode: <span class="prelude-val">Some</span>(<span class="bool-val">true</span>) }.is_diff_mode());
+        <span class="macro">assert!</span>(!PreStateConfig { diff_mode: <span class="prelude-val">Some</span>(<span class="bool-val">false</span>) }.is_diff_mode());
+        <span class="macro">assert!</span>(!PreStateConfig { diff_mode: <span class="prelude-val">None </span>}.is_diff_mode());
+    }
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>parse_prestate_default_resp() {
+        <span class="kw">let </span>s = <span class="string">r#"{
+  "0x0000000000000000000000000000000000000002": {
+    "balance": "0x0"
+  },
+  "0x008b3b2f992c0e14edaa6e2c662bec549caa8df1": {
+    "balance": "0x2638035a26d133809"
+  },
+  "0x35a9f94af726f07b5162df7e828cc9dc8439e7d0": {
+    "balance": "0x7a48734599f7284",
+    "nonce": 1133
+  },
+  "0xc8ba32cab1757528daf49033e3673fae77dcf05d": {
+    "balance": "0x0",
+    "code": "0x",
+    "nonce": 1,
+    "storage": {
+      "0x0000000000000000000000000000000000000000000000000000000000000000": "0x000000000000000000000000000000000000000000000000000000000024aea6",
+      "0x59fb7853eb21f604d010b94c123acbeae621f09ce15ee5d7616485b1e78a72e9": "0x00000000000000c42b56a52aedf18667c8ae258a0280a8912641c80c48cd9548",
+      "0x8d8ebb65ec00cb973d4fe086a607728fd1b9de14aa48208381eed9592f0dee9a": "0x00000000000000784ae4881e40b1f5ebb4437905fbb8a5914454123b0293b35f",
+      "0xff896b09014882056009dedb136458f017fcef9a4729467d0d00b4fd413fb1f1": "0x000000000000000e78ac39cb1c20e9edc753623b153705d0ccc487e31f9d6749"
+    }
+  }
+}
+"#</span>;
+        <span class="kw">let </span>pre_state: PreStateFrame = serde_json::from_str(s).unwrap();
+        <span class="macro">assert!</span>(pre_state.is_default());
+    }
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>parse_prestate_diff_resp() {
+        <span class="kw">let </span>s = <span class="string">r#"{
+  "post": {
+    "0x35a9f94af726f07b5162df7e828cc9dc8439e7d0": {
+      "nonce": 1135
+    }
+  },
+  "pre": {
+    "0x35a9f94af726f07b5162df7e828cc9dc8439e7d0": {
+      "balance": "0x7a48429e177130a",
+      "nonce": 1134
+    }
+  }
+}
+"#</span>;
+        <span class="kw">let </span>pre_state: PreStateFrame = serde_json::from_str(s).unwrap();
+        <span class="macro">assert!</span>(pre_state.is_diff());
+    }
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>test_retain_changed_accounts() {
+        <span class="kw">let </span>s = <span class="string">r#"{
+  "post": {
+    "0x35a9f94af726f07b5162df7e828cc9dc8439e7d0": {
+      "nonce": 1135
+    }
+  },
+  "pre": {
+    "0x35a9f94af726f07b5162df7e828cc9dc8439e7d0": {
+      "balance": "0x7a48429e177130a",
+      "nonce": 1134
+    }
+  }
+}
+"#</span>;
+        <span class="kw">let </span>diff: DiffMode = serde_json::from_str(s).unwrap();
+        <span class="kw">let </span><span class="kw-2">mut </span>diff_changed = diff.clone();
+        diff_changed.retain_changed();
+        <span class="comment">// different entries
+        </span><span class="macro">assert_eq!</span>(diff_changed, diff);
+
+        diff_changed.pre = diff_changed.post.clone();
+        diff_changed.retain_changed();
+        <span class="macro">assert!</span>(diff_changed.post.is_empty());
+        <span class="macro">assert!</span>(diff_changed.pre.is_empty());
+    }
+}
+</code></pre></div></section></main></body></html>

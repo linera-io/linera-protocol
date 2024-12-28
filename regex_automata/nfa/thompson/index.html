@@ -1,0 +1,57 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Defines a Thompson NFA and provides the `PikeVM` and `BoundedBacktracker` regex engines."><title>regex_automata::nfa::thompson - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="regex_automata" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../regex_automata/index.html">regex_automata</a><span class="version">0.4.7</span></h2></div><h2 class="location"><a href="#">Module thompson</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li></ul></section><h2><a href="../index.html">In regex_automata::nfa</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../../index.html">regex_automata</a>::<wbr><a href="../index.html">nfa</a>::<wbr><a class="mod" href="#">thompson</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/regex_automata/nfa/thompson/mod.rs.html#1-81">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Defines a Thompson NFA and provides the <a href="pikevm/struct.PikeVM.html" title="struct regex_automata::nfa::thompson::pikevm::PikeVM"><code>PikeVM</code></a> and
+<a href="backtrack/struct.BoundedBacktracker.html" title="struct regex_automata::nfa::thompson::backtrack::BoundedBacktracker"><code>BoundedBacktracker</code></a> regex engines.</p>
+<p>A Thompson NFA (non-deterministic finite automaton) is arguably <em>the</em> central
+data type in this library. It is the result of what is commonly referred to as
+“regex compilation.” That is, turning a regex pattern from its concrete syntax
+string into something that can run a search looks roughly like this:</p>
+<ul>
+<li>A <code>&amp;str</code> is parsed into a <a href="../../../regex_syntax/ast/enum.Ast.html" title="enum regex_syntax::ast::Ast"><code>regex-syntax::ast::Ast</code></a>.</li>
+<li>An <code>Ast</code> is translated into a <a href="../../../regex_syntax/hir/struct.Hir.html" title="struct regex_syntax::hir::Hir"><code>regex-syntax::hir::Hir</code></a>.</li>
+<li>An <code>Hir</code> is compiled into a <a href="struct.NFA.html" title="struct regex_automata::nfa::thompson::NFA"><code>NFA</code></a>.</li>
+<li>The <code>NFA</code> is then used to build one of a few different regex engines:
+<ul>
+<li>An <code>NFA</code> is used directly in the <code>PikeVM</code> and <code>BoundedBacktracker</code> engines.</li>
+<li>An <code>NFA</code> is used by a <a href="../../hybrid/index.html" title="mod regex_automata::hybrid">hybrid NFA/DFA</a> to build out a DFA’s
+transition table at search time.</li>
+<li>An <code>NFA</code>, assuming it is one-pass, is used to build a full
+<a href="../../dfa/onepass/index.html" title="mod regex_automata::dfa::onepass">one-pass DFA</a> ahead of time.</li>
+<li>An <code>NFA</code> is used to build a <a href="../../dfa/index.html" title="mod regex_automata::dfa">full DFA</a> ahead of time.</li>
+</ul>
+</li>
+</ul>
+<p>The <a href="../../meta/index.html" title="mod regex_automata::meta"><code>meta</code></a> regex engine makes all of these choices for you based
+on various criteria. However, if you have a lower level use case, <em>you</em> can
+build any of the above regex engines and use them directly. But you must start
+here by building an <code>NFA</code>.</p>
+<h2 id="details"><a class="doc-anchor" href="#details">§</a>Details</h2>
+<p>It is perhaps worth expanding a bit more on what it means to go through the
+<code>&amp;str</code>-&gt;<code>Ast</code>-&gt;<code>Hir</code>-&gt;<code>NFA</code> process.</p>
+<ul>
+<li>Parsing a string into an <code>Ast</code> gives it a structured representation.
+Crucially, the size and amount of work done in this step is proportional to the
+size of the original string. No optimization or Unicode handling is done at
+this point. This means that parsing into an <code>Ast</code> has very predictable costs.
+Moreover, an <code>Ast</code> can be roundtripped back to its original pattern string as
+written.</li>
+<li>Translating an <code>Ast</code> into an <code>Hir</code> is a process by which the structured
+representation is simplified down to its most fundamental components.
+Translation deals with flags such as case insensitivity by converting things
+like <code>(?i:a)</code> to <code>[Aa]</code>. Translation is also where Unicode tables are consulted
+to resolve things like <code>\p{Emoji}</code> and <code>\p{Greek}</code>. It also flattens each
+character class, regardless of how deeply nested it is, into a single sequence
+of non-overlapping ranges. All the various literal forms are thrown out in
+favor of one common representation. Overall, the <code>Hir</code> is small enough to fit
+into your head and makes analysis and other tasks much simpler.</li>
+<li>Compiling an <code>Hir</code> into an <code>NFA</code> formulates the regex into a finite state
+machine whose transitions are defined over bytes. For example, an <code>Hir</code> might
+have a Unicode character class corresponding to a sequence of ranges defined
+in terms of <code>char</code>. Compilation is then responsible for turning those ranges
+into a UTF-8 automaton. That is, an automaton that matches the UTF-8 encoding
+of just the codepoints specified by those ranges. Otherwise, the main job of
+an <code>NFA</code> is to serve as a byte-code of sorts for a virtual machine. It can be
+seen as a sequence of instructions for how to match a regex.</li>
+</ul>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="backtrack/index.html" title="mod regex_automata::nfa::thompson::backtrack">backtrack</a></div><div class="desc docblock-short">An NFA backed bounded backtracker for executing regex searches with capturing
+groups.</div></li><li><div class="item-name"><a class="mod" href="pikevm/index.html" title="mod regex_automata::nfa::thompson::pikevm">pikevm</a></div><div class="desc docblock-short">An NFA backed Pike VM for executing regex searches with capturing groups.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.BuildError.html" title="struct regex_automata::nfa::thompson::BuildError">BuildError</a></div><div class="desc docblock-short">An error that can occurred during the construction of a thompson NFA.</div></li><li><div class="item-name"><a class="struct" href="struct.Builder.html" title="struct regex_automata::nfa::thompson::Builder">Builder</a></div><div class="desc docblock-short">An abstraction for building Thompson NFAs by hand.</div></li><li><div class="item-name"><a class="struct" href="struct.Compiler.html" title="struct regex_automata::nfa::thompson::Compiler">Compiler</a></div><div class="desc docblock-short">A builder for compiling an NFA from a regex’s high-level intermediate
+representation (HIR).</div></li><li><div class="item-name"><a class="struct" href="struct.Config.html" title="struct regex_automata::nfa::thompson::Config">Config</a></div><div class="desc docblock-short">The configuration used for a Thompson NFA compiler.</div></li><li><div class="item-name"><a class="struct" href="struct.DenseTransitions.html" title="struct regex_automata::nfa::thompson::DenseTransitions">DenseTransitions</a></div><div class="desc docblock-short">A sequence of transitions used to represent a dense state.</div></li><li><div class="item-name"><a class="struct" href="struct.NFA.html" title="struct regex_automata::nfa::thompson::NFA">NFA</a></div><div class="desc docblock-short">A byte oriented Thompson non-deterministic finite automaton (NFA).</div></li><li><div class="item-name"><a class="struct" href="struct.PatternIter.html" title="struct regex_automata::nfa::thompson::PatternIter">PatternIter</a></div><div class="desc docblock-short">An iterator over all pattern IDs in an NFA.</div></li><li><div class="item-name"><a class="struct" href="struct.SparseTransitions.html" title="struct regex_automata::nfa::thompson::SparseTransitions">SparseTransitions</a></div><div class="desc docblock-short">A sequence of transitions used to represent a sparse state.</div></li><li><div class="item-name"><a class="struct" href="struct.Transition.html" title="struct regex_automata::nfa::thompson::Transition">Transition</a></div><div class="desc docblock-short">A single transition to another state.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.State.html" title="enum regex_automata::nfa::thompson::State">State</a></div><div class="desc docblock-short">A state in an NFA.</div></li><li><div class="item-name"><a class="enum" href="enum.WhichCaptures.html" title="enum regex_automata::nfa::thompson::WhichCaptures">WhichCaptures</a></div><div class="desc docblock-short">A configuration indicating which kinds of
+<a href="enum.State.html#variant.Capture" title="variant regex_automata::nfa::thompson::State::Capture"><code>State::Capture</code></a> states to include.</div></li></ul></section></div></main></body></html>

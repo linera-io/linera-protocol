@@ -1,0 +1,65 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Serde"><title>serde - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="serde" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../serde/index.html">serde</a><span class="version">1.0.210</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#macros">Macros</a></li><li><a href="#traits">Traits</a></li><li><a href="#derives">Derive Macros</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">serde</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/serde/lib.rs.html#1-347">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="serde"><a class="doc-anchor" href="#serde">§</a>Serde</h2>
+<p>Serde is a framework for <em><strong>ser</strong></em>ializing and <em><strong>de</strong></em>serializing Rust data
+structures efficiently and generically.</p>
+<p>The Serde ecosystem consists of data structures that know how to serialize
+and deserialize themselves along with data formats that know how to
+serialize and deserialize other things. Serde provides the layer by which
+these two groups interact with each other, allowing any supported data
+structure to be serialized and deserialized using any supported data format.</p>
+<p>See the Serde website <a href="https://serde.rs/">https://serde.rs/</a> for additional documentation and
+usage examples.</p>
+<h3 id="design"><a class="doc-anchor" href="#design">§</a>Design</h3>
+<p>Where many other languages rely on runtime reflection for serializing data,
+Serde is instead built on Rust’s powerful trait system. A data structure
+that knows how to serialize and deserialize itself is one that implements
+Serde’s <code>Serialize</code> and <code>Deserialize</code> traits (or uses Serde’s derive
+attribute to automatically generate implementations at compile time). This
+avoids any overhead of reflection or runtime type information. In fact in
+many situations the interaction between data structure and data format can
+be completely optimized away by the Rust compiler, leaving Serde
+serialization to perform the same speed as a handwritten serializer for the
+specific selection of data structure and data format.</p>
+<h3 id="data-formats"><a class="doc-anchor" href="#data-formats">§</a>Data formats</h3>
+<p>The following is a partial list of data formats that have been implemented
+for Serde by the community.</p>
+<ul>
+<li><a href="https://github.com/serde-rs/json">JSON</a>, the ubiquitous JavaScript Object Notation used by many HTTP APIs.</li>
+<li><a href="https://github.com/jamesmunns/postcard">Postcard</a>, a no_std and embedded-systems friendly compact binary format.</li>
+<li><a href="https://github.com/enarx/ciborium">CBOR</a>, a Concise Binary Object Representation designed for small message
+size without the need for version negotiation.</li>
+<li><a href="https://github.com/dtolnay/serde-yaml">YAML</a>, a self-proclaimed human-friendly configuration language that ain’t
+markup language.</li>
+<li><a href="https://github.com/3Hren/msgpack-rust">MessagePack</a>, an efficient binary format that resembles a compact JSON.</li>
+<li><a href="https://docs.rs/toml">TOML</a>, a minimal configuration format used by <a href="https://doc.rust-lang.org/cargo/reference/manifest.html">Cargo</a>.</li>
+<li><a href="https://github.com/birkenfeld/serde-pickle">Pickle</a>, a format common in the Python world.</li>
+<li><a href="https://github.com/ron-rs/ron">RON</a>, a Rusty Object Notation.</li>
+<li><a href="https://github.com/mongodb/bson-rust">BSON</a>, the data storage and network transfer format used by MongoDB.</li>
+<li><a href="https://docs.rs/apache-avro">Avro</a>, a binary format used within Apache Hadoop, with support for schema
+definition.</li>
+<li><a href="https://github.com/callum-oakley/json5-rs">JSON5</a>, a superset of JSON including some productions from ES5.</li>
+<li><a href="https://docs.rs/serde_qs">URL</a> query strings, in the x-www-form-urlencoded format.</li>
+<li><a href="https://github.com/dtolnay/serde-starlark">Starlark</a>, the format used for describing build targets by the Bazel and
+Buck build systems. <em>(serialization only)</em></li>
+<li><a href="https://github.com/softprops/envy">Envy</a>, a way to deserialize environment variables into Rust structs.
+<em>(deserialization only)</em></li>
+<li><a href="https://github.com/softprops/envy-store">Envy Store</a>, a way to deserialize <a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-parameter-store.html">AWS Parameter Store</a> parameters into
+Rust structs. <em>(deserialization only)</em></li>
+<li><a href="https://github.com/rotty/lexpr-rs">S-expressions</a>, the textual representation of code and data used by the
+Lisp language family.</li>
+<li><a href="https://docs.rs/zvariant">D-Bus</a>’s binary wire format.</li>
+<li><a href="https://github.com/google/flatbuffers/tree/master/rust/flexbuffers">FlexBuffers</a>, the schemaless cousin of Google’s FlatBuffers zero-copy
+serialization format.</li>
+<li><a href="https://github.com/P3KI/bendy">Bencode</a>, a simple binary format used in the BitTorrent protocol.</li>
+<li><a href="https://github.com/oxidecomputer/serde_tokenstream">Token streams</a>, for processing Rust procedural macro input.
+<em>(deserialization only)</em></li>
+<li><a href="https://docs.rs/serde_dynamo">DynamoDB Items</a>, the format used by <a href="https://docs.rs/rusoto_dynamodb">rusoto_dynamodb</a> to transfer data to
+and from DynamoDB.</li>
+<li><a href="https://github.com/Canop/deser-hjson">Hjson</a>, a syntax extension to JSON designed around human reading and
+editing. <em>(deserialization only)</em></li>
+<li><a href="https://docs.rs/csv">CSV</a>, Comma-separated values is a tabular text file format.</li>
+</ul>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="de/index.html" title="mod serde::de">de</a></div><div class="desc docblock-short">Generic data structure deserialization framework.</div></li><li><div class="item-name"><a class="mod" href="ser/index.html" title="mod serde::ser">ser</a></div><div class="desc docblock-short">Generic data structure serialization framework.</div></li></ul><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="macro" href="macro.forward_to_deserialize_any.html" title="macro serde::forward_to_deserialize_any">forward_to_deserialize_any</a></div><div class="desc docblock-short">Helper macro when implementing the <code>Deserializer</code> part of a new data format
+for Serde.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.Deserialize.html" title="trait serde::Deserialize">Deserialize</a></div><div class="desc docblock-short">A <strong>data structure</strong> that can be deserialized from any data format supported
+by Serde.</div></li><li><div class="item-name"><a class="trait" href="trait.Deserializer.html" title="trait serde::Deserializer">Deserializer</a></div><div class="desc docblock-short">A <strong>data format</strong> that can deserialize any data structure supported by
+Serde.</div></li><li><div class="item-name"><a class="trait" href="trait.Serialize.html" title="trait serde::Serialize">Serialize</a></div><div class="desc docblock-short">A <strong>data structure</strong> that can be serialized into any data format supported
+by Serde.</div></li><li><div class="item-name"><a class="trait" href="trait.Serializer.html" title="trait serde::Serializer">Serializer</a></div><div class="desc docblock-short">A <strong>data format</strong> that can serialize any data structure supported by Serde.</div></li></ul><h2 id="derives" class="section-header">Derive Macros<a href="#derives" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="derive" href="derive.Deserialize.html" title="derive serde::Deserialize">Deserialize</a></div><div class="desc docblock-short">Derive macro available if serde is built with <code>features = ["derive"]</code>.</div></li><li><div class="item-name"><a class="derive" href="derive.Serialize.html" title="derive serde::Serialize">Serialize</a></div><div class="desc docblock-short">Derive macro available if serde is built with <code>features = ["derive"]</code>.</div></li></ul></section></div></main></body></html>

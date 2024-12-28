@@ -1,0 +1,70 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Document tree traversal to mutate an exclusive borrow of a document tree in place."><title>toml_edit::visit_mut - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="toml_edit" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../toml_edit/index.html">toml_edit</a><span class="version">0.22.22</span></h2></div><h2 class="location"><a href="#">Module visit_mut</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#traits">Traits</a></li><li><a href="#functions">Functions</a></li></ul></section><h2><a href="../index.html">In crate toml_edit</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">toml_edit</a>::<wbr><a class="mod" href="#">visit_mut</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/toml_edit/visit_mut.rs.html#1-256">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Document tree traversal to mutate an exclusive borrow of a document tree in place.</p>
+<p>Each method of the <a href="trait.VisitMut.html" title="trait toml_edit::visit_mut::VisitMut"><code>VisitMut</code></a> trait is a hook that can be overridden
+to customize the behavior when mutating the corresponding type of node.
+By default, every method recursively visits the substructure of the
+input by invoking the right visitor method of each of its fields.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code>
+<span class="kw">pub trait </span>VisitMut {
+    <span class="comment">/* ... */
+
+    </span><span class="kw">fn </span>visit_item_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>, i: <span class="kw-2">&amp;mut </span>Item) {
+        visit_item_mut(<span class="self">self</span>, i);
+    }
+
+    <span class="comment">/* ... */
+</span>}
+
+<span class="kw">pub fn </span>visit_item_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>Item)
+<span class="kw">where
+    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
+{
+    <span class="kw">match </span>node {
+        Item::None =&gt; {}
+        Item::Value(value) =&gt; v.visit_value_mut(value),
+        Item::Table(table) =&gt; v.visit_table_mut(table),
+        Item::ArrayOfTables(array) =&gt; v.visit_array_of_tables_mut(array),
+    }
+}</code></pre></div>
+<p>The API is modeled after <a href="https://docs.rs/syn/1/syn/visit_mut"><code>syn::visit_mut</code></a>.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>This visitor replaces every floating point value with its decimal string representation, to
+2 decimal points.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>toml_edit::visit_mut::<span class="kw-2">*</span>;
+
+<span class="kw">struct </span>FloatToString;
+
+<span class="kw">impl </span>VisitMut <span class="kw">for </span>FloatToString {
+    <span class="kw">fn </span>visit_value_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>, node: <span class="kw-2">&amp;mut </span>Value) {
+        <span class="kw">if let </span>Value::Float(f) = node {
+            <span class="comment">// Convert the float to a string.
+            </span><span class="kw">let </span><span class="kw-2">mut </span>s = Formatted::new(<span class="macro">format!</span>(<span class="string">"{:.2}"</span>, f.value()));
+            <span class="comment">// Copy over the formatting.
+            </span>std::mem::swap(s.decor_mut(), f.decor_mut());
+            <span class="kw-2">*</span>node = Value::String(s);
+        }
+        <span class="comment">// Most of the time, you will also need to call the default implementation to recurse
+        // further down the document tree.
+        </span>visit_value_mut(<span class="self">self</span>, node);
+    }
+}
+
+<span class="kw">let </span>input = <span class="string">r#"
+banana = 3.26
+table = { apple = 4.5 }
+"#</span>;
+
+<span class="kw">let </span><span class="kw-2">mut </span>document: DocumentMut = input.parse().unwrap();
+<span class="kw">let </span><span class="kw-2">mut </span>visitor = FloatToString;
+visitor.visit_document_mut(<span class="kw-2">&amp;mut </span>document);
+
+<span class="kw">let </span>output = <span class="string">r#"
+banana = "3.26"
+table = { apple = "4.50" }
+"#</span>;
+
+<span class="macro">assert_eq!</span>(<span class="macro">format!</span>(<span class="string">"{}"</span>, document), output);</code></pre></div>
+<p>For a more complex example where the visitor has internal state, see <code>examples/visit.rs</code>
+<a href="https://github.com/toml-rs/toml/blob/main/crates/toml_edit/examples/visit.rs">on GitHub</a>.</p>
+</div></details><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.VisitMut.html" title="trait toml_edit::visit_mut::VisitMut">VisitMut</a></div><div class="desc docblock-short">Document tree traversal to mutate an exclusive borrow of a document tree in-place.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.visit_array_mut.html" title="fn toml_edit::visit_mut::visit_array_mut">visit_array_mut</a></div></li><li><div class="item-name"><a class="fn" href="fn.visit_array_of_tables_mut.html" title="fn toml_edit::visit_mut::visit_array_of_tables_mut">visit_array_of_tables_mut</a></div></li><li><div class="item-name"><a class="fn" href="fn.visit_document_mut.html" title="fn toml_edit::visit_mut::visit_document_mut">visit_document_mut</a></div></li><li><div class="item-name"><a class="fn" href="fn.visit_inline_table_mut.html" title="fn toml_edit::visit_mut::visit_inline_table_mut">visit_inline_table_mut</a></div></li><li><div class="item-name"><a class="fn" href="fn.visit_item_mut.html" title="fn toml_edit::visit_mut::visit_item_mut">visit_item_mut</a></div></li><li><div class="item-name"><a class="fn" href="fn.visit_table_like_kv_mut.html" title="fn toml_edit::visit_mut::visit_table_like_kv_mut">visit_table_like_kv_mut</a></div></li><li><div class="item-name"><a class="fn" href="fn.visit_table_like_mut.html" title="fn toml_edit::visit_mut::visit_table_like_mut">visit_table_like_mut</a></div></li><li><div class="item-name"><a class="fn" href="fn.visit_table_mut.html" title="fn toml_edit::visit_mut::visit_table_mut">visit_table_mut</a></div></li><li><div class="item-name"><a class="fn" href="fn.visit_value_mut.html" title="fn toml_edit::visit_mut::visit_value_mut">visit_value_mut</a></div></li></ul></section></div></main></body></html>

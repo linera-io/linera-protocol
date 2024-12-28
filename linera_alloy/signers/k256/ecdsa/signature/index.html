@@ -1,0 +1,138 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="RustCrypto: Digital Signature Algorithms"><title>linera_alloy::signers::k256::ecdsa::signature - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../../../" data-static-root-path="../../../../../static.files/" data-current-crate="linera_alloy" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../../../../../crates.js"></script><script defer src="../../../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="icon" href="https://raw.githubusercontent.com/alloy-rs/core/main/assets/favicon.ico"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../../../../../linera_alloy/index.html"><img src="https://raw.githubusercontent.com/alloy-rs/core/main/assets/alloy.jpg" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../../../../../linera_alloy/index.html"><img src="https://raw.githubusercontent.com/alloy-rs/core/main/assets/alloy.jpg" alt="logo"></a><h2><a href="../../../../../linera_alloy/index.html">linera_alloy</a><span class="version">0.1.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#traits">Traits</a></li><li><a href="#types">Type Aliases</a></li></ul></section><h2><a href="../index.html">In linera_alloy::signers::k256::ecdsa</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a href="../../../../index.html">linera_alloy</a>::<wbr><a href="../../../index.html">signers</a>::<wbr><a href="../../index.html">k256</a>::<wbr><a href="../index.html">ecdsa</a>::<wbr><a class="mod" href="#">signature</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../../../src/signature/lib.rs.html#1-158">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="rustcrypto-digital-signature-algorithms"><a class="doc-anchor" href="#rustcrypto-digital-signature-algorithms">§</a><a href="https://github.com/RustCrypto/">RustCrypto</a>: Digital Signature Algorithms</h2>
+<p><a href="https://crates.io/crates/signature"><img src="https://buildstats.info/crate/signature" alt="crate" /></a>
+<a href="https://docs.rs/signature/"><img src="https://docs.rs/signature/badge.svg" alt="Docs" /></a>
+<a href="https://github.com/RustCrypto/traits/actions/workflows/signature.yml"><img src="https://github.com/RustCrypto/traits/actions/workflows/signature.yml/badge.svg" alt="Build Status" /></a>
+<img src="https://img.shields.io/badge/license-Apache2.0/MIT-blue.svg" alt="Apache2/MIT licensed" />
+<img src="https://img.shields.io/badge/rustc-1.60+-blue.svg" alt="Rust Version" />
+<a href="https://rustcrypto.zulipchat.com/#narrow/stream/260048-signatures"><img src="https://img.shields.io/badge/zulip-join_chat-blue.svg" alt="Project Chat" /></a></p>
+<p>This crate contains traits which provide generic, object-safe APIs for
+generating and verifying <a href="https://en.wikipedia.org/wiki/Digital_signature">digital signatures</a>.</p>
+<p>Used by the <a href="https://github.com/RustCrypto/signatures/tree/master/dsa"><code>dsa</code></a>, <a href="https://github.com/RustCrypto/signatures/tree/master/ecdsa"><code>ecdsa</code></a>, <a href="https://github.com/RustCrypto/signatures/tree/master/ed25519"><code>ed25519</code></a>, and <a href="https://github.com/RustCrypto/RSA"><code>rsa</code></a> crates maintained by
+the <a href="https://github.com/RustCrypto/">RustCrypto</a> organization, as well as <a href="https://github.com/dalek-cryptography/ed25519-dalek"><code>ed25519-dalek</code></a>.</p>
+<p><a href="https://docs.rs/signature/">Documentation</a></p>
+<h3 id="minimum-supported-rust-version"><a class="doc-anchor" href="#minimum-supported-rust-version">§</a>Minimum Supported Rust Version</h3>
+<p>Rust <strong>1.60</strong> or higher.</p>
+<p>Minimum supported Rust version can be changed in the future, but it will be
+done with a minor version bump.</p>
+<h3 id="semver-policy"><a class="doc-anchor" href="#semver-policy">§</a>SemVer Policy</h3>
+<ul>
+<li>All on-by-default features of this library are covered by SemVer</li>
+<li>MSRV is considered exempt from SemVer as noted above</li>
+<li>The <code>derive</code> feature is stable and covered by SemVer</li>
+<li>The off-by-default features <code>digest</code> and <code>rand_core</code> are unstable features
+which are also considered exempt from SemVer as they correspond to pre-1.0
+crates which are still subject to changes. Breaking changes to these features
+will, like MSRV, be done with a minor version bump.</li>
+</ul>
+<h3 id="license"><a class="doc-anchor" href="#license">§</a>License</h3>
+<p>Licensed under either of</p>
+<ul>
+<li><a href="http://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a></li>
+<li><a href="http://opensource.org/licenses/MIT">MIT license</a></li>
+</ul>
+<p>at your option.</p>
+<h4 id="contribution"><a class="doc-anchor" href="#contribution">§</a>Contribution</h4>
+<p>Unless you explicitly state otherwise, any contribution intentionally submitted
+for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
+dual licensed as above, without any additional terms or conditions.</p>
+<h2 id="design"><a class="doc-anchor" href="#design">§</a>Design</h2>
+<p>This crate provides a common set of traits for signing and verifying
+digital signatures intended to be implemented by libraries which produce
+or contain implementations of digital signature algorithms, and used by
+libraries which want to produce or verify digital signatures while
+generically supporting any compatible backend.</p>
+<h3 id="goals"><a class="doc-anchor" href="#goals">§</a>Goals</h3>
+<p>The traits provided by this crate were designed with the following goals
+in mind:</p>
+<ul>
+<li>Provide an easy-to-use, misuse resistant API optimized for consumers
+(as opposed to implementers) of its traits.</li>
+<li>Support common type-safe wrappers around “bag-of-bytes” representations
+which can be directly parsed from or written to the “wire”.</li>
+<li>Expose a trait/object-safe API where signers/verifiers spanning multiple
+homogeneous provider implementations can be seamlessly leveraged together
+in the same logical “keyring” so long as they operate on the same
+underlying signature type.</li>
+<li>Allow one provider type to potentially implement support (including
+being generic over) several signature types.</li>
+<li>Keep signature algorithm customizations / “knobs” out-of-band from the
+signing/verification APIs, ideally pushing such concerns into the type
+system so that algorithm mismatches are caught as type errors.</li>
+<li>Opaque error type which minimizes information leaked from cryptographic
+failures, as “rich” error types in these scenarios are often a source
+of sidechannel information for attackers (e.g. <a href="https://en.wikipedia.org/wiki/Daniel_Bleichenbacher">BB’06</a>)</li>
+</ul>
+<h3 id="implementation"><a class="doc-anchor" href="#implementation">§</a>Implementation</h3>
+<p>To accomplish the above goals, the <a href="trait.Signer.html" title="trait linera_alloy::signers::k256::ecdsa::signature::Signer"><code>Signer</code></a> and <a href="trait.Verifier.html" title="trait linera_alloy::signers::k256::ecdsa::signature::Verifier"><code>Verifier</code></a> traits
+provided by this are generic over a signature value, and use generic
+parameters rather than associated types. Notably, they use such a parameter
+for the return value, allowing it to be inferred by the type checker based
+on the desired signature type.</p>
+<h3 id="alternatives-considered"><a class="doc-anchor" href="#alternatives-considered">§</a>Alternatives considered</h3>
+<p>This crate is based on many years of exploration of how to encapsulate
+digital signature systems in the most flexible, developer-friendly way.
+During that time many design alternatives were explored, tradeoffs
+compared, and ultimately the provided API was selected.</p>
+<p>The tradeoffs made in this API have all been to improve simplicity,
+ergonomics, type safety, and flexibility for <em>consumers</em> of the traits.
+At times, this has come at a cost to implementers. Below are some concerns
+we are cognizant of which were considered in the design of the API:</p>
+<ul>
+<li>“Bag-of-bytes” serialization precludes signature providers from using
+their own internal representation of a signature, which can be helpful
+for many reasons (e.g. advanced signature system features like batch
+verification).</li>
+<li>Associated types, rather than generic parameters of traits, could allow
+more customization of the types used by a particular signature system,
+e.g. using custom error types.</li>
+</ul>
+<p>It may still make sense to continue to explore the above tradeoffs, but
+with a <em>new</em> set of traits which are intended to be implementor-friendly,
+rather than consumer friendly. The existing <a href="trait.Signer.html" title="trait linera_alloy::signers::k256::ecdsa::signature::Signer"><code>Signer</code></a> and <a href="trait.Verifier.html" title="trait linera_alloy::signers::k256::ecdsa::signature::Verifier"><code>Verifier</code></a>
+traits could have blanket impls for the “provider-friendly” traits.
+However, as noted above this is a design space easily explored after
+stabilizing the consumer-oriented traits, and thus we consider these
+more important.</p>
+<p>That said, below are some caveats of trying to design such traits, and
+why we haven’t actively pursued them:</p>
+<ul>
+<li>Generics in the return position are already used to select which trait
+impl to use, i.e. for a particular signature algorithm/system. Avoiding
+a unified, concrete signature type adds another dimension to complexity
+and compiler errors, and in our experience makes them unsuitable for this
+sort of API. We believe such an API is the natural one for signature
+systems, reflecting the natural way they are written absent a trait.</li>
+<li>Associated types preclude multiple implementations of the same trait.
+These parameters are common in signature systems, notably ones which
+support different serializations of a signature (e.g. raw vs ASN.1).</li>
+<li>Digital signatures are almost always larger than the present 32-entry
+trait impl limitation on array types, which complicates bounds
+for these types (particularly things like <code>From</code> or <code>Borrow</code> bounds).</li>
+</ul>
+<h3 id="unstable-features"><a class="doc-anchor" href="#unstable-features">§</a>Unstable features</h3>
+<p>Despite being post-1.0, this crate includes off-by-default unstable
+optional features, each of which depends on a pre-1.0
+crate.</p>
+<p>These features are considered exempt from SemVer. See the
+<a href="#semver-policy">SemVer policy</a> above for more information.</p>
+<p>The following unstable features are presently supported:</p>
+<ul>
+<li><code>digest</code>: enables the <a href="trait.DigestSigner.html" title="trait linera_alloy::signers::k256::ecdsa::signature::DigestSigner"><code>DigestSigner</code></a> and <a href="trait.DigestVerifier.html" title="trait linera_alloy::signers::k256::ecdsa::signature::DigestVerifier"><code>DigestVerifier</code></a>
+traits which are based on the <a href="https://docs.rs/digest/"><code>Digest</code></a> trait from the <a href="https://docs.rs/digest/"><code>digest</code></a> crate.
+These traits are used for representing signature systems based on the
+<a href="https://en.wikipedia.org/wiki/Fiat%E2%80%93Shamir_heuristic">Fiat-Shamir heuristic</a> which compute a random challenge value to sign
+by computing a cryptographically secure digest of the input message.</li>
+<li><code>rand_core</code>: enables the <a href="trait.RandomizedSigner.html" title="trait linera_alloy::signers::k256::ecdsa::signature::RandomizedSigner"><code>RandomizedSigner</code></a> trait for signature
+systems which rely on a cryptographically secure random number generator
+for security.</li>
+</ul>
+<p>NOTE: the <a href="https://docs.rs/async-signature"><code>async-signature</code></a> crate contains experimental <code>async</code> support
+for <a href="trait.Signer.html" title="trait linera_alloy::signers::k256::ecdsa::signature::Signer"><code>Signer</code></a> and <a href="trait.DigestSigner.html" title="trait linera_alloy::signers::k256::ecdsa::signature::DigestSigner"><code>DigestSigner</code></a>.</p>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="digest/index.html" title="mod linera_alloy::signers::k256::ecdsa::signature::digest">digest</a></div><div class="desc docblock-short">This crate provides traits which describe functionality of cryptographic hash
+functions and Message Authentication algorithms.</div></li><li><div class="item-name"><a class="mod" href="hazmat/index.html" title="mod linera_alloy::signers::k256::ecdsa::signature::hazmat">hazmat</a></div><div class="desc docblock-short">Hazardous Materials: low-level APIs which can be insecure if misused.</div></li><li><div class="item-name"><a class="mod" href="rand_core/index.html" title="mod linera_alloy::signers::k256::ecdsa::signature::rand_core">rand_core</a></div><div class="desc docblock-short">Random number generation traits</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Error.html" title="struct linera_alloy::signers::k256::ecdsa::signature::Error">Error</a></div><div class="desc docblock-short">Signature errors.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.DigestSigner.html" title="trait linera_alloy::signers::k256::ecdsa::signature::DigestSigner">DigestSigner</a></div><div class="desc docblock-short">Sign the given prehashed message <a href="../../sha2/trait.Digest.html" title="trait linera_alloy::signers::k256::sha2::Digest"><code>Digest</code></a> using <code>Self</code>.</div></li><li><div class="item-name"><a class="trait" href="trait.DigestVerifier.html" title="trait linera_alloy::signers::k256::ecdsa::signature::DigestVerifier">DigestVerifier</a></div><div class="desc docblock-short">Verify the provided signature for the given prehashed message <a href="../../sha2/trait.Digest.html" title="trait linera_alloy::signers::k256::sha2::Digest"><code>Digest</code></a>
+is authentic.</div></li><li><div class="item-name"><a class="trait" href="trait.Keypair.html" title="trait linera_alloy::signers::k256::ecdsa::signature::Keypair">Keypair</a></div><div class="desc docblock-short">Signing keypair with an associated verifying key.</div></li><li><div class="item-name"><a class="trait" href="trait.KeypairRef.html" title="trait linera_alloy::signers::k256::ecdsa::signature::KeypairRef">KeypairRef</a></div><div class="desc docblock-short">Signing keypair with an associated verifying key.</div></li><li><div class="item-name"><a class="trait" href="trait.PrehashSignature.html" title="trait linera_alloy::signers::k256::ecdsa::signature::PrehashSignature">PrehashSignature</a></div><div class="desc docblock-short">Marker trait for <code>Signature</code> types computable as <code>𝐒(𝐇(𝒎))</code>
+i.e. ones which prehash a message to be signed as <code>𝐇(𝒎)</code></div></li><li><div class="item-name"><a class="trait" href="trait.RandomizedDigestSigner.html" title="trait linera_alloy::signers::k256::ecdsa::signature::RandomizedDigestSigner">RandomizedDigestSigner</a></div><div class="desc docblock-short">Combination of <a href="trait.DigestSigner.html" title="trait linera_alloy::signers::k256::ecdsa::signature::DigestSigner"><code>DigestSigner</code></a> and <a href="trait.RandomizedSigner.html" title="trait linera_alloy::signers::k256::ecdsa::signature::RandomizedSigner"><code>RandomizedSigner</code></a> with support for
+computing a signature over a digest which requires entropy from an RNG.</div></li><li><div class="item-name"><a class="trait" href="trait.RandomizedSigner.html" title="trait linera_alloy::signers::k256::ecdsa::signature::RandomizedSigner">RandomizedSigner</a></div><div class="desc docblock-short">Sign the given message using the provided external randomness source.</div></li><li><div class="item-name"><a class="trait" href="trait.SignatureEncoding.html" title="trait linera_alloy::signers::k256::ecdsa::signature::SignatureEncoding">SignatureEncoding</a></div><div class="desc docblock-short">Support for decoding/encoding signatures as bytes.</div></li><li><div class="item-name"><a class="trait" href="trait.Signer.html" title="trait linera_alloy::signers::k256::ecdsa::signature::Signer">Signer</a></div><div class="desc docblock-short">Sign the provided message bytestring using <code>Self</code> (e.g. a cryptographic key
+or connection to an HSM), returning a digital signature.</div></li><li><div class="item-name"><a class="trait" href="trait.SignerMut.html" title="trait linera_alloy::signers::k256::ecdsa::signature::SignerMut">SignerMut</a></div><div class="desc docblock-short">Sign the provided message bytestring using <code>&amp;mut Self</code> (e.g. an evolving
+cryptographic key such as a stateful hash-based signature), returning a
+digital signature.</div></li><li><div class="item-name"><a class="trait" href="trait.Verifier.html" title="trait linera_alloy::signers::k256::ecdsa::signature::Verifier">Verifier</a></div><div class="desc docblock-short">Verify the provided message bytestring using <code>Self</code> (e.g. a public key)</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.Result.html" title="type linera_alloy::signers::k256::ecdsa::signature::Result">Result</a></div><div class="desc docblock-short">Result type.</div></li></ul></section></div></main></body></html>

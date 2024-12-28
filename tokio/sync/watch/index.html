@@ -1,0 +1,75 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A multi-producer, multi-consumer channel that only retains the last sent value."><title>tokio::sync::watch - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="tokio" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../tokio/index.html">tokio</a><span class="version">1.40.0</span></h2></div><h2 class="location"><a href="#">Module watch</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#functions">Functions</a></li></ul></section><h2><a href="../index.html">In tokio::sync</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../../index.html">tokio</a>::<wbr><a href="../index.html">sync</a>::<wbr><a class="mod" href="#">watch</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/tokio/sync/watch.rs.html#1-1443">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A multi-producer, multi-consumer channel that only retains the <em>last</em> sent
+value.</p>
+<p>This channel is useful for watching for changes to a value from multiple
+points in the code base, for example, changes to configuration values.</p>
+<h2 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h2>
+<p><a href="fn.channel.html" title="fn tokio::sync::watch::channel"><code>channel</code></a> returns a <a href="struct.Sender.html" title="struct tokio::sync::watch::Sender"><code>Sender</code></a> / <a href="struct.Receiver.html" title="struct tokio::sync::watch::Receiver"><code>Receiver</code></a> pair. These are the producer
+and consumer halves of the channel. The channel is created with an initial
+value.</p>
+<p>Each <a href="struct.Receiver.html" title="struct tokio::sync::watch::Receiver"><code>Receiver</code></a> independently tracks the last value <em>seen</em> by its caller.</p>
+<p>To access the <strong>current</strong> value stored in the channel and mark it as <em>seen</em>
+by a given <a href="struct.Receiver.html" title="struct tokio::sync::watch::Receiver"><code>Receiver</code></a>, use <a href="struct.Receiver.html#method.borrow_and_update" title="method tokio::sync::watch::Receiver::borrow_and_update"><code>Receiver::borrow_and_update()</code></a>.</p>
+<p>To access the current value <strong>without</strong> marking it as <em>seen</em>, use
+<a href="struct.Receiver.html#method.borrow" title="method tokio::sync::watch::Receiver::borrow"><code>Receiver::borrow()</code></a>. (If the value has already been marked <em>seen</em>,
+<a href="struct.Receiver.html#method.borrow" title="method tokio::sync::watch::Receiver::borrow"><code>Receiver::borrow()</code></a> is equivalent to <a href="struct.Receiver.html#method.borrow_and_update" title="method tokio::sync::watch::Receiver::borrow_and_update"><code>Receiver::borrow_and_update()</code></a>.)</p>
+<p>For more information on when to use these methods, see
+<a href="#borrow_and_update-versus-borrow">here</a>.</p>
+<h3 id="change-notifications"><a class="doc-anchor" href="#change-notifications">§</a>Change notifications</h3>
+<p>The <a href="struct.Receiver.html" title="struct tokio::sync::watch::Receiver"><code>Receiver</code></a> half provides an asynchronous <a href="struct.Receiver.html#method.changed" title="method tokio::sync::watch::Receiver::changed"><code>changed</code></a> method. This
+method is ready when a new, <em>unseen</em> value is sent via the <a href="struct.Sender.html" title="struct tokio::sync::watch::Sender"><code>Sender</code></a> half.</p>
+<ul>
+<li><a href="struct.Receiver.html#method.changed" title="method tokio::sync::watch::Receiver::changed"><code>Receiver::changed()</code></a> returns <code>Ok(())</code> on receiving a new value, or
+<code>Err(</code><a href="error/struct.RecvError.html" title="struct tokio::sync::watch::error::RecvError"><code>error::RecvError</code></a><code>)</code> if the <a href="struct.Sender.html" title="struct tokio::sync::watch::Sender"><code>Sender</code></a> has been dropped.</li>
+<li>If the current value is <em>unseen</em> when calling <a href="struct.Receiver.html#method.changed" title="method tokio::sync::watch::Receiver::changed"><code>changed</code></a>, then
+<a href="struct.Receiver.html#method.changed" title="method tokio::sync::watch::Receiver::changed"><code>changed</code></a> will return immediately. If the current value is <em>seen</em>, then
+it will sleep until either a new message is sent via the <a href="struct.Sender.html" title="struct tokio::sync::watch::Sender"><code>Sender</code></a> half,
+or the <a href="struct.Sender.html" title="struct tokio::sync::watch::Sender"><code>Sender</code></a> is dropped.</li>
+<li>On completion, the <a href="struct.Receiver.html#method.changed" title="method tokio::sync::watch::Receiver::changed"><code>changed</code></a> method marks the new value as <em>seen</em>.</li>
+<li>At creation, the initial value is considered <em>seen</em>. In other words,
+<a href="struct.Receiver.html#method.changed" title="method tokio::sync::watch::Receiver::changed"><code>Receiver::changed()</code></a> will not return until a subsequent value is sent.</li>
+<li>New <a href="struct.Receiver.html" title="struct tokio::sync::watch::Receiver"><code>Receiver</code></a> instances can be created with <a href="struct.Sender.html#method.subscribe" title="method tokio::sync::watch::Sender::subscribe"><code>Sender::subscribe()</code></a>.
+The current value at the time the <a href="struct.Receiver.html" title="struct tokio::sync::watch::Receiver"><code>Receiver</code></a> is created is considered
+<em>seen</em>.</li>
+</ul>
+<h3 id="borrow_and_update-versus-borrow"><a class="doc-anchor" href="#borrow_and_update-versus-borrow">§</a><code>borrow_and_update</code> versus <code>borrow</code></h3>
+<p>If the receiver intends to await notifications from <a href="struct.Receiver.html#method.changed" title="method tokio::sync::watch::Receiver::changed"><code>changed</code></a> in a loop,
+<a href="struct.Receiver.html#method.borrow_and_update" title="method tokio::sync::watch::Receiver::borrow_and_update"><code>Receiver::borrow_and_update()</code></a> should be preferred over
+<a href="struct.Receiver.html#method.borrow" title="method tokio::sync::watch::Receiver::borrow"><code>Receiver::borrow()</code></a>.  This avoids a potential race where a new value is
+sent between <a href="struct.Receiver.html#method.changed" title="method tokio::sync::watch::Receiver::changed"><code>changed</code></a> being ready and the value being read. (If
+<a href="struct.Receiver.html#method.borrow" title="method tokio::sync::watch::Receiver::borrow"><code>Receiver::borrow()</code></a> is used, the loop may run twice with the same value.)</p>
+<p>If the receiver is only interested in the current value, and does not intend
+to wait for changes, then <a href="struct.Receiver.html#method.borrow" title="method tokio::sync::watch::Receiver::borrow"><code>Receiver::borrow()</code></a> can be used. It may be more
+convenient to use <a href="struct.Receiver.html#method.borrow" title="method tokio::sync::watch::Receiver::borrow"><code>borrow</code></a> since it’s an <code>&amp;self</code>
+method—<a href="struct.Receiver.html#method.borrow_and_update" title="method tokio::sync::watch::Receiver::borrow_and_update"><code>borrow_and_update</code></a> requires <code>&amp;mut self</code>.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>The following example prints <code>hello! world! </code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::sync::watch;
+<span class="kw">use </span>tokio::time::{Duration, sleep};
+
+<span class="kw">let </span>(tx, <span class="kw-2">mut </span>rx) = watch::channel(<span class="string">"hello"</span>);
+
+tokio::spawn(<span class="kw">async move </span>{
+    <span class="comment">// Use the equivalent of a "do-while" loop so the initial value is
+    // processed before awaiting the `changed()` future.
+    </span><span class="kw">loop </span>{
+        <span class="macro">println!</span>(<span class="string">"{}! "</span>, <span class="kw-2">*</span>rx.borrow_and_update());
+        <span class="kw">if </span>rx.changed().<span class="kw">await</span>.is_err() {
+            <span class="kw">break</span>;
+        }
+    }
+});
+
+sleep(Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
+tx.send(<span class="string">"world"</span>)<span class="question-mark">?</span>;</code></pre></div>
+<h2 id="closing"><a class="doc-anchor" href="#closing">§</a>Closing</h2>
+<p><a href="struct.Sender.html#method.is_closed" title="method tokio::sync::watch::Sender::is_closed"><code>Sender::is_closed</code></a> and <a href="struct.Sender.html#method.closed" title="method tokio::sync::watch::Sender::closed"><code>Sender::closed</code></a> allow the producer to detect
+when all <a href="struct.Receiver.html" title="struct tokio::sync::watch::Receiver"><code>Receiver</code></a> handles have been dropped. This indicates that there
+is no further interest in the values being produced and work can be stopped.</p>
+<p>The value in the channel will not be dropped until the sender and all
+receivers have been dropped.</p>
+<h2 id="thread-safety"><a class="doc-anchor" href="#thread-safety">§</a>Thread safety</h2>
+<p>Both <a href="struct.Sender.html" title="struct tokio::sync::watch::Sender"><code>Sender</code></a> and <a href="struct.Receiver.html" title="struct tokio::sync::watch::Receiver"><code>Receiver</code></a> are thread safe. They can be moved to other
+threads and can be used in a concurrent environment. Clones of <a href="struct.Receiver.html" title="struct tokio::sync::watch::Receiver"><code>Receiver</code></a>
+handles may be moved to separate threads and also used concurrently.</p>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="error/index.html" title="mod tokio::sync::watch::error">error</a></div><div class="desc docblock-short">Watch error types.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Receiver.html" title="struct tokio::sync::watch::Receiver">Receiver</a></div><div class="desc docblock-short">Receives values from the associated <a href="struct.Sender.html" title="struct tokio::sync::watch::Sender"><code>Sender</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.Ref.html" title="struct tokio::sync::watch::Ref">Ref</a></div><div class="desc docblock-short">Returns a reference to the inner value.</div></li><li><div class="item-name"><a class="struct" href="struct.Sender.html" title="struct tokio::sync::watch::Sender">Sender</a></div><div class="desc docblock-short">Sends values to the associated <a href="struct.Receiver.html" title="struct tokio::sync::watch::Receiver"><code>Receiver</code></a>.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.channel.html" title="fn tokio::sync::watch::channel">channel</a></div><div class="desc docblock-short">Creates a new watch channel, returning the “send” and “receive” handles.</div></li></ul></section></div></main></body></html>

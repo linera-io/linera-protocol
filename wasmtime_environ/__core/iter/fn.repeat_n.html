@@ -1,0 +1,48 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Creates a new iterator that repeats a single element a given number of times."><title>repeat_n in wasmtime_environ::__core::iter - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="wasmtime_environ" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../wasmtime_environ/index.html">wasmtime_environ</a><span class="version">25.0.1</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In wasmtime_environ::__core::iter</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../../index.html">wasmtime_environ</a>::<wbr><a href="../index.html">__core</a>::<wbr><a href="index.html">iter</a>::<wbr><a class="fn" href="#">repeat_n</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/iter/sources/repeat_n.rs.html#62">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn repeat_n&lt;T&gt;(element: T, count: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="struct" href="struct.RepeatN.html" title="struct wasmtime_environ::__core::iter::RepeatN">RepeatN</a>&lt;T&gt; <a href="#" class="tooltip" data-notable-ty="RepeatN&lt;T&gt;">ⓘ</a><div class="where">where
+    T: <a class="trait" href="../clone/trait.Clone.html" title="trait wasmtime_environ::__core::clone::Clone">Clone</a>,</div></code></pre><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>iter_repeat_n</code>)</span></div></span><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Creates a new iterator that repeats a single element a given number of times.</p>
+<p>The <code>repeat_n()</code> function repeats a single value exactly <code>n</code> times.</p>
+<p>This is very similar to using <a href="fn.repeat.html" title="fn wasmtime_environ::__core::iter::repeat"><code>repeat()</code></a> with <a href="trait.Iterator.html#method.take" title="method wasmtime_environ::__core::iter::Iterator::take"><code>Iterator::take()</code></a>,
+but there are two differences:</p>
+<ul>
+<li><code>repeat_n()</code> can return the original value, rather than always cloning.</li>
+<li><code>repeat_n()</code> produces an <a href="trait.ExactSizeIterator.html" title="trait wasmtime_environ::__core::iter::ExactSizeIterator"><code>ExactSizeIterator</code></a>.</li>
+</ul>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Basic usage:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(iter_repeat_n)]
+</span><span class="kw">use </span>std::iter;
+
+<span class="comment">// four of the number four:
+</span><span class="kw">let </span><span class="kw-2">mut </span>four_fours = iter::repeat_n(<span class="number">4</span>, <span class="number">4</span>);
+
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="number">4</span>), four_fours.next());
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="number">4</span>), four_fours.next());
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="number">4</span>), four_fours.next());
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="number">4</span>), four_fours.next());
+
+<span class="comment">// no more fours
+</span><span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, four_fours.next());</code></pre></div>
+<p>For non-<code>Copy</code> types,</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(iter_repeat_n)]
+</span><span class="kw">use </span>std::iter;
+
+<span class="kw">let </span>v: Vec&lt;i32&gt; = Vec::with_capacity(<span class="number">123</span>);
+<span class="kw">let </span><span class="kw-2">mut </span>it = iter::repeat_n(v, <span class="number">5</span>);
+
+<span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..<span class="number">4 </span>{
+    <span class="comment">// It starts by cloning things
+    </span><span class="kw">let </span>cloned = it.next().unwrap();
+    <span class="macro">assert_eq!</span>(cloned.len(), <span class="number">0</span>);
+    <span class="macro">assert_eq!</span>(cloned.capacity(), <span class="number">0</span>);
+}
+
+<span class="comment">// ... but the last item is the original one
+</span><span class="kw">let </span>last = it.next().unwrap();
+<span class="macro">assert_eq!</span>(last.len(), <span class="number">0</span>);
+<span class="macro">assert_eq!</span>(last.capacity(), <span class="number">123</span>);
+
+<span class="comment">// ... and now we're done
+</span><span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, it.next());</code></pre></div>
+</div></details><script type="text/json" id="notable-traits-data">{"RepeatN<T>":"<h3>Notable traits for <code><a class=\"struct\" href=\"struct.RepeatN.html\" title=\"struct wasmtime_environ::__core::iter::RepeatN\">RepeatN</a>&lt;A&gt;</code></h3><pre><code><div class=\"where\">impl&lt;A&gt; <a class=\"trait\" href=\"trait.Iterator.html\" title=\"trait wasmtime_environ::__core::iter::Iterator\">Iterator</a> for <a class=\"struct\" href=\"struct.RepeatN.html\" title=\"struct wasmtime_environ::__core::iter::RepeatN\">RepeatN</a>&lt;A&gt;<div class=\"where\">where\n    A: <a class=\"trait\" href=\"../clone/trait.Clone.html\" title=\"trait wasmtime_environ::__core::clone::Clone\">Clone</a>,</div></div><div class=\"where\">    type <a href=\"trait.Iterator.html#associatedtype.Item\" class=\"associatedtype\">Item</a> = A;</div>"}</script></section></div></main></body></html>

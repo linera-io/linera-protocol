@@ -1,0 +1,31 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Sequences multiple parsers and builds a struct out of them."><title>struct_parser in combine - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="combine" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../combine/index.html">combine</a><span class="version">3.8.1</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="index.html">combine</a>::<wbr><a class="macro" href="#">struct_parser</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/combine/parser/sequence.rs.html#396-403">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><span class="macro">macro_rules!</span> struct_parser {
+    (<span class="macro-nonterminal">$name</span>: ident { $(<span class="macro-nonterminal">$tt</span>: tt)* }) =&gt; { ... };
+}</pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Sequences multiple parsers and builds a struct out of them.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[macro_use]
+</span><span class="kw">extern crate </span>combine;
+<span class="kw">use </span>combine::{Parser, many, token};
+<span class="kw">use </span>combine::byte::{letter, spaces};
+
+<span class="attr">#[derive(Debug, PartialEq)]
+</span><span class="kw">struct </span>Field {
+    name: Vec&lt;u8&gt;,
+    value: Vec&lt;u8&gt;,
+}
+<span class="kw">fn </span>main() {
+    <span class="kw">let </span><span class="kw-2">mut </span>parser = <span class="macro">struct_parser!</span>{
+        Field {
+            name: many(letter()),
+            <span class="comment">// `_` fields are ignored when building the struct
+            </span><span class="kw">_</span>: spaces(),
+            <span class="kw">_</span>: token(<span class="string">b':'</span>),
+            <span class="kw">_</span>: spaces(),
+            value: many(letter()),
+        }
+    };
+    <span class="macro">assert_eq!</span>(
+        parser.parse(<span class="kw-2">&amp;</span><span class="string">b"test: data"</span>[..]),
+        <span class="prelude-val">Ok</span>((Field { name: <span class="string">b"test"</span>[..].to_owned(), value: <span class="string">b"data"</span>[..].to_owned() }, <span class="kw-2">&amp;</span><span class="string">b""</span>[..]))
+    );
+}</code></pre></div>
+</div></details></section></div></main></body></html>

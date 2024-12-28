@@ -1,0 +1,1 @@
+searchState.loadedDescShard("self_cell", 0, "Overview\nThis macro declares a new struct of <code>$StructName</code> and …")

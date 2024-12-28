@@ -1,0 +1,47 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Requires a `Future` to complete before the specified duration has elapsed."><title>timeout in linera_base::time::timer - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="linera_base" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../linera_base/index.html">linera_base</a><span class="version">0.14.0</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In linera_base::time::timer</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../../index.html">linera_base</a>::<wbr><a href="../index.html">time</a>::<wbr><a href="index.html">timer</a>::<wbr><a class="fn" href="#">timeout</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/tokio/time/timeout.rs.html#86-88">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn timeout&lt;F&gt;(
+    duration: <a class="struct" href="../struct.Duration.html" title="struct linera_base::time::Duration">Duration</a>,
+    future: F,
+) -&gt; <a class="struct" href="struct.Timeout.html" title="struct linera_base::time::timer::Timeout">Timeout</a>&lt;&lt;F as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/future/into_future/trait.IntoFuture.html" title="trait core::future::into_future::IntoFuture">IntoFuture</a>&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/future/into_future/trait.IntoFuture.html#associatedtype.IntoFuture" title="type core::future::into_future::IntoFuture::IntoFuture">IntoFuture</a>&gt; <a href="#" class="tooltip" data-notable-ty="Timeout&lt;&lt;F as IntoFuture&gt;::IntoFuture&gt;">ⓘ</a><div class="where">where
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/future/into_future/trait.IntoFuture.html" title="trait core::future::into_future::IntoFuture">IntoFuture</a>,</div></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Requires a <code>Future</code> to complete before the specified duration has elapsed.</p>
+<p>If the future completes before the duration has elapsed, then the completed
+value is returned. Otherwise, an error is returned and the future is
+canceled.</p>
+<p>Note that the timeout is checked before polling the future, so if the future
+does not yield during execution then it is possible for the future to complete
+and exceed the timeout <em>without</em> returning an error.</p>
+<p>This function returns a future whose return type is <a href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result"><code>Result</code></a><code>&lt;T,</code><a href="error/struct.Elapsed.html" title="struct linera_base::time::timer::error::Elapsed"><code>Elapsed</code></a><code>&gt;</code>, where <code>T</code> is the
+return type of the provided future.</p>
+<p>If the provided future completes immediately, then the future returned from
+this function is guaranteed to complete immediately with an <a href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html#variant.Ok" title="variant core::result::Result::Ok"><code>Ok</code></a> variant
+no matter the provided duration.</p>
+<h2 id="cancellation"><a class="doc-anchor" href="#cancellation">§</a>Cancellation</h2>
+<p>Cancelling a timeout is done by dropping the future. No additional cleanup
+or other work is required.</p>
+<p>The original future may be obtained by calling <a href="struct.Timeout.html#method.into_inner" title="method linera_base::time::timer::Timeout::into_inner"><code>Timeout::into_inner</code></a>. This
+consumes the <code>Timeout</code>.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Create a new <code>Timeout</code> set to expire in 10 milliseconds.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::time::timeout;
+<span class="kw">use </span>tokio::sync::oneshot;
+
+<span class="kw">use </span>std::time::Duration;
+
+<span class="kw">let </span>(tx, rx) = oneshot::channel();
+
+<span class="comment">// Wrap the future with a `Timeout` set to expire in 10 milliseconds.
+</span><span class="kw">if let </span><span class="prelude-val">Err</span>(<span class="kw">_</span>) = timeout(Duration::from_millis(<span class="number">10</span>), rx).<span class="kw">await </span>{
+    <span class="macro">println!</span>(<span class="string">"did not receive value within 10 ms"</span>);
+}</code></pre></div>
+<h2 id="panics"><a class="doc-anchor" href="#panics">§</a>Panics</h2>
+<p>This function panics if there is no current timer set.</p>
+<p>It can be triggered when <a href="../../../tokio/runtime/builder/struct.Builder.html#method.enable_time" title="method tokio::runtime::builder::Builder::enable_time"><code>Builder::enable_time</code></a> or
+<a href="../../../tokio/runtime/builder/struct.Builder.html#method.enable_all" title="method tokio::runtime::builder::Builder::enable_all"><code>Builder::enable_all</code></a> are not included in the builder.</p>
+<p>It can also panic whenever a timer is created outside of a
+Tokio runtime. That is why <code>rt.block_on(sleep(...))</code> will panic,
+since the function is executed outside of the runtime.
+Whereas <code>rt.block_on(async {sleep(...).await})</code> doesn’t panic.
+And this is because wrapping the function on an async makes it lazy,
+and so gets executed inside the runtime successfully without
+panicking.</p>
+</div></details><script type="text/json" id="notable-traits-data">{"Timeout<<F as IntoFuture>::IntoFuture>":"<h3>Notable traits for <code><a class=\"struct\" href=\"struct.Timeout.html\" title=\"struct linera_base::time::timer::Timeout\">Timeout</a>&lt;T&gt;</code></h3><pre><code><div class=\"where\">impl&lt;T&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html\" title=\"trait core::future::future::Future\">Future</a> for <a class=\"struct\" href=\"struct.Timeout.html\" title=\"struct linera_base::time::timer::Timeout\">Timeout</a>&lt;T&gt;<div class=\"where\">where\n    T: <a class=\"trait\" href=\"https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html\" title=\"trait core::future::future::Future\">Future</a>,</div></div><div class=\"where\">    type <a href=\"https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html#associatedtype.Output\" class=\"associatedtype\">Output</a> = <a class=\"enum\" href=\"https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html\" title=\"enum core::result::Result\">Result</a>&lt;&lt;T as <a class=\"trait\" href=\"https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html\" title=\"trait core::future::future::Future\">Future</a>&gt;::<a class=\"associatedtype\" href=\"https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html#associatedtype.Output\" title=\"type core::future::future::Future::Output\">Output</a>, <a class=\"struct\" href=\"error/struct.Elapsed.html\" title=\"struct linera_base::time::timer::error::Elapsed\">Elapsed</a>&gt;;</div>"}</script></section></div></main></body></html>

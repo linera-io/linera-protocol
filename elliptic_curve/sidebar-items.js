@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["consts","ops","point","scalar","sec1","weierstrass"],"struct":["Error","PublicKey","SecretKey"],"trait":["Curve","CurveArithmetic","Field","FieldBytesEncoding","Group","PrimeCurve","PrimeCurveArithmetic","PrimeField"],"type":["FieldBytes","FieldBytesSize","Result"]};

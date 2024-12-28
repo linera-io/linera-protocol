@@ -1,0 +1,37 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Provides routines for interpolating capture group references."><title>regex_automata::util::interpolate - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="regex_automata" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../regex_automata/index.html">regex_automata</a><span class="version">0.4.7</span></h2></div><h2 class="location"><a href="#">Module interpolate</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#functions">Functions</a></li></ul></section><h2><a href="../index.html">In regex_automata::util</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../../index.html">regex_automata</a>::<wbr><a href="../index.html">util</a>::<wbr><a class="mod" href="#">interpolate</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/regex_automata/util/interpolate.rs.html#1-579">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Provides routines for interpolating capture group references.</p>
+<p>That is, if a replacement string contains references like <code>$foo</code> or <code>${foo1}</code>,
+then they are replaced with the corresponding capture values for the groups
+named <code>foo</code> and <code>foo1</code>, respectively. Similarly, syntax like <code>$1</code> and <code>${1}</code>
+is supported as well, with <code>1</code> corresponding to a capture group index and not
+a name.</p>
+<p>This module provides the free functions <a href="fn.string.html" title="fn regex_automata::util::interpolate::string"><code>string</code></a> and <a href="fn.bytes.html" title="fn regex_automata::util::interpolate::bytes"><code>bytes</code></a>, which
+interpolate Rust Unicode strings and byte strings, respectively.</p>
+<h2 id="format"><a class="doc-anchor" href="#format">§</a>Format</h2>
+<p>These routines support two different kinds of capture references: unbraced and
+braced.</p>
+<p>For the unbraced format, the format supported is <code>$ref</code> where <code>name</code> can be
+any character in the class <code>[0-9A-Za-z_]</code>. <code>ref</code> is always the longest
+possible parse. So for example, <code>$1a</code> corresponds to the capture group named
+<code>1a</code> and not the capture group at index <code>1</code>. If <code>ref</code> matches <code>^[0-9]+$</code>, then
+it is treated as a capture group index itself and not a name.</p>
+<p>For the braced format, the format supported is <code>${ref}</code> where <code>ref</code> can be any
+sequence of bytes except for <code>}</code>. If no closing brace occurs, then it is not
+considered a capture reference. As with the unbraced format, if <code>ref</code> matches
+<code>^[0-9]+$</code>, then it is treated as a capture group index and not a name.</p>
+<p>The braced format is useful for exerting precise control over the name of the
+capture reference. For example, <code>${1}a</code> corresponds to the capture group
+reference <code>1</code> followed by the letter <code>a</code>, where as <code>$1a</code> (as mentioned above)
+corresponds to the capture group reference <code>1a</code>. The braced format is also
+useful for expressing capture group names that use characters not supported by
+the unbraced format. For example, <code>${foo[bar].baz}</code> refers to the capture group
+named <code>foo[bar].baz</code>.</p>
+<p>If a capture group reference is found and it does not refer to a valid capture
+group, then it will be replaced with the empty string.</p>
+<p>To write a literal <code>$</code>, use <code>$$</code>.</p>
+<p>To be clear, and as exhibited via the type signatures in the routines in this
+module, it is impossible for a replacement string to be invalid. A replacement
+string may not have the intended semantics, but the interpolation procedure
+itself can never fail.</p>
+</div></details><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.bytes.html" title="fn regex_automata::util::interpolate::bytes">bytes</a></div><div class="desc docblock-short">Accepts a replacement byte string and interpolates capture references with
+their corresponding values.</div></li><li><div class="item-name"><a class="fn" href="fn.string.html" title="fn regex_automata::util::interpolate::string">string</a></div><div class="desc docblock-short">Accepts a replacement string and interpolates capture references with their
+corresponding values.</div></li></ul></section></div></main></body></html>

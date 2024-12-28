@@ -1,0 +1,52 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Same as `quote!`, but applies a given span to all tokens originating within the macro invocation."><title>quote_spanned in quote - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="quote" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../quote/index.html">quote</a><span class="version">1.0.37</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="index.html">quote</a>::<wbr><a class="macro" href="#">quote_spanned</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/quote/lib.rs.html#639-643">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><span class="macro">macro_rules!</span> quote_spanned {
+    (<span class="macro-nonterminal">$span</span>:expr=&gt; $(<span class="macro-nonterminal">$tt</span>:tt)<span class="kw-2">*</span>) =&gt; { ... };
+}</pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Same as <code>quote!</code>, but applies a given span to all tokens originating within
+the macro invocation.</p>
+<br>
+<h2 id="syntax"><a class="doc-anchor" href="#syntax">§</a>Syntax</h2>
+<p>A span expression of type <a href="https://docs.rs/proc-macro2/1.0/proc_macro2/struct.Span.html"><code>Span</code></a>, followed by <code>=&gt;</code>, followed by the tokens
+to quote. The span expression should be brief — use a variable for
+anything more than a few characters. There should be no space before the
+<code>=&gt;</code> token.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>span = <span class="comment">/* ... */</span>;
+
+<span class="comment">// On one line, use parentheses.
+</span><span class="kw">let </span>tokens = <span class="macro">quote_spanned!</span>(span=&gt; Box::into_raw(Box::new(#init)));
+
+<span class="comment">// On multiple lines, place the span at the top and use braces.
+</span><span class="kw">let </span>tokens = <span class="macro">quote_spanned!</span> {span=&gt;
+    Box::into_raw(Box::new(#init))
+};</code></pre></div>
+<p>The lack of space before the <code>=&gt;</code> should look jarring to Rust programmers
+and this is intentional. The formatting is designed to be visibly
+off-balance and draw the eye a particular way, due to the span expression
+being evaluated in the context of the procedural macro and the remaining
+tokens being evaluated in the generated code.</p>
+<br>
+<h2 id="hygiene"><a class="doc-anchor" href="#hygiene">§</a>Hygiene</h2>
+<p>Any interpolated tokens preserve the <code>Span</code> information provided by their
+<code>ToTokens</code> implementation. Tokens that originate within the <code>quote_spanned!</code>
+invocation are spanned with the given span argument.</p>
+<br>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<p>The following procedural macro code uses <code>quote_spanned!</code> to assert that a
+particular Rust type implements the <a href="https://doc.rust-lang.org/std/marker/trait.Sync.html"><code>Sync</code></a> trait so that references can be
+safely shared between threads.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>ty_span = ty.span();
+<span class="kw">let </span>assert_sync = <span class="macro">quote_spanned!</span> {ty_span=&gt;
+    <span class="kw">struct </span>_AssertSync <span class="kw">where </span>#ty: Sync;
+};</code></pre></div>
+<p>If the assertion fails, the user will see an error like the following. The
+input span of their type is highlighted in the error.</p>
+<div class="example-wrap"><pre class="language-text"><code>error[E0277]: the trait bound `*const (): std::marker::Sync` is not satisfied
+  --&gt; src/main.rs:10:21
+   |
+10 |     static ref PTR: *const () = &amp;();
+   |                     ^^^^^^^^^ `*const ()` cannot be shared between threads safely
+</code></pre></div>
+<p>In this example it is important for the where-clause to be spanned with the
+line/column information of the user’s input type so that error messages are
+placed appropriately by the compiler.</p>
+</div></details></section></div></main></body></html>

@@ -1,0 +1,703 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="The configuration used for building a lazy DFA."><title>Config in regex_automata::hybrid::dfa - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="regex_automata" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc struct"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../regex_automata/index.html">regex_automata</a><span class="version">0.4.7</span></h2></div><h2 class="location"><a href="#">Config</a></h2><div class="sidebar-elems"><section><h3><a href="#implementations">Methods</a></h3><ul class="block method"><li><a href="#method.byte_classes">byte_classes</a></li><li><a href="#method.cache_capacity">cache_capacity</a></li><li><a href="#method.get_byte_classes">get_byte_classes</a></li><li><a href="#method.get_cache_capacity">get_cache_capacity</a></li><li><a href="#method.get_match_kind">get_match_kind</a></li><li><a href="#method.get_minimum_bytes_per_state">get_minimum_bytes_per_state</a></li><li><a href="#method.get_minimum_cache_capacity">get_minimum_cache_capacity</a></li><li><a href="#method.get_minimum_cache_clear_count">get_minimum_cache_clear_count</a></li><li><a href="#method.get_prefilter">get_prefilter</a></li><li><a href="#method.get_quit">get_quit</a></li><li><a href="#method.get_skip_cache_capacity_check">get_skip_cache_capacity_check</a></li><li><a href="#method.get_specialize_start_states">get_specialize_start_states</a></li><li><a href="#method.get_starts_for_each_pattern">get_starts_for_each_pattern</a></li><li><a href="#method.get_unicode_word_boundary">get_unicode_word_boundary</a></li><li><a href="#method.match_kind">match_kind</a></li><li><a href="#method.minimum_bytes_per_state">minimum_bytes_per_state</a></li><li><a href="#method.minimum_cache_clear_count">minimum_cache_clear_count</a></li><li><a href="#method.new">new</a></li><li><a href="#method.prefilter">prefilter</a></li><li><a href="#method.quit">quit</a></li><li><a href="#method.skip_cache_capacity_check">skip_cache_capacity_check</a></li><li><a href="#method.specialize_start_states">specialize_start_states</a></li><li><a href="#method.starts_for_each_pattern">starts_for_each_pattern</a></li><li><a href="#method.unicode_word_boundary">unicode_word_boundary</a></li></ul><h3><a href="#trait-implementations">Trait Implementations</a></h3><ul class="block trait-implementation"><li><a href="#impl-Clone-for-Config">Clone</a></li><li><a href="#impl-Debug-for-Config">Debug</a></li><li><a href="#impl-Default-for-Config">Default</a></li></ul><h3><a href="#synthetic-implementations">Auto Trait Implementations</a></h3><ul class="block synthetic-implementation"><li><a href="#impl-Freeze-for-Config">Freeze</a></li><li><a href="#impl-RefUnwindSafe-for-Config">RefUnwindSafe</a></li><li><a href="#impl-Send-for-Config">Send</a></li><li><a href="#impl-Sync-for-Config">Sync</a></li><li><a href="#impl-Unpin-for-Config">Unpin</a></li><li><a href="#impl-UnwindSafe-for-Config">UnwindSafe</a></li></ul><h3><a href="#blanket-implementations">Blanket Implementations</a></h3><ul class="block blanket-implementation"><li><a href="#impl-Any-for-T">Any</a></li><li><a href="#impl-Borrow%3CT%3E-for-T">Borrow&lt;T&gt;</a></li><li><a href="#impl-BorrowMut%3CT%3E-for-T">BorrowMut&lt;T&gt;</a></li><li><a href="#impl-CloneToUninit-for-T">CloneToUninit</a></li><li><a href="#impl-From%3CT%3E-for-T">From&lt;T&gt;</a></li><li><a href="#impl-Into%3CU%3E-for-T">Into&lt;U&gt;</a></li><li><a href="#impl-ToOwned-for-T">ToOwned</a></li><li><a href="#impl-TryFrom%3CU%3E-for-T">TryFrom&lt;U&gt;</a></li><li><a href="#impl-TryInto%3CU%3E-for-T">TryInto&lt;U&gt;</a></li></ul></section><h2><a href="index.html">In regex_automata::hybrid::dfa</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Struct <a href="../../index.html">regex_automata</a>::<wbr><a href="../index.html">hybrid</a>::<wbr><a href="index.html">dfa</a>::<wbr><a class="struct" href="#">Config</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/regex_automata/hybrid/dfa.rs.html#2863-2882">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub struct Config { <span class="comment">/* private fields */</span> }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>The configuration used for building a lazy DFA.</p>
+<p>As a convenience, <a href="struct.DFA.html#method.config" title="associated function regex_automata::hybrid::dfa::DFA::config"><code>DFA::config</code></a> is an alias for <a href="struct.Config.html#method.new" title="associated function regex_automata::hybrid::dfa::Config::new"><code>Config::new</code></a>. The
+advantage of the former is that it often lets you avoid importing the
+<code>Config</code> type directly.</p>
+<p>A lazy DFA configuration is a simple data object that is typically used
+with <a href="struct.Builder.html#method.configure" title="method regex_automata::hybrid::dfa::Builder::configure"><code>Builder::configure</code></a>.</p>
+<p>The default configuration guarantees that a search will never return a
+“gave up” or “quit” error, although it is possible for a search to fail
+if <a href="struct.Config.html#method.starts_for_each_pattern" title="method regex_automata::hybrid::dfa::Config::starts_for_each_pattern"><code>Config::starts_for_each_pattern</code></a> wasn’t enabled (which it is not by
+default) and an <a href="../../enum.Anchored.html#variant.Pattern" title="variant regex_automata::Anchored::Pattern"><code>Anchored::Pattern</code></a> mode is requested via <a href="../../struct.Input.html" title="struct regex_automata::Input"><code>Input</code></a>.</p>
+</div></details><h2 id="implementations" class="section-header">Implementations<a href="#implementations" class="anchor">§</a></h2><div id="implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-Config" class="impl"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#2884-3906">source</a><a href="#impl-Config" class="anchor">§</a><h3 class="code-header">impl <a class="struct" href="struct.Config.html" title="struct regex_automata::hybrid::dfa::Config">Config</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.new" class="method"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#2886-2888">source</a><h4 class="code-header">pub fn <a href="#method.new" class="fn">new</a>() -&gt; <a class="struct" href="struct.Config.html" title="struct regex_automata::hybrid::dfa::Config">Config</a></h4></section></summary><div class="docblock"><p>Return a new default lazy DFA builder configuration.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.match_kind" class="method"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#2998-3001">source</a><h4 class="code-header">pub fn <a href="#method.match_kind" class="fn">match_kind</a>(self, kind: <a class="enum" href="../../enum.MatchKind.html" title="enum regex_automata::MatchKind">MatchKind</a>) -&gt; <a class="struct" href="struct.Config.html" title="struct regex_automata::hybrid::dfa::Config">Config</a></h4></section></summary><div class="docblock"><p>Set the desired match semantics.</p>
+<p>The default is <a href="../../enum.MatchKind.html#variant.LeftmostFirst" title="variant regex_automata::MatchKind::LeftmostFirst"><code>MatchKind::LeftmostFirst</code></a>, which corresponds to the
+match semantics of Perl-like regex engines. That is, when multiple
+patterns would match at the same leftmost position, the pattern that
+appears first in the concrete syntax is chosen.</p>
+<p>Currently, the only other kind of match semantics supported is
+<a href="../../enum.MatchKind.html#variant.All" title="variant regex_automata::MatchKind::All"><code>MatchKind::All</code></a>. This corresponds to classical DFA construction
+where all possible matches are added to the lazy DFA.</p>
+<p>Typically, <code>All</code> is used when one wants to execute an overlapping
+search and <code>LeftmostFirst</code> otherwise. In particular, it rarely makes
+sense to use <code>All</code> with the various “leftmost” find routines, since the
+leftmost routines depend on the <code>LeftmostFirst</code> automata construction
+strategy. Specifically, <code>LeftmostFirst</code> adds dead states to the
+lazy DFA as a way to terminate the search and report a match.
+<code>LeftmostFirst</code> also supports non-greedy matches using this strategy
+where as <code>All</code> does not.</p>
+<h5 id="example-overlapping-search"><a class="doc-anchor" href="#example-overlapping-search">§</a>Example: overlapping search</h5>
+<p>This example shows the typical use of <code>MatchKind::All</code>, which is to
+report overlapping matches.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    hybrid::dfa::{DFA, OverlappingState},
+    HalfMatch, Input, MatchKind,
+};
+
+<span class="kw">let </span>dfa = DFA::builder()
+    .configure(DFA::config().match_kind(MatchKind::All))
+    .build_many(<span class="kw-2">&amp;</span>[<span class="string">r"\w+$"</span>, <span class="string">r"\S+$"</span>])<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = dfa.create_cache();
+<span class="kw">let </span>haystack = <span class="string">"@foo"</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>state = OverlappingState::start();
+
+<span class="kw">let </span>expected = <span class="prelude-val">Some</span>(HalfMatch::must(<span class="number">1</span>, <span class="number">4</span>));
+dfa.try_search_overlapping_fwd(
+    <span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>Input::new(haystack), <span class="kw-2">&amp;mut </span>state,
+)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(expected, state.get_match());
+
+<span class="comment">// The first pattern also matches at the same position, so re-running
+// the search will yield another match. Notice also that the first
+// pattern is returned after the second. This is because the second
+// pattern begins its match before the first, is therefore an earlier
+// match and is thus reported first.
+</span><span class="kw">let </span>expected = <span class="prelude-val">Some</span>(HalfMatch::must(<span class="number">0</span>, <span class="number">4</span>));
+dfa.try_search_overlapping_fwd(
+    <span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>Input::new(haystack), <span class="kw-2">&amp;mut </span>state,
+)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(expected, state.get_match());
+</code></pre></div>
+<h5 id="example-reverse-automaton-to-find-start-of-match"><a class="doc-anchor" href="#example-reverse-automaton-to-find-start-of-match">§</a>Example: reverse automaton to find start of match</h5>
+<p>Another example for using <code>MatchKind::All</code> is for constructing a
+reverse automaton to find the start of a match. <code>All</code> semantics are
+used for this in order to find the longest possible match, which
+corresponds to the leftmost starting position.</p>
+<p>Note that if you need the starting position then
+<a href="../regex/struct.Regex.html" title="struct regex_automata::hybrid::regex::Regex"><code>hybrid::regex::Regex</code></a> will handle this
+for you, so it’s usually not necessary to do this yourself.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    hybrid::dfa::DFA,
+    nfa::thompson::NFA,
+    Anchored, HalfMatch, Input, MatchKind,
+};
+
+<span class="kw">let </span>input = Input::new(<span class="string">"123foobar456"</span>);
+<span class="kw">let </span>pattern = <span class="string">r"[a-z]+r"</span>;
+
+<span class="kw">let </span>dfa_fwd = DFA::new(pattern)<span class="question-mark">?</span>;
+<span class="kw">let </span>dfa_rev = DFA::builder()
+    .thompson(NFA::config().reverse(<span class="bool-val">true</span>))
+    .configure(DFA::config().match_kind(MatchKind::All))
+    .build(pattern)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache_fwd = dfa_fwd.create_cache();
+<span class="kw">let </span><span class="kw-2">mut </span>cache_rev = dfa_rev.create_cache();
+
+<span class="kw">let </span>expected_fwd = HalfMatch::must(<span class="number">0</span>, <span class="number">9</span>);
+<span class="kw">let </span>expected_rev = HalfMatch::must(<span class="number">0</span>, <span class="number">3</span>);
+<span class="kw">let </span>got_fwd = dfa_fwd.try_search_fwd(<span class="kw-2">&amp;mut </span>cache_fwd, <span class="kw-2">&amp;</span>input)<span class="question-mark">?</span>.unwrap();
+<span class="comment">// Here we don't specify the pattern to search for since there's only
+// one pattern and we're doing a leftmost search. But if this were an
+// overlapping search, you'd need to specify the pattern that matched
+// in the forward direction. (Otherwise, you might wind up finding the
+// starting position of a match of some other pattern.) That in turn
+// requires building the reverse automaton with starts_for_each_pattern
+// enabled.
+</span><span class="kw">let </span>input = input
+    .clone()
+    .range(..got_fwd.offset())
+    .anchored(Anchored::Yes);
+<span class="kw">let </span>got_rev = dfa_rev.try_search_rev(<span class="kw-2">&amp;mut </span>cache_rev, <span class="kw-2">&amp;</span>input)<span class="question-mark">?</span>.unwrap();
+<span class="macro">assert_eq!</span>(expected_fwd, got_fwd);
+<span class="macro">assert_eq!</span>(expected_rev, got_rev);
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.prefilter" class="method"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#3074-3081">source</a><h4 class="code-header">pub fn <a href="#method.prefilter" class="fn">prefilter</a>(self, pre: <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../../util/prefilter/struct.Prefilter.html" title="struct regex_automata::util::prefilter::Prefilter">Prefilter</a>&gt;) -&gt; <a class="struct" href="struct.Config.html" title="struct regex_automata::hybrid::dfa::Config">Config</a></h4></section></summary><div class="docblock"><p>Set a prefilter to be used whenever a start state is entered.</p>
+<p>A <a href="../../util/prefilter/struct.Prefilter.html" title="struct regex_automata::util::prefilter::Prefilter"><code>Prefilter</code></a> in this context is meant to accelerate searches by
+looking for literal prefixes that every match for the corresponding
+pattern (or patterns) must start with. Once a prefilter produces a
+match, the underlying search routine continues on to try and confirm
+the match.</p>
+<p>Be warned that setting a prefilter does not guarantee that the search
+will be faster. While it’s usually a good bet, if the prefilter
+produces a lot of false positive candidates (i.e., positions matched
+by the prefilter but not by the regex), then the overall result can
+be slower than if you had just executed the regex engine without any
+prefilters.</p>
+<p>Note that unless <a href="struct.Config.html#method.specialize_start_states" title="method regex_automata::hybrid::dfa::Config::specialize_start_states"><code>Config::specialize_start_states</code></a> has been
+explicitly set, then setting this will also enable (when <code>pre</code> is
+<code>Some</code>) or disable (when <code>pre</code> is <code>None</code>) start state specialization.
+This occurs because without start state specialization, a prefilter
+is likely to be less effective. And without a prefilter, start state
+specialization is usually pointless.</p>
+<p>By default no prefilter is set.</p>
+<h5 id="example"><a class="doc-anchor" href="#example">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    hybrid::dfa::DFA,
+    util::prefilter::Prefilter,
+    Input, HalfMatch, MatchKind,
+};
+
+<span class="kw">let </span>pre = Prefilter::new(MatchKind::LeftmostFirst, <span class="kw-2">&amp;</span>[<span class="string">"foo"</span>, <span class="string">"bar"</span>]);
+<span class="kw">let </span>re = DFA::builder()
+    .configure(DFA::config().prefilter(pre))
+    .build(<span class="string">r"(foo|bar)[a-z]+"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = re.create_cache();
+<span class="kw">let </span>input = Input::new(<span class="string">"foo1 barfox bar"</span>);
+<span class="macro">assert_eq!</span>(
+    <span class="prelude-val">Some</span>(HalfMatch::must(<span class="number">0</span>, <span class="number">11</span>)),
+    re.try_search_fwd(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>input)<span class="question-mark">?</span>,
+);
+</code></pre></div>
+<p>Be warned though that an incorrect prefilter can lead to incorrect
+results!</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    hybrid::dfa::DFA,
+    util::prefilter::Prefilter,
+    Input, HalfMatch, MatchKind,
+};
+
+<span class="kw">let </span>pre = Prefilter::new(MatchKind::LeftmostFirst, <span class="kw-2">&amp;</span>[<span class="string">"foo"</span>, <span class="string">"car"</span>]);
+<span class="kw">let </span>re = DFA::builder()
+    .configure(DFA::config().prefilter(pre))
+    .build(<span class="string">r"(foo|bar)[a-z]+"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = re.create_cache();
+<span class="kw">let </span>input = Input::new(<span class="string">"foo1 barfox bar"</span>);
+<span class="macro">assert_eq!</span>(
+    <span class="comment">// No match reported even though there clearly is one!
+    </span><span class="prelude-val">None</span>,
+    re.try_search_fwd(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>input)<span class="question-mark">?</span>,
+);
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.starts_for_each_pattern" class="method"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#3153-3156">source</a><h4 class="code-header">pub fn <a href="#method.starts_for_each_pattern" class="fn">starts_for_each_pattern</a>(self, yes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>) -&gt; <a class="struct" href="struct.Config.html" title="struct regex_automata::hybrid::dfa::Config">Config</a></h4></section></summary><div class="docblock"><p>Whether to compile a separate start state for each pattern in the
+lazy DFA.</p>
+<p>When enabled, a separate <strong>anchored</strong> start state is added for each
+pattern in the lazy DFA. When this start state is used, then the DFA
+will only search for matches for the pattern specified, even if there
+are other patterns in the DFA.</p>
+<p>The main downside of this option is that it can potentially increase
+the size of the DFA and/or increase the time it takes to build the
+DFA at search time. However, since this is configuration for a lazy
+DFA, these states aren’t actually built unless they’re used. Enabling
+this isn’t necessarily free, however, as it may result in higher cache
+usage.</p>
+<p>There are a few reasons one might want to enable this (it’s disabled
+by default):</p>
+<ol>
+<li>When looking for the start of an overlapping match (using a reverse
+DFA), doing it correctly requires starting the reverse search using the
+starting state of the pattern that matched in the forward direction.
+Indeed, when building a <a href="../regex/struct.Regex.html" title="struct regex_automata::hybrid::regex::Regex"><code>Regex</code></a>, it
+will automatically enable this option when building the reverse DFA
+internally.</li>
+<li>When you want to use a DFA with multiple patterns to both search
+for matches of any pattern or to search for anchored matches of one
+particular pattern while using the same DFA. (Otherwise, you would need
+to compile a new DFA for each pattern.)</li>
+</ol>
+<p>By default this is disabled.</p>
+<h5 id="example-1"><a class="doc-anchor" href="#example-1">§</a>Example</h5>
+<p>This example shows how to use this option to permit the same lazy DFA
+to run both general searches for any pattern and anchored searches for
+a specific pattern.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    hybrid::dfa::DFA,
+    Anchored, HalfMatch, Input, PatternID,
+};
+
+<span class="kw">let </span>dfa = DFA::builder()
+    .configure(DFA::config().starts_for_each_pattern(<span class="bool-val">true</span>))
+    .build_many(<span class="kw-2">&amp;</span>[<span class="string">r"[a-z0-9]{6}"</span>, <span class="string">r"[a-z][a-z0-9]{5}"</span>])<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = dfa.create_cache();
+<span class="kw">let </span>haystack = <span class="string">"bar foo123"</span>;
+
+<span class="comment">// Here's a normal unanchored search that looks for any pattern.
+</span><span class="kw">let </span>expected = HalfMatch::must(<span class="number">0</span>, <span class="number">10</span>);
+<span class="kw">let </span>input = Input::new(haystack);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(expected), dfa.try_search_fwd(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>input)<span class="question-mark">?</span>);
+<span class="comment">// We can also do a normal anchored search for any pattern. Since it's
+// an anchored search, we position the start of the search where we
+// know the match will begin.
+</span><span class="kw">let </span>expected = HalfMatch::must(<span class="number">0</span>, <span class="number">10</span>);
+<span class="kw">let </span>input = Input::new(haystack).range(<span class="number">4</span>..);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(expected), dfa.try_search_fwd(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>input)<span class="question-mark">?</span>);
+<span class="comment">// Since we compiled anchored start states for each pattern, we can
+// also look for matches of other patterns explicitly, even if a
+// different pattern would have normally matched.
+</span><span class="kw">let </span>expected = HalfMatch::must(<span class="number">1</span>, <span class="number">10</span>);
+<span class="kw">let </span>input = Input::new(haystack)
+    .range(<span class="number">4</span>..)
+    .anchored(Anchored::Pattern(PatternID::must(<span class="number">1</span>)));
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(expected), dfa.try_search_fwd(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>input)<span class="question-mark">?</span>);
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.byte_classes" class="method"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#3189-3192">source</a><h4 class="code-header">pub fn <a href="#method.byte_classes" class="fn">byte_classes</a>(self, yes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>) -&gt; <a class="struct" href="struct.Config.html" title="struct regex_automata::hybrid::dfa::Config">Config</a></h4></section></summary><div class="docblock"><p>Whether to attempt to shrink the size of the lazy DFA’s alphabet or
+not.</p>
+<p>This option is enabled by default and should never be disabled unless
+one is debugging the lazy DFA.</p>
+<p>When enabled, the lazy DFA will use a map from all possible bytes
+to their corresponding equivalence class. Each equivalence class
+represents a set of bytes that does not discriminate between a match
+and a non-match in the DFA. For example, the pattern <code>[ab]+</code> has at
+least two equivalence classes: a set containing <code>a</code> and <code>b</code> and a set
+containing every byte except for <code>a</code> and <code>b</code>. <code>a</code> and <code>b</code> are in the
+same equivalence classes because they never discriminate between a
+match and a non-match.</p>
+<p>The advantage of this map is that the size of the transition table
+can be reduced drastically from <code>#states * 256 * sizeof(LazyStateID)</code>
+to <code>#states * k * sizeof(LazyStateID)</code> where <code>k</code> is the number of
+equivalence classes (rounded up to the nearest power of 2). As a
+result, total space usage can decrease substantially. Moreover, since a
+smaller alphabet is used, DFA compilation during search becomes faster
+as well since it will potentially be able to reuse a single transition
+for multiple bytes.</p>
+<p><strong>WARNING:</strong> This is only useful for debugging lazy DFAs. Disabling
+this does not yield any speed advantages. Namely, even when this is
+disabled, a byte class map is still used while searching. The only
+difference is that every byte will be forced into its own distinct
+equivalence class. This is useful for debugging the actual generated
+transitions because it lets one see the transitions defined on actual
+bytes instead of the equivalence classes.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.unicode_word_boundary" class="method"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#3277-3284">source</a><h4 class="code-header">pub fn <a href="#method.unicode_word_boundary" class="fn">unicode_word_boundary</a>(self, yes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>) -&gt; <a class="struct" href="struct.Config.html" title="struct regex_automata::hybrid::dfa::Config">Config</a></h4></section></summary><div class="docblock"><p>Heuristically enable Unicode word boundaries.</p>
+<p>When set, this will attempt to implement Unicode word boundaries as if
+they were ASCII word boundaries. This only works when the search input
+is ASCII only. If a non-ASCII byte is observed while searching, then a
+<a href="../../struct.MatchError.html#method.quit" title="associated function regex_automata::MatchError::quit"><code>MatchError::quit</code></a> error is returned.</p>
+<p>A possible alternative to enabling this option is to simply use an
+ASCII word boundary, e.g., via <code>(?-u:\b)</code>. The main reason to use this
+option is if you absolutely need Unicode support. This option lets one
+use a fast search implementation (a DFA) for some potentially very
+common cases, while providing the option to fall back to some other
+regex engine to handle the general case when an error is returned.</p>
+<p>If the pattern provided has no Unicode word boundary in it, then this
+option has no effect. (That is, quitting on a non-ASCII byte only
+occurs when this option is enabled <em>and</em> a Unicode word boundary is
+present in the pattern.)</p>
+<p>This is almost equivalent to setting all non-ASCII bytes to be quit
+bytes. The only difference is that this will cause non-ASCII bytes to
+be quit bytes <em>only</em> when a Unicode word boundary is present in the
+pattern.</p>
+<p>When enabling this option, callers <em>must</em> be prepared to
+handle a <a href="../../struct.MatchError.html" title="struct regex_automata::MatchError"><code>MatchError</code></a> error during search. When using a
+<a href="../regex/struct.Regex.html" title="struct regex_automata::hybrid::regex::Regex"><code>Regex</code></a>, this corresponds to using the
+<code>try_</code> suite of methods. Alternatively, if callers can guarantee that
+their input is ASCII only, then a <a href="../../struct.MatchError.html#method.quit" title="associated function regex_automata::MatchError::quit"><code>MatchError::quit</code></a> error will never
+be returned while searching.</p>
+<p>This is disabled by default.</p>
+<h5 id="example-2"><a class="doc-anchor" href="#example-2">§</a>Example</h5>
+<p>This example shows how to heuristically enable Unicode word boundaries
+in a pattern. It also shows what happens when a search comes across a
+non-ASCII byte.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    hybrid::dfa::DFA,
+    HalfMatch, Input, MatchError,
+};
+
+<span class="kw">let </span>dfa = DFA::builder()
+    .configure(DFA::config().unicode_word_boundary(<span class="bool-val">true</span>))
+    .build(<span class="string">r"\b[0-9]+\b"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = dfa.create_cache();
+
+<span class="comment">// The match occurs before the search ever observes the snowman
+// character, so no error occurs.
+</span><span class="kw">let </span>haystack = <span class="string">"foo 123  ☃"</span>;
+<span class="kw">let </span>expected = <span class="prelude-val">Some</span>(HalfMatch::must(<span class="number">0</span>, <span class="number">7</span>));
+<span class="kw">let </span>got = dfa.try_search_fwd(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>Input::new(haystack))<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(expected, got);
+
+<span class="comment">// Notice that this search fails, even though the snowman character
+// occurs after the ending match offset. This is because search
+// routines read one byte past the end of the search to account for
+// look-around, and indeed, this is required here to determine whether
+// the trailing \b matches.
+</span><span class="kw">let </span>haystack = <span class="string">"foo 123 ☃"</span>;
+<span class="kw">let </span>expected = MatchError::quit(<span class="number">0xE2</span>, <span class="number">8</span>);
+<span class="kw">let </span>got = dfa.try_search_fwd(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>Input::new(haystack));
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Err</span>(expected), got);
+
+<span class="comment">// Another example is executing a search where the span of the haystack
+// we specify is all ASCII, but there is non-ASCII just before it. This
+// correctly also reports an error.
+</span><span class="kw">let </span>input = Input::new(<span class="string">"β123"</span>).range(<span class="number">2</span>..);
+<span class="kw">let </span>expected = MatchError::quit(<span class="number">0xB2</span>, <span class="number">1</span>);
+<span class="kw">let </span>got = dfa.try_search_fwd(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>input);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Err</span>(expected), got);
+
+<span class="comment">// And similarly for the trailing word boundary.
+</span><span class="kw">let </span>input = Input::new(<span class="string">"123β"</span>).range(..<span class="number">3</span>);
+<span class="kw">let </span>expected = MatchError::quit(<span class="number">0xCE</span>, <span class="number">3</span>);
+<span class="kw">let </span>got = dfa.try_search_fwd(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>input);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Err</span>(expected), got);
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.quit" class="method"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#3352-3368">source</a><h4 class="code-header">pub fn <a href="#method.quit" class="fn">quit</a>(self, byte: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>, yes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>) -&gt; <a class="struct" href="struct.Config.html" title="struct regex_automata::hybrid::dfa::Config">Config</a></h4></section></summary><div class="docblock"><p>Add a “quit” byte to the lazy DFA.</p>
+<p>When a quit byte is seen during search time, then search will return a
+<a href="../../struct.MatchError.html#method.quit" title="associated function regex_automata::MatchError::quit"><code>MatchError::quit</code></a> error indicating the offset at which the search
+stopped.</p>
+<p>A quit byte will always overrule any other aspects of a regex. For
+example, if the <code>x</code> byte is added as a quit byte and the regex <code>\w</code> is
+used, then observing <code>x</code> will cause the search to quit immediately
+despite the fact that <code>x</code> is in the <code>\w</code> class.</p>
+<p>This mechanism is primarily useful for heuristically enabling certain
+features like Unicode word boundaries in a DFA. Namely, if the input
+to search is ASCII, then a Unicode word boundary can be implemented
+via an ASCII word boundary with no change in semantics. Thus, a DFA
+can attempt to match a Unicode word boundary but give up as soon as it
+observes a non-ASCII byte. Indeed, if callers set all non-ASCII bytes
+to be quit bytes, then Unicode word boundaries will be permitted when
+building lazy DFAs. Of course, callers should enable
+<a href="struct.Config.html#method.unicode_word_boundary" title="method regex_automata::hybrid::dfa::Config::unicode_word_boundary"><code>Config::unicode_word_boundary</code></a> if they want this behavior instead.
+(The advantage being that non-ASCII quit bytes will only be added if a
+Unicode word boundary is in the pattern.)</p>
+<p>When enabling this option, callers <em>must</em> be prepared to
+handle a <a href="../../struct.MatchError.html" title="struct regex_automata::MatchError"><code>MatchError</code></a> error during search. When using a
+<a href="../regex/struct.Regex.html" title="struct regex_automata::hybrid::regex::Regex"><code>Regex</code></a>, this corresponds to using the
+<code>try_</code> suite of methods.</p>
+<p>By default, there are no quit bytes set.</p>
+<h5 id="panics"><a class="doc-anchor" href="#panics">§</a>Panics</h5>
+<p>This panics if heuristic Unicode word boundaries are enabled and any
+non-ASCII byte is removed from the set of quit bytes. Namely, enabling
+Unicode word boundaries requires setting every non-ASCII byte to a quit
+byte. So if the caller attempts to undo any of that, then this will
+panic.</p>
+<h5 id="example-3"><a class="doc-anchor" href="#example-3">§</a>Example</h5>
+<p>This example shows how to cause a search to terminate if it sees a
+<code>\n</code> byte. This could be useful if, for example, you wanted to prevent
+a user supplied pattern from matching across a line boundary.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{hybrid::dfa::DFA, MatchError, Input};
+
+<span class="kw">let </span>dfa = DFA::builder()
+    .configure(DFA::config().quit(<span class="string">b'\n'</span>, <span class="bool-val">true</span>))
+    .build(<span class="string">r"foo\p{any}+bar"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = dfa.create_cache();
+
+<span class="kw">let </span>haystack = <span class="string">"foo\nbar"</span>;
+<span class="comment">// Normally this would produce a match, since \p{any} contains '\n'.
+// But since we instructed the automaton to enter a quit state if a
+// '\n' is observed, this produces a match error instead.
+</span><span class="kw">let </span>expected = MatchError::quit(<span class="string">b'\n'</span>, <span class="number">3</span>);
+<span class="kw">let </span>got = dfa.try_search_fwd(
+    <span class="kw-2">&amp;mut </span>cache,
+    <span class="kw-2">&amp;</span>Input::new(haystack),
+).unwrap_err();
+<span class="macro">assert_eq!</span>(expected, got);
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.specialize_start_states" class="method"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#3448-3451">source</a><h4 class="code-header">pub fn <a href="#method.specialize_start_states" class="fn">specialize_start_states</a>(self, yes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>) -&gt; <a class="struct" href="struct.Config.html" title="struct regex_automata::hybrid::dfa::Config">Config</a></h4></section></summary><div class="docblock"><p>Enable specializing start states in the lazy DFA.</p>
+<p>When start states are specialized, an implementor of a search routine
+using a lazy DFA can tell when the search has entered a starting state.
+When start states aren’t specialized, then it is impossible to know
+whether the search has entered a start state.</p>
+<p>Ideally, this option wouldn’t need to exist and we could always
+specialize start states. The problem is that start states can be quite
+active. This in turn means that an efficient search routine is likely
+to ping-pong between a heavily optimized hot loop that handles most
+states and to a less optimized specialized handling of start states.
+This causes branches to get heavily mispredicted and overall can
+materially decrease throughput. Therefore, specializing start states
+should only be enabled when it is needed.</p>
+<p>Knowing whether a search is in a start state is typically useful when a
+prefilter is active for the search. A prefilter is typically only run
+when in a start state and a prefilter can greatly accelerate a search.
+Therefore, the possible cost of specializing start states is worth it
+in this case. Otherwise, if you have no prefilter, there is likely no
+reason to specialize start states.</p>
+<p>This is disabled by default, but note that it is automatically
+enabled (or disabled) if <a href="struct.Config.html#method.prefilter" title="method regex_automata::hybrid::dfa::Config::prefilter"><code>Config::prefilter</code></a> is set. Namely, unless
+<code>specialize_start_states</code> has already been set, <a href="struct.Config.html#method.prefilter" title="method regex_automata::hybrid::dfa::Config::prefilter"><code>Config::prefilter</code></a>
+will automatically enable or disable it based on whether a prefilter
+is present or not, respectively. This is done because a prefilter’s
+effectiveness is rooted in being executed whenever the DFA is in a
+start state, and that’s only possible to do when they are specialized.</p>
+<p>Note that it is plausibly reasonable to <em>disable</em> this option
+explicitly while <em>enabling</em> a prefilter. In that case, a prefilter
+will still be run at the beginning of a search, but never again. This
+in theory could strike a good balance if you’re in a situation where a
+prefilter is likely to produce many false positive candidates.</p>
+<h5 id="example-4"><a class="doc-anchor" href="#example-4">§</a>Example</h5>
+<p>This example shows how to enable start state specialization and then
+shows how to check whether a state is a start state or not.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{hybrid::dfa::DFA, MatchError, Input};
+
+<span class="kw">let </span>dfa = DFA::builder()
+    .configure(DFA::config().specialize_start_states(<span class="bool-val">true</span>))
+    .build(<span class="string">r"[a-z]+"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = dfa.create_cache();
+
+<span class="kw">let </span>haystack = <span class="string">"123 foobar 4567"</span>.as_bytes();
+<span class="kw">let </span>sid = dfa.start_state_forward(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>Input::new(haystack))<span class="question-mark">?</span>;
+<span class="comment">// The ID returned by 'start_state_forward' will always be tagged as
+// a start state when start state specialization is enabled.
+</span><span class="macro">assert!</span>(sid.is_tagged());
+<span class="macro">assert!</span>(sid.is_start());
+</code></pre></div>
+<p>Compare the above with the default lazy DFA configuration where
+start states are <em>not</em> specialized. In this case, the start state
+is not tagged and <code>sid.is_start()</code> returns false.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{hybrid::dfa::DFA, MatchError, Input};
+
+<span class="kw">let </span>dfa = DFA::new(<span class="string">r"[a-z]+"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = dfa.create_cache();
+
+<span class="kw">let </span>haystack = <span class="string">"123 foobar 4567"</span>.as_bytes();
+<span class="kw">let </span>sid = dfa.start_state_forward(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>Input::new(haystack))<span class="question-mark">?</span>;
+<span class="comment">// Start states are not tagged in the default configuration!
+</span><span class="macro">assert!</span>(!sid.is_tagged());
+<span class="macro">assert!</span>(!sid.is_start());
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.cache_capacity" class="method"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#3506-3509">source</a><h4 class="code-header">pub fn <a href="#method.cache_capacity" class="fn">cache_capacity</a>(self, bytes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="struct" href="struct.Config.html" title="struct regex_automata::hybrid::dfa::Config">Config</a></h4></section></summary><div class="docblock"><p>Sets the maximum amount of heap memory, in bytes, to allocate to the
+cache for use during a lazy DFA search. If the lazy DFA would otherwise
+use more heap memory, then, depending on other configuration knobs,
+either stop the search and return an error or clear the cache and
+continue the search.</p>
+<p>The default cache capacity is some “reasonable” number that will
+accommodate most regular expressions. You may find that if you need
+to build a large DFA then it may be necessary to increase the cache
+capacity.</p>
+<p>Note that while building a lazy DFA will do a “minimum” check to ensure
+the capacity is big enough, this is more or less about correctness.
+If the cache is bigger than the minimum but still “too small,” then the
+lazy DFA could wind up spending a lot of time clearing the cache and
+recomputing transitions, thus negating the performance benefits of a
+lazy DFA. Thus, setting the cache capacity is mostly an experimental
+endeavor. For most common patterns, however, the default should be
+sufficient.</p>
+<p>For more details on how the lazy DFA’s cache is used, see the
+documentation for <a href="struct.Cache.html" title="struct regex_automata::hybrid::dfa::Cache"><code>Cache</code></a>.</p>
+<h5 id="example-5"><a class="doc-anchor" href="#example-5">§</a>Example</h5>
+<p>This example shows what happens if the configured cache capacity is
+too small. In such cases, one can override the cache capacity to make
+it bigger. Alternatively, one might want to use less memory by setting
+a smaller cache capacity.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{hybrid::dfa::DFA, HalfMatch, Input};
+
+<span class="kw">let </span>pattern = <span class="string">r"\p{L}{1000}"</span>;
+
+<span class="comment">// The default cache capacity is likely too small to deal with regexes
+// that are very large. Large repetitions of large Unicode character
+// classes are a common way to make very large regexes.
+</span><span class="kw">let _ </span>= DFA::new(pattern).unwrap_err();
+<span class="comment">// Bump up the capacity to something bigger.
+</span><span class="kw">let </span>dfa = DFA::builder()
+    .configure(DFA::config().cache_capacity(<span class="number">100 </span>* (<span class="number">1</span>&lt;&lt;<span class="number">20</span>))) <span class="comment">// 100 MB
+    </span>.build(pattern)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = dfa.create_cache();
+
+<span class="kw">let </span>haystack = <span class="string">"ͰͲͶͿΆΈΉΊΌΎΏΑΒΓΔΕΖΗΘΙ"</span>.repeat(<span class="number">50</span>);
+<span class="kw">let </span>expected = <span class="prelude-val">Some</span>(HalfMatch::must(<span class="number">0</span>, <span class="number">2000</span>));
+<span class="kw">let </span>got = dfa.try_search_fwd(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>Input::new(<span class="kw-2">&amp;</span>haystack))<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(expected, got);
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.skip_cache_capacity_check" class="method"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#3561-3564">source</a><h4 class="code-header">pub fn <a href="#method.skip_cache_capacity_check" class="fn">skip_cache_capacity_check</a>(self, yes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>) -&gt; <a class="struct" href="struct.Config.html" title="struct regex_automata::hybrid::dfa::Config">Config</a></h4></section></summary><div class="docblock"><p>Configures construction of a lazy DFA to use the minimum cache capacity
+if the configured capacity is otherwise too small for the provided NFA.</p>
+<p>This is useful if you never want lazy DFA construction to fail because
+of a capacity that is too small.</p>
+<p>In general, this option is typically not a good idea. In particular,
+while a minimum cache capacity does permit the lazy DFA to function
+where it otherwise couldn’t, it’s plausible that it may not function
+well if it’s constantly running out of room. In that case, the speed
+advantages of the lazy DFA may be negated. On the other hand, the
+“minimum” cache capacity computed may not be completely accurate and
+could actually be bigger than what is really necessary. Therefore, it
+is plausible that using the minimum cache capacity could still result
+in very good performance.</p>
+<p>This is disabled by default.</p>
+<h5 id="example-6"><a class="doc-anchor" href="#example-6">§</a>Example</h5>
+<p>This example shows what happens if the configured cache capacity is
+too small. In such cases, one could override the capacity explicitly.
+An alternative, demonstrated here, let’s us force construction to use
+the minimum cache capacity if the configured capacity is otherwise
+too small.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{hybrid::dfa::DFA, HalfMatch, Input};
+
+<span class="kw">let </span>pattern = <span class="string">r"\p{L}{1000}"</span>;
+
+<span class="comment">// The default cache capacity is likely too small to deal with regexes
+// that are very large. Large repetitions of large Unicode character
+// classes are a common way to make very large regexes.
+</span><span class="kw">let _ </span>= DFA::new(pattern).unwrap_err();
+<span class="comment">// Configure construction such it automatically selects the minimum
+// cache capacity if it would otherwise be too small.
+</span><span class="kw">let </span>dfa = DFA::builder()
+    .configure(DFA::config().skip_cache_capacity_check(<span class="bool-val">true</span>))
+    .build(pattern)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = dfa.create_cache();
+
+<span class="kw">let </span>haystack = <span class="string">"ͰͲͶͿΆΈΉΊΌΎΏΑΒΓΔΕΖΗΘΙ"</span>.repeat(<span class="number">50</span>);
+<span class="kw">let </span>expected = <span class="prelude-val">Some</span>(HalfMatch::must(<span class="number">0</span>, <span class="number">2000</span>));
+<span class="kw">let </span>got = dfa.try_search_fwd(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>Input::new(<span class="kw-2">&amp;</span>haystack))<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(expected, got);
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.minimum_cache_clear_count" class="method"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#3665-3668">source</a><h4 class="code-header">pub fn <a href="#method.minimum_cache_clear_count" class="fn">minimum_cache_clear_count</a>(self, min: <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>&gt;) -&gt; <a class="struct" href="struct.Config.html" title="struct regex_automata::hybrid::dfa::Config">Config</a></h4></section></summary><div class="docblock"><p>Configure a lazy DFA search to quit after a certain number of cache
+clearings.</p>
+<p>When a minimum is set, then a lazy DFA search will <em>possibly</em> “give
+up” after the minimum number of cache clearings has occurred. This is
+typically useful in scenarios where callers want to detect whether the
+lazy DFA search is “efficient” or not. If the cache is cleared too many
+times, this is a good indicator that it is not efficient, and thus, the
+caller may wish to use some other regex engine.</p>
+<p>Note that the number of times a cache is cleared is a property of
+the cache itself. Thus, if a cache is used in a subsequent search
+with a similarly configured lazy DFA, then it could cause the
+search to “give up” if the cache needed to be cleared, depending
+on its internal count and configured minimum. The cache clear
+count can only be reset to <code>0</code> via <a href="struct.DFA.html#method.reset_cache" title="method regex_automata::hybrid::dfa::DFA::reset_cache"><code>DFA::reset_cache</code></a> (or
+<a href="../regex/struct.Regex.html#method.reset_cache" title="method regex_automata::hybrid::regex::Regex::reset_cache"><code>Regex::reset_cache</code></a> if
+you’re using the <code>Regex</code> API).</p>
+<p>By default, no minimum is configured. Thus, a lazy DFA search will
+never give up due to cache clearings. If you do set this option, you
+might consider also setting <a href="struct.Config.html#method.minimum_bytes_per_state" title="method regex_automata::hybrid::dfa::Config::minimum_bytes_per_state"><code>Config::minimum_bytes_per_state</code></a> in
+order for the lazy DFA to take efficiency into account before giving
+up.</p>
+<h5 id="example-7"><a class="doc-anchor" href="#example-7">§</a>Example</h5>
+<p>This example uses a somewhat pathological configuration to demonstrate
+the <em>possible</em> behavior of cache clearing and how it might result
+in a search that returns an error.</p>
+<p>It is important to note that the precise mechanics of how and when
+a cache gets cleared is an implementation detail.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{hybrid::dfa::DFA, Input, MatchError, MatchErrorKind};
+
+<span class="comment">// This is a carefully chosen regex. The idea is to pick one
+// that requires some decent number of states (hence the bounded
+// repetition). But we specifically choose to create a class with an
+// ASCII letter and a non-ASCII letter so that we can check that no new
+// states are created once the cache is full. Namely, if we fill up the
+// cache on a haystack of 'a's, then in order to match one 'β', a new
+// state will need to be created since a 'β' is encoded with multiple
+// bytes. Since there's no room for this state, the search should quit
+// at the very first position.
+</span><span class="kw">let </span>pattern = <span class="string">r"[aβ]{100}"</span>;
+<span class="kw">let </span>dfa = DFA::builder()
+    .configure(
+        <span class="comment">// Configure it so that we have the minimum cache capacity
+        // possible. And that if any clearings occur, the search quits.
+        </span>DFA::config()
+            .skip_cache_capacity_check(<span class="bool-val">true</span>)
+            .cache_capacity(<span class="number">0</span>)
+            .minimum_cache_clear_count(<span class="prelude-val">Some</span>(<span class="number">0</span>)),
+    )
+    .build(pattern)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = dfa.create_cache();
+
+<span class="comment">// Our search will give up before reaching the end!
+</span><span class="kw">let </span>haystack = <span class="string">"a"</span>.repeat(<span class="number">101</span>).into_bytes();
+<span class="kw">let </span>result = dfa.try_search_fwd(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>Input::new(<span class="kw-2">&amp;</span>haystack));
+<span class="macro">assert!</span>(<span class="macro">matches!</span>(
+    <span class="kw-2">*</span>result.unwrap_err().kind(),
+    MatchErrorKind::GaveUp { .. },
+));
+
+<span class="comment">// Now that we know the cache is full, if we search a haystack that we
+// know will require creating at least one new state, it should not
+// be able to make much progress.
+</span><span class="kw">let </span>haystack = <span class="string">"β"</span>.repeat(<span class="number">101</span>).into_bytes();
+<span class="kw">let </span>result = dfa.try_search_fwd(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>Input::new(<span class="kw-2">&amp;</span>haystack));
+<span class="macro">assert!</span>(<span class="macro">matches!</span>(
+    <span class="kw-2">*</span>result.unwrap_err().kind(),
+    MatchErrorKind::GaveUp { .. },
+));
+
+<span class="comment">// If we reset the cache, then we should be able to create more states
+// and make more progress with searching for betas.
+</span>cache.reset(<span class="kw-2">&amp;</span>dfa);
+<span class="kw">let </span>haystack = <span class="string">"β"</span>.repeat(<span class="number">101</span>).into_bytes();
+<span class="kw">let </span>result = dfa.try_search_fwd(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>Input::new(<span class="kw-2">&amp;</span>haystack));
+<span class="macro">assert!</span>(<span class="macro">matches!</span>(
+    <span class="kw-2">*</span>result.unwrap_err().kind(),
+    MatchErrorKind::GaveUp { .. },
+));
+
+<span class="comment">// ... switching back to ASCII still makes progress since it just needs
+// to set transitions on existing states!
+</span><span class="kw">let </span>haystack = <span class="string">"a"</span>.repeat(<span class="number">101</span>).into_bytes();
+<span class="kw">let </span>result = dfa.try_search_fwd(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>Input::new(<span class="kw-2">&amp;</span>haystack));
+<span class="macro">assert!</span>(<span class="macro">matches!</span>(
+    <span class="kw-2">*</span>result.unwrap_err().kind(),
+    MatchErrorKind::GaveUp { .. },
+));
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.minimum_bytes_per_state" class="method"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#3709-3712">source</a><h4 class="code-header">pub fn <a href="#method.minimum_bytes_per_state" class="fn">minimum_bytes_per_state</a>(self, min: <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>&gt;) -&gt; <a class="struct" href="struct.Config.html" title="struct regex_automata::hybrid::dfa::Config">Config</a></h4></section></summary><div class="docblock"><p>Configure a lazy DFA search to quit only when its efficiency drops
+below the given minimum.</p>
+<p>The efficiency of the cache is determined by the number of DFA states
+compiled per byte of haystack searched. For example, if the efficiency
+is 2, then it means the lazy DFA is creating a new DFA state after
+searching approximately 2 bytes in a haystack. Generally speaking, 2
+is quite bad and it’s likely that even a slower regex engine like the
+<a href="../../nfa/thompson/pikevm/struct.PikeVM.html" title="struct regex_automata::nfa::thompson::pikevm::PikeVM"><code>PikeVM</code></a> would be faster.</p>
+<p>This has no effect if <a href="struct.Config.html#method.minimum_cache_clear_count" title="method regex_automata::hybrid::dfa::Config::minimum_cache_clear_count"><code>Config::minimum_cache_clear_count</code></a> is not set.
+Namely, this option only kicks in when the cache has been cleared more
+than the minimum number. If no minimum is set, then the cache is simply
+cleared whenever it fills up and it is impossible for the lazy DFA to
+quit due to ineffective use of the cache.</p>
+<p>In general, if one is setting <a href="struct.Config.html#method.minimum_cache_clear_count" title="method regex_automata::hybrid::dfa::Config::minimum_cache_clear_count"><code>Config::minimum_cache_clear_count</code></a>,
+then one should probably also set this knob as well. The reason is
+that the absolute number of times the cache is cleared is generally
+not a great predictor of efficiency. For example, if a new DFA state
+is created for every 1,000 bytes searched, then it wouldn’t be hard
+for the cache to get cleared more than <code>N</code> times and then cause the
+lazy DFA to quit. But a new DFA state every 1,000 bytes is likely quite
+good from a performance perspective, and it’s likely that the lazy
+DFA should continue searching, even if it requires clearing the cache
+occasionally.</p>
+<p>Finally, note that if you’re implementing your own lazy DFA search
+routine and also want this efficiency check to work correctly, then
+you’ll need to use the following routines to record search progress:</p>
+<ul>
+<li>Call <a href="struct.Cache.html#method.search_start" title="method regex_automata::hybrid::dfa::Cache::search_start"><code>Cache::search_start</code></a> at the beginning of every search.</li>
+<li>Call <a href="struct.Cache.html#method.search_update" title="method regex_automata::hybrid::dfa::Cache::search_update"><code>Cache::search_update</code></a> whenever <a href="struct.DFA.html#method.next_state" title="method regex_automata::hybrid::dfa::DFA::next_state"><code>DFA::next_state</code></a> is
+called.</li>
+<li>Call <a href="struct.Cache.html#method.search_finish" title="method regex_automata::hybrid::dfa::Cache::search_finish"><code>Cache::search_finish</code></a> before completing a search. (It is
+not strictly necessary to call this when an error is returned, as
+<code>Cache::search_start</code> will automatically finish the previous search
+for you. But calling it where possible before returning helps improve
+the accuracy of how many bytes have actually been searched.)</li>
+</ul>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_match_kind" class="method"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#3715-3717">source</a><h4 class="code-header">pub fn <a href="#method.get_match_kind" class="fn">get_match_kind</a>(&amp;self) -&gt; <a class="enum" href="../../enum.MatchKind.html" title="enum regex_automata::MatchKind">MatchKind</a></h4></section></summary><div class="docblock"><p>Returns the match semantics set in this configuration.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_prefilter" class="method"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#3720-3722">source</a><h4 class="code-header">pub fn <a href="#method.get_prefilter" class="fn">get_prefilter</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;<a class="struct" href="../../util/prefilter/struct.Prefilter.html" title="struct regex_automata::util::prefilter::Prefilter">Prefilter</a>&gt;</h4></section></summary><div class="docblock"><p>Returns the prefilter set in this configuration, if one at all.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_starts_for_each_pattern" class="method"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#3726-3728">source</a><h4 class="code-header">pub fn <a href="#method.get_starts_for_each_pattern" class="fn">get_starts_for_each_pattern</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns whether this configuration has enabled anchored starting states
+for every pattern in the DFA.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_byte_classes" class="method"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#3733-3735">source</a><h4 class="code-header">pub fn <a href="#method.get_byte_classes" class="fn">get_byte_classes</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns whether this configuration has enabled byte classes or not.
+This is typically a debugging oriented option, as disabling it confers
+no speed benefit.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_unicode_word_boundary" class="method"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#3740-3742">source</a><h4 class="code-header">pub fn <a href="#method.get_unicode_word_boundary" class="fn">get_unicode_word_boundary</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns whether this configuration has enabled heuristic Unicode word
+boundary support. When enabled, it is possible for a search to return
+an error.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_quit" class="method"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#3748-3750">source</a><h4 class="code-header">pub fn <a href="#method.get_quit" class="fn">get_quit</a>(&amp;self, byte: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns whether this configuration will instruct the lazy DFA to enter
+a quit state whenever the given byte is seen during a search. When at
+least one byte has this enabled, it is possible for a search to return
+an error.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_specialize_start_states" class="method"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#3757-3759">source</a><h4 class="code-header">pub fn <a href="#method.get_specialize_start_states" class="fn">get_specialize_start_states</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns whether this configuration will instruct the lazy DFA to
+“specialize” start states. When enabled, the lazy DFA will tag start
+states so that search routines using the lazy DFA can detect when
+it’s in a start state and do some kind of optimization (like run a
+prefilter).</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_cache_capacity" class="method"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#3762-3764">source</a><h4 class="code-header">pub fn <a href="#method.get_cache_capacity" class="fn">get_cache_capacity</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a></h4></section></summary><div class="docblock"><p>Returns the cache capacity set on this configuration.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_skip_cache_capacity_check" class="method"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#3767-3769">source</a><h4 class="code-header">pub fn <a href="#method.get_skip_cache_capacity_check" class="fn">get_skip_cache_capacity_check</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns whether the cache capacity check should be skipped.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_minimum_cache_clear_count" class="method"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#3775-3777">source</a><h4 class="code-header">pub fn <a href="#method.get_minimum_cache_clear_count" class="fn">get_minimum_cache_clear_count</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>&gt;</h4></section></summary><div class="docblock"><p>Returns, if set, the minimum number of times the cache must be cleared
+before a lazy DFA search can give up. When no minimum is set, then a
+search will never quit and will always clear the cache whenever it
+fills up.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_minimum_bytes_per_state" class="method"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#3783-3785">source</a><h4 class="code-header">pub fn <a href="#method.get_minimum_bytes_per_state" class="fn">get_minimum_bytes_per_state</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>&gt;</h4></section></summary><div class="docblock"><p>Returns, if set, the minimum number of bytes per state that need to be
+processed in order for the lazy DFA to keep going. If the minimum falls
+below this number (and the cache has been cleared a minimum number of
+times), then the lazy DFA will return a “gave up” error.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_minimum_cache_capacity" class="method"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#3801-3809">source</a><h4 class="code-header">pub fn <a href="#method.get_minimum_cache_capacity" class="fn">get_minimum_cache_capacity</a>(&amp;self, nfa: &amp;<a class="struct" href="../../nfa/thompson/struct.NFA.html" title="struct regex_automata::nfa::thompson::NFA">NFA</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>, <a class="struct" href="../struct.BuildError.html" title="struct regex_automata::hybrid::BuildError">BuildError</a>&gt;</h4></section></summary><div class="docblock"><p>Returns the minimum lazy DFA cache capacity required for the given NFA.</p>
+<p>The cache capacity required for a particular NFA may change without
+notice. Callers should not rely on it being stable.</p>
+<p>This is useful for informational purposes, but can also be useful for
+other reasons. For example, if one wants to check the minimum cache
+capacity themselves or if one wants to set the capacity based on the
+minimum.</p>
+<p>This may return an error if this configuration does not support all of
+the instructions used in the given NFA. For example, if the NFA has a
+Unicode word boundary but this configuration does not enable heuristic
+support for Unicode word boundaries.</p>
+</div></details></div></details></div><h2 id="trait-implementations" class="section-header">Trait Implementations<a href="#trait-implementations" class="anchor">§</a></h2><div id="trait-implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-Clone-for-Config" class="impl"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#2862">source</a><a href="#impl-Clone-for-Config" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a> for <a class="struct" href="struct.Config.html" title="struct regex_automata::hybrid::dfa::Config">Config</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.clone" class="method trait-impl"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#2862">source</a><a href="#method.clone" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#tymethod.clone" class="fn">clone</a>(&amp;self) -&gt; <a class="struct" href="struct.Config.html" title="struct regex_automata::hybrid::dfa::Config">Config</a></h4></section></summary><div class='docblock'>Returns a copy of the value. <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#tymethod.clone">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.clone_from" class="method trait-impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#172">source</a></span><a href="#method.clone_from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#method.clone_from" class="fn">clone_from</a>(&amp;mut self, source: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;Self</a>)</h4></section></summary><div class='docblock'>Performs copy-assignment from <code>source</code>. <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#method.clone_from">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Debug-for-Config" class="impl"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#2862">source</a><a href="#impl-Debug-for-Config" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html" title="trait core::fmt::Debug">Debug</a> for <a class="struct" href="struct.Config.html" title="struct regex_automata::hybrid::dfa::Config">Config</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.fmt" class="method trait-impl"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#2862">source</a><a href="#method.fmt" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html#tymethod.fmt" class="fn">fmt</a>(&amp;self, f: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/fmt/struct.Formatter.html" title="struct core::fmt::Formatter">Formatter</a>&lt;'_&gt;) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a></h4></section></summary><div class='docblock'>Formats the value using the given formatter. <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html#tymethod.fmt">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Default-for-Config" class="impl"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#2862">source</a><a href="#impl-Default-for-Config" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/default/trait.Default.html" title="trait core::default::Default">Default</a> for <a class="struct" href="struct.Config.html" title="struct regex_automata::hybrid::dfa::Config">Config</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.default" class="method trait-impl"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#2862">source</a><a href="#method.default" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/default/trait.Default.html#tymethod.default" class="fn">default</a>() -&gt; <a class="struct" href="struct.Config.html" title="struct regex_automata::hybrid::dfa::Config">Config</a></h4></section></summary><div class='docblock'>Returns the “default value” for a type. <a href="https://doc.rust-lang.org/1.81.0/core/default/trait.Default.html#tymethod.default">Read more</a></div></details></div></details></div><h2 id="synthetic-implementations" class="section-header">Auto Trait Implementations<a href="#synthetic-implementations" class="anchor">§</a></h2><div id="synthetic-implementations-list"><section id="impl-Freeze-for-Config" class="impl"><a href="#impl-Freeze-for-Config" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Freeze.html" title="trait core::marker::Freeze">Freeze</a> for <a class="struct" href="struct.Config.html" title="struct regex_automata::hybrid::dfa::Config">Config</a></h3></section><section id="impl-RefUnwindSafe-for-Config" class="impl"><a href="#impl-RefUnwindSafe-for-Config" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/panic/unwind_safe/trait.RefUnwindSafe.html" title="trait core::panic::unwind_safe::RefUnwindSafe">RefUnwindSafe</a> for <a class="struct" href="struct.Config.html" title="struct regex_automata::hybrid::dfa::Config">Config</a></h3></section><section id="impl-Send-for-Config" class="impl"><a href="#impl-Send-for-Config" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> for <a class="struct" href="struct.Config.html" title="struct regex_automata::hybrid::dfa::Config">Config</a></h3></section><section id="impl-Sync-for-Config" class="impl"><a href="#impl-Sync-for-Config" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> for <a class="struct" href="struct.Config.html" title="struct regex_automata::hybrid::dfa::Config">Config</a></h3></section><section id="impl-Unpin-for-Config" class="impl"><a href="#impl-Unpin-for-Config" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a> for <a class="struct" href="struct.Config.html" title="struct regex_automata::hybrid::dfa::Config">Config</a></h3></section><section id="impl-UnwindSafe-for-Config" class="impl"><a href="#impl-UnwindSafe-for-Config" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/panic/unwind_safe/trait.UnwindSafe.html" title="trait core::panic::unwind_safe::UnwindSafe">UnwindSafe</a> for <a class="struct" href="struct.Config.html" title="struct regex_automata::hybrid::dfa::Config">Config</a></h3></section></div><h2 id="blanket-implementations" class="section-header">Blanket Implementations<a href="#blanket-implementations" class="anchor">§</a></h2><div id="blanket-implementations-list"><details class="toggle implementors-toggle"><summary><section id="impl-Any-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#140">source</a><a href="#impl-Any-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html" title="trait core::any::Any">Any</a> for T<div class="where">where
+    T: 'static + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.type_id" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#141">source</a><a href="#method.type_id" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html#tymethod.type_id" class="fn">type_id</a>(&amp;self) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/any/struct.TypeId.html" title="struct core::any::TypeId">TypeId</a></h4></section></summary><div class='docblock'>Gets the <code>TypeId</code> of <code>self</code>. <a href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html#tymethod.type_id">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Borrow%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#209">source</a><a href="#impl-Borrow%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html" title="trait core::borrow::Borrow">Borrow</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#211">source</a><a href="#method.borrow" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html#tymethod.borrow" class="fn">borrow</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a></h4></section></summary><div class='docblock'>Immutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html#tymethod.borrow">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-BorrowMut%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#217">source</a><a href="#impl-BorrowMut%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html" title="trait core::borrow::BorrowMut">BorrowMut</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow_mut" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#218">source</a><a href="#method.borrow_mut" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut" class="fn">borrow_mut</a>(&amp;mut self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a></h4></section></summary><div class='docblock'>Mutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-CloneToUninit-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#271">source</a><a href="#impl-CloneToUninit-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.CloneToUninit.html" title="trait core::clone::CloneToUninit">CloneToUninit</a> for T<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.clone_to_uninit" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#272">source</a><a href="#method.clone_to_uninit" class="anchor">§</a><h4 class="code-header">default unsafe fn <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.CloneToUninit.html#tymethod.clone_to_uninit" class="fn">clone_to_uninit</a>(&amp;self, dst: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.pointer.html">*mut T</a>)</h4></section></summary><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>clone_to_uninit</code>)</span></div></span><div class='docblock'>Performs copy-assignment from <code>self</code> to <code>dst</code>. <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.CloneToUninit.html#tymethod.clone_to_uninit">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-From%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#765">source</a><a href="#impl-From%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for T</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#768">source</a><a href="#method.from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html#tymethod.from" class="fn">from</a>(t: T) -&gt; T</h4></section></summary><div class="docblock"><p>Returns the argument unchanged.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Into%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#748-750">source</a><a href="#impl-Into%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#758">source</a><a href="#method.into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html#tymethod.into" class="fn">into</a>(self) -&gt; U</h4></section></summary><div class="docblock"><p>Calls <code>U::from(self)</code>.</p>
+<p>That is, this conversion is whatever the implementation of
+<code><a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for U</code> chooses to do.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-ToOwned-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#83-85">source</a><a href="#impl-ToOwned-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html" title="trait alloc::borrow::ToOwned">ToOwned</a> for T<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Owned" class="associatedtype trait-impl"><a href="#associatedtype.Owned" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#associatedtype.Owned" class="associatedtype">Owned</a> = T</h4></section></summary><div class='docblock'>The resulting type after obtaining ownership.</div></details><details class="toggle method-toggle" open><summary><section id="method.to_owned" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#88">source</a><a href="#method.to_owned" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#tymethod.to_owned" class="fn">to_owned</a>(&amp;self) -&gt; T</h4></section></summary><div class='docblock'>Creates owned data from borrowed data, usually by cloning. <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#tymethod.to_owned">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.clone_into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#92">source</a><a href="#method.clone_into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#method.clone_into" class="fn">clone_into</a>(&amp;self, target: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a>)</h4></section></summary><div class='docblock'>Uses borrowed data to replace owned data, usually by cloning. <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#method.clone_into">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryFrom%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#805-807">source</a><a href="#impl-TryFrom%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error" class="associatedtype trait-impl"><a href="#associatedtype.Error" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" class="associatedtype">Error</a> = <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/convert/enum.Infallible.html" title="enum core::convert::Infallible">Infallible</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#812">source</a><a href="#method.try_from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#tymethod.try_from" class="fn">try_from</a>(value: U) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, &lt;T as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryInto%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#790-792">source</a><a href="#impl-TryInto%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html" title="trait core::convert::TryInto">TryInto</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error-1" class="associatedtype trait-impl"><a href="#associatedtype.Error-1" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html#associatedtype.Error" class="associatedtype">Error</a> = &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#797">source</a><a href="#method.try_into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html#tymethod.try_into" class="fn">try_into</a>(self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;U, &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details></div></section></div></main></body></html>

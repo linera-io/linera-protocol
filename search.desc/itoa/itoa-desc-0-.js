@@ -1,0 +1,1 @@
+searchState.loadedDescShard("itoa", 0, "github crates-io docs-rs\nA correctly sized stack allocation for the formatted …\nAn integer that can be written into an <code>itoa::Buffer</code>.\nPrint an integer into this buffer and return a reference …\nReturns the argument unchanged.\nCalls <code>U::from(self)</code>.\nThis is a cheap operation; you don’t need to worry about …")

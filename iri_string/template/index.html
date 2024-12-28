@@ -1,0 +1,98 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Processor for RFC 6570 URI Template."><title>iri_string::template - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="iri_string" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../iri_string/index.html">iri_string</a><span class="version">0.7.7</span></h2></div><h2 class="location"><a href="#">Module template</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#types">Type Aliases</a></li></ul></section><h2><a href="../index.html">In crate iri_string</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">iri_string</a>::<wbr><a class="mod" href="#">template</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/iri_string/template.rs.html#1-200">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Processor for <a href="https://www.rfc-editor.org/rfc/rfc6570.html">RFC 6570</a> URI Template.</p>
+<h2 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h2>
+<ol>
+<li>Prepare a template.
+<ul>
+<li>You can create a template as <a href="struct.UriTemplateStr.html" title="struct iri_string::template::UriTemplateStr"><code>UriTemplateStr</code></a>
+type (borrowed) or <a href="struct.UriTemplateString.html" title="struct iri_string::template::UriTemplateString"><code>UriTemplateString</code></a> type (owned).</li>
+</ul>
+</li>
+<li>Prepare a context.
+<ul>
+<li>Create a value of type that implements <a href="context/trait.Context.html" title="trait iri_string::template::context::Context"><code>Context</code></a> trait.</li>
+<li>Or, if you use <a href="simple_context/struct.SimpleContext.html" title="struct iri_string::template::simple_context::SimpleContext"><code>SimpleContext</code></a>, insert key-value pairs into it.</li>
+</ul>
+</li>
+<li>Expand.
+<ul>
+<li>Pass the context to <a href="struct.UriTemplateStr.html#method.expand" title="method iri_string::template::UriTemplateStr::expand"><code>UriTemplateStr::expand</code></a> method of the template.</li>
+</ul>
+</li>
+<li>Use the result.
+<ul>
+<li>Returned <a href="struct.Expanded.html" title="struct iri_string::template::Expanded"><code>Expanded</code></a> object can be directly printed since it
+implements <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Display.html" title="trait core::fmt::Display"><code>Display</code></a> trait. Or, you can call
+<code>.to_string()</code> method of the <code>alloc::string::ToString</code> trait to
+convert it to a <code>String</code>.</li>
+</ul>
+</li>
+</ol>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2><h3 id="custom-context-type"><a class="doc-anchor" href="#custom-context-type">§</a>Custom context type</h3>
+<p>For details, see <a href="context/index.html" title="mod iri_string::template::context">the documentation of <code>context</code> module</a>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>core::fmt;
+<span class="kw">use </span>iri_string::spec::{IriSpec, Spec, UriSpec};
+<span class="kw">use </span>iri_string::template::UriTemplateStr;
+<span class="kw">use </span>iri_string::template::context::{Context, VarName, Visitor};
+
+<span class="kw">struct </span>UserInfo {
+    username: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str,
+    utf8_available: bool,
+}
+
+<span class="kw">impl </span>Context <span class="kw">for </span>UserInfo {
+    <span class="kw">fn </span>visit&lt;V: Visitor&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        visitor: V,
+    ) -&gt; V::Result {
+        <span class="kw">match </span>visitor.var_name().as_str() {
+            <span class="string">"username" </span>=&gt; visitor.visit_string(<span class="self">self</span>.username),
+            <span class="string">"utf8" </span>=&gt; {
+                <span class="kw">if </span><span class="self">self</span>.utf8_available {
+                    <span class="comment">// U+2713 CHECK MARK
+                    </span>visitor.visit_string(<span class="string">"\u{2713}"</span>)
+                } <span class="kw">else </span>{
+                    visitor.visit_undefined()
+                }
+            }
+            <span class="kw">_ </span>=&gt; visitor.visit_undefined()
+        }
+    }
+}
+
+<span class="kw">let </span>context = UserInfo {
+    username: <span class="string">"foo"</span>,
+    utf8_available: <span class="bool-val">true</span>,
+};
+
+<span class="kw">let </span>template = UriTemplateStr::new(<span class="string">"/users/{username}{?utf8}"</span>)<span class="question-mark">?</span>;
+
+<span class="macro">assert_eq!</span>(
+    template.expand::&lt;UriSpec, <span class="kw">_</span>&gt;(<span class="kw-2">&amp;</span>context)<span class="question-mark">?</span>.to_string(),
+    <span class="string">"/users/foo?utf8=%E2%9C%93"
+</span>);
+<span class="macro">assert_eq!</span>(
+    template.expand::&lt;IriSpec, <span class="kw">_</span>&gt;(<span class="kw-2">&amp;</span>context)<span class="question-mark">?</span>.to_string(),
+    <span class="string">"/users/foo?utf8=\u{2713}"
+</span>);</code></pre></div>
+<h3 id="simplecontext-type-enabled-by-alloc-feature-flag"><a class="doc-anchor" href="#simplecontext-type-enabled-by-alloc-feature-flag">§</a><code>SimpleContext</code> type (enabled by <code>alloc</code> feature flag)</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>iri_string::spec::{IriSpec, UriSpec};
+<span class="kw">use </span>iri_string::template::UriTemplateStr;
+<span class="kw">use </span>iri_string::template::simple_context::SimpleContext;
+
+<span class="kw">let </span><span class="kw-2">mut </span>context = SimpleContext::new();
+context.insert(<span class="string">"username"</span>, <span class="string">"foo"</span>);
+<span class="comment">// U+2713 CHECK MARK
+</span>context.insert(<span class="string">"utf8"</span>, <span class="string">"\u{2713}"</span>);
+
+<span class="kw">let </span>template = UriTemplateStr::new(<span class="string">"/users/{username}{?utf8}"</span>)<span class="question-mark">?</span>;
+
+<span class="macro">assert_eq!</span>(
+    template.expand::&lt;UriSpec, <span class="kw">_</span>&gt;(<span class="kw-2">&amp;</span>context)<span class="question-mark">?</span>.to_string(),
+    <span class="string">"/users/foo?utf8=%E2%9C%93"
+</span>);
+<span class="macro">assert_eq!</span>(
+    template.expand::&lt;IriSpec, <span class="kw">_</span>&gt;(<span class="kw-2">&amp;</span>context)<span class="question-mark">?</span>.to_string(),
+    <span class="string">"/users/foo?utf8=\u{2713}"
+</span>);</code></pre></div>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.Context"><code>pub use self::context::<a class="trait" href="context/trait.Context.html" title="trait iri_string::template::context::Context">Context</a>;</code></div></li><li><div class="item-name" id="reexport.DynamicContext"><code>pub use self::context::<a class="trait" href="context/trait.DynamicContext.html" title="trait iri_string::template::context::DynamicContext">DynamicContext</a>;</code></div></li></ul><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="context/index.html" title="mod iri_string::template::context">context</a></div><div class="desc docblock-short">Template expansion context.</div></li><li><div class="item-name"><a class="mod" href="simple_context/index.html" title="mod iri_string::template::simple_context">simple_context</a></div><div class="desc docblock-short">Simple general-purpose context type.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.CreationError.html" title="struct iri_string::template::CreationError">CreationError</a></div><div class="desc docblock-short">Error on conversion into a URI template type.</div></li><li><div class="item-name"><a class="struct" href="struct.Error.html" title="struct iri_string::template::Error">Error</a></div><div class="desc docblock-short">Template construction and expansion error.</div></li><li><div class="item-name"><a class="struct" href="struct.Expanded.html" title="struct iri_string::template::Expanded">Expanded</a></div><div class="desc docblock-short">Template expansion result.</div></li><li><div class="item-name"><a class="struct" href="struct.UriTemplateStr.html" title="struct iri_string::template::UriTemplateStr">UriTemplateStr</a></div><div class="desc docblock-short">A borrowed slice of a URI template.</div></li><li><div class="item-name"><a class="struct" href="struct.UriTemplateString.html" title="struct iri_string::template::UriTemplateString">UriTemplateString</a></div><div class="desc docblock-short">An owned slice of a URI template.</div></li><li><div class="item-name"><a class="struct" href="struct.UriTemplateVariables.html" title="struct iri_string::template::UriTemplateVariables">UriTemplateVariables</a></div><div class="desc docblock-short">An iterator of variables in a URI template.</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.VarName.html" title="type iri_string::template::VarName">VarName</a><span class="stab deprecated" title="">Deprecated</span></div><div class="desc docblock-short">Deprecated old name of <a href="context/struct.VarName.html" title="struct iri_string::template::context::VarName"><code>template::context::VarName</code></a>.</div></li></ul></section></div></main></body></html>

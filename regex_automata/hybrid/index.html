@@ -1,0 +1,107 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A module for building and searching with lazy deterministic finite automata (DFAs)."><title>regex_automata::hybrid - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="regex_automata" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../regex_automata/index.html">regex_automata</a><span class="version">0.4.7</span></h2></div><h2 class="location"><a href="#">Module hybrid</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li></ul></section><h2><a href="../index.html">In crate regex_automata</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">regex_automata</a>::<wbr><a class="mod" href="#">hybrid</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/regex_automata/hybrid/mod.rs.html#1-144">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A module for building and searching with lazy deterministic finite automata
+(DFAs).</p>
+<p>Like other modules in this crate, lazy DFAs support a rich regex syntax with
+Unicode features. The key feature of a lazy DFA is that it builds itself
+incrementally during search, and never uses more than a configured capacity of
+memory. Thus, when searching with a lazy DFA, one must supply a mutable “cache”
+in which the actual DFA’s transition table is stored.</p>
+<p>If you’re looking for fully compiled DFAs, then please see the top-level
+<a href="../dfa/index.html" title="mod regex_automata::dfa"><code>dfa</code> module</a>.</p>
+<h2 id="overview"><a class="doc-anchor" href="#overview">§</a>Overview</h2>
+<p>This section gives a brief overview of the primary types in this module:</p>
+<ul>
+<li>A <a href="regex/struct.Regex.html" title="struct regex_automata::hybrid::regex::Regex"><code>regex::Regex</code></a> provides a way to search for matches of a regular
+expression using lazy DFAs. This includes iterating over matches with both the
+start and end positions of each match.</li>
+<li>A <a href="dfa/struct.DFA.html" title="struct regex_automata::hybrid::dfa::DFA"><code>dfa::DFA</code></a> provides direct low level access to a lazy DFA.</li>
+</ul>
+<h2 id="example-basic-regex-searching"><a class="doc-anchor" href="#example-basic-regex-searching">§</a>Example: basic regex searching</h2>
+<p>This example shows how to compile a regex using the default configuration
+and then use it to find matches in a byte string:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{hybrid::regex::Regex, Match};
+
+<span class="kw">let </span>re = Regex::new(<span class="string">r"[0-9]{4}-[0-9]{2}-[0-9]{2}"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = re.create_cache();
+
+<span class="kw">let </span>haystack = <span class="string">"2018-12-24 2016-10-08"</span>;
+<span class="kw">let </span>matches: Vec&lt;Match&gt; = re.find_iter(<span class="kw-2">&amp;mut </span>cache, haystack).collect();
+<span class="macro">assert_eq!</span>(matches, <span class="macro">vec!</span>[
+    Match::must(<span class="number">0</span>, <span class="number">0</span>..<span class="number">10</span>),
+    Match::must(<span class="number">0</span>, <span class="number">11</span>..<span class="number">21</span>),
+]);</code></pre></div>
+<h2 id="example-searching-with-multiple-regexes"><a class="doc-anchor" href="#example-searching-with-multiple-regexes">§</a>Example: searching with multiple regexes</h2>
+<p>The lazy DFAs in this module all fully support searching with multiple regexes
+simultaneously. You can use this support with standard leftmost-first style
+searching to find non-overlapping matches:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{hybrid::regex::Regex, Match};
+
+<span class="kw">let </span>re = Regex::new_many(<span class="kw-2">&amp;</span>[<span class="string">r"\w+"</span>, <span class="string">r"\S+"</span>])<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = re.create_cache();
+
+<span class="kw">let </span>haystack = <span class="string">"@foo bar"</span>;
+<span class="kw">let </span>matches: Vec&lt;Match&gt; = re.find_iter(<span class="kw-2">&amp;mut </span>cache, haystack).collect();
+<span class="macro">assert_eq!</span>(matches, <span class="macro">vec!</span>[
+    Match::must(<span class="number">1</span>, <span class="number">0</span>..<span class="number">4</span>),
+    Match::must(<span class="number">0</span>, <span class="number">5</span>..<span class="number">8</span>),
+]);</code></pre></div>
+<h2 id="when-should-i-use-this"><a class="doc-anchor" href="#when-should-i-use-this">§</a>When should I use this?</h2>
+<p>Generally speaking, if you can abide the use of mutable state during search,
+and you don’t need things like capturing groups or Unicode word boundary
+support in non-ASCII text, then a lazy DFA is likely a robust choice with
+respect to both search speed and memory usage. Note however that its speed
+may be worse than a general purpose regex engine if you don’t select a good
+<a href="../util/prefilter/index.html" title="mod regex_automata::util::prefilter">prefilter</a>.</p>
+<p>If you know ahead of time that your pattern would result in a very large DFA
+if it was fully compiled, it may be better to use an NFA simulation instead
+of a lazy DFA. Either that, or increase the cache capacity of your lazy DFA
+to something that is big enough to hold the state machine (likely through
+experimentation). The issue here is that if the cache is too small, then it
+could wind up being reset too frequently and this might decrease searching
+speed significantly.</p>
+<h2 id="differences-with-fully-compiled-dfas"><a class="doc-anchor" href="#differences-with-fully-compiled-dfas">§</a>Differences with fully compiled DFAs</h2>
+<p>A <a href="regex/struct.Regex.html" title="struct regex_automata::hybrid::regex::Regex"><code>hybrid::regex::Regex</code></a> and a
+<a href="crate::dfa::regex::Regex"><code>dfa::regex::Regex</code></a> both have the same capabilities
+(and similarly for their underlying DFAs), but they achieve them through
+different means. The main difference is that a hybrid or “lazy” regex builds
+its DFA lazily during search, where as a fully compiled regex will build its
+DFA at construction time. While building a DFA at search time might sound like
+it’s slow, it tends to work out where most bytes seen during a search will
+reuse pre-built parts of the DFA and thus can be almost as fast as a fully
+compiled DFA. The main downside is that searching requires mutable space to
+store the DFA, and, in the worst case, a search can result in a new state being
+created for each byte seen, which would make searching quite a bit slower.</p>
+<p>A fully compiled DFA never has to worry about searches being slower once
+it’s built. (Aside from, say, the transition table being so large that it
+is subject to harsh CPU cache effects.) However, of course, building a full
+DFA can be quite time consuming and memory hungry. Particularly when large
+Unicode character classes are used, which tend to translate into very large
+DFAs.</p>
+<p>A lazy DFA strikes a nice balance <em>in practice</em>, particularly in the
+presence of Unicode mode, by only building what is needed. It avoids the
+worst case exponential time complexity of DFA compilation by guaranteeing that
+it will only build at most one state per byte searched. While the worst
+case here can lead to a very high constant, it will never be exponential.</p>
+<h2 id="syntax"><a class="doc-anchor" href="#syntax">§</a>Syntax</h2>
+<p>This module supports the same syntax as the <code>regex</code> crate, since they share the
+same parser. You can find an exhaustive list of supported syntax in the
+<a href="https://docs.rs/regex/1/regex/#syntax">documentation for the <code>regex</code> crate</a>.</p>
+<p>There are two things that are not supported by the lazy DFAs in this module:</p>
+<ul>
+<li>Capturing groups. The DFAs (and <a href="regex/struct.Regex.html" title="struct regex_automata::hybrid::regex::Regex"><code>Regex</code></a>es built on top
+of them) can only find the offsets of an entire match, but cannot resolve
+the offsets of each capturing group. This is because DFAs do not have the
+expressive power necessary. Note that it is okay to build a lazy DFA from an
+NFA that contains capture groups. The capture groups will simply be ignored.</li>
+<li>Unicode word boundaries. These present particularly difficult challenges for
+DFA construction and would result in an explosion in the number of states.
+One can enable <a href="dfa/struct.Config.html#method.unicode_word_boundary" title="method regex_automata::hybrid::dfa::Config::unicode_word_boundary"><code>dfa::Config::unicode_word_boundary</code></a> though, which provides
+heuristic support for Unicode word boundaries that only works on ASCII text.
+Otherwise, one can use <code>(?-u:\b)</code> for an ASCII word boundary, which will work
+on any input.</li>
+</ul>
+<p>There are no plans to lift either of these limitations.</p>
+<p>Note that these restrictions are identical to the restrictions on fully
+compiled DFAs.</p>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="dfa/index.html" title="mod regex_automata::hybrid::dfa">dfa</a></div><div class="desc docblock-short">Types and routines specific to lazy DFAs.</div></li><li><div class="item-name"><a class="mod" href="regex/index.html" title="mod regex_automata::hybrid::regex">regex</a></div><div class="desc docblock-short">A lazy DFA backed <code>Regex</code>.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.BuildError.html" title="struct regex_automata::hybrid::BuildError">BuildError</a></div><div class="desc docblock-short">An error that occurs when initial construction of a lazy DFA fails.</div></li><li><div class="item-name"><a class="struct" href="struct.CacheError.html" title="struct regex_automata::hybrid::CacheError">CacheError</a></div><div class="desc docblock-short">An error that occurs when cache usage has become inefficient.</div></li><li><div class="item-name"><a class="struct" href="struct.LazyStateID.html" title="struct regex_automata::hybrid::LazyStateID">LazyStateID</a></div><div class="desc docblock-short">A state identifier specifically tailored for lazy DFAs.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.StartError.html" title="enum regex_automata::hybrid::StartError">StartError</a></div><div class="desc docblock-short">An error that can occur when computing the start state for a search.</div></li></ul></section></div></main></body></html>

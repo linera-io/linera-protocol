@@ -1,0 +1,51 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Load Credentials from Web Identity Tokens"><title>aws_config::web_identity_token - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="aws_config" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../aws_config/index.html">aws_config</a><span class="version">1.5.6</span></h2></div><h2 class="location"><a href="#">Module web_identity_token</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#structs">Structs</a></li></ul></section><h2><a href="../index.html">In crate aws_config</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">aws_config</a>::<wbr><a class="mod" href="#">web_identity_token</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/aws_config/web_identity_token.rs.html#6-365">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Load Credentials from Web Identity Tokens</p>
+<p>Web identity tokens can be loaded from file. The path may be set in one of three ways:</p>
+<ol>
+<li><a href="#environment-variable-configuration">Environment Variables</a></li>
+<li><a href="#aws-profile-configuration">AWS profile</a> defined in <code>~/.aws/config</code></li>
+<li>Static configuration via <a href="struct.Builder.html#method.static_configuration" title="method aws_config::web_identity_token::Builder::static_configuration"><code>static_configuration</code></a></li>
+</ol>
+<p><em>Note: <a href="struct.WebIdentityTokenCredentialsProvider.html" title="struct aws_config::web_identity_token::WebIdentityTokenCredentialsProvider">WebIdentityTokenCredentialsProvider</a> is part of the <a href="../default_provider/index.html" title="mod aws_config::default_provider">default provider chain</a>.
+Unless you need specific behavior or configuration overrides, it is recommended to use the
+default chain instead of using this provider directly. This client should be considered a “low level”
+client as it does not include caching or profile-file resolution when used in isolation.</em></p>
+<h3 id="environment-variable-configuration"><a class="doc-anchor" href="#environment-variable-configuration">§</a>Environment Variable Configuration</h3>
+<p>WebIdentityTokenCredentialProvider will load the following environment variables:</p>
+<ul>
+<li><code>AWS_WEB_IDENTITY_TOKEN_FILE</code>: <strong>required</strong>, location to find the token file containing a JWT token</li>
+<li><code>AWS_ROLE_ARN</code>: <strong>required</strong>, role ARN to assume</li>
+<li><code>AWS_IAM_ROLE_SESSION_NAME</code>: <strong>optional</strong>: Session name to use when assuming the role</li>
+</ul>
+<h3 id="aws-profile-configuration"><a class="doc-anchor" href="#aws-profile-configuration">§</a>AWS Profile Configuration</h3>
+<p><em>Note: Configuration of the web identity token provider via a shared profile is only supported
+when using the <a href="../profile/credentials/index.html" title="mod aws_config::profile::credentials"><code>ProfileFileCredentialsProvider</code></a>.</em></p>
+<p>Web identity token credentials can be loaded from <code>~/.aws/config</code> in two ways:</p>
+<ol>
+<li>Directly:</li>
+</ol>
+<div class="example-wrap"><pre class="language-ini"><code>[profile default]
+role_arn = arn:aws:iam::1234567890123:role/RoleA
+web_identity_token_file = /token.jwt
+</code></pre></div>
+<ol start="2">
+<li>As a source profile for another role:</li>
+</ol>
+<div class="example-wrap"><pre class="language-ini"><code>[profile default]
+role_arn = arn:aws:iam::123456789:role/RoleA
+source_profile = base
+
+[profile base]
+role_arn = arn:aws:iam::123456789012:role/s3-reader
+web_identity_token_file = /token.jwt
+</code></pre></div><h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Web Identity Token providers are part of the <a href="../default_provider/credentials/index.html" title="mod aws_config::default_provider::credentials">default chain</a>.
+However, they may be directly constructed if you don’t want to use the default provider chain.
+Unless overridden with <a href="struct.Builder.html#method.static_configuration" title="method aws_config::web_identity_token::Builder::static_configuration"><code>static_configuration</code></a>, the provider will
+load configuration from environment variables.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aws_config::web_identity_token::WebIdentityTokenCredentialsProvider;
+<span class="kw">use </span>aws_config::provider_config::ProviderConfig;
+<span class="kw">let </span>provider = WebIdentityTokenCredentialsProvider::builder()
+    .configure(<span class="kw-2">&amp;</span>ProviderConfig::with_default_region().<span class="kw">await</span>)
+    .build();</code></pre></div>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Builder.html" title="struct aws_config::web_identity_token::Builder">Builder</a></div><div class="desc docblock-short">Builder for <a href="struct.WebIdentityTokenCredentialsProvider.html" title="struct aws_config::web_identity_token::WebIdentityTokenCredentialsProvider"><code>WebIdentityTokenCredentialsProvider</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.StaticConfiguration.html" title="struct aws_config::web_identity_token::StaticConfiguration">StaticConfiguration</a></div><div class="desc docblock-short">Statically configured WebIdentityToken configuration</div></li><li><div class="item-name"><a class="struct" href="struct.WebIdentityTokenCredentialsProvider.html" title="struct aws_config::web_identity_token::WebIdentityTokenCredentialsProvider">WebIdentityTokenCredentialsProvider</a></div><div class="desc docblock-short">Credential provider to load credentials from Web Identity  Tokens</div></li></ul></section></div></main></body></html>

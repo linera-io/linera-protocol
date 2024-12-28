@@ -1,0 +1,63 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A retry “budget” for allowing only a certain amount of retries over time."><title>tower::retry::budget - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="tower" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../tower/index.html">tower</a><span class="version">0.5.1</span></h2></div><h2 class="location"><a href="#">Module budget</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li><li><a href="#traits">Traits</a></li></ul></section><h2><a href="../index.html">In tower::retry</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../../index.html">tower</a>::<wbr><a href="../index.html">retry</a>::<wbr><a class="mod" href="#">budget</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/tower/retry/budget/mod.rs.html#1-91">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A retry “budget” for allowing only a certain amount of retries over time.</p>
+<h2 id="why-budgets-and-not-max-retries"><a class="doc-anchor" href="#why-budgets-and-not-max-retries">§</a>Why budgets and not max retries?</h2>
+<p>The most common way of configuring retries is to specify a maximum
+number of retry attempts to perform before giving up. This is a familiar idea to anyone
+who’s used a web browser: you try to load a webpage, and if it doesn’t load, you try again.
+If it still doesn’t load, you try a third time. Finally you give up.</p>
+<p>Unfortunately, there are at least two problems with configuring retries this way:</p>
+<p><strong>Choosing the maximum number of retry attempts is a guessing game.</strong>
+You need to pick a number that’s high enough to make a difference when things are somewhat failing,
+but not so high that it generates extra load on the system when it’s really failing. In practice,
+you usually pick a maximum retry attempts number out of a hat (e.g. 3) and hope for the best.</p>
+<p><strong>Systems configured this way are vulnerable to retry storms.</strong>
+A retry storm begins when one service starts to experience a larger than normal failure rate.
+This causes its clients to retry those failed requests. The extra load from the retries causes the
+service to slow down further and fail more requests, triggering more retries. If each client is
+configured to retry up to 3 times, this can quadruple the number of requests being sent! To make
+matters even worse, if any of the clients’ clients are configured with retries, the number of retries
+compounds multiplicatively and can turn a small number of errors into a self-inflicted denial of service attack.</p>
+<p>It’s generally dangerous to implement retries without some limiting factor. <a href="trait.Budget.html" title="trait tower::retry::budget::Budget"><code>Budget</code></a>s are that limit.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::sync::Arc;
+
+<span class="kw">use </span>futures_util::future;
+<span class="kw">use </span>tower::retry::{budget::{Budget, TpsBudget}, Policy};
+
+<span class="kw">type </span>Req = String;
+<span class="kw">type </span>Res = String;
+
+<span class="attr">#[derive(Clone, Debug)]
+</span><span class="kw">struct </span>RetryPolicy {
+    budget: Arc&lt;TpsBudget&gt;,
+}
+
+<span class="kw">impl</span>&lt;E&gt; Policy&lt;Req, Res, E&gt; <span class="kw">for </span>RetryPolicy {
+    <span class="kw">type </span>Future = future::Ready&lt;()&gt;;
+
+    <span class="kw">fn </span>retry(<span class="kw-2">&amp;mut </span><span class="self">self</span>, req: <span class="kw-2">&amp;mut </span>Req, result: <span class="kw-2">&amp;mut </span><span class="prelude-ty">Result</span>&lt;Res, E&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::Future&gt; {
+        <span class="kw">match </span>result {
+            <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
+                <span class="comment">// Treat all `Response`s as success,
+                // so deposit budget and don't retry...
+                </span><span class="self">self</span>.budget.deposit();
+                <span class="prelude-val">None
+            </span>}
+            <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
+                <span class="comment">// Treat all errors as failures...
+                // Withdraw the budget, don't retry if we overdrew.
+                </span><span class="kw">let </span>withdrew = <span class="self">self</span>.budget.withdraw();
+                <span class="kw">if </span>!withdrew {
+                    <span class="kw">return </span><span class="prelude-val">None</span>;
+                }
+
+                <span class="comment">// Try again!
+                </span><span class="prelude-val">Some</span>(future::ready(()))
+            }
+        }
+    }
+
+    <span class="kw">fn </span>clone_request(<span class="kw-2">&amp;mut </span><span class="self">self</span>, req: <span class="kw-2">&amp;</span>Req) -&gt; <span class="prelude-ty">Option</span>&lt;Req&gt; {
+        <span class="prelude-val">Some</span>(req.clone())
+    }
+}</code></pre></div>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.TpsBudget"><code>pub use tps_budget::<a class="struct" href="tps_budget/struct.TpsBudget.html" title="struct tower::retry::budget::tps_budget::TpsBudget">TpsBudget</a>;</code></div></li></ul><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="tps_budget/index.html" title="mod tower::retry::budget::tps_budget">tps_budget</a></div><div class="desc docblock-short">Transactions Per Minute (Tps) Budget implementations</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.Budget.html" title="trait tower::retry::budget::Budget">Budget</a></div><div class="desc docblock-short">For more info about <a href="trait.Budget.html" title="trait tower::retry::budget::Budget"><code>Budget</code></a>, please see the <a href="index.html" title="mod tower::retry::budget">module-level documentation</a>.</div></li></ul></section></div></main></body></html>

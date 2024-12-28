@@ -1,0 +1,139 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/linera-alloy-consensus-0.1.0/src/constants.rs`."><title>constants.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="linera_alloy_consensus" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="icon" href="https://raw.githubusercontent.com/alloy-rs/core/main/assets/favicon.ico"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<a href="#2" id="2">2</a>
+<a href="#3" id="3">3</a>
+<a href="#4" id="4">4</a>
+<a href="#5" id="5">5</a>
+<a href="#6" id="6">6</a>
+<a href="#7" id="7">7</a>
+<a href="#8" id="8">8</a>
+<a href="#9" id="9">9</a>
+<a href="#10" id="10">10</a>
+<a href="#11" id="11">11</a>
+<a href="#12" id="12">12</a>
+<a href="#13" id="13">13</a>
+<a href="#14" id="14">14</a>
+<a href="#15" id="15">15</a>
+<a href="#16" id="16">16</a>
+<a href="#17" id="17">17</a>
+<a href="#18" id="18">18</a>
+<a href="#19" id="19">19</a>
+<a href="#20" id="20">20</a>
+<a href="#21" id="21">21</a>
+<a href="#22" id="22">22</a>
+<a href="#23" id="23">23</a>
+<a href="#24" id="24">24</a>
+<a href="#25" id="25">25</a>
+<a href="#26" id="26">26</a>
+<a href="#27" id="27">27</a>
+<a href="#28" id="28">28</a>
+<a href="#29" id="29">29</a>
+<a href="#30" id="30">30</a>
+<a href="#31" id="31">31</a>
+<a href="#32" id="32">32</a>
+<a href="#33" id="33">33</a>
+<a href="#34" id="34">34</a>
+<a href="#35" id="35">35</a>
+<a href="#36" id="36">36</a>
+<a href="#37" id="37">37</a>
+<a href="#38" id="38">38</a>
+<a href="#39" id="39">39</a>
+<a href="#40" id="40">40</a>
+<a href="#41" id="41">41</a>
+<a href="#42" id="42">42</a>
+<a href="#43" id="43">43</a>
+<a href="#44" id="44">44</a>
+<a href="#45" id="45">45</a>
+<a href="#46" id="46">46</a>
+<a href="#47" id="47">47</a>
+<a href="#48" id="48">48</a>
+<a href="#49" id="49">49</a>
+<a href="#50" id="50">50</a>
+<a href="#51" id="51">51</a>
+<a href="#52" id="52">52</a>
+<a href="#53" id="53">53</a>
+<a href="#54" id="54">54</a>
+<a href="#55" id="55">55</a>
+<a href="#56" id="56">56</a>
+<a href="#57" id="57">57</a>
+<a href="#58" id="58">58</a>
+<a href="#59" id="59">59</a>
+<a href="#60" id="60">60</a>
+<a href="#61" id="61">61</a>
+<a href="#62" id="62">62</a>
+<a href="#63" id="63">63</a>
+<a href="#64" id="64">64</a>
+<a href="#65" id="65">65</a>
+<a href="#66" id="66">66</a>
+<a href="#67" id="67">67</a>
+<a href="#68" id="68">68</a>
+<a href="#69" id="69">69</a>
+</pre></div><pre class="rust"><code><span class="doccomment">//! Ethereum protocol-related constants
+</span><span class="kw">use </span>linera_alloy_primitives::{b256, B256};
+
+<span class="doccomment">/// The first four bytes of the call data for a function call specifies the function to be called.
+</span><span class="kw">pub const </span>SELECTOR_LEN: usize = <span class="number">4</span>;
+
+<span class="doccomment">/// Maximum extra data size in a block after genesis
+</span><span class="kw">pub const </span>MAXIMUM_EXTRA_DATA_SIZE: usize = <span class="number">32</span>;
+
+<span class="doccomment">/// Multiplier for converting gwei to wei.
+</span><span class="kw">pub const </span>GWEI_TO_WEI: u64 = <span class="number">1_000_000_000</span>;
+
+<span class="doccomment">/// Multiplier for converting finney (milliether) to wei.
+</span><span class="kw">pub const </span>FINNEY_TO_WEI: u128 = (GWEI_TO_WEI <span class="kw">as </span>u128) * <span class="number">1_000_000</span>;
+
+<span class="doccomment">/// Multiplier for converting ether to wei.
+</span><span class="kw">pub const </span>ETH_TO_WEI: u128 = FINNEY_TO_WEI * <span class="number">1000</span>;
+
+<span class="doccomment">/// Multiplier for converting mgas to gas.
+</span><span class="kw">pub const </span>MGAS_TO_GAS: u64 = <span class="number">1_000_000u64</span>;
+
+<span class="doccomment">/// The Ethereum mainnet genesis hash.
+</span><span class="kw">pub const </span>MAINNET_GENESIS_HASH: B256 =
+    <span class="macro">b256!</span>(<span class="string">"d4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3"</span>);
+
+<span class="doccomment">/// Goerli genesis hash.
+</span><span class="kw">pub const </span>GOERLI_GENESIS_HASH: B256 =
+    <span class="macro">b256!</span>(<span class="string">"bf7e331f7f7c1dd2e05159666b3bf8bc7a8a3a9eb1d518969eab529dd9b88c1a"</span>);
+
+<span class="doccomment">/// Sepolia genesis hash.
+</span><span class="kw">pub const </span>SEPOLIA_GENESIS_HASH: B256 =
+    <span class="macro">b256!</span>(<span class="string">"25a5cc106eea7138acab33231d7160d69cb777ee0c2c553fcddf5138993e6dd9"</span>);
+
+<span class="doccomment">/// Holesky genesis hash.
+</span><span class="kw">pub const </span>HOLESKY_GENESIS_HASH: B256 =
+    <span class="macro">b256!</span>(<span class="string">"ff9006519a8ce843ac9c28549d24211420b546e12ce2d170c77a8cca7964f23d"</span>);
+
+<span class="doccomment">/// Testnet genesis hash.
+</span><span class="kw">pub const </span>DEV_GENESIS_HASH: B256 =
+    <span class="macro">b256!</span>(<span class="string">"2f980576711e3617a5e4d83dd539548ec0f7792007d505a3d2e9674833af2d7c"</span>);
+
+<span class="doccomment">/// Optimism goerli genesis hash.
+</span><span class="kw">pub const </span>GOERLI_OP_GENESIS: B256 =
+    <span class="macro">b256!</span>(<span class="string">"c1fc15cd51159b1f1e5cbc4b82e85c1447ddfa33c52cf1d98d14fba0d6354be1"</span>);
+
+<span class="doccomment">/// Base goerli genesis hash.
+</span><span class="kw">pub const </span>GOERLI_BASE_GENESIS: B256 =
+    <span class="macro">b256!</span>(<span class="string">"a3ab140f15ea7f7443a4702da64c10314eb04d488e72974e02e2d728096b4f76"</span>);
+
+<span class="doccomment">/// Keccak256 over empty array.
+</span><span class="kw">pub const </span>KECCAK_EMPTY: B256 =
+    <span class="macro">b256!</span>(<span class="string">"c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"</span>);
+
+<span class="doccomment">/// Ommer root of empty list.
+</span><span class="kw">pub const </span>EMPTY_OMMER_ROOT_HASH: B256 =
+    <span class="macro">b256!</span>(<span class="string">"1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"</span>);
+
+<span class="doccomment">/// Root hash of an empty trie.
+</span><span class="kw">pub const </span>EMPTY_ROOT_HASH: B256 =
+    <span class="macro">b256!</span>(<span class="string">"56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"</span>);
+
+<span class="doccomment">/// Transactions root of empty receipts set.
+</span><span class="kw">pub const </span>EMPTY_RECEIPTS: B256 = EMPTY_ROOT_HASH;
+
+<span class="doccomment">/// Transactions root of empty transactions set.
+</span><span class="kw">pub const </span>EMPTY_TRANSACTIONS: B256 = EMPTY_ROOT_HASH;
+
+<span class="doccomment">/// Withdrawals root of empty withdrawals set.
+</span><span class="kw">pub const </span>EMPTY_WITHDRAWALS: B256 = EMPTY_ROOT_HASH;
+</code></pre></div></section></main></body></html>

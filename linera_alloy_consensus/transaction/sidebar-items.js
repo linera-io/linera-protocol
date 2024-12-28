@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["TxEnvelope","TxType","TypedTransaction"],"mod":["eip4844","eip4844_utils"],"struct":["BlobTransactionSidecar","SidecarBuilder","SimpleCoder","TxEip1559","TxEip2930","TxLegacy"],"trait":["SidecarCoder","SignableTransaction","Transaction"],"type":["Blob","Bytes48"]};

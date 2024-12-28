@@ -1,0 +1,190 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Creates a “fork-join” scope `s` and invokes the closure with a reference to `s`. This closure can then spawn asynchronous tasks into `s`. Those tasks may run asynchronously with respect to the closure; they may themselves spawn additional tasks into `s`. When the closure returns, it will block until all tasks that have been spawned into `s` complete."><title>scope in rayon_core - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="rayon_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../rayon_core/index.html">rayon_core</a><span class="version">1.12.1</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="index.html">rayon_core</a>::<wbr><a class="fn" href="#">scope</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/rayon_core/scope/mod.rs.html#284-293">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn scope&lt;'scope, OP, R&gt;(op: OP) -&gt; R<div class="where">where
+    OP: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnOnce.html" title="trait core::ops::function::FnOnce">FnOnce</a>(&amp;<a class="struct" href="struct.Scope.html" title="struct rayon_core::Scope">Scope</a>&lt;'scope&gt;) -&gt; R + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a>,
+    R: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a>,</div></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Creates a “fork-join” scope <code>s</code> and invokes the closure with a
+reference to <code>s</code>. This closure can then spawn asynchronous tasks
+into <code>s</code>. Those tasks may run asynchronously with respect to the
+closure; they may themselves spawn additional tasks into <code>s</code>. When
+the closure returns, it will block until all tasks that have been
+spawned into <code>s</code> complete.</p>
+<p><code>scope()</code> is a more flexible building block compared to <code>join()</code>,
+since a loop can be used to spawn any number of tasks without
+recursing. However, that flexibility comes at a performance price:
+tasks spawned using <code>scope()</code> must be allocated onto the heap,
+whereas <code>join()</code> can make exclusive use of the stack. <strong>Prefer
+<code>join()</code> (or, even better, parallel iterators) where possible.</strong></p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<p>The Rayon <code>join()</code> function launches two closures and waits for them
+to stop. One could implement <code>join()</code> using a scope like so, although
+it would be less efficient than the real implementation:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">pub fn </span>join&lt;A,B,RA,RB&gt;(oper_a: A, oper_b: B) -&gt; (RA, RB)
+    <span class="kw">where </span>A: FnOnce() -&gt; RA + Send,
+          B: FnOnce() -&gt; RB + Send,
+          RA: Send,
+          RB: Send,
+{
+    <span class="kw">let </span><span class="kw-2">mut </span>result_a: <span class="prelude-ty">Option</span>&lt;RA&gt; = <span class="prelude-val">None</span>;
+    <span class="kw">let </span><span class="kw-2">mut </span>result_b: <span class="prelude-ty">Option</span>&lt;RB&gt; = <span class="prelude-val">None</span>;
+    rayon::scope(|s| {
+        s.spawn(|<span class="kw">_</span>| result_a = <span class="prelude-val">Some</span>(oper_a()));
+        s.spawn(|<span class="kw">_</span>| result_b = <span class="prelude-val">Some</span>(oper_b()));
+    });
+    (result_a.unwrap(), result_b.unwrap())
+}</code></pre></div>
+<h2 id="a-note-on-threading"><a class="doc-anchor" href="#a-note-on-threading">§</a>A note on threading</h2>
+<p>The closure given to <code>scope()</code> executes in the Rayon thread-pool,
+as do those given to <code>spawn()</code>. This means that you can’t access
+thread-local variables (well, you can, but they may have
+unexpected values).</p>
+<h2 id="task-execution"><a class="doc-anchor" href="#task-execution">§</a>Task execution</h2>
+<p>Task execution potentially starts as soon as <code>spawn()</code> is called.
+The task will end sometime before <code>scope()</code> returns. Note that the
+<em>closure</em> given to scope may return much earlier. In general
+the lifetime of a scope created like <code>scope(body)</code> goes something like this:</p>
+<ul>
+<li>Scope begins when <code>scope(body)</code> is called</li>
+<li>Scope body <code>body()</code> is invoked
+<ul>
+<li>Scope tasks may be spawned</li>
+</ul>
+</li>
+<li>Scope body returns</li>
+<li>Scope tasks execute, possibly spawning more tasks</li>
+<li>Once all tasks are done, scope ends and <code>scope()</code> returns</li>
+</ul>
+<p>To see how and when tasks are joined, consider this example:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// point start
+</span>rayon::scope(|s| {
+    s.spawn(|s| { <span class="comment">// task s.1
+        </span>s.spawn(|s| { <span class="comment">// task s.1.1
+            </span>rayon::scope(|t| {
+                t.spawn(|<span class="kw">_</span>| ()); <span class="comment">// task t.1
+                </span>t.spawn(|<span class="kw">_</span>| ()); <span class="comment">// task t.2
+            </span>});
+        });
+    });
+    s.spawn(|s| { <span class="comment">// task s.2
+    </span>});
+    <span class="comment">// point mid
+</span>});
+<span class="comment">// point end</span></code></pre></div>
+<p>The various tasks that are run will execute roughly like so:</p>
+<div class="example-wrap"><pre class="language-notrust"><code>| (start)
+|
+| (scope `s` created)
++-----------------------------------------------+ (task s.2)
++-------+ (task s.1)                            |
+|       |                                       |
+|       +---+ (task s.1.1)                      |
+|       |   |                                   |
+|       |   | (scope `t` created)               |
+|       |   +----------------+ (task t.2)       |
+|       |   +---+ (task t.1) |                  |
+| (mid) |   |   |            |                  |
+:       |   + &lt;-+------------+ (scope `t` ends) |
+:       |   |                                   |
+|&lt;------+---+-----------------------------------+ (scope `s` ends)
+|
+| (end)
+</code></pre></div>
+<p>The point here is that everything spawned into scope <code>s</code> will
+terminate (at latest) at the same point – right before the
+original call to <code>rayon::scope</code> returns. This includes new
+subtasks created by other subtasks (e.g., task <code>s.1.1</code>). If a new
+scope is created (such as <code>t</code>), the things spawned into that scope
+will be joined before that scope returns, which in turn occurs
+before the creating task (task <code>s.1.1</code> in this case) finishes.</p>
+<p>There is no guaranteed order of execution for spawns in a scope,
+given that other threads may steal tasks at any time. However, they
+are generally prioritized in a LIFO order on the thread from which
+they were spawned. So in this example, absent any stealing, we can
+expect <code>s.2</code> to execute before <code>s.1</code>, and <code>t.2</code> before <code>t.1</code>. Other
+threads always steal from the other end of the deque, like FIFO
+order.  The idea is that “recent” tasks are most likely to be fresh
+in the local CPU’s cache, while other threads can steal older
+“stale” tasks.  For an alternate approach, consider
+<a href="fn.scope_fifo.html"><code>scope_fifo()</code></a> instead.</p>
+<h2 id="accessing-stack-data"><a class="doc-anchor" href="#accessing-stack-data">§</a>Accessing stack data</h2>
+<p>In general, spawned tasks may access stack data in place that
+outlives the scope itself. Other data must be fully owned by the
+spawned task.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>ok: Vec&lt;i32&gt; = <span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>];
+rayon::scope(|s| {
+    <span class="kw">let </span>bad: Vec&lt;i32&gt; = <span class="macro">vec!</span>[<span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>];
+    s.spawn(|<span class="kw">_</span>| {
+        <span class="comment">// We can access `ok` because outlives the scope `s`.
+        </span><span class="macro">println!</span>(<span class="string">"ok: {:?}"</span>, ok);
+
+        <span class="comment">// If we just try to use `bad` here, the closure will borrow `bad`
+        // (because we are just printing it out, and that only requires a
+        // borrow), which will result in a compilation error. Read on
+        // for options.
+        // println!("bad: {:?}", bad);
+   </span>});
+});</code></pre></div>
+<p>As the comments example above suggest, to reference <code>bad</code> we must
+take ownership of it. One way to do this is to detach the closure
+from the surrounding stack frame, using the <code>move</code> keyword. This
+will cause it to take ownership of <em>all</em> the variables it touches,
+in this case including both <code>ok</code> <em>and</em> <code>bad</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>ok: Vec&lt;i32&gt; = <span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>];
+rayon::scope(|s| {
+    <span class="kw">let </span>bad: Vec&lt;i32&gt; = <span class="macro">vec!</span>[<span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>];
+    s.spawn(<span class="kw">move </span>|<span class="kw">_</span>| {
+        <span class="macro">println!</span>(<span class="string">"ok: {:?}"</span>, ok);
+        <span class="macro">println!</span>(<span class="string">"bad: {:?}"</span>, bad);
+    });
+
+    <span class="comment">// That closure is fine, but now we can't use `ok` anywhere else,
+    // since it is owned by the previous task:
+    // s.spawn(|_| println!("ok: {:?}", ok));
+</span>});</code></pre></div>
+<p>While this works, it could be a problem if we want to use <code>ok</code> elsewhere.
+There are two choices. We can keep the closure as a <code>move</code> closure, but
+instead of referencing the variable <code>ok</code>, we create a shadowed variable that
+is a borrow of <code>ok</code> and capture <em>that</em>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>ok: Vec&lt;i32&gt; = <span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>];
+rayon::scope(|s| {
+    <span class="kw">let </span>bad: Vec&lt;i32&gt; = <span class="macro">vec!</span>[<span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>];
+    <span class="kw">let </span>ok: <span class="kw-2">&amp;</span>Vec&lt;i32&gt; = <span class="kw-2">&amp;</span>ok; <span class="comment">// shadow the original `ok`
+    </span>s.spawn(<span class="kw">move </span>|<span class="kw">_</span>| {
+        <span class="macro">println!</span>(<span class="string">"ok: {:?}"</span>, ok); <span class="comment">// captures the shadowed version
+        </span><span class="macro">println!</span>(<span class="string">"bad: {:?}"</span>, bad);
+    });
+
+    <span class="comment">// Now we too can use the shadowed `ok`, since `&amp;Vec&lt;i32&gt;` references
+    // can be shared freely. Note that we need a `move` closure here though,
+    // because otherwise we'd be trying to borrow the shadowed `ok`,
+    // and that doesn't outlive `scope`.
+    </span>s.spawn(<span class="kw">move </span>|<span class="kw">_</span>| <span class="macro">println!</span>(<span class="string">"ok: {:?}"</span>, ok));
+});</code></pre></div>
+<p>Another option is not to use the <code>move</code> keyword but instead to take ownership
+of individual variables:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>ok: Vec&lt;i32&gt; = <span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>];
+rayon::scope(|s| {
+    <span class="kw">let </span>bad: Vec&lt;i32&gt; = <span class="macro">vec!</span>[<span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>];
+    s.spawn(|<span class="kw">_</span>| {
+        <span class="comment">// Transfer ownership of `bad` into a local variable (also named `bad`).
+        // This will force the closure to take ownership of `bad` from the environment.
+        </span><span class="kw">let </span>bad = bad;
+        <span class="macro">println!</span>(<span class="string">"ok: {:?}"</span>, ok); <span class="comment">// `ok` is only borrowed.
+        </span><span class="macro">println!</span>(<span class="string">"bad: {:?}"</span>, bad); <span class="comment">// refers to our local variable, above.
+    </span>});
+
+    s.spawn(|<span class="kw">_</span>| <span class="macro">println!</span>(<span class="string">"ok: {:?}"</span>, ok)); <span class="comment">// we too can borrow `ok`
+</span>});</code></pre></div>
+<h2 id="panics"><a class="doc-anchor" href="#panics">§</a>Panics</h2>
+<p>If a panic occurs, either in the closure given to <code>scope()</code> or in
+any of the spawned jobs, that panic will be propagated and the
+call to <code>scope()</code> will panic. If multiple panics occurs, it is
+non-deterministic which of their panic values will propagate.
+Regardless, once a task is spawned using <code>scope.spawn()</code>, it will
+execute, even if the spawning task should later panic. <code>scope()</code>
+returns once all spawned jobs have completed, and any panics are
+propagated at that point.</p>
+</div></details></section></div></main></body></html>

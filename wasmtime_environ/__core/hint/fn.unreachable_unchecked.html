@@ -1,0 +1,78 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Informs the compiler that the site which is calling this function is not reachable, possibly enabling further optimizations."><title>unreachable_unchecked in wasmtime_environ::__core::hint - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="wasmtime_environ" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../wasmtime_environ/index.html">wasmtime_environ</a><span class="version">25.0.1</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In wasmtime_environ::__core::hint</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../../index.html">wasmtime_environ</a>::<wbr><a href="../index.html">__core</a>::<wbr><a href="index.html">hint</a>::<wbr><a class="fn" href="#">unreachable_unchecked</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><span class="since" title="Stable since Rust version 1.27.0, const since 1.57.0">1.27.0 (const: 1.57.0)</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/hint.rs.html#101">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub const unsafe fn unreachable_unchecked() -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.never.html">!</a></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Informs the compiler that the site which is calling this function is not
+reachable, possibly enabling further optimizations.</p>
+<h2 id="safety"><a class="doc-anchor" href="#safety">§</a>Safety</h2>
+<p>Reaching this function is <em>Undefined Behavior</em>.</p>
+<p>As the compiler assumes that all forms of Undefined Behavior can never
+happen, it will eliminate all branches in the surrounding code that it can
+determine will invariably lead to a call to <code>unreachable_unchecked()</code>.</p>
+<p>If the assumptions embedded in using this function turn out to be wrong -
+that is, if the site which is calling <code>unreachable_unchecked()</code> is actually
+reachable at runtime - the compiler may have generated nonsensical machine
+instructions for this situation, including in seemingly unrelated code,
+causing difficult-to-debug problems.</p>
+<p>Use this function sparingly. Consider using the <a href="../macro.unreachable.html" title="macro wasmtime_environ::__core::unreachable"><code>unreachable!</code></a> macro,
+which may prevent some optimizations but will safely panic in case it is
+actually reached at runtime. Benchmark your code to find out if using
+<code>unreachable_unchecked()</code> comes with a performance benefit.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p><code>unreachable_unchecked()</code> can be used in situations where the compiler
+can’t prove invariants that were previously established. Such situations
+have a higher chance of occurring if those invariants are upheld by
+external code that the compiler can’t analyze.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>prepare_inputs(divisors: <span class="kw-2">&amp;mut </span>Vec&lt;u32&gt;) {
+    <span class="comment">// Note to future-self when making changes: The invariant established
+    // here is NOT checked in `do_computation()`; if this changes, you HAVE
+    // to change `do_computation()`.
+    </span>divisors.retain(|divisor| <span class="kw-2">*</span>divisor != <span class="number">0</span>)
+}
+
+<span class="doccomment">/// # Safety
+/// All elements of `divisor` must be non-zero.
+</span><span class="kw">unsafe fn </span>do_computation(i: u32, divisors: <span class="kw-2">&amp;</span>[u32]) -&gt; u32 {
+    divisors.iter().fold(i, |acc, divisor| {
+        <span class="comment">// Convince the compiler that a division by zero can't happen here
+        // and a check is not needed below.
+        </span><span class="kw">if </span><span class="kw-2">*</span>divisor == <span class="number">0 </span>{
+            <span class="comment">// Safety: `divisor` can't be zero because of `prepare_inputs`,
+            // but the compiler does not know about this. We *promise*
+            // that we always call `prepare_inputs`.
+            </span>std::hint::unreachable_unchecked()
+        }
+        <span class="comment">// The compiler would normally introduce a check here that prevents
+        // a division by zero. However, if `divisor` was zero, the branch
+        // above would reach what we explicitly marked as unreachable.
+        // The compiler concludes that `divisor` can't be zero at this point
+        // and removes the - now proven useless - check.
+        </span>acc / divisor
+    })
+}
+
+<span class="kw">let </span><span class="kw-2">mut </span>divisors = <span class="macro">vec!</span>[<span class="number">2</span>, <span class="number">0</span>, <span class="number">4</span>];
+prepare_inputs(<span class="kw-2">&amp;mut </span>divisors);
+<span class="kw">let </span>result = <span class="kw">unsafe </span>{
+    <span class="comment">// Safety: prepare_inputs() guarantees that divisors is non-zero
+    </span>do_computation(<span class="number">100</span>, <span class="kw-2">&amp;</span>divisors)
+};
+<span class="macro">assert_eq!</span>(result, <span class="number">12</span>);
+</code></pre></div>
+<p>While using <code>unreachable_unchecked()</code> is perfectly sound in the following
+example, as the compiler is able to prove that a division by zero is not
+possible, benchmarking reveals that <code>unreachable_unchecked()</code> provides
+no benefit over using <a href="../macro.unreachable.html" title="macro wasmtime_environ::__core::unreachable"><code>unreachable!</code></a>, while the latter does not introduce
+the possibility of Undefined Behavior.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>div_1(a: u32, b: u32) -&gt; u32 {
+    <span class="kw">use </span>std::hint::unreachable_unchecked;
+
+    <span class="comment">// `b.saturating_add(1)` is always positive (not zero),
+    // hence `checked_div` will never return `None`.
+    // Therefore, the else branch is unreachable.
+    </span>a.checked_div(b.saturating_add(<span class="number">1</span>))
+        .unwrap_or_else(|| <span class="kw">unsafe </span>{ unreachable_unchecked() })
+}
+
+<span class="macro">assert_eq!</span>(div_1(<span class="number">7</span>, <span class="number">0</span>), <span class="number">7</span>);
+<span class="macro">assert_eq!</span>(div_1(<span class="number">9</span>, <span class="number">1</span>), <span class="number">4</span>);
+<span class="macro">assert_eq!</span>(div_1(<span class="number">11</span>, u32::MAX), <span class="number">0</span>);</code></pre></div>
+</div></details></section></div></main></body></html>

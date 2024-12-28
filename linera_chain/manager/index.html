@@ -1,0 +1,57 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Chain manager"><title>linera_chain::manager - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="linera_chain" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../linera_chain/index.html">linera_chain</a><span class="version">0.14.0</span></h2></div><h2 class="location"><a href="#">Module manager</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li></ul></section><h2><a href="../index.html">In crate linera_chain</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">linera_chain</a>::<wbr><a class="mod" href="#">manager</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/linera_chain/manager.rs.html#4-697">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="chain-manager"><a class="doc-anchor" href="#chain-manager">§</a>Chain manager</h2>
+<p>This module contains the consensus mechanism for all microchains. Whenever a block is
+confirmed, a new chain manager is created for the next block height. It manages the consensus
+state until a new block is confirmed. As long as less than a third of the validators are faulty,
+it guarantees that at most one <code>ConfirmedBlock</code> certificate will be created for this height.</p>
+<p>The protocol proceeds in rounds, until it reaches a round where a block gets confirmed.</p>
+<p>There are four kinds of rounds:</p>
+<ul>
+<li>In <code>Round::Fast</code>, only super owners can propose blocks, and validators vote to confirm a
+block immediately. Super owners must be careful to make only one block proposal, or else they
+can permanently block the microchain. If there are no super owners, <code>Round::Fast</code> is skipped.</li>
+<li>In cooperative mode (<code>Round::MultiLeader</code>), all chain owners can propose blocks at any time.
+The protocol is guaranteed to eventually confirm a block as long as no chain owner
+continuously actively prevents progress.</li>
+<li>In leader rotation mode (<code>Round::SingleLeader</code>), chain owners take turns at proposing blocks.
+It can make progress as long as at least one owner is honest, even if other owners try to
+prevent it.</li>
+<li>In fallback/public mode (<code>Round::Validator</code>), validators take turns at proposing blocks.
+It can always make progress under the standard assumption that there is a quorum of honest
+validators.</li>
+</ul>
+<h3 id="safety-ie-at-most-one-block-will-be-confirmed"><a class="doc-anchor" href="#safety-ie-at-most-one-block-will-be-confirmed">§</a>Safety, i.e. at most one block will be confirmed</h3>
+<p>In all modes this is guaranteed as follows:</p>
+<ul>
+<li>Validators (honest ones) never cast a vote if they have already cast any vote in a later
+round.</li>
+<li>Validators never vote for a <code>ValidatedBlock</code> <strong>A</strong> in round <strong>r</strong> if they have voted for a
+<em>different</em> <code>ConfirmedBlock</code> <strong>B</strong> in an earlier round <strong>s</strong> ≤ <strong>r</strong>, unless there is a
+<code>ValidatedBlock</code> certificate (with a quorum of validator signatures) for <strong>A</strong> in some round
+between <strong>s</strong> and <strong>r</strong> included in the block proposal.</li>
+<li>Validators only vote for a <code>ConfirmedBlock</code> if there is a <code>ValidatedBlock</code> certificate for the
+same block in the same round.</li>
+</ul>
+<p>This guarantees that once a quorum votes for some <code>ConfirmedBlock</code>, there can never be a
+<code>ValidatedBlock</code> certificate (and thus also no <code>ConfirmedBlock</code> certificate) for a different
+block in a later round. So if there are two different <code>ConfirmedBlock</code> certificates, they may
+be from different rounds, but they are guaranteed to contain the same block.</p>
+<h3 id="liveness-ie-some-block-will-eventually-be-confirmed"><a class="doc-anchor" href="#liveness-ie-some-block-will-eventually-be-confirmed">§</a>Liveness, i.e. some block will eventually be confirmed</h3>
+<p>In <code>Round::Fast</code>, liveness depends on the super owners coordinating, and proposing at most one
+block.</p>
+<p>If they propose none, and there are other owners, <code>Round::Fast</code> will eventually time out.</p>
+<p>In cooperative mode, if there is contention, the owners need to agree on a single owner as the
+next proposer. That owner should then download all highest-round certificates and block
+proposals known to the honest validators. They can then make a proposal in a round higher than
+all previous proposals. If there is any <code>ValidatedBlock</code> certificate they must include the
+highest one in their proposal, and propose that block. Otherwise they can propose a new block.
+Now all honest validators are allowed to vote for that proposal, and eventually confirm it.</p>
+<p>If the owners fail to cooperate, any honest owner can initiate the last multi-leader round by
+making a proposal there, then wait for it to time out, which starts the leader-based mode:</p>
+<p>In leader-based and fallback/public mode, an honest participant should subscribe to
+notifications from all validators, and follow the chain. Whenever another leader’s round takes
+too long, they should request timeout votes from the validators to make the next round begin.
+Once the honest participant becomes the round leader, they should update all validators, so
+that they all agree on the current round. Then they download the highest <code>ValidatedBlock</code>
+certificate known to any honest validator and include that in their block proposal, just like
+in the cooperative case.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.ChainManager.html" title="struct linera_chain::manager::ChainManager">ChainManager</a></div><div class="desc docblock-short">The state of the certification process for a chain’s next block.</div></li><li><div class="item-name"><a class="struct" href="struct.ChainManagerInfo.html" title="struct linera_chain::manager::ChainManagerInfo">ChainManagerInfo</a></div><div class="desc docblock-short">Chain manager information that is included in <code>ChainInfo</code> sent to clients.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.Outcome.html" title="enum linera_chain::manager::Outcome">Outcome</a></div><div class="desc docblock-short">The result of verifying a (valid) query.</div></li></ul></section></div></main></body></html>

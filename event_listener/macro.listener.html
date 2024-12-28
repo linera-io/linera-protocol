@@ -1,0 +1,77 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Create a stack-based event listener for an `Event`."><title>listener in event_listener - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="event_listener" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="icon" href="https://raw.githubusercontent.com/smol-rs/smol/master/assets/images/logo_fullsize_transparent.png"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../event_listener/index.html"><img src="https://raw.githubusercontent.com/smol-rs/smol/master/assets/images/logo_fullsize_transparent.png" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../event_listener/index.html"><img src="https://raw.githubusercontent.com/smol-rs/smol/master/assets/images/logo_fullsize_transparent.png" alt="logo"></a><h2><a href="../event_listener/index.html">event_listener</a><span class="version">5.3.1</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="index.html">event_listener</a>::<wbr><a class="macro" href="#">listener</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/event_listener/lib.rs.html#1030-1038">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><span class="macro">macro_rules!</span> listener {
+    (<span class="macro-nonterminal">$event</span>:expr =&gt; <span class="macro-nonterminal">$listener</span>:ident) =&gt; { ... };
+}</pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Create a stack-based event listener for an <a href="struct.Event.html" title="struct event_listener::Event"><code>Event</code></a>.</p>
+<p><a href="struct.EventListener.html" title="struct event_listener::EventListener"><code>EventListener</code></a> allocates the listener on the heap. While this works for most use cases, in
+practice this heap allocation can be expensive for repeated uses. This method allows for
+allocating the listener on the stack instead.</p>
+<p>There are limitations to using this macro instead of the <a href="struct.EventListener.html" title="struct event_listener::EventListener"><code>EventListener</code></a> type, however.
+Firstly, it is significantly less flexible. The listener is locked to the current stack
+frame, meaning that it can’t be returned or put into a place where it would go out of
+scope. For instance, this will not work:</p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>event_listener::{Event, Listener, listener};
+
+<span class="kw">fn </span>get_listener(event: <span class="kw-2">&amp;</span>Event) -&gt; <span class="kw">impl </span>Listener {
+    <span class="macro">listener!</span>(event =&gt; cant_return_this);
+    cant_return_this
+}</code></pre></div>
+<p>In addition, the types involved in creating this listener are not able to be named. Therefore
+it cannot be used in hand-rolled futures or similar structures.</p>
+<p>The type created by this macro implements <a href="trait.Listener.html" title="trait event_listener::Listener"><code>Listener</code></a>, allowing it to be used in cases where
+<a href="struct.EventListener.html" title="struct event_listener::EventListener"><code>EventListener</code></a> would normally be used.</p>
+<h3 id="example"><a class="doc-anchor" href="#example">§</a>Example</h3>
+<p>To use this macro, replace cases where you would normally use this…</p>
+<div class="example-wrap"><pre class="language-no_compile"><code>let listener = event.listen();
+</code></pre></div>
+<p>…with this:</p>
+<div class="example-wrap"><pre class="language-no_compile"><code>listener!(event =&gt; listener);
+</code></pre></div>
+<p>Here is the top level example from this crate’s documentation, but using <a href="macro.listener.html" title="macro event_listener::listener"><code>listener</code></a> instead
+of <a href="struct.EventListener.html" title="struct event_listener::EventListener"><code>EventListener</code></a>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::sync::atomic::{AtomicBool, Ordering};
+<span class="kw">use </span>std::sync::Arc;
+<span class="kw">use </span>std::thread;
+<span class="kw">use </span>std::time::Duration;
+<span class="kw">use </span>std::usize;
+<span class="kw">use </span>event_listener::{Event, listener, IntoNotification, Listener};
+
+<span class="kw">let </span>flag = Arc::new(AtomicBool::new(<span class="bool-val">false</span>));
+<span class="kw">let </span>event = Arc::new(Event::new());
+
+<span class="comment">// Spawn a thread that will set the flag after 1 second.
+</span>thread::spawn({
+    <span class="kw">let </span>flag = flag.clone();
+    <span class="kw">let </span>event = event.clone();
+    <span class="kw">move </span>|| {
+        <span class="comment">// Wait for a second.
+        </span>thread::sleep(Duration::from_secs(<span class="number">1</span>));
+
+        <span class="comment">// Set the flag.
+        </span>flag.store(<span class="bool-val">true</span>, Ordering::SeqCst);
+
+        <span class="comment">// Notify all listeners that the flag has been set.
+        </span>event.notify(usize::MAX);
+    }
+});
+
+<span class="comment">// Wait until the flag is set.
+</span><span class="kw">loop </span>{
+    <span class="comment">// Check the flag.
+    </span><span class="kw">if </span>flag.load(Ordering::SeqCst) {
+        <span class="kw">break</span>;
+    }
+
+    <span class="comment">// Start listening for events.
+    // NEW: Changed to a stack-based listener.
+    </span><span class="macro">listener!</span>(event =&gt; listener);
+
+    <span class="comment">// Check the flag again after creating the listener.
+    </span><span class="kw">if </span>flag.load(Ordering::SeqCst) {
+        <span class="kw">break</span>;
+    }
+
+    <span class="comment">// Wait for a notification and continue the loop.
+    </span>listener.wait();
+}</code></pre></div>
+</div></details></section></div></main></body></html>

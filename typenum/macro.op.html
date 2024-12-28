@@ -1,0 +1,129 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Convenient type operations."><title>op in typenum - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="typenum" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../typenum/index.html">typenum</a><span class="version">1.17.0</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="index.html">typenum</a>::<wbr><a class="macro" href="#">op</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/typenum/home/runner/work/linera-protocol/linera-protocol/target/debug/build/typenum-67226b504f312954/out/op.rs.html#323-325">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><span class="macro">macro_rules!</span> op {
+    ($(<span class="macro-nonterminal">$tail</span>:tt)<span class="kw-2">*</span>) =&gt; { ... };
+}</pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Convenient type operations.</p>
+<p>Any types representing values must be able to be expressed as <code>ident</code>s. That means they need to be
+in scope.</p>
+<p>For example, <code>P5</code> is okay, but <code>typenum::P5</code> is not.</p>
+<p>You may combine operators arbitrarily, although doing so excessively may require raising the
+recursion limit.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![recursion_limit=<span class="string">"128"</span>]
+#[macro_use] </span><span class="kw">extern crate </span>typenum;
+<span class="kw">use </span>typenum::consts::<span class="kw-2">*</span>;
+
+<span class="kw">fn </span>main() {
+    <span class="macro">assert_type!</span>(
+        <span class="macro">op!</span>(min((P1 - P2) * (N3 + N7), P5 * (P3 + P4)) == P10)
+    );
+}</code></pre></div>
+<p>Operators are evaluated based on the operator precedence outlined
+<a href="https://doc.rust-lang.org/reference.html#operator-precedence">here</a>.</p>
+<p>The full list of supported operators and functions is as follows:</p>
+<p><code>*</code>, <code>/</code>, <code>%</code>, <code>+</code>, <code>-</code>, <code>&lt;&lt;</code>, <code>&gt;&gt;</code>, <code>&amp;</code>, <code>^</code>, <code>|</code>, <code>==</code>, <code>!=</code>, <code>&lt;=</code>, <code>&gt;=</code>, <code>&lt;</code>, <code>&gt;</code>, <code>cmp</code>, <code>sqr</code>, <code>sqrt</code>, <code>abs</code>, <code>cube</code>, <code>pow</code>, <code>min</code>, <code>max</code>, <code>log2</code>, <code>gcd</code></p>
+<p>They all expand to type aliases defined in the <code>operator_aliases</code> module. Here is an expanded list,
+including examples:</p>
+<hr />
+<p>Operator <code>*</code>. Expands to <code>Prod</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">assert_type_eq!</span>(<span class="macro">op!</span>(P2 * P3), P6);</code></pre></div>
+<hr />
+<p>Operator <code>/</code>. Expands to <code>Quot</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">assert_type_eq!</span>(<span class="macro">op!</span>(P6 / P2), P3);</code></pre></div>
+<hr />
+<p>Operator <code>%</code>. Expands to <code>Mod</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">assert_type_eq!</span>(<span class="macro">op!</span>(P5 % P3), P2);</code></pre></div>
+<hr />
+<p>Operator <code>+</code>. Expands to <code>Sum</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">assert_type_eq!</span>(<span class="macro">op!</span>(P2 + P3), P5);</code></pre></div>
+<hr />
+<p>Operator <code>-</code>. Expands to <code>Diff</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">assert_type_eq!</span>(<span class="macro">op!</span>(P2 - P3), N1);</code></pre></div>
+<hr />
+<p>Operator <code>&lt;&lt;</code>. Expands to <code>Shleft</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">assert_type_eq!</span>(<span class="macro">op!</span>(U1 &lt;&lt; U5), U32);</code></pre></div>
+<hr />
+<p>Operator <code>&gt;&gt;</code>. Expands to <code>Shright</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">assert_type_eq!</span>(<span class="macro">op!</span>(U32 &gt;&gt; U5), U1);</code></pre></div>
+<hr />
+<p>Operator <code>&amp;</code>. Expands to <code>And</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">assert_type_eq!</span>(<span class="macro">op!</span>(U5 &amp; U3), U1);</code></pre></div>
+<hr />
+<p>Operator <code>^</code>. Expands to <code>Xor</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">assert_type_eq!</span>(<span class="macro">op!</span>(U5 ^ U3), U6);</code></pre></div>
+<hr />
+<p>Operator <code>|</code>. Expands to <code>Or</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">assert_type_eq!</span>(<span class="macro">op!</span>(U5 | U3), U7);</code></pre></div>
+<hr />
+<p>Operator <code>==</code>. Expands to <code>Eq</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">assert_type_eq!</span>(<span class="macro">op!</span>(P5 == P3 + P2), True);</code></pre></div>
+<hr />
+<p>Operator <code>!=</code>. Expands to <code>NotEq</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">assert_type_eq!</span>(<span class="macro">op!</span>(P5 != P3 + P2), False);</code></pre></div>
+<hr />
+<p>Operator <code>&lt;=</code>. Expands to <code>LeEq</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">assert_type_eq!</span>(<span class="macro">op!</span>(P6 &lt;= P3 + P2), False);</code></pre></div>
+<hr />
+<p>Operator <code>&gt;=</code>. Expands to <code>GrEq</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">assert_type_eq!</span>(<span class="macro">op!</span>(P6 &gt;= P3 + P2), True);</code></pre></div>
+<hr />
+<p>Operator <code>&lt;</code>. Expands to <code>Le</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">assert_type_eq!</span>(<span class="macro">op!</span>(P4 &lt; P3 + P2), True);</code></pre></div>
+<hr />
+<p>Operator <code>&gt;</code>. Expands to <code>Gr</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">assert_type_eq!</span>(<span class="macro">op!</span>(P5 &lt; P3 + P2), False);</code></pre></div>
+<hr />
+<p>Operator <code>cmp</code>. Expands to <code>Compare</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">assert_type_eq!</span>(<span class="macro">op!</span>(cmp(P2, P3)), Less);</code></pre></div>
+<hr />
+<p>Operator <code>sqr</code>. Expands to <code>Square</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">assert_type_eq!</span>(<span class="macro">op!</span>(sqr(P2)), P4);</code></pre></div>
+<hr />
+<p>Operator <code>sqrt</code>. Expands to <code>Sqrt</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">assert_type_eq!</span>(<span class="macro">op!</span>(sqrt(U9)), U3);</code></pre></div>
+<hr />
+<p>Operator <code>abs</code>. Expands to <code>AbsVal</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">assert_type_eq!</span>(<span class="macro">op!</span>(abs(N2)), P2);</code></pre></div>
+<hr />
+<p>Operator <code>cube</code>. Expands to <code>Cube</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">assert_type_eq!</span>(<span class="macro">op!</span>(cube(P2)), P8);</code></pre></div>
+<hr />
+<p>Operator <code>pow</code>. Expands to <code>Exp</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">assert_type_eq!</span>(<span class="macro">op!</span>(pow(P2, P3)), P8);</code></pre></div>
+<hr />
+<p>Operator <code>min</code>. Expands to <code>Minimum</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">assert_type_eq!</span>(<span class="macro">op!</span>(min(P2, P3)), P2);</code></pre></div>
+<hr />
+<p>Operator <code>max</code>. Expands to <code>Maximum</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">assert_type_eq!</span>(<span class="macro">op!</span>(max(P2, P3)), P3);</code></pre></div>
+<hr />
+<p>Operator <code>log2</code>. Expands to <code>Log2</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">assert_type_eq!</span>(<span class="macro">op!</span>(log2(U9)), U3);</code></pre></div>
+<hr />
+<p>Operator <code>gcd</code>. Expands to <code>Gcf</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">assert_type_eq!</span>(<span class="macro">op!</span>(gcd(U9, U21)), U3);</code></pre></div>
+</div></details></section></div></main></body></html>

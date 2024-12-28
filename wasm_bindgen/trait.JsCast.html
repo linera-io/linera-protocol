@@ -1,0 +1,99 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A trait for checked and unchecked casting between JS types."><title>JsCast in wasm_bindgen - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="wasm_bindgen" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../wasm_bindgen/index.html">wasm_bindgen</a><span class="version">0.2.93</span></h2></div><h2 class="location"><a href="#">JsCast</a></h2><div class="sidebar-elems"><section><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.instanceof">instanceof</a></li><li><a href="#tymethod.unchecked_from_js">unchecked_from_js</a></li><li><a href="#tymethod.unchecked_from_js_ref">unchecked_from_js_ref</a></li></ul><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.dyn_into">dyn_into</a></li><li><a href="#method.dyn_ref">dyn_ref</a></li><li><a href="#method.has_type">has_type</a></li><li><a href="#method.is_instance_of">is_instance_of</a></li><li><a href="#method.is_type_of">is_type_of</a></li><li><a href="#method.unchecked_into">unchecked_into</a></li><li><a href="#method.unchecked_ref">unchecked_ref</a></li></ul><h3><a href="#object-safety">Object Safety</a></h3><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In crate wasm_bindgen</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="index.html">wasm_bindgen</a>::<wbr><a class="trait" href="#">JsCast</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/wasm_bindgen/cast.rs.html#15-156">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub trait JsCast<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;<a class="struct" href="struct.JsValue.html" title="struct wasm_bindgen::JsValue">JsValue</a>&gt; + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="struct" href="struct.JsValue.html" title="struct wasm_bindgen::JsValue">JsValue</a>&gt;,</div>{
+    // Required methods
+    fn <a href="#tymethod.instanceof" class="fn">instanceof</a>(val: &amp;<a class="struct" href="struct.JsValue.html" title="struct wasm_bindgen::JsValue">JsValue</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.unchecked_from_js" class="fn">unchecked_from_js</a>(val: <a class="struct" href="struct.JsValue.html" title="struct wasm_bindgen::JsValue">JsValue</a>) -&gt; Self;
+<span class="item-spacer"></span>    fn <a href="#tymethod.unchecked_from_js_ref" class="fn">unchecked_from_js_ref</a>(val: &amp;<a class="struct" href="struct.JsValue.html" title="struct wasm_bindgen::JsValue">JsValue</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;Self</a>;
+
+    // Provided methods
+    fn <a href="#method.has_type" class="fn">has_type</a>&lt;T&gt;(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>
+       <span class="where">where T: <a class="trait" href="trait.JsCast.html" title="trait wasm_bindgen::JsCast">JsCast</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.dyn_into" class="fn">dyn_into</a>&lt;T&gt;(self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, Self&gt;
+       <span class="where">where T: <a class="trait" href="trait.JsCast.html" title="trait wasm_bindgen::JsCast">JsCast</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.dyn_ref" class="fn">dyn_ref</a>&lt;T&gt;(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a>&gt;
+       <span class="where">where T: <a class="trait" href="trait.JsCast.html" title="trait wasm_bindgen::JsCast">JsCast</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.unchecked_into" class="fn">unchecked_into</a>&lt;T&gt;(self) -&gt; T
+       <span class="where">where T: <a class="trait" href="trait.JsCast.html" title="trait wasm_bindgen::JsCast">JsCast</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.unchecked_ref" class="fn">unchecked_ref</a>&lt;T&gt;(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a>
+       <span class="where">where T: <a class="trait" href="trait.JsCast.html" title="trait wasm_bindgen::JsCast">JsCast</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.is_instance_of" class="fn">is_instance_of</a>&lt;T&gt;(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>
+       <span class="where">where T: <a class="trait" href="trait.JsCast.html" title="trait wasm_bindgen::JsCast">JsCast</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.is_type_of" class="fn">is_type_of</a>(val: &amp;<a class="struct" href="struct.JsValue.html" title="struct wasm_bindgen::JsValue">JsValue</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a> { ... }
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A trait for checked and unchecked casting between JS types.</p>
+<p>Specified <a href="https://github.com/rustwasm/rfcs/blob/master/text/002-wasm-bindgen-inheritance-casting.md">in an RFC</a> this trait is intended to provide support for
+casting JS values between different types of one another. In JS there aren’t
+many static types but we’ve ascribed JS values with static types in Rust,
+yet they often need to be switched to other types temporarily! This trait
+provides both checked and unchecked casting into various kinds of values.</p>
+<p>This trait is automatically implemented for any type imported in a
+<code>#[wasm_bindgen]</code> <code>extern</code> block.</p>
+</div></details><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.instanceof" class="method"><a class="src rightside" href="../src/wasm_bindgen/cast.rs.html#125">source</a><h4 class="code-header">fn <a href="#tymethod.instanceof" class="fn">instanceof</a>(val: &amp;<a class="struct" href="struct.JsValue.html" title="struct wasm_bindgen::JsValue">JsValue</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Performs a dynamic <code>instanceof</code> check to see whether the <code>JsValue</code>
+provided is an instance of this type.</p>
+<p>This is intended to be an internal implementation detail, you likely
+won’t need to call this. It’s generally called through the
+<code>is_instance_of</code> method instead.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.unchecked_from_js" class="method"><a class="src rightside" href="../src/wasm_bindgen/cast.rs.html#145">source</a><h4 class="code-header">fn <a href="#tymethod.unchecked_from_js" class="fn">unchecked_from_js</a>(val: <a class="struct" href="struct.JsValue.html" title="struct wasm_bindgen::JsValue">JsValue</a>) -&gt; Self</h4></section></summary><div class="docblock"><p>Performs a zero-cost unchecked conversion from a <code>JsValue</code> into an
+instance of <code>Self</code></p>
+<p>This is intended to be an internal implementation detail, you likely
+won’t need to call this.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.unchecked_from_js_ref" class="method"><a class="src rightside" href="../src/wasm_bindgen/cast.rs.html#155">source</a><h4 class="code-header">fn <a href="#tymethod.unchecked_from_js_ref" class="fn">unchecked_from_js_ref</a>(val: &amp;<a class="struct" href="struct.JsValue.html" title="struct wasm_bindgen::JsValue">JsValue</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;Self</a></h4></section></summary><div class="docblock"><p>Performs a zero-cost unchecked conversion from a <code>&amp;JsValue</code> into an
+instance of <code>&amp;Self</code>.</p>
+<p>Note the safety of this method, which basically means that <code>Self</code> must
+be a newtype wrapper around <code>JsValue</code>.</p>
+<p>This is intended to be an internal implementation detail, you likely
+won’t need to call this.</p>
+</div></details></div><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.has_type" class="method"><a class="src rightside" href="../src/wasm_bindgen/cast.rs.html#30-35">source</a><h4 class="code-header">fn <a href="#method.has_type" class="fn">has_type</a>&lt;T&gt;(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a><div class="where">where
+    T: <a class="trait" href="trait.JsCast.html" title="trait wasm_bindgen::JsCast">JsCast</a>,</div></h4></section></summary><div class="docblock"><p>Test whether this JS value has a type <code>T</code>.</p>
+<p>This method will dynamically check to see if this JS object can be
+casted to the JS object of type <code>T</code>. Usually this uses the <code>instanceof</code>
+operator. This also works with primitive types like
+booleans/strings/numbers as well as cross-realm object like <code>Array</code>
+which can originate from other iframes.</p>
+<p>In general this is intended to be a more robust version of
+<code>is_instance_of</code>, but if you want strictly the <code>instanceof</code> operator
+it’s recommended to use that instead.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.dyn_into" class="method"><a class="src rightside" href="../src/wasm_bindgen/cast.rs.html#43-52">source</a><h4 class="code-header">fn <a href="#method.dyn_into" class="fn">dyn_into</a>&lt;T&gt;(self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, Self&gt;<div class="where">where
+    T: <a class="trait" href="trait.JsCast.html" title="trait wasm_bindgen::JsCast">JsCast</a>,</div></h4></section></summary><div class="docblock"><p>Performs a dynamic cast (checked at runtime) of this value into the
+target type <code>T</code>.</p>
+<p>This method will return <code>Err(self)</code> if <code>self.has_type::&lt;T&gt;()</code>
+returns <code>false</code>, and otherwise it will return <code>Ok(T)</code> manufactured with
+an unchecked cast (verified correct via the <code>has_type</code> operation).</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.dyn_ref" class="method"><a class="src rightside" href="../src/wasm_bindgen/cast.rs.html#60-69">source</a><h4 class="code-header">fn <a href="#method.dyn_ref" class="fn">dyn_ref</a>&lt;T&gt;(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a>&gt;<div class="where">where
+    T: <a class="trait" href="trait.JsCast.html" title="trait wasm_bindgen::JsCast">JsCast</a>,</div></h4></section></summary><div class="docblock"><p>Performs a dynamic cast (checked at runtime) of this value into the
+target type <code>T</code>.</p>
+<p>This method will return <code>None</code> if <code>self.has_type::&lt;T&gt;()</code>
+returns <code>false</code>, and otherwise it will return <code>Some(&amp;T)</code> manufactured
+with an unchecked cast (verified correct via the <code>has_type</code> operation).</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.unchecked_into" class="method"><a class="src rightside" href="../src/wasm_bindgen/cast.rs.html#78-83">source</a><h4 class="code-header">fn <a href="#method.unchecked_into" class="fn">unchecked_into</a>&lt;T&gt;(self) -&gt; T<div class="where">where
+    T: <a class="trait" href="trait.JsCast.html" title="trait wasm_bindgen::JsCast">JsCast</a>,</div></h4></section></summary><div class="docblock"><p>Performs a zero-cost unchecked cast into the specified type.</p>
+<p>This method will convert the <code>self</code> value to the type <code>T</code>, where both
+<code>self</code> and <code>T</code> are simple wrappers around <code>JsValue</code>. This method <strong>does
+not check whether <code>self</code> is an instance of <code>T</code></strong>. If used incorrectly
+then this method may cause runtime exceptions in both Rust and JS, this
+should be used with caution.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.unchecked_ref" class="method"><a class="src rightside" href="../src/wasm_bindgen/cast.rs.html#96-101">source</a><h4 class="code-header">fn <a href="#method.unchecked_ref" class="fn">unchecked_ref</a>&lt;T&gt;(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a><div class="where">where
+    T: <a class="trait" href="trait.JsCast.html" title="trait wasm_bindgen::JsCast">JsCast</a>,</div></h4></section></summary><div class="docblock"><p>Performs a zero-cost unchecked cast into a reference to the specified
+type.</p>
+<p>This method will convert the <code>self</code> value to the type <code>T</code>, where both
+<code>self</code> and <code>T</code> are simple wrappers around <code>JsValue</code>. This method <strong>does
+not check whether <code>self</code> is an instance of <code>T</code></strong>. If used incorrectly
+then this method may cause runtime exceptions in both Rust and JS, this
+should be used with caution.</p>
+<p>This method, unlike <code>unchecked_into</code>, does not consume ownership of
+<code>self</code> and instead works over a shared reference.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.is_instance_of" class="method"><a class="src rightside" href="../src/wasm_bindgen/cast.rs.html#112-117">source</a><h4 class="code-header">fn <a href="#method.is_instance_of" class="fn">is_instance_of</a>&lt;T&gt;(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a><div class="where">where
+    T: <a class="trait" href="trait.JsCast.html" title="trait wasm_bindgen::JsCast">JsCast</a>,</div></h4></section></summary><div class="docblock"><p>Test whether this JS value is an instance of the type <code>T</code>.</p>
+<p>This method performs a dynamic check (at runtime) using the JS
+<code>instanceof</code> operator. This method returns <code>self instanceof T</code>.</p>
+<p>Note that <code>instanceof</code> does not always work with primitive values or
+across different realms (e.g. iframes). If you’re not sure whether you
+specifically need only <code>instanceof</code> it’s recommended to use <code>has_type</code>
+instead.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.is_type_of" class="method"><a class="src rightside" href="../src/wasm_bindgen/cast.rs.html#136-138">source</a><h4 class="code-header">fn <a href="#method.is_type_of" class="fn">is_type_of</a>(val: &amp;<a class="struct" href="struct.JsValue.html" title="struct wasm_bindgen::JsValue">JsValue</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Performs a dynamic check to see whether the <code>JsValue</code> provided
+is a value of this type.</p>
+<p>Unlike <code>instanceof</code>, this can be specialised to use a custom check by
+adding a <code>#[wasm_bindgen(is_type_of = callback)]</code> attribute to the
+type import declaration.</p>
+<p>Other than that, this is intended to be an internal implementation
+detail of <code>has_type</code> and you likely won’t need to call this.</p>
+</div></details></div><h2 id="object-safety" class="section-header">Object Safety<a href="#object-safety" class="anchor">§</a></h2><div class="object-safety-info">This trait is <b>not</b> <a href="https://doc.rust-lang.org/1.81.0/reference/items/traits.html#object-safety">object safe</a>.</div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><section id="impl-JsCast-for-JsValue" class="impl"><a class="src rightside" href="../src/wasm_bindgen/lib.rs.html#865-879">source</a><a href="#impl-JsCast-for-JsValue" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.JsCast.html" title="trait wasm_bindgen::JsCast">JsCast</a> for <a class="struct" href="struct.JsValue.html" title="struct wasm_bindgen::JsValue">JsValue</a></h3></section></div><script src="../trait.impl/wasm_bindgen/cast/trait.JsCast.js" async></script></section></div></main></body></html>

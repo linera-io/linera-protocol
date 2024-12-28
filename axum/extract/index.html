@@ -1,0 +1,611 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Types and traits for extracting data from requests."><title>axum::extract - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="axum" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../axum/index.html">axum</a><span class="version">0.7.6</span></h2></div><h2 class="location"><a href="#">Module extract</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#traits">Traits</a></li><li><a href="#types">Type Aliases</a></li></ul></section><h2><a href="../index.html">In crate axum</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">axum</a>::<wbr><a class="mod" href="#">extract</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/axum/extract/mod.rs.html#1-112">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Types and traits for extracting data from requests.</p>
+<h2 id="table-of-contents"><a class="doc-anchor" href="#table-of-contents">§</a>Table of contents</h2>
+<ul>
+<li><a href="#intro">Intro</a></li>
+<li><a href="#common-extractors">Common extractors</a></li>
+<li><a href="#applying-multiple-extractors">Applying multiple extractors</a></li>
+<li><a href="#the-order-of-extractors">The order of extractors</a></li>
+<li><a href="#optional-extractors">Optional extractors</a></li>
+<li><a href="#customizing-extractor-responses">Customizing extractor responses</a></li>
+<li><a href="#accessing-inner-errors">Accessing inner errors</a></li>
+<li><a href="#defining-custom-extractors">Defining custom extractors</a></li>
+<li><a href="#accessing-other-extractors-in-fromrequest-or-fromrequestparts-implementations">Accessing other extractors in <code>FromRequest</code> or <code>FromRequestParts</code> implementations</a></li>
+<li><a href="#request-body-limits">Request body limits</a></li>
+<li><a href="#wrapping-extractors">Wrapping extractors</a></li>
+<li><a href="#logging-rejections">Logging rejections</a></li>
+</ul>
+<h2 id="intro"><a class="doc-anchor" href="#intro">§</a>Intro</h2>
+<p>A handler function is an async function that takes any number of
+“extractors” as arguments. An extractor is a type that implements
+<a href="trait.FromRequest.html" title="trait axum::extract::FromRequest"><code>FromRequest</code></a> or <a href="trait.FromRequestParts.html" title="trait axum::extract::FromRequestParts"><code>FromRequestParts</code></a>.</p>
+<p>For example, <a href="../struct.Json.html" title="struct axum::Json"><code>Json</code></a> is an extractor that consumes the request body and
+deserializes it as JSON into some target type:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>axum::{
+    extract::Json,
+    routing::post,
+    handler::Handler,
+    Router,
+};
+<span class="kw">use </span>serde::Deserialize;
+
+<span class="attr">#[derive(Deserialize)]
+</span><span class="kw">struct </span>CreateUser {
+    email: String,
+    password: String,
+}
+
+<span class="kw">async fn </span>create_user(Json(payload): Json&lt;CreateUser&gt;) {
+    <span class="comment">// ...
+</span>}
+
+<span class="kw">let </span>app = Router::new().route(<span class="string">"/users"</span>, post(create_user));</code></pre></div>
+<h2 id="common-extractors"><a class="doc-anchor" href="#common-extractors">§</a>Common extractors</h2>
+<p>Some commonly used extractors are:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>axum::{
+    extract::{Request, Json, Path, Extension, Query},
+    routing::post,
+    http::header::HeaderMap,
+    body::{Bytes, Body},
+    Router,
+};
+<span class="kw">use </span>serde_json::Value;
+<span class="kw">use </span>std::collections::HashMap;
+
+<span class="comment">// `Path` gives you the path parameters and deserializes them. See its docs for
+// more details
+</span><span class="kw">async fn </span>path(Path(user_id): Path&lt;u32&gt;) {}
+
+<span class="comment">// `Query` gives you the query parameters and deserializes them.
+</span><span class="kw">async fn </span>query(Query(params): Query&lt;HashMap&lt;String, String&gt;&gt;) {}
+
+<span class="comment">// `HeaderMap` gives you all the headers
+</span><span class="kw">async fn </span>headers(headers: HeaderMap) {}
+
+<span class="comment">// `String` consumes the request body and ensures it is valid utf-8
+</span><span class="kw">async fn </span>string(body: String) {}
+
+<span class="comment">// `Bytes` gives you the raw request body
+</span><span class="kw">async fn </span>bytes(body: Bytes) {}
+
+<span class="comment">// We've already seen `Json` for parsing the request body as json
+</span><span class="kw">async fn </span>json(Json(payload): Json&lt;Value&gt;) {}
+
+<span class="comment">// `Request` gives you the whole request for maximum control
+</span><span class="kw">async fn </span>request(request: Request) {}
+
+<span class="comment">// `Extension` extracts data from "request extensions"
+// This is commonly used to share state with handlers
+</span><span class="kw">async fn </span>extension(Extension(state): Extension&lt;State&gt;) {}
+
+<span class="attr">#[derive(Clone)]
+</span><span class="kw">struct </span>State { <span class="comment">/* ... */ </span>}
+
+<span class="kw">let </span>app = Router::new()
+    .route(<span class="string">"/path/:user_id"</span>, post(path))
+    .route(<span class="string">"/query"</span>, post(query))
+    .route(<span class="string">"/string"</span>, post(string))
+    .route(<span class="string">"/bytes"</span>, post(bytes))
+    .route(<span class="string">"/json"</span>, post(json))
+    .route(<span class="string">"/request"</span>, post(request))
+    .route(<span class="string">"/extension"</span>, post(extension));</code></pre></div>
+<h2 id="applying-multiple-extractors"><a class="doc-anchor" href="#applying-multiple-extractors">§</a>Applying multiple extractors</h2>
+<p>You can also apply multiple extractors:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>axum::{
+    extract::{Path, Query},
+    routing::get,
+    Router,
+};
+<span class="kw">use </span>uuid::Uuid;
+<span class="kw">use </span>serde::Deserialize;
+
+<span class="kw">let </span>app = Router::new().route(<span class="string">"/users/:id/things"</span>, get(get_user_things));
+
+<span class="attr">#[derive(Deserialize)]
+</span><span class="kw">struct </span>Pagination {
+    page: usize,
+    per_page: usize,
+}
+
+<span class="kw">impl </span>Default <span class="kw">for </span>Pagination {
+    <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{ page: <span class="number">1</span>, per_page: <span class="number">30 </span>}
+    }
+}
+
+<span class="kw">async fn </span>get_user_things(
+    Path(user_id): Path&lt;Uuid&gt;,
+    pagination: <span class="prelude-ty">Option</span>&lt;Query&lt;Pagination&gt;&gt;,
+) {
+    <span class="kw">let </span>Query(pagination) = pagination.unwrap_or_default();
+
+    <span class="comment">// ...
+</span>}</code></pre></div>
+<h2 id="the-order-of-extractors"><a class="doc-anchor" href="#the-order-of-extractors">§</a>The order of extractors</h2>
+<p>Extractors always run in the order of the function parameters that is from
+left to right.</p>
+<p>The request body is an asynchronous stream that can only be consumed once.
+Therefore you can only have one extractor that consumes the request body. axum
+enforces this by requiring such extractors to be the <em>last</em> argument your
+handler takes.</p>
+<p>For example</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>axum::{extract::State, http::{Method, HeaderMap}};
+
+<span class="kw">async fn </span>handler(
+    <span class="comment">// `Method` and `HeaderMap` don't consume the request body so they can
+    // put anywhere in the argument list (but before `body`)
+    </span>method: Method,
+    headers: HeaderMap,
+    <span class="comment">// `State` is also an extractor so it needs to be before `body`
+    </span>State(state): State&lt;AppState&gt;,
+    <span class="comment">// `String` consumes the request body and thus must be the last extractor
+    </span>body: String,
+) {
+    <span class="comment">// ...
+</span>}</code></pre></div>
+<p>We get a compile error if <code>String</code> isn’t the last extractor:</p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>axum::http::Method;
+
+<span class="kw">async fn </span>handler(
+    <span class="comment">// this doesn't work since `String` must be the last argument
+    </span>body: String,
+    method: Method,
+) {
+    <span class="comment">// ...
+</span>}</code></pre></div>
+<p>This also means you cannot consume the request body twice:</p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>axum::Json;
+<span class="kw">use </span>serde::Deserialize;
+
+<span class="attr">#[derive(Deserialize)]
+</span><span class="kw">struct </span>Payload {}
+
+<span class="kw">async fn </span>handler(
+    <span class="comment">// `String` and `Json` both consume the request body
+    // so they cannot both be used
+    </span>string_body: String,
+    json_body: Json&lt;Payload&gt;,
+) {
+    <span class="comment">// ...
+</span>}</code></pre></div>
+<p>axum enforces this by requiring the last extractor implements <a href="trait.FromRequest.html" title="trait axum::extract::FromRequest"><code>FromRequest</code></a>
+and all others implement <a href="trait.FromRequestParts.html" title="trait axum::extract::FromRequestParts"><code>FromRequestParts</code></a>.</p>
+<h2 id="optional-extractors"><a class="doc-anchor" href="#optional-extractors">§</a>Optional extractors</h2>
+<p>All extractors defined in axum will reject the request if it doesn’t match.
+If you wish to make an extractor optional you can wrap it in <code>Option</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>axum::{
+    extract::Json,
+    routing::post,
+    Router,
+};
+<span class="kw">use </span>serde_json::Value;
+
+<span class="kw">async fn </span>create_user(payload: <span class="prelude-ty">Option</span>&lt;Json&lt;Value&gt;&gt;) {
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(payload) = payload {
+        <span class="comment">// We got a valid JSON payload
+    </span>} <span class="kw">else </span>{
+        <span class="comment">// Payload wasn't valid JSON
+    </span>}
+}
+
+<span class="kw">let </span>app = Router::new().route(<span class="string">"/users"</span>, post(create_user));</code></pre></div>
+<p>Wrapping extractors in <code>Result</code> makes them optional and gives you the reason
+the extraction failed:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>axum::{
+    extract::{Json, rejection::JsonRejection},
+    routing::post,
+    Router,
+};
+<span class="kw">use </span>serde_json::Value;
+
+<span class="kw">async fn </span>create_user(payload: <span class="prelude-ty">Result</span>&lt;Json&lt;Value&gt;, JsonRejection&gt;) {
+    <span class="kw">match </span>payload {
+        <span class="prelude-val">Ok</span>(payload) =&gt; {
+            <span class="comment">// We got a valid JSON payload
+        </span>}
+        <span class="prelude-val">Err</span>(JsonRejection::MissingJsonContentType(<span class="kw">_</span>)) =&gt; {
+            <span class="comment">// Request didn't have `Content-Type: application/json`
+            // header
+        </span>}
+        <span class="prelude-val">Err</span>(JsonRejection::JsonDataError(<span class="kw">_</span>)) =&gt; {
+            <span class="comment">// Couldn't deserialize the body into the target type
+        </span>}
+        <span class="prelude-val">Err</span>(JsonRejection::JsonSyntaxError(<span class="kw">_</span>)) =&gt; {
+            <span class="comment">// Syntax error in the body
+        </span>}
+        <span class="prelude-val">Err</span>(JsonRejection::BytesRejection(<span class="kw">_</span>)) =&gt; {
+            <span class="comment">// Failed to extract the request body
+        </span>}
+        <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
+            <span class="comment">// `JsonRejection` is marked `#[non_exhaustive]` so match must
+            // include a catch-all case.
+        </span>}
+    }
+}
+
+<span class="kw">let </span>app = Router::new().route(<span class="string">"/users"</span>, post(create_user));</code></pre></div>
+<p>Another option is to make use of the optional extractors in <a href="https://docs.rs/axum-extra/latest/axum_extra/extract/index.html">axum-extra</a> that
+either returns <code>None</code> if there are no query parameters in the request URI,
+or returns <code>Some(T)</code> if deserialization was successful.
+If the deserialization was not successful, the request is rejected.</p>
+<h2 id="customizing-extractor-responses"><a class="doc-anchor" href="#customizing-extractor-responses">§</a>Customizing extractor responses</h2>
+<p>If an extractor fails it will return a response with the error and your
+handler will not be called. To customize the error response you have two
+options:</p>
+<ol>
+<li>Use <code>Result&lt;T, T::Rejection&gt;</code> as your extractor like shown in <a href="#optional-extractors">“Optional
+extractors”</a>. This works well if you’re only using
+the extractor in a single handler.</li>
+<li>Create your own extractor that in its <a href="trait.FromRequest.html" title="trait axum::extract::FromRequest"><code>FromRequest</code></a> implementation calls
+one of axum’s built in extractors but returns a different response for
+rejections. See the <a href="https://github.com/tokio-rs/axum/blob/main/examples/customize-extractor-error/src/main.rs">customize-extractor-error</a> example for more details.</li>
+</ol>
+<h2 id="accessing-inner-errors"><a class="doc-anchor" href="#accessing-inner-errors">§</a>Accessing inner errors</h2>
+<p>axum’s built-in extractors don’t directly expose the inner error. This gives us
+more flexibility and allows us to change internal implementations without
+breaking the public API.</p>
+<p>For example that means while <a href="../struct.Json.html" title="struct axum::Json"><code>Json</code></a> is implemented using <a href="../../serde_json/index.html" title="mod serde_json"><code>serde_json</code></a> it
+doesn’t directly expose the <a href="../../serde_json/error/struct.Error.html" title="struct serde_json::error::Error"><code>serde_json::Error</code></a> thats contained in
+<a href="rejection/enum.JsonRejection.html#variant.JsonDataError" title="variant axum::extract::rejection::JsonRejection::JsonDataError"><code>JsonRejection::JsonDataError</code></a>. However it is still possible to access via
+methods from <a href="https://doc.rust-lang.org/1.81.0/core/error/trait.Error.html" title="trait core::error::Error"><code>std::error::Error</code></a>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::error::Error;
+<span class="kw">use </span>axum::{
+    extract::{Json, rejection::JsonRejection},
+    response::IntoResponse,
+    http::StatusCode,
+};
+<span class="kw">use </span>serde_json::{json, Value};
+
+<span class="kw">async fn </span>handler(
+    result: <span class="prelude-ty">Result</span>&lt;Json&lt;Value&gt;, JsonRejection&gt;,
+) -&gt; <span class="prelude-ty">Result</span>&lt;Json&lt;Value&gt;, (StatusCode, String)&gt; {
+    <span class="kw">match </span>result {
+        <span class="comment">// if the client sent valid JSON then we're good
+        </span><span class="prelude-val">Ok</span>(Json(payload)) =&gt; <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>({ <span class="string">"payload"</span>: payload }))),
+
+        <span class="prelude-val">Err</span>(err) =&gt; <span class="kw">match </span>err {
+            JsonRejection::JsonDataError(err) =&gt; {
+                <span class="prelude-val">Err</span>(serde_json_error_response(err))
+            }
+            JsonRejection::JsonSyntaxError(err) =&gt; {
+                <span class="prelude-val">Err</span>(serde_json_error_response(err))
+            }
+            <span class="comment">// handle other rejections from the `Json` extractor
+            </span>JsonRejection::MissingJsonContentType(<span class="kw">_</span>) =&gt; <span class="prelude-val">Err</span>((
+                StatusCode::BAD_REQUEST,
+                <span class="string">"Missing `Content-Type: application/json` header"</span>.to_string(),
+            )),
+            JsonRejection::BytesRejection(<span class="kw">_</span>) =&gt; <span class="prelude-val">Err</span>((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                <span class="string">"Failed to buffer request body"</span>.to_string(),
+            )),
+            <span class="comment">// we must provide a catch-all case since `JsonRejection` is marked
+            // `#[non_exhaustive]`
+            </span><span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                <span class="string">"Unknown error"</span>.to_string(),
+            )),
+        },
+    }
+}
+
+<span class="comment">// attempt to extract the inner `serde_path_to_error::Error&lt;serde_json::Error&gt;`,
+// if that succeeds we can provide a more specific error.
+//
+// `Json` uses `serde_path_to_error` so the error will be wrapped in `serde_path_to_error::Error`.
+</span><span class="kw">fn </span>serde_json_error_response&lt;E&gt;(err: E) -&gt; (StatusCode, String)
+<span class="kw">where
+    </span>E: Error + <span class="lifetime">'static</span>,
+{
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(err) = find_error_source::&lt;serde_path_to_error::Error&lt;serde_json::Error&gt;&gt;(<span class="kw-2">&amp;</span>err) {
+        <span class="kw">let </span>serde_json_err = err.inner();
+        (
+            StatusCode::BAD_REQUEST,
+            <span class="macro">format!</span>(
+                <span class="string">"Invalid JSON at line {} column {}"</span>,
+                serde_json_err.line(),
+                serde_json_err.column()
+            ),
+        )
+    } <span class="kw">else </span>{
+        (StatusCode::BAD_REQUEST, <span class="string">"Unknown error"</span>.to_string())
+    }
+}
+
+<span class="comment">// attempt to downcast `err` into a `T` and if that fails recursively try and
+// downcast `err`'s source
+</span><span class="kw">fn </span>find_error_source&lt;<span class="lifetime">'a</span>, T&gt;(err: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>(<span class="kw">dyn </span>Error + <span class="lifetime">'static</span>)) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">'a </span>T&gt;
+<span class="kw">where
+    </span>T: Error + <span class="lifetime">'static</span>,
+{
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(err) = err.downcast_ref::&lt;T&gt;() {
+        <span class="prelude-val">Some</span>(err)
+    } <span class="kw">else if let </span><span class="prelude-val">Some</span>(source) = err.source() {
+        find_error_source(source)
+    } <span class="kw">else </span>{
+        <span class="prelude-val">None
+    </span>}
+}</code></pre></div>
+<p>Note that while this approach works it might break in the future if axum changes
+its implementation to use a different error type internally. Such changes might
+happen without major breaking versions.</p>
+<h2 id="defining-custom-extractors"><a class="doc-anchor" href="#defining-custom-extractors">§</a>Defining custom extractors</h2>
+<p>You can also define your own extractors by implementing either
+<a href="trait.FromRequestParts.html" title="trait axum::extract::FromRequestParts"><code>FromRequestParts</code></a> or <a href="trait.FromRequest.html" title="trait axum::extract::FromRequest"><code>FromRequest</code></a>.</p>
+<h3 id="implementing-fromrequestparts"><a class="doc-anchor" href="#implementing-fromrequestparts">§</a>Implementing <code>FromRequestParts</code></h3>
+<p>Implement <code>FromRequestParts</code> if your extractor doesn’t need access to the
+request body:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>axum::{
+    async_trait,
+    extract::FromRequestParts,
+    routing::get,
+    Router,
+    http::{
+        StatusCode,
+        header::{HeaderValue, USER_AGENT},
+        request::Parts,
+    },
+};
+
+<span class="kw">struct </span>ExtractUserAgent(HeaderValue);
+
+<span class="attr">#[async_trait]
+</span><span class="kw">impl</span>&lt;S&gt; FromRequestParts&lt;S&gt; <span class="kw">for </span>ExtractUserAgent
+<span class="kw">where
+    </span>S: Send + Sync,
+{
+    <span class="kw">type </span>Rejection = (StatusCode, <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str);
+
+    <span class="kw">async fn </span>from_request_parts(parts: <span class="kw-2">&amp;mut </span>Parts, state: <span class="kw-2">&amp;</span>S) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Rejection&gt; {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(user_agent) = parts.headers.get(USER_AGENT) {
+            <span class="prelude-val">Ok</span>(ExtractUserAgent(user_agent.clone()))
+        } <span class="kw">else </span>{
+            <span class="prelude-val">Err</span>((StatusCode::BAD_REQUEST, <span class="string">"`User-Agent` header is missing"</span>))
+        }
+    }
+}
+
+<span class="kw">async fn </span>handler(ExtractUserAgent(user_agent): ExtractUserAgent) {
+    <span class="comment">// ...
+</span>}
+
+<span class="kw">let </span>app = Router::new().route(<span class="string">"/foo"</span>, get(handler));</code></pre></div>
+<h3 id="implementing-fromrequest"><a class="doc-anchor" href="#implementing-fromrequest">§</a>Implementing <code>FromRequest</code></h3>
+<p>If your extractor needs to consume the request body you must implement <a href="trait.FromRequest.html" title="trait axum::extract::FromRequest"><code>FromRequest</code></a></p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>axum::{
+    async_trait,
+    extract::{Request, FromRequest},
+    response::{Response, IntoResponse},
+    body::{Bytes, Body},
+    routing::get,
+    Router,
+    http::{
+        StatusCode,
+        header::{HeaderValue, USER_AGENT},
+    },
+};
+
+<span class="kw">struct </span>ValidatedBody(Bytes);
+
+<span class="attr">#[async_trait]
+</span><span class="kw">impl</span>&lt;S&gt; FromRequest&lt;S&gt; <span class="kw">for </span>ValidatedBody
+<span class="kw">where
+    </span>Bytes: FromRequest&lt;S&gt;,
+    S: Send + Sync,
+{
+    <span class="kw">type </span>Rejection = Response;
+
+    <span class="kw">async fn </span>from_request(req: Request, state: <span class="kw-2">&amp;</span>S) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Rejection&gt; {
+        <span class="kw">let </span>body = Bytes::from_request(req, state)
+            .<span class="kw">await
+            </span>.map_err(IntoResponse::into_response)<span class="question-mark">?</span>;
+
+        <span class="comment">// do validation...
+
+        </span><span class="prelude-val">Ok</span>(<span class="self">Self</span>(body))
+    }
+}
+
+<span class="kw">async fn </span>handler(ValidatedBody(body): ValidatedBody) {
+    <span class="comment">// ...
+</span>}
+
+<span class="kw">let </span>app = Router::new().route(<span class="string">"/foo"</span>, get(handler));</code></pre></div>
+<h3 id="cannot-implement-both-fromrequest-and-fromrequestparts"><a class="doc-anchor" href="#cannot-implement-both-fromrequest-and-fromrequestparts">§</a>Cannot implement both <code>FromRequest</code> and <code>FromRequestParts</code></h3>
+<p>Note that you will make your extractor unusable by implementing both
+<code>FromRequest</code> and <code>FromRequestParts</code> directly for the same type, unless it is
+wrapping another extractor:</p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>axum::{
+    Router,
+    routing::get,
+    extract::{FromRequest, Request, FromRequestParts},
+    http::request::Parts,
+    body::Body,
+    async_trait,
+};
+<span class="kw">use </span>std::convert::Infallible;
+
+<span class="comment">// Some extractor that doesn't wrap another extractor
+</span><span class="kw">struct </span>MyExtractor;
+
+<span class="comment">// `MyExtractor` implements both `FromRequest`
+</span><span class="attr">#[async_trait]
+</span><span class="kw">impl</span>&lt;S&gt; FromRequest&lt;S&gt; <span class="kw">for </span>MyExtractor
+<span class="kw">where
+    </span>S: Send + Sync,
+{
+    <span class="kw">type </span>Rejection = Infallible;
+
+    <span class="kw">async fn </span>from_request(req: Request, state: <span class="kw-2">&amp;</span>S) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Rejection&gt; {
+        <span class="comment">// ...
+    </span>}
+}
+
+<span class="comment">// and `FromRequestParts`
+</span><span class="attr">#[async_trait]
+</span><span class="kw">impl</span>&lt;S&gt; FromRequestParts&lt;S&gt; <span class="kw">for </span>MyExtractor
+<span class="kw">where
+    </span>S: Send + Sync,
+{
+    <span class="kw">type </span>Rejection = Infallible;
+
+    <span class="kw">async fn </span>from_request_parts(parts: <span class="kw-2">&amp;mut </span>Parts, state: <span class="kw-2">&amp;</span>S) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Rejection&gt; {
+        <span class="comment">// ...
+    </span>}
+}
+
+<span class="kw">let </span>app = Router::new().route(
+    <span class="string">"/"</span>,
+    <span class="comment">// This fails when we go to actually use `MyExtractor` in a handler function.
+    // This is due to a limit in Rust's type system.
+    //
+    // The workaround is to implement either `FromRequest` or `FromRequestParts`
+    // but not both, if your extractor doesn't wrap another extractor.
+    //
+    // See "Wrapping extractors" for how to wrap other extractors.
+    </span>get(|<span class="kw">_</span>: MyExtractor| <span class="kw">async </span>{}),
+);</code></pre></div>
+<h2 id="accessing-other-extractors-in-fromrequest-or-fromrequestparts-implementations"><a class="doc-anchor" href="#accessing-other-extractors-in-fromrequest-or-fromrequestparts-implementations">§</a>Accessing other extractors in <code>FromRequest</code> or <code>FromRequestParts</code> implementations</h2>
+<p>When defining custom extractors you often need to access another extractor
+in your implementation.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>axum::{
+    async_trait,
+    extract::{Extension, FromRequestParts},
+    http::{StatusCode, HeaderMap, request::Parts},
+    response::{IntoResponse, Response},
+    routing::get,
+    Router,
+};
+
+<span class="attr">#[derive(Clone)]
+</span><span class="kw">struct </span>State {
+    <span class="comment">// ...
+</span>}
+
+<span class="kw">struct </span>AuthenticatedUser {
+    <span class="comment">// ...
+</span>}
+
+<span class="attr">#[async_trait]
+</span><span class="kw">impl</span>&lt;S&gt; FromRequestParts&lt;S&gt; <span class="kw">for </span>AuthenticatedUser
+<span class="kw">where
+    </span>S: Send + Sync,
+{
+    <span class="kw">type </span>Rejection = Response;
+
+    <span class="kw">async fn </span>from_request_parts(parts: <span class="kw-2">&amp;mut </span>Parts, state: <span class="kw-2">&amp;</span>S) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Rejection&gt; {
+        <span class="comment">// You can either call them directly...
+        </span><span class="kw">let </span>headers = HeaderMap::from_request_parts(parts, state)
+            .<span class="kw">await
+            </span>.map_err(|err| <span class="kw">match </span>err {})<span class="question-mark">?</span>;
+
+        <span class="comment">// ... or use `extract` / `extract_with_state` from `RequestExt` / `RequestPartsExt`
+        </span><span class="kw">use </span>axum::RequestPartsExt;
+        <span class="kw">let </span>Extension(state) = parts.extract::&lt;Extension&lt;State&gt;&gt;()
+            .<span class="kw">await
+            </span>.map_err(|err| err.into_response())<span class="question-mark">?</span>;
+
+        <span class="macro">unimplemented!</span>(<span class="string">"actually perform the authorization"</span>)
+    }
+}
+
+<span class="kw">async fn </span>handler(user: AuthenticatedUser) {
+    <span class="comment">// ...
+</span>}
+
+<span class="kw">let </span>state = State { <span class="comment">/* ... */ </span>};
+
+<span class="kw">let </span>app = Router::new().route(<span class="string">"/"</span>, get(handler)).layer(Extension(state));</code></pre></div>
+<h2 id="request-body-limits"><a class="doc-anchor" href="#request-body-limits">§</a>Request body limits</h2>
+<p>For security reasons, <a href="../../bytes/bytes/struct.Bytes.html" title="struct bytes::bytes::Bytes"><code>Bytes</code></a> will, by default, not accept bodies larger than
+2MB. This also applies to extractors that uses <a href="../../bytes/bytes/struct.Bytes.html" title="struct bytes::bytes::Bytes"><code>Bytes</code></a> internally such as
+<code>String</code>, <a href="../struct.Json.html" title="struct axum::Json"><code>Json</code></a>, and <a href="../struct.Form.html" title="struct axum::Form"><code>Form</code></a>.</p>
+<p>For more details, including how to disable this limit, see <a href="struct.DefaultBodyLimit.html" title="struct axum::extract::DefaultBodyLimit"><code>DefaultBodyLimit</code></a>.</p>
+<h2 id="wrapping-extractors"><a class="doc-anchor" href="#wrapping-extractors">§</a>Wrapping extractors</h2>
+<p>If you want write an extractor that generically wraps another extractor (that
+may or may not consume the request body) you should implement both
+<a href="trait.FromRequest.html" title="trait axum::extract::FromRequest"><code>FromRequest</code></a> and <a href="trait.FromRequestParts.html" title="trait axum::extract::FromRequestParts"><code>FromRequestParts</code></a>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>axum::{
+    Router,
+    body::Body,
+    routing::get,
+    extract::{Request, FromRequest, FromRequestParts},
+    http::{HeaderMap, request::Parts},
+    async_trait,
+};
+<span class="kw">use </span>std::time::{Instant, Duration};
+
+<span class="comment">// an extractor that wraps another and measures how long time it takes to run
+</span><span class="kw">struct </span>Timing&lt;E&gt; {
+    extractor: E,
+    duration: Duration,
+}
+
+<span class="comment">// we must implement both `FromRequestParts`
+</span><span class="attr">#[async_trait]
+</span><span class="kw">impl</span>&lt;S, T&gt; FromRequestParts&lt;S&gt; <span class="kw">for </span>Timing&lt;T&gt;
+<span class="kw">where
+    </span>S: Send + Sync,
+    T: FromRequestParts&lt;S&gt;,
+{
+    <span class="kw">type </span>Rejection = T::Rejection;
+
+    <span class="kw">async fn </span>from_request_parts(parts: <span class="kw-2">&amp;mut </span>Parts, state: <span class="kw-2">&amp;</span>S) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Rejection&gt; {
+        <span class="kw">let </span>start = Instant::now();
+        <span class="kw">let </span>extractor = T::from_request_parts(parts, state).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>duration = start.elapsed();
+        <span class="prelude-val">Ok</span>(Timing {
+            extractor,
+            duration,
+        })
+    }
+}
+
+<span class="comment">// and `FromRequest`
+</span><span class="attr">#[async_trait]
+</span><span class="kw">impl</span>&lt;S, T&gt; FromRequest&lt;S&gt; <span class="kw">for </span>Timing&lt;T&gt;
+<span class="kw">where
+    </span>S: Send + Sync,
+    T: FromRequest&lt;S&gt;,
+{
+    <span class="kw">type </span>Rejection = T::Rejection;
+
+    <span class="kw">async fn </span>from_request(req: Request, state: <span class="kw-2">&amp;</span>S) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Rejection&gt; {
+        <span class="kw">let </span>start = Instant::now();
+        <span class="kw">let </span>extractor = T::from_request(req, state).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>duration = start.elapsed();
+        <span class="prelude-val">Ok</span>(Timing {
+            extractor,
+            duration,
+        })
+    }
+}
+
+<span class="kw">async fn </span>handler(
+    <span class="comment">// this uses the `FromRequestParts` impl
+    </span><span class="kw">_</span>: Timing&lt;HeaderMap&gt;,
+    <span class="comment">// this uses the `FromRequest` impl
+    </span><span class="kw">_</span>: Timing&lt;String&gt;,
+) {}</code></pre></div>
+<h2 id="logging-rejections"><a class="doc-anchor" href="#logging-rejections">§</a>Logging rejections</h2>
+<p>All built-in extractors will log rejections for easier debugging. To see the
+logs, enable the <code>tracing</code> feature for axum (enabled by default) and the
+<code>axum::rejection=trace</code> tracing target, for example with
+<code>RUST_LOG=info,axum::rejection=trace cargo run</code>.</p>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.Json"><code>pub use crate::<a class="struct" href="../struct.Json.html" title="struct axum::Json">Json</a>;</code></div></li><li><div class="item-name" id="reexport.Extension"><code>pub use crate::<a class="struct" href="../struct.Extension.html" title="struct axum::Extension">Extension</a>;</code></div></li><li><div class="item-name" id="reexport.Form"><code>pub use crate::form::<a class="struct" href="../struct.Form.html" title="struct axum::Form">Form</a>;</code></div></li></ul><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="connect_info/index.html" title="mod axum::extract::connect_info">connect_info</a></div><div class="desc docblock-short">Extractor for getting connection information from a client.</div></li><li><div class="item-name"><a class="mod" href="path/index.html" title="mod axum::extract::path">path</a></div><div class="desc docblock-short">Extractor that will get captures from the URL and parse them using
+<a href="../../serde/index.html" title="mod serde"><code>serde</code></a>.</div></li><li><div class="item-name"><a class="mod" href="rejection/index.html" title="mod axum::extract::rejection">rejection</a></div><div class="desc docblock-short">Rejection response types.</div></li><li><div class="item-name"><a class="mod" href="ws/index.html" title="mod axum::extract::ws">ws</a></div><div class="desc docblock-short">Handle WebSocket connections.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.ConnectInfo.html" title="struct axum::extract::ConnectInfo">ConnectInfo</a></div><div class="desc docblock-short">Extractor for getting connection information produced by a <a href="connect_info/trait.Connected.html" title="trait axum::extract::connect_info::Connected"><code>Connected</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.DefaultBodyLimit.html" title="struct axum::extract::DefaultBodyLimit">DefaultBodyLimit</a></div><div class="desc docblock-short">Layer for configuring the default request body limit.</div></li><li><div class="item-name"><a class="struct" href="struct.Host.html" title="struct axum::extract::Host">Host</a></div><div class="desc docblock-short">Extractor that resolves the hostname of the request.</div></li><li><div class="item-name"><a class="struct" href="struct.MatchedPath.html" title="struct axum::extract::MatchedPath">MatchedPath</a></div><div class="desc docblock-short">Access the path in the router that matches the request.</div></li><li><div class="item-name"><a class="struct" href="struct.NestedPath.html" title="struct axum::extract::NestedPath">NestedPath</a></div><div class="desc docblock-short">Access the path the matched the route is nested at.</div></li><li><div class="item-name"><a class="struct" href="struct.OriginalUri.html" title="struct axum::extract::OriginalUri">OriginalUri</a></div><div class="desc docblock-short">Extractor that gets the original request URI regardless of nesting.</div></li><li><div class="item-name"><a class="struct" href="struct.Path.html" title="struct axum::extract::Path">Path</a></div><div class="desc docblock-short">Extractor that will get captures from the URL and parse them using
+<a href="https://crates.io/crates/serde"><code>serde</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.Query.html" title="struct axum::extract::Query">Query</a></div><div class="desc docblock-short">Extractor that deserializes query strings into some type.</div></li><li><div class="item-name"><a class="struct" href="struct.RawForm.html" title="struct axum::extract::RawForm">RawForm</a></div><div class="desc docblock-short">Extractor that extracts raw form requests.</div></li><li><div class="item-name"><a class="struct" href="struct.RawPathParams.html" title="struct axum::extract::RawPathParams">RawPathParams</a></div><div class="desc docblock-short">Extractor that will get captures from the URL without deserializing them.</div></li><li><div class="item-name"><a class="struct" href="struct.RawQuery.html" title="struct axum::extract::RawQuery">RawQuery</a></div><div class="desc docblock-short">Extractor that extracts the raw query string, without parsing it.</div></li><li><div class="item-name"><a class="struct" href="struct.State.html" title="struct axum::extract::State">State</a></div><div class="desc docblock-short">Extractor for state.</div></li><li><div class="item-name"><a class="struct" href="struct.WebSocketUpgrade.html" title="struct axum::extract::WebSocketUpgrade">WebSocketUpgrade</a></div><div class="desc docblock-short">Extractor for establishing WebSocket connections.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.FromRef.html" title="trait axum::extract::FromRef">FromRef</a></div><div class="desc docblock-short">Used to do reference-to-value conversions thus not consuming the input value.</div></li><li><div class="item-name"><a class="trait" href="trait.FromRequest.html" title="trait axum::extract::FromRequest">FromRequest</a></div><div class="desc docblock-short">Types that can be created from requests.</div></li><li><div class="item-name"><a class="trait" href="trait.FromRequestParts.html" title="trait axum::extract::FromRequestParts">FromRequestParts</a></div><div class="desc docblock-short">Types that can be created from request parts.</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.Request.html" title="type axum::extract::Request">Request</a></div><div class="desc docblock-short">Type alias for <a href="../../http/request/struct.Request.html" title="struct http::request::Request"><code>http::Request</code></a> whose body type defaults to <a href="../body/struct.Body.html" title="struct axum::body::Body"><code>Body</code></a>, the most common body
+type used with axum.</div></li></ul></section></div></main></body></html>

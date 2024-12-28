@@ -1,0 +1,71 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Callsites represent the source locations from which spans or events originate."><title>tracing_core::callsite - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="tracing_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../../tracing_core/index.html"><img src="https://raw.githubusercontent.com/tokio-rs/tracing/master/assets/logo-type.png" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../../tracing_core/index.html"><img src="https://raw.githubusercontent.com/tokio-rs/tracing/master/assets/logo-type.png" alt="logo"></a><h2><a href="../../tracing_core/index.html">tracing_core</a><span class="version">0.1.32</span></h2></div><h2 class="location"><a href="#">Module callsite</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#traits">Traits</a></li><li><a href="#functions">Functions</a></li></ul></section><h2><a href="../index.html">In crate tracing_core</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">tracing_core</a>::<wbr><a class="mod" href="#">callsite</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/tracing_core/callsite.rs.html#1-619">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Callsites represent the source locations from which spans or events
+originate.</p>
+<h2 id="what-are-callsites"><a class="doc-anchor" href="#what-are-callsites">§</a>What Are Callsites?</h2>
+<p>Every span or event in <code>tracing</code> is associated with a <a href="../trait.Callsite.html" title="trait tracing_core::Callsite"><code>Callsite</code></a>. A
+callsite is a small <code>static</code> value that is responsible for the following:</p>
+<ul>
+<li>Storing the span or event’s <a href="../struct.Metadata.html" title="struct tracing_core::Metadata"><code>Metadata</code></a>,</li>
+<li>Uniquely <a href="struct.Identifier.html" title="struct tracing_core::callsite::Identifier">identifying</a> the span or event definition,</li>
+<li>Caching the subscriber’s [<code>Interest</code>]<sup id="fnref1"><a href="#fn1">1</a></sup> in that span or event, to avoid
+re-evaluating filters.</li>
+</ul>
+<h2 id="registering-callsites"><a class="doc-anchor" href="#registering-callsites">§</a>Registering Callsites</h2>
+<p>When a span or event is recorded for the first time, its callsite
+<a href="fn.register.html" title="fn tracing_core::callsite::register"><code>register</code></a>s itself with the global callsite registry. Registering a
+callsite calls the <a href="../trait.Subscriber.html#method.register_callsite" title="method tracing_core::Subscriber::register_callsite"><code>Subscriber::register_callsite</code></a>
+method with that callsite’s <a href="../struct.Metadata.html" title="struct tracing_core::Metadata"><code>Metadata</code></a> on every currently active
+subscriber. This serves two primary purposes: informing subscribers of the
+callsite’s existence, and performing static filtering.</p>
+<h3 id="callsite-existence"><a class="doc-anchor" href="#callsite-existence">§</a>Callsite Existence</h3>
+<p>If a <a href="../trait.Subscriber.html" title="trait tracing_core::Subscriber"><code>Subscriber</code></a> implementation wishes to allocate storage for each
+unique span/event location in the program, or pre-compute some value
+that will be used to record that span or event in the future, it can
+do so in its <a href="../trait.Subscriber.html#method.register_callsite" title="method tracing_core::Subscriber::register_callsite"><code>register_callsite</code></a> method.</p>
+<h3 id="performing-static-filtering"><a class="doc-anchor" href="#performing-static-filtering">§</a>Performing Static Filtering</h3>
+<p>The <a href="../trait.Subscriber.html#method.register_callsite" title="method tracing_core::Subscriber::register_callsite"><code>register_callsite</code></a> method returns an <a href="../subscriber/struct.Interest.html" title="struct tracing_core::subscriber::Interest"><code>Interest</code></a> value,
+which indicates that the subscriber either <a href="../subscriber/struct.Interest.html#method.always" title="associated function tracing_core::subscriber::Interest::always">always</a> wishes to record
+that span or event, <a href="../subscriber/struct.Interest.html#method.sometimes" title="associated function tracing_core::subscriber::Interest::sometimes">sometimes</a> wishes to record it based on a
+dynamic filter evaluation, or <a href="../subscriber/struct.Interest.html#method.never" title="associated function tracing_core::subscriber::Interest::never">never</a> wishes to record it.</p>
+<p>When registering a new callsite, the <a href="../subscriber/struct.Interest.html" title="struct tracing_core::subscriber::Interest"><code>Interest</code></a>s returned by every
+currently active subscriber are combined, and the result is stored at
+each callsite. This way, when the span or event occurs in the
+future, the cached <a href="../subscriber/struct.Interest.html" title="struct tracing_core::subscriber::Interest"><code>Interest</code></a> value can be checked efficiently
+to determine if the span or event should be recorded, without
+needing to perform expensive filtering (i.e. calling the
+<a href="../trait.Subscriber.html#tymethod.enabled" title="method tracing_core::Subscriber::enabled"><code>Subscriber::enabled</code></a> method every time a span or event occurs).</p>
+<h4 id="rebuilding-cached-interest"><a class="doc-anchor" href="#rebuilding-cached-interest">§</a>Rebuilding Cached Interest</h4>
+<p>When a new <a href="crate::dispatch::Dispatch"><code>Dispatch</code></a> is created (i.e. a new subscriber becomes
+active), any previously cached <a href="../subscriber/struct.Interest.html" title="struct tracing_core::subscriber::Interest"><code>Interest</code></a> values are re-evaluated
+for all callsites in the program. This way, if the new subscriber
+will enable a callsite that was not previously enabled, the
+<a href="../subscriber/struct.Interest.html" title="struct tracing_core::subscriber::Interest"><code>Interest</code></a> in that callsite is updated. Similarly, when a
+subscriber is dropped, the interest cache is also re-evaluated, so
+that any callsites enabled only by that subscriber are disabled.</p>
+<p>In addition, the <a href="fn.rebuild_interest_cache.html" title="fn tracing_core::callsite::rebuild_interest_cache"><code>rebuild_interest_cache</code></a> function in this module can be
+used to manually invalidate all cached interest and re-register those
+callsites. This function is useful in situations where a subscriber’s
+interest can change, but it does so relatively infrequently. The subscriber
+may wish for its interest to be cached most of the time, and return
+<a href="../subscriber/struct.Interest.html#method.always" title="associated function tracing_core::subscriber::Interest::always"><code>Interest::always</code></a> or <a href="../subscriber/struct.Interest.html#method.never" title="associated function tracing_core::subscriber::Interest::never"><code>Interest::never</code></a> in its
+<a href="../trait.Subscriber.html#method.register_callsite" title="method tracing_core::Subscriber::register_callsite"><code>register_callsite</code></a> method, so that its <a href="../trait.Subscriber.html#tymethod.enabled" title="method tracing_core::Subscriber::enabled"><code>Subscriber::enabled</code></a> method
+doesn’t need to be evaluated every time a span or event is recorded.
+However, when the configuration changes, the subscriber can call
+<a href="fn.rebuild_interest_cache.html" title="fn tracing_core::callsite::rebuild_interest_cache"><code>rebuild_interest_cache</code></a> to re-evaluate the entire interest cache with its
+new configuration. This is a relatively costly operation, but if the
+configuration changes infrequently, it may be more efficient than calling
+<a href="../trait.Subscriber.html#tymethod.enabled" title="method tracing_core::Subscriber::enabled"><code>Subscriber::enabled</code></a> frequently.</p>
+<h2 id="implementing-callsites"><a class="doc-anchor" href="#implementing-callsites">§</a>Implementing Callsites</h2>
+<p>In most cases, instrumenting code using <code>tracing</code> should <em>not</em> require
+implementing the <a href="../trait.Callsite.html" title="trait tracing_core::Callsite"><code>Callsite</code></a> trait directly. When using the <a href="https://docs.rs/tracing/latest/tracing/#macros"><code>tracing</code>
+crate’s macros</a> or the <a href="https://docs.rs/tracing/latest/tracing/attr.instrument.html"><code>#[instrument]</code> attribute</a>, a
+<code>Callsite</code> is automatically generated.</p>
+<p>However, code which provides alternative forms of <code>tracing</code> instrumentation
+may need to interact with the callsite system directly. If
+instrumentation-side code needs to produce a <code>Callsite</code> to emit spans or
+events, the <a href="struct.DefaultCallsite.html" title="struct tracing_core::callsite::DefaultCallsite"><code>DefaultCallsite</code></a> struct provided in this module is a
+ready-made <code>Callsite</code> implementation that is suitable for most uses. When
+possible, the use of <code>DefaultCallsite</code> should be preferred over implementing
+<a href="../trait.Callsite.html" title="trait tracing_core::Callsite"><code>Callsite</code></a> for user types, as <code>DefaultCallsite</code> may benefit from
+additional performance optimizations.</p>
+<div class="footnotes"><hr><ol><li id="fn1"><p>Returned by the <a href="crate::subscriber::Subscriber::register_callsite"><code>Subscriber::register_callsite</code></a>
+method.&nbsp;<a href="#fnref1">↩</a></p></li></ol></div></div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.DefaultCallsite.html" title="struct tracing_core::callsite::DefaultCallsite">DefaultCallsite</a></div><div class="desc docblock-short">A default <a href="../trait.Callsite.html" title="trait tracing_core::Callsite"><code>Callsite</code></a> implementation.</div></li><li><div class="item-name"><a class="struct" href="struct.Identifier.html" title="struct tracing_core::callsite::Identifier">Identifier</a></div><div class="desc docblock-short">Uniquely identifies a <a href="../trait.Callsite.html" title="trait tracing_core::Callsite"><code>Callsite</code></a></div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.Callsite.html" title="trait tracing_core::callsite::Callsite">Callsite</a></div><div class="desc docblock-short">Trait implemented by callsites.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.rebuild_interest_cache.html" title="fn tracing_core::callsite::rebuild_interest_cache">rebuild_interest_cache</a></div><div class="desc docblock-short">Clear and reregister interest on every <a href="../trait.Callsite.html" title="trait tracing_core::Callsite"><code>Callsite</code></a></div></li><li><div class="item-name"><a class="fn" href="fn.register.html" title="fn tracing_core::callsite::register">register</a></div><div class="desc docblock-short">Register a new <a href="../trait.Callsite.html" title="trait tracing_core::Callsite"><code>Callsite</code></a> with the global registry.</div></li></ul></section></div></main></body></html>

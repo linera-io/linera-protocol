@@ -1,0 +1,80 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A “retry policy” to classify if a request should be retried."><title>Policy in tower::retry - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="tower" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../tower/index.html">tower</a><span class="version">0.5.1</span></h2></div><h2 class="location"><a href="#">Policy</a></h2><div class="sidebar-elems"><section><h3><a href="#required-associated-types">Required Associated Types</a></h3><ul class="block"><li><a href="#associatedtype.Future">Future</a></li></ul><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.clone_request">clone_request</a></li><li><a href="#tymethod.retry">retry</a></li></ul><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In tower::retry</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="../index.html">tower</a>::<wbr><a href="index.html">retry</a>::<wbr><a class="trait" href="#">Policy</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/tower/retry/policy.rs.html#46-90">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub trait Policy&lt;Req, Res, E&gt; {
+    type <a href="#associatedtype.Future" class="associatedtype">Future</a>: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;;
+
+    // Required methods
+    fn <a href="#tymethod.retry" class="fn">retry</a>(
+        &amp;mut self,
+        req: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Req</a>,
+        result: &amp;mut <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Res, E&gt;,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;Self::<a class="associatedtype" href="trait.Policy.html#associatedtype.Future" title="type tower::retry::Policy::Future">Future</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.clone_request" class="fn">clone_request</a>(&amp;mut self, req: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;Req</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;Req&gt;;
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A “retry policy” to classify if a request should be retried.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tower::retry::Policy;
+<span class="kw">use </span>futures_util::future;
+
+<span class="kw">type </span>Req = String;
+<span class="kw">type </span>Res = String;
+
+<span class="kw">struct </span>Attempts(usize);
+
+<span class="kw">impl</span>&lt;E&gt; Policy&lt;Req, Res, E&gt; <span class="kw">for </span>Attempts {
+    <span class="kw">type </span>Future = future::Ready&lt;()&gt;;
+
+    <span class="kw">fn </span>retry(<span class="kw-2">&amp;mut </span><span class="self">self</span>, req: <span class="kw-2">&amp;mut </span>Req, result: <span class="kw-2">&amp;mut </span><span class="prelude-ty">Result</span>&lt;Res, E&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::Future&gt; {
+        <span class="kw">match </span>result {
+            <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
+                <span class="comment">// Treat all `Response`s as success,
+                // so don't retry...
+                </span><span class="prelude-val">None
+            </span>},
+            <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
+                <span class="comment">// Treat all errors as failures...
+                // But we limit the number of attempts...
+                </span><span class="kw">if </span><span class="self">self</span>.<span class="number">0 </span>&gt; <span class="number">0 </span>{
+                    <span class="comment">// Try again!
+                    </span><span class="self">self</span>.<span class="number">0 </span>-= <span class="number">1</span>;
+                    <span class="prelude-val">Some</span>(future::ready(()))
+                } <span class="kw">else </span>{
+                    <span class="comment">// Used all our attempts, no retry...
+                    </span><span class="prelude-val">None
+                </span>}
+            }
+        }
+    }
+
+    <span class="kw">fn </span>clone_request(<span class="kw-2">&amp;mut </span><span class="self">self</span>, req: <span class="kw-2">&amp;</span>Req) -&gt; <span class="prelude-ty">Option</span>&lt;Req&gt; {
+        <span class="prelude-val">Some</span>(req.clone())
+    }
+}</code></pre></div>
+</div></details><h2 id="required-associated-types" class="section-header">Required Associated Types<a href="#required-associated-types" class="anchor">§</a></h2><div class="methods"><details class="toggle" open><summary><section id="associatedtype.Future" class="method"><a class="src rightside" href="../../src/tower/retry/policy.rs.html#48">source</a><h4 class="code-header">type <a href="#associatedtype.Future" class="associatedtype">Future</a>: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>The <a href="https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html" title="trait core::future::future::Future"><code>Future</code></a> type returned by <a href="trait.Policy.html#tymethod.retry" title="method tower::retry::Policy::retry"><code>Policy::retry</code></a>.</p>
+</div></details></div><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.retry" class="method"><a class="src rightside" href="../../src/tower/retry/policy.rs.html#83">source</a><h4 class="code-header">fn <a href="#tymethod.retry" class="fn">retry</a>(
+    &amp;mut self,
+    req: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Req</a>,
+    result: &amp;mut <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Res, E&gt;,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;Self::<a class="associatedtype" href="trait.Policy.html#associatedtype.Future" title="type tower::retry::Policy::Future">Future</a>&gt;</h4></section></summary><div class="docblock"><p>Check the policy if a certain request should be retried.</p>
+<p>This method is passed a reference to the original request, and either
+the <a href="../trait.Service.html#associatedtype.Response" title="associated type tower::Service::Response"><code>Service::Response</code></a> or <a href="../trait.Service.html#associatedtype.Error" title="associated type tower::Service::Error"><code>Service::Error</code></a> from the inner service.</p>
+<p>If the request should <strong>not</strong> be retried, return <code>None</code>.</p>
+<p>If the request <em>should</em> be retried, return <code>Some</code> future that will delay
+the next retry of the request. This can be used to sleep for a certain
+duration, to wait for some external condition to be met before retrying,
+or resolve right away, if the request should be retried immediately.</p>
+<h6 id="mutating-requests"><a class="doc-anchor" href="#mutating-requests">§</a>Mutating Requests</h6>
+<p>The policy MAY chose to mutate the <code>req</code>: if the request is mutated, the
+mutated request will be sent to the inner service in the next retry.
+This can be helpful for use cases like tracking the retry count in a
+header.</p>
+<h6 id="mutating-results"><a class="doc-anchor" href="#mutating-results">§</a>Mutating Results</h6>
+<p>The policy MAY chose to mutate the result. This enables the retry
+policy to convert a failure into a success and vice versa. For example,
+if the policy is used to poll while waiting for a state change, the
+policy can switch the result to emit a specific error when retries are
+exhausted.</p>
+<p>The policy can also record metadata on the request to include
+information about the number of retries required or to record that a
+failure failed after exhausting all retries.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.clone_request" class="method"><a class="src rightside" href="../../src/tower/retry/policy.rs.html#89">source</a><h4 class="code-header">fn <a href="#tymethod.clone_request" class="fn">clone_request</a>(&amp;mut self, req: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;Req</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;Req&gt;</h4></section></summary><div class="docblock"><p>Tries to clone a request before being passed to the inner service.</p>
+<p>If the request cannot be cloned, return <a href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html#variant.None" title="variant core::option::Option::None"><code>None</code></a>. Moreover, the retry
+function will not be called if the <a href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html#variant.None" title="variant core::option::Option::None"><code>None</code></a> is returned.</p>
+</div></details></div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"></div><script src="../../trait.impl/tower/retry/policy/trait.Policy.js" async></script></section></div></main></body></html>

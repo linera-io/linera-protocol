@@ -1,0 +1,55 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="An extension trait that adds utility methods to `AsyncSeek` types."><title>AsyncSeekExt in tokio::io - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="tokio" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../tokio/index.html">tokio</a><span class="version">1.40.0</span></h2></div><h2 class="location"><a href="#">AsyncSeekExt</a></h2><div class="sidebar-elems"><section><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.rewind">rewind</a></li><li><a href="#method.seek">seek</a></li><li><a href="#method.stream_position">stream_position</a></li></ul><h3><a href="#object-safety">Object Safety</a></h3><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In tokio::io</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="../index.html">tokio</a>::<wbr><a href="index.html">io</a>::<wbr><a class="trait" href="#">AsyncSeekExt</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/tokio/io/util/async_seek_ext.rs.html#33-90">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub trait AsyncSeekExt: <a class="trait" href="trait.AsyncSeek.html" title="trait tokio::io::AsyncSeek">AsyncSeek</a> {
+    // Provided methods
+    fn <a href="#method.seek" class="fn">seek</a>(&amp;mut self, pos: <a class="enum" href="https://doc.rust-lang.org/1.81.0/std/io/enum.SeekFrom.html" title="enum std::io::SeekFrom">SeekFrom</a>) -&gt; Seek&lt;'_, Self&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.rewind" class="fn">rewind</a>(&amp;mut self) -&gt; Seek&lt;'_, Self&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.stream_position" class="fn">stream_position</a>(&amp;mut self) -&gt; Seek&lt;'_, Self&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a></span> { ... }
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>An extension trait that adds utility methods to <a href="trait.AsyncSeek.html" title="trait tokio::io::AsyncSeek"><code>AsyncSeek</code></a> types.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io::{<span class="self">self</span>, Cursor, SeekFrom};
+<span class="kw">use </span>tokio::io::{AsyncSeekExt, AsyncReadExt};
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>cursor = Cursor::new(<span class="string">b"abcdefg"</span>);
+
+    <span class="comment">// the `seek` method is defined by this trait
+    </span>cursor.seek(SeekFrom::Start(<span class="number">3</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0</span>; <span class="number">1</span>];
+    <span class="kw">let </span>n = cursor.read(<span class="kw-2">&amp;mut </span>buf).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="macro">assert_eq!</span>(n, <span class="number">1</span>);
+    <span class="macro">assert_eq!</span>(buf, [<span class="string">b'd'</span>]);
+
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<p>See <a href="index.html" title="mod tokio::io">module</a> documentation for more details.</p>
+</div></details><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.seek" class="method"><a class="src rightside" href="../../src/tokio/io/util/async_seek_ext.rs.html#63-68">source</a><h4 class="code-header">fn <a href="#method.seek" class="fn">seek</a>(&amp;mut self, pos: <a class="enum" href="https://doc.rust-lang.org/1.81.0/std/io/enum.SeekFrom.html" title="enum std::io::SeekFrom">SeekFrom</a>) -&gt; Seek&lt;'_, Self&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a>,</div></h4></section></summary><div class="docblock"><p>Creates a future which will seek an IO object, and then yield the
+new position in the object and the object itself.</p>
+<p>Equivalent to:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">async fn </span>seek(<span class="kw-2">&amp;mut </span><span class="self">self</span>, pos: SeekFrom) -&gt; io::Result&lt;u64&gt;;</code></pre></div>
+<p>In the case of an error the buffer and the object will be discarded, with
+the error yielded.</p>
+<h5 id="examples-1"><a class="doc-anchor" href="#examples-1">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::fs::File;
+<span class="kw">use </span>tokio::io::{AsyncSeekExt, AsyncReadExt};
+
+<span class="kw">use </span>std::io::SeekFrom;
+
+<span class="kw">let </span><span class="kw-2">mut </span>file = File::open(<span class="string">"foo.txt"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+file.seek(SeekFrom::Start(<span class="number">6</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
+
+<span class="kw">let </span><span class="kw-2">mut </span>contents = <span class="macro">vec!</span>[<span class="number">0u8</span>; <span class="number">10</span>];
+file.read_exact(<span class="kw-2">&amp;mut </span>contents).<span class="kw">await</span><span class="question-mark">?</span>;</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.rewind" class="method"><a class="src rightside" href="../../src/tokio/io/util/async_seek_ext.rs.html#73-78">source</a><h4 class="code-header">fn <a href="#method.rewind" class="fn">rewind</a>(&amp;mut self) -&gt; Seek&lt;'_, Self&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a>,</div></h4></section></summary><div class="docblock"><p>Creates a future which will rewind to the beginning of the stream.</p>
+<p>This is convenience method, equivalent to <code>self.seek(SeekFrom::Start(0))</code>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.stream_position" class="method"><a class="src rightside" href="../../src/tokio/io/util/async_seek_ext.rs.html#84-89">source</a><h4 class="code-header">fn <a href="#method.stream_position" class="fn">stream_position</a>(&amp;mut self) -&gt; Seek&lt;'_, Self&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a>,</div></h4></section></summary><div class="docblock"><p>Creates a future which will return the current seek position from the
+start of the stream.</p>
+<p>This is equivalent to <code>self.seek(SeekFrom::Current(0))</code>.</p>
+</div></details></div><h2 id="object-safety" class="section-header">Object Safety<a href="#object-safety" class="anchor">§</a></h2><div class="object-safety-info">This trait is <b>not</b> <a href="https://doc.rust-lang.org/1.81.0/reference/items/traits.html#object-safety">object safe</a>.</div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><section id="impl-AsyncSeekExt-for-S" class="impl"><a class="src rightside" href="../../src/tokio/io/util/async_seek_ext.rs.html#93">source</a><a href="#impl-AsyncSeekExt-for-S" class="anchor">§</a><h3 class="code-header">impl&lt;S: <a class="trait" href="trait.AsyncSeek.html" title="trait tokio::io::AsyncSeek">AsyncSeek</a> + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>&gt; <a class="trait" href="trait.AsyncSeekExt.html" title="trait tokio::io::AsyncSeekExt">AsyncSeekExt</a> for S</h3></section></div><script src="../../trait.impl/tokio/io/util/async_seek_ext/trait.AsyncSeekExt.js" async></script></section></div></main></body></html>

@@ -1,0 +1,30 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Wraps a function, turning it into a parser."><title>parser in combine - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="combine" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../combine/index.html">combine</a><span class="version">3.8.1</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="index.html">combine</a>::<wbr><a class="fn" href="#">parser</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/combine/parser/function.rs.html#60-66">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn parser&lt;I, O, F&gt;(f: F) -&gt; <a class="struct" href="parser/function/struct.FnParser.html" title="struct combine::parser::function::FnParser">FnParser</a>&lt;I, F&gt;<div class="where">where
+    I: <a class="trait" href="trait.Stream.html" title="trait combine::Stream">Stream</a>,
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut I</a>) -&gt; <a class="type" href="type.ParseResult.html" title="type combine::ParseResult">ParseResult</a>&lt;O, I&gt;,</div></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Wraps a function, turning it into a parser.</p>
+<p>Mainly needed to turn closures into parsers as function types can be casted to function pointers
+to make them usable as a parser.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">extern crate </span>combine;
+<span class="kw">let </span><span class="kw-2">mut </span>even_digit = parser(|input| {
+    <span class="comment">// Help type inference out
+    </span><span class="kw">let _</span>: <span class="kw-2">&amp;mut </span>easy::Stream&lt;<span class="kw-2">&amp;</span>str&gt; = input;
+    <span class="kw">let </span>position = input.position();
+    <span class="kw">let </span>(char_digit, consumed) = <span class="macro">try!</span>(digit().parse_stream(input));
+    <span class="kw">let </span>d = (char_digit <span class="kw">as </span>i32) - (<span class="string">'0' </span><span class="kw">as </span>i32);
+    <span class="kw">if </span>d % <span class="number">2 </span>== <span class="number">0 </span>{
+        <span class="prelude-val">Ok</span>((d, consumed))
+    }
+    <span class="kw">else </span>{
+        <span class="comment">//Return an empty error since we only tested the first token of the stream
+        </span><span class="kw">let </span>errors = easy::Errors::new(
+            position,
+            StreamError::expected(From::from(<span class="string">"even number"</span>))
+        );
+        <span class="prelude-val">Err</span>(Consumed::Empty(errors.into()))
+    }
+});
+<span class="kw">let </span>result = even_digit
+    .easy_parse(<span class="string">"8"</span>)
+    .map(|x| x.<span class="number">0</span>);
+<span class="macro">assert_eq!</span>(result, <span class="prelude-val">Ok</span>(<span class="number">8</span>));</code></pre></div>
+</div></details></section></div></main></body></html>

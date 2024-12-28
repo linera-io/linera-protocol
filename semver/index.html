@@ -1,0 +1,46 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="github crates-io docs-rs"><title>semver - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="semver" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../semver/index.html">semver</a><span class="version">1.0.23</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">semver</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/semver/lib.rs.html#1-580">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><a href="https://github.com/dtolnay/semver"><img src="https://img.shields.io/badge/github-8da0cb?style=for-the-badge&amp;labelColor=555555&amp;logo=github" alt="github" /></a> <a href="https://crates.io/crates/semver"><img src="https://img.shields.io/badge/crates.io-fc8d62?style=for-the-badge&amp;labelColor=555555&amp;logo=rust" alt="crates-io" /></a> <a href="https://docs.rs/semver"><img src="https://img.shields.io/badge/docs.rs-66c2a5?style=for-the-badge&amp;labelColor=555555&amp;logo=docs.rs" alt="docs-rs" /></a></p>
+<br>
+<p>A parser and evaluator for Cargo’s flavor of Semantic Versioning.</p>
+<p>Semantic Versioning (see <a href="https://semver.org">https://semver.org</a>) is a guideline for how
+version numbers are assigned and incremented. It is widely followed within
+the Cargo/crates.io ecosystem for Rust.</p>
+<br>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>semver::{BuildMetadata, Prerelease, Version, VersionReq};
+
+<span class="kw">fn </span>main() {
+    <span class="kw">let </span>req = VersionReq::parse(<span class="string">"&gt;=1.2.3, &lt;1.8.0"</span>).unwrap();
+
+    <span class="comment">// Check whether this requirement matches version 1.2.3-alpha.1 (no)
+    </span><span class="kw">let </span>version = Version {
+        major: <span class="number">1</span>,
+        minor: <span class="number">2</span>,
+        patch: <span class="number">3</span>,
+        pre: Prerelease::new(<span class="string">"alpha.1"</span>).unwrap(),
+        build: BuildMetadata::EMPTY,
+    };
+    <span class="macro">assert!</span>(!req.matches(<span class="kw-2">&amp;</span>version));
+
+    <span class="comment">// Check whether it matches 1.3.0 (yes it does)
+    </span><span class="kw">let </span>version = Version::parse(<span class="string">"1.3.0"</span>).unwrap();
+    <span class="macro">assert!</span>(req.matches(<span class="kw-2">&amp;</span>version));
+}</code></pre></div>
+<p><br><br></p>
+<h2 id="scope-of-this-crate"><a class="doc-anchor" href="#scope-of-this-crate">§</a>Scope of this crate</h2>
+<p>Besides Cargo, several other package ecosystems and package managers for
+other languages also use SemVer: RubyGems/Bundler for Ruby, npm for
+JavaScript, Composer for PHP, CocoaPods for Objective-C…</p>
+<p>The <code>semver</code> crate is specifically intended to implement Cargo’s
+interpretation of Semantic Versioning.</p>
+<p>Where the various tools differ in their interpretation or implementation of
+the spec, this crate follows the implementation choices made by Cargo. If
+you are operating on version numbers from some other package ecosystem, you
+will want to use a different semver library which is appropriate to that
+ecosystem.</p>
+<p>The extent of Cargo’s SemVer support is documented in the <em><a href="https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html">Specifying
+Dependencies</a></em> chapter of the Cargo reference.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.BuildMetadata.html" title="struct semver::BuildMetadata">BuildMetadata</a></div><div class="desc docblock-short">Optional build metadata identifier. This comes after <code>+</code> in a SemVer
+version, as in <code>0.8.1+zstd.1.5.0</code>.</div></li><li><div class="item-name"><a class="struct" href="struct.Comparator.html" title="struct semver::Comparator">Comparator</a></div><div class="desc docblock-short">A pair of comparison operator and partial version, such as <code>&gt;=1.2</code>. Forms
+one piece of a VersionReq.</div></li><li><div class="item-name"><a class="struct" href="struct.Error.html" title="struct semver::Error">Error</a></div><div class="desc docblock-short">Error parsing a SemVer version or version requirement.</div></li><li><div class="item-name"><a class="struct" href="struct.Prerelease.html" title="struct semver::Prerelease">Prerelease</a></div><div class="desc docblock-short">Optional pre-release identifier on a version string. This comes after <code>-</code> in
+a SemVer version, like <code>1.0.0-alpha.1</code></div></li><li><div class="item-name"><a class="struct" href="struct.Version.html" title="struct semver::Version">Version</a></div><div class="desc docblock-short"><strong>SemVer version</strong> as defined by <a href="https://semver.org">https://semver.org</a>.</div></li><li><div class="item-name"><a class="struct" href="struct.VersionReq.html" title="struct semver::VersionReq">VersionReq</a></div><div class="desc docblock-short"><strong>SemVer version requirement</strong> describing the intersection of some version
+comparators, such as <code>&gt;=1.2.3, &lt;1.8</code>.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.Op.html" title="enum semver::Op">Op</a></div><div class="desc docblock-short">SemVer comparison operator: <code>=</code>, <code>&gt;</code>, <code>&gt;=</code>, <code>&lt;</code>, <code>&lt;=</code>, <code>~</code>, <code>^</code>, <code>*</code>.</div></li></ul></section></div></main></body></html>

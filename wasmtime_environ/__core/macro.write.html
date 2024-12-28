@@ -1,0 +1,67 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Writes formatted data into a buffer."><title>write in wasmtime_environ::__core - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="wasmtime_environ" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../wasmtime_environ/index.html">wasmtime_environ</a><span class="version">25.0.1</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In wasmtime_environ::__core</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="../index.html">wasmtime_environ</a>::<wbr><a href="index.html">__core</a>::<wbr><a class="macro" href="#">write</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/macros/mod.rs.html#630">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><span class="macro">macro_rules!</span> write {
+    (<span class="macro-nonterminal">$dst</span>:expr, $(<span class="macro-nonterminal">$arg</span>:tt)<span class="kw-2">*</span>) =&gt; { ... };
+}</pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Writes formatted data into a buffer.</p>
+<p>This macro accepts a ‘writer’, a format string, and a list of arguments. Arguments will be
+formatted according to the specified format string and the result will be passed to the writer.
+The writer may be any value with a <code>write_fmt</code> method; generally this comes from an
+implementation of either the <a href="fmt/trait.Write.html" title="trait wasmtime_environ::__core::fmt::Write"><code>fmt::Write</code></a> or the <a href="../std/io/trait.Write.html"><code>io::Write</code></a> trait. The macro
+returns whatever the <code>write_fmt</code> method returns; commonly a <a href="fmt/type.Result.html" title="type wasmtime_environ::__core::fmt::Result"><code>fmt::Result</code></a>, or an
+<a href="../std/io/type.Result.html"><code>io::Result</code></a>.</p>
+<p>See <a href="../std/fmt/index.html"><code>std::fmt</code></a> for more information on the format string syntax.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io::Write;
+
+<span class="kw">fn </span>main() -&gt; std::io::Result&lt;()&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>w = Vec::new();
+    <span class="macro">write!</span>(<span class="kw-2">&amp;mut </span>w, <span class="string">"test"</span>)<span class="question-mark">?</span>;
+    <span class="macro">write!</span>(<span class="kw-2">&amp;mut </span>w, <span class="string">"formatted {}"</span>, <span class="string">"arguments"</span>)<span class="question-mark">?</span>;
+
+    <span class="macro">assert_eq!</span>(w, <span class="string">b"testformatted arguments"</span>);
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<p>A module can import both <code>std::fmt::Write</code> and <code>std::io::Write</code> and call <code>write!</code> on objects
+implementing either, as objects do not typically implement both. However, the module must
+avoid conflict between the trait names, such as by importing them as <code>_</code> or otherwise renaming
+them:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::fmt::Write <span class="kw">as _</span>;
+<span class="kw">use </span>std::io::Write <span class="kw">as _</span>;
+
+<span class="kw">fn </span>main() -&gt; <span class="prelude-ty">Result</span>&lt;(), Box&lt;<span class="kw">dyn </span>std::error::Error&gt;&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>s = String::new();
+    <span class="kw">let </span><span class="kw-2">mut </span>v = Vec::new();
+
+    <span class="macro">write!</span>(<span class="kw-2">&amp;mut </span>s, <span class="string">"{} {}"</span>, <span class="string">"abc"</span>, <span class="number">123</span>)<span class="question-mark">?</span>; <span class="comment">// uses fmt::Write::write_fmt
+    </span><span class="macro">write!</span>(<span class="kw-2">&amp;mut </span>v, <span class="string">"s = {:?}"</span>, s)<span class="question-mark">?</span>; <span class="comment">// uses io::Write::write_fmt
+    </span><span class="macro">assert_eq!</span>(v, <span class="string">b"s = \"abc 123\""</span>);
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<p>If you also need the trait names themselves, such as to implement one or both on your types,
+import the containing module and then name them with a prefix:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::fmt::{<span class="self">self</span>, Write <span class="kw">as _</span>};
+<span class="kw">use </span>std::io::{<span class="self">self</span>, Write <span class="kw">as _</span>};
+
+<span class="kw">struct </span>Example;
+
+<span class="kw">impl </span>fmt::Write <span class="kw">for </span>Example {
+    <span class="kw">fn </span>write_str(<span class="kw-2">&amp;mut </span><span class="self">self</span>, _s: <span class="kw-2">&amp;</span>str) -&gt; core::fmt::Result {
+         <span class="macro">unimplemented!</span>();
+    }
+}</code></pre></div>
+<p>Note: This macro can be used in <code>no_std</code> setups as well.
+In a <code>no_std</code> setup you are responsible for the implementation details of the components.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>core::fmt::Write;
+
+<span class="kw">struct </span>Example;
+
+<span class="kw">impl </span>Write <span class="kw">for </span>Example {
+    <span class="kw">fn </span>write_str(<span class="kw-2">&amp;mut </span><span class="self">self</span>, _s: <span class="kw-2">&amp;</span>str) -&gt; core::fmt::Result {
+         <span class="macro">unimplemented!</span>();
+    }
+}
+
+<span class="kw">let </span><span class="kw-2">mut </span>m = Example{};
+<span class="macro">write!</span>(<span class="kw-2">&amp;mut </span>m, <span class="string">"Hello World"</span>).expect(<span class="string">"Not written"</span>);</code></pre></div>
+</div></details></section></div></main></body></html>

@@ -1,0 +1,26 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Implement `fill_bytes` by reading chunks from the output buffer of a block based RNG."><title>fill_via_u32_chunks in rand_core::impls - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="rand_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="icon" href="https://www.rust-lang.org/favicon.ico"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../../rand_core/index.html"><img src="https://www.rust-lang.org/logos/rust-logo-128x128-blk.png" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../../rand_core/index.html"><img src="https://www.rust-lang.org/logos/rust-logo-128x128-blk.png" alt="logo"></a><h2><a href="../../rand_core/index.html">rand_core</a><span class="version">0.6.4</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In rand_core::impls</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../index.html">rand_core</a>::<wbr><a href="index.html">impls</a>::<wbr><a class="fn" href="#">fill_via_u32_chunks</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/rand_core/impls.rs.html#140-142">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn fill_via_u32_chunks(src: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>], dest: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; (<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>, <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>)</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Implement <code>fill_bytes</code> by reading chunks from the output buffer of a block
+based RNG.</p>
+<p>The return values are <code>(consumed_u32, filled_u8)</code>.</p>
+<p><code>filled_u8</code> is the number of filled bytes in <code>dest</code>, which may be less than
+the length of <code>dest</code>.
+<code>consumed_u32</code> is the number of words consumed from <code>src</code>, which is the same
+as <code>filled_u8 / 4</code> rounded up.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<p>(from <code>IsaacRng</code>)</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>fill_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, dest: <span class="kw-2">&amp;mut </span>[u8]) {
+    <span class="kw">let </span><span class="kw-2">mut </span>read_len = <span class="number">0</span>;
+    <span class="kw">while </span>read_len &lt; dest.len() {
+        <span class="kw">if </span><span class="self">self</span>.index &gt;= <span class="self">self</span>.rsl.len() {
+            <span class="self">self</span>.isaac();
+        }
+
+        <span class="kw">let </span>(consumed_u32, filled_u8) =
+            impls::fill_via_u32_chunks(<span class="kw-2">&amp;mut </span><span class="self">self</span>.rsl[<span class="self">self</span>.index..],
+                                       <span class="kw-2">&amp;mut </span>dest[read_len..]);
+
+        <span class="self">self</span>.index += consumed_u32;
+        read_len += filled_u8;
+    }
+}</code></pre></div>
+</div></details></section></div></main></body></html>

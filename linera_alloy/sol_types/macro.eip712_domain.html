@@ -1,0 +1,39 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Convenience macro to instantiate an EIP-712 domain."><title>eip712_domain in linera_alloy::sol_types - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="linera_alloy" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="icon" href="https://raw.githubusercontent.com/alloy-rs/core/main/assets/favicon.ico"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../../linera_alloy/index.html"><img src="https://raw.githubusercontent.com/alloy-rs/core/main/assets/alloy.jpg" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../../linera_alloy/index.html"><img src="https://raw.githubusercontent.com/alloy-rs/core/main/assets/alloy.jpg" alt="logo"></a><h2><a href="../../linera_alloy/index.html">linera_alloy</a><span class="version">0.1.0</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In linera_alloy::sol_types</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="../index.html">linera_alloy</a>::<wbr><a href="index.html">sol_types</a>::<wbr><a class="macro" href="#">eip712_domain</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/linera_alloy_sol_types/eip712.rs.html#200">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><span class="macro">macro_rules!</span> eip712_domain {
+    (@opt) =&gt; { ... };
+    (@opt <span class="macro-nonterminal">$e</span>:expr) =&gt; { ... };
+    (@cow) =&gt; { ... };
+    (@cow <span class="macro-nonterminal">$l</span>:literal) =&gt; { ... };
+    (@cow <span class="macro-nonterminal">$e</span>:expr) =&gt; { ... };
+    (
+        $(name: <span class="macro-nonterminal">$name</span>:expr,)<span class="question-mark">?
+        </span>$(version: <span class="macro-nonterminal">$version</span>:expr,)<span class="question-mark">?
+        </span>$(chain_id: <span class="macro-nonterminal">$chain_id</span>:expr,)<span class="question-mark">?
+        </span>$(verifying_contract: <span class="macro-nonterminal">$verifying_contract</span>:expr,)<span class="question-mark">?
+        </span>$(salt: <span class="macro-nonterminal">$salt</span>:expr)<span class="question-mark">?
+        </span>$(,)<span class="question-mark">?
+    </span>) =&gt; { ... };
+}</pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Convenience macro to instantiate an <a href="struct.Eip712Domain.html" title="struct linera_alloy::sol_types::Eip712Domain">EIP-712 domain</a>.</p>
+<p>This macro allows you to instantiate an <a href="struct.Eip712Domain.html" title="struct linera_alloy::sol_types::Eip712Domain">EIP-712 domain</a>
+struct without manually writing <code>None</code> for unused fields.</p>
+<p>It may be used to declare a domain with any combination of fields. Each
+field must be labeled with the name of the field, and the fields must be in
+order. The fields for the domain are:</p>
+<ul>
+<li><code>name</code></li>
+<li><code>version</code></li>
+<li><code>chain_id</code></li>
+<li><code>verifying_contract</code></li>
+<li><code>salt</code></li>
+</ul>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">const </span>MY_DOMAIN: Eip712Domain = <span class="macro">eip712_domain!</span> {
+    name: <span class="string">"MyCoolProtocol"</span>,
+};
+
+<span class="kw">let </span>dynamic_name = String::from(<span class="string">"MyCoolProtocol"</span>);
+<span class="kw">let </span>my_other_domain: Eip712Domain = <span class="macro">eip712_domain!</span> {
+    name: dynamic_name,
+    version: <span class="string">"1.0.0"</span>,
+    salt: keccak256(<span class="string">"my domain salt"</span>),
+};</code></pre></div>
+</div></details></section></div></main></body></html>

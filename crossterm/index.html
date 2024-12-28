@@ -1,0 +1,203 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Cross-platform Terminal Manipulation Library"><title>crossterm - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="crossterm" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../crossterm/index.html">crossterm</a><span class="version">0.27.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#macros">Macros</a></li><li><a href="#traits">Traits</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">crossterm</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/crossterm/lib.rs.html#1-261">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="cross-platform-terminal-manipulation-library"><a class="doc-anchor" href="#cross-platform-terminal-manipulation-library">§</a>Cross-platform Terminal Manipulation Library</h2>
+<p>Crossterm is a pure-rust, terminal manipulation library that makes it possible to write cross-platform text-based interfaces (see <a href="#features">features</a>). It supports all UNIX and Windows terminals down to Windows 7 (not all terminals are tested,
+see <a href="#tested-terminals">Tested Terminals</a> for more info).</p>
+<p>This crate supports all UNIX and Windows terminals down to Windows 7 (not all terminals are tested
+see <a href="https://github.com/crossterm-rs/crossterm#tested-terminals">Tested Terminals</a>
+for more info).</p>
+<h3 id="command-api"><a class="doc-anchor" href="#command-api">§</a>Command API</h3>
+<p>The command API makes the use of <code>crossterm</code> much easier and offers more control over when and how a
+command is executed. A command is just an action you can perform on the terminal e.g. cursor movement.</p>
+<p>The command API offers:</p>
+<ul>
+<li>Better Performance.</li>
+<li>Complete control over when to flush.</li>
+<li>Complete control over where the ANSI escape commands are executed to.</li>
+<li>Way easier and nicer API.</li>
+</ul>
+<p>There are two ways to use the API command:</p>
+<ul>
+<li>Functions can execute commands on types that implement Write. Functions are easier to use and debug.
+There is a disadvantage, and that is that there is a boilerplate code involved.</li>
+<li>Macros are generally seen as more difficult and aren’t always well supported by editors but offer an API with less boilerplate code. If you are
+not afraid of macros, this is a recommendation.</li>
+</ul>
+<p>Linux and Windows 10 systems support ANSI escape codes. Those ANSI escape codes are strings or rather a
+byte sequence. When we <code>write</code> and <code>flush</code> those to the terminal we can perform some action.
+For older windows systems a WinAPI call is made.</p>
+<h4 id="supported-commands"><a class="doc-anchor" href="#supported-commands">§</a>Supported Commands</h4>
+<ul>
+<li>Module <a href="cursor/index.html"><code>cursor</code></a>
+<ul>
+<li>Visibility - <a href="cursor/struct.Show.html"><code>Show</code></a>, <a href="cursor/struct.Hide.html"><code>Hide</code></a></li>
+<li>Appearance - <a href="cursor/struct.EnableBlinking.html"><code>EnableBlinking</code></a>,
+<a href="cursor/struct.DisableBlinking.html"><code>DisableBlinking</code></a>,
+<a href="cursor/enum.SetCursorStyle.html"><code>SetCursorStyle</code></a></li>
+<li>Position -
+<a href="cursor/struct.SavePosition.html"><code>SavePosition</code></a>, <a href="cursor/struct.RestorePosition.html"><code>RestorePosition</code></a>,
+<a href="cursor/struct.MoveUp.html"><code>MoveUp</code></a>, <a href="cursor/struct.MoveDown.html"><code>MoveDown</code></a>,
+<a href="cursor/struct.MoveLeft.html"><code>MoveLeft</code></a>, <a href="cursor/struct.MoveRight.html"><code>MoveRight</code></a>,
+<a href="cursor/struct.MoveTo.html"><code>MoveTo</code></a>, <a href="cursor/struct.MoveToColumn.html"><code>MoveToColumn</code></a>,<a href="cursor/struct.MoveToRow.html"><code>MoveToRow</code></a>,
+<a href="cursor/struct.MoveToNextLine.html"><code>MoveToNextLine</code></a>, <a href="cursor/struct.MoveToPreviousLine.html"><code>MoveToPreviousLine</code></a></li>
+</ul>
+</li>
+<li>Module <a href="event/index.html"><code>event</code></a>
+<ul>
+<li>Keyboard events -
+<a href="event/struct.PushKeyboardEnhancementFlags.html"><code>PushKeyboardEnhancementFlags</code></a>,
+<a href="event/struct.PopKeyboardEnhancementFlags.html"><code>PopKeyboardEnhancementFlags</code></a></li>
+<li>Mouse events - <a href="event/struct.EnableMouseCapture.html"><code>EnableMouseCapture</code></a>,
+<a href="event/struct.DisableMouseCapture.html"><code>DisableMouseCapture</code></a></li>
+</ul>
+</li>
+<li>Module <a href="style/index.html"><code>style</code></a>
+<ul>
+<li>Colors - <a href="style/struct.SetForegroundColor.html"><code>SetForegroundColor</code></a>,
+<a href="style/struct.SetBackgroundColor.html"><code>SetBackgroundColor</code></a>,
+<a href="style/struct.ResetColor.html"><code>ResetColor</code></a>, <a href="style/struct.SetColors.html"><code>SetColors</code></a></li>
+<li>Attributes - <a href="style/struct.SetAttribute.html"><code>SetAttribute</code></a>, <a href="style/struct.SetAttributes.html"><code>SetAttributes</code></a>,
+<a href="style/struct.PrintStyledContent.html"><code>PrintStyledContent</code></a></li>
+</ul>
+</li>
+<li>Module <a href="terminal/index.html"><code>terminal</code></a>
+<ul>
+<li>Scrolling - <a href="terminal/struct.ScrollUp.html"><code>ScrollUp</code></a>,
+<a href="terminal/struct.ScrollDown.html"><code>ScrollDown</code></a></li>
+<li>Miscellaneous - <a href="terminal/struct.Clear.html"><code>Clear</code></a>,
+<a href="terminal/struct.SetSize.html"><code>SetSize</code></a>,
+<a href="terminal/struct.SetTitle.html"><code>SetTitle</code></a>,
+<a href="terminal/struct.DisableLineWrap.html"><code>DisableLineWrap</code></a>,
+<a href="terminal/struct.EnableLineWrap.html"><code>EnableLineWrap</code></a></li>
+<li>Alternate screen - <a href="terminal/struct.EnterAlternateScreen.html"><code>EnterAlternateScreen</code></a>,
+<a href="terminal/struct.LeaveAlternateScreen.html"><code>LeaveAlternateScreen</code></a></li>
+</ul>
+</li>
+</ul>
+<h4 id="command-execution"><a class="doc-anchor" href="#command-execution">§</a>Command Execution</h4>
+<p>There are two different ways to execute commands:</p>
+<ul>
+<li><a href="#lazy-execution">Lazy Execution</a></li>
+<li><a href="#direct-execution">Direct Execution</a></li>
+</ul>
+<h5 id="lazy-execution"><a class="doc-anchor" href="#lazy-execution">§</a>Lazy Execution</h5>
+<p>Flushing bytes to the terminal buffer is a heavy system call. If we perform a lot of actions with the terminal,
+we want to do this periodically - like with a TUI editor - so that we can flush more data to the terminal buffer
+at the same time.</p>
+<p>Crossterm offers the possibility to do this with <code>queue</code>.
+With <code>queue</code> you can queue commands, and when you call <a href="https://doc.rust-lang.org/std/io/trait.Write.html#tymethod.flush">Write::flush</a> these commands will be executed.</p>
+<p>You can pass a custom buffer implementing <a href="https://doc.rust-lang.org/std/io/trait.Write.html">std::io::Write</a> to this <code>queue</code> operation.
+The commands will be executed on that buffer.
+The most common buffer is <a href="https://doc.rust-lang.org/std/io/fn.stdout.html">std::io::stdout</a> however, <a href="https://doc.rust-lang.org/std/io/fn.stderr.html">std::io::stderr</a> is used sometimes as well.</p>
+<h6 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h6>
+<p>A simple demonstration that shows the command API in action with cursor commands.</p>
+<p>Functions:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io::{Write, stdout};
+<span class="kw">use </span>crossterm::{QueueableCommand, cursor};
+
+<span class="kw">let </span><span class="kw-2">mut </span>stdout = stdout();
+stdout.queue(cursor::MoveTo(<span class="number">5</span>,<span class="number">5</span>));
+
+<span class="comment">// some other code ...
+
+</span>stdout.flush();</code></pre></div>
+<p>The <a href="./trait.QueueableCommand.html">queue</a> function returns itself, therefore you can use this to queue another
+command. Like <code>stdout.queue(Goto(5,5)).queue(Clear(ClearType::All))</code>.</p>
+<p>Macros:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io::{Write, stdout};
+<span class="kw">use </span>crossterm::{queue, QueueableCommand, cursor};
+
+<span class="kw">let </span><span class="kw-2">mut </span>stdout = stdout();
+<span class="macro">queue!</span>(stdout,  cursor::MoveTo(<span class="number">5</span>, <span class="number">5</span>));
+
+<span class="comment">// some other code ...
+
+// move operation is performed only if we flush the buffer.
+</span>stdout.flush();</code></pre></div>
+<p>You can pass more than one command into the <a href="./macro.queue.html">queue</a> macro like
+<code>queue!(stdout, MoveTo(5, 5), Clear(ClearType::All))</code> and
+they will be executed in the given order from left to right.</p>
+<h5 id="direct-execution"><a class="doc-anchor" href="#direct-execution">§</a>Direct Execution</h5>
+<p>For many applications it is not at all important to be efficient with ‘flush’ operations.
+For this use case there is the <code>execute</code> operation.
+This operation executes the command immediately, and calls the <code>flush</code> under water.</p>
+<p>You can pass a custom buffer implementing <a href="https://doc.rust-lang.org/std/io/trait.Write.html">std::io::Write</a> to this <code>execute</code> operation.
+The commands will be executed on that buffer.
+The most common buffer is <a href="https://doc.rust-lang.org/std/io/fn.stdout.html">std::io::stdout</a> however, <a href="https://doc.rust-lang.org/std/io/fn.stderr.html">std::io::stderr</a> is used sometimes as well.</p>
+<h6 id="examples-1"><a class="doc-anchor" href="#examples-1">§</a>Examples</h6>
+<p>Functions:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io::{Write, stdout};
+<span class="kw">use </span>crossterm::{ExecutableCommand, cursor};
+
+<span class="kw">let </span><span class="kw-2">mut </span>stdout = stdout();
+stdout.execute(cursor::MoveTo(<span class="number">5</span>,<span class="number">5</span>));</code></pre></div>
+<p>The <a href="./trait.ExecutableCommand.html">execute</a> function returns itself, therefore you can use this to queue
+another command. Like <code>stdout.execute(Goto(5,5))?.execute(Clear(ClearType::All))</code>.</p>
+<p>Macros:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io::{stdout, Write};
+<span class="kw">use </span>crossterm::{execute, ExecutableCommand, cursor};
+
+<span class="kw">let </span><span class="kw-2">mut </span>stdout = stdout();
+<span class="macro">execute!</span>(stdout, cursor::MoveTo(<span class="number">5</span>, <span class="number">5</span>));</code></pre></div>
+<p>You can pass more than one command into the <a href="./macro.execute.html">execute</a> macro like
+<code>execute!(stdout, MoveTo(5, 5), Clear(ClearType::All))</code> and they will be executed in the given order from
+left to right.</p>
+<h3 id="examples-2"><a class="doc-anchor" href="#examples-2">§</a>Examples</h3>
+<p>Print a rectangle colored with magenta and use both direct execution and lazy execution.</p>
+<p>Functions:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io::{<span class="self">self</span>, Write};
+<span class="kw">use </span>crossterm::{
+    ExecutableCommand, QueueableCommand,
+    terminal, cursor, style::{<span class="self">self</span>, Stylize}
+};
+
+<span class="kw">fn </span>main() -&gt; io::Result&lt;()&gt; {
+  <span class="kw">let </span><span class="kw-2">mut </span>stdout = io::stdout();
+
+  stdout.execute(terminal::Clear(terminal::ClearType::All))<span class="question-mark">?</span>;
+
+  <span class="kw">for </span>y <span class="kw">in </span><span class="number">0</span>..<span class="number">40 </span>{
+    <span class="kw">for </span>x <span class="kw">in </span><span class="number">0</span>..<span class="number">150 </span>{
+      <span class="kw">if </span>(y == <span class="number">0 </span>|| y == <span class="number">40 </span>- <span class="number">1</span>) || (x == <span class="number">0 </span>|| x == <span class="number">150 </span>- <span class="number">1</span>) {
+        <span class="comment">// in this loop we are more efficient by not flushing the buffer.
+        </span>stdout
+          .queue(cursor::MoveTo(x,y))<span class="question-mark">?
+          </span>.queue(style::PrintStyledContent( <span class="string">"█"</span>.magenta()))<span class="question-mark">?</span>;
+      }
+    }
+  }
+  stdout.flush()<span class="question-mark">?</span>;
+  <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<p>Macros:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io::{<span class="self">self</span>, Write};
+<span class="kw">use </span>crossterm::{
+    execute, queue,
+    style::{<span class="self">self</span>, Stylize}, cursor, terminal
+};
+
+<span class="kw">fn </span>main() -&gt; io::Result&lt;()&gt; {
+  <span class="kw">let </span><span class="kw-2">mut </span>stdout = io::stdout();
+
+  <span class="macro">execute!</span>(stdout, terminal::Clear(terminal::ClearType::All))<span class="question-mark">?</span>;
+
+  <span class="kw">for </span>y <span class="kw">in </span><span class="number">0</span>..<span class="number">40 </span>{
+    <span class="kw">for </span>x <span class="kw">in </span><span class="number">0</span>..<span class="number">150 </span>{
+      <span class="kw">if </span>(y == <span class="number">0 </span>|| y == <span class="number">40 </span>- <span class="number">1</span>) || (x == <span class="number">0 </span>|| x == <span class="number">150 </span>- <span class="number">1</span>) {
+        <span class="comment">// in this loop we are more efficient by not flushing the buffer.
+        </span><span class="macro">queue!</span>(stdout, cursor::MoveTo(x,y), style::PrintStyledContent( <span class="string">"█"</span>.magenta()))<span class="question-mark">?</span>;
+      }
+    }
+  }
+  stdout.flush()<span class="question-mark">?</span>;
+  <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="cursor/index.html" title="mod crossterm::cursor">cursor</a></div><div class="desc docblock-short">A module to work with the terminal cursor</div></li><li><div class="item-name"><a class="mod" href="style/index.html" title="mod crossterm::style">style</a></div><div class="desc docblock-short">A module to apply attributes and colors on your text.</div></li><li><div class="item-name"><a class="mod" href="terminal/index.html" title="mod crossterm::terminal">terminal</a></div><div class="desc docblock-short">A module to work with the terminal.</div></li><li><div class="item-name"><a class="mod" href="tty/index.html" title="mod crossterm::tty">tty</a></div><div class="desc docblock-short">A module to query if the current instance is a tty.
+Making it a little more convenient and safe to query whether
+something is a terminal teletype or not.
+This module defines the IsTty trait and the is_tty method to
+return true if the item represents a terminal.</div></li></ul><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="macro" href="macro.execute.html" title="macro crossterm::execute">execute</a></div><div class="desc docblock-short">Executes one or more command(s).</div></li><li><div class="item-name"><a class="macro" href="macro.queue.html" title="macro crossterm::queue">queue</a></div><div class="desc docblock-short">Queues one or more command(s) for further execution.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.Command.html" title="trait crossterm::Command">Command</a></div><div class="desc docblock-short">An interface for a command that performs an action on the terminal.</div></li><li><div class="item-name"><a class="trait" href="trait.ExecutableCommand.html" title="trait crossterm::ExecutableCommand">ExecutableCommand</a></div><div class="desc docblock-short">An interface for types that can directly execute commands.</div></li><li><div class="item-name"><a class="trait" href="trait.QueueableCommand.html" title="trait crossterm::QueueableCommand">QueueableCommand</a></div><div class="desc docblock-short">An interface for types that can queue commands for further execution.</div></li><li><div class="item-name"><a class="trait" href="trait.SynchronizedUpdate.html" title="trait crossterm::SynchronizedUpdate">SynchronizedUpdate</a></div><div class="desc docblock-short">An interface for types that support synchronized updates.</div></li></ul></section></div></main></body></html>

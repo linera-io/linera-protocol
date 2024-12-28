@@ -1,0 +1,281 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Types and traits for generating responses."><title>axum::response - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="axum" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../axum/index.html">axum</a><span class="version">0.7.6</span></h2></div><h2 class="location"><a href="#">Module response</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#traits">Traits</a></li><li><a href="#types">Type Aliases</a></li></ul></section><h2><a href="../index.html">In crate axum</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">axum</a>::<wbr><a class="mod" href="#">response</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/axum/response/mod.rs.html#1-227">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Types and traits for generating responses.</p>
+<h2 id="table-of-contents"><a class="doc-anchor" href="#table-of-contents">§</a>Table of contents</h2>
+<ul>
+<li><a href="#building-responses">Building responses</a></li>
+<li><a href="#returning-different-response-types">Returning different response types</a></li>
+<li><a href="#regarding-impl-intoresponse">Regarding <code>impl IntoResponse</code></a></li>
+</ul>
+<h2 id="building-responses"><a class="doc-anchor" href="#building-responses">§</a>Building responses</h2>
+<p>Anything that implements <a href="trait.IntoResponse.html" title="trait axum::response::IntoResponse"><code>IntoResponse</code></a> can be returned from a handler. axum
+provides implementations for common types:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>axum::{
+    Json,
+    response::{Html, IntoResponse},
+    http::{StatusCode, Uri, header::{<span class="self">self</span>, HeaderMap, HeaderName}},
+};
+
+<span class="comment">// `()` gives an empty response
+</span><span class="kw">async fn </span>empty() {}
+
+<span class="comment">// String will get a `text/plain; charset=utf-8` content-type
+</span><span class="kw">async fn </span>plain_text(uri: Uri) -&gt; String {
+    <span class="macro">format!</span>(<span class="string">"Hi from {}"</span>, uri.path())
+}
+
+<span class="comment">// Bytes will get a `application/octet-stream` content-type
+</span><span class="kw">async fn </span>bytes() -&gt; Vec&lt;u8&gt; {
+    <span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>]
+}
+
+<span class="comment">// `Json` will get a `application/json` content-type and work with anything that
+// implements `serde::Serialize`
+</span><span class="kw">async fn </span>json() -&gt; Json&lt;Vec&lt;String&gt;&gt; {
+    Json(<span class="macro">vec!</span>[<span class="string">"foo"</span>.to_owned(), <span class="string">"bar"</span>.to_owned()])
+}
+
+<span class="comment">// `Html` will get a `text/html` content-type
+</span><span class="kw">async fn </span>html() -&gt; Html&lt;<span class="kw-2">&amp;</span><span class="lifetime">'static </span>str&gt; {
+    Html(<span class="string">"&lt;p&gt;Hello, World!&lt;/p&gt;"</span>)
+}
+
+<span class="comment">// `StatusCode` gives an empty response with that status code
+</span><span class="kw">async fn </span>status() -&gt; StatusCode {
+    StatusCode::NOT_FOUND
+}
+
+<span class="comment">// `HeaderMap` gives an empty response with some headers
+</span><span class="kw">async fn </span>headers() -&gt; HeaderMap {
+    <span class="kw">let </span><span class="kw-2">mut </span>headers = HeaderMap::new();
+    headers.insert(header::SERVER, <span class="string">"axum"</span>.parse().unwrap());
+    headers
+}
+
+<span class="comment">// An array of tuples also gives headers
+</span><span class="kw">async fn </span>array_headers() -&gt; [(HeaderName, <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str); <span class="number">2</span>] {
+    [
+        (header::SERVER, <span class="string">"axum"</span>),
+        (header::CONTENT_TYPE, <span class="string">"text/plain"</span>)
+    ]
+}
+
+<span class="comment">// Use `impl IntoResponse` to avoid writing the whole type
+</span><span class="kw">async fn </span>impl_trait() -&gt; <span class="kw">impl </span>IntoResponse {
+    [
+        (header::SERVER, <span class="string">"axum"</span>),
+        (header::CONTENT_TYPE, <span class="string">"text/plain"</span>)
+    ]
+}</code></pre></div>
+<p>Additionally you can return tuples to build more complex responses from
+individual parts.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>axum::{
+    Json,
+    response::IntoResponse,
+    http::{StatusCode, HeaderMap, Uri, header},
+    extract::Extension,
+};
+
+<span class="comment">// `(StatusCode, impl IntoResponse)` will override the status code of the response
+</span><span class="kw">async fn </span>with_status(uri: Uri) -&gt; (StatusCode, String) {
+    (StatusCode::NOT_FOUND, <span class="macro">format!</span>(<span class="string">"Not Found: {}"</span>, uri.path()))
+}
+
+<span class="comment">// Use `impl IntoResponse` to avoid having to type the whole type
+</span><span class="kw">async fn </span>impl_trait(uri: Uri) -&gt; <span class="kw">impl </span>IntoResponse {
+    (StatusCode::NOT_FOUND, <span class="macro">format!</span>(<span class="string">"Not Found: {}"</span>, uri.path()))
+}
+
+<span class="comment">// `(HeaderMap, impl IntoResponse)` to add additional headers
+</span><span class="kw">async fn </span>with_headers() -&gt; <span class="kw">impl </span>IntoResponse {
+    <span class="kw">let </span><span class="kw-2">mut </span>headers = HeaderMap::new();
+    headers.insert(header::CONTENT_TYPE, <span class="string">"text/plain"</span>.parse().unwrap());
+    (headers, <span class="string">"foo"</span>)
+}
+
+<span class="comment">// Or an array of tuples to more easily build the headers
+</span><span class="kw">async fn </span>with_array_headers() -&gt; <span class="kw">impl </span>IntoResponse {
+    ([(header::CONTENT_TYPE, <span class="string">"text/plain"</span>)], <span class="string">"foo"</span>)
+}
+
+<span class="comment">// Use string keys for custom headers
+</span><span class="kw">async fn </span>with_array_headers_custom() -&gt; <span class="kw">impl </span>IntoResponse {
+    ([(<span class="string">"x-custom"</span>, <span class="string">"custom"</span>)], <span class="string">"foo"</span>)
+}
+
+<span class="comment">// `(StatusCode, headers, impl IntoResponse)` to set status and add headers
+// `headers` can be either a `HeaderMap` or an array of tuples
+</span><span class="kw">async fn </span>with_status_and_array_headers() -&gt; <span class="kw">impl </span>IntoResponse {
+    (
+        StatusCode::NOT_FOUND,
+        [(header::CONTENT_TYPE, <span class="string">"text/plain"</span>)],
+        <span class="string">"foo"</span>,
+    )
+}
+
+<span class="comment">// `(Extension&lt;_&gt;, impl IntoResponse)` to set response extensions
+</span><span class="kw">async fn </span>with_status_extensions() -&gt; <span class="kw">impl </span>IntoResponse {
+    (
+        Extension(Foo(<span class="string">"foo"</span>)),
+        <span class="string">"foo"</span>,
+    )
+}
+
+<span class="attr">#[derive(Clone)]
+</span><span class="kw">struct </span>Foo(<span class="kw-2">&amp;</span><span class="lifetime">'static </span>str);
+
+<span class="comment">// Or mix and match all the things
+</span><span class="kw">async fn </span>all_the_things(uri: Uri) -&gt; <span class="kw">impl </span>IntoResponse {
+    <span class="kw">let </span><span class="kw-2">mut </span>header_map = HeaderMap::new();
+    <span class="kw">if </span>uri.path() == <span class="string">"/" </span>{
+        header_map.insert(header::SERVER, <span class="string">"axum"</span>.parse().unwrap());
+    }
+
+    (
+        <span class="comment">// set status code
+        </span>StatusCode::NOT_FOUND,
+        <span class="comment">// headers with an array
+        </span>[(<span class="string">"x-custom"</span>, <span class="string">"custom"</span>)],
+        <span class="comment">// some extensions
+        </span>Extension(Foo(<span class="string">"foo"</span>)),
+        Extension(Foo(<span class="string">"bar"</span>)),
+        <span class="comment">// more headers, built dynamically
+        </span>header_map,
+        <span class="comment">// and finally the body
+        </span><span class="string">"foo"</span>,
+    )
+}</code></pre></div>
+<p>In general you can return tuples like:</p>
+<ul>
+<li><code>(StatusCode, impl IntoResponse)</code></li>
+<li><code>(Parts, impl IntoResponse)</code></li>
+<li><code>(Response&lt;()&gt;, impl IntoResponse)</code></li>
+<li><code>(T1, .., Tn, impl IntoResponse)</code> where <code>T1</code> to <code>Tn</code> all implement <a href="trait.IntoResponseParts.html" title="trait axum::response::IntoResponseParts"><code>IntoResponseParts</code></a>.</li>
+<li><code>(StatusCode, T1, .., Tn, impl IntoResponse)</code> where <code>T1</code> to <code>Tn</code> all implement <a href="trait.IntoResponseParts.html" title="trait axum::response::IntoResponseParts"><code>IntoResponseParts</code></a>.</li>
+<li><code>(Parts, T1, .., Tn, impl IntoResponse)</code> where <code>T1</code> to <code>Tn</code> all implement <a href="trait.IntoResponseParts.html" title="trait axum::response::IntoResponseParts"><code>IntoResponseParts</code></a>.</li>
+<li><code>(Response&lt;()&gt;, T1, .., Tn, impl IntoResponse)</code> where <code>T1</code> to <code>Tn</code> all implement <a href="trait.IntoResponseParts.html" title="trait axum::response::IntoResponseParts"><code>IntoResponseParts</code></a>.</li>
+</ul>
+<p>This means you cannot accidentally override the status or body as <a href="trait.IntoResponseParts.html" title="trait axum::response::IntoResponseParts"><code>IntoResponseParts</code></a> only allows
+setting headers and extensions.</p>
+<p>Use <a href="type.Response.html" title="type axum::response::Response"><code>Response</code></a> for more low level control:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>axum::{
+    Json,
+    response::{IntoResponse, Response},
+    body::Body,
+    http::StatusCode,
+};
+
+<span class="kw">async fn </span>response() -&gt; Response {
+    Response::builder()
+        .status(StatusCode::NOT_FOUND)
+        .header(<span class="string">"x-foo"</span>, <span class="string">"custom header"</span>)
+        .body(Body::from(<span class="string">"not found"</span>))
+        .unwrap()
+}</code></pre></div>
+<h2 id="returning-different-response-types"><a class="doc-anchor" href="#returning-different-response-types">§</a>Returning different response types</h2>
+<p>If you need to return multiple response types, and <code>Result&lt;T, E&gt;</code> isn’t appropriate, you can call
+<code>.into_response()</code> to turn things into <code>axum::response::Response</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>axum::{
+    response::{IntoResponse, Redirect, Response},
+    http::StatusCode,
+};
+
+<span class="kw">async fn </span>handle() -&gt; Response {
+    <span class="kw">if </span>something() {
+        <span class="string">"All good!"</span>.into_response()
+    } <span class="kw">else if </span>something_else() {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            <span class="string">"Something went wrong..."</span>,
+        ).into_response()
+    } <span class="kw">else </span>{
+        Redirect::to(<span class="string">"/"</span>).into_response()
+    }
+}
+
+<span class="kw">fn </span>something() -&gt; bool {
+    <span class="comment">// ...
+</span>}
+
+<span class="kw">fn </span>something_else() -&gt; bool {
+    <span class="comment">// ...
+</span>}</code></pre></div>
+<h2 id="regarding-impl-intoresponse"><a class="doc-anchor" href="#regarding-impl-intoresponse">§</a>Regarding <code>impl IntoResponse</code></h2>
+<p>You can use <code>impl IntoResponse</code> as the return type from handlers to avoid
+typing large types. For example</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>axum::http::StatusCode;
+
+<span class="kw">async fn </span>handler() -&gt; (StatusCode, [(<span class="kw-2">&amp;</span><span class="lifetime">'static </span>str, <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str); <span class="number">1</span>], <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str) {
+    (StatusCode::OK, [(<span class="string">"x-foo"</span>, <span class="string">"bar"</span>)], <span class="string">"Hello, World!"</span>)
+}</code></pre></div>
+<p>Becomes easier using <code>impl IntoResponse</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>axum::{http::StatusCode, response::IntoResponse};
+
+<span class="kw">async fn </span>impl_into_response() -&gt; <span class="kw">impl </span>IntoResponse {
+    (StatusCode::OK, [(<span class="string">"x-foo"</span>, <span class="string">"bar"</span>)], <span class="string">"Hello, World!"</span>)
+}</code></pre></div>
+<p>However <code>impl IntoResponse</code> has a few limitations. Firstly it can only be used
+to return a single type:</p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>axum::{http::StatusCode, response::IntoResponse};
+
+<span class="kw">async fn </span>handler() -&gt; <span class="kw">impl </span>IntoResponse {
+    <span class="kw">if </span>check_something() {
+        StatusCode::NOT_FOUND
+    } <span class="kw">else </span>{
+        <span class="string">"Hello, World!"
+    </span>}
+}
+
+<span class="kw">fn </span>check_something() -&gt; bool {
+    <span class="comment">// ...
+</span>}</code></pre></div>
+<p>This function returns either a <code>StatusCode</code> or a <code>&amp;'static str</code> which <code>impl Trait</code> doesn’t allow.</p>
+<p>Secondly <code>impl IntoResponse</code> can lead to type inference issues when used with
+<code>Result</code> and <code>?</code>:</p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>axum::{http::StatusCode, response::IntoResponse};
+
+<span class="kw">async fn </span>handler() -&gt; <span class="kw">impl </span>IntoResponse {
+    create_thing()<span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(StatusCode::CREATED)
+}
+
+<span class="kw">fn </span>create_thing() -&gt; <span class="prelude-ty">Result</span>&lt;(), StatusCode&gt; {
+    <span class="comment">// ...
+</span>}</code></pre></div>
+<p>This is because <code>?</code> supports using the <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From"><code>From</code></a> trait to convert to a different
+error type but it doesn’t know which type to convert to, because we only
+specified <code>impl IntoResponse</code> as the return type.</p>
+<p><code>Result&lt;impl IntoResponse, impl IntoResponse&gt;</code> doesn’t always work either:</p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>axum::{http::StatusCode, response::IntoResponse};
+
+<span class="kw">async fn </span>handler() -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, <span class="kw">impl </span>IntoResponse&gt; {
+    create_thing()<span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(StatusCode::CREATED)
+}
+
+<span class="kw">fn </span>create_thing() -&gt; <span class="prelude-ty">Result</span>&lt;(), StatusCode&gt; {
+    <span class="comment">// ...
+</span>}</code></pre></div>
+<p>The solution is to use a concrete error type, such as <code>Result&lt;impl IntoResponse, StatusCode&gt;</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>axum::{http::StatusCode, response::IntoResponse};
+
+<span class="kw">async fn </span>handler() -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, StatusCode&gt; {
+    create_thing()<span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(StatusCode::CREATED)
+}
+
+<span class="kw">fn </span>create_thing() -&gt; <span class="prelude-ty">Result</span>&lt;(), StatusCode&gt; {
+    <span class="comment">// ...
+</span>}</code></pre></div>
+<p>Because of this it is generally not recommended to use <code>impl IntoResponse</code>
+unless you’re familiar with the details of how <code>impl Trait</code> works.</p>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.Json"><code>pub use crate::<a class="struct" href="../struct.Json.html" title="struct axum::Json">Json</a>;</code></div></li><li><div class="item-name" id="reexport.Form"><code>pub use crate::form::<a class="struct" href="../struct.Form.html" title="struct axum::Form">Form</a>;</code></div></li><li><div class="item-name" id="reexport.Extension"><code>pub use crate::<a class="struct" href="../struct.Extension.html" title="struct axum::Extension">Extension</a>;</code></div></li></ul><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="sse/index.html" title="mod axum::response::sse">sse</a></div><div class="desc docblock-short">Server-Sent Events (SSE) responses.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.AppendHeaders.html" title="struct axum::response::AppendHeaders">AppendHeaders</a></div><div class="desc docblock-short">Append headers to a response.</div></li><li><div class="item-name"><a class="struct" href="struct.ErrorResponse.html" title="struct axum::response::ErrorResponse">ErrorResponse</a></div><div class="desc docblock-short">An <a href="trait.IntoResponse.html" title="trait axum::response::IntoResponse"><code>IntoResponse</code></a>-based error type</div></li><li><div class="item-name"><a class="struct" href="struct.Html.html" title="struct axum::response::Html">Html</a></div><div class="desc docblock-short">An HTML response.</div></li><li><div class="item-name"><a class="struct" href="struct.Redirect.html" title="struct axum::response::Redirect">Redirect</a></div><div class="desc docblock-short">Response that redirects the request to another location.</div></li><li><div class="item-name"><a class="struct" href="struct.ResponseParts.html" title="struct axum::response::ResponseParts">ResponseParts</a></div><div class="desc docblock-short">Parts of a response.</div></li><li><div class="item-name"><a class="struct" href="struct.Sse.html" title="struct axum::response::Sse">Sse</a></div><div class="desc docblock-short">An SSE response</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.IntoResponse.html" title="trait axum::response::IntoResponse">IntoResponse</a></div><div class="desc docblock-short">Trait for generating responses.</div></li><li><div class="item-name"><a class="trait" href="trait.IntoResponseParts.html" title="trait axum::response::IntoResponseParts">IntoResponseParts</a></div><div class="desc docblock-short">Trait for adding headers and extensions to a response.</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.Response.html" title="type axum::response::Response">Response</a></div><div class="desc docblock-short">Type alias for <a href="../../http/response/struct.Response.html" title="struct http::response::Response"><code>http::Response</code></a> whose body type defaults to <a href="../body/struct.Body.html" title="struct axum::body::Body"><code>Body</code></a>, the most common body
+type used with axum.</div></li><li><div class="item-name"><a class="type" href="type.Result.html" title="type axum::response::Result">Result</a></div><div class="desc docblock-short">An <a href="trait.IntoResponse.html" title="trait axum::response::IntoResponse"><code>IntoResponse</code></a>-based result type that uses <a href="struct.ErrorResponse.html" title="struct axum::response::ErrorResponse"><code>ErrorResponse</code></a> as the error type.</div></li></ul></section></div></main></body></html>

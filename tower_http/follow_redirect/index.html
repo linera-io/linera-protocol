@@ -1,0 +1,61 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Middleware for following redirections."><title>tower_http::follow_redirect - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="tower_http" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../tower_http/index.html">tower_http</a><span class="version">0.6.1</span></h2></div><h2 class="location"><a href="#">Module follow_redirect</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li></ul></section><h2><a href="../index.html">In crate tower_http</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">tower_http</a>::<wbr><a class="mod" href="#">follow_redirect</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/tower_http/follow_redirect/mod.rs.html#1-462">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Middleware for following redirections.</p>
+<h2 id="overview"><a class="doc-anchor" href="#overview">§</a>Overview</h2>
+<p>The <a href="struct.FollowRedirect.html" title="struct tower_http::follow_redirect::FollowRedirect"><code>FollowRedirect</code></a> middleware retries requests with the inner <a href="../../tower_service/trait.Service.html" title="trait tower_service::Service"><code>Service</code></a> to follow HTTP
+redirections.</p>
+<p>The middleware tries to clone the original <a href="../../http/request/struct.Request.html" title="struct http::request::Request"><code>Request</code></a> when making a redirected request.
+However, since <a href="../../http/extensions/struct.Extensions.html" title="struct http::extensions::Extensions"><code>Extensions</code></a> are <code>!Clone</code>, any extensions set by outer
+middleware will be discarded. Also, the request body cannot always be cloned. When the
+original body is known to be empty by <a href="../../http_body/trait.Body.html#method.size_hint" title="method http_body::Body::size_hint"><code>Body::size_hint</code></a>, the middleware uses <code>Default</code>
+implementation of the body type to create a new request body. If you know that the body can be
+cloned in some way, you can tell the middleware to clone it by configuring a <a href="policy/index.html" title="mod tower_http::follow_redirect::policy"><code>policy</code></a>.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2><h3 id="basic-usage"><a class="doc-anchor" href="#basic-usage">§</a>Basic usage</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>http::{Request, Response};
+<span class="kw">use </span>bytes::Bytes;
+<span class="kw">use </span>http_body_util::Full;
+<span class="kw">use </span>tower::{Service, ServiceBuilder, ServiceExt};
+<span class="kw">use </span>tower_http::follow_redirect::{FollowRedirectLayer, RequestUri};
+
+<span class="kw">let </span><span class="kw-2">mut </span>client = ServiceBuilder::new()
+    .layer(FollowRedirectLayer::new())
+    .service(http_client);
+
+<span class="kw">let </span>request = Request::builder()
+    .uri(<span class="string">"https://rust-lang.org/"</span>)
+    .body(Full::&lt;Bytes&gt;::default())
+    .unwrap();
+
+<span class="kw">let </span>response = client.ready().<span class="kw">await</span><span class="question-mark">?</span>.call(request).<span class="kw">await</span><span class="question-mark">?</span>;
+<span class="comment">// Get the final request URI.
+</span><span class="macro">assert_eq!</span>(response.extensions().get::&lt;RequestUri&gt;().unwrap().<span class="number">0</span>, <span class="string">"https://www.rust-lang.org/"</span>);</code></pre></div>
+<h3 id="customizing-the-policy"><a class="doc-anchor" href="#customizing-the-policy">§</a>Customizing the <code>Policy</code></h3>
+<p>You can use a <a href="policy/trait.Policy.html" title="trait tower_http::follow_redirect::policy::Policy"><code>Policy</code></a> value to customize how the middleware handles redirections.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>http::{Request, Response};
+<span class="kw">use </span>http_body_util::Full;
+<span class="kw">use </span>bytes::Bytes;
+<span class="kw">use </span>tower::{Service, ServiceBuilder, ServiceExt};
+<span class="kw">use </span>tower_http::follow_redirect::{
+    policy::{<span class="self">self</span>, PolicyExt},
+    FollowRedirectLayer,
+};
+
+<span class="attr">#[derive(Debug)]
+</span><span class="kw">enum </span>MyError {
+    TooManyRedirects,
+    Other(tower::BoxError),
+}
+
+<span class="kw">let </span>policy = policy::Limited::new(<span class="number">10</span>) <span class="comment">// Set the maximum number of redirections to 10.
+    // Return an error when the limit was reached.
+    </span>.or::&lt;<span class="kw">_</span>, (), <span class="kw">_</span>&gt;(policy::redirect_fn(|<span class="kw">_</span>| <span class="prelude-val">Err</span>(MyError::TooManyRedirects)))
+    <span class="comment">// Do not follow cross-origin redirections, and return the redirection responses as-is.
+    </span>.and::&lt;<span class="kw">_</span>, (), <span class="kw">_</span>&gt;(policy::SameOrigin::new());
+
+<span class="kw">let </span><span class="kw-2">mut </span>client = ServiceBuilder::new()
+    .layer(FollowRedirectLayer::with_policy(policy))
+    .map_err(MyError::Other)
+    .service(http_client);
+
+<span class="comment">// ...</span></code></pre></div>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="policy/index.html" title="mod tower_http::follow_redirect::policy">policy</a></div><div class="desc docblock-short">Tools for customizing the behavior of a <a href="struct.FollowRedirect.html" title="struct tower_http::follow_redirect::FollowRedirect"><code>FollowRedirect</code></a> middleware.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.FollowRedirect.html" title="struct tower_http::follow_redirect::FollowRedirect">FollowRedirect</a></div><div class="desc docblock-short">Middleware that retries requests with a <a href="../../tower_service/trait.Service.html" title="trait tower_service::Service"><code>Service</code></a> to follow redirection responses.</div></li><li><div class="item-name"><a class="struct" href="struct.FollowRedirectLayer.html" title="struct tower_http::follow_redirect::FollowRedirectLayer">FollowRedirectLayer</a></div><div class="desc docblock-short"><a href="../../tower_layer/trait.Layer.html" title="trait tower_layer::Layer"><code>Layer</code></a> for retrying requests with a <a href="../../tower_service/trait.Service.html" title="trait tower_service::Service"><code>Service</code></a> to follow redirection responses.</div></li><li><div class="item-name"><a class="struct" href="struct.RequestUri.html" title="struct tower_http::follow_redirect::RequestUri">RequestUri</a></div><div class="desc docblock-short">Response <a href="../../http/extensions/struct.Extensions.html" title="struct http::extensions::Extensions"><code>Extensions</code></a> value that represents the effective request URI of
+a response returned by a <a href="struct.FollowRedirect.html" title="struct tower_http::follow_redirect::FollowRedirect"><code>FollowRedirect</code></a> middleware.</div></li><li><div class="item-name"><a class="struct" href="struct.ResponseFuture.html" title="struct tower_http::follow_redirect::ResponseFuture">ResponseFuture</a></div><div class="desc docblock-short">Response future for <a href="struct.FollowRedirect.html" title="struct tower_http::follow_redirect::FollowRedirect"><code>FollowRedirect</code></a>.</div></li></ul></section></div></main></body></html>

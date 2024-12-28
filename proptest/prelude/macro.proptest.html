@@ -1,0 +1,126 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Easily define `proptest` tests."><title>proptest in proptest::prelude - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="proptest" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../proptest/index.html">proptest</a><span class="version">1.5.0</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In proptest::prelude</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="../index.html">proptest</a>::<wbr><a href="index.html">prelude</a>::<wbr><a class="macro" href="#">proptest</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/proptest/sugar.rs.html#151-248">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><span class="macro">macro_rules!</span> proptest {
+    (<span class="attr">#![proptest_config(<span class="macro-nonterminal">$config</span>:expr)]
+     </span>$(
+        $(<span class="attr">#[<span class="macro-nonterminal">$meta</span>:meta]</span>)*
+       <span class="kw">fn </span><span class="macro-nonterminal">$test_name</span>:ident($(<span class="macro-nonterminal">$parm</span>:pat <span class="kw">in </span><span class="macro-nonterminal">$strategy</span>:expr),+ $(,)<span class="question-mark">?</span>) <span class="macro-nonterminal">$body</span>:block
+    )<span class="kw-2">*</span>) =&gt; { ... };
+    (<span class="attr">#![proptest_config(<span class="macro-nonterminal">$config</span>:expr)]
+     </span>$(
+        $(<span class="attr">#[<span class="macro-nonterminal">$meta</span>:meta]</span>)*
+        <span class="kw">fn </span><span class="macro-nonterminal">$test_name</span>:ident($(<span class="macro-nonterminal">$arg</span>:tt)+) <span class="macro-nonterminal">$body</span>:block
+    )<span class="kw-2">*</span>) =&gt; { ... };
+    ($(
+        $(<span class="attr">#[<span class="macro-nonterminal">$meta</span>:meta]</span>)*
+        <span class="kw">fn </span><span class="macro-nonterminal">$test_name</span>:ident($(<span class="macro-nonterminal">$parm</span>:pat <span class="kw">in </span><span class="macro-nonterminal">$strategy</span>:expr),+ $(,)<span class="question-mark">?</span>) <span class="macro-nonterminal">$body</span>:block
+    )<span class="kw-2">*</span>) =&gt; { ... };
+    ($(
+        $(<span class="attr">#[<span class="macro-nonterminal">$meta</span>:meta]</span>)*
+        <span class="kw">fn </span><span class="macro-nonterminal">$test_name</span>:ident($(<span class="macro-nonterminal">$arg</span>:tt)+) <span class="macro-nonterminal">$body</span>:block
+    )<span class="kw-2">*</span>) =&gt; { ... };
+    (|($(<span class="macro-nonterminal">$parm</span>:pat <span class="kw">in </span><span class="macro-nonterminal">$strategy</span>:expr),+ $(,)<span class="question-mark">?</span>)| <span class="macro-nonterminal">$body</span>:expr) =&gt; { ... };
+    (<span class="kw">move </span>|($(<span class="macro-nonterminal">$parm</span>:pat <span class="kw">in </span><span class="macro-nonterminal">$strategy</span>:expr),+ $(,)<span class="question-mark">?</span>)| <span class="macro-nonterminal">$body</span>:expr) =&gt; { ... };
+    (|($(<span class="macro-nonterminal">$arg</span>:tt)+)| <span class="macro-nonterminal">$body</span>:expr) =&gt; { ... };
+    (<span class="kw">move </span>|($(<span class="macro-nonterminal">$arg</span>:tt)+)| <span class="macro-nonterminal">$body</span>:expr) =&gt; { ... };
+    (<span class="macro-nonterminal">$config</span>:expr, |($(<span class="macro-nonterminal">$parm</span>:pat <span class="kw">in </span><span class="macro-nonterminal">$strategy</span>:expr),+ $(,)<span class="question-mark">?</span>)| <span class="macro-nonterminal">$body</span>:expr) =&gt; { ... };
+    (<span class="macro-nonterminal">$config</span>:expr, <span class="kw">move </span>|($(<span class="macro-nonterminal">$parm</span>:pat <span class="kw">in </span><span class="macro-nonterminal">$strategy</span>:expr),+ $(,)<span class="question-mark">?</span>)| <span class="macro-nonterminal">$body</span>:expr) =&gt; { ... };
+    (<span class="macro-nonterminal">$config</span>:expr, |($(<span class="macro-nonterminal">$arg</span>:tt)+)| <span class="macro-nonterminal">$body</span>:expr) =&gt; { ... };
+    (<span class="macro-nonterminal">$config</span>:expr, <span class="kw">move </span>|($(<span class="macro-nonterminal">$arg</span>:tt)+)| <span class="macro-nonterminal">$body</span>:expr) =&gt; { ... };
+}</pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Easily define <code>proptest</code> tests.</p>
+<p>Within <code>proptest!</code>, define one or more functions without return type
+normally, except instead of putting <code>: type</code> after each parameter, write
+<code>in strategy</code>, where <code>strategy</code> is an expression evaluating to some
+<code>Strategy</code>.</p>
+<p>Each function will be wrapped in a function which sets up a <code>TestRunner</code>,
+and then invokes the function body with inputs generated according to the
+strategies.</p>
+<h4 id="example"><a class="doc-anchor" href="#example">§</a>Example</h4>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>proptest::prelude::<span class="kw-2">*</span>;
+
+<span class="macro">proptest!</span> {
+  <span class="attr">#[test]
+  </span><span class="kw">fn </span>test_addition(a <span class="kw">in </span><span class="number">0</span>..<span class="number">10</span>, b <span class="kw">in </span><span class="number">0</span>..<span class="number">10</span>) {
+    <span class="macro">prop_assert!</span>(a + b &lt;= <span class="number">18</span>);
+  }
+
+  <span class="attr">#[test]
+  </span><span class="kw">fn </span>test_string_concat(a <span class="kw">in </span><span class="string">".*"</span>, b <span class="kw">in </span><span class="string">".*"</span>) {
+    <span class="kw">let </span>cat = <span class="macro">format!</span>(<span class="string">"{}{}"</span>, a, b);
+    <span class="macro">prop_assert_eq!</span>(a.len() + b.len(), cat.len());
+  }
+}</code></pre></div>
+<p>You can also use the normal argument syntax <code>pattern: type</code> as in:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>proptest::prelude::<span class="kw-2">*</span>;
+
+<span class="macro">proptest!</span> {
+  <span class="attr">#[test]
+  </span><span class="kw">fn </span>addition_is_commutative(a: u8, b: u8) {
+    <span class="macro">prop_assert_eq!</span>(a <span class="kw">as </span>u16 + b <span class="kw">as </span>u16, b <span class="kw">as </span>u16 + a <span class="kw">as </span>u16);
+  }
+
+  <span class="attr">#[test]
+  </span><span class="kw">fn </span>test_string_concat(a <span class="kw">in </span><span class="string">".*"</span>, b: String) {
+    <span class="kw">let </span>cat = <span class="macro">format!</span>(<span class="string">"{}{}"</span>, a, b);
+    <span class="macro">prop_assert_eq!</span>(a.len() + b.len(), cat.len());
+  }
+}</code></pre></div>
+<p>As you can see, you can mix <code>pattern: type</code> and <code>pattern in expr</code>.
+Due to limitations in <code>macro_rules!</code>, <code>pattern: type</code> does not work in
+all circumstances. In such a case, use <code>(pattern): type</code> instead.</p>
+<p>To override the default configuration, you can start the <code>proptest!</code> block
+with <code>#![proptest_config(expr)]</code>, where <code>expr</code> is an expression that
+evaluates to a <code>proptest::test_runner::Config</code> (or a reference to one).</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>proptest::prelude::<span class="kw-2">*</span>;
+
+<span class="macro">proptest!</span> {
+  <span class="attr">#![proptest_config(ProptestConfig {
+    cases: <span class="number">99</span>, .. ProptestConfig::default()
+  })]
+  #[test]
+  </span><span class="kw">fn </span>test_addition(a <span class="kw">in </span><span class="number">0</span>..<span class="number">10</span>, b <span class="kw">in </span><span class="number">0</span>..<span class="number">10</span>) {
+    <span class="macro">prop_assert!</span>(a + b &lt;= <span class="number">18</span>);
+  }
+}</code></pre></div>
+<h3 id="closure-style-invocation"><a class="doc-anchor" href="#closure-style-invocation">§</a>Closure-Style Invocation</h3>
+<p>As of proptest 0.8.1, an alternative, “closure-style” invocation is
+supported. In this form, <code>proptest!</code> is a function-like macro taking a
+closure-esque argument. This makes it possible to run multiple tests that
+require some expensive setup process. Note that the “fork” and “timeout”
+features are <em>not</em> supported in closure style.</p>
+<p>To use a custom configuration, pass the <code>Config</code> object as a first
+argument.</p>
+<h4 id="example-1"><a class="doc-anchor" href="#example-1">§</a>Example</h4>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>proptest::prelude::<span class="kw-2">*</span>;
+
+<span class="attr">#[derive(Debug)]
+</span><span class="kw">struct </span>BigStruct { <span class="comment">/* Lots of fields ... */ </span>}
+
+<span class="kw">fn </span>very_expensive_function() -&gt; BigStruct {
+  <span class="comment">// Lots of code...
+  </span>BigStruct { <span class="comment">/* fields */ </span>}
+}
+
+<span class="attr">#[test]
+</span><span class="kw">fn </span>my_test() {
+  <span class="comment">// We create just one `BigStruct`
+  </span><span class="kw">let </span>big_struct = very_expensive_function();
+
+  <span class="comment">// But now can run multiple tests without needing to build it every time.
+  // Note the extra parentheses around the arguments are currently
+  // required.
+  </span><span class="macro">proptest!</span>(|(x <span class="kw">in </span><span class="number">0u32</span>..<span class="number">42u32</span>, y <span class="kw">in </span><span class="number">1000u32</span>..<span class="number">100000u32</span>)| {
+    <span class="comment">// Test stuff
+  </span>});
+
+  <span class="comment">// `move` closures are also supported
+  </span><span class="macro">proptest!</span>(<span class="kw">move </span>|(x <span class="kw">in </span><span class="number">0u32</span>..<span class="number">42u32</span>)| {
+    <span class="comment">// Test other stuff
+  </span>});
+
+  <span class="comment">// You can pass a custom configuration as the first argument
+  </span><span class="macro">proptest!</span>(ProptestConfig::with_cases(<span class="number">1000</span>), |(x: i32)| {
+    <span class="comment">// Test more stuff
+  </span>});
+}</code></pre></div>
+</div></details></section></div></main></body></html>

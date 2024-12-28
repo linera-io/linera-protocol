@@ -1,0 +1,114 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Elliptic Curve Digital Signature Algorithm (ECDSA)."><title>k256::ecdsa - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="k256" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="icon" href="https://raw.githubusercontent.com/RustCrypto/meta/master/logo.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../../k256/index.html"><img src="https://raw.githubusercontent.com/RustCrypto/meta/master/logo.svg" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../../k256/index.html"><img src="https://raw.githubusercontent.com/RustCrypto/meta/master/logo.svg" alt="logo"></a><h2><a href="../../k256/index.html">k256</a><span class="version">0.13.4</span></h2></div><h2 class="location"><a href="#">Module ecdsa</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#types">Type Aliases</a></li></ul></section><h2><a href="../index.html">In crate k256</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">k256</a>::<wbr><a class="mod" href="#">ecdsa</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/k256/ecdsa.rs.html#1-426">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Elliptic Curve Digital Signature Algorithm (ECDSA).</p>
+<p>This module contains support for computing and verifying ECDSA signatures.
+To use it, you will need to enable one of the two following Cargo features:</p>
+<ul>
+<li><code>ecdsa-core</code>: provides only the <a href="type.Signature.html" title="type k256::ecdsa::Signature"><code>Signature</code></a> type (which represents an
+ECDSA/secp256k1 signature). Does not require the <code>arithmetic</code> feature.
+This is useful for 3rd-party crates which wish to use the <code>Signature</code>
+type for interoperability purposes (particularly in conjunction with the
+<a href="../../signature/signer/trait.Signer.html" title="trait signature::signer::Signer"><code>signature::Signer</code></a> trait). Example use cases for this include other
+software implementations of ECDSA/secp256k1 and wrappers for cloud KMS
+services or hardware devices (HSM or crypto hardware wallet).</li>
+<li><code>ecdsa</code>: provides <code>ecdsa-core</code> features plus the <a href="type.SigningKey.html" title="type k256::ecdsa::SigningKey"><code>SigningKey</code></a> and
+<a href="type.VerifyingKey.html" title="type k256::ecdsa::VerifyingKey"><code>VerifyingKey</code></a> types which natively implement ECDSA/secp256k1 signing and
+verification.</li>
+</ul>
+<p>Most users of this library who want to sign/verify signatures will want to
+enable the <code>ecdsa</code> and <code>sha256</code> Cargo features.</p>
+<h3 id="signing-and-verifying-signatures"><a class="doc-anchor" href="#signing-and-verifying-signatures">§</a>Signing and Verifying Signatures</h3>
+<p>This example requires the <code>ecdsa</code> and <code>sha256</code> Cargo features are enabled:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>k256::{
+    ecdsa::{SigningKey, Signature, signature::Signer},
+    SecretKey,
+};
+<span class="kw">use </span>rand_core::OsRng; <span class="comment">// requires 'getrandom' feature
+
+// Signing
+</span><span class="kw">let </span>signing_key = SigningKey::random(<span class="kw-2">&amp;mut </span>OsRng); <span class="comment">// Serialize with `::to_bytes()`
+</span><span class="kw">let </span>message = <span class="string">b"ECDSA proves knowledge of a secret number in the context of a single message"</span>;
+
+<span class="comment">// Note: The signature type must be annotated or otherwise inferable as
+// `Signer` has many impls of the `Signer` trait (for both regular and
+// recoverable signature types).
+</span><span class="kw">let </span>signature: Signature = signing_key.sign(message);
+
+<span class="comment">// Verification
+</span><span class="kw">use </span>k256::{EncodedPoint, ecdsa::{VerifyingKey, signature::Verifier}};
+
+<span class="kw">let </span>verifying_key = VerifyingKey::from(<span class="kw-2">&amp;</span>signing_key); <span class="comment">// Serialize with `::to_encoded_point()`
+</span><span class="macro">assert!</span>(verifying_key.verify(message, <span class="kw-2">&amp;</span>signature).is_ok());</code></pre></div>
+<h3 id="recovering-verifyingkey-from-signature"><a class="doc-anchor" href="#recovering-verifyingkey-from-signature">§</a>Recovering <a href="type.VerifyingKey.html" title="type k256::ecdsa::VerifyingKey"><code>VerifyingKey</code></a> from <a href="type.Signature.html" title="type k256::ecdsa::Signature"><code>Signature</code></a></h3>
+<p>ECDSA makes it possible to recover the public key used to verify a
+signature with the assistance of 2-bits of additional information.</p>
+<p>This is helpful when there is already a trust relationship for a particular
+key, and it’s desirable to omit the full public key used to sign a
+particular message.</p>
+<p>One common application of signature recovery with secp256k1 is Ethereum.</p>
+<h4 id="upgrading-recoverable-signature-code-from-earlier-versions-of-k256"><a class="doc-anchor" href="#upgrading-recoverable-signature-code-from-earlier-versions-of-k256">§</a>Upgrading recoverable signature code from earlier versions of <code>k256</code></h4>
+<p>The v0.12 release of <code>k256</code> contains a brand new recoverable signature API
+from previous releases. Functionality has been upstreamed from <code>k256</code> to a
+generic implementation in the <a href="../../ecdsa/index.html" title="mod ecdsa"><code>ecdsa</code></a> crate.</p>
+<p>If you previously used <code>k256::ecdsa::recoverable::Signature</code>, the old
+functionality now uses a “detached” <a href="type.Signature.html" title="type k256::ecdsa::Signature"><code>Signature</code></a> and <a href="struct.RecoveryId.html" title="struct k256::ecdsa::RecoveryId"><code>RecoveryId</code></a>.
+Here is where the various functionality went:</p>
+<ul>
+<li>Signing now requires the use of the <a href="hazmat/trait.SignPrimitive.html" title="trait k256::ecdsa::hazmat::SignPrimitive"><code>hazmat::SignPrimitive</code></a> trait
+(see examples immediately below).</li>
+<li>Signature recovery is now implemented as methods of the <a href="type.VerifyingKey.html" title="type k256::ecdsa::VerifyingKey"><code>VerifyingKey</code></a>
+type (i.e. <code>::recover_from_*</code>).</li>
+<li>Trial recovery is now defined on the <a href="struct.RecoveryId.html" title="struct k256::ecdsa::RecoveryId"><code>RecoveryId</code></a> type
+(i.e. <code>::trial_recovery_from_*</code>).</li>
+</ul>
+<h4 id="computing-a-signature-with-a-recoveryid"><a class="doc-anchor" href="#computing-a-signature-with-a-recoveryid">§</a>Computing a signature with a <a href="struct.RecoveryId.html" title="struct k256::ecdsa::RecoveryId"><code>RecoveryId</code></a>.</h4>
+<p>This example shows how to compute a signature and its associated
+<a href="struct.RecoveryId.html" title="struct k256::ecdsa::RecoveryId"><code>RecoveryId</code></a> in a manner which is byte-for-byte compatible with
+Ethereum libraries, leveraging the <a href="../../ecdsa/signing/struct.SigningKey.html#method.sign_digest_recoverable" title="method ecdsa::signing::SigningKey::sign_digest_recoverable"><code>SigningKey::sign_digest_recoverable</code></a>
+API:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>hex_literal::hex;
+<span class="kw">use </span>k256::ecdsa::{hazmat::SignPrimitive, RecoveryId, Signature, SigningKey};
+<span class="kw">use </span>sha2::Sha256;
+<span class="kw">use </span>sha3::{Keccak256, Digest};
+
+<span class="kw">let </span>signing_key = SigningKey::from_bytes(<span class="kw-2">&amp;</span><span class="macro">hex!</span>(
+    <span class="string">"4c0883a69102937d6231471b5dbb6204fe5129617082792ae468d01a3f362318"
+</span>).into())<span class="question-mark">?</span>;
+
+<span class="kw">let </span>msg = <span class="macro">hex!</span>(<span class="string">"e9808504e3b29200831e848094f0109fc8df283027b6285cc889f5aa624eac1f55843b9aca0080018080"</span>);
+<span class="kw">let </span>digest = Keccak256::new_with_prefix(msg);
+<span class="kw">let </span>(signature, recid) = signing_key.sign_digest_recoverable(digest)<span class="question-mark">?</span>;
+
+<span class="macro">assert_eq!</span>(
+    signature.to_bytes().as_slice(),
+    <span class="kw-2">&amp;</span><span class="macro">hex!</span>(<span class="string">"c9cf86333bcb065d140032ecaab5d9281bde80f21b9687b3e94161de42d51895727a108a0b8d101465414033c3f705a9c7b826e596766046ee1183dbc8aeaa68"</span>)
+);
+
+<span class="macro">assert_eq!</span>(recid, RecoveryId::try_from(<span class="number">0u8</span>).unwrap());</code></pre></div>
+<h4 id="recovering-a-verifyingkey-from-a-signature"><a class="doc-anchor" href="#recovering-a-verifyingkey-from-a-signature">§</a>Recovering a <a href="type.VerifyingKey.html" title="type k256::ecdsa::VerifyingKey"><code>VerifyingKey</code></a> from a signature</h4>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>hex_literal::hex;
+<span class="kw">use </span>k256::ecdsa::{RecoveryId, Signature, VerifyingKey};
+<span class="kw">use </span>sha3::{Keccak256, Digest};
+<span class="kw">use </span>elliptic_curve::sec1::ToEncodedPoint;
+
+<span class="kw">let </span>msg = <span class="string">b"example message"</span>;
+
+<span class="kw">let </span>signature = Signature::try_from(<span class="macro">hex!</span>(
+    <span class="string">"46c05b6368a44b8810d79859441d819b8e7cdc8bfd371e35c53196f4bcacdb51
+     35c7facce2a97b95eacba8a586d87b7958aaf8368ab29cee481f76e871dbd9cb"
+</span>).as_slice())<span class="question-mark">?</span>;
+
+<span class="kw">let </span>recid = RecoveryId::try_from(<span class="number">1u8</span>)<span class="question-mark">?</span>;
+
+<span class="kw">let </span>recovered_key = VerifyingKey::recover_from_digest(
+    Keccak256::new_with_prefix(msg),
+    <span class="kw-2">&amp;</span>signature,
+    recid
+)<span class="question-mark">?</span>;
+
+<span class="kw">let </span>expected_key = VerifyingKey::from_sec1_bytes(
+    <span class="kw-2">&amp;</span><span class="macro">hex!</span>(<span class="string">"0200866db99873b09fc2fb1e3ba549b156e96d1a567e3284f5f0e859a83320cb8b"</span>)
+)<span class="question-mark">?</span>;
+
+<span class="macro">assert_eq!</span>(recovered_key, expected_key);</code></pre></div>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.signature"><code>pub use ecdsa_core::<a class="mod" href="../../signature/index.html" title="mod signature">signature</a>;</code></div></li></ul><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="hazmat/index.html" title="mod k256::ecdsa::hazmat">hazmat</a></div><div class="desc docblock-short">Low-level ECDSA primitives.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Error.html" title="struct k256::ecdsa::Error">Error</a></div><div class="desc docblock-short">Signature errors.</div></li><li><div class="item-name"><a class="struct" href="struct.RecoveryId.html" title="struct k256::ecdsa::RecoveryId">RecoveryId</a></div><div class="desc docblock-short">Recovery IDs, a.k.a. “recid”.</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.DerSignature.html" title="type k256::ecdsa::DerSignature">DerSignature</a></div><div class="desc docblock-short">ECDSA/secp256k1 signature (ASN.1 DER encoded)</div></li><li><div class="item-name"><a class="type" href="type.Signature.html" title="type k256::ecdsa::Signature">Signature</a></div><div class="desc docblock-short">ECDSA/secp256k1 signature (fixed-size)</div></li><li><div class="item-name"><a class="type" href="type.SigningKey.html" title="type k256::ecdsa::SigningKey">SigningKey</a></div><div class="desc docblock-short">ECDSA/secp256k1 signing key</div></li><li><div class="item-name"><a class="type" href="type.VerifyingKey.html" title="type k256::ecdsa::VerifyingKey">VerifyingKey</a></div><div class="desc docblock-short">ECDSA/secp256k1 verification key (i.e. public key)</div></li></ul></section></div></main></body></html>

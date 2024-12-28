@@ -1,0 +1,154 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Marks async function to be executed by the selected runtime. This macro helps set up a `Runtime` without requiring the user to use Runtime or Builder directly."><title>main in tokio_macros - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="tokio_macros" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc attr"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../tokio_macros/index.html">tokio_macros</a><span class="version">2.4.0</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Attribute Macro <a href="index.html">tokio_macros</a>::<wbr><a class="attr" href="#">main</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/tokio_macros/lib.rs.html#252-254">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>#[main]</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Marks async function to be executed by the selected runtime. This macro
+helps set up a <code>Runtime</code> without requiring the user to use
+<a href="../tokio/runtime/struct.Runtime.html">Runtime</a> or
+<a href="../tokio/runtime/struct.Builder.html">Builder</a> directly.</p>
+<p>Note: This macro is designed to be simplistic and targets applications that
+do not require a complex setup. If the provided functionality is not
+sufficient, you may be interested in using
+<a href="../tokio/runtime/struct.Builder.html">Builder</a>, which provides a more
+powerful interface.</p>
+<p>Note: This macro can be used on any function and not just the <code>main</code>
+function. Using it on a non-main function makes the function behave as if it
+was synchronous by starting a new runtime each time it is called. If the
+function is called often, it is preferable to create the runtime using the
+runtime builder so the runtime can be reused across calls.</p>
+<h2 id="non-worker-async-function"><a class="doc-anchor" href="#non-worker-async-function">§</a>Non-worker async function</h2>
+<p>Note that the async function marked with this macro does not run as a
+worker. The expectation is that other tasks are spawned by the function here.
+Awaiting on other futures from the function provided here will not
+perform as fast as those spawned as workers.</p>
+<h2 id="multi-threaded-runtime"><a class="doc-anchor" href="#multi-threaded-runtime">§</a>Multi-threaded runtime</h2>
+<p>To use the multi-threaded runtime, the macro can be configured using</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[tokio::main(flavor = <span class="string">"multi_thread"</span>, worker_threads = <span class="number">10</span>)]</span></code></pre></div>
+<p>The <code>worker_threads</code> option configures the number of worker threads, and
+defaults to the number of cpus on the system. This is the default flavor.</p>
+<p>Note: The multi-threaded runtime requires the <code>rt-multi-thread</code> feature
+flag.</p>
+<h2 id="current-thread-runtime"><a class="doc-anchor" href="#current-thread-runtime">§</a>Current thread runtime</h2>
+<p>To use the single-threaded runtime known as the <code>current_thread</code> runtime,
+the macro can be configured using</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[tokio::main(flavor = <span class="string">"current_thread"</span>)]</span></code></pre></div>
+<h3 id="function-arguments"><a class="doc-anchor" href="#function-arguments">§</a>Function arguments:</h3>
+<p>Arguments are allowed for any functions aside from <code>main</code> which is special</p>
+<h3 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h3><h4 id="using-the-multi-thread-runtime"><a class="doc-anchor" href="#using-the-multi-thread-runtime">§</a>Using the multi-thread runtime</h4>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
+    <span class="macro">println!</span>(<span class="string">"Hello world"</span>);
+}</code></pre></div>
+<p>Equivalent code not using <code>#[tokio::main]</code></p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>main() {
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(<span class="kw">async </span>{
+            <span class="macro">println!</span>(<span class="string">"Hello world"</span>);
+        })
+}</code></pre></div>
+<h4 id="using-current-thread-runtime"><a class="doc-anchor" href="#using-current-thread-runtime">§</a>Using current thread runtime</h4>
+<p>The basic scheduler is single-threaded.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[tokio::main(flavor = <span class="string">"current_thread"</span>)]
+</span><span class="kw">async fn </span>main() {
+    <span class="macro">println!</span>(<span class="string">"Hello world"</span>);
+}</code></pre></div>
+<p>Equivalent code not using <code>#[tokio::main]</code></p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>main() {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(<span class="kw">async </span>{
+            <span class="macro">println!</span>(<span class="string">"Hello world"</span>);
+        })
+}</code></pre></div>
+<h4 id="set-number-of-worker-threads"><a class="doc-anchor" href="#set-number-of-worker-threads">§</a>Set number of worker threads</h4>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[tokio::main(worker_threads = <span class="number">2</span>)]
+</span><span class="kw">async fn </span>main() {
+    <span class="macro">println!</span>(<span class="string">"Hello world"</span>);
+}</code></pre></div>
+<p>Equivalent code not using <code>#[tokio::main]</code></p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>main() {
+    tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(<span class="number">2</span>)
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(<span class="kw">async </span>{
+            <span class="macro">println!</span>(<span class="string">"Hello world"</span>);
+        })
+}</code></pre></div>
+<h4 id="configure-the-runtime-to-start-with-time-paused"><a class="doc-anchor" href="#configure-the-runtime-to-start-with-time-paused">§</a>Configure the runtime to start with time paused</h4>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[tokio::main(flavor = <span class="string">"current_thread"</span>, start_paused = <span class="bool-val">true</span>)]
+</span><span class="kw">async fn </span>main() {
+    <span class="macro">println!</span>(<span class="string">"Hello world"</span>);
+}</code></pre></div>
+<p>Equivalent code not using <code>#[tokio::main]</code></p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>main() {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .start_paused(<span class="bool-val">true</span>)
+        .build()
+        .unwrap()
+        .block_on(<span class="kw">async </span>{
+            <span class="macro">println!</span>(<span class="string">"Hello world"</span>);
+        })
+}</code></pre></div>
+<p>Note that <code>start_paused</code> requires the <code>test-util</code> feature to be enabled.</p>
+<h4 id="rename-package"><a class="doc-anchor" href="#rename-package">§</a>Rename package</h4>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio <span class="kw">as </span>tokio1;
+
+<span class="attr">#[tokio1::main(<span class="kw">crate </span>= <span class="string">"tokio1"</span>)]
+</span><span class="kw">async fn </span>main() {
+    <span class="macro">println!</span>(<span class="string">"Hello world"</span>);
+}</code></pre></div>
+<p>Equivalent code not using <code>#[tokio::main]</code></p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio <span class="kw">as </span>tokio1;
+
+<span class="kw">fn </span>main() {
+    tokio1::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(<span class="kw">async </span>{
+            <span class="macro">println!</span>(<span class="string">"Hello world"</span>);
+        })
+}</code></pre></div>
+<h4 id="configure-unhandled-panic-behavior"><a class="doc-anchor" href="#configure-unhandled-panic-behavior">§</a>Configure unhandled panic behavior</h4>
+<p>Available options are <code>shutdown_runtime</code> and <code>ignore</code>. For more details, see
+<a href="../tokio/runtime/struct.Builder.html#method.unhandled_panic"><code>Builder::unhandled_panic</code></a>.</p>
+<p>This option is only compatible with the <code>current_thread</code> runtime.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[cfg(tokio_unstable)]
+#[tokio::main(flavor = <span class="string">"current_thread"</span>, unhandled_panic = <span class="string">"shutdown_runtime"</span>)]
+</span><span class="kw">async fn </span>main() {
+    <span class="kw">let _ </span>= tokio::spawn(<span class="kw">async </span>{
+        <span class="macro">panic!</span>(<span class="string">"This panic will shutdown the runtime."</span>);
+    }).<span class="kw">await</span>;
+}</code></pre></div>
+<p>Equivalent code not using <code>#[tokio::main]</code></p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[cfg(tokio_unstable)]
+</span><span class="kw">fn </span>main() {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .unhandled_panic(UnhandledPanic::ShutdownRuntime)
+        .build()
+        .unwrap()
+        .block_on(<span class="kw">async </span>{
+            <span class="kw">let _ </span>= tokio::spawn(<span class="kw">async </span>{
+                <span class="macro">panic!</span>(<span class="string">"This panic will shutdown the runtime."</span>);
+            }).<span class="kw">await</span>;
+        })
+}</code></pre></div>
+<p><strong>Note</strong>: This option depends on Tokio’s <a href="../tokio/index.html#unstable-features">unstable API</a>. See <a href="../tokio/index.html#unstable-features">the
+documentation on unstable features</a> for details on how to enable
+Tokio’s unstable features.</p>
+</div></details></section></div></main></body></html>

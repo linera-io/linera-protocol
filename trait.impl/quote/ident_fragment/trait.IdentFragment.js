@@ -1,0 +1,4 @@
+(function() {var implementors = {
+"linera_alloy_syn_solidity":[["impl <a class=\"trait\" href=\"quote/ident_fragment/trait.IdentFragment.html\" title=\"trait quote::ident_fragment::IdentFragment\">IdentFragment</a> for <a class=\"struct\" href=\"linera_alloy_syn_solidity/struct.SolIdent.html\" title=\"struct linera_alloy_syn_solidity::SolIdent\">SolIdent</a>"],["impl <a class=\"trait\" href=\"quote/ident_fragment/trait.IdentFragment.html\" title=\"trait quote::ident_fragment::IdentFragment\">IdentFragment</a> for <a class=\"struct\" href=\"linera_alloy_syn_solidity/struct.YulIdent.html\" title=\"struct linera_alloy_syn_solidity::YulIdent\">YulIdent</a>"]],
+"quote":[]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

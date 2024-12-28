@@ -1,0 +1,69 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="An identity function that hints to the compiler to be maximally pessimistic about what `black_box` could do."><title>black_box in wasmtime_environ::__core::hint - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="wasmtime_environ" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../wasmtime_environ/index.html">wasmtime_environ</a><span class="version">25.0.1</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In wasmtime_environ::__core::hint</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../../index.html">wasmtime_environ</a>::<wbr><a href="../index.html">__core</a>::<wbr><a href="index.html">hint</a>::<wbr><a class="fn" href="#">black_box</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><span class="since" title="Stable since Rust version 1.66.0, const unstable">1.66.0 (const: unstable)</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/hint.rs.html#388">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn black_box&lt;T&gt;(dummy: T) -&gt; T</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>An identity function that <em><strong>hints</strong></em> to the compiler to be maximally pessimistic about what
+<code>black_box</code> could do.</p>
+<p>Unlike <a href="../convert/fn.identity.html" title="fn wasmtime_environ::__core::convert::identity"><code>std::convert::identity</code></a>, a Rust compiler is encouraged to assume that <code>black_box</code> can
+use <code>dummy</code> in any possible valid way that Rust code is allowed to without introducing undefined
+behavior in the calling code. This property makes <code>black_box</code> useful for writing code in which
+certain optimizations are not desired, such as benchmarks.</p>
+<p>Note however, that <code>black_box</code> is only (and can only be) provided on a “best-effort” basis. The
+extent to which it can block optimisations may vary depending upon the platform and code-gen
+backend used. Programs cannot rely on <code>black_box</code> for <em>correctness</em>, beyond it behaving as the
+identity function. As such, it <strong>must not be relied upon to control critical program behavior.</strong>
+This also means that this function does not offer any guarantees for cryptographic or security
+purposes.</p>
+<h2 id="when-is-this-useful"><a class="doc-anchor" href="#when-is-this-useful">§</a>When is this useful?</h2>
+<p>While not suitable in those mission-critical cases, <code>black_box</code>’s functionality can generally be
+relied upon for benchmarking, and should be used there. It will try to ensure that the
+compiler doesn’t optimize away part of the intended test code based on context. For
+example:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>contains(haystack: <span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span>str], needle: <span class="kw-2">&amp;</span>str) -&gt; bool {
+    haystack.iter().any(|x| x == <span class="kw-2">&amp;</span>needle)
+}
+
+<span class="kw">pub fn </span>benchmark() {
+    <span class="kw">let </span>haystack = <span class="macro">vec!</span>[<span class="string">"abc"</span>, <span class="string">"def"</span>, <span class="string">"ghi"</span>, <span class="string">"jkl"</span>, <span class="string">"mno"</span>];
+    <span class="kw">let </span>needle = <span class="string">"ghi"</span>;
+    <span class="kw">for _ in </span><span class="number">0</span>..<span class="number">10 </span>{
+        contains(<span class="kw-2">&amp;</span>haystack, needle);
+    }
+}</code></pre></div>
+<p>The compiler could theoretically make optimizations like the following:</p>
+<ul>
+<li>The <code>needle</code> and <code>haystack</code> do not change, move the call to <code>contains</code> outside the loop and
+delete the loop</li>
+<li>Inline <code>contains</code></li>
+<li><code>needle</code> and <code>haystack</code> have values known at compile time, <code>contains</code> is always true. Remove
+the call and replace with <code>true</code></li>
+<li>Nothing is done with the result of <code>contains</code>: delete this function call entirely</li>
+<li><code>benchmark</code> now has no purpose: delete this function</li>
+</ul>
+<p>It is not likely that all of the above happens, but the compiler is definitely able to make some
+optimizations that could result in a very inaccurate benchmark. This is where <code>black_box</code> comes
+in:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::hint::black_box;
+
+<span class="comment">// Same `contains` function
+</span><span class="kw">fn </span>contains(haystack: <span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span>str], needle: <span class="kw-2">&amp;</span>str) -&gt; bool {
+    haystack.iter().any(|x| x == <span class="kw-2">&amp;</span>needle)
+}
+
+<span class="kw">pub fn </span>benchmark() {
+    <span class="kw">let </span>haystack = <span class="macro">vec!</span>[<span class="string">"abc"</span>, <span class="string">"def"</span>, <span class="string">"ghi"</span>, <span class="string">"jkl"</span>, <span class="string">"mno"</span>];
+    <span class="kw">let </span>needle = <span class="string">"ghi"</span>;
+    <span class="kw">for _ in </span><span class="number">0</span>..<span class="number">10 </span>{
+        <span class="comment">// Adjust our benchmark loop contents
+        </span>black_box(contains(black_box(<span class="kw-2">&amp;</span>haystack), black_box(needle)));
+    }
+}</code></pre></div>
+<p>This essentially tells the compiler to block optimizations across any calls to <code>black_box</code>. So,
+it now:</p>
+<ul>
+<li>Treats both arguments to <code>contains</code> as unpredictable: the body of <code>contains</code> can no longer be
+optimized based on argument values</li>
+<li>Treats the call to <code>contains</code> and its result as volatile: the body of <code>benchmark</code> cannot
+optimize this away</li>
+</ul>
+<p>This makes our benchmark much more realistic to how the function would actually be used, where
+arguments are usually not known at compile time and the result is used in some way.</p>
+</div></details></section></div></main></body></html>

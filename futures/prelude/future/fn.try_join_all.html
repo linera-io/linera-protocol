@@ -1,0 +1,46 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Creates a future which represents either a collection of the results of the futures given or an error."><title>try_join_all in futures::prelude::future - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="futures" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../futures/index.html">futures</a><span class="version">0.3.30</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In futures::prelude::future</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../../index.html">futures</a>::<wbr><a href="../index.html">prelude</a>::<wbr><a href="index.html">future</a>::<wbr><a class="fn" href="#">try_join_all</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/futures_util/future/try_join_all.rs.html#117-120">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn try_join_all&lt;I&gt;(iter: I) -&gt; <a class="struct" href="../../future/struct.TryJoinAll.html" title="struct futures::future::TryJoinAll">TryJoinAll</a>&lt;&lt;I as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/iter/traits/collect/trait.IntoIterator.html" title="trait core::iter::traits::collect::IntoIterator">IntoIterator</a>&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/iter/traits/collect/trait.IntoIterator.html#associatedtype.Item" title="type core::iter::traits::collect::IntoIterator::Item">Item</a>&gt; <a href="#" class="tooltip" data-notable-ty="TryJoinAll&lt;&lt;I as IntoIterator&gt;::Item&gt;">ⓘ</a><div class="where">where
+    I: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/iter/traits/collect/trait.IntoIterator.html" title="trait core::iter::traits::collect::IntoIterator">IntoIterator</a>,
+    &lt;I as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/iter/traits/collect/trait.IntoIterator.html" title="trait core::iter::traits::collect::IntoIterator">IntoIterator</a>&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/iter/traits/collect/trait.IntoIterator.html#associatedtype.Item" title="type core::iter::traits::collect::IntoIterator::Item">Item</a>: <a class="trait" href="../../future/trait.TryFuture.html" title="trait futures::future::TryFuture">TryFuture</a>,</div></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Creates a future which represents either a collection of the results of the
+futures given or an error.</p>
+<p>The returned future will drive execution for all of its underlying futures,
+collecting the results into a destination <code>Vec&lt;T&gt;</code> in the same order as they
+were provided.</p>
+<p>If any future returns an error then all other futures will be canceled and
+an error will be returned immediately. If all futures complete successfully,
+however, then the returned future will succeed with a <code>Vec</code> of all the
+successful results.</p>
+<p>This function is only available when the <code>std</code> or <code>alloc</code> feature of this
+library is activated, and it is activated by default.</p>
+<h2 id="see-also"><a class="doc-anchor" href="#see-also">§</a>See Also</h2>
+<p><code>try_join_all</code> will switch to the more powerful <a href="../../stream/struct.FuturesOrdered.html" title="struct futures::stream::FuturesOrdered"><code>FuturesOrdered</code></a> for performance
+reasons if the number of futures is large. You may want to look into using it or
+it’s counterpart <a href="../../stream/struct.FuturesUnordered.html" title="struct futures::stream::FuturesUnordered"><code>FuturesUnordered</code></a> directly.</p>
+<p>Some examples for additional functionality provided by these are:</p>
+<ul>
+<li>
+<p>Adding new futures to the set even after it has been started.</p>
+</li>
+<li>
+<p>Only polling the specific futures that have been woken. In cases where
+you have a lot of futures this will result in much more efficient polling.</p>
+</li>
+</ul>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>futures::future::{<span class="self">self</span>, try_join_all};
+
+<span class="kw">let </span>futures = <span class="macro">vec!</span>[
+    future::ok::&lt;u32, u32&gt;(<span class="number">1</span>),
+    future::ok::&lt;u32, u32&gt;(<span class="number">2</span>),
+    future::ok::&lt;u32, u32&gt;(<span class="number">3</span>),
+];
+
+<span class="macro">assert_eq!</span>(try_join_all(futures).<span class="kw">await</span>, <span class="prelude-val">Ok</span>(<span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>]));
+
+<span class="kw">let </span>futures = <span class="macro">vec!</span>[
+    future::ok::&lt;u32, u32&gt;(<span class="number">1</span>),
+    future::err::&lt;u32, u32&gt;(<span class="number">2</span>),
+    future::ok::&lt;u32, u32&gt;(<span class="number">3</span>),
+];
+
+<span class="macro">assert_eq!</span>(try_join_all(futures).<span class="kw">await</span>, <span class="prelude-val">Err</span>(<span class="number">2</span>));</code></pre></div>
+</div></details><script type="text/json" id="notable-traits-data">{"TryJoinAll<<I as IntoIterator>::Item>":"<h3>Notable traits for <code><a class=\"struct\" href=\"../../future/struct.TryJoinAll.html\" title=\"struct futures::future::TryJoinAll\">TryJoinAll</a>&lt;F&gt;</code></h3><pre><code><div class=\"where\">impl&lt;F&gt; <a class=\"trait\" href=\"../../future/trait.Future.html\" title=\"trait futures::future::Future\">Future</a> for <a class=\"struct\" href=\"../../future/struct.TryJoinAll.html\" title=\"struct futures::future::TryJoinAll\">TryJoinAll</a>&lt;F&gt;<div class=\"where\">where\n    F: <a class=\"trait\" href=\"../../future/trait.TryFuture.html\" title=\"trait futures::future::TryFuture\">TryFuture</a>,</div></div><div class=\"where\">    type <a href=\"../../future/trait.Future.html#associatedtype.Output\" class=\"associatedtype\">Output</a> = <a class=\"enum\" href=\"https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html\" title=\"enum core::result::Result\">Result</a>&lt;<a class=\"struct\" href=\"https://doc.rust-lang.org/1.81.0/alloc/vec/struct.Vec.html\" title=\"struct alloc::vec::Vec\">Vec</a>&lt;&lt;F as <a class=\"trait\" href=\"../../future/trait.TryFuture.html\" title=\"trait futures::future::TryFuture\">TryFuture</a>&gt;::<a class=\"associatedtype\" href=\"../../future/trait.TryFuture.html#associatedtype.Ok\" title=\"type futures::future::TryFuture::Ok\">Ok</a>&gt;, &lt;F as <a class=\"trait\" href=\"../../future/trait.TryFuture.html\" title=\"trait futures::future::TryFuture\">TryFuture</a>&gt;::<a class=\"associatedtype\" href=\"../../future/trait.TryFuture.html#associatedtype.Error\" title=\"type futures::future::TryFuture::Error\">Error</a>&gt;;</div>"}</script></section></div></main></body></html>

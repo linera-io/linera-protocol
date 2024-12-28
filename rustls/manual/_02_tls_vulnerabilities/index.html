@@ -1,0 +1,125 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="This section discusses vulnerabilities and design errors in the TLS protocol."><title>rustls::manual::_02_tls_vulnerabilities - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="rustls" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../rustls/index.html">rustls</a><span class="version">0.23.13</span></h2></div><h2 class="location"><a href="#">Module _02_tls_vulnerabilities</a></h2><div class="sidebar-elems"><h2><a href="../index.html">In rustls::manual</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../../index.html">rustls</a>::<wbr><a href="../index.html">manual</a>::<wbr><a class="mod" href="#">_02_tls_vulnerabilities</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/rustls/manual/tlsvulns.rs.html#1-175">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>This section discusses vulnerabilities and design errors in the TLS protocol.</p>
+<h2 id="a-review-of-protocol-vulnerabilities"><a class="doc-anchor" href="#a-review-of-protocol-vulnerabilities">§</a>A review of protocol vulnerabilities</h2><h3 id="cbc-mac-then-encrypt-ciphersuites"><a class="doc-anchor" href="#cbc-mac-then-encrypt-ciphersuites">§</a>CBC MAC-then-encrypt ciphersuites</h3>
+<p>Back in 2000 <a href="https://eprint.iacr.org/2000/025">Bellare and Namprempre</a> discussed how to make authenticated
+encryption by composing separate encryption and authentication primitives.  That paper included this table:</p>
+<p>| Composition Method | Privacy || Integrity ||
+|––––––––––|———||———–||
+|| IND-CPA | IND-CCA | NM-CPA | INT-PTXT | INT-CTXT |
+| Encrypt-and-MAC | insecure | insecure | insecure | secure | insecure |
+| MAC-then-encrypt | secure | insecure | insecure | secure | insecure |
+| Encrypt-then-MAC | secure | secure | secure | secure | secure |</p>
+<p>One may assume from this fairly clear result that encrypt-and-MAC and MAC-then-encrypt compositions would be quickly abandoned
+in favour of the remaining proven-secure option.  But that didn’t happen, not in TLSv1.1 (2006) nor in TLSv1.2 (2008).  Worse,
+both RFCs included incorrect advice on countermeasures for implementers, suggesting that the flaw was “not believed to be large
+enough to be exploitable”.</p>
+<p><a href="http://www.isg.rhul.ac.uk/tls/Lucky13.html">Lucky 13</a> (2013) exploited this flaw and affected all implementations, including
+those written <a href="https://aws.amazon.com/blogs/security/s2n-and-lucky-13/">after discovery</a>. OpenSSL even had a
+<a href="https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2016-2107">memory safety vulnerability in the fix for Lucky 13</a>, which
+gives a flavour of the kind of complexity required to remove the side channel.</p>
+<p>rustls does not implement CBC MAC-then-encrypt ciphersuites for these reasons.  TLSv1.3 removed support for these
+ciphersuites in 2018.</p>
+<p>There are some further rejected options worth mentioning: <a href="https://tools.ietf.org/html/rfc7366">RFC7366</a> defines
+Encrypt-then-MAC for TLS, but unfortunately cannot be negotiated without also supporting MAC-then-encrypt
+(clients cannot express “I offer CBC, but only EtM and not MtE”).</p>
+<h3 id="rsa-pkcs1-encryption"><a class="doc-anchor" href="#rsa-pkcs1-encryption">§</a>RSA PKCS#1 encryption</h3>
+<p>“RSA key exchange” in TLS involves the client choosing a large random value and encrypting it using the server’s
+public key.  This has two overall problems:</p>
+<ol>
+<li>It provides no <em>forward secrecy</em>: later compromise of the server’s private key breaks confidentiality of
+<em>all</em> past sessions using that key.  This is a crucial property in the presence of software that is often
+<a href="http://heartbleed.com/">poor at keeping a secret</a>.</li>
+<li>The padding used in practice in TLS (“PKCS#1”, or fully “RSAES-PKCS1-v1_5”) has been known to be broken since
+<a href="http://archiv.infsec.ethz.ch/education/fs08/secsem/bleichenbacher98.pdf">1998</a>.</li>
+</ol>
+<p>In a similar pattern to the MAC-then-encrypt problem discussed above, TLSv1.0 (1999), TLSv1.1 (2006) and TLSv1.2 (2008)
+continued to specify use of PKCS#1 encryption, again with incrementally more complex and incorrect advice on countermeasures.</p>
+<p><a href="https://robotattack.org/">ROBOT</a> (2018) showed that implementations were still vulnerable to these attacks twenty years later.
+<a href="https://people.redhat.com/~hkario/marvin/">The Marvin Attack</a> (2023) demonstrated the same a further five years later.</p>
+<p>rustls does not support RSA key exchange.  TLSv1.3 also removed support.</p>
+<h3 id="beast"><a class="doc-anchor" href="#beast">§</a>BEAST</h3>
+<p><a href="https://vnhacker.blogspot.com/2011/09/beast.html">BEAST</a> (<a href="https://nvd.nist.gov/vuln/detail/CVE-2011-3389">CVE-2011-3389</a>)
+was demonstrated in 2011 by Thai Duong and Juliano Rizzo,
+and was another vulnerability in CBC-based ciphersuites in SSLv3.0 and TLSv1.0.  CBC mode is vulnerable to adaptive
+chosen-plaintext attacks if the IV is predictable.  In the case of these protocol versions, the IV was the previous
+block of ciphertext (as if the entire TLS session was one CBC ciphertext, albeit revealed incrementally).  This was
+obviously predictable, since it was published on the wire.</p>
+<p>OpenSSL contained a countermeasure for this problem from 2002 onwards: it encrypts an empty message before each real
+one, so that the IV used in the real message is unpredictable.  This was turned off by default due to bugs in IE6.</p>
+<p>TLSv1.1 fix this vulnerability, but not any of the other deficiencies of CBC mode (see above).</p>
+<p>rustls does not support these ciphersuites.</p>
+<h3 id="crime"><a class="doc-anchor" href="#crime">§</a>CRIME</h3>
+<p>In 2002 <a href="https://www.iacr.org/cryptodb/archive/2002/FSE/3091/3091.pdf">John Kelsey</a> discussed the length side channel
+as applied to compression of combined secret and attacker-chosen strings.</p>
+<p>Compression continued to be an option in TLSv1.1 (2006) and in TLSv1.2 (2008).  Support in libraries was widespread.</p>
+<p><a href="http://netifera.com/research/crime/CRIME_ekoparty2012.pdf">CRIME</a> (<a href="https://nvd.nist.gov/vuln/detail/CVE-2012-4929">CVE-2012-4929</a>)
+was demonstrated in 2012, again by Thai Duong and Juliano Rizzo.  It attacked several protocols offering transparent
+compression of application data, allowing quick adaptive chosen-plaintext attacks against secret values like cookies.</p>
+<p>rustls does not implement compression.  TLSv1.3 also removed support.</p>
+<h3 id="logjam--freak"><a class="doc-anchor" href="#logjam--freak">§</a>Logjam / FREAK</h3>
+<p>Way back when SSL was first being born, circa 1995, the US government considered cryptography a munition requiring
+export control.  SSL contained specific ciphersuites with dramatically small key sizes that were not subject
+to export control.  These controls were dropped in 2000.</p>
+<p>Since the “export-grade” ciphersuites no longer fulfilled any purpose, and because they were actively harmful to users,
+one may have expected software support to disappear quickly. This did not happen.</p>
+<p>In 2015 <a href="https://mitls.org/pages/attacks/SMACK#freak">the FREAK attack</a> (<a href="https://nvd.nist.gov/vuln/detail/CVE-2015-0204">CVE-2015-0204</a>)
+and <a href="https://weakdh.org/">the Logjam attack</a> (<a href="https://nvd.nist.gov/vuln/detail/CVE-2015-4000">CVE-2015-4000</a>) both
+demonstrated total breaks of security in the presence of servers that accepted export ciphersuites.  FREAK factored
+512-bit RSA keys, while Logjam optimised solving discrete logs in the 512-bit group used by many different servers.</p>
+<p>Naturally, rustls does not implement any of these ciphersuites.</p>
+<h3 id="sweet32"><a class="doc-anchor" href="#sweet32">§</a>SWEET32</h3>
+<p>Block ciphers are vulnerable to birthday attacks, where the probability of repeating a block increases dramatically
+once a particular key has been used for many blocks.  For block ciphers with 64-bit blocks, this becomes probable
+once a given key encrypts the order of 32GB of data.</p>
+<p><a href="https://sweet32.info/">Sweet32</a> (<a href="https://nvd.nist.gov/vuln/detail/CVE-2016-2183">CVE-2016-2183</a>) attacked this fact
+in the context of TLS support for 3DES, breaking confidentiality by analysing a large amount of attacker-induced traffic
+in one session.</p>
+<p>rustls does not support any 64-bit block ciphers.</p>
+<h3 id="drown"><a class="doc-anchor" href="#drown">§</a>DROWN</h3>
+<p><a href="https://drownattack.com/">DROWN</a> (<a href="https://nvd.nist.gov/vuln/detail/CVE-2016-0800">CVE-2016-0800</a>) is a cross-protocol
+attack that breaks the security of TLSv1.2 and earlier (when used with RSA key exchange) by using SSLv2.  It is required
+that the server uses the same key for both protocol versions.</p>
+<p>rustls naturally does not support SSLv2, but most importantly does not support RSA key exchange for TLSv1.2.</p>
+<h3 id="poodle"><a class="doc-anchor" href="#poodle">§</a>Poodle</h3>
+<p><a href="https://www.openssl.org/~bodo/ssl-poodle.pdf">POODLE</a> (<a href="https://nvd.nist.gov/vuln/detail/CVE-2014-3566">CVE-2014-3566</a>)
+is an attack against CBC mode ciphersuites in SSLv3.  This was possible in most cases because some clients willingly
+downgraded to SSLv3 after failed handshakes for later versions.</p>
+<p>rustls does not support CBC mode ciphersuites, or SSLv3.  Note that rustls does not need to implement <code>TLS_FALLBACK_SCSV</code>
+introduced as a countermeasure because it contains no ability to downgrade from TLS 1.2 to earlier protocol versions,
+and TLS 1.3 has protocol-level downgrade protection based on the <a href="https://www.rfc-editor.org/rfc/rfc8446#section-4.1.3">ServerHello server random value</a>.</p>
+<h3 id="gcm-nonces"><a class="doc-anchor" href="#gcm-nonces">§</a>GCM nonces</h3>
+<p><a href="https://tools.ietf.org/html/rfc5288">RFC5288</a> introduced GCM-based ciphersuites for use in TLS.  Unfortunately
+the design was poor; it reused design for an unrelated security setting proposed in RFC5116.</p>
+<p>GCM is a typical nonce-based AEAD: it requires a unique (but not necessarily unpredictable) 96-bit nonce for each encryption
+with a given key.  The design specified by RFC5288 left two-thirds of the nonce construction up to implementations:</p>
+<ul>
+<li>wasting 8 bytes per TLS ciphertext,</li>
+<li>meaning correct operation cannot be tested for (e.g., in protocol-level test vectors).</li>
+</ul>
+<p>There were no trade-offs here: TLS has a 64-bit sequence number that is not allowed to wrap and would make an ideal nonce.</p>
+<p>As a result, a <a href="https://eprint.iacr.org/2016/475.pdf">2016 study</a> found:</p>
+<ul>
+<li>implementations from IBM, A10 and Citrix used randomly-chosen nonces, which are unlikely to be unique over long connections,</li>
+<li>an implementation from Radware used the same nonce for the first two messages.</li>
+</ul>
+<p>rustls uses a counter from a random starting point for GCM nonces.  TLSv1.3 and the Chacha20-Poly1305 TLSv1.2 ciphersuite
+standardise this method.</p>
+<h3 id="renegotiation"><a class="doc-anchor" href="#renegotiation">§</a>Renegotiation</h3>
+<p>In 2009 Marsh Ray and Steve Dispensa <a href="https://kryptera.se/Renegotiating%20TLS.pdf">discovered</a> that the renegotiation
+feature of all versions of TLS allows a MitM to splice a request of their choice onto the front of the client’s real HTTP
+request.  A countermeasure was proposed and widely implemented to bind renegotiations to their previous negotiations;
+unfortunately this was insufficient.</p>
+<p>rustls does not support renegotiation in TLSv1.2.  TLSv1.3 also no longer supports renegotiation.</p>
+<h3 id="3shake"><a class="doc-anchor" href="#3shake">§</a>3SHAKE</h3>
+<p><a href="https://www.mitls.org/pages/attacks/3SHAKE">3SHAKE</a> (2014) described a complex attack that broke the “Secure Renegotiation” extension
+introduced as a countermeasure to the previous protocol flaw.</p>
+<p>rustls does not support renegotiation for TLSv1.2 connections, or RSA key exchange, and both are required for this attack
+to work.  rustls implements the “Extended Master Secret” (RFC7627) extension for TLSv1.2 which was standardised as a countermeasure.</p>
+<p>TLSv1.3 no longer supports renegotiation and RSA key exchange.  It also effectively incorporates the improvements made in RFC7627.</p>
+<h3 id="kci"><a class="doc-anchor" href="#kci">§</a>KCI</h3>
+<p><a href="https://kcitls.org/">This vulnerability</a> makes use of TLS ciphersuites (those offering static DH) which were standardised
+yet not widely used. However, they were implemented by libraries, and as a result enabled for various clients.  It coupled
+this with misconfigured certificates (on services including facebook.com) which allowed their misuse to MitM connections.</p>
+<p>rustls does not support static DH/EC-DH ciphersuites.  We assert that it is misissuance to sign an EC certificate
+with the keyUsage extension allowing both signatures and key exchange.  That it isn’t is probably a failure
+of CAB Forum baseline requirements.</p>
+</div></details></section></div></main></body></html>

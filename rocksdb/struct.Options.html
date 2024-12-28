@@ -1,0 +1,1030 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Database-wide options around performance and behavior."><title>Options in rocksdb - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="rocksdb" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc struct"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../rocksdb/index.html">rocksdb</a><span class="version">0.21.0</span></h2></div><h2 class="location"><a href="#">Options</a></h2><div class="sidebar-elems"><section><h3><a href="#implementations">Methods</a></h3><ul class="block method"><li><a href="#method.add_merge_operator">add_merge_operator</a></li><li><a href="#method.create_if_missing">create_if_missing</a></li><li><a href="#method.create_missing_column_families">create_missing_column_families</a></li><li><a href="#method.enable_statistics">enable_statistics</a></li><li><a href="#method.get_statistics">get_statistics</a></li><li><a href="#method.increase_parallelism">increase_parallelism</a></li><li><a href="#method.load_latest">load_latest</a></li><li><a href="#method.optimize_for_point_lookup">optimize_for_point_lookup</a></li><li><a href="#method.optimize_level_style_compaction">optimize_level_style_compaction</a></li><li><a href="#method.optimize_universal_style_compaction">optimize_universal_style_compaction</a></li><li><a href="#method.prepare_for_bulk_load">prepare_for_bulk_load</a></li><li><a href="#method.set_access_hint_on_compaction_start">set_access_hint_on_compaction_start</a></li><li><a href="#method.set_advise_random_on_open">set_advise_random_on_open</a></li><li><a href="#method.set_allow_concurrent_memtable_write">set_allow_concurrent_memtable_write</a></li><li><a href="#method.set_allow_mmap_reads">set_allow_mmap_reads</a></li><li><a href="#method.set_allow_mmap_writes">set_allow_mmap_writes</a></li><li><a href="#method.set_allow_os_buffer">set_allow_os_buffer</a></li><li><a href="#method.set_arena_block_size">set_arena_block_size</a></li><li><a href="#method.set_atomic_flush">set_atomic_flush</a></li><li><a href="#method.set_blob_compaction_readahead_size">set_blob_compaction_readahead_size</a></li><li><a href="#method.set_blob_compression_type">set_blob_compression_type</a></li><li><a href="#method.set_blob_file_size">set_blob_file_size</a></li><li><a href="#method.set_blob_gc_age_cutoff">set_blob_gc_age_cutoff</a></li><li><a href="#method.set_blob_gc_force_threshold">set_blob_gc_force_threshold</a></li><li><a href="#method.set_block_based_table_factory">set_block_based_table_factory</a></li><li><a href="#method.set_bloom_locality">set_bloom_locality</a></li><li><a href="#method.set_bottommost_compression_options">set_bottommost_compression_options</a></li><li><a href="#method.set_bottommost_compression_type">set_bottommost_compression_type</a></li><li><a href="#method.set_bottommost_zstd_max_train_bytes">set_bottommost_zstd_max_train_bytes</a></li><li><a href="#method.set_bytes_per_sync">set_bytes_per_sync</a></li><li><a href="#method.set_compaction_filter">set_compaction_filter</a></li><li><a href="#method.set_compaction_filter_factory">set_compaction_filter_factory</a></li><li><a href="#method.set_compaction_readahead_size">set_compaction_readahead_size</a></li><li><a href="#method.set_compaction_style">set_compaction_style</a></li><li><a href="#method.set_comparator">set_comparator</a></li><li><a href="#method.set_compression_options">set_compression_options</a></li><li><a href="#method.set_compression_per_level">set_compression_per_level</a></li><li><a href="#method.set_compression_type">set_compression_type</a></li><li><a href="#method.set_cuckoo_table_factory">set_cuckoo_table_factory</a></li><li><a href="#method.set_db_log_dir">set_db_log_dir</a></li><li><a href="#method.set_db_paths">set_db_paths</a></li><li><a href="#method.set_db_write_buffer_size">set_db_write_buffer_size</a></li><li><a href="#method.set_delete_obsolete_files_period_micros">set_delete_obsolete_files_period_micros</a></li><li><a href="#method.set_disable_auto_compactions">set_disable_auto_compactions</a></li><li><a href="#method.set_dump_malloc_stats">set_dump_malloc_stats</a></li><li><a href="#method.set_enable_blob_files">set_enable_blob_files</a></li><li><a href="#method.set_enable_blob_gc">set_enable_blob_gc</a></li><li><a href="#method.set_enable_pipelined_write">set_enable_pipelined_write</a></li><li><a href="#method.set_enable_write_thread_adaptive_yield">set_enable_write_thread_adaptive_yield</a></li><li><a href="#method.set_env">set_env</a></li><li><a href="#method.set_error_if_exists">set_error_if_exists</a></li><li><a href="#method.set_fifo_compaction_options">set_fifo_compaction_options</a></li><li><a href="#method.set_hard_pending_compaction_bytes_limit">set_hard_pending_compaction_bytes_limit</a></li><li><a href="#method.set_inplace_update_locks">set_inplace_update_locks</a></li><li><a href="#method.set_inplace_update_support">set_inplace_update_support</a></li><li><a href="#method.set_is_fd_close_on_exec">set_is_fd_close_on_exec</a></li><li><a href="#method.set_keep_log_file_num">set_keep_log_file_num</a></li><li><a href="#method.set_level_compaction_dynamic_level_bytes">set_level_compaction_dynamic_level_bytes</a></li><li><a href="#method.set_level_zero_file_num_compaction_trigger">set_level_zero_file_num_compaction_trigger</a></li><li><a href="#method.set_level_zero_slowdown_writes_trigger">set_level_zero_slowdown_writes_trigger</a></li><li><a href="#method.set_level_zero_stop_writes_trigger">set_level_zero_stop_writes_trigger</a></li><li><a href="#method.set_log_file_time_to_roll">set_log_file_time_to_roll</a></li><li><a href="#method.set_log_level">set_log_level</a></li><li><a href="#method.set_manifest_preallocation_size">set_manifest_preallocation_size</a></li><li><a href="#method.set_manual_wal_flush">set_manual_wal_flush</a></li><li><a href="#method.set_max_background_compactions">set_max_background_compactions</a></li><li><a href="#method.set_max_background_flushes">set_max_background_flushes</a></li><li><a href="#method.set_max_background_jobs">set_max_background_jobs</a></li><li><a href="#method.set_max_bytes_for_level_base">set_max_bytes_for_level_base</a></li><li><a href="#method.set_max_bytes_for_level_multiplier">set_max_bytes_for_level_multiplier</a></li><li><a href="#method.set_max_bytes_for_level_multiplier_additional">set_max_bytes_for_level_multiplier_additional</a></li><li><a href="#method.set_max_compaction_bytes">set_max_compaction_bytes</a></li><li><a href="#method.set_max_file_opening_threads">set_max_file_opening_threads</a></li><li><a href="#method.set_max_log_file_size">set_max_log_file_size</a></li><li><a href="#method.set_max_manifest_file_size">set_max_manifest_file_size</a></li><li><a href="#method.set_max_open_files">set_max_open_files</a></li><li><a href="#method.set_max_sequential_skip_in_iterations">set_max_sequential_skip_in_iterations</a></li><li><a href="#method.set_max_subcompactions">set_max_subcompactions</a></li><li><a href="#method.set_max_successive_merges">set_max_successive_merges</a></li><li><a href="#method.set_max_total_wal_size">set_max_total_wal_size</a></li><li><a href="#method.set_max_write_buffer_number">set_max_write_buffer_number</a></li><li><a href="#method.set_max_write_buffer_size_to_maintain">set_max_write_buffer_size_to_maintain</a></li><li><a href="#method.set_memtable_factory">set_memtable_factory</a></li><li><a href="#method.set_memtable_huge_page_size">set_memtable_huge_page_size</a></li><li><a href="#method.set_memtable_prefix_bloom_ratio">set_memtable_prefix_bloom_ratio</a></li><li><a href="#method.set_memtable_whole_key_filtering">set_memtable_whole_key_filtering</a></li><li><a href="#method.set_merge_operator">set_merge_operator</a></li><li><a href="#method.set_merge_operator_associative">set_merge_operator_associative</a></li><li><a href="#method.set_min_blob_size">set_min_blob_size</a></li><li><a href="#method.set_min_level_to_compress">set_min_level_to_compress</a></li><li><a href="#method.set_min_write_buffer_number">set_min_write_buffer_number</a></li><li><a href="#method.set_min_write_buffer_number_to_merge">set_min_write_buffer_number_to_merge</a></li><li><a href="#method.set_num_levels">set_num_levels</a></li><li><a href="#method.set_optimize_filters_for_hits">set_optimize_filters_for_hits</a></li><li><a href="#method.set_paranoid_checks">set_paranoid_checks</a></li><li><a href="#method.set_plain_table_factory">set_plain_table_factory</a></li><li><a href="#method.set_prefix_extractor">set_prefix_extractor</a></li><li><a href="#method.set_ratelimiter">set_ratelimiter</a></li><li><a href="#method.set_recycle_log_file_num">set_recycle_log_file_num</a></li><li><a href="#method.set_report_bg_io_stats">set_report_bg_io_stats</a></li><li><a href="#method.set_row_cache">set_row_cache</a></li><li><a href="#method.set_skip_checking_sst_file_sizes_on_db_open">set_skip_checking_sst_file_sizes_on_db_open</a></li><li><a href="#method.set_skip_stats_update_on_db_open">set_skip_stats_update_on_db_open</a></li><li><a href="#method.set_soft_pending_compaction_bytes_limit">set_soft_pending_compaction_bytes_limit</a></li><li><a href="#method.set_stats_dump_period_sec">set_stats_dump_period_sec</a></li><li><a href="#method.set_stats_persist_period_sec">set_stats_persist_period_sec</a></li><li><a href="#method.set_table_cache_num_shard_bits">set_table_cache_num_shard_bits</a></li><li><a href="#method.set_target_file_size_base">set_target_file_size_base</a></li><li><a href="#method.set_target_file_size_multiplier">set_target_file_size_multiplier</a></li><li><a href="#method.set_universal_compaction_options">set_universal_compaction_options</a></li><li><a href="#method.set_unordered_write">set_unordered_write</a></li><li><a href="#method.set_use_adaptive_mutex">set_use_adaptive_mutex</a></li><li><a href="#method.set_use_direct_io_for_flush_and_compaction">set_use_direct_io_for_flush_and_compaction</a></li><li><a href="#method.set_use_direct_reads">set_use_direct_reads</a></li><li><a href="#method.set_use_fsync">set_use_fsync</a></li><li><a href="#method.set_wal_bytes_per_sync">set_wal_bytes_per_sync</a></li><li><a href="#method.set_wal_dir">set_wal_dir</a></li><li><a href="#method.set_wal_recovery_mode">set_wal_recovery_mode</a></li><li><a href="#method.set_wal_size_limit_mb">set_wal_size_limit_mb</a></li><li><a href="#method.set_wal_ttl_seconds">set_wal_ttl_seconds</a></li><li><a href="#method.set_writable_file_max_buffer_size">set_writable_file_max_buffer_size</a></li><li><a href="#method.set_write_buffer_size">set_write_buffer_size</a></li><li><a href="#method.set_zstd_max_train_bytes">set_zstd_max_train_bytes</a></li></ul><h3><a href="#trait-implementations">Trait Implementations</a></h3><ul class="block trait-implementation"><li><a href="#impl-Clone-for-Options">Clone</a></li><li><a href="#impl-Default-for-Options">Default</a></li><li><a href="#impl-Drop-for-Options">Drop</a></li><li><a href="#impl-Send-for-Options">Send</a></li><li><a href="#impl-Sync-for-Options">Sync</a></li></ul><h3><a href="#synthetic-implementations">Auto Trait Implementations</a></h3><ul class="block synthetic-implementation"><li><a href="#impl-Freeze-for-Options">Freeze</a></li><li><a href="#impl-RefUnwindSafe-for-Options">RefUnwindSafe</a></li><li><a href="#impl-Unpin-for-Options">Unpin</a></li><li><a href="#impl-UnwindSafe-for-Options">UnwindSafe</a></li></ul><h3><a href="#blanket-implementations">Blanket Implementations</a></h3><ul class="block blanket-implementation"><li><a href="#impl-Any-for-T">Any</a></li><li><a href="#impl-Borrow%3CT%3E-for-T">Borrow&lt;T&gt;</a></li><li><a href="#impl-BorrowMut%3CT%3E-for-T">BorrowMut&lt;T&gt;</a></li><li><a href="#impl-CloneToUninit-for-T">CloneToUninit</a></li><li><a href="#impl-From%3CT%3E-for-T">From&lt;T&gt;</a></li><li><a href="#impl-Into%3CU%3E-for-T">Into&lt;U&gt;</a></li><li><a href="#impl-ToOwned-for-T">ToOwned</a></li><li><a href="#impl-TryFrom%3CU%3E-for-T">TryFrom&lt;U&gt;</a></li><li><a href="#impl-TryInto%3CU%3E-for-T">TryInto&lt;U&gt;</a></li></ul></section><h2><a href="index.html">In crate rocksdb</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Struct <a href="index.html">rocksdb</a>::<wbr><a class="struct" href="#">Options</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/rocksdb/db_options.rs.html#172-175">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub struct Options { <span class="comment">/* private fields */</span> }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Database-wide options around performance and behavior.</p>
+<p>Please read the official tuning <a href="https://github.com/facebook/rocksdb/wiki/RocksDB-Tuning-Guide">guide</a>
+and most importantly, measure performance under realistic workloads with realistic hardware.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rocksdb::{Options, DB};
+<span class="kw">use </span>rocksdb::DBCompactionStyle;
+
+<span class="kw">fn </span>badly_tuned_for_somebody_elses_disk() -&gt; DB {
+   <span class="kw">let </span>path = <span class="string">"path/for/rocksdb/storageX"</span>;
+   <span class="kw">let </span><span class="kw-2">mut </span>opts = Options::default();
+   opts.create_if_missing(<span class="bool-val">true</span>);
+   opts.set_max_open_files(<span class="number">10000</span>);
+   opts.set_use_fsync(<span class="bool-val">false</span>);
+   opts.set_bytes_per_sync(<span class="number">8388608</span>);
+   opts.optimize_for_point_lookup(<span class="number">1024</span>);
+   opts.set_table_cache_num_shard_bits(<span class="number">6</span>);
+   opts.set_max_write_buffer_number(<span class="number">32</span>);
+   opts.set_write_buffer_size(<span class="number">536870912</span>);
+   opts.set_target_file_size_base(<span class="number">1073741824</span>);
+   opts.set_min_write_buffer_number_to_merge(<span class="number">4</span>);
+   opts.set_level_zero_stop_writes_trigger(<span class="number">2000</span>);
+   opts.set_level_zero_slowdown_writes_trigger(<span class="number">0</span>);
+   opts.set_compaction_style(DBCompactionStyle::Universal);
+   opts.set_disable_auto_compactions(<span class="bool-val">true</span>);
+
+   DB::open(<span class="kw-2">&amp;</span>opts, path).unwrap()
+}</code></pre></div>
+</div></details><h2 id="implementations" class="section-header">Implementations<a href="#implementations" class="anchor">§</a></h2><div id="implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-Options" class="impl"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#740-3059">source</a><a href="#impl-Options" class="anchor">§</a><h3 class="code-header">impl <a class="struct" href="struct.Options.html" title="struct rocksdb::Options">Options</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.load_latest" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#743-778">source</a><h4 class="code-header">pub fn <a href="#method.load_latest" class="fn">load_latest</a>&lt;P: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/std/path/struct.Path.html" title="struct std::path::Path">Path</a>&gt;&gt;(
+    path: P,
+    env: <a class="struct" href="struct.Env.html" title="struct rocksdb::Env">Env</a>,
+    ignore_unknown_options: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>,
+    cache: <a class="struct" href="struct.Cache.html" title="struct rocksdb::Cache">Cache</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;(<a class="struct" href="struct.Options.html" title="struct rocksdb::Options">Options</a>, <a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="struct" href="struct.ColumnFamilyDescriptor.html" title="struct rocksdb::ColumnFamilyDescriptor">ColumnFamilyDescriptor</a>&gt;), <a class="struct" href="struct.Error.html" title="struct rocksdb::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Constructs the DBOptions and ColumnFamilyDescriptors by loading the
+latest RocksDB options file stored in the specified rocksdb database.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.increase_parallelism" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#825-829">source</a><h4 class="code-header">pub fn <a href="#method.increase_parallelism" class="fn">increase_parallelism</a>(&amp;mut self, parallelism: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i32.html">i32</a>)</h4></section></summary><div class="docblock"><p>By default, RocksDB uses only one background thread for flush and
+compaction. Calling this function will set it up such that total of
+<code>total_threads</code> is used. Good value for <code>total_threads</code> is the number of
+cores. You almost definitely want to call this function if your system is
+bottlenecked by RocksDB.</p>
+<h5 id="examples-1"><a class="doc-anchor" href="#examples-1">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rocksdb::Options;
+
+<span class="kw">let </span><span class="kw-2">mut </span>opts = Options::default();
+opts.increase_parallelism(<span class="number">3</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.optimize_level_style_compaction" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#847-854">source</a><h4 class="code-header">pub fn <a href="#method.optimize_level_style_compaction" class="fn">optimize_level_style_compaction</a>(&amp;mut self, memtable_memory_budget: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>)</h4></section></summary><div class="docblock"><p>Optimize level style compaction.</p>
+<p>Default values for some parameters in <code>Options</code> are not optimized for heavy
+workloads and big datasets, which means you might observe write stalls under
+some conditions.</p>
+<p>This can be used as one of the starting points for tuning RocksDB options in
+such cases.</p>
+<p>Internally, it sets <code>write_buffer_size</code>, <code>min_write_buffer_number_to_merge</code>,
+<code>max_write_buffer_number</code>, <code>level0_file_num_compaction_trigger</code>,
+<code>target_file_size_base</code>, <code>max_bytes_for_level_base</code>, so it can override if those
+parameters were set before.</p>
+<p>It sets buffer sizes so that memory consumption would be constrained by
+<code>memtable_memory_budget</code>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.optimize_universal_style_compaction" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#872-879">source</a><h4 class="code-header">pub fn <a href="#method.optimize_universal_style_compaction" class="fn">optimize_universal_style_compaction</a>(
+    &amp;mut self,
+    memtable_memory_budget: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>,
+)</h4></section></summary><div class="docblock"><p>Optimize universal style compaction.</p>
+<p>Default values for some parameters in <code>Options</code> are not optimized for heavy
+workloads and big datasets, which means you might observe write stalls under
+some conditions.</p>
+<p>This can be used as one of the starting points for tuning RocksDB options in
+such cases.</p>
+<p>Internally, it sets <code>write_buffer_size</code>, <code>min_write_buffer_number_to_merge</code>,
+<code>max_write_buffer_number</code>, <code>level0_file_num_compaction_trigger</code>,
+<code>target_file_size_base</code>, <code>max_bytes_for_level_base</code>, so it can override if those
+parameters were set before.</p>
+<p>It sets buffer sizes so that memory consumption would be constrained by
+<code>memtable_memory_budget</code>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.create_if_missing" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#893-900">source</a><h4 class="code-header">pub fn <a href="#method.create_if_missing" class="fn">create_if_missing</a>(&amp;mut self, create_if_missing: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>)</h4></section></summary><div class="docblock"><p>If true, the database will be created if it is missing.</p>
+<p>Default: <code>false</code></p>
+<h5 id="examples-2"><a class="doc-anchor" href="#examples-2">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rocksdb::Options;
+
+<span class="kw">let </span><span class="kw-2">mut </span>opts = Options::default();
+opts.create_if_missing(<span class="bool-val">true</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.create_missing_column_families" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#915-922">source</a><h4 class="code-header">pub fn <a href="#method.create_missing_column_families" class="fn">create_missing_column_families</a>(&amp;mut self, create_missing_cfs: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>)</h4></section></summary><div class="docblock"><p>If true, any column families that didn’t exist when opening the database
+will be created.</p>
+<p>Default: <code>false</code></p>
+<h5 id="examples-3"><a class="doc-anchor" href="#examples-3">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rocksdb::Options;
+
+<span class="kw">let </span><span class="kw-2">mut </span>opts = Options::default();
+opts.create_missing_column_families(<span class="bool-val">true</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_error_if_exists" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#927-931">source</a><h4 class="code-header">pub fn <a href="#method.set_error_if_exists" class="fn">set_error_if_exists</a>(&amp;mut self, enabled: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>)</h4></section></summary><div class="docblock"><p>Specifies whether an error should be raised if the database already exists.</p>
+<p>Default: false</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_paranoid_checks" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#945-949">source</a><h4 class="code-header">pub fn <a href="#method.set_paranoid_checks" class="fn">set_paranoid_checks</a>(&amp;mut self, enabled: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>)</h4></section></summary><div class="docblock"><p>Enable/disable paranoid checks.</p>
+<p>If true, the implementation will do aggressive checking of the
+data it is processing and will stop early if it detects any
+errors. This may have unforeseen ramifications: for example, a
+corruption of one DB entry may cause a large number of entries to
+become unreadable or for the entire DB to become unopenable.
+If any of the  writes to the database fails (Put, Delete, Merge, Write),
+the database will switch to read-only mode and fail all other
+Write operations.</p>
+<p>Default: false</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_db_paths" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#976-985">source</a><h4 class="code-header">pub fn <a href="#method.set_db_paths" class="fn">set_db_paths</a>(&amp;mut self, paths: &amp;[<a class="struct" href="struct.DBPath.html" title="struct rocksdb::DBPath">DBPath</a>])</h4></section></summary><div class="docblock"><p>A list of paths where SST files can be put into, with its target size.
+Newer data is placed into paths specified earlier in the vector while
+older data gradually moves to paths specified later in the vector.</p>
+<p>For example, you have a flash device with 10GB allocated for the DB,
+as well as a hard drive of 2TB, you should config it to be:
+[{“/flash_path”, 10GB}, {“/hard_drive”, 2TB}]</p>
+<p>The system will try to guarantee data under each path is close to but
+not larger than the target size. But current and future file sizes used
+by determining where to place a file are based on best-effort estimation,
+which means there is a chance that the actual size under the directory
+is slightly more than target size under some workloads. User should give
+some buffer room for those cases.</p>
+<p>If none of the paths has sufficient room to place a file, the file will
+be placed to the last path anyway, despite to the target size.</p>
+<p>Placing newer data to earlier paths is also best-efforts. User should
+expect user files to be placed in higher levels in some extreme cases.</p>
+<p>If left empty, only one path will be used, which is <code>path</code> passed when
+opening the DB.</p>
+<p>Default: empty</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_env" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#993-998">source</a><h4 class="code-header">pub fn <a href="#method.set_env" class="fn">set_env</a>(&amp;mut self, env: &amp;<a class="struct" href="struct.Env.html" title="struct rocksdb::Env">Env</a>)</h4></section></summary><div class="docblock"><p>Use the specified object to interact with the environment,
+e.g. to read/write files, schedule background work, etc. In the near
+future, support for doing storage operations such as read/write files
+through env will be deprecated in favor of file_system.</p>
+<p>Default: Env::default()</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_compression_type" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#1013-1017">source</a><h4 class="code-header">pub fn <a href="#method.set_compression_type" class="fn">set_compression_type</a>(&amp;mut self, t: <a class="enum" href="enum.DBCompressionType.html" title="enum rocksdb::DBCompressionType">DBCompressionType</a>)</h4></section></summary><div class="docblock"><p>Sets the compression algorithm that will be used for compressing blocks.</p>
+<p>Default: <code>DBCompressionType::Snappy</code> (<code>DBCompressionType::None</code> if
+snappy feature is not enabled).</p>
+<h5 id="examples-4"><a class="doc-anchor" href="#examples-4">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rocksdb::{Options, DBCompressionType};
+
+<span class="kw">let </span><span class="kw-2">mut </span>opts = Options::default();
+opts.set_compression_type(DBCompressionType::Snappy);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_bottommost_compression_type" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#1037-1041">source</a><h4 class="code-header">pub fn <a href="#method.set_bottommost_compression_type" class="fn">set_bottommost_compression_type</a>(&amp;mut self, t: <a class="enum" href="enum.DBCompressionType.html" title="enum rocksdb::DBCompressionType">DBCompressionType</a>)</h4></section></summary><div class="docblock"><p>Sets the bottom-most compression algorithm that will be used for
+compressing blocks at the bottom-most level.</p>
+<p>Note that to actually unable bottom-most compression configuration after
+setting the compression type it needs to be enabled by calling
+<a href="#method.set_bottommost_compression_options"><code>set_bottommost_compression_options</code></a> or
+<a href="#method.set_bottommost_zstd_max_train_bytes"><code>set_bottommost_zstd_max_train_bytes</code></a> method with <code>enabled</code> argument
+set to <code>true</code>.</p>
+<h5 id="examples-5"><a class="doc-anchor" href="#examples-5">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rocksdb::{Options, DBCompressionType};
+
+<span class="kw">let </span><span class="kw-2">mut </span>opts = Options::default();
+opts.set_bottommost_compression_type(DBCompressionType::Zstd);
+opts.set_bottommost_zstd_max_train_bytes(<span class="number">0</span>, <span class="bool-val">true</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_compression_per_level" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#1065-1074">source</a><h4 class="code-header">pub fn <a href="#method.set_compression_per_level" class="fn">set_compression_per_level</a>(&amp;mut self, level_types: &amp;[<a class="enum" href="enum.DBCompressionType.html" title="enum rocksdb::DBCompressionType">DBCompressionType</a>])</h4></section></summary><div class="docblock"><p>Different levels can have different compression policies. There
+are cases where most lower levels would like to use quick compression
+algorithms while the higher levels (which have more data) use
+compression algorithms that have better compression but could
+be slower. This array, if non-empty, should have an entry for
+each level of the database; these override the value specified in
+the previous field ‘compression’.</p>
+<h5 id="examples-6"><a class="doc-anchor" href="#examples-6">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rocksdb::{Options, DBCompressionType};
+
+<span class="kw">let </span><span class="kw-2">mut </span>opts = Options::default();
+opts.set_compression_per_level(<span class="kw-2">&amp;</span>[
+    DBCompressionType::None,
+    DBCompressionType::None,
+    DBCompressionType::Snappy,
+    DBCompressionType::Snappy,
+    DBCompressionType::Snappy
+]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_compression_options" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#1101-1117">source</a><h4 class="code-header">pub fn <a href="#method.set_compression_options" class="fn">set_compression_options</a>(
+    &amp;mut self,
+    w_bits: <a class="type" href="../libc/unix/type.c_int.html" title="type libc::unix::c_int">c_int</a>,
+    level: <a class="type" href="../libc/unix/type.c_int.html" title="type libc::unix::c_int">c_int</a>,
+    strategy: <a class="type" href="../libc/unix/type.c_int.html" title="type libc::unix::c_int">c_int</a>,
+    max_dict_bytes: <a class="type" href="../libc/unix/type.c_int.html" title="type libc::unix::c_int">c_int</a>,
+)</h4></section></summary><div class="docblock"><p>Maximum size of dictionaries used to prime the compression library.
+Enabling dictionary can improve compression ratios when there are
+repetitions across data blocks.</p>
+<p>The dictionary is created by sampling the SST file data. If
+<code>zstd_max_train_bytes</code> is nonzero, the samples are passed through zstd’s
+dictionary generator. Otherwise, the random samples are used directly as
+the dictionary.</p>
+<p>When compression dictionary is disabled, we compress and write each block
+before buffering data for the next one. When compression dictionary is
+enabled, we buffer all SST file data in-memory so we can sample it, as data
+can only be compressed and written after the dictionary has been finalized.
+So users of this feature may see increased memory usage.</p>
+<p>Default: <code>0</code></p>
+<h5 id="examples-7"><a class="doc-anchor" href="#examples-7">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rocksdb::Options;
+
+<span class="kw">let </span><span class="kw-2">mut </span>opts = Options::default();
+opts.set_compression_options(<span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>, <span class="number">7</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_bottommost_compression_options" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#1133-1151">source</a><h4 class="code-header">pub fn <a href="#method.set_bottommost_compression_options" class="fn">set_bottommost_compression_options</a>(
+    &amp;mut self,
+    w_bits: <a class="type" href="../libc/unix/type.c_int.html" title="type libc::unix::c_int">c_int</a>,
+    level: <a class="type" href="../libc/unix/type.c_int.html" title="type libc::unix::c_int">c_int</a>,
+    strategy: <a class="type" href="../libc/unix/type.c_int.html" title="type libc::unix::c_int">c_int</a>,
+    max_dict_bytes: <a class="type" href="../libc/unix/type.c_int.html" title="type libc::unix::c_int">c_int</a>,
+    enabled: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>,
+)</h4></section></summary><div class="docblock"><p>Sets compression options for blocks at the bottom-most level.  Meaning
+of all settings is the same as in <a href="#method.set_compression_options"><code>set_compression_options</code></a> method but
+affect only the bottom-most compression which is set using
+<a href="#method.set_bottommost_compression_type"><code>set_bottommost_compression_type</code></a> method.</p>
+<h5 id="examples-8"><a class="doc-anchor" href="#examples-8">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rocksdb::{Options, DBCompressionType};
+
+<span class="kw">let </span><span class="kw-2">mut </span>opts = Options::default();
+opts.set_bottommost_compression_type(DBCompressionType::Zstd);
+opts.set_bottommost_compression_options(<span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>, <span class="number">7</span>, <span class="bool-val">true</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_zstd_max_train_bytes" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#1160-1164">source</a><h4 class="code-header">pub fn <a href="#method.set_zstd_max_train_bytes" class="fn">set_zstd_max_train_bytes</a>(&amp;mut self, value: <a class="type" href="../libc/unix/type.c_int.html" title="type libc::unix::c_int">c_int</a>)</h4></section></summary><div class="docblock"><p>Sets maximum size of training data passed to zstd’s dictionary trainer. Using zstd’s
+dictionary trainer can achieve even better compression ratio improvements than using
+<code>max_dict_bytes</code> alone.</p>
+<p>The training data will be used to generate a dictionary of max_dict_bytes.</p>
+<p>Default: 0.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_bottommost_zstd_max_train_bytes" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#1175-1183">source</a><h4 class="code-header">pub fn <a href="#method.set_bottommost_zstd_max_train_bytes" class="fn">set_bottommost_zstd_max_train_bytes</a>(
+    &amp;mut self,
+    value: <a class="type" href="../libc/unix/type.c_int.html" title="type libc::unix::c_int">c_int</a>,
+    enabled: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>,
+)</h4></section></summary><div class="docblock"><p>Sets maximum size of training data passed to zstd’s dictionary trainer
+when compressing the bottom-most level. Using zstd’s dictionary trainer
+can achieve even better compression ratio improvements than using
+<code>max_dict_bytes</code> alone.</p>
+<p>The training data will be used to generate a dictionary of
+<code>max_dict_bytes</code>.</p>
+<p>Default: 0.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_compaction_readahead_size" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#1193-1197">source</a><h4 class="code-header">pub fn <a href="#method.set_compaction_readahead_size" class="fn">set_compaction_readahead_size</a>(
+    &amp;mut self,
+    compaction_readahead_size: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>,
+)</h4></section></summary><div class="docblock"><p>If non-zero, we perform bigger reads when doing compaction. If you’re
+running RocksDB on spinning disks, you should set this to at least 2MB.
+That way RocksDB’s compaction is doing sequential instead of random reads.</p>
+<p>When non-zero, we also force new_table_reader_for_compaction_inputs to
+true.</p>
+<p>Default: <code>0</code></p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_level_compaction_dynamic_level_bytes" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#1204-1211">source</a><h4 class="code-header">pub fn <a href="#method.set_level_compaction_dynamic_level_bytes" class="fn">set_level_compaction_dynamic_level_bytes</a>(&amp;mut self, v: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>)</h4></section></summary><div class="docblock"><p>Allow RocksDB to pick dynamic base of bytes for levels.
+With this feature turned on, RocksDB will automatically adjust max bytes for each level.
+The goal of this feature is to have lower bound on size amplification.</p>
+<p>Default: false.</p>
+</div></details><section id="method.set_merge_operator_associative" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#1213-1235">source</a><h4 class="code-header">pub fn <a href="#method.set_merge_operator_associative" class="fn">set_merge_operator_associative</a>&lt;F: <a class="trait" href="merge_operator/trait.MergeFn.html" title="trait rocksdb::merge_operator::MergeFn">MergeFn</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>&gt;(
+    &amp;mut self,
+    name: impl <a class="trait" href="trait.CStrLike.html" title="trait rocksdb::CStrLike">CStrLike</a>,
+    full_merge_fn: F,
+)</h4></section><section id="method.set_merge_operator" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#1237-1260">source</a><h4 class="code-header">pub fn <a href="#method.set_merge_operator" class="fn">set_merge_operator</a>&lt;F: <a class="trait" href="merge_operator/trait.MergeFn.html" title="trait rocksdb::merge_operator::MergeFn">MergeFn</a>, PF: <a class="trait" href="merge_operator/trait.MergeFn.html" title="trait rocksdb::merge_operator::MergeFn">MergeFn</a>&gt;(
+    &amp;mut self,
+    name: impl <a class="trait" href="trait.CStrLike.html" title="trait rocksdb::CStrLike">CStrLike</a>,
+    full_merge_fn: F,
+    partial_merge_fn: PF,
+)</h4></section><section id="method.add_merge_operator" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#1266-1268">source</a><h4 class="code-header">pub fn <a href="#method.add_merge_operator" class="fn">add_merge_operator</a>&lt;F: <a class="trait" href="merge_operator/trait.MergeFn.html" title="trait rocksdb::merge_operator::MergeFn">MergeFn</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>&gt;(
+    &amp;mut self,
+    name: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+    merge_fn: F,
+)</h4></section><span class="item-info"><div class="stab deprecated"><span class="emoji">👎</span><span>Deprecated since 0.5.0: add_merge_operator has been renamed to set_merge_operator</span></div></span><details class="toggle method-toggle" open><summary><section id="method.set_compaction_filter" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#1280-1298">source</a><h4 class="code-header">pub fn <a href="#method.set_compaction_filter" class="fn">set_compaction_filter</a>&lt;F&gt;(&amp;mut self, name: impl <a class="trait" href="trait.CStrLike.html" title="trait rocksdb::CStrLike">CStrLike</a>, filter_fn: F)<div class="where">where
+    F: <a class="trait" href="compaction_filter/trait.CompactionFilterFn.html" title="trait rocksdb::compaction_filter::CompactionFilterFn">CompactionFilterFn</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'static,</div></h4></section></summary><div class="docblock"><p>Sets a compaction filter used to determine if entries should be kept, changed,
+or removed during compaction.</p>
+<p>An example use case is to remove entries with an expired TTL.</p>
+<p>If you take a snapshot of the database, only values written since the last
+snapshot will be passed through the compaction filter.</p>
+<p>If multi-threaded compaction is used, <code>filter_fn</code> may be called multiple times
+simultaneously.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_compaction_filter_factory" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#1308-1324">source</a><h4 class="code-header">pub fn <a href="#method.set_compaction_filter_factory" class="fn">set_compaction_filter_factory</a>&lt;F&gt;(&amp;mut self, factory: F)<div class="where">where
+    F: <a class="trait" href="compaction_filter_factory/trait.CompactionFilterFactory.html" title="trait rocksdb::compaction_filter_factory::CompactionFilterFactory">CompactionFilterFactory</a> + 'static,</div></h4></section></summary><div class="docblock"><p>This is a factory that provides compaction filter objects which allow
+an application to modify/delete a key-value during background compaction.</p>
+<p>A new filter will be created on each compaction run.  If multithreaded
+compaction is being used, each created CompactionFilter will only be used
+from a single thread and so does not need to be thread-safe.</p>
+<p>Default: nullptr</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_comparator" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#1332-1347">source</a><h4 class="code-header">pub fn <a href="#method.set_comparator" class="fn">set_comparator</a>(
+    &amp;mut self,
+    name: impl <a class="trait" href="trait.CStrLike.html" title="trait rocksdb::CStrLike">CStrLike</a>,
+    compare_fn: <a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.Fn.html" title="trait core::ops::function::Fn">Fn</a>(&amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/cmp/enum.Ordering.html" title="enum core::cmp::Ordering">Ordering</a>&gt;,
+)</h4></section></summary><div class="docblock"><p>Sets the comparator used to define the order of keys in the table.
+Default: a comparator that uses lexicographic byte-wise ordering</p>
+<p>The client must ensure that the comparator supplied here has the same
+name and orders keys <em>exactly</em> the same as the comparator provided to
+previous open calls on the same DB.</p>
+</div></details><section id="method.set_prefix_extractor" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#1349-1353">source</a><h4 class="code-header">pub fn <a href="#method.set_prefix_extractor" class="fn">set_prefix_extractor</a>(&amp;mut self, prefix_extractor: <a class="struct" href="struct.SliceTransform.html" title="struct rocksdb::SliceTransform">SliceTransform</a>)</h4></section><section id="method.optimize_for_point_lookup" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#1355-1359">source</a><h4 class="code-header">pub fn <a href="#method.optimize_for_point_lookup" class="fn">optimize_for_point_lookup</a>(&amp;mut self, cache_size: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>)</h4></section><details class="toggle method-toggle" open><summary><section id="method.set_optimize_filters_for_hits" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#1373-1380">source</a><h4 class="code-header">pub fn <a href="#method.set_optimize_filters_for_hits" class="fn">set_optimize_filters_for_hits</a>(&amp;mut self, optimize_for_hits: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>)</h4></section></summary><div class="docblock"><p>Sets the optimize_filters_for_hits flag</p>
+<p>Default: <code>false</code></p>
+<h5 id="examples-9"><a class="doc-anchor" href="#examples-9">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rocksdb::Options;
+
+<span class="kw">let </span><span class="kw-2">mut </span>opts = Options::default();
+opts.set_optimize_filters_for_hits(<span class="bool-val">true</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_delete_obsolete_files_period_micros" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#1389-1393">source</a><h4 class="code-header">pub fn <a href="#method.set_delete_obsolete_files_period_micros" class="fn">set_delete_obsolete_files_period_micros</a>(&amp;mut self, micros: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>)</h4></section></summary><div class="docblock"><p>Sets the periodicity when obsolete files get deleted.</p>
+<p>The files that get out of scope by compaction
+process will still get automatically delete on every compaction,
+regardless of this setting.</p>
+<p>Default: 6 hours</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.prepare_for_bulk_load" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#1400-1404">source</a><h4 class="code-header">pub fn <a href="#method.prepare_for_bulk_load" class="fn">prepare_for_bulk_load</a>(&amp;mut self)</h4></section></summary><div class="docblock"><p>Prepare the DB for bulk loading.</p>
+<p>All data will be in level 0 without any automatic compaction.
+It’s recommended to manually call CompactRange(NULL, NULL) before reading
+from the database, because otherwise the read can be very slow.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_max_open_files" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#1422-1426">source</a><h4 class="code-header">pub fn <a href="#method.set_max_open_files" class="fn">set_max_open_files</a>(&amp;mut self, nfiles: <a class="type" href="../libc/unix/type.c_int.html" title="type libc::unix::c_int">c_int</a>)</h4></section></summary><div class="docblock"><p>Sets the number of open files that can be used by the DB. You may need to
+increase this if your database has a large working set. Value <code>-1</code> means
+files opened are always kept open. You can estimate number of files based
+on target_file_size_base and target_file_size_multiplier for level-based
+compaction. For universal-style compaction, you can usually set it to <code>-1</code>.</p>
+<p>Default: <code>-1</code></p>
+<h5 id="examples-10"><a class="doc-anchor" href="#examples-10">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rocksdb::Options;
+
+<span class="kw">let </span><span class="kw-2">mut </span>opts = Options::default();
+opts.set_max_open_files(<span class="number">10</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_max_file_opening_threads" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#1431-1435">source</a><h4 class="code-header">pub fn <a href="#method.set_max_file_opening_threads" class="fn">set_max_file_opening_threads</a>(&amp;mut self, nthreads: <a class="type" href="../libc/unix/type.c_int.html" title="type libc::unix::c_int">c_int</a>)</h4></section></summary><div class="docblock"><p>If max_open_files is -1, DB will open all files on DB::Open(). You can
+use this option to increase the number of threads used to open the files.
+Default: 16</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_use_fsync" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#1456-1460">source</a><h4 class="code-header">pub fn <a href="#method.set_use_fsync" class="fn">set_use_fsync</a>(&amp;mut self, useit: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>)</h4></section></summary><div class="docblock"><p>By default, writes to stable storage use fdatasync (on platforms
+where this function is available). If this option is true,
+fsync is used instead.</p>
+<p>fsync and fdatasync are equally safe for our purposes and fdatasync is
+faster, so it is rarely necessary to set this option. It is provided
+as a workaround for kernel/filesystem bugs, such as one that affected
+fdatasync with ext4 in kernel versions prior to 3.7.</p>
+<p>Default: <code>false</code></p>
+<h5 id="examples-11"><a class="doc-anchor" href="#examples-11">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rocksdb::Options;
+
+<span class="kw">let </span><span class="kw-2">mut </span>opts = Options::default();
+opts.set_use_fsync(<span class="bool-val">true</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_db_log_dir" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#1470-1475">source</a><h4 class="code-header">pub fn <a href="#method.set_db_log_dir" class="fn">set_db_log_dir</a>&lt;P: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/std/path/struct.Path.html" title="struct std::path::Path">Path</a>&gt;&gt;(&amp;mut self, path: P)</h4></section></summary><div class="docblock"><p>Specifies the absolute info LOG dir.</p>
+<p>If it is empty, the log files will be in the same dir as data.
+If it is non empty, the log files will be in the specified dir,
+and the db data dir’s absolute path will be used as the log file
+name’s prefix.</p>
+<p>Default: empty</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_log_level" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#1490-1494">source</a><h4 class="code-header">pub fn <a href="#method.set_log_level" class="fn">set_log_level</a>(&amp;mut self, level: <a class="enum" href="enum.LogLevel.html" title="enum rocksdb::LogLevel">LogLevel</a>)</h4></section></summary><div class="docblock"><p>Specifies the log level.
+Consider the <code>LogLevel</code> enum for a list of possible levels.</p>
+<p>Default: Info</p>
+<h5 id="examples-12"><a class="doc-anchor" href="#examples-12">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rocksdb::{Options, LogLevel};
+
+<span class="kw">let </span><span class="kw-2">mut </span>opts = Options::default();
+opts.set_log_level(LogLevel::Warn);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_bytes_per_sync" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#1518-1522">source</a><h4 class="code-header">pub fn <a href="#method.set_bytes_per_sync" class="fn">set_bytes_per_sync</a>(&amp;mut self, nbytes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>)</h4></section></summary><div class="docblock"><p>Allows OS to incrementally sync files to disk while they are being
+written, asynchronously, in the background. This operation can be used
+to smooth out write I/Os over time. Users shouldn’t rely on it for
+persistency guarantee.
+Issue one request for every bytes_per_sync written. <code>0</code> turns it off.</p>
+<p>Default: <code>0</code></p>
+<p>You may consider using rate_limiter to regulate write rate to device.
+When rate limiter is enabled, it automatically enables bytes_per_sync
+to 1MB.</p>
+<p>This option applies to table files</p>
+<h5 id="examples-13"><a class="doc-anchor" href="#examples-13">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rocksdb::Options;
+
+<span class="kw">let </span><span class="kw-2">mut </span>opts = Options::default();
+opts.set_bytes_per_sync(<span class="number">1024 </span>* <span class="number">1024</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_wal_bytes_per_sync" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#1529-1533">source</a><h4 class="code-header">pub fn <a href="#method.set_wal_bytes_per_sync" class="fn">set_wal_bytes_per_sync</a>(&amp;mut self, nbytes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>)</h4></section></summary><div class="docblock"><p>Same as bytes_per_sync, but applies to WAL files.</p>
+<p>Default: 0, turned off</p>
+<p>Dynamically changeable through SetDBOptions() API.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_writable_file_max_buffer_size" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#1545-1549">source</a><h4 class="code-header">pub fn <a href="#method.set_writable_file_max_buffer_size" class="fn">set_writable_file_max_buffer_size</a>(&amp;mut self, nbytes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>)</h4></section></summary><div class="docblock"><p>Sets the maximum buffer size that is used by WritableFileWriter.</p>
+<p>On Windows, we need to maintain an aligned buffer for writes.
+We allow the buffer to grow until it’s size hits the limit in buffered
+IO and fix the buffer size when using direct IO to ensure alignment of
+write requests if the logical sector size is unusual</p>
+<p>Default: 1024 * 1024 (1 MB)</p>
+<p>Dynamically changeable through SetDBOptions() API.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_allow_concurrent_memtable_write" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#1568-1575">source</a><h4 class="code-header">pub fn <a href="#method.set_allow_concurrent_memtable_write" class="fn">set_allow_concurrent_memtable_write</a>(&amp;mut self, allow: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>)</h4></section></summary><div class="docblock"><p>If true, allow multi-writers to update mem tables in parallel.
+Only some memtable_factory-s support concurrent writes; currently it
+is implemented only for SkipListFactory.  Concurrent memtable writes
+are not compatible with inplace_update_support or filter_deletes.
+It is strongly recommended to set enable_write_thread_adaptive_yield
+if you are going to use this feature.</p>
+<p>Default: true</p>
+<h5 id="examples-14"><a class="doc-anchor" href="#examples-14">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rocksdb::Options;
+
+<span class="kw">let </span><span class="kw-2">mut </span>opts = Options::default();
+opts.set_allow_concurrent_memtable_write(<span class="bool-val">false</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_enable_write_thread_adaptive_yield" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#1583-1590">source</a><h4 class="code-header">pub fn <a href="#method.set_enable_write_thread_adaptive_yield" class="fn">set_enable_write_thread_adaptive_yield</a>(&amp;mut self, enabled: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>)</h4></section></summary><div class="docblock"><p>If true, threads synchronizing with the write batch group leader will wait for up to
+write_thread_max_yield_usec before blocking on a mutex. This can substantially improve
+throughput for concurrent workloads, regardless of whether allow_concurrent_memtable_write
+is enabled.</p>
+<p>Default: true</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_max_sequential_skip_in_iterations" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#1598-1602">source</a><h4 class="code-header">pub fn <a href="#method.set_max_sequential_skip_in_iterations" class="fn">set_max_sequential_skip_in_iterations</a>(&amp;mut self, num: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>)</h4></section></summary><div class="docblock"><p>Specifies whether an iteration-&gt;Next() sequentially skips over keys with the same user-key or not.</p>
+<p>This number specifies the number of keys (with the same userkey)
+that will be sequentially skipped before a reseek is issued.</p>
+<p>Default: 8</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_use_direct_reads" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#1622-1626">source</a><h4 class="code-header">pub fn <a href="#method.set_use_direct_reads" class="fn">set_use_direct_reads</a>(&amp;mut self, enabled: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>)</h4></section></summary><div class="docblock"><p>Enable direct I/O mode for reading
+they may or may not improve performance depending on the use case</p>
+<p>Files will be opened in “direct I/O” mode
+which means that data read from the disk will not be cached or
+buffered. The hardware buffer of the devices may however still
+be used. Memory mapped files are not impacted by these parameters.</p>
+<p>Default: false</p>
+<h5 id="examples-15"><a class="doc-anchor" href="#examples-15">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rocksdb::Options;
+
+<span class="kw">let </span><span class="kw-2">mut </span>opts = Options::default();
+opts.set_use_direct_reads(<span class="bool-val">true</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_use_direct_io_for_flush_and_compaction" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#1646-1653">source</a><h4 class="code-header">pub fn <a href="#method.set_use_direct_io_for_flush_and_compaction" class="fn">set_use_direct_io_for_flush_and_compaction</a>(&amp;mut self, enabled: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>)</h4></section></summary><div class="docblock"><p>Enable direct I/O mode for flush and compaction</p>
+<p>Files will be opened in “direct I/O” mode
+which means that data written to the disk will not be cached or
+buffered. The hardware buffer of the devices may however still
+be used. Memory mapped files are not impacted by these parameters.
+they may or may not improve performance depending on the use case</p>
+<p>Default: false</p>
+<h5 id="examples-16"><a class="doc-anchor" href="#examples-16">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rocksdb::Options;
+
+<span class="kw">let </span><span class="kw-2">mut </span>opts = Options::default();
+opts.set_use_direct_io_for_flush_and_compaction(<span class="bool-val">true</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_is_fd_close_on_exec" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#1658-1662">source</a><h4 class="code-header">pub fn <a href="#method.set_is_fd_close_on_exec" class="fn">set_is_fd_close_on_exec</a>(&amp;mut self, enabled: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>)</h4></section></summary><div class="docblock"><p>Enable/dsiable child process inherit open files.</p>
+<p>Default: true</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_allow_os_buffer" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#1696-1699">source</a><h4 class="code-header">pub fn <a href="#method.set_allow_os_buffer" class="fn">set_allow_os_buffer</a>(&amp;mut self, is_allow: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>)</h4></section><span class="item-info"><div class="stab deprecated"><span class="emoji">👎</span><span>Deprecated since 0.7.0: replaced with set_use_direct_reads/set_use_direct_io_for_flush_and_compaction methods</span></div></span></summary><div class="docblock"><p>Hints to the OS that it should not buffer disk I/O. Enabling this
+parameter may improve performance but increases pressure on the
+system cache.</p>
+<p>The exact behavior of this parameter is platform dependent.</p>
+<p>On POSIX systems, after RocksDB reads data from disk it will
+mark the pages as “unneeded”. The operating system may - or may not</p>
+<ul>
+<li>evict these pages from memory, reducing pressure on the system
+cache. If the disk block is requested again this can result in
+additional disk I/O.</li>
+</ul>
+<p>On WINDOWS systems, files will be opened in “unbuffered I/O” mode
+which means that data read from the disk will not be cached or
+bufferized. The hardware buffer of the devices may however still
+be used. Memory mapped files are not impacted by this parameter.</p>
+<p>Default: true</p>
+<h5 id="examples-17"><a class="doc-anchor" href="#examples-17">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rocksdb::Options;
+
+<span class="kw">let </span><span class="kw-2">mut </span>opts = Options::default();
+<span class="attr">#[allow(deprecated)]
+</span>opts.set_allow_os_buffer(<span class="bool-val">false</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_table_cache_num_shard_bits" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#1713-1717">source</a><h4 class="code-header">pub fn <a href="#method.set_table_cache_num_shard_bits" class="fn">set_table_cache_num_shard_bits</a>(&amp;mut self, nbits: <a class="type" href="../libc/unix/type.c_int.html" title="type libc::unix::c_int">c_int</a>)</h4></section></summary><div class="docblock"><p>Sets the number of shards used for table cache.</p>
+<p>Default: <code>6</code></p>
+<h5 id="examples-18"><a class="doc-anchor" href="#examples-18">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rocksdb::Options;
+
+<span class="kw">let </span><span class="kw-2">mut </span>opts = Options::default();
+opts.set_table_cache_num_shard_bits(<span class="number">4</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_target_file_size_multiplier" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#1723-1727">source</a><h4 class="code-header">pub fn <a href="#method.set_target_file_size_multiplier" class="fn">set_target_file_size_multiplier</a>(&amp;mut self, multiplier: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i32.html">i32</a>)</h4></section></summary><div class="docblock"><p>By default target_file_size_multiplier is 1, which means
+by default files in different levels will have similar size.</p>
+<p>Dynamically changeable through SetOptions() API</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_min_write_buffer_number" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#1747-1751">source</a><h4 class="code-header">pub fn <a href="#method.set_min_write_buffer_number" class="fn">set_min_write_buffer_number</a>(&amp;mut self, nbuf: <a class="type" href="../libc/unix/type.c_int.html" title="type libc::unix::c_int">c_int</a>)</h4></section></summary><div class="docblock"><p>Sets the minimum number of write buffers that will be merged together
+before writing to storage.  If set to <code>1</code>, then
+all write buffers are flushed to L0 as individual files and this increases
+read amplification because a get request has to check in all of these
+files. Also, an in-memory merge may result in writing lesser
+data to storage if there are duplicate records in each of these
+individual write buffers.</p>
+<p>Default: <code>1</code></p>
+<h5 id="examples-19"><a class="doc-anchor" href="#examples-19">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rocksdb::Options;
+
+<span class="kw">let </span><span class="kw-2">mut </span>opts = Options::default();
+opts.set_min_write_buffer_number(<span class="number">2</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_max_write_buffer_number" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#1771-1775">source</a><h4 class="code-header">pub fn <a href="#method.set_max_write_buffer_number" class="fn">set_max_write_buffer_number</a>(&amp;mut self, nbuf: <a class="type" href="../libc/unix/type.c_int.html" title="type libc::unix::c_int">c_int</a>)</h4></section></summary><div class="docblock"><p>Sets the maximum number of write buffers that are built up in memory.
+The default and the minimum number is 2, so that when 1 write buffer
+is being flushed to storage, new writes can continue to the other
+write buffer.
+If max_write_buffer_number &gt; 3, writing will be slowed down to
+options.delayed_write_rate if we are writing to the last write buffer
+allowed.</p>
+<p>Default: <code>2</code></p>
+<h5 id="examples-20"><a class="doc-anchor" href="#examples-20">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rocksdb::Options;
+
+<span class="kw">let </span><span class="kw-2">mut </span>opts = Options::default();
+opts.set_max_write_buffer_number(<span class="number">4</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_write_buffer_size" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#1802-1806">source</a><h4 class="code-header">pub fn <a href="#method.set_write_buffer_size" class="fn">set_write_buffer_size</a>(&amp;mut self, size: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>)</h4></section></summary><div class="docblock"><p>Sets the amount of data to build up in memory (backed by an unsorted log
+on disk) before converting to a sorted on-disk file.</p>
+<p>Larger values increase performance, especially during bulk loads.
+Up to max_write_buffer_number write buffers may be held in memory
+at the same time,
+so you may wish to adjust this parameter to control memory usage.
+Also, a larger write buffer will result in a longer recovery time
+the next time the database is opened.</p>
+<p>Note that write_buffer_size is enforced per column family.
+See db_write_buffer_size for sharing memory across column families.</p>
+<p>Default: <code>0x4000000</code> (64MiB)</p>
+<p>Dynamically changeable through SetOptions() API</p>
+<h5 id="examples-21"><a class="doc-anchor" href="#examples-21">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rocksdb::Options;
+
+<span class="kw">let </span><span class="kw-2">mut </span>opts = Options::default();
+opts.set_write_buffer_size(<span class="number">128 </span>* <span class="number">1024 </span>* <span class="number">1024</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_db_write_buffer_size" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#1827-1831">source</a><h4 class="code-header">pub fn <a href="#method.set_db_write_buffer_size" class="fn">set_db_write_buffer_size</a>(&amp;mut self, size: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>)</h4></section></summary><div class="docblock"><p>Amount of data to build up in memtables across all column
+families before writing to disk.</p>
+<p>This is distinct from write_buffer_size, which enforces a limit
+for a single memtable.</p>
+<p>This feature is disabled by default. Specify a non-zero value
+to enable it.</p>
+<p>Default: 0 (disabled)</p>
+<h5 id="examples-22"><a class="doc-anchor" href="#examples-22">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rocksdb::Options;
+
+<span class="kw">let </span><span class="kw-2">mut </span>opts = Options::default();
+opts.set_db_write_buffer_size(<span class="number">128 </span>* <span class="number">1024 </span>* <span class="number">1024</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_max_bytes_for_level_base" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#1854-1858">source</a><h4 class="code-header">pub fn <a href="#method.set_max_bytes_for_level_base" class="fn">set_max_bytes_for_level_base</a>(&amp;mut self, size: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>)</h4></section></summary><div class="docblock"><p>Control maximum total data size for a level.
+max_bytes_for_level_base is the max total for level-1.
+Maximum number of bytes for level L can be calculated as
+(max_bytes_for_level_base) * (max_bytes_for_level_multiplier ^ (L-1))
+For example, if max_bytes_for_level_base is 200MB, and if
+max_bytes_for_level_multiplier is 10, total data size for level-1
+will be 200MB, total file size for level-2 will be 2GB,
+and total file size for level-3 will be 20GB.</p>
+<p>Default: <code>0x10000000</code> (256MiB).</p>
+<p>Dynamically changeable through SetOptions() API</p>
+<h5 id="examples-23"><a class="doc-anchor" href="#examples-23">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rocksdb::Options;
+
+<span class="kw">let </span><span class="kw-2">mut </span>opts = Options::default();
+opts.set_max_bytes_for_level_base(<span class="number">512 </span>* <span class="number">1024 </span>* <span class="number">1024</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_max_bytes_for_level_multiplier" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#1870-1874">source</a><h4 class="code-header">pub fn <a href="#method.set_max_bytes_for_level_multiplier" class="fn">set_max_bytes_for_level_multiplier</a>(&amp;mut self, mul: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.f64.html">f64</a>)</h4></section></summary><div class="docblock"><p>Default: <code>10</code></p>
+<h5 id="examples-24"><a class="doc-anchor" href="#examples-24">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rocksdb::Options;
+
+<span class="kw">let </span><span class="kw-2">mut </span>opts = Options::default();
+opts.set_max_bytes_for_level_multiplier(<span class="number">4.0</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_max_manifest_file_size" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#1888-1892">source</a><h4 class="code-header">pub fn <a href="#method.set_max_manifest_file_size" class="fn">set_max_manifest_file_size</a>(&amp;mut self, size: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>)</h4></section></summary><div class="docblock"><p>The manifest file is rolled over on reaching this limit.
+The older manifest file be deleted.
+The default value is MAX_INT so that roll-over does not take place.</p>
+<h5 id="examples-25"><a class="doc-anchor" href="#examples-25">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rocksdb::Options;
+
+<span class="kw">let </span><span class="kw-2">mut </span>opts = Options::default();
+opts.set_max_manifest_file_size(<span class="number">20 </span>* <span class="number">1024 </span>* <span class="number">1024</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_target_file_size_base" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#1915-1919">source</a><h4 class="code-header">pub fn <a href="#method.set_target_file_size_base" class="fn">set_target_file_size_base</a>(&amp;mut self, size: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>)</h4></section></summary><div class="docblock"><p>Sets the target file size for compaction.
+target_file_size_base is per-file size for level-1.
+Target file size for level L can be calculated by
+target_file_size_base * (target_file_size_multiplier ^ (L-1))
+For example, if target_file_size_base is 2MB and
+target_file_size_multiplier is 10, then each file on level-1 will
+be 2MB, and each file on level 2 will be 20MB,
+and each file on level-3 will be 200MB.</p>
+<p>Default: <code>0x4000000</code> (64MiB)</p>
+<p>Dynamically changeable through SetOptions() API</p>
+<h5 id="examples-26"><a class="doc-anchor" href="#examples-26">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rocksdb::Options;
+
+<span class="kw">let </span><span class="kw-2">mut </span>opts = Options::default();
+opts.set_target_file_size_base(<span class="number">128 </span>* <span class="number">1024 </span>* <span class="number">1024</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_min_write_buffer_number_to_merge" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#1939-1943">source</a><h4 class="code-header">pub fn <a href="#method.set_min_write_buffer_number_to_merge" class="fn">set_min_write_buffer_number_to_merge</a>(&amp;mut self, to_merge: <a class="type" href="../libc/unix/type.c_int.html" title="type libc::unix::c_int">c_int</a>)</h4></section></summary><div class="docblock"><p>Sets the minimum number of write buffers that will be merged together
+before writing to storage.  If set to <code>1</code>, then
+all write buffers are flushed to L0 as individual files and this increases
+read amplification because a get request has to check in all of these
+files. Also, an in-memory merge may result in writing lesser
+data to storage if there are duplicate records in each of these
+individual write buffers.</p>
+<p>Default: <code>1</code></p>
+<h5 id="examples-27"><a class="doc-anchor" href="#examples-27">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rocksdb::Options;
+
+<span class="kw">let </span><span class="kw-2">mut </span>opts = Options::default();
+opts.set_min_write_buffer_number_to_merge(<span class="number">2</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_level_zero_file_num_compaction_trigger" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#1960-1964">source</a><h4 class="code-header">pub fn <a href="#method.set_level_zero_file_num_compaction_trigger" class="fn">set_level_zero_file_num_compaction_trigger</a>(&amp;mut self, n: <a class="type" href="../libc/unix/type.c_int.html" title="type libc::unix::c_int">c_int</a>)</h4></section></summary><div class="docblock"><p>Sets the number of files to trigger level-0 compaction. A value &lt; <code>0</code> means that
+level-0 compaction will not be triggered by number of files at all.</p>
+<p>Default: <code>4</code></p>
+<p>Dynamically changeable through SetOptions() API</p>
+<h5 id="examples-28"><a class="doc-anchor" href="#examples-28">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rocksdb::Options;
+
+<span class="kw">let </span><span class="kw-2">mut </span>opts = Options::default();
+opts.set_level_zero_file_num_compaction_trigger(<span class="number">8</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_level_zero_slowdown_writes_trigger" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#1982-1986">source</a><h4 class="code-header">pub fn <a href="#method.set_level_zero_slowdown_writes_trigger" class="fn">set_level_zero_slowdown_writes_trigger</a>(&amp;mut self, n: <a class="type" href="../libc/unix/type.c_int.html" title="type libc::unix::c_int">c_int</a>)</h4></section></summary><div class="docblock"><p>Sets the soft limit on number of level-0 files. We start slowing down writes at this
+point. A value &lt; <code>0</code> means that no writing slow down will be triggered by
+number of files in level-0.</p>
+<p>Default: <code>20</code></p>
+<p>Dynamically changeable through SetOptions() API</p>
+<h5 id="examples-29"><a class="doc-anchor" href="#examples-29">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rocksdb::Options;
+
+<span class="kw">let </span><span class="kw-2">mut </span>opts = Options::default();
+opts.set_level_zero_slowdown_writes_trigger(<span class="number">10</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_level_zero_stop_writes_trigger" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2002-2006">source</a><h4 class="code-header">pub fn <a href="#method.set_level_zero_stop_writes_trigger" class="fn">set_level_zero_stop_writes_trigger</a>(&amp;mut self, n: <a class="type" href="../libc/unix/type.c_int.html" title="type libc::unix::c_int">c_int</a>)</h4></section></summary><div class="docblock"><p>Sets the maximum number of level-0 files.  We stop writes at this point.</p>
+<p>Default: <code>24</code></p>
+<p>Dynamically changeable through SetOptions() API</p>
+<h5 id="examples-30"><a class="doc-anchor" href="#examples-30">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rocksdb::Options;
+
+<span class="kw">let </span><span class="kw-2">mut </span>opts = Options::default();
+opts.set_level_zero_stop_writes_trigger(<span class="number">48</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_compaction_style" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2020-2024">source</a><h4 class="code-header">pub fn <a href="#method.set_compaction_style" class="fn">set_compaction_style</a>(&amp;mut self, style: <a class="enum" href="enum.DBCompactionStyle.html" title="enum rocksdb::DBCompactionStyle">DBCompactionStyle</a>)</h4></section></summary><div class="docblock"><p>Sets the compaction style.</p>
+<p>Default: DBCompactionStyle::Level</p>
+<h5 id="examples-31"><a class="doc-anchor" href="#examples-31">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rocksdb::{Options, DBCompactionStyle};
+
+<span class="kw">let </span><span class="kw-2">mut </span>opts = Options::default();
+opts.set_compaction_style(DBCompactionStyle::Universal);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_universal_compaction_options" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2027-2031">source</a><h4 class="code-header">pub fn <a href="#method.set_universal_compaction_options" class="fn">set_universal_compaction_options</a>(
+    &amp;mut self,
+    uco: &amp;<a class="struct" href="struct.UniversalCompactOptions.html" title="struct rocksdb::UniversalCompactOptions">UniversalCompactOptions</a>,
+)</h4></section></summary><div class="docblock"><p>Sets the options needed to support Universal Style compactions.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_fifo_compaction_options" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2034-2038">source</a><h4 class="code-header">pub fn <a href="#method.set_fifo_compaction_options" class="fn">set_fifo_compaction_options</a>(&amp;mut self, fco: &amp;<a class="struct" href="struct.FifoCompactOptions.html" title="struct rocksdb::FifoCompactOptions">FifoCompactOptions</a>)</h4></section></summary><div class="docblock"><p>Sets the options for FIFO compaction style.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_unordered_write" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2064-2068">source</a><h4 class="code-header">pub fn <a href="#method.set_unordered_write" class="fn">set_unordered_write</a>(&amp;mut self, unordered: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>)</h4></section></summary><div class="docblock"><p>Sets unordered_write to true trades higher write throughput with
+relaxing the immutability guarantee of snapshots. This violates the
+repeatability one expects from ::Get from a snapshot, as well as
+::MultiGet and Iterator’s consistent-point-in-time view property.
+If the application cannot tolerate the relaxed guarantees, it can implement
+its own mechanisms to work around that and yet benefit from the higher
+throughput. Using TransactionDB with WRITE_PREPARED write policy and
+two_write_queues=true is one way to achieve immutable snapshots despite
+unordered_write.</p>
+<p>By default, i.e., when it is false, rocksdb does not advance the sequence
+number for new snapshots unless all the writes with lower sequence numbers
+are already finished. This provides the immutability that we except from
+snapshots. Moreover, since Iterator and MultiGet internally depend on
+snapshots, the snapshot immutability results into Iterator and MultiGet
+offering consistent-point-in-time view. If set to true, although
+Read-Your-Own-Write property is still provided, the snapshot immutability
+property is relaxed: the writes issued after the snapshot is obtained (with
+larger sequence numbers) will be still not visible to the reads from that
+snapshot, however, there still might be pending writes (with lower sequence
+number) that will change the state visible to the snapshot after they are
+landed to the memtable.</p>
+<p>Default: false</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_max_subcompactions" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2075-2079">source</a><h4 class="code-header">pub fn <a href="#method.set_max_subcompactions" class="fn">set_max_subcompactions</a>(&amp;mut self, num: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>)</h4></section></summary><div class="docblock"><p>Sets maximum number of threads that will
+concurrently perform a compaction job by breaking it into multiple,
+smaller ones that are run simultaneously.</p>
+<p>Default: 1 (i.e. no subcompactions)</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_max_background_jobs" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2087-2091">source</a><h4 class="code-header">pub fn <a href="#method.set_max_background_jobs" class="fn">set_max_background_jobs</a>(&amp;mut self, jobs: <a class="type" href="../libc/unix/type.c_int.html" title="type libc::unix::c_int">c_int</a>)</h4></section></summary><div class="docblock"><p>Sets maximum number of concurrent background jobs
+(compactions and flushes).</p>
+<p>Default: 2</p>
+<p>Dynamically changeable through SetDBOptions() API.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_max_background_compactions" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2119-2123">source</a><h4 class="code-header">pub fn <a href="#method.set_max_background_compactions" class="fn">set_max_background_compactions</a>(&amp;mut self, n: <a class="type" href="../libc/unix/type.c_int.html" title="type libc::unix::c_int">c_int</a>)</h4></section><span class="item-info"><div class="stab deprecated"><span class="emoji">👎</span><span>Deprecated since 0.15.0: RocksDB automatically decides this based on the value of max_background_jobs</span></div></span></summary><div class="docblock"><p>Sets the maximum number of concurrent background compaction jobs, submitted to
+the default LOW priority thread pool.
+We first try to schedule compactions based on
+<code>base_background_compactions</code>. If the compaction cannot catch up , we
+will increase number of compaction threads up to
+<code>max_background_compactions</code>.</p>
+<p>If you’re increasing this, also consider increasing number of threads in
+LOW priority thread pool. For more information, see
+Env::SetBackgroundThreads</p>
+<p>Default: <code>1</code></p>
+<h5 id="examples-32"><a class="doc-anchor" href="#examples-32">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rocksdb::Options;
+
+<span class="kw">let </span><span class="kw-2">mut </span>opts = Options::default();
+<span class="attr">#[allow(deprecated)]
+</span>opts.set_max_background_compactions(<span class="number">2</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_max_background_flushes" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2155-2159">source</a><h4 class="code-header">pub fn <a href="#method.set_max_background_flushes" class="fn">set_max_background_flushes</a>(&amp;mut self, n: <a class="type" href="../libc/unix/type.c_int.html" title="type libc::unix::c_int">c_int</a>)</h4></section><span class="item-info"><div class="stab deprecated"><span class="emoji">👎</span><span>Deprecated since 0.15.0: RocksDB automatically decides this based on the value of max_background_jobs</span></div></span></summary><div class="docblock"><p>Sets the maximum number of concurrent background memtable flush jobs, submitted to
+the HIGH priority thread pool.</p>
+<p>By default, all background jobs (major compaction and memtable flush) go
+to the LOW priority pool. If this option is set to a positive number,
+memtable flush jobs will be submitted to the HIGH priority pool.
+It is important when the same Env is shared by multiple db instances.
+Without a separate pool, long running major compaction jobs could
+potentially block memtable flush jobs of other db instances, leading to
+unnecessary Put stalls.</p>
+<p>If you’re increasing this, also consider increasing number of threads in
+HIGH priority thread pool. For more information, see
+Env::SetBackgroundThreads</p>
+<p>Default: <code>1</code></p>
+<h5 id="examples-33"><a class="doc-anchor" href="#examples-33">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rocksdb::Options;
+
+<span class="kw">let </span><span class="kw-2">mut </span>opts = Options::default();
+<span class="attr">#[allow(deprecated)]
+</span>opts.set_max_background_flushes(<span class="number">2</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_disable_auto_compactions" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2176-2180">source</a><h4 class="code-header">pub fn <a href="#method.set_disable_auto_compactions" class="fn">set_disable_auto_compactions</a>(&amp;mut self, disable: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>)</h4></section></summary><div class="docblock"><p>Disables automatic compactions. Manual compactions can still
+be issued on this column family</p>
+<p>Default: <code>false</code></p>
+<p>Dynamically changeable through SetOptions() API</p>
+<h5 id="examples-34"><a class="doc-anchor" href="#examples-34">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rocksdb::Options;
+
+<span class="kw">let </span><span class="kw-2">mut </span>opts = Options::default();
+opts.set_disable_auto_compactions(<span class="bool-val">true</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_memtable_huge_page_size" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2193-2197">source</a><h4 class="code-header">pub fn <a href="#method.set_memtable_huge_page_size" class="fn">set_memtable_huge_page_size</a>(&amp;mut self, size: <a class="type" href="../libc/unix/type.size_t.html" title="type libc::unix::size_t">size_t</a>)</h4></section></summary><div class="docblock"><p>SetMemtableHugePageSize sets the page size for huge page for
+arena used by the memtable.
+If &lt;=0, it won’t allocate from huge page but from malloc.
+Users are responsible to reserve huge pages for it to be allocated. For
+example:
+sysctl -w vm.nr_hugepages=20
+See linux doc Documentation/vm/hugetlbpage.txt
+If there isn’t enough free huge page available, it will fall back to
+malloc.</p>
+<p>Dynamically changeable through SetOptions() API</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_max_successive_merges" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2208-2212">source</a><h4 class="code-header">pub fn <a href="#method.set_max_successive_merges" class="fn">set_max_successive_merges</a>(&amp;mut self, num: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>)</h4></section></summary><div class="docblock"><p>Sets the maximum number of successive merge operations on a key in the memtable.</p>
+<p>When a merge operation is added to the memtable and the maximum number of
+successive merges is reached, the value of the key will be calculated and
+inserted into the memtable instead of the merge operation. This will
+ensure that there are never more than max_successive_merges merge
+operations in the memtable.</p>
+<p>Default: 0 (disabled)</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_bloom_locality" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2225-2229">source</a><h4 class="code-header">pub fn <a href="#method.set_bloom_locality" class="fn">set_bloom_locality</a>(&amp;mut self, v: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>)</h4></section></summary><div class="docblock"><p>Control locality of bloom filter probes to improve cache miss rate.
+This option only applies to memtable prefix bloom and plaintable
+prefix bloom. It essentially limits the max number of cache lines each
+bloom filter check can touch.</p>
+<p>This optimization is turned off when set to 0. The number should never
+be greater than number of probes. This option can boost performance
+for in-memory workload but should use with care since it can cause
+higher false positive rate.</p>
+<p>Default: 0</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_inplace_update_support" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2239-2243">source</a><h4 class="code-header">pub fn <a href="#method.set_inplace_update_support" class="fn">set_inplace_update_support</a>(&amp;mut self, enabled: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>)</h4></section></summary><div class="docblock"><p>Enable/disable thread-safe inplace updates.</p>
+<p>Requires updates if</p>
+<ul>
+<li>key exists in current memtable</li>
+<li>new sizeof(new_value) &lt;= sizeof(old_value)</li>
+<li>old_value for that key is a put i.e. kTypeValue</li>
+</ul>
+<p>Default: false.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_inplace_update_locks" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2248-2252">source</a><h4 class="code-header">pub fn <a href="#method.set_inplace_update_locks" class="fn">set_inplace_update_locks</a>(&amp;mut self, num: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>)</h4></section></summary><div class="docblock"><p>Sets the number of locks used for inplace update.</p>
+<p>Default: 10000 when inplace_update_support = true, otherwise 0.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_max_bytes_for_level_multiplier_additional" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2261-2270">source</a><h4 class="code-header">pub fn <a href="#method.set_max_bytes_for_level_multiplier_additional" class="fn">set_max_bytes_for_level_multiplier_additional</a>(
+    &amp;mut self,
+    level_values: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i32.html">i32</a>],
+)</h4></section></summary><div class="docblock"><p>Different max-size multipliers for different levels.
+These are multiplied by max_bytes_for_level_multiplier to arrive
+at the max-size of each level.</p>
+<p>Default: 1</p>
+<p>Dynamically changeable through SetOptions() API</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_skip_checking_sst_file_sizes_on_db_open" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2280-2287">source</a><h4 class="code-header">pub fn <a href="#method.set_skip_checking_sst_file_sizes_on_db_open" class="fn">set_skip_checking_sst_file_sizes_on_db_open</a>(&amp;mut self, value: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>)</h4></section></summary><div class="docblock"><p>If true, then DB::Open() will not fetch and check sizes of all sst files.
+This may significantly speed up startup if there are many sst files,
+especially when using non-default Env with expensive GetFileSize().
+We’ll still check that all required sst files exist.
+If paranoid_checks is false, this option is ignored, and sst files are
+not checked at all.</p>
+<p>Default: false</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_max_write_buffer_size_to_maintain" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2319-2323">source</a><h4 class="code-header">pub fn <a href="#method.set_max_write_buffer_size_to_maintain" class="fn">set_max_write_buffer_size_to_maintain</a>(&amp;mut self, size: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i64.html">i64</a>)</h4></section></summary><div class="docblock"><p>The total maximum size(bytes) of write buffers to maintain in memory
+including copies of buffers that have already been flushed. This parameter
+only affects trimming of flushed buffers and does not affect flushing.
+This controls the maximum amount of write history that will be available
+in memory for conflict checking when Transactions are used. The actual
+size of write history (flushed Memtables) might be higher than this limit
+if further trimming will reduce write history total size below this
+limit. For example, if max_write_buffer_size_to_maintain is set to 64MB,
+and there are three flushed Memtables, with sizes of 32MB, 20MB, 20MB.
+Because trimming the next Memtable of size 20MB will reduce total memory
+usage to 52MB which is below the limit, RocksDB will stop trimming.</p>
+<p>When using an OptimisticTransactionDB:
+If this value is too low, some transactions may fail at commit time due
+to not being able to determine whether there were any write conflicts.</p>
+<p>When using a TransactionDB:
+If Transaction::SetSnapshot is used, TransactionDB will read either
+in-memory write buffers or SST files to do write-conflict checking.
+Increasing this value can reduce the number of reads to SST files
+done for conflict detection.</p>
+<p>Setting this value to 0 will cause write buffers to be freed immediately
+after they are flushed. If this value is set to -1,
+‘max_write_buffer_number * write_buffer_size’ will be used.</p>
+<p>Default:
+If using a TransactionDB/OptimisticTransactionDB, the default value will
+be set to the value of ‘max_write_buffer_number * write_buffer_size’
+if it is not explicitly set by the user.  Otherwise, the default is 0.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_enable_pipelined_write" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2338-2342">source</a><h4 class="code-header">pub fn <a href="#method.set_enable_pipelined_write" class="fn">set_enable_pipelined_write</a>(&amp;mut self, value: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>)</h4></section></summary><div class="docblock"><p>By default, a single write thread queue is maintained. The thread gets
+to the head of the queue becomes write batch group leader and responsible
+for writing to WAL and memtable for the batch group.</p>
+<p>If enable_pipelined_write is true, separate write thread queue is
+maintained for WAL write and memtable write. A write thread first enter WAL
+writer queue and then memtable writer queue. Pending thread on the WAL
+writer queue thus only have to wait for previous writers to finish their
+WAL writing but not the memtable writing. Enabling the feature may improve
+write throughput and reduce latency of the prepare phase of two-phase
+commit.</p>
+<p>Default: false</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_memtable_factory" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2362-2383">source</a><h4 class="code-header">pub fn <a href="#method.set_memtable_factory" class="fn">set_memtable_factory</a>(&amp;mut self, factory: <a class="enum" href="enum.MemtableFactory.html" title="enum rocksdb::MemtableFactory">MemtableFactory</a>)</h4></section></summary><div class="docblock"><p>Defines the underlying memtable implementation.
+See official <a href="https://github.com/facebook/rocksdb/wiki/MemTable">wiki</a> for more information.
+Defaults to using a skiplist.</p>
+<h5 id="examples-35"><a class="doc-anchor" href="#examples-35">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rocksdb::{Options, MemtableFactory};
+<span class="kw">let </span><span class="kw-2">mut </span>opts = Options::default();
+<span class="kw">let </span>factory = MemtableFactory::HashSkipList {
+    bucket_count: <span class="number">1_000_000</span>,
+    height: <span class="number">4</span>,
+    branching_factor: <span class="number">4</span>,
+};
+
+opts.set_allow_concurrent_memtable_write(<span class="bool-val">false</span>);
+opts.set_memtable_factory(factory);</code></pre></div>
+</div></details><section id="method.set_block_based_table_factory" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2385-2390">source</a><h4 class="code-header">pub fn <a href="#method.set_block_based_table_factory" class="fn">set_block_based_table_factory</a>(&amp;mut self, factory: &amp;<a class="struct" href="struct.BlockBasedOptions.html" title="struct rocksdb::BlockBasedOptions">BlockBasedOptions</a>)</h4></section><details class="toggle method-toggle" open><summary><section id="method.set_cuckoo_table_factory" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2412-2416">source</a><h4 class="code-header">pub fn <a href="#method.set_cuckoo_table_factory" class="fn">set_cuckoo_table_factory</a>(&amp;mut self, factory: &amp;<a class="struct" href="struct.CuckooTableOptions.html" title="struct rocksdb::CuckooTableOptions">CuckooTableOptions</a>)</h4></section></summary><div class="docblock"><p>Sets the table factory to a CuckooTableFactory (the default table
+factory is a block-based table factory that provides a default
+implementation of TableBuilder and TableReader with default
+BlockBasedTableOptions).
+See official <a href="https://github.com/facebook/rocksdb/wiki/CuckooTable-Format">wiki</a> for more information on this table format.</p>
+<h5 id="examples-36"><a class="doc-anchor" href="#examples-36">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rocksdb::{Options, CuckooTableOptions};
+
+<span class="kw">let </span><span class="kw-2">mut </span>opts = Options::default();
+<span class="kw">let </span><span class="kw-2">mut </span>factory_opts = CuckooTableOptions::default();
+factory_opts.set_hash_ratio(<span class="number">0.8</span>);
+factory_opts.set_max_search_depth(<span class="number">20</span>);
+factory_opts.set_cuckoo_block_size(<span class="number">10</span>);
+factory_opts.set_identity_as_first_hash(<span class="bool-val">true</span>);
+factory_opts.set_use_module_hash(<span class="bool-val">false</span>);
+
+opts.set_cuckoo_table_factory(<span class="kw-2">&amp;</span>factory_opts);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_plain_table_factory" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2441-2451">source</a><h4 class="code-header">pub fn <a href="#method.set_plain_table_factory" class="fn">set_plain_table_factory</a>(&amp;mut self, options: &amp;<a class="struct" href="struct.PlainTableFactoryOptions.html" title="struct rocksdb::PlainTableFactoryOptions">PlainTableFactoryOptions</a>)</h4></section></summary><div class="docblock"><p>Sets the factory as plain table.
+See official <a href="https://github.com/facebook/rocksdb/wiki/PlainTable-Format">wiki</a> for more
+information.</p>
+<h5 id="examples-37"><a class="doc-anchor" href="#examples-37">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rocksdb::{Options, PlainTableFactoryOptions};
+
+<span class="kw">let </span><span class="kw-2">mut </span>opts = Options::default();
+<span class="kw">let </span>factory_opts = PlainTableFactoryOptions {
+  user_key_length: <span class="number">0</span>,
+  bloom_bits_per_key: <span class="number">20</span>,
+  hash_table_ratio: <span class="number">0.75</span>,
+  index_sparseness: <span class="number">16</span>,
+};
+
+opts.set_plain_table_factory(<span class="kw-2">&amp;</span>factory_opts);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_min_level_to_compress" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2454-2458">source</a><h4 class="code-header">pub fn <a href="#method.set_min_level_to_compress" class="fn">set_min_level_to_compress</a>(&amp;mut self, lvl: <a class="type" href="../libc/unix/type.c_int.html" title="type libc::unix::c_int">c_int</a>)</h4></section></summary><div class="docblock"><p>Sets the start level to use compression.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_report_bg_io_stats" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2472-2476">source</a><h4 class="code-header">pub fn <a href="#method.set_report_bg_io_stats" class="fn">set_report_bg_io_stats</a>(&amp;mut self, enable: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>)</h4></section></summary><div class="docblock"><p>Measure IO stats in compactions and flushes, if <code>true</code>.</p>
+<p>Default: <code>false</code></p>
+<h5 id="examples-38"><a class="doc-anchor" href="#examples-38">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rocksdb::Options;
+
+<span class="kw">let </span><span class="kw-2">mut </span>opts = Options::default();
+opts.set_report_bg_io_stats(<span class="bool-val">true</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_max_total_wal_size" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2493-2497">source</a><h4 class="code-header">pub fn <a href="#method.set_max_total_wal_size" class="fn">set_max_total_wal_size</a>(&amp;mut self, size: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>)</h4></section></summary><div class="docblock"><p>Once write-ahead logs exceed this size, we will start forcing the flush of
+column families whose memtables are backed by the oldest live WAL file
+(i.e. the ones that are causing all the space amplification).</p>
+<p>Default: <code>0</code></p>
+<h5 id="examples-39"><a class="doc-anchor" href="#examples-39">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rocksdb::Options;
+
+<span class="kw">let </span><span class="kw-2">mut </span>opts = Options::default();
+<span class="comment">// Set max total wal size to 1G.
+</span>opts.set_max_total_wal_size(<span class="number">1 </span>&lt;&lt; <span class="number">30</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_wal_recovery_mode" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2511-2515">source</a><h4 class="code-header">pub fn <a href="#method.set_wal_recovery_mode" class="fn">set_wal_recovery_mode</a>(&amp;mut self, mode: <a class="enum" href="enum.DBRecoveryMode.html" title="enum rocksdb::DBRecoveryMode">DBRecoveryMode</a>)</h4></section></summary><div class="docblock"><p>Recovery mode to control the consistency while replaying WAL.</p>
+<p>Default: DBRecoveryMode::PointInTime</p>
+<h5 id="examples-40"><a class="doc-anchor" href="#examples-40">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rocksdb::{Options, DBRecoveryMode};
+
+<span class="kw">let </span><span class="kw-2">mut </span>opts = Options::default();
+opts.set_wal_recovery_mode(DBRecoveryMode::AbsoluteConsistency);</code></pre></div>
+</div></details><section id="method.enable_statistics" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2517-2521">source</a><h4 class="code-header">pub fn <a href="#method.enable_statistics" class="fn">enable_statistics</a>(&amp;mut self)</h4></section><section id="method.get_statistics" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2523-2535">source</a><h4 class="code-header">pub fn <a href="#method.get_statistics" class="fn">get_statistics</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>&gt;</h4></section><details class="toggle method-toggle" open><summary><section id="method.set_stats_dump_period_sec" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2549-2553">source</a><h4 class="code-header">pub fn <a href="#method.set_stats_dump_period_sec" class="fn">set_stats_dump_period_sec</a>(&amp;mut self, period: <a class="type" href="../libc/unix/type.c_uint.html" title="type libc::unix::c_uint">c_uint</a>)</h4></section></summary><div class="docblock"><p>If not zero, dump <code>rocksdb.stats</code> to LOG every <code>stats_dump_period_sec</code>.</p>
+<p>Default: <code>600</code> (10 mins)</p>
+<h5 id="examples-41"><a class="doc-anchor" href="#examples-41">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rocksdb::Options;
+
+<span class="kw">let </span><span class="kw-2">mut </span>opts = Options::default();
+opts.set_stats_dump_period_sec(<span class="number">300</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_stats_persist_period_sec" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2567-2571">source</a><h4 class="code-header">pub fn <a href="#method.set_stats_persist_period_sec" class="fn">set_stats_persist_period_sec</a>(&amp;mut self, period: <a class="type" href="../libc/unix/type.c_uint.html" title="type libc::unix::c_uint">c_uint</a>)</h4></section></summary><div class="docblock"><p>If not zero, dump rocksdb.stats to RocksDB to LOG every <code>stats_persist_period_sec</code>.</p>
+<p>Default: <code>600</code> (10 mins)</p>
+<h5 id="examples-42"><a class="doc-anchor" href="#examples-42">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rocksdb::Options;
+
+<span class="kw">let </span><span class="kw-2">mut </span>opts = Options::default();
+opts.set_stats_persist_period_sec(<span class="number">5</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_advise_random_on_open" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2578-2582">source</a><h4 class="code-header">pub fn <a href="#method.set_advise_random_on_open" class="fn">set_advise_random_on_open</a>(&amp;mut self, advise: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>)</h4></section></summary><div class="docblock"><p>When set to true, reading SST files will opt out of the filesystem’s
+readahead. Setting this to false may improve sequential iteration
+performance.</p>
+<p>Default: <code>true</code></p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_access_hint_on_compaction_start" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2589-2593">source</a><h4 class="code-header">pub fn <a href="#method.set_access_hint_on_compaction_start" class="fn">set_access_hint_on_compaction_start</a>(&amp;mut self, pattern: AccessHint)</h4></section></summary><div class="docblock"><p>Specifies the file access pattern once a compaction is started.</p>
+<p>It will be applied to all input files of a compaction.</p>
+<p>Default: Normal</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_use_adaptive_mutex" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2602-2606">source</a><h4 class="code-header">pub fn <a href="#method.set_use_adaptive_mutex" class="fn">set_use_adaptive_mutex</a>(&amp;mut self, enabled: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>)</h4></section></summary><div class="docblock"><p>Enable/disable adaptive mutex, which spins in the user space before resorting to kernel.</p>
+<p>This could reduce context switch when the mutex is not
+heavily contended. However, if the mutex is hot, we could end up
+wasting spin time.</p>
+<p>Default: false</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_num_levels" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2609-2613">source</a><h4 class="code-header">pub fn <a href="#method.set_num_levels" class="fn">set_num_levels</a>(&amp;mut self, n: <a class="type" href="../libc/unix/type.c_int.html" title="type libc::unix::c_int">c_int</a>)</h4></section></summary><div class="docblock"><p>Sets the number of levels for this database.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_memtable_prefix_bloom_ratio" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2631-2635">source</a><h4 class="code-header">pub fn <a href="#method.set_memtable_prefix_bloom_ratio" class="fn">set_memtable_prefix_bloom_ratio</a>(&amp;mut self, ratio: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.f64.html">f64</a>)</h4></section></summary><div class="docblock"><p>When a <code>prefix_extractor</code> is defined through <code>opts.set_prefix_extractor</code> this
+creates a prefix bloom filter for each memtable with the size of
+<code>write_buffer_size * memtable_prefix_bloom_ratio</code> (capped at 0.25).</p>
+<p>Default: <code>0</code></p>
+<h5 id="examples-43"><a class="doc-anchor" href="#examples-43">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rocksdb::{Options, SliceTransform};
+
+<span class="kw">let </span><span class="kw-2">mut </span>opts = Options::default();
+<span class="kw">let </span>transform = SliceTransform::create_fixed_prefix(<span class="number">10</span>);
+opts.set_prefix_extractor(transform);
+opts.set_memtable_prefix_bloom_ratio(<span class="number">0.2</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_max_compaction_bytes" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2644-2648">source</a><h4 class="code-header">pub fn <a href="#method.set_max_compaction_bytes" class="fn">set_max_compaction_bytes</a>(&amp;mut self, nbytes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>)</h4></section></summary><div class="docblock"><p>Sets the maximum number of bytes in all compacted files.
+We try to limit number of bytes in one compaction to be lower than this
+threshold. But it’s not guaranteed.</p>
+<p>Value 0 will be sanitized.</p>
+<p>Default: target_file_size_base * 25</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_wal_dir" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2663-2668">source</a><h4 class="code-header">pub fn <a href="#method.set_wal_dir" class="fn">set_wal_dir</a>&lt;P: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/std/path/struct.Path.html" title="struct std::path::Path">Path</a>&gt;&gt;(&amp;mut self, path: P)</h4></section></summary><div class="docblock"><p>Specifies the absolute path of the directory the
+write-ahead log (WAL) should be written to.</p>
+<p>Default: same directory as the database</p>
+<h5 id="examples-44"><a class="doc-anchor" href="#examples-44">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rocksdb::Options;
+
+<span class="kw">let </span><span class="kw-2">mut </span>opts = Options::default();
+opts.set_wal_dir(<span class="string">"/path/to/dir"</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_wal_ttl_seconds" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2686-2690">source</a><h4 class="code-header">pub fn <a href="#method.set_wal_ttl_seconds" class="fn">set_wal_ttl_seconds</a>(&amp;mut self, secs: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>)</h4></section></summary><div class="docblock"><p>Sets the WAL ttl in seconds.</p>
+<p>The following two options affect how archived logs will be deleted.</p>
+<ol>
+<li>If both set to 0, logs will be deleted asap and will not get into
+the archive.</li>
+<li>If wal_ttl_seconds is 0 and wal_size_limit_mb is not 0,
+WAL files will be checked every 10 min and if total size is greater
+then wal_size_limit_mb, they will be deleted starting with the
+earliest until size_limit is met. All empty files will be deleted.</li>
+<li>If wal_ttl_seconds is not 0 and wall_size_limit_mb is 0, then
+WAL files will be checked every wal_ttl_seconds / 2 and those that
+are older than wal_ttl_seconds will be deleted.</li>
+<li>If both are not 0, WAL files will be checked every 10 min and both
+checks will be performed with ttl being first.</li>
+</ol>
+<p>Default: 0</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_wal_size_limit_mb" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2698-2702">source</a><h4 class="code-header">pub fn <a href="#method.set_wal_size_limit_mb" class="fn">set_wal_size_limit_mb</a>(&amp;mut self, size: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>)</h4></section></summary><div class="docblock"><p>Sets the WAL size limit in MB.</p>
+<p>If total size of WAL files is greater then wal_size_limit_mb,
+they will be deleted starting with the earliest until size_limit is met.</p>
+<p>Default: 0</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_manifest_preallocation_size" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2709-2713">source</a><h4 class="code-header">pub fn <a href="#method.set_manifest_preallocation_size" class="fn">set_manifest_preallocation_size</a>(&amp;mut self, size: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>)</h4></section></summary><div class="docblock"><p>Sets the number of bytes to preallocate (via fallocate) the manifest files.</p>
+<p>Default is 4MB, which is reasonable to reduce random IO
+as well as prevent overallocation for mounts that preallocate
+large amounts of data (such as xfs’s allocsize option).</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_skip_stats_update_on_db_open" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2720-2724">source</a><h4 class="code-header">pub fn <a href="#method.set_skip_stats_update_on_db_open" class="fn">set_skip_stats_update_on_db_open</a>(&amp;mut self, skip: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>)</h4></section></summary><div class="docblock"><p>If true, then DB::Open() will not update the statistics used to optimize
+compaction decision by loading table properties from many files.
+Turning off this feature will improve DBOpen time especially in disk environment.</p>
+<p>Default: false</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_keep_log_file_num" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2738-2742">source</a><h4 class="code-header">pub fn <a href="#method.set_keep_log_file_num" class="fn">set_keep_log_file_num</a>(&amp;mut self, nfiles: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>)</h4></section></summary><div class="docblock"><p>Specify the maximal number of info log files to be kept.</p>
+<p>Default: 1000</p>
+<h5 id="examples-45"><a class="doc-anchor" href="#examples-45">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rocksdb::Options;
+
+<span class="kw">let </span><span class="kw-2">mut </span>options = Options::default();
+options.set_keep_log_file_num(<span class="number">100</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_allow_mmap_writes" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2756-2760">source</a><h4 class="code-header">pub fn <a href="#method.set_allow_mmap_writes" class="fn">set_allow_mmap_writes</a>(&amp;mut self, is_enabled: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>)</h4></section></summary><div class="docblock"><p>Allow the OS to mmap file for writing.</p>
+<p>Default: false</p>
+<h5 id="examples-46"><a class="doc-anchor" href="#examples-46">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rocksdb::Options;
+
+<span class="kw">let </span><span class="kw-2">mut </span>options = Options::default();
+options.set_allow_mmap_writes(<span class="bool-val">true</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_allow_mmap_reads" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2774-2778">source</a><h4 class="code-header">pub fn <a href="#method.set_allow_mmap_reads" class="fn">set_allow_mmap_reads</a>(&amp;mut self, is_enabled: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>)</h4></section></summary><div class="docblock"><p>Allow the OS to mmap file for reading sst tables.</p>
+<p>Default: false</p>
+<h5 id="examples-47"><a class="doc-anchor" href="#examples-47">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rocksdb::Options;
+
+<span class="kw">let </span><span class="kw-2">mut </span>options = Options::default();
+options.set_allow_mmap_reads(<span class="bool-val">true</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_manual_wal_flush" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2794-2798">source</a><h4 class="code-header">pub fn <a href="#method.set_manual_wal_flush" class="fn">set_manual_wal_flush</a>(&amp;mut self, is_enabled: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>)</h4></section></summary><div class="docblock"><p>If enabled, WAL is not flushed automatically after each write. Instead it
+relies on manual invocation of <code>DB::flush_wal()</code> to write the WAL buffer
+to its file.</p>
+<p>Default: false</p>
+<h5 id="examples-48"><a class="doc-anchor" href="#examples-48">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rocksdb::Options;
+
+<span class="kw">let </span><span class="kw-2">mut </span>options = Options::default();
+options.set_manual_wal_flush(<span class="bool-val">true</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_atomic_flush" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2817-2821">source</a><h4 class="code-header">pub fn <a href="#method.set_atomic_flush" class="fn">set_atomic_flush</a>(&amp;mut self, atomic_flush: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>)</h4></section></summary><div class="docblock"><p>Guarantee that all column families are flushed together atomically.
+This option applies to both manual flushes (<code>db.flush()</code>) and automatic
+background flushes caused when memtables are filled.</p>
+<p>Note that this is only useful when the WAL is disabled. When using the
+WAL, writes are always consistent across column families.</p>
+<p>Default: false</p>
+<h5 id="examples-49"><a class="doc-anchor" href="#examples-49">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rocksdb::Options;
+
+<span class="kw">let </span><span class="kw-2">mut </span>options = Options::default();
+options.set_atomic_flush(<span class="bool-val">true</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_row_cache" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2827-2832">source</a><h4 class="code-header">pub fn <a href="#method.set_row_cache" class="fn">set_row_cache</a>(&amp;mut self, cache: &amp;<a class="struct" href="struct.Cache.html" title="struct rocksdb::Cache">Cache</a>)</h4></section></summary><div class="docblock"><p>Sets global cache for table-level rows. Cache must outlive DB instance which uses it.</p>
+<p>Default: null (disabled)
+Not supported in ROCKSDB_LITE mode!</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_ratelimiter" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2848-2861">source</a><h4 class="code-header">pub fn <a href="#method.set_ratelimiter" class="fn">set_ratelimiter</a>(
+    &amp;mut self,
+    rate_bytes_per_sec: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i64.html">i64</a>,
+    refill_period_us: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i64.html">i64</a>,
+    fairness: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i32.html">i32</a>,
+)</h4></section></summary><div class="docblock"><p>Use to control write rate of flush and compaction. Flush has higher
+priority than compaction.
+If rate limiter is enabled, bytes_per_sync is set to 1MB by default.</p>
+<p>Default: disable</p>
+<h5 id="examples-50"><a class="doc-anchor" href="#examples-50">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rocksdb::Options;
+
+<span class="kw">let </span><span class="kw-2">mut </span>options = Options::default();
+options.set_ratelimiter(<span class="number">1024 </span>* <span class="number">1024</span>, <span class="number">100 </span>* <span class="number">1000</span>, <span class="number">10</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_max_log_file_size" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2879-2883">source</a><h4 class="code-header">pub fn <a href="#method.set_max_log_file_size" class="fn">set_max_log_file_size</a>(&amp;mut self, size: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>)</h4></section></summary><div class="docblock"><p>Sets the maximal size of the info log file.</p>
+<p>If the log file is larger than <code>max_log_file_size</code>, a new info log file
+will be created. If <code>max_log_file_size</code> is equal to zero, all logs will
+be written to one log file.</p>
+<p>Default: 0</p>
+<h5 id="examples-51"><a class="doc-anchor" href="#examples-51">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rocksdb::Options;
+
+<span class="kw">let </span><span class="kw-2">mut </span>options = Options::default();
+options.set_max_log_file_size(<span class="number">0</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_log_file_time_to_roll" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2890-2894">source</a><h4 class="code-header">pub fn <a href="#method.set_log_file_time_to_roll" class="fn">set_log_file_time_to_roll</a>(&amp;mut self, secs: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>)</h4></section></summary><div class="docblock"><p>Sets the time for the info log file to roll (in seconds).</p>
+<p>If specified with non-zero value, log file will be rolled
+if it has been active longer than <code>log_file_time_to_roll</code>.
+Default: 0 (disabled)</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_recycle_log_file_num" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2914-2918">source</a><h4 class="code-header">pub fn <a href="#method.set_recycle_log_file_num" class="fn">set_recycle_log_file_num</a>(&amp;mut self, num: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>)</h4></section></summary><div class="docblock"><p>Controls the recycling of log files.</p>
+<p>If non-zero, previously written log files will be reused for new logs,
+overwriting the old data. The value indicates how many such files we will
+keep around at any point in time for later use. This is more efficient
+because the blocks are already allocated and fdatasync does not need to
+update the inode after each write.</p>
+<p>Default: 0</p>
+<h5 id="examples-52"><a class="doc-anchor" href="#examples-52">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rocksdb::Options;
+
+<span class="kw">let </span><span class="kw-2">mut </span>options = Options::default();
+options.set_recycle_log_file_num(<span class="number">5</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_soft_pending_compaction_bytes_limit" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2924-2928">source</a><h4 class="code-header">pub fn <a href="#method.set_soft_pending_compaction_bytes_limit" class="fn">set_soft_pending_compaction_bytes_limit</a>(&amp;mut self, limit: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>)</h4></section></summary><div class="docblock"><p>Sets the threshold at which all writes will be slowed down to at least delayed_write_rate if estimated
+bytes needed to be compaction exceed this threshold.</p>
+<p>Default: 64GB</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_hard_pending_compaction_bytes_limit" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2934-2938">source</a><h4 class="code-header">pub fn <a href="#method.set_hard_pending_compaction_bytes_limit" class="fn">set_hard_pending_compaction_bytes_limit</a>(&amp;mut self, limit: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>)</h4></section></summary><div class="docblock"><p>Sets the bytes threshold at which all writes are stopped if estimated bytes needed to be compaction exceed
+this threshold.</p>
+<p>Default: 256GB</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_arena_block_size" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2946-2950">source</a><h4 class="code-header">pub fn <a href="#method.set_arena_block_size" class="fn">set_arena_block_size</a>(&amp;mut self, size: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>)</h4></section></summary><div class="docblock"><p>Sets the size of one block in arena memory allocation.</p>
+<p>If &lt;= 0, a proper value is automatically calculated (usually 1/10 of
+writer_buffer_size).</p>
+<p>Default: 0</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_dump_malloc_stats" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2955-2959">source</a><h4 class="code-header">pub fn <a href="#method.set_dump_malloc_stats" class="fn">set_dump_malloc_stats</a>(&amp;mut self, enabled: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>)</h4></section></summary><div class="docblock"><p>If true, then print malloc stats together with rocksdb.stats when printing to LOG.</p>
+<p>Default: false</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_memtable_whole_key_filtering" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2968-2975">source</a><h4 class="code-header">pub fn <a href="#method.set_memtable_whole_key_filtering" class="fn">set_memtable_whole_key_filtering</a>(&amp;mut self, whole_key_filter: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>)</h4></section></summary><div class="docblock"><p>Enable whole key bloom filter in memtable. Note this will only take effect
+if memtable_prefix_bloom_size_ratio is not 0. Enabling whole key filtering
+can potentially reduce CPU usage for point-look-ups.</p>
+<p>Default: false (disable)</p>
+<p>Dynamically changeable through SetOptions() API</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_enable_blob_files" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2984-2988">source</a><h4 class="code-header">pub fn <a href="#method.set_enable_blob_files" class="fn">set_enable_blob_files</a>(&amp;mut self, val: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>)</h4></section></summary><div class="docblock"><p>Enable the use of key-value separation.</p>
+<p>More details can be found here: <a href="http://rocksdb.org/blog/2021/05/26/integrated-blob-db.html">Integrated BlobDB</a>.</p>
+<p>Default: false (disable)</p>
+<p>Dynamically changeable through SetOptions() API</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_min_blob_size" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#2994-2998">source</a><h4 class="code-header">pub fn <a href="#method.set_min_blob_size" class="fn">set_min_blob_size</a>(&amp;mut self, val: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>)</h4></section></summary><div class="docblock"><p>Sets the minimum threshold value at or above which will be written
+to blob files during flush or compaction.</p>
+<p>Dynamically changeable through SetOptions() API</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_blob_file_size" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#3003-3007">source</a><h4 class="code-header">pub fn <a href="#method.set_blob_file_size" class="fn">set_blob_file_size</a>(&amp;mut self, val: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>)</h4></section></summary><div class="docblock"><p>Sets the size limit for blob files.</p>
+<p>Dynamically changeable through SetOptions() API</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_blob_compression_type" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#3013-3017">source</a><h4 class="code-header">pub fn <a href="#method.set_blob_compression_type" class="fn">set_blob_compression_type</a>(&amp;mut self, val: <a class="enum" href="enum.DBCompressionType.html" title="enum rocksdb::DBCompressionType">DBCompressionType</a>)</h4></section></summary><div class="docblock"><p>Sets the blob compression type. All blob files use the same
+compression type.</p>
+<p>Dynamically changeable through SetOptions() API</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_enable_blob_gc" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#3023-3027">source</a><h4 class="code-header">pub fn <a href="#method.set_enable_blob_gc" class="fn">set_enable_blob_gc</a>(&amp;mut self, val: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>)</h4></section></summary><div class="docblock"><p>If this is set to true RocksDB will actively relocate valid blobs from the oldest blob files
+as they are encountered during compaction.</p>
+<p>Dynamically changeable through SetOptions() API</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_blob_gc_age_cutoff" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#3036-3040">source</a><h4 class="code-header">pub fn <a href="#method.set_blob_gc_age_cutoff" class="fn">set_blob_gc_age_cutoff</a>(&amp;mut self, val: <a class="type" href="../libc/unix/type.c_double.html" title="type libc::unix::c_double">c_double</a>)</h4></section></summary><div class="docblock"><p>Sets the threshold that the GC logic uses to determine which blob files should be considered “old.”</p>
+<p>For example, the default value of 0.25 signals to RocksDB that blobs residing in the
+oldest 25% of blob files should be relocated by GC. This parameter can be tuned to adjust
+the trade-off between write amplification and space amplification.</p>
+<p>Dynamically changeable through SetOptions() API</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_blob_gc_force_threshold" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#3045-3049">source</a><h4 class="code-header">pub fn <a href="#method.set_blob_gc_force_threshold" class="fn">set_blob_gc_force_threshold</a>(&amp;mut self, val: <a class="type" href="../libc/unix/type.c_double.html" title="type libc::unix::c_double">c_double</a>)</h4></section></summary><div class="docblock"><p>Sets the blob GC force threshold.</p>
+<p>Dynamically changeable through SetOptions() API</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_blob_compaction_readahead_size" class="method"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#3054-3058">source</a><h4 class="code-header">pub fn <a href="#method.set_blob_compaction_readahead_size" class="fn">set_blob_compaction_readahead_size</a>(&amp;mut self, val: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>)</h4></section></summary><div class="docblock"><p>Sets the blob compaction read ahead size.</p>
+<p>Dynamically changeable through SetOptions() API</p>
+</div></details></div></details></div><h2 id="trait-implementations" class="section-header">Trait Implementations<a href="#trait-implementations" class="anchor">§</a></h2><div id="trait-implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-Clone-for-Options" class="impl"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#304-314">source</a><a href="#impl-Clone-for-Options" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a> for <a class="struct" href="struct.Options.html" title="struct rocksdb::Options">Options</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.clone" class="method trait-impl"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#305-313">source</a><a href="#method.clone" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#tymethod.clone" class="fn">clone</a>(&amp;self) -&gt; Self</h4></section></summary><div class='docblock'>Returns a copy of the value. <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#tymethod.clone">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.clone_from" class="method trait-impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#172">source</a></span><a href="#method.clone_from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#method.clone_from" class="fn">clone_from</a>(&amp;mut self, source: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;Self</a>)</h4></section></summary><div class='docblock'>Performs copy-assignment from <code>source</code>. <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#method.clone_from">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Default-for-Options" class="impl"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#3061-3073">source</a><a href="#impl-Default-for-Options" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/default/trait.Default.html" title="trait core::default::Default">Default</a> for <a class="struct" href="struct.Options.html" title="struct rocksdb::Options">Options</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.default" class="method trait-impl"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#3062-3072">source</a><a href="#method.default" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/default/trait.Default.html#tymethod.default" class="fn">default</a>() -&gt; Self</h4></section></summary><div class='docblock'>Returns the “default value” for a type. <a href="https://doc.rust-lang.org/1.81.0/core/default/trait.Default.html#tymethod.default">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Drop-for-Options" class="impl"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#296-302">source</a><a href="#impl-Drop-for-Options" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/drop/trait.Drop.html" title="trait core::ops::drop::Drop">Drop</a> for <a class="struct" href="struct.Options.html" title="struct rocksdb::Options">Options</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.drop" class="method trait-impl"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#297-301">source</a><a href="#method.drop" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/ops/drop/trait.Drop.html#tymethod.drop" class="fn">drop</a>(&amp;mut self)</h4></section></summary><div class='docblock'>Executes the destructor for this type. <a href="https://doc.rust-lang.org/1.81.0/core/ops/drop/trait.Drop.html#tymethod.drop">Read more</a></div></details></div></details><section id="impl-Send-for-Options" class="impl"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#278">source</a><a href="#impl-Send-for-Options" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> for <a class="struct" href="struct.Options.html" title="struct rocksdb::Options">Options</a></h3></section><section id="impl-Sync-for-Options" class="impl"><a class="src rightside" href="../src/rocksdb/db_options.rs.html#288">source</a><a href="#impl-Sync-for-Options" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> for <a class="struct" href="struct.Options.html" title="struct rocksdb::Options">Options</a></h3></section></div><h2 id="synthetic-implementations" class="section-header">Auto Trait Implementations<a href="#synthetic-implementations" class="anchor">§</a></h2><div id="synthetic-implementations-list"><section id="impl-Freeze-for-Options" class="impl"><a href="#impl-Freeze-for-Options" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Freeze.html" title="trait core::marker::Freeze">Freeze</a> for <a class="struct" href="struct.Options.html" title="struct rocksdb::Options">Options</a></h3></section><section id="impl-RefUnwindSafe-for-Options" class="impl"><a href="#impl-RefUnwindSafe-for-Options" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/panic/unwind_safe/trait.RefUnwindSafe.html" title="trait core::panic::unwind_safe::RefUnwindSafe">RefUnwindSafe</a> for <a class="struct" href="struct.Options.html" title="struct rocksdb::Options">Options</a></h3></section><section id="impl-Unpin-for-Options" class="impl"><a href="#impl-Unpin-for-Options" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a> for <a class="struct" href="struct.Options.html" title="struct rocksdb::Options">Options</a></h3></section><section id="impl-UnwindSafe-for-Options" class="impl"><a href="#impl-UnwindSafe-for-Options" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/panic/unwind_safe/trait.UnwindSafe.html" title="trait core::panic::unwind_safe::UnwindSafe">UnwindSafe</a> for <a class="struct" href="struct.Options.html" title="struct rocksdb::Options">Options</a></h3></section></div><h2 id="blanket-implementations" class="section-header">Blanket Implementations<a href="#blanket-implementations" class="anchor">§</a></h2><div id="blanket-implementations-list"><details class="toggle implementors-toggle"><summary><section id="impl-Any-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#140">source</a><a href="#impl-Any-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html" title="trait core::any::Any">Any</a> for T<div class="where">where
+    T: 'static + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.type_id" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#141">source</a><a href="#method.type_id" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html#tymethod.type_id" class="fn">type_id</a>(&amp;self) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/any/struct.TypeId.html" title="struct core::any::TypeId">TypeId</a></h4></section></summary><div class='docblock'>Gets the <code>TypeId</code> of <code>self</code>. <a href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html#tymethod.type_id">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Borrow%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#209">source</a><a href="#impl-Borrow%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html" title="trait core::borrow::Borrow">Borrow</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#211">source</a><a href="#method.borrow" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html#tymethod.borrow" class="fn">borrow</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a></h4></section></summary><div class='docblock'>Immutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html#tymethod.borrow">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-BorrowMut%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#217">source</a><a href="#impl-BorrowMut%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html" title="trait core::borrow::BorrowMut">BorrowMut</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow_mut" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#218">source</a><a href="#method.borrow_mut" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut" class="fn">borrow_mut</a>(&amp;mut self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a></h4></section></summary><div class='docblock'>Mutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-CloneToUninit-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#271">source</a><a href="#impl-CloneToUninit-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.CloneToUninit.html" title="trait core::clone::CloneToUninit">CloneToUninit</a> for T<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.clone_to_uninit" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#272">source</a><a href="#method.clone_to_uninit" class="anchor">§</a><h4 class="code-header">default unsafe fn <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.CloneToUninit.html#tymethod.clone_to_uninit" class="fn">clone_to_uninit</a>(&amp;self, dst: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.pointer.html">*mut T</a>)</h4></section></summary><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>clone_to_uninit</code>)</span></div></span><div class='docblock'>Performs copy-assignment from <code>self</code> to <code>dst</code>. <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.CloneToUninit.html#tymethod.clone_to_uninit">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-From%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#765">source</a><a href="#impl-From%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for T</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#768">source</a><a href="#method.from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html#tymethod.from" class="fn">from</a>(t: T) -&gt; T</h4></section></summary><div class="docblock"><p>Returns the argument unchanged.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Into%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#748-750">source</a><a href="#impl-Into%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#758">source</a><a href="#method.into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html#tymethod.into" class="fn">into</a>(self) -&gt; U</h4></section></summary><div class="docblock"><p>Calls <code>U::from(self)</code>.</p>
+<p>That is, this conversion is whatever the implementation of
+<code><a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for U</code> chooses to do.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-ToOwned-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#83-85">source</a><a href="#impl-ToOwned-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html" title="trait alloc::borrow::ToOwned">ToOwned</a> for T<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Owned" class="associatedtype trait-impl"><a href="#associatedtype.Owned" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#associatedtype.Owned" class="associatedtype">Owned</a> = T</h4></section></summary><div class='docblock'>The resulting type after obtaining ownership.</div></details><details class="toggle method-toggle" open><summary><section id="method.to_owned" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#88">source</a><a href="#method.to_owned" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#tymethod.to_owned" class="fn">to_owned</a>(&amp;self) -&gt; T</h4></section></summary><div class='docblock'>Creates owned data from borrowed data, usually by cloning. <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#tymethod.to_owned">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.clone_into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#92">source</a><a href="#method.clone_into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#method.clone_into" class="fn">clone_into</a>(&amp;self, target: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a>)</h4></section></summary><div class='docblock'>Uses borrowed data to replace owned data, usually by cloning. <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#method.clone_into">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryFrom%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#805-807">source</a><a href="#impl-TryFrom%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error" class="associatedtype trait-impl"><a href="#associatedtype.Error" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" class="associatedtype">Error</a> = <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/convert/enum.Infallible.html" title="enum core::convert::Infallible">Infallible</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#812">source</a><a href="#method.try_from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#tymethod.try_from" class="fn">try_from</a>(value: U) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, &lt;T as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryInto%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#790-792">source</a><a href="#impl-TryInto%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html" title="trait core::convert::TryInto">TryInto</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error-1" class="associatedtype trait-impl"><a href="#associatedtype.Error-1" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html#associatedtype.Error" class="associatedtype">Error</a> = &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#797">source</a><a href="#method.try_into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html#tymethod.try_into" class="fn">try_into</a>(self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;U, &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details></div></section></div></main></body></html>

@@ -1,0 +1,231 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Binary Canonical Serialization (BCS)"><title>bcs - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="bcs" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../bcs/index.html">bcs</a><span class="version">0.1.6</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#enums">Enums</a></li><li><a href="#constants">Constants</a></li><li><a href="#functions">Functions</a></li><li><a href="#types">Type Aliases</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">bcs</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/bcs/lib.rs.html#4-325">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="binary-canonical-serialization-bcs"><a class="doc-anchor" href="#binary-canonical-serialization-bcs">§</a>Binary Canonical Serialization (BCS)</h2>
+<p>BCS (formerly “Libra Canonical Serialization” or LCS) is a serialization format developed
+in the context of the <a href="https://diem.com">Diem</a> blockchain.</p>
+<p>BCS was designed with the following main goals in mind:</p>
+<ul>
+<li>provide good performance and concise (binary) representations;</li>
+<li>support a rich set of data types commonly used in Rust;</li>
+<li>enforce canonical serialization, meaning that every value of a given type should have
+a single valid representation.</li>
+</ul>
+<p>BCS also aims to mitigate the consequence of malicious inputs by enforcing well-defined limits
+on large or nested containers during (de)serialization.</p>
+<h3 id="rust-implementation"><a class="doc-anchor" href="#rust-implementation">§</a>Rust Implementation</h3>
+<p>This crate provides a Rust implementation of BCS as an encoding format for the <a href="https://serde.rs">Serde library</a>.
+As such, this implementation covers most data types supported by Serde – including user-defined structs,
+tagged variants (Rust enums), tuples, and maps – excluding floats, single unicode characters (char), and sets.</p>
+<p>BCS is also available in other programming languages, thanks to the separate project <a href="https://github.com/novifinancial/serde-reflection">serde-reflection</a>.</p>
+<h3 id="application-to-cryptography"><a class="doc-anchor" href="#application-to-cryptography">§</a>Application to Cryptography</h3>
+<p>The BCS format guarantees canonical serialization, meaning that for any given data type, there
+is a one-to-one correspondance between in-memory values and valid byte representations.</p>
+<p>In the context of a cryptographic application, canonical serialization has several benefits:</p>
+<ul>
+<li>It provides a natural and reliable way to associate in-memory values to cryptographic hashes.</li>
+<li>It allows the signature of a message to be defined equivalently as the signature of the serialized bytes or as the signature of the in-memory value.</li>
+</ul>
+<p>Note that BCS ensures canonical serialization for each data type separately. The data type of a serialized value
+must be enforced by the application itself. This requirement is typically fulfilled
+using unique hash seeds for each data type. (See <a href="https://github.com/diem/diem/blob/master/crypto/crypto/src/hash.rs">Diem’s cryptographic library</a> for an example.)</p>
+<h3 id="backwards-compatibility"><a class="doc-anchor" href="#backwards-compatibility">§</a>Backwards Compatibility</h3>
+<p>By design, BCS does not provide implicit versioning or backwards/forwards compatibility, therefore
+applications must carefully plan in advance for adhoc extension points:</p>
+<ul>
+<li>Enums may be used for explicit versioning and backward compatibility (e.g. extensible query interfaces).</li>
+<li>In some cases, data fields of type <code>Vec&lt;u8&gt;</code> may also be added to allow (future) unknown payloads
+in serialized form.</li>
+</ul>
+<h3 id="detailed-specifications"><a class="doc-anchor" href="#detailed-specifications">§</a>Detailed Specifications</h3>
+<p>BCS supports the following data types:</p>
+<ul>
+<li>Booleans</li>
+<li>Signed 8-bit, 16-bit, 32-bit, 64-bit, and 128-bit integers</li>
+<li>Unsigned 8-bit, 16-bit, 32-bit, 64-bit, and 128-bit integers</li>
+<li>Option</li>
+<li>Unit (an empty value)</li>
+<li>Fixed and variable length sequences</li>
+<li>UTF-8 Encoded Strings</li>
+<li>Tuples</li>
+<li>Structures (aka “structs”)</li>
+<li>Externally tagged enumerations (aka “enums”)</li>
+<li>Maps</li>
+</ul>
+<p>BCS is not a self-describing format. As such, in order to deserialize a message, one must
+know the message type and layout ahead of time.</p>
+<p>Unless specified, all numbers are stored in little endian, two’s complement format.</p>
+<h4 id="recursion-and-depth-of-bcs-data"><a class="doc-anchor" href="#recursion-and-depth-of-bcs-data">§</a>Recursion and Depth of BCS Data</h4>
+<p>Recursive data-structures (e.g. trees) are allowed. However, because of the possibility of stack
+overflow during (de)serialization, the <em>container depth</em> of any valid BCS data cannot exceed the constant
+<code>MAX_CONTAINER_DEPTH</code>. Formally, we define <em>container depth</em> as the number of structs and enums traversed
+during (de)serialization.</p>
+<p>This definition aims to minimize the number of operations while ensuring that
+(de)serialization of a known BCS format cannot cause arbitrarily large stack allocations.</p>
+<p>As an example, if <code>v1</code> and <code>v2</code> are values of depth <code>n1</code> and <code>n2</code>,</p>
+<ul>
+<li>a struct value <code>Foo { v1, v2 }</code> has depth <code>1 + max(n1, n2)</code>;</li>
+<li>an enum value <code>E::Foo { v1, v2 }</code> has depth <code>1 + max(n1, n2)</code>;</li>
+<li>a pair <code>(v1, v2)</code> has depth <code>max(n1, n2)</code>;</li>
+<li>the value <code>Some(v1)</code> has depth <code>n1</code>.</li>
+</ul>
+<p>All string and integer values have depths <code>0</code>.</p>
+<h4 id="booleans-and-integers"><a class="doc-anchor" href="#booleans-and-integers">§</a>Booleans and Integers</h4><div><table><thead><tr><th>Type</th><th>Original data</th><th>Hex representation</th><th>Serialized bytes</th></tr></thead><tbody>
+<tr><td>Boolean</td><td>True / False</td><td>0x01 / 0x00</td><td>01 / 00</td></tr>
+<tr><td>8-bit signed integer</td><td>-1</td><td>0xFF</td><td>FF</td></tr>
+<tr><td>8-bit unsigned integer</td><td>1</td><td>0x01</td><td>01</td></tr>
+<tr><td>16-bit signed integer</td><td>-4660</td><td>0xEDCC</td><td>CC ED</td></tr>
+<tr><td>16-bit unsigned integer</td><td>4660</td><td>0x1234</td><td>34 12</td></tr>
+<tr><td>32-bit signed integer</td><td>-305419896</td><td>0xEDCBA988</td><td>88 A9 CB ED</td></tr>
+<tr><td>32-bit unsigned integer</td><td>305419896</td><td>0x12345678</td><td>78 56 34 12</td></tr>
+<tr><td>64-bit signed integer</td><td>-1311768467750121216</td><td>0xEDCBA98754321100</td><td>00 11 32 54 87 A9 CB ED</td></tr>
+<tr><td>64-bit unsigned integer</td><td>1311768467750121216</td><td>0x12345678ABCDEF00</td><td>00 EF CD AB 78 56 34 12</td></tr>
+</tbody></table>
+</div><h4 id="uleb128-encoded-integers"><a class="doc-anchor" href="#uleb128-encoded-integers">§</a>ULEB128-Encoded Integers</h4>
+<p>The BCS format also uses the <a href="https://en.wikipedia.org/wiki/LEB128">ULEB128 encoding</a> internally
+to represent unsigned 32-bit integers in two cases where small values are usually expected:
+(1) lengths of variable-length sequences and (2) tags of enum values (see the corresponding
+sections below).</p>
+<div><table><thead><tr><th>Type</th><th>Original data</th><th>Hex representation</th><th>Serialized bytes</th></tr></thead><tbody>
+<tr><td>ULEB128-encoded u32-integer</td><td>2^0 = 1</td><td>0x00000001</td><td>01</td></tr>
+<tr><td></td><td>2^7 = 128</td><td>0x00000080</td><td>80 01</td></tr>
+<tr><td></td><td>2^14 = 16384</td><td>0x00004000</td><td>80 80 01</td></tr>
+<tr><td></td><td>2^21 = 2097152</td><td>0x00200000</td><td>80 80 80 01</td></tr>
+<tr><td></td><td>2^28 = 268435456</td><td>0x10000000</td><td>80 80 80 80 01</td></tr>
+<tr><td></td><td>9487</td><td>0x0000250f</td><td>8f 4a</td></tr>
+</tbody></table>
+</div>
+<p>In general, a ULEB128 encoding consists of a little-endian sequence of base-128 (7-bit)
+digits. Each digit is completed into a byte by setting the highest bit to 1, except for the
+last (highest-significance) digit whose highest bit is set to 0.</p>
+<p>In BCS, the result of decoding ULEB128 bytes is required to fit into a 32-bit unsigned
+integer and be in canonical form. For instance, the following values are rejected:</p>
+<ul>
+<li>80 80 80 80 80 01 (2^36) is too large.</li>
+<li>80 80 80 80 10 (2^33) is too large.</li>
+<li>80 00 is not a minimal encoding of 0.</li>
+</ul>
+<h4 id="optional-data"><a class="doc-anchor" href="#optional-data">§</a>Optional Data</h4>
+<p>Optional or nullable data either exists in its full representation or does not. BCS represents
+this as a single byte representing the presence <code>0x01</code> or absence <code>0x00</code> of data. If the data
+is present then the serialized form of that data follows. For example:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>some_data: <span class="prelude-ty">Option</span>&lt;u8&gt; = <span class="prelude-val">Some</span>(<span class="number">8</span>);
+<span class="macro">assert_eq!</span>(to_bytes(<span class="kw-2">&amp;</span>some_data)<span class="question-mark">?</span>, <span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">8</span>]);
+
+<span class="kw">let </span>no_data: <span class="prelude-ty">Option</span>&lt;u8&gt; = <span class="prelude-val">None</span>;
+<span class="macro">assert_eq!</span>(to_bytes(<span class="kw-2">&amp;</span>no_data)<span class="question-mark">?</span>, <span class="macro">vec!</span>[<span class="number">0</span>]);</code></pre></div>
+<h4 id="fixed-and-variable-length-sequences"><a class="doc-anchor" href="#fixed-and-variable-length-sequences">§</a>Fixed and Variable Length Sequences</h4>
+<p>Sequences can be made of up of any BCS supported types (even complex structures) but all
+elements in the sequence must be of the same type. If the length of a sequence is fixed and
+well known then BCS represents this as just the concatenation of the serialized form of each
+individual element in the sequence. If the length of the sequence can be variable, then the
+serialized sequence is length prefixed with a ULEB128-encoded unsigned integer indicating
+the number of elements in the sequence. All variable length sequences must be
+<code>MAX_SEQUENCE_LENGTH</code> elements long or less.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>fixed: [u16; <span class="number">3</span>] = [<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>];
+<span class="macro">assert_eq!</span>(to_bytes(<span class="kw-2">&amp;</span>fixed)<span class="question-mark">?</span>, <span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">0</span>, <span class="number">2</span>, <span class="number">0</span>, <span class="number">3</span>, <span class="number">0</span>]);
+
+<span class="kw">let </span>variable: Vec&lt;u16&gt; = <span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">2</span>];
+<span class="macro">assert_eq!</span>(to_bytes(<span class="kw-2">&amp;</span>variable)<span class="question-mark">?</span>, <span class="macro">vec!</span>[<span class="number">2</span>, <span class="number">1</span>, <span class="number">0</span>, <span class="number">2</span>, <span class="number">0</span>]);
+
+<span class="kw">let </span>large_variable_length: Vec&lt;()&gt; = <span class="macro">vec!</span>[(); <span class="number">9_487</span>];
+<span class="macro">assert_eq!</span>(to_bytes(<span class="kw-2">&amp;</span>large_variable_length)<span class="question-mark">?</span>, <span class="macro">vec!</span>[<span class="number">0x8f</span>, <span class="number">0x4a</span>]);</code></pre></div>
+<h4 id="strings"><a class="doc-anchor" href="#strings">§</a>Strings</h4>
+<p>Only valid UTF-8 Strings are supported. BCS serializes such strings as a variable length byte
+sequence, i.e. length prefixed with a ULEB128-encoded unsigned integer followed by the byte
+representation of the string.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// Note that this string has 10 characters but has a byte length of 24
+</span><span class="kw">let </span>utf8_str = <span class="string">"çå∞≠¢õß∂ƒ∫"</span>;
+<span class="kw">let </span>expecting = <span class="macro">vec!</span>[
+    <span class="number">24</span>, <span class="number">0xc3</span>, <span class="number">0xa7</span>, <span class="number">0xc3</span>, <span class="number">0xa5</span>, <span class="number">0xe2</span>, <span class="number">0x88</span>, <span class="number">0x9e</span>, <span class="number">0xe2</span>, <span class="number">0x89</span>, <span class="number">0xa0</span>, <span class="number">0xc2</span>,
+    <span class="number">0xa2</span>, <span class="number">0xc3</span>, <span class="number">0xb5</span>, <span class="number">0xc3</span>, <span class="number">0x9f</span>, <span class="number">0xe2</span>, <span class="number">0x88</span>, <span class="number">0x82</span>, <span class="number">0xc6</span>, <span class="number">0x92</span>, <span class="number">0xe2</span>, <span class="number">0x88</span>, <span class="number">0xab</span>,
+];
+<span class="macro">assert_eq!</span>(to_bytes(<span class="kw-2">&amp;</span>utf8_str)<span class="question-mark">?</span>, expecting);</code></pre></div>
+<h4 id="tuples"><a class="doc-anchor" href="#tuples">§</a>Tuples</h4>
+<p>Tuples are typed composition of objects: <code>(Type0, Type1)</code></p>
+<p>Tuples are considered a fixed length sequence where each element in the sequence can be a
+different type supported by BCS. Each element of a tuple is serialized in the order it is
+defined within the tuple, i.e. [tuple.0, tuple.2].</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>tuple = (-<span class="number">1i8</span>, <span class="string">"diem"</span>);
+<span class="kw">let </span>expecting = <span class="macro">vec!</span>[<span class="number">0xFF</span>, <span class="number">4</span>, <span class="string">b'd'</span>, <span class="string">b'i'</span>, <span class="string">b'e'</span>, <span class="string">b'm'</span>];
+<span class="macro">assert_eq!</span>(to_bytes(<span class="kw-2">&amp;</span>tuple)<span class="question-mark">?</span>, expecting);</code></pre></div>
+<h4 id="structures"><a class="doc-anchor" href="#structures">§</a>Structures</h4>
+<p>Structures are fixed length sequences consisting of fields with potentially different types.
+Each field within a struct is serialized in the order specified by the canonical structure
+definition. Structs can exist within other structs and as such, BCS recurses into each struct
+and serializes them in order. There are no labels in the serialized format, the struct ordering
+defines the organization within the serialization stream.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Serialize)]
+</span><span class="kw">struct </span>MyStruct {
+    boolean: bool,
+    bytes: Vec&lt;u8&gt;,
+    label: String,
+}
+
+<span class="attr">#[derive(Serialize)]
+</span><span class="kw">struct </span>Wrapper {
+    inner: MyStruct,
+    name: String,
+}
+
+<span class="kw">let </span>s = MyStruct {
+    boolean: <span class="bool-val">true</span>,
+    bytes: <span class="macro">vec!</span>[<span class="number">0xC0</span>, <span class="number">0xDE</span>],
+    label: <span class="string">"a"</span>.to_owned(),
+};
+<span class="kw">let </span>s_bytes = to_bytes(<span class="kw-2">&amp;</span>s)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>expecting = <span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">0xC0</span>, <span class="number">0xDE</span>, <span class="number">1</span>, <span class="string">b'a'</span>];
+<span class="macro">assert_eq!</span>(s_bytes, expecting);
+
+<span class="kw">let </span>w = Wrapper {
+    inner: s,
+    name: <span class="string">"b"</span>.to_owned(),
+};
+<span class="kw">let </span>w_bytes = to_bytes(<span class="kw-2">&amp;</span>w)<span class="question-mark">?</span>;
+<span class="macro">assert!</span>(w_bytes.starts_with(<span class="kw-2">&amp;</span>s_bytes));
+
+expecting.append(<span class="kw-2">&amp;mut </span><span class="macro">vec!</span>[<span class="number">1</span>, <span class="string">b'b'</span>]);
+<span class="macro">assert_eq!</span>(w_bytes, expecting);</code></pre></div>
+<h4 id="externally-tagged-enumerations"><a class="doc-anchor" href="#externally-tagged-enumerations">§</a>Externally Tagged Enumerations</h4>
+<p>An enumeration is typically represented as a type that can take one of potentially many
+different variants. In BCS, each variant is mapped to a variant index, a ULEB128-encoded 32-bit unsigned
+integer, followed by serialized data if the type has an associated value. An
+associated type can be any BCS supported type. The variant index is determined based on the
+ordering of the variants in the canonical enum definition, where the first variant has an index
+of <code>0</code>, the second an index of <code>1</code>, etc.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Serialize)]
+</span><span class="kw">enum </span>E {
+    Variant0(u16),
+    Variant1(u8),
+    Variant2(String),
+}
+
+<span class="kw">let </span>v0 = E::Variant0(<span class="number">8000</span>);
+<span class="kw">let </span>v1 = E::Variant1(<span class="number">255</span>);
+<span class="kw">let </span>v2 = E::Variant2(<span class="string">"e"</span>.to_owned());
+
+<span class="macro">assert_eq!</span>(to_bytes(<span class="kw-2">&amp;</span>v0)<span class="question-mark">?</span>, <span class="macro">vec!</span>[<span class="number">0</span>, <span class="number">0x40</span>, <span class="number">0x1F</span>]);
+<span class="macro">assert_eq!</span>(to_bytes(<span class="kw-2">&amp;</span>v1)<span class="question-mark">?</span>, <span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">0xFF</span>]);
+<span class="macro">assert_eq!</span>(to_bytes(<span class="kw-2">&amp;</span>v2)<span class="question-mark">?</span>, <span class="macro">vec!</span>[<span class="number">2</span>, <span class="number">1</span>, <span class="string">b'e'</span>]);</code></pre></div>
+<p>If you need to serialize a C-style enum, you should use a primitive integer type.</p>
+<h4 id="maps-key--value-stores"><a class="doc-anchor" href="#maps-key--value-stores">§</a>Maps (Key / Value Stores)</h4>
+<p>Maps are represented as a variable-length, sorted sequence of (Key, Value) tuples. Keys must be
+unique and the tuples sorted by increasing lexicographical order on the BCS bytes of each key.
+The representation is otherwise similar to that of a variable-length sequence. In particular,
+it is preceded by the number of tuples, encoded in ULEB128.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span><span class="kw-2">mut </span>map = HashMap::new();
+map.insert(<span class="string">b'e'</span>, <span class="string">b'f'</span>);
+map.insert(<span class="string">b'a'</span>, <span class="string">b'b'</span>);
+map.insert(<span class="string">b'c'</span>, <span class="string">b'd'</span>);
+
+<span class="kw">let </span>expecting = <span class="macro">vec!</span>[(<span class="string">b'a'</span>, <span class="string">b'b'</span>), (<span class="string">b'c'</span>, <span class="string">b'd'</span>), (<span class="string">b'e'</span>, <span class="string">b'f'</span>)];
+
+<span class="macro">assert_eq!</span>(to_bytes(<span class="kw-2">&amp;</span>map)<span class="question-mark">?</span>, to_bytes(<span class="kw-2">&amp;</span>expecting)<span class="question-mark">?</span>);</code></pre></div>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="test_helpers/index.html" title="mod bcs::test_helpers">test_helpers</a></div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.Error.html" title="enum bcs::Error">Error</a></div></li></ul><h2 id="constants" class="section-header">Constants<a href="#constants" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="constant" href="constant.MAX_CONTAINER_DEPTH.html" title="constant bcs::MAX_CONTAINER_DEPTH">MAX_CONTAINER_DEPTH</a></div><div class="desc docblock-short">Maximal allowed depth of BCS data, counting only structs and enums.</div></li><li><div class="item-name"><a class="constant" href="constant.MAX_SEQUENCE_LENGTH.html" title="constant bcs::MAX_SEQUENCE_LENGTH">MAX_SEQUENCE_LENGTH</a></div><div class="desc docblock-short">Variable length sequences in BCS are limited to max length of 2^31 - 1.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.from_bytes.html" title="fn bcs::from_bytes">from_bytes</a></div><div class="desc docblock-short">Deserializes a <code>&amp;[u8]</code> into a type.</div></li><li><div class="item-name"><a class="fn" href="fn.from_bytes_seed.html" title="fn bcs::from_bytes_seed">from_bytes_seed</a></div><div class="desc docblock-short">Perform a stateful deserialization from a <code>&amp;[u8]</code> using the provided <code>seed</code>.</div></li><li><div class="item-name"><a class="fn" href="fn.from_bytes_seed_with_limit.html" title="fn bcs::from_bytes_seed_with_limit">from_bytes_seed_with_limit</a></div><div class="desc docblock-short">Same as <code>from_bytes_seed</code> but use <code>limit</code> as max container depth instead of MAX_CONTAINER_DEPTH<code>Note that</code>limit` has to be lower than MAX_CONTAINER_DEPTH</div></li><li><div class="item-name"><a class="fn" href="fn.from_bytes_with_limit.html" title="fn bcs::from_bytes_with_limit">from_bytes_with_limit</a></div><div class="desc docblock-short">Same as <code>from_bytes</code> but use <code>limit</code> as max container depth instead of MAX_CONTAINER_DEPTH<code>Note that</code>limit` has to be lower than MAX_CONTAINER_DEPTH</div></li><li><div class="item-name"><a class="fn" href="fn.from_reader.html" title="fn bcs::from_reader">from_reader</a></div><div class="desc docblock-short">Deserialize a type from an implementation of <a href="https://doc.rust-lang.org/1.81.0/std/io/trait.Read.html" title="trait std::io::Read"><code>Read</code></a>.</div></li><li><div class="item-name"><a class="fn" href="fn.from_reader_seed.html" title="fn bcs::from_reader_seed">from_reader_seed</a></div><div class="desc docblock-short">Deserialize a type from an implementation of <a href="https://doc.rust-lang.org/1.81.0/std/io/trait.Read.html" title="trait std::io::Read"><code>Read</code></a> using the provided seed</div></li><li><div class="item-name"><a class="fn" href="fn.from_reader_seed_with_limit.html" title="fn bcs::from_reader_seed_with_limit">from_reader_seed_with_limit</a></div><div class="desc docblock-short">Same as <code>from_reader_seed</code> but use <code>limit</code> as max container depth instead of MAX_CONTAINER_DEPTH<code>Note that</code>limit` has to be lower than MAX_CONTAINER_DEPTH</div></li><li><div class="item-name"><a class="fn" href="fn.from_reader_with_limit.html" title="fn bcs::from_reader_with_limit">from_reader_with_limit</a></div><div class="desc docblock-short">Same as <code>from_reader_seed</code> but use <code>limit</code> as max container depth instead of MAX_CONTAINER_DEPTH<code>Note that</code>limit` has to be lower than MAX_CONTAINER_DEPTH</div></li><li><div class="item-name"><a class="fn" href="fn.is_human_readable.html" title="fn bcs::is_human_readable">is_human_readable</a></div></li><li><div class="item-name"><a class="fn" href="fn.serialize_into.html" title="fn bcs::serialize_into">serialize_into</a></div><div class="desc docblock-short">Same as <code>to_bytes</code> but write directly into an <code>std::io::Write</code> object.</div></li><li><div class="item-name"><a class="fn" href="fn.serialize_into_with_limit.html" title="fn bcs::serialize_into_with_limit">serialize_into_with_limit</a></div><div class="desc docblock-short">Same as <code>serialize_into</code> but use <code>limit</code> as max container depth instead of MAX_CONTAINER_DEPTH
+Note that <code>limit</code> has to be lower than MAX_CONTAINER_DEPTH</div></li><li><div class="item-name"><a class="fn" href="fn.serialized_size.html" title="fn bcs::serialized_size">serialized_size</a></div><div class="desc docblock-short">Same as <code>to_bytes</code> but only return the size of the serialized bytes.</div></li><li><div class="item-name"><a class="fn" href="fn.serialized_size_with_limit.html" title="fn bcs::serialized_size_with_limit">serialized_size_with_limit</a></div><div class="desc docblock-short">Same as <code>serialized_size</code> but use <code>limit</code> as max container depth instead of MAX_CONTAINER_DEPTH
+Note that <code>limit</code> has to be lower than MAX_CONTAINER_DEPTH</div></li><li><div class="item-name"><a class="fn" href="fn.to_bytes.html" title="fn bcs::to_bytes">to_bytes</a></div><div class="desc docblock-short">Serialize the given data structure as a <code>Vec&lt;u8&gt;</code> of BCS.</div></li><li><div class="item-name"><a class="fn" href="fn.to_bytes_with_limit.html" title="fn bcs::to_bytes_with_limit">to_bytes_with_limit</a></div><div class="desc docblock-short">Same as <code>to_bytes</code> but use <code>limit</code> as max container depth instead of MAX_CONTAINER_DEPTH
+Note that <code>limit</code> has to be lower than MAX_CONTAINER_DEPTH</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.Result.html" title="type bcs::Result">Result</a></div></li></ul></section></div></main></body></html>

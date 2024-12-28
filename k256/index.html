@@ -1,0 +1,87 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="RustCrypto: secp256k1 (K-256) elliptic curve"><title>k256 - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="k256" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="icon" href="https://raw.githubusercontent.com/RustCrypto/meta/master/logo.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../k256/index.html"><img src="https://raw.githubusercontent.com/RustCrypto/meta/master/logo.svg" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../k256/index.html"><img src="https://raw.githubusercontent.com/RustCrypto/meta/master/logo.svg" alt="logo"></a><h2><a href="../k256/index.html">k256</a><span class="version">0.13.4</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#types">Type Aliases</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">k256</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/k256/lib.rs.html#1-159">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="rustcrypto-secp256k1-k-256-elliptic-curve"><a class="doc-anchor" href="#rustcrypto-secp256k1-k-256-elliptic-curve">§</a><a href="https://github.com/RustCrypto/">RustCrypto</a>: secp256k1 (K-256) elliptic curve</h2>
+<p><a href="https://crates.io/crates/k256"><img src="https://buildstats.info/crate/k256" alt="crate" /></a>
+<a href="https://docs.rs/k256/"><img src="https://docs.rs/k256/badge.svg" alt="Docs" /></a>
+<a href="https://github.com/RustCrypto/elliptic-curves/actions?query=workflow%3Ak256"><img src="https://github.com/RustCrypto/elliptic-curves/workflows/k256/badge.svg?branch=master&amp;event=push" alt="Build Status" /></a>
+<img src="https://img.shields.io/badge/license-Apache2.0/MIT-blue.svg" alt="Apache2/MIT licensed" />
+<img src="https://img.shields.io/badge/rustc-1.65+-blue.svg" alt="Rust Version" />
+<a href="https://rustcrypto.zulipchat.com/#narrow/stream/260040-elliptic-curves"><img src="https://img.shields.io/badge/zulip-join_chat-blue.svg" alt="Project Chat" /></a></p>
+<p><a href="https://en.bitcoin.it/wiki/Secp256k1">secp256k1</a> (a.k.a. K-256) elliptic curve library written in pure Rust with
+support for <a href="https://en.wikipedia.org/wiki/Elliptic_Curve_Digital_Signature_Algorithm">ECDSA</a> signing/verification/public-key recovery, Taproot
+<a href="https://en.wikipedia.org/wiki/Schnorr_signature">Schnorr signatures</a> as defined in BIP340, Elliptic Curve Diffie-Hellman (ECDH),
+and general-purpose secp256k1 elliptic curve group operations which can be used
+to implement arbitrary group-based protocols.</p>
+<p>Uses traits and base types from the <a href="https://github.com/RustCrypto/traits/tree/master/elliptic-curve"><code>elliptic-curve</code></a> crate.</p>
+<p>Optionally includes a secp256k1 <a href="https://docs.rs/k256/latest/k256/arithmetic/index.html"><code>arithmetic</code></a> feature providing scalar and
+point types (projective/affine) with support for constant-time scalar
+multiplication. Additionally, implements traits from the <a href="https://github.com/zkcrypto/group"><code>group</code></a> crate
+which can be used to generically construct group-based protocols.</p>
+<p><a href="https://docs.rs/k256/">Documentation</a></p>
+<h3 id="security-notes"><a class="doc-anchor" href="#security-notes">§</a>Security Notes</h3>
+<p>This crate has been <a href="https://research.nccgroup.com/2023/08/30/public-report-entropy-rust-cryptography-review/">audited by NCC Group</a>, which found a high severity issue
+in the ECDSA/secp256k1 implementation and another high severity issue in the
+Schnorr/secp256k1 signature implementation, both of which have since been
+corrected. We would like to thank <a href="https://entropy.xyz/">Entropy</a> for funding the audit.</p>
+<p>This crate has been designed with the goal of ensuring that secret-dependent
+secp256k1 operations are performed in constant time (using the <code>subtle</code> crate
+and constant-time formulas). However, it is not suitable for use on processors
+with a variable-time multiplication operation (e.g. short circuit on
+multiply-by-zero / multiply-by-one, such as certain 32-bit PowerPC CPUs and
+some non-ARM microcontrollers).</p>
+<p>USE AT YOUR OWN RISK!</p>
+<h3 id="supported-algorithms"><a class="doc-anchor" href="#supported-algorithms">§</a>Supported Algorithms</h3>
+<ul>
+<li><a href="https://en.wikipedia.org/wiki/Elliptic-curve_Diffie-Hellman">Elliptic Curve Diffie-Hellman (ECDH)</a>: gated under the <code>ecdh</code> feature.
+Note that this is technically ephemeral secp256k1 Diffie-Hellman
+(a.k.a. ECDHE)</li>
+<li><a href="https://en.wikipedia.org/wiki/Elliptic_Curve_Digital_Signature_Algorithm">Elliptic Curve Digital Signature Algorithm (ECDSA)</a>: gated under the
+<code>ecdsa</code> feature. Support for ECDSA/secp256k1 signing and verification,
+applying <a href="https://github.com/bitcoin/bips/blob/master/bip-0062.mediawiki">low-S normalization (BIP 0062)</a> as used in
+consensus-critical applications, and additionally supports secp256k1
+public-key recovery from ECDSA signatures (as used by e.g. Ethereum)</li>
+<li>Taproot <a href="https://en.wikipedia.org/wiki/Schnorr_signature">Schnorr signatures</a> (as defined in <a href="https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki">BIP0340</a>): next-generation
+signature algorithm based on group operations enabling elegant higher-level
+constructions like multisignatures.</li>
+</ul>
+<h3 id="about-secp256k1-k-256"><a class="doc-anchor" href="#about-secp256k1-k-256">§</a>About secp256k1 (K-256)</h3>
+<p><a href="https://en.bitcoin.it/wiki/Secp256k1">secp256k1</a> is a Koblitz curve commonly used in cryptocurrency applications.
+The “K-256” name follows NIST notation where P = prime fields,
+B = binary fields, and K = Koblitz curves.</p>
+<p>The curve is specified as <code>secp256k1</code> by Certicom’s SECG in
+“SEC 2: Recommended Elliptic Curve Domain Parameters”:</p>
+<p><a href="https://www.secg.org/sec2-v2.pdf">https://www.secg.org/sec2-v2.pdf</a></p>
+<p>secp256k1 is primarily notable for usage in Bitcoin and other cryptocurrencies,
+particularly in conjunction with the
+<a href="https://en.wikipedia.org/wiki/Elliptic_Curve_Digital_Signature_Algorithm">Elliptic Curve Digital Signature Algorithm (ECDSA)</a>.
+Owing to its wide deployment in these applications, secp256k1 is one of the
+most popular and commonly used elliptic curves.</p>
+<h3 id="minimum-supported-rust-version"><a class="doc-anchor" href="#minimum-supported-rust-version">§</a>Minimum Supported Rust Version</h3>
+<p>Rust <strong>1.65</strong> or higher.</p>
+<p>Minimum supported Rust version can be changed in the future, but it will be
+done with a minor version bump.</p>
+<h3 id="semver-policy"><a class="doc-anchor" href="#semver-policy">§</a>SemVer Policy</h3>
+<ul>
+<li>All on-by-default features of this library are covered by SemVer</li>
+<li>MSRV is considered exempt from SemVer as noted above</li>
+</ul>
+<h3 id="license"><a class="doc-anchor" href="#license">§</a>License</h3>
+<p>All crates licensed under either of</p>
+<ul>
+<li><a href="http://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a></li>
+<li><a href="http://opensource.org/licenses/MIT">MIT license</a></li>
+</ul>
+<p>at your option.</p>
+<h4 id="contribution"><a class="doc-anchor" href="#contribution">§</a>Contribution</h4>
+<p>Unless you explicitly state otherwise, any contribution intentionally submitted
+for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
+dual licensed as above, without any additional terms or conditions.</p>
+<h3 id="serde-support"><a class="doc-anchor" href="#serde-support">§</a><code>serde</code> support</h3>
+<p>When the <code>serde</code> feature of this crate is enabled, <code>Serialize</code> and
+<code>Deserialize</code> are impl’d for the following types:</p>
+<ul>
+<li><a href="struct.AffinePoint.html" title="struct k256::AffinePoint"><code>AffinePoint</code></a></li>
+<li><a href="struct.Scalar.html" title="struct k256::Scalar"><code>Scalar</code></a></li>
+<li><a href="ecdsa/type.VerifyingKey.html" title="type k256::ecdsa::VerifyingKey"><code>ecdsa::VerifyingKey</code></a></li>
+</ul>
+<p>Please see type-specific documentation for more information.</p>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.elliptic_curve"><code>pub use <a class="mod" href="../elliptic_curve/index.html" title="mod elliptic_curve">elliptic_curve</a>;</code></div></li><li><div class="item-name" id="reexport.sha2"><code>pub use <a class="mod" href="../sha2/index.html" title="mod sha2">sha2</a>;</code></div></li></ul><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="ecdsa/index.html" title="mod k256::ecdsa">ecdsa</a></div><div class="desc docblock-short">Elliptic Curve Digital Signature Algorithm (ECDSA).</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.AffinePoint.html" title="struct k256::AffinePoint">AffinePoint</a></div><div class="desc docblock-short">secp256k1 curve point expressed in affine coordinates.</div></li><li><div class="item-name"><a class="struct" href="struct.ProjectivePoint.html" title="struct k256::ProjectivePoint">ProjectivePoint</a></div><div class="desc docblock-short">A point on the secp256k1 curve in projective coordinates.</div></li><li><div class="item-name"><a class="struct" href="struct.Scalar.html" title="struct k256::Scalar">Scalar</a></div><div class="desc docblock-short">Scalars are elements in the finite field modulo n.</div></li><li><div class="item-name"><a class="struct" href="struct.Secp256k1.html" title="struct k256::Secp256k1">Secp256k1</a></div><div class="desc docblock-short">secp256k1 (K-256) elliptic curve.</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.CompressedPoint.html" title="type k256::CompressedPoint">CompressedPoint</a></div><div class="desc docblock-short">Compressed SEC1-encoded secp256k1 (K-256) curve point.</div></li><li><div class="item-name"><a class="type" href="type.EncodedPoint.html" title="type k256::EncodedPoint">EncodedPoint</a></div><div class="desc docblock-short">SEC1-encoded secp256k1 (K-256) curve point.</div></li><li><div class="item-name"><a class="type" href="type.FieldBytes.html" title="type k256::FieldBytes">FieldBytes</a></div><div class="desc docblock-short">secp256k1 (K-256) field element serialized as bytes.</div></li><li><div class="item-name"><a class="type" href="type.NonZeroScalar.html" title="type k256::NonZeroScalar">NonZeroScalar</a></div><div class="desc docblock-short">Non-zero secp256k1 (K-256) scalar field element.</div></li><li><div class="item-name"><a class="type" href="type.PublicKey.html" title="type k256::PublicKey">PublicKey</a></div><div class="desc docblock-short">secp256k1 (K-256) public key.</div></li><li><div class="item-name"><a class="type" href="type.SecretKey.html" title="type k256::SecretKey">SecretKey</a></div><div class="desc docblock-short">secp256k1 (K-256) secret key.</div></li><li><div class="item-name"><a class="type" href="type.U256.html" title="type k256::U256">U256</a></div><div class="desc docblock-short">256-bit
+unsigned big integer.</div></li><li><div class="item-name"><a class="type" href="type.WideBytes.html" title="type k256::WideBytes">WideBytes</a></div><div class="desc docblock-short">Bytes used by a wide reduction: twice the width of <a href="type.FieldBytes.html" title="type k256::FieldBytes"><code>FieldBytes</code></a>.</div></li></ul></section></div></main></body></html>

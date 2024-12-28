@@ -1,0 +1,62 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="An atomic fence."><title>fence in wasmer_types::lib::std::sync::atomic - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../../../" data-static-root-path="../../../../../static.files/" data-current-crate="wasmer_types" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../../../wasmer_types/index.html">wasmer_types</a><span class="version">4.4.0</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In wasmer_types::lib::std::sync::atomic</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../../../../index.html">wasmer_types</a>::<wbr><a href="../../../index.html">lib</a>::<wbr><a href="../../index.html">std</a>::<wbr><a href="../index.html">sync</a>::<wbr><a href="index.html">atomic</a>::<wbr><a class="fn" href="#">fence</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/sync/atomic.rs.html#3652">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn fence(order: <a class="enum" href="enum.Ordering.html" title="enum wasmer_types::lib::std::sync::atomic::Ordering">Ordering</a>)</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>An atomic fence.</p>
+<p>Depending on the specified order, a fence prevents the compiler and CPU from
+reordering certain types of memory operations around it.
+That creates synchronizes-with relationships between it and atomic operations
+or fences in other threads.</p>
+<p>A fence ‘A’ which has (at least) <a href="enum.Ordering.html#variant.Release" title="variant wasmer_types::lib::std::sync::atomic::Ordering::Release"><code>Release</code></a> ordering semantics, synchronizes
+with a fence ‘B’ with (at least) <a href="enum.Ordering.html#variant.Acquire" title="variant wasmer_types::lib::std::sync::atomic::Ordering::Acquire"><code>Acquire</code></a> semantics, if and only if there
+exist operations X and Y, both operating on some atomic object ‘M’ such
+that A is sequenced before X, Y is sequenced before B and Y observes
+the change to M. This provides a happens-before dependence between A and B.</p>
+<div class="example-wrap"><pre class="language-text"><code>    Thread 1                                          Thread 2
+
+fence(Release);      A --------------
+x.store(3, Relaxed); X ---------    |
+                               |    |
+                               |    |
+                               -------------&gt; Y  if x.load(Relaxed) == 3 {
+                                    |-------&gt; B      fence(Acquire);
+                                                     ...
+                                                 }
+</code></pre></div>
+<p>Atomic operations with <a href="enum.Ordering.html#variant.Release" title="variant wasmer_types::lib::std::sync::atomic::Ordering::Release"><code>Release</code></a> or <a href="enum.Ordering.html#variant.Acquire" title="variant wasmer_types::lib::std::sync::atomic::Ordering::Acquire"><code>Acquire</code></a> semantics can also synchronize
+with a fence.</p>
+<p>A fence which has <a href="enum.Ordering.html#variant.SeqCst" title="variant wasmer_types::lib::std::sync::atomic::Ordering::SeqCst"><code>SeqCst</code></a> ordering, in addition to having both <a href="enum.Ordering.html#variant.Acquire" title="variant wasmer_types::lib::std::sync::atomic::Ordering::Acquire"><code>Acquire</code></a>
+and <a href="enum.Ordering.html#variant.Release" title="variant wasmer_types::lib::std::sync::atomic::Ordering::Release"><code>Release</code></a> semantics, participates in the global program order of the
+other <a href="enum.Ordering.html#variant.SeqCst" title="variant wasmer_types::lib::std::sync::atomic::Ordering::SeqCst"><code>SeqCst</code></a> operations and/or fences.</p>
+<p>Accepts <a href="enum.Ordering.html#variant.Acquire" title="variant wasmer_types::lib::std::sync::atomic::Ordering::Acquire"><code>Acquire</code></a>, <a href="enum.Ordering.html#variant.Release" title="variant wasmer_types::lib::std::sync::atomic::Ordering::Release"><code>Release</code></a>, <a href="enum.Ordering.html#variant.AcqRel" title="variant wasmer_types::lib::std::sync::atomic::Ordering::AcqRel"><code>AcqRel</code></a> and <a href="enum.Ordering.html#variant.SeqCst" title="variant wasmer_types::lib::std::sync::atomic::Ordering::SeqCst"><code>SeqCst</code></a> orderings.</p>
+<h2 id="panics"><a class="doc-anchor" href="#panics">§</a>Panics</h2>
+<p>Panics if <code>order</code> is <a href="enum.Ordering.html#variant.Relaxed" title="variant wasmer_types::lib::std::sync::atomic::Ordering::Relaxed"><code>Relaxed</code></a>.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::sync::atomic::AtomicBool;
+<span class="kw">use </span>std::sync::atomic::fence;
+<span class="kw">use </span>std::sync::atomic::Ordering;
+
+<span class="comment">// A mutual exclusion primitive based on spinlock.
+</span><span class="kw">pub struct </span>Mutex {
+    flag: AtomicBool,
+}
+
+<span class="kw">impl </span>Mutex {
+    <span class="kw">pub fn </span>new() -&gt; Mutex {
+        Mutex {
+            flag: AtomicBool::new(<span class="bool-val">false</span>),
+        }
+    }
+
+    <span class="kw">pub fn </span>lock(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+        <span class="comment">// Wait until the old value is `false`.
+        </span><span class="kw">while </span><span class="self">self
+            </span>.flag
+            .compare_exchange_weak(<span class="bool-val">false</span>, <span class="bool-val">true</span>, Ordering::Relaxed, Ordering::Relaxed)
+            .is_err()
+        {}
+        <span class="comment">// This fence synchronizes-with store in `unlock`.
+        </span>fence(Ordering::Acquire);
+    }
+
+    <span class="kw">pub fn </span>unlock(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+        <span class="self">self</span>.flag.store(<span class="bool-val">false</span>, Ordering::Release);
+    }
+}</code></pre></div>
+</div></details></section></div></main></body></html>

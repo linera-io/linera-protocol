@@ -1,0 +1,100 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Forms a slice from a pointer and a length."><title>from_raw_parts in wasmtime_environ::__core::slice - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="wasmtime_environ" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../wasmtime_environ/index.html">wasmtime_environ</a><span class="version">25.0.1</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In wasmtime_environ::__core::slice</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../../index.html">wasmtime_environ</a>::<wbr><a href="../index.html">__core</a>::<wbr><a href="index.html">slice</a>::<wbr><a class="fn" href="#">from_raw_parts</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><span class="since" title="Stable since Rust version 1.0.0, const since 1.64.0">1.0.0 (const: 1.64.0)</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/slice/raw.rs.html#125">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub const unsafe fn from_raw_parts&lt;'a, T&gt;(data: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.pointer.html">*const T</a>, len: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; &amp;'a <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.slice.html">[T]</a></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Forms a slice from a pointer and a length.</p>
+<p>The <code>len</code> argument is the number of <strong>elements</strong>, not the number of bytes.</p>
+<h2 id="safety"><a class="doc-anchor" href="#safety">§</a>Safety</h2>
+<p>Behavior is undefined if any of the following conditions are violated:</p>
+<ul>
+<li>
+<p><code>data</code> must be <a href="../ptr/index.html#safety" title="mod wasmtime_environ::__core::ptr">valid</a> for reads for <code>len * mem::size_of::&lt;T&gt;()</code> many bytes,
+and it must be properly aligned. This means in particular:</p>
+<ul>
+<li>The entire memory range of this slice must be contained within a single allocated object!
+Slices can never span across multiple allocated objects. See <a href="#incorrect-usage">below</a>
+for an example incorrectly not taking this into account.</li>
+<li><code>data</code> must be non-null and aligned even for zero-length slices. One
+reason for this is that enum layout optimizations may rely on references
+(including slices of any length) being aligned and non-null to distinguish
+them from other data. You can obtain a pointer that is usable as <code>data</code>
+for zero-length slices using <a href="../ptr/struct.NonNull.html#method.dangling" title="associated function wasmtime_environ::__core::ptr::NonNull::dangling"><code>NonNull::dangling()</code></a>.</li>
+</ul>
+</li>
+<li>
+<p><code>data</code> must point to <code>len</code> consecutive properly initialized values of type <code>T</code>.</p>
+</li>
+<li>
+<p>The memory referenced by the returned slice must not be mutated for the duration
+of lifetime <code>'a</code>, except inside an <code>UnsafeCell</code>.</p>
+</li>
+<li>
+<p>The total size <code>len * mem::size_of::&lt;T&gt;()</code> of the slice must be no larger than <code>isize::MAX</code>,
+and adding that size to <code>data</code> must not “wrap around” the address space.
+See the safety documentation of <a href="https://doc.rust-lang.org/1.81.0/std/primitive.pointer.html#method.offset" title="method pointer::offset"><code>pointer::offset</code></a>.</p>
+</li>
+</ul>
+<h2 id="caveat"><a class="doc-anchor" href="#caveat">§</a>Caveat</h2>
+<p>The lifetime for the returned slice is inferred from its usage. To
+prevent accidental misuse, it’s suggested to tie the lifetime to whichever
+source lifetime is safe in the context, such as by providing a helper
+function taking the lifetime of a host value for the slice, or by explicit
+annotation.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::slice;
+
+<span class="comment">// manifest a slice for a single element
+</span><span class="kw">let </span>x = <span class="number">42</span>;
+<span class="kw">let </span>ptr = <span class="kw-2">&amp;</span>x <span class="kw">as </span><span class="kw-2">*const </span><span class="kw">_</span>;
+<span class="kw">let </span>slice = <span class="kw">unsafe </span>{ slice::from_raw_parts(ptr, <span class="number">1</span>) };
+<span class="macro">assert_eq!</span>(slice[<span class="number">0</span>], <span class="number">42</span>);</code></pre></div>
+<h4 id="incorrect-usage"><a class="doc-anchor" href="#incorrect-usage">§</a>Incorrect usage</h4>
+<p>The following <code>join_slices</code> function is <strong>unsound</strong> ⚠️</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::slice;
+
+<span class="kw">fn </span>join_slices&lt;<span class="lifetime">'a</span>, T&gt;(fst: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>[T], snd: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>[T]) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'a </span>[T] {
+    <span class="kw">let </span>fst_end = fst.as_ptr().wrapping_add(fst.len());
+    <span class="kw">let </span>snd_start = snd.as_ptr();
+    <span class="macro">assert_eq!</span>(fst_end, snd_start, <span class="string">"Slices must be contiguous!"</span>);
+    <span class="kw">unsafe </span>{
+        <span class="comment">// The assertion above ensures `fst` and `snd` are contiguous, but they might
+        // still be contained within _different allocated objects_, in which case
+        // creating this slice is undefined behavior.
+        </span>slice::from_raw_parts(fst.as_ptr(), fst.len() + snd.len())
+    }
+}
+
+<span class="kw">fn </span>main() {
+    <span class="comment">// `a` and `b` are different allocated objects...
+    </span><span class="kw">let </span>a = <span class="number">42</span>;
+    <span class="kw">let </span>b = <span class="number">27</span>;
+    <span class="comment">// ... which may nevertheless be laid out contiguously in memory: | a | b |
+    </span><span class="kw">let _ </span>= join_slices(slice::from_ref(<span class="kw-2">&amp;</span>a), slice::from_ref(<span class="kw-2">&amp;</span>b)); <span class="comment">// UB
+</span>}</code></pre></div>
+<h4 id="ffi-handling-null-pointers"><a class="doc-anchor" href="#ffi-handling-null-pointers">§</a>FFI: Handling null pointers</h4>
+<p>In languages such as C++, pointers to empty collections are not guaranteed to be non-null.
+When accepting such pointers, they have to be checked for null-ness to avoid undefined
+behavior.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::slice;
+
+<span class="doccomment">/// Sum the elements of an FFI slice.
+///
+/// # Safety
+///
+/// If ptr is not NULL, it must be correctly aligned and
+/// point to `len` initialized items of type `f32`.
+</span><span class="kw">unsafe extern </span><span class="string">"C" </span><span class="kw">fn </span>sum_slice(ptr: <span class="kw-2">*const </span>f32, len: usize) -&gt; f32 {
+    <span class="kw">let </span>data = <span class="kw">if </span>ptr.is_null() {
+        <span class="comment">// `len` is assumed to be 0.
+        </span><span class="kw-2">&amp;</span>[]
+    } <span class="kw">else </span>{
+        <span class="comment">// SAFETY: see function docstring.
+        </span><span class="kw">unsafe </span>{ slice::from_raw_parts(ptr, len) }
+    };
+    data.into_iter().sum()
+}
+
+<span class="comment">// This could be the result of C++'s std::vector::data():
+</span><span class="kw">let </span>ptr = std::ptr::null();
+<span class="comment">// And this could be std::vector::size():
+</span><span class="kw">let </span>len = <span class="number">0</span>;
+<span class="macro">assert_eq!</span>(<span class="kw">unsafe </span>{ sum_slice(ptr, len) }, <span class="number">0.0</span>);</code></pre></div>
+</div></details></section></div></main></body></html>

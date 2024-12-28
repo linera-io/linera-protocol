@@ -1,0 +1,89 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Creates a future that wraps a function returning `Poll`."><title>poll_fn in wasmtime_environ::__core::future - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="wasmtime_environ" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../wasmtime_environ/index.html">wasmtime_environ</a><span class="version">25.0.1</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In wasmtime_environ::__core::future</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../../index.html">wasmtime_environ</a>::<wbr><a href="../index.html">__core</a>::<wbr><a href="index.html">future</a>::<wbr><a class="fn" href="#">poll_fn</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><span class="since" title="Stable since Rust version 1.64.0">1.64.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/future/poll_fn.rs.html#115-117">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn poll_fn&lt;T, F&gt;(f: F) -&gt; <a class="struct" href="struct.PollFn.html" title="struct wasmtime_environ::__core::future::PollFn">PollFn</a>&lt;F&gt; <a href="#" class="tooltip" data-notable-ty="PollFn&lt;F&gt;">ⓘ</a><div class="where">where
+    F: <a class="trait" href="../ops/trait.FnMut.html" title="trait wasmtime_environ::__core::ops::FnMut">FnMut</a>(&amp;mut <a class="struct" href="../task/struct.Context.html" title="struct wasmtime_environ::__core::task::Context">Context</a>&lt;'_&gt;) -&gt; <a class="enum" href="../task/enum.Poll.html" title="enum wasmtime_environ::__core::task::Poll">Poll</a>&lt;T&gt;,</div></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Creates a future that wraps a function returning <a href="../task/enum.Poll.html" title="enum wasmtime_environ::__core::task::Poll"><code>Poll</code></a>.</p>
+<p>Polling the future delegates to the wrapped function. If the returned future is pinned, then the
+captured environment of the wrapped function is also pinned in-place, so as long as the closure
+does not move out of its captures it can soundly create pinned references to them.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>core::future::poll_fn;
+<span class="kw">use </span>std::task::{Context, Poll};
+
+<span class="kw">fn </span>read_line(_cx: <span class="kw-2">&amp;mut </span>Context&lt;<span class="lifetime">'_</span>&gt;) -&gt; Poll&lt;String&gt; {
+    Poll::Ready(<span class="string">"Hello, World!"</span>.into())
+}
+
+<span class="kw">let </span>read_future = poll_fn(read_line);
+<span class="macro">assert_eq!</span>(read_future.<span class="kw">await</span>, <span class="string">"Hello, World!"</span>.to_owned());</code></pre></div>
+<h3 id="capturing-a-pinned-state"><a class="doc-anchor" href="#capturing-a-pinned-state">§</a>Capturing a pinned state</h3>
+<p>Example of a closure wrapping inner futures:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>core::future::{<span class="self">self</span>, Future};
+<span class="kw">use </span>core::task::Poll;
+
+<span class="doccomment">/// Resolves to the first future that completes. In the event of a tie, `a` wins.
+</span><span class="kw">fn </span>naive_select&lt;T&gt;(
+    a: <span class="kw">impl </span>Future&lt;Output = T&gt;,
+    b: <span class="kw">impl </span>Future&lt;Output = T&gt;,
+) -&gt; <span class="kw">impl </span>Future&lt;Output = T&gt;
+{
+    <span class="kw">let </span>(<span class="kw-2">mut </span>a, <span class="kw-2">mut </span>b) = (Box::pin(a), Box::pin(b));
+    future::poll_fn(<span class="kw">move </span>|cx| {
+        <span class="kw">if let </span>Poll::Ready(r) = a.as_mut().poll(cx) {
+            Poll::Ready(r)
+        } <span class="kw">else if let </span>Poll::Ready(r) = b.as_mut().poll(cx) {
+            Poll::Ready(r)
+        } <span class="kw">else </span>{
+            Poll::Pending
+        }
+    })
+}
+
+<span class="kw">let </span>a = <span class="kw">async </span>{ <span class="number">42 </span>};
+<span class="kw">let </span>b = future::pending();
+<span class="kw">let </span>v = naive_select(a, b).<span class="kw">await</span>;
+<span class="macro">assert_eq!</span>(v, <span class="number">42</span>);
+
+<span class="kw">let </span>a = future::pending();
+<span class="kw">let </span>b = <span class="kw">async </span>{ <span class="number">27 </span>};
+<span class="kw">let </span>v = naive_select(a, b).<span class="kw">await</span>;
+<span class="macro">assert_eq!</span>(v, <span class="number">27</span>);
+
+<span class="kw">let </span>a = <span class="kw">async </span>{ <span class="number">42 </span>};
+<span class="kw">let </span>b = <span class="kw">async </span>{ <span class="number">27 </span>};
+<span class="kw">let </span>v = naive_select(a, b).<span class="kw">await</span>;
+<span class="macro">assert_eq!</span>(v, <span class="number">42</span>); <span class="comment">// biased towards `a` in case of tie!</span></code></pre></div>
+<p>This time without <a href="../../std/boxed/struct.Box.html#method.pin"><code>Box::pin</code></a>ning:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>core::future::{<span class="self">self</span>, Future};
+<span class="kw">use </span>core::pin::pin;
+<span class="kw">use </span>core::task::Poll;
+
+<span class="doccomment">/// Resolves to the first future that completes. In the event of a tie, `a` wins.
+</span><span class="kw">fn </span>naive_select&lt;T&gt;(
+    a: <span class="kw">impl </span>Future&lt;Output = T&gt;,
+    b: <span class="kw">impl </span>Future&lt;Output = T&gt;,
+) -&gt; <span class="kw">impl </span>Future&lt;Output = T&gt;
+{
+    <span class="kw">async </span>{
+        <span class="kw">let </span>(<span class="kw-2">mut </span>a, <span class="kw-2">mut </span>b) = (<span class="macro">pin!</span>(a), <span class="macro">pin!</span>(b));
+        future::poll_fn(<span class="kw">move </span>|cx| {
+            <span class="kw">if let </span>Poll::Ready(r) = a.as_mut().poll(cx) {
+                Poll::Ready(r)
+            } <span class="kw">else if let </span>Poll::Ready(r) = b.as_mut().poll(cx) {
+                Poll::Ready(r)
+            } <span class="kw">else </span>{
+                Poll::Pending
+            }
+        }).<span class="kw">await
+    </span>}
+}
+
+<span class="kw">let </span>a = <span class="kw">async </span>{ <span class="number">42 </span>};
+<span class="kw">let </span>b = future::pending();
+<span class="kw">let </span>v = naive_select(a, b).<span class="kw">await</span>;
+<span class="macro">assert_eq!</span>(v, <span class="number">42</span>);</code></pre></div>
+<ul>
+<li>Notice how, by virtue of being in an <code>async</code> context, we have been able to make the <a href="../pin/macro.pin.html" title="macro wasmtime_environ::__core::pin::pin"><code>pin!</code></a>
+macro work, thereby avoiding any need for the <code>unsafe</code>
+<code><a href="../pin/struct.Pin.html#method.new_unchecked" title="associated function wasmtime_environ::__core::pin::Pin::new_unchecked">Pin::new_unchecked</a>(&amp;mut fut)</code> constructor.</li>
+</ul>
+</div></details><script type="text/json" id="notable-traits-data">{"PollFn<F>":"<h3>Notable traits for <code><a class=\"struct\" href=\"struct.PollFn.html\" title=\"struct wasmtime_environ::__core::future::PollFn\">PollFn</a>&lt;F&gt;</code></h3><pre><code><div class=\"where\">impl&lt;T, F&gt; <a class=\"trait\" href=\"trait.Future.html\" title=\"trait wasmtime_environ::__core::future::Future\">Future</a> for <a class=\"struct\" href=\"struct.PollFn.html\" title=\"struct wasmtime_environ::__core::future::PollFn\">PollFn</a>&lt;F&gt;<div class=\"where\">where\n    F: <a class=\"trait\" href=\"../ops/trait.FnMut.html\" title=\"trait wasmtime_environ::__core::ops::FnMut\">FnMut</a>(&amp;mut <a class=\"struct\" href=\"../task/struct.Context.html\" title=\"struct wasmtime_environ::__core::task::Context\">Context</a>&lt;'_&gt;) -&gt; <a class=\"enum\" href=\"../task/enum.Poll.html\" title=\"enum wasmtime_environ::__core::task::Poll\">Poll</a>&lt;T&gt;,</div></div><div class=\"where\">    type <a href=\"trait.Future.html#associatedtype.Output\" class=\"associatedtype\">Output</a> = T;</div>"}</script></section></div></main></body></html>

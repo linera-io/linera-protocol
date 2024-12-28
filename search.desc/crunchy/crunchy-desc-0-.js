@@ -1,0 +1,1 @@
+searchState.loadedDescShard("crunchy", 0, "The crunchy unroller - deterministically unroll constant …\nUnroll the given for loop")

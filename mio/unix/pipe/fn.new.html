@@ -1,0 +1,97 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Create a new non-blocking Unix pipe."><title>new in mio::unix::pipe - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="mio" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../mio/index.html">mio</a><span class="version">1.0.2</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In mio::unix::pipe</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../../index.html">mio</a>::<wbr><a href="../index.html">unix</a>::<wbr><a href="index.html">pipe</a>::<wbr><a class="fn" href="#">new</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/mio/sys/unix/pipe.rs.html#208-214">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn new() -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;(<a class="struct" href="struct.Sender.html" title="struct mio::unix::pipe::Sender">Sender</a>, <a class="struct" href="struct.Receiver.html" title="struct mio::unix::pipe::Receiver">Receiver</a>)&gt;</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Create a new non-blocking Unix pipe.</p>
+<p>This is a wrapper around Unix’s <a href="https://pubs.opengroup.org/onlinepubs/9699919799/functions/pipe.html"><code>pipe(2)</code></a> system call and can be used as
+inter-process or thread communication channel.</p>
+<p>This channel may be created before forking the process and then one end used
+in each process, e.g. the parent process has the sending end to send command
+to the child process.</p>
+<h2 id="events"><a class="doc-anchor" href="#events">§</a>Events</h2>
+<p>The <a href="struct.Sender.html" title="struct mio::unix::pipe::Sender"><code>Sender</code></a> can be registered with <a href="../../struct.Interest.html#associatedconstant.WRITABLE" title="associated constant mio::Interest::WRITABLE"><code>WRITABLE</code></a> interest to receive
+<a href="../../event/struct.Event.html#method.is_writable" title="method mio::event::Event::is_writable">writable events</a>, the <a href="struct.Receiver.html" title="struct mio::unix::pipe::Receiver"><code>Receiver</code></a> with <a href="../../struct.Interest.html#associatedconstant.READABLE" title="associated constant mio::Interest::READABLE"><code>READABLE</code></a> interest. Once data is
+written to the <code>Sender</code> the <code>Receiver</code> will receive an <a href="../../event/struct.Event.html#method.is_readable" title="method mio::event::Event::is_readable">readable event</a>.</p>
+<p>In addition to those events, events will also be generated if the other side
+is dropped. To check if the <code>Sender</code> is dropped you’ll need to check
+<a href="../../event/struct.Event.html#method.is_read_closed" title="method mio::event::Event::is_read_closed"><code>is_read_closed</code></a> on events for the <code>Receiver</code>, if it returns true the
+<code>Sender</code> is dropped. On the <code>Sender</code> end check <a href="../../event/struct.Event.html#method.is_write_closed" title="method mio::event::Event::is_write_closed"><code>is_write_closed</code></a>, if it
+returns true the <code>Receiver</code> was dropped. Also see the second example below.</p>
+<h2 id="deregistering"><a class="doc-anchor" href="#deregistering">§</a>Deregistering</h2>
+<p>Both <code>Sender</code> and <code>Receiver</code> will deregister themselves when dropped,
+<strong>iff</strong> the file descriptors are not duplicated (via <a href="https://pubs.opengroup.org/onlinepubs/9699919799/functions/dup.html"><code>dup(2)</code></a>).</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Simple example that writes data into the sending end and read it from the
+receiving end.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io::{<span class="self">self</span>, Read, Write};
+
+<span class="kw">use </span>mio::{Poll, Events, Interest, Token};
+<span class="kw">use </span>mio::unix::pipe;
+
+<span class="comment">// Unique tokens for the two ends of the channel.
+</span><span class="kw">const </span>PIPE_RECV: Token = Token(<span class="number">0</span>);
+<span class="kw">const </span>PIPE_SEND: Token = Token(<span class="number">1</span>);
+
+<span class="comment">// Create our `Poll` instance and the `Events` container.
+</span><span class="kw">let </span><span class="kw-2">mut </span>poll = Poll::new()<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>events = Events::with_capacity(<span class="number">8</span>);
+
+<span class="comment">// Create a new pipe.
+</span><span class="kw">let </span>(<span class="kw-2">mut </span>sender, <span class="kw-2">mut </span>receiver) = pipe::new()<span class="question-mark">?</span>;
+
+<span class="comment">// Register both ends of the channel.
+</span>poll.registry().register(<span class="kw-2">&amp;mut </span>receiver, PIPE_RECV, Interest::READABLE)<span class="question-mark">?</span>;
+poll.registry().register(<span class="kw-2">&amp;mut </span>sender, PIPE_SEND, Interest::WRITABLE)<span class="question-mark">?</span>;
+
+<span class="kw">const </span>MSG: <span class="kw-2">&amp;</span>[u8; <span class="number">11</span>] = <span class="string">b"Hello world"</span>;
+
+<span class="kw">loop </span>{
+    poll.poll(<span class="kw-2">&amp;mut </span>events, <span class="prelude-val">None</span>)<span class="question-mark">?</span>;
+
+    <span class="kw">for </span>event <span class="kw">in </span>events.iter() {
+        <span class="kw">match </span>event.token() {
+            PIPE_SEND =&gt; sender.write(MSG)
+                .and_then(|n| <span class="kw">if </span>n != MSG.len() {
+                        <span class="comment">// We'll consider a short write an error in this
+                        // example. NOTE: we can't use `write_all` with
+                        // non-blocking I/O.
+                        </span><span class="prelude-val">Err</span>(io::ErrorKind::WriteZero.into())
+                    } <span class="kw">else </span>{
+                        <span class="prelude-val">Ok</span>(())
+                    })<span class="question-mark">?</span>,
+            PIPE_RECV =&gt; {
+                <span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0</span>; <span class="number">11</span>];
+                <span class="kw">let </span>n = receiver.read(<span class="kw-2">&amp;mut </span>buf)<span class="question-mark">?</span>;
+                <span class="macro">println!</span>(<span class="string">"received: {:?}"</span>, <span class="kw-2">&amp;</span>buf[<span class="number">0</span>..n]);
+                <span class="macro">assert_eq!</span>(n, MSG.len());
+                <span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span>buf, <span class="kw-2">&amp;*</span>MSG);
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+            },
+            <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(),
+        }
+    }
+}</code></pre></div>
+<p>Example that receives an event once the <code>Sender</code> is dropped.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// Same setup as in the example above.
+</span><span class="kw">let </span><span class="kw-2">mut </span>poll = Poll::new()<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>events = Events::with_capacity(<span class="number">8</span>);
+
+<span class="kw">let </span>(<span class="kw-2">mut </span>sender, <span class="kw-2">mut </span>receiver) = pipe::new()<span class="question-mark">?</span>;
+
+poll.registry().register(<span class="kw-2">&amp;mut </span>receiver, PIPE_RECV, Interest::READABLE)<span class="question-mark">?</span>;
+poll.registry().register(<span class="kw-2">&amp;mut </span>sender, PIPE_SEND, Interest::WRITABLE)<span class="question-mark">?</span>;
+
+<span class="comment">// Drop the sender.
+</span>drop(sender);
+
+poll.poll(<span class="kw-2">&amp;mut </span>events, <span class="prelude-val">None</span>)<span class="question-mark">?</span>;
+
+<span class="kw">for </span>event <span class="kw">in </span>events.iter() {
+    <span class="kw">match </span>event.token() {
+        PIPE_RECV <span class="kw">if </span>event.is_read_closed() =&gt; {
+            <span class="comment">// Detected that the sender was dropped.
+            </span><span class="macro">println!</span>(<span class="string">"Sender dropped!"</span>);
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+        },
+        <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(),
+    }
+}</code></pre></div>
+</div></details></section></div></main></body></html>

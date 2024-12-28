@@ -1,0 +1,102 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Conversion into a `Future`."><title>IntoFuture in wasmtime_environ::__core::future - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="wasmtime_environ" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../wasmtime_environ/index.html">wasmtime_environ</a><span class="version">25.0.1</span></h2></div><h2 class="location"><a href="#">IntoFuture</a></h2><div class="sidebar-elems"><section><h3><a href="#required-associated-types">Required Associated Types</a></h3><ul class="block"><li><a href="#associatedtype.IntoFuture">IntoFuture</a></li><li><a href="#associatedtype.Output">Output</a></li></ul><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.into_future">into_future</a></li></ul><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In wasmtime_environ::__core::future</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="../../index.html">wasmtime_environ</a>::<wbr><a href="../index.html">__core</a>::<wbr><a href="index.html">future</a>::<wbr><a class="trait" href="#">IntoFuture</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><span class="since" title="Stable since Rust version 1.64.0">1.64.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/future/into_future.rs.html#108">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub trait IntoFuture {
+    type <a href="#associatedtype.Output" class="associatedtype">Output</a>;
+    type <a href="#associatedtype.IntoFuture" class="associatedtype">IntoFuture</a>: <a class="trait" href="trait.Future.html" title="trait wasmtime_environ::__core::future::Future">Future</a>&lt;Output = Self::<a class="associatedtype" href="trait.IntoFuture.html#associatedtype.Output" title="type wasmtime_environ::__core::future::IntoFuture::Output">Output</a>&gt;;
+
+    // Required method
+    fn <a href="#tymethod.into_future" class="fn">into_future</a>(self) -&gt; Self::<a class="associatedtype" href="trait.IntoFuture.html#associatedtype.IntoFuture" title="type wasmtime_environ::__core::future::IntoFuture::IntoFuture">IntoFuture</a>;
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Conversion into a <code>Future</code>.</p>
+<p>By implementing <code>IntoFuture</code> for a type, you define how it will be
+converted to a future.</p>
+<h2 id="await-desugaring"><a class="doc-anchor" href="#await-desugaring">§</a><code>.await</code> desugaring</h2>
+<p>The <code>.await</code> keyword desugars into a call to <code>IntoFuture::into_future</code>
+first before polling the future to completion. <code>IntoFuture</code> is implemented
+for all <code>T: Future</code> which means the <code>into_future</code> method will be available
+on all futures.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::future::IntoFuture;
+
+<span class="kw">let </span>v = <span class="kw">async </span>{ <span class="string">"meow" </span>};
+<span class="kw">let </span><span class="kw-2">mut </span>fut = v.into_future();
+<span class="macro">assert_eq!</span>(<span class="string">"meow"</span>, fut.<span class="kw">await</span>);</code></pre></div>
+<h2 id="async-builders"><a class="doc-anchor" href="#async-builders">§</a>Async builders</h2>
+<p>When implementing futures manually there will often be a choice between
+implementing <code>Future</code> or <code>IntoFuture</code> for a type. Implementing <code>Future</code> is a
+good choice in most cases. But implementing <code>IntoFuture</code> is most useful when
+implementing “async builder” types, which allow their values to be modified
+multiple times before being <code>.await</code>ed.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::future::{ready, Ready, IntoFuture};
+
+<span class="doccomment">/// Eventually multiply two numbers
+</span><span class="kw">pub struct </span>Multiply {
+    num: u16,
+    factor: u16,
+}
+
+<span class="kw">impl </span>Multiply {
+    <span class="doccomment">/// Construct a new instance of `Multiply`.
+    </span><span class="kw">pub fn </span>new(num: u16, factor: u16) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{ num, factor }
+    }
+
+    <span class="doccomment">/// Set the number to multiply by the factor.
+    </span><span class="kw">pub fn </span>number(<span class="kw-2">mut </span><span class="self">self</span>, num: u16) -&gt; <span class="self">Self </span>{
+        <span class="self">self</span>.num = num;
+        <span class="self">self
+    </span>}
+
+    <span class="doccomment">/// Set the factor to multiply the number with.
+    </span><span class="kw">pub fn </span>factor(<span class="kw-2">mut </span><span class="self">self</span>, factor: u16) -&gt; <span class="self">Self </span>{
+        <span class="self">self</span>.factor = factor;
+        <span class="self">self
+    </span>}
+}
+
+<span class="kw">impl </span>IntoFuture <span class="kw">for </span>Multiply {
+    <span class="kw">type </span>Output = u16;
+    <span class="kw">type </span>IntoFuture = Ready&lt;<span class="self">Self</span>::Output&gt;;
+
+    <span class="kw">fn </span>into_future(<span class="self">self</span>) -&gt; <span class="self">Self</span>::IntoFuture {
+        ready(<span class="self">self</span>.num * <span class="self">self</span>.factor)
+    }
+}
+
+<span class="comment">// NOTE: Rust does not yet have an `async fn main` function, that functionality
+// currently only exists in the ecosystem.
+</span><span class="kw">async fn </span>run() {
+    <span class="kw">let </span>num = Multiply::new(<span class="number">0</span>, <span class="number">0</span>)  <span class="comment">// initialize the builder to number: 0, factor: 0
+        </span>.number(<span class="number">2</span>)                 <span class="comment">// change the number to 2
+        </span>.factor(<span class="number">2</span>)                 <span class="comment">// change the factor to 2
+        </span>.<span class="kw">await</span>;                    <span class="comment">// convert to future and .await
+
+    </span><span class="macro">assert_eq!</span>(num, <span class="number">4</span>);
+}</code></pre></div>
+<h2 id="usage-in-trait-bounds"><a class="doc-anchor" href="#usage-in-trait-bounds">§</a>Usage in trait bounds</h2>
+<p>Using <code>IntoFuture</code> in trait bounds allows a function to be generic over both
+<code>Future</code> and <code>IntoFuture</code>. This is convenient for users of the function, so
+when they are using it they don’t have to make an extra call to
+<code>IntoFuture::into_future</code> to obtain an instance of <code>Future</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::future::IntoFuture;
+
+<span class="doccomment">/// Convert the output of a future to a string.
+</span><span class="kw">async fn </span>fut_to_string&lt;Fut&gt;(fut: Fut) -&gt; String
+<span class="kw">where
+    </span>Fut: IntoFuture,
+    Fut::Output: std::fmt::Debug,
+{
+    <span class="macro">format!</span>(<span class="string">"{:?}"</span>, fut.<span class="kw">await</span>)
+}</code></pre></div>
+</div></details><h2 id="required-associated-types" class="section-header">Required Associated Types<a href="#required-associated-types" class="anchor">§</a></h2><div class="methods"><details class="toggle" open><summary><section id="associatedtype.Output" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.64.0">1.64.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/future/into_future.rs.html#111">source</a></span><h4 class="code-header">type <a href="#associatedtype.Output" class="associatedtype">Output</a></h4></section></summary><div class="docblock"><p>The output that the future will produce on completion.</p>
+</div></details><details class="toggle" open><summary><section id="associatedtype.IntoFuture" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.64.0">1.64.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/future/into_future.rs.html#115">source</a></span><h4 class="code-header">type <a href="#associatedtype.IntoFuture" class="associatedtype">IntoFuture</a>: <a class="trait" href="trait.Future.html" title="trait wasmtime_environ::__core::future::Future">Future</a>&lt;Output = Self::<a class="associatedtype" href="trait.IntoFuture.html#associatedtype.Output" title="type wasmtime_environ::__core::future::IntoFuture::Output">Output</a>&gt;</h4></section></summary><div class="docblock"><p>Which kind of future are we turning this into?</p>
+</div></details></div><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.into_future" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.64.0">1.64.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/future/into_future.rs.html#134">source</a></span><h4 class="code-header">fn <a href="#tymethod.into_future" class="fn">into_future</a>(self) -&gt; Self::<a class="associatedtype" href="trait.IntoFuture.html#associatedtype.IntoFuture" title="type wasmtime_environ::__core::future::IntoFuture::IntoFuture">IntoFuture</a></h4></section></summary><div class="docblock"><p>Creates a future from a value.</p>
+<h5 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h5>
+<p>Basic usage:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::future::IntoFuture;
+
+<span class="kw">let </span>v = <span class="kw">async </span>{ <span class="string">"meow" </span>};
+<span class="kw">let </span><span class="kw-2">mut </span>fut = v.into_future();
+<span class="macro">assert_eq!</span>(<span class="string">"meow"</span>, fut.<span class="kw">await</span>);</code></pre></div>
+</div></details></div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><details class="toggle implementors-toggle"><summary><section id="impl-IntoFuture-for-F" class="impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.64.0">1.64.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/future/into_future.rs.html#138">source</a></span><a href="#impl-IntoFuture-for-F" class="anchor">§</a><h3 class="code-header">impl&lt;F&gt; <a class="trait" href="trait.IntoFuture.html" title="trait wasmtime_environ::__core::future::IntoFuture">IntoFuture</a> for F<div class="where">where
+    F: <a class="trait" href="trait.Future.html" title="trait wasmtime_environ::__core::future::Future">Future</a>,</div></h3></section></summary><div class="impl-items"><section id="associatedtype.Output-1" class="associatedtype trait-impl"><a href="#associatedtype.Output-1" class="anchor">§</a><h4 class="code-header">type <a href="#associatedtype.Output" class="associatedtype">Output</a> = &lt;F as <a class="trait" href="trait.Future.html" title="trait wasmtime_environ::__core::future::Future">Future</a>&gt;::<a class="associatedtype" href="trait.Future.html#associatedtype.Output" title="type wasmtime_environ::__core::future::Future::Output">Output</a></h4></section><section id="associatedtype.IntoFuture-1" class="associatedtype trait-impl"><a href="#associatedtype.IntoFuture-1" class="anchor">§</a><h4 class="code-header">type <a href="#associatedtype.IntoFuture" class="associatedtype">IntoFuture</a> = F</h4></section></div></details></div><script src="../../../trait.impl/core/future/into_future/trait.IntoFuture.js" async></script></section></div></main></body></html>

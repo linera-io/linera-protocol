@@ -1,0 +1,38 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Safely transmutes a mutable reference of one type to an mutable reference of another type of the same size."><title>transmute_mut in zerocopy - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="zerocopy" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../zerocopy/index.html">zerocopy</a><span class="version">0.7.35</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="index.html">zerocopy</a>::<wbr><a class="macro" href="#">transmute_mut</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/zerocopy/lib.rs.html#3982-4054">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><span class="macro">macro_rules!</span> transmute_mut {
+    (<span class="macro-nonterminal">$e</span>:expr) =&gt; { ... };
+}</pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Safely transmutes a mutable reference of one type to an mutable reference of
+another type of the same size.</p>
+<p>The expression <code>$e</code> must have a concrete type, <code>&amp;mut T</code>, where <code>T: Sized + AsBytes</code>. The <code>transmute_mut!</code> expression must also have a concrete type,
+<code>&amp;mut U</code> (<code>U</code> is inferred from the calling context), where <code>U: Sized + FromBytes</code>. It must be the case that <code>align_of::&lt;T&gt;() &gt;= align_of::&lt;U&gt;()</code>.</p>
+<p>The lifetime of the input type, <code>&amp;mut T</code>, must be the same as or outlive the
+lifetime of the output type, <code>&amp;mut U</code>.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span><span class="kw-2">mut </span>one_dimensional: [u8; <span class="number">8</span>] = [<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>, <span class="number">7</span>];
+
+<span class="kw">let </span>two_dimensional: <span class="kw-2">&amp;mut </span>[[u8; <span class="number">4</span>]; <span class="number">2</span>] = <span class="macro">transmute_mut!</span>(<span class="kw-2">&amp;mut </span>one_dimensional);
+
+<span class="macro">assert_eq!</span>(two_dimensional, <span class="kw-2">&amp;</span>[[<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>], [<span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>, <span class="number">7</span>]]);
+
+two_dimensional.reverse();
+
+<span class="macro">assert_eq!</span>(one_dimensional, [<span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>, <span class="number">7</span>, <span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>]);</code></pre></div>
+<h2 id="alignment-increase-error-message"><a class="doc-anchor" href="#alignment-increase-error-message">§</a>Alignment increase error message</h2>
+<p>Because of limitations on macros, the error message generated when
+<code>transmute_mut!</code> is used to transmute from a type of lower alignment to a
+type of higher alignment is somewhat confusing. For example, the following
+code:</p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">const </span>INCREASE_ALIGNMENT: <span class="kw-2">&amp;mut </span>u16 = <span class="macro">zerocopy::transmute_mut!</span>(<span class="kw-2">&amp;mut </span>[<span class="number">0u8</span>; <span class="number">2</span>]);</code></pre></div>
+<p>…generates the following error:</p>
+<div class="example-wrap"><pre class="language-text"><code>error[E0512]: cannot transmute between types of different sizes, or dependently-sized types
+ --&gt; src/lib.rs:1524:34
+  |
+5 | const INCREASE_ALIGNMENT: &amp;mut u16 = zerocopy::transmute_mut!(&amp;mut [0u8; 2]);
+  |                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: source type: `AlignOf&lt;[u8; 2]&gt;` (8 bits)
+  = note: target type: `MaxAlignsOf&lt;[u8; 2], u16&gt;` (16 bits)
+  = note: this error originates in the macro `$crate::assert_align_gt_eq` which comes from the expansion of the macro `transmute_mut` (in Nightly builds, run with -Z macro-backtrace for more info)
+</code></pre></div>
+<p>This is saying that <code>max(align_of::&lt;T&gt;(), align_of::&lt;U&gt;()) != align_of::&lt;T&gt;()</code>, which is equivalent to <code>align_of::&lt;T&gt;() &lt; align_of::&lt;U&gt;()</code>.</p>
+</div></details></section></div></main></body></html>

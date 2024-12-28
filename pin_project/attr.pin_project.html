@@ -1,0 +1,352 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="An attribute that creates projection types covering all the fields of struct or enum."><title>pin_project in pin_project - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="pin_project" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc attr"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../pin_project/index.html">pin_project</a><span class="version">1.1.5</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Attribute Macro <a href="index.html">pin_project</a>::<wbr><a class="attr" href="#">pin_project</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/pin_project_internal/lib.rs.html#485">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>#[pin_project]</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>An attribute that creates projection types covering all the fields of
+struct or enum.</p>
+<p>This attribute creates projection types according to the following rules:</p>
+<ul>
+<li>For the fields that use <code>#[pin]</code> attribute, create the pinned reference to
+the field.</li>
+<li>For the other fields, create a normal reference to the field.</li>
+</ul>
+<p>And the following methods are implemented on the original type:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>project(<span class="self">self</span>: Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;) -&gt; Projection&lt;<span class="lifetime">'_</span>&gt;;
+<span class="kw">fn </span>project_ref(<span class="self">self</span>: Pin&lt;<span class="kw-2">&amp;</span><span class="self">Self</span>&gt;) -&gt; ProjectionRef&lt;<span class="lifetime">'_</span>&gt;;</code></pre></div>
+<p>By passing an argument with the same name as the method to the attribute,
+you can name the projection type returned from the method. This allows you
+to use pattern matching on the projected types.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[pin_project(project = EnumProj)]
+</span><span class="kw">enum </span>Enum&lt;T&gt; {
+    Variant(<span class="attr">#[pin] </span>T),
+}
+
+<span class="kw">impl</span>&lt;T&gt; Enum&lt;T&gt; {
+    <span class="kw">fn </span>method(<span class="self">self</span>: Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;) {
+        <span class="kw">let </span>this: EnumProj&lt;<span class="lifetime">'_</span>, T&gt; = <span class="self">self</span>.project();
+        <span class="kw">match </span>this {
+            EnumProj::Variant(x) =&gt; {
+                <span class="kw">let _</span>: Pin&lt;<span class="kw-2">&amp;mut </span>T&gt; = x;
+            }
+        }
+    }
+}</code></pre></div>
+<p>Note that the projection types returned by <code>project</code> and <code>project_ref</code> have
+an additional lifetime at the beginning of generics.</p>
+<div class="example-wrap"><pre class="language-text"><code>let this: EnumProj&lt;&#39;_, T&gt; = self.project();
+                   ^^
+</code></pre></div>
+<p>The visibility of the projected types and projection methods is based on the
+original type. However, if the visibility of the original type is <code>pub</code>, the
+visibility of the projected types and the projection methods is downgraded
+to <code>pub(crate)</code>.</p>
+<h2 id="safety"><a class="doc-anchor" href="#safety">§</a>Safety</h2>
+<p>This attribute is completely safe. In the absence of other <code>unsafe</code> code
+<em>that you write</em>, it is impossible to cause <a href="https://doc.rust-lang.org/reference/behavior-considered-undefined.html">undefined
+behavior</a> with this attribute.</p>
+<p>This is accomplished by enforcing the four requirements for pin projection
+stated in <a href="core::pin#projections-and-structural-pinning">the Rust documentation</a>:</p>
+<ol>
+<li>
+<p>The struct must only be [<code>Unpin</code>] if all the structural fields are
+[<code>Unpin</code>].</p>
+<p>To enforce this, this attribute will automatically generate an [<code>Unpin</code>]
+implementation for you, which will require that all structurally pinned
+fields be [<code>Unpin</code>].</p>
+<p>If you attempt to provide an [<code>Unpin</code>] impl, the blanket impl will then
+apply to your type, causing a compile-time error due to the conflict with
+the second impl.</p>
+<p>If you wish to provide a manual [<code>Unpin</code>] impl, you can do so via the
+<a href="attr.pin_project.html#unsafeunpin" title="attr pin_project::pin_project"><code>UnsafeUnpin</code></a> argument.</p>
+</li>
+<li>
+<p>The destructor of the struct must not move structural fields out of its
+argument.</p>
+<p>To enforce this, this attribute will generate code like this:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">struct </span>MyStruct {}
+<span class="kw">trait </span>MyStructMustNotImplDrop {}
+<span class="kw">impl</span>&lt;T: Drop&gt; MyStructMustNotImplDrop <span class="kw">for </span>T {}
+<span class="kw">impl </span>MyStructMustNotImplDrop <span class="kw">for </span>MyStruct {}</code></pre></div>
+<p>If you attempt to provide an [<code>Drop</code>] impl, the blanket impl will then
+apply to your type, causing a compile-time error due to the conflict with
+the second impl.</p>
+<p>If you wish to provide a custom [<code>Drop</code>] impl, you can annotate an impl
+with <a href="attr.pin_project.html#pinned_drop" title="attr pin_project::pin_project"><code>#[pinned_drop]</code></a>. This impl takes a pinned version of
+your struct - that is, <a href="core::pin::Pin"><code>Pin</code></a><code>&lt;&amp;mut MyStruct&gt;</code> where <code>MyStruct</code> is the
+type of your struct.</p>
+<p>You can call <code>.project()</code> on this type as usual, along with any other
+methods you have defined. Because your code is never provided with
+a <code>&amp;mut MyStruct</code>, it is impossible to move out of pin-projectable
+fields in safe code in your destructor.</p>
+</li>
+<li>
+<p>You must make sure that you uphold the <a href="core::pin#drop-guarantee"><code>Drop</code>
+guarantee</a>: once your struct is pinned, the memory that
+contains the content is not overwritten or deallocated without calling
+the content’s destructors.</p>
+<p>Safe code doesn’t need to worry about this - the only way to violate
+this requirement is to manually deallocate memory (which is <code>unsafe</code>),
+or to overwrite a field with something else.
+Because your custom destructor takes <a href="core::pin::Pin"><code>Pin</code></a><code>&lt;&amp;mut MyStruct&gt;</code>, it’s
+impossible to obtain a mutable reference to a pin-projected field in safe
+code.</p>
+</li>
+<li>
+<p>You must not offer any other operations that could lead to data being
+moved out of the structural fields when your type is pinned.</p>
+<p>As with requirement 3, it is impossible for safe code to violate this.
+This crate ensures that safe code can never obtain a mutable reference to
+<code>#[pin]</code> fields, which prevents you from ever moving out of them in safe
+code.</p>
+</li>
+</ol>
+<p>Pin projections are also incompatible with <a href="https://doc.rust-lang.org/nomicon/other-reprs.html#reprpacked"><code>#[repr(packed)]</code></a>
+types. Attempting to use this attribute on a <code>#[repr(packed)]</code> type results
+in a compile-time error.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p><code>#[pin_project]</code> can be used on structs and enums.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::pin::Pin;
+
+<span class="kw">use </span>pin_project::pin_project;
+
+<span class="attr">#[pin_project]
+</span><span class="kw">struct </span>Struct&lt;T, U&gt; {
+    <span class="attr">#[pin]
+    </span>pinned: T,
+    unpinned: U,
+}
+
+<span class="kw">impl</span>&lt;T, U&gt; Struct&lt;T, U&gt; {
+    <span class="kw">fn </span>method(<span class="self">self</span>: Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;) {
+        <span class="kw">let </span>this = <span class="self">self</span>.project();
+        <span class="kw">let _</span>: Pin&lt;<span class="kw-2">&amp;mut </span>T&gt; = this.pinned;
+        <span class="kw">let _</span>: <span class="kw-2">&amp;mut </span>U = this.unpinned;
+    }
+}</code></pre></div>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::pin::Pin;
+
+<span class="kw">use </span>pin_project::pin_project;
+
+<span class="attr">#[pin_project]
+</span><span class="kw">struct </span>TupleStruct&lt;T, U&gt;(<span class="attr">#[pin] </span>T, U);
+
+<span class="kw">impl</span>&lt;T, U&gt; TupleStruct&lt;T, U&gt; {
+    <span class="kw">fn </span>method(<span class="self">self</span>: Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;) {
+        <span class="kw">let </span>this = <span class="self">self</span>.project();
+        <span class="kw">let _</span>: Pin&lt;<span class="kw-2">&amp;mut </span>T&gt; = this.<span class="number">0</span>;
+        <span class="kw">let _</span>: <span class="kw-2">&amp;mut </span>U = this.<span class="number">1</span>;
+    }
+}</code></pre></div>
+<p>To use <code>#[pin_project]</code> on enums, you need to name the projection type
+returned from the method.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::pin::Pin;
+
+<span class="kw">use </span>pin_project::pin_project;
+
+<span class="attr">#[pin_project(project = EnumProj)]
+</span><span class="kw">enum </span>Enum&lt;T, U&gt; {
+    Tuple(<span class="attr">#[pin] </span>T),
+    Struct { field: U },
+    Unit,
+}
+
+<span class="kw">impl</span>&lt;T, U&gt; Enum&lt;T, U&gt; {
+    <span class="kw">fn </span>method(<span class="self">self</span>: Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;) {
+        <span class="kw">match </span><span class="self">self</span>.project() {
+            EnumProj::Tuple(x) =&gt; {
+                <span class="kw">let _</span>: Pin&lt;<span class="kw-2">&amp;mut </span>T&gt; = x;
+            }
+            EnumProj::Struct { field } =&gt; {
+                <span class="kw">let _</span>: <span class="kw-2">&amp;mut </span>U = field;
+            }
+            EnumProj::Unit =&gt; {}
+        }
+    }
+}</code></pre></div>
+<p>When <code>#[pin_project]</code> is used on enums, only named projection types and
+methods are generated because there is no way to access variants of
+projected types without naming it.
+For example, in the above example, only the <code>project</code> method is generated,
+and the <code>project_ref</code> method is not generated.
+(When <code>#[pin_project]</code> is used on structs, both methods are always generated.)</p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">impl</span>&lt;T, U&gt; Enum&lt;T, U&gt; {
+    <span class="kw">fn </span>call_project_ref(<span class="self">self</span>: Pin&lt;<span class="kw-2">&amp;</span><span class="self">Self</span>&gt;) {
+        <span class="kw">let </span>_this = <span class="self">self</span>.project_ref();
+        <span class="comment">//~^ ERROR no method named `project_ref` found for struct `Pin&lt;&amp;Enum&lt;T, U&gt;&gt;` in the current scope
+    </span>}
+}</code></pre></div>
+<p>If you want to call <code>.project()</code> multiple times or later use the
+original <a href="core::pin::Pin"><code>Pin</code></a> type, it needs to use <a href="core::pin::Pin::as_mut"><code>.as_mut()</code></a> to avoid
+consuming the <a href="core::pin::Pin"><code>Pin</code></a>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::pin::Pin;
+
+<span class="kw">use </span>pin_project::pin_project;
+
+<span class="attr">#[pin_project]
+</span><span class="kw">struct </span>Struct&lt;T&gt; {
+    <span class="attr">#[pin]
+    </span>field: T,
+}
+
+<span class="kw">impl</span>&lt;T&gt; Struct&lt;T&gt; {
+    <span class="kw">fn </span>call_project_twice(<span class="kw-2">mut </span><span class="self">self</span>: Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;) {
+        <span class="comment">// `project` consumes `self`, so reborrow the `Pin&lt;&amp;mut Self&gt;` via `as_mut`.
+        </span><span class="self">self</span>.as_mut().project();
+        <span class="self">self</span>.as_mut().project();
+    }
+}</code></pre></div>
+<h2 id="unpin"><a class="doc-anchor" href="#unpin">§</a><code>!Unpin</code></h2>
+<p>If you want to ensure that [<code>Unpin</code>] is not implemented, use the <code>!Unpin</code>
+argument to <code>#[pin_project]</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>pin_project::pin_project;
+
+<span class="attr">#[pin_project(!Unpin)]
+</span><span class="kw">struct </span>Struct&lt;T&gt; {
+    field: T,
+}</code></pre></div>
+<p>This is equivalent to using <code>#[pin]</code> attribute for the <a href="core::marker::PhantomPinned"><code>PhantomPinned</code></a>
+field.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::marker::PhantomPinned;
+
+<span class="kw">use </span>pin_project::pin_project;
+
+<span class="attr">#[pin_project]
+</span><span class="kw">struct </span>Struct&lt;T&gt; {
+    field: T,
+    <span class="attr">#[pin] </span><span class="comment">// &lt;------ This `#[pin]` is required to make `Struct` to `!Unpin`.
+    </span>_pin: PhantomPinned,
+}</code></pre></div>
+<p>Note that using <a href="core::marker::PhantomPinned"><code>PhantomPinned</code></a> without <code>#[pin]</code> attribute has no effect.</p>
+<h2 id="unsafeunpin"><a class="doc-anchor" href="#unsafeunpin">§</a><code>UnsafeUnpin</code></h2>
+<p>If you want to implement [<code>Unpin</code>] manually, you must use the <code>UnsafeUnpin</code>
+argument to <code>#[pin_project]</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>pin_project::{pin_project, UnsafeUnpin};
+
+<span class="attr">#[pin_project(UnsafeUnpin)]
+</span><span class="kw">struct </span>Struct&lt;T, U&gt; {
+    <span class="attr">#[pin]
+    </span>pinned: T,
+    unpinned: U,
+}
+
+<span class="kw">unsafe impl</span>&lt;T: Unpin, U&gt; UnsafeUnpin <span class="kw">for </span>Struct&lt;T, U&gt; {}</code></pre></div>
+<p>Note the usage of the unsafe <a href="https://docs.rs/pin-project/1/pin_project/trait.UnsafeUnpin.html"><code>UnsafeUnpin</code></a> trait, instead of the usual
+[<code>Unpin</code>] trait. <a href="https://docs.rs/pin-project/1/pin_project/trait.UnsafeUnpin.html"><code>UnsafeUnpin</code></a> behaves exactly like [<code>Unpin</code>], except that
+is unsafe to implement. This unsafety comes from the fact that pin
+projections are being used. If you implement <a href="https://docs.rs/pin-project/1/pin_project/trait.UnsafeUnpin.html"><code>UnsafeUnpin</code></a>, you must
+ensure that it is only implemented when all pin-projected fields implement
+[<code>Unpin</code>].</p>
+<p>See <a href="https://docs.rs/pin-project/1/pin_project/trait.UnsafeUnpin.html"><code>UnsafeUnpin</code></a> trait for more details.</p>
+<h2 id="pinned_drop"><a class="doc-anchor" href="#pinned_drop">§</a><code>#[pinned_drop]</code></h2>
+<p>In order to correctly implement pin projections, a type’s [<code>Drop</code>] impl must
+not move out of any structurally pinned fields. Unfortunately,
+[<code>Drop::drop</code>] takes <code>&amp;mut Self</code>, not <a href="core::pin::Pin"><code>Pin</code></a><code>&lt;&amp;mut Self&gt;</code>.</p>
+<p>To ensure that this requirement is upheld, the <code>#[pin_project]</code> attribute
+will provide a [<code>Drop</code>] impl for you. This [<code>Drop</code>] impl will delegate to
+an impl block annotated with <code>#[pinned_drop]</code> if you use the <code>PinnedDrop</code>
+argument to <code>#[pin_project]</code>.</p>
+<p>This impl block acts just like a normal [<code>Drop</code>] impl,
+except for the following two:</p>
+<ul>
+<li><code>drop</code> method takes <a href="core::pin::Pin"><code>Pin</code></a><code>&lt;&amp;mut Self&gt;</code></li>
+<li>Name of the trait is <code>PinnedDrop</code>.</li>
+</ul>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">pub trait </span>PinnedDrop {
+    <span class="kw">fn </span>drop(<span class="self">self</span>: Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;);
+}</code></pre></div>
+<p><code>#[pin_project]</code> implements the actual [<code>Drop</code>] trait via <code>PinnedDrop</code> you
+implemented. To drop a type that implements <code>PinnedDrop</code>, use the [<code>drop</code>]
+function just like dropping a type that directly implements [<code>Drop</code>].</p>
+<p>In particular, it will never be called more than once, just like
+[<code>Drop::drop</code>].</p>
+<p>For example:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::{fmt::Debug, pin::Pin};
+
+<span class="kw">use </span>pin_project::{pin_project, pinned_drop};
+
+<span class="attr">#[pin_project(PinnedDrop)]
+</span><span class="kw">struct </span>PrintOnDrop&lt;T: Debug, U: Debug&gt; {
+    <span class="attr">#[pin]
+    </span>pinned_field: T,
+    unpin_field: U,
+}
+
+<span class="attr">#[pinned_drop]
+</span><span class="kw">impl</span>&lt;T: Debug, U: Debug&gt; PinnedDrop <span class="kw">for </span>PrintOnDrop&lt;T, U&gt; {
+    <span class="kw">fn </span>drop(<span class="self">self</span>: Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;) {
+        <span class="macro">println!</span>(<span class="string">"Dropping pinned field: {:?}"</span>, <span class="self">self</span>.pinned_field);
+        <span class="macro">println!</span>(<span class="string">"Dropping unpin field: {:?}"</span>, <span class="self">self</span>.unpin_field);
+    }
+}
+
+<span class="kw">fn </span>main() {
+    <span class="kw">let </span>_x = PrintOnDrop { pinned_field: <span class="bool-val">true</span>, unpin_field: <span class="number">40 </span>};
+}</code></pre></div>
+<p>See also <a href="attr.pinned_drop.html" title="attr pin_project::pinned_drop"><code>#[pinned_drop]</code></a> attribute.</p>
+<h2 id="project_replace-method"><a class="doc-anchor" href="#project_replace-method">§</a><code>project_replace</code> method</h2>
+<p>In addition to the <code>project</code> and <code>project_ref</code> methods which are always
+provided when you use the <code>#[pin_project]</code> attribute, there is a third
+method, <code>project_replace</code> which can be useful in some situations. It is
+equivalent to <a href="core::pin::Pin::set"><code>Pin::set</code></a>, except that the unpinned fields are moved and
+returned, instead of being dropped in-place.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>project_replace(<span class="self">self</span>: Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;, other: <span class="self">Self</span>) -&gt; ProjectionOwned;</code></pre></div>
+<p>The <code>ProjectionOwned</code> type is identical to the <code>Self</code> type, except that
+all pinned fields have been replaced by equivalent <a href="core::marker::PhantomData"><code>PhantomData</code></a> types.</p>
+<p>This method is opt-in, because it is only supported for [<code>Sized</code>] types, and
+because it is incompatible with the <a href="attr.pin_project.html#pinned_drop" title="attr pin_project::pin_project"><code>#[pinned_drop]</code></a>
+attribute described above. It can be enabled by using
+<code>#[pin_project(project_replace)]</code>.</p>
+<p>For example:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::{marker::PhantomData, pin::Pin};
+
+<span class="kw">use </span>pin_project::pin_project;
+
+<span class="attr">#[pin_project(project_replace)]
+</span><span class="kw">struct </span>Struct&lt;T, U&gt; {
+    <span class="attr">#[pin]
+    </span>pinned_field: T,
+    unpinned_field: U,
+}
+
+<span class="kw">impl</span>&lt;T, U&gt; Struct&lt;T, U&gt; {
+    <span class="kw">fn </span>method(<span class="self">self</span>: Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;, other: <span class="self">Self</span>) {
+        <span class="kw">let </span>this = <span class="self">self</span>.project_replace(other);
+        <span class="kw">let _</span>: U = this.unpinned_field;
+        <span class="kw">let _</span>: PhantomData&lt;T&gt; = this.pinned_field;
+    }
+}</code></pre></div>
+<p>By passing the value to the <code>project_replace</code> argument, you can name the
+returned type of the <code>project_replace</code> method. This is necessary whenever
+destructuring the return type of the <code>project_replace</code> method, and work in exactly
+the same way as the <code>project</code> and <code>project_ref</code> arguments.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>pin_project::pin_project;
+
+<span class="attr">#[pin_project(project_replace = EnumProjOwn)]
+</span><span class="kw">enum </span>Enum&lt;T, U&gt; {
+    A {
+        <span class="attr">#[pin]
+        </span>pinned_field: T,
+        unpinned_field: U,
+    },
+    B,
+}
+
+<span class="kw">let </span><span class="kw-2">mut </span>x = Box::pin(Enum::A { pinned_field: <span class="number">42</span>, unpinned_field: <span class="string">"hello" </span>});
+
+<span class="kw">match </span>x.as_mut().project_replace(Enum::B) {
+    EnumProjOwn::A { unpinned_field, .. } =&gt; <span class="macro">assert_eq!</span>(unpinned_field, <span class="string">"hello"</span>),
+    EnumProjOwn::B =&gt; <span class="macro">unreachable!</span>(),
+}</code></pre></div>
+</div></details></section></div></main></body></html>

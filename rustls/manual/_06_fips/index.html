@@ -1,0 +1,30 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="This section provides guidance on using rustls with FIPS-approved cryptography."><title>rustls::manual::_06_fips - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="rustls" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../rustls/index.html">rustls</a><span class="version">0.23.13</span></h2></div><h2 class="location"><a href="#">Module _06_fips</a></h2><div class="sidebar-elems"><h2><a href="../index.html">In rustls::manual</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../../index.html">rustls</a>::<wbr><a href="../index.html">manual</a>::<wbr><a class="mod" href="#">_06_fips</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/rustls/manual/fips.rs.html#1-56">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>This section provides guidance on using rustls with FIPS-approved cryptography.</p>
+<h2 id="using-rustls-with-fips-approved-cryptography"><a class="doc-anchor" href="#using-rustls-with-fips-approved-cryptography">§</a>Using rustls with FIPS-approved cryptography</h2>
+<p>To use FIPS-approved cryptography with rustls, you should take
+these actions:</p>
+<h3 id="1-enable-the-fips-crate-feature-for-rustls"><a class="doc-anchor" href="#1-enable-the-fips-crate-feature-for-rustls">§</a>1. Enable the <code>fips</code> crate feature for rustls.</h3>
+<p>Use:</p>
+<div class="example-wrap"><pre class="language-toml"><code>rustls = { version = &quot;0.23&quot;, features = [ &quot;fips&quot; ] }
+</code></pre></div><h3 id="2-use-the-fips-cryptoprovider"><a class="doc-anchor" href="#2-use-the-fips-cryptoprovider">§</a>2. Use the FIPS <code>CryptoProvider</code></h3>
+<p>This is <a href="crate::crypto::default_fips_provider"><code>default_fips_provider()</code></a>:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code>rustls::crypto::default_fips_provider()
+    .install_default()
+    .expect(<span class="string">"default provider already set elsewhere"</span>);</code></pre></div>
+<p>This snippet makes use of the process-default provider,
+and that assumes all your uses of rustls use that.
+See <a href="../../crypto/struct.CryptoProvider.html" title="struct rustls::crypto::CryptoProvider"><code>CryptoProvider</code></a> documentation for other ways to
+specify which <code>CryptoProvider</code> to use.</p>
+<h3 id="3-validate-the-fips-status-of-your-clientconfigserverconfig-at-run-time"><a class="doc-anchor" href="#3-validate-the-fips-status-of-your-clientconfigserverconfig-at-run-time">§</a>3. Validate the FIPS status of your <code>ClientConfig</code>/<code>ServerConfig</code> at run-time</h3>
+<p>See <a href="../../client/struct.ClientConfig.html#method.fips" title="method rustls::client::ClientConfig::fips"><code>ClientConfig::fips()</code></a> or <a href="../../server/struct.ServerConfig.html#method.fips" title="method rustls::server::ServerConfig::fips"><code>ServerConfig::fips()</code></a>.</p>
+<p>You could, for example:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="macro">assert!</span>(client_config.fips());</code></pre></div>
+<p>But maybe your application has an error handling
+or health-check strategy better than panicking.</p>
+<h2 id="aws-lc-rs-fips-approval-status"><a class="doc-anchor" href="#aws-lc-rs-fips-approval-status">§</a>aws-lc-rs FIPS approval status</h2>
+<p>At the time of writing, this is pending approval on Linux
+for two architectures (ARM aarch64 and Intel x86-64).</p>
+<p>For the most up-to-date details see the latest documentation
+for the <a href="https://crates.io/crates/aws-lc-fips-sys"><code>aws-lc-fips-sys</code></a> crate.</p>
+</div></details></section></div></main></body></html>
