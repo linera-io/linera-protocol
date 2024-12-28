@@ -16,6 +16,7 @@ use crate::{
 };
 
 /// The initial configuration of the system.
+#[derive(Debug)]
 pub struct DualStoreConfig<C1, C2> {
     /// The first config.
     pub first_config: C1,
@@ -24,7 +25,7 @@ pub struct DualStoreConfig<C1, C2> {
 }
 
 /// The store in use.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum StoreInUse {
     /// The first store.
     First,
