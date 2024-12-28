@@ -400,6 +400,19 @@ fn test_heap_allocated_fields() {
     );
 }
 
+/// Check that a [`Vec`] type is properly stored in memory and lowered into its flat layout.
+#[test]
+fn test_vec() {
+    let data = vec![
+        SimpleWrapper(true),
+        SimpleWrapper(false),
+        SimpleWrapper(true),
+    ];
+
+    test_store_in_memory(data.clone(), &[8, 0, 0, 0, 3, 0, 0, 0], &[1, 0, 1]);
+    test_lower_to_flat_layout(data, hlist![0_i32, 3_i32,], &[1, 0, 1]);
+}
+
 /// Tests that the `data` of type `T` and wrapped versions of it can be stored as a sequence of
 /// bytes in memory and that they match the `expected` bytes.
 fn test_store_in_memory<T>(
