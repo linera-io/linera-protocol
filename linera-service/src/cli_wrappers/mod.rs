@@ -8,9 +8,9 @@
 /// How to run docker operations
 pub mod docker;
 
-#[cfg(all(with_testing, feature = "existing-net"))]
-/// How to connect to an existing/running network.
-pub mod existing_net;
+#[cfg(all(with_testing, feature = "faucet-net"))]
+/// How to connect to network that has a faucet.
+pub mod faucet_net;
 #[cfg(feature = "kubernetes")]
 /// How to run helmfile operations
 mod helmfile;
