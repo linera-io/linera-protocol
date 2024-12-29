@@ -3,6 +3,16 @@ name: Benchmarks
 on:
   push:
     branches: [ main, 'devnet_*', 'testnet_*' ]
+  pull_request:
+    branches:
+      - "**"
+    paths-ignore:
+      - 'CONTRIBUTING.md'
+      - 'INSTALL.md'
+      - 'docker/**'
+      - 'docker_scylla/**'
+      - 'configuration/**'
+      - 'kubernetes/**'
   workflow_dispatch:
 
 env:
@@ -17,12 +27,6 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - uses: actions-rust-lang/setup-rust-toolchain@v1
-    - name: Clear up some space
-      run: |
-        sudo rm -rf /usr/share/dotnet
-        sudo rm -rf /opt/ghc
-        sudo rm -rf "/usr/local/share/boost"
-        sudo rm -rf "$AGENT_TOOLSDIRECTORY"
     - name: Install Protoc
       uses: arduino/setup-protoc@v1
       with:
