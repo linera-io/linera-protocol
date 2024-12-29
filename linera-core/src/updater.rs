@@ -31,9 +31,9 @@ use crate::{
     remote_node::RemoteNode,
 };
 
-/// The amount of time we wait for additional validators to contribute to the result, as a fraction
-/// of how long it took to reach a quorum.
-const GRACE_PERIOD: f64 = 0.2;
+/// The default amount of time we wait for additional validators to contribute
+/// to the result, as a fraction of how long it took to reach a quorum.
+const DEFAULT_GRACE_PERIOD: f64 = 0.2;
 /// The maximum timeout for `communicate_with_quorum` if no quorum is reached.
 const MAX_TIMEOUT: Duration = Duration::from_secs(60 * 60 * 24); // 1 day.
 
@@ -97,14 +97,16 @@ pub enum CommunicationError<E: fmt::Debug> {
 
 /// Executes a sequence of actions in parallel for all validators.
 ///
-/// Tries to stop early when a quorum is reached. If `grace_period` is not zero, other validators
-/// are given this much additional time to contribute to the result, as a fraction of how long it
-/// took to reach the quorum.
+/// Tries to stop early when a quorum is reached. If `grace_period` is specified, other validators
+/// are given additional time to contribute to the result. The grace period is calculated as a fraction
+/// (defaulting to `DEFAULT_GRACE_PERIOD`) of the time taken to reach quorum.
 pub async fn communicate_with_quorum<'a, A, V, K, F, R, G>(
     validator_clients: &'a [RemoteNode<A>],
     committee: &Committee,
     group_by: G,
     execute: F,
+    // Grace period as a fraction of time taken to reach quorum
+    grace_period: Option<f64>,
 ) -> Result<(K, Vec<V>), CommunicationError<NodeError>>
 where
     A: ValidatorNode + Clone + 'static,
@@ -134,8 +136,9 @@ where
     let mut highest_key_score = 0;
     let mut value_scores = HashMap::new();
     let mut error_scores = HashMap::new();
+    let grace_period = grace_period.unwrap_or(DEFAULT_GRACE_PERIOD);
 
-    while let Ok(Some((name, result))) = timeout(
+    'vote_wait: while let Ok(Some((name, result))) = timeout(
         end_time.map_or(MAX_TIMEOUT, |t| t.saturating_duration_since(Instant::now())),
         responses.next(),
     )
@@ -167,13 +170,15 @@ where
                 }
             }
         }
-        // If a key reaches a quorum or it becomes clear that no key can, wait for the grace
-        // period to collect more values or error information and then stop.
-        if end_time.is_none()
-            && (highest_key_score >= committee.quorum_threshold()
-                || highest_key_score + remaining_votes < committee.quorum_threshold())
-        {
-            end_time = Some(Instant::now() + start_time.elapsed().mul_f64(GRACE_PERIOD));
+        // If it becomes clear that no key can reach a quorum, break early.
+        if highest_key_score + remaining_votes < committee.quorum_threshold() {
+            break 'vote_wait;
+        }
+
+        // If a key reaches a quorum, wait for the grace period to collect more values
+        // or error information and then stop.
+        if end_time.is_none() && highest_key_score >= committee.quorum_threshold() {
+            end_time = Some(Instant::now() + start_time.elapsed().mul_f64(grace_period));
         }
     }
 

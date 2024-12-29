@@ -1111,6 +1111,7 @@ where
                         .await
                 })
             },
+            None,
         )
         .await?;
         Ok(())
@@ -1146,6 +1147,7 @@ where
                 let action = action.clone();
                 Box::pin(async move { updater.send_chain_update(action).await })
             },
+            None,
         )
         .await?;
         ensure!(
@@ -1516,6 +1518,7 @@ where
                         .await
                 })
             },
+            None,
         )
         .await;
         let received_certificate_batches = match result {
@@ -1673,6 +1676,7 @@ where
                         .await
                 }
             },
+            None,
         )
         .await?;
 
