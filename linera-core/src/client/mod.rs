@@ -157,8 +157,8 @@ where
     message_policy: MessagePolicy,
     /// Whether to block on cross-chain message delivery.
     cross_chain_message_delivery: CrossChainMessageDelivery,
-    /// Grace period for communicate_with_quorum as a fraction of time taken to reach quorum.
-    /// If None, uses the default value.
+    /// An additional delay, after reaching a quorum, to wait for additional validator signatures,
+    /// as a fraction of time taken to reach quorum. If `None`, uses the default value.
     grace_period: Option<f64>,
     /// Chains that should be tracked by the client.
     // TODO(#2412): Merge with set of chains the client is receiving notifications from validators
@@ -471,8 +471,8 @@ pub struct ChainClientOptions {
     pub message_policy: MessagePolicy,
     /// Whether to block on cross-chain message delivery.
     pub cross_chain_message_delivery: CrossChainMessageDelivery,
-    /// Grace period for communicate_with_quorum as a fraction of time taken to reach quorum.
-    /// If None, uses the default value.
+    /// An additional delay, after reaching a quorum, to wait for additional validator signatures,
+    /// as a fraction of time taken to reach quorum. If `None`, uses the default value.
     pub grace_period: Option<f64>,
 }
 

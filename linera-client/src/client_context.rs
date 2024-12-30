@@ -174,7 +174,7 @@ where
             chain_ids,
             name,
             options.max_loaded_chains,
-            None,
+            options.grace_period,
         );
 
         ClientContext {

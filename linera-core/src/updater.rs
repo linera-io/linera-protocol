@@ -34,7 +34,7 @@ use crate::{
 /// The default amount of time we wait for additional validators to contribute
 /// to the result, as a fraction of how long it took to reach a quorum.
 const DEFAULT_GRACE_PERIOD: f64 = 0.2;
-/// The maximum timeout for `communicate_with_quorum` if no quorum is reached.
+/// The maximum timeout for requests to a stake-weighted quorum if no quorum is reached.
 const MAX_TIMEOUT: Duration = Duration::from_secs(60 * 60 * 24); // 1 day.
 
 /// Used for `communicate_chain_action`
@@ -76,7 +76,7 @@ where
     pub local_node: LocalNodeClient<S>,
 }
 
-/// An error result for [`communicate_with_quorum`].
+/// An error result for requests to a stake-weighted quorum.
 #[derive(Error, Debug)]
 pub enum CommunicationError<E: fmt::Debug> {
     /// No consensus is possible since validators returned different possibilities
