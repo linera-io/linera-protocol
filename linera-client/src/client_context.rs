@@ -174,6 +174,7 @@ where
             chain_ids,
             name,
             options.max_loaded_chains,
+            None,
         );
 
         ClientContext {
@@ -218,6 +219,7 @@ where
             chain_ids,
             name,
             NonZeroUsize::new(20).expect("Chain worker limit should not be zero"),
+            None,
         );
 
         ClientContext {

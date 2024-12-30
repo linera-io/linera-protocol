@@ -1247,6 +1247,7 @@ impl Job {
             vec![message_id.chain_id, chain_id],
             "Temporary client for fetching the parent chain",
             NonZeroUsize::new(20).expect("Chain worker limit should not be zero"),
+            None,
         );
 
         // Take the latest committee we know of.
