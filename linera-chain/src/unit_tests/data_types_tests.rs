@@ -59,7 +59,7 @@ fn test_hashes() {
     let confirmed_hashed = Hashed::new(ConfirmedBlock::new(executed_block.clone()));
     let validated_hashed = Hashed::new(ValidatedBlock::new(executed_block));
 
-    assert_ne!(confirmed_hashed.hash(), validated_hashed.hash());
+    assert_eq!(confirmed_hashed.hash(), validated_hashed.hash());
 }
 
 #[test]
