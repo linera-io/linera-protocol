@@ -273,10 +273,10 @@ ChainManagerInfo:
           TYPENAME: LiteVote
     - requested_confirmed:
         OPTION:
-          TYPENAME: ConfirmedBlock
+          TYPENAME: ExecutedBlock
     - requested_validated:
         OPTION:
-          TYPENAME: ValidatedBlock
+          TYPENAME: ExecutedBlock
     - current_round:
         TYPENAME: Round
     - leader:
@@ -331,14 +331,10 @@ Committee:
             TYPENAME: ValidatorState
     - policy:
         TYPENAME: ResourceControlPolicy
-ConfirmedBlock:
-  STRUCT:
-    - executed_block:
-        TYPENAME: ExecutedBlock
 ConfirmedBlockCertificate:
   STRUCT:
     - value:
-        TYPENAME: ConfirmedBlock
+        TYPENAME: ExecutedBlock
     - round:
         TYPENAME: Round
     - signatures:
@@ -857,7 +853,7 @@ RpcMessage:
     19:
       DownloadConfirmedBlockResponse:
         NEWTYPE:
-          TYPENAME: ConfirmedBlock
+          TYPENAME: ExecutedBlock
     20:
       DownloadCertificatesResponse:
         NEWTYPE:
@@ -1098,14 +1094,10 @@ UserApplicationDescription:
     - required_application_ids:
         SEQ:
           TYPENAME: ApplicationId
-ValidatedBlock:
-  STRUCT:
-    - executed_block:
-        TYPENAME: ExecutedBlock
 ValidatedBlockCertificate:
   STRUCT:
     - value:
-        TYPENAME: ValidatedBlock
+        TYPENAME: ExecutedBlock
     - round:
         TYPENAME: Round
     - signatures:
