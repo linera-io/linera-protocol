@@ -1527,7 +1527,7 @@ where
                         .await
                 })
             },
-            None,
+            self.options.grace_period,
         )
         .await;
         let received_certificate_batches = match result {
