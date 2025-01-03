@@ -11,6 +11,7 @@ services:
       - "0"
       - "--overprovisioned"
       - "1"
+
   proxy:
     image: "${LINERA_IMAGE:-linera}"
     container_name: proxy
@@ -19,9 +20,12 @@ services:
     command: [ "./compose-proxy-entrypoint.sh" ]
     volumes:
       - .:/config
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
     depends_on:
       shard-init:
         condition: service_completed_successfully
+
   shard:
     image: "${LINERA_IMAGE:-linera}"
     deploy:
@@ -29,9 +33,12 @@ services:
     command: [ "./compose-server-entrypoint.sh" ]
     volumes:
       - .:/config
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
     depends_on:
       shard-init:
         condition: service_completed_successfully
+
   shard-init:
     image: "${LINERA_IMAGE:-linera}"
     container_name: shard-init
@@ -60,6 +67,13 @@ services:
       - grafana-storage:/var/lib/grafana
       - ./provisioning/dashboards:/etc/grafana/provisioning/dashboards
       - ./dashboards:/var/lib/grafana/dashboards
+
+  watchtower:
+    image: containrrr/watchtower:latest
+    container_name: watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: [ "--interval", "30"]
 
 volumes:
   linera-scylla-data:
