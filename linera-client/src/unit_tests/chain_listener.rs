@@ -133,6 +133,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
             [chain_id0],
             format!("Client node for {:.8}", chain_id0),
             NonZeroUsize::new(20).expect("Chain worker LRU cache size must be non-zero"),
+            None,
         )),
     };
     let key_pair = KeyPair::generate_from(&mut rng);
