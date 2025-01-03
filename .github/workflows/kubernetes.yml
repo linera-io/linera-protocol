@@ -64,7 +64,7 @@ jobs:
           timeout_minutes: 30
           command: |
             kind get clusters | xargs -I {} kind delete cluster --name {}
-            RUST_LOG=linera=info cargo test --locked -p linera-service --features scylladb,kubernetes --test end_to_end_tests -- kubernetes --nocapture
+            RUST_LOG=linera=info cargo test --locked -p linera-service --features scylladb,kubernetes --test linera_net_tests -- kubernetes --nocapture
       - name: Port forward Prometheus
         run: |
           kubectl port-forward prometheus-linera-core-kube-prometheu-prometheus-0 9090 &
