@@ -613,7 +613,7 @@ where
     /// shortened one by the prefix. The value is an enum that can be either a value
     /// or its serialization. This is needed in order to avoid a scenario where we
     /// deserialize something that was serialized. The key/value are send to the
-    /// function f. If it returns false the the loop ends prematurely. Keys and values
+    /// function f. If it returns false the loop ends prematurely. Keys and values
     /// are visited in the lexicographic order.
     async fn for_each_key_value_or_bytes_while<'a, F>(
         &'a self,
