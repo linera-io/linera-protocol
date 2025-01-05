@@ -192,6 +192,8 @@ where
 
     #[cfg(with_testing)]
     pub fn new_test_client_context(storage: S, wallet: W) -> Self {
+        use linera_core::DEFAULT_GRACE_PERIOD;
+
         let send_recv_timeout = Duration::from_millis(4000);
         let retry_delay = Duration::from_millis(1000);
         let max_retries = 10;
@@ -219,7 +221,7 @@ where
             chain_ids,
             name,
             NonZeroUsize::new(20).expect("Chain worker limit should not be zero"),
-            None,
+            DEFAULT_GRACE_PERIOD,
         );
 
         ClientContext {

@@ -17,6 +17,7 @@ use linera_core::{
     client::{ChainClient, Client},
     node::CrossChainMessageDelivery,
     test_utils::{MemoryStorageBuilder, NodeProvider, StorageBuilder as _, TestBuilder},
+    DEFAULT_GRACE_PERIOD,
 };
 use linera_execution::system::Recipient;
 use linera_storage::{DbStorage, TestClock};
@@ -133,7 +134,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
             [chain_id0],
             format!("Client node for {:.8}", chain_id0),
             NonZeroUsize::new(20).expect("Chain worker LRU cache size must be non-zero"),
-            None,
+            DEFAULT_GRACE_PERIOD,
         )),
     };
     let key_pair = KeyPair::generate_from(&mut rng);

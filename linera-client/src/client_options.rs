@@ -18,7 +18,7 @@ use linera_base::{
     },
     ownership::{ChainOwnership, TimeoutConfig},
 };
-use linera_core::client::BlanketMessagePolicy;
+use linera_core::{client::BlanketMessagePolicy, DEFAULT_GRACE_PERIOD};
 use linera_execution::{
     committee::ValidatorName, ResourceControlPolicy, WasmRuntime, WithWasmDefault as _,
 };
@@ -158,9 +158,9 @@ pub struct ClientOptions {
     pub restrict_chain_ids_to: Option<HashSet<ChainId>>,
 
     /// An additional delay, after reaching a quorum, to wait for additional validator signatures,
-    /// as a fraction of time taken to reach quorum. If omitted, uses the default value.
-    #[arg(long)]
-    pub grace_period: Option<f64>,
+    /// as a fraction of time taken to reach quorum.
+    #[arg(long, default_value_t = DEFAULT_GRACE_PERIOD)]
+    pub grace_period: f64,
 }
 
 impl ClientOptions {

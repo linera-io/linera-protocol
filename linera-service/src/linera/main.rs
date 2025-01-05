@@ -39,7 +39,7 @@ use linera_core::{
     node::{CrossChainMessageDelivery, ValidatorNodeProvider},
     remote_node::RemoteNode,
     worker::Reason,
-    JoinSetExt as _,
+    JoinSetExt as _, DEFAULT_GRACE_PERIOD,
 };
 use linera_execution::{
     committee::{Committee, ValidatorName, ValidatorState},
@@ -1247,7 +1247,7 @@ impl Job {
             vec![message_id.chain_id, chain_id],
             "Temporary client for fetching the parent chain",
             NonZeroUsize::new(20).expect("Chain worker limit should not be zero"),
-            None,
+            DEFAULT_GRACE_PERIOD,
         );
 
         // Take the latest committee we know of.

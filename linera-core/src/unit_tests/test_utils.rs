@@ -50,14 +50,10 @@ use {
 };
 
 use crate::{
-    client::{ChainClient, Client},
-    data_types::*,
-    node::{
+    client::{ChainClient, Client}, data_types::*, node::{
         CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode,
         ValidatorNodeProvider,
-    },
-    notifier::ChannelNotifier,
-    worker::{NetworkActions, Notification, ProcessableCertificate, WorkerState},
+    }, notifier::ChannelNotifier, updater::DEFAULT_GRACE_PERIOD, worker::{NetworkActions, Notification, ProcessableCertificate, WorkerState}
 };
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -840,7 +836,7 @@ where
             [chain_id],
             format!("Client node for {:.8}", chain_id),
             NonZeroUsize::new(20).expect("Chain worker limit should not be zero"),
-            None,
+            DEFAULT_GRACE_PERIOD,
         ));
         Ok(builder.create_chain_client(
             chain_id,

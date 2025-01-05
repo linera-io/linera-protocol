@@ -33,7 +33,7 @@ use crate::{
 
 /// The default amount of time we wait for additional validators to contribute
 /// to the result, as a fraction of how long it took to reach a quorum.
-const DEFAULT_GRACE_PERIOD: f64 = 0.2;
+pub const DEFAULT_GRACE_PERIOD: f64 = 0.2;
 /// The maximum timeout for requests to a stake-weighted quorum if no quorum is reached.
 const MAX_TIMEOUT: Duration = Duration::from_secs(60 * 60 * 24); // 1 day.
 
@@ -106,7 +106,7 @@ pub async fn communicate_with_quorum<'a, A, V, K, F, R, G>(
     group_by: G,
     execute: F,
     // Grace period as a fraction of time taken to reach quorum
-    grace_period: Option<f64>,
+    grace_period: f64,
 ) -> Result<(K, Vec<V>), CommunicationError<NodeError>>
 where
     A: ValidatorNode + Clone + 'static,
@@ -136,7 +136,6 @@ where
     let mut highest_key_score = 0;
     let mut value_scores = HashMap::new();
     let mut error_scores = HashMap::new();
-    let grace_period = grace_period.unwrap_or(DEFAULT_GRACE_PERIOD);
 
     'vote_wait: while let Ok(Some((name, result))) = timeout(
         end_time.map_or(MAX_TIMEOUT, |t| t.saturating_duration_since(Instant::now())),
