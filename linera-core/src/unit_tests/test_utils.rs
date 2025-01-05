@@ -50,10 +50,15 @@ use {
 };
 
 use crate::{
-    client::{ChainClient, Client}, data_types::*, node::{
+    client::{ChainClient, Client},
+    data_types::*,
+    node::{
         CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode,
         ValidatorNodeProvider,
-    }, notifier::ChannelNotifier, updater::DEFAULT_GRACE_PERIOD, worker::{NetworkActions, Notification, ProcessableCertificate, WorkerState}
+    },
+    notifier::ChannelNotifier,
+    updater::DEFAULT_GRACE_PERIOD,
+    worker::{NetworkActions, Notification, ProcessableCertificate, WorkerState},
 };
 
 #[derive(Debug, PartialEq, Clone, Copy)]

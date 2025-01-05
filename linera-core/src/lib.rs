@@ -23,5 +23,6 @@ pub mod worker;
 pub(crate) mod updater;
 pub(crate) mod value_cache;
 
-pub use crate::join_set_ext::{JoinSetExt, TaskHandle};
 pub use updater::DEFAULT_GRACE_PERIOD;
+
+pub use crate::join_set_ext::{JoinSetExt, TaskHandle};
