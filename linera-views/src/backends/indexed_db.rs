@@ -19,6 +19,7 @@ use crate::{
 };
 
 /// The initial configuration of the system
+#[derive(Debug)]
 pub struct IndexedDbStoreConfig {
     /// The common configuration of the key value store
     pub common_config: CommonStoreConfig,
