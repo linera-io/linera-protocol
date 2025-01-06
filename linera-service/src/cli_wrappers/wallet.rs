@@ -165,7 +165,6 @@ impl ClientWrapper {
         for argument in self.command_arguments() {
             command.arg(&*argument);
         }
-        println!("command={:?}", command);
         Ok(command)
     }
 
