@@ -244,6 +244,47 @@ enum BaseKey {
     BlobState(BlobId),
 }
 
+const INDEX_CHAIN_STATE: u8 = 0;
+const INDEX_CERTIFICATE: u8 = 1;
+const INDEX_CONFIRMED_BLOCK: u8 = 2;
+const INDEX_BLOB: u8 = 3;
+const INDEX_BLOB_STATE: u8 = 4;
+const BLOB_LENGTH: usize = std::mem::size_of::<BlobId>();
+
+impl BaseKey {
+    /// We depend on the precise serialization to do queries and so we have to
+    /// hardcode it.
+    fn to_bytes(&self) -> Result<Vec<u8>, ViewError> {
+        match self {
+            BaseKey::ChainState(chain_id) => {
+                let mut vec = vec![INDEX_CHAIN_STATE];
+                vec.extend(bcs::to_bytes(&chain_id)?);
+                Ok(vec)
+            }
+            BaseKey::Certificate(hash) => {
+                let mut vec = vec![INDEX_CERTIFICATE];
+                vec.extend(bcs::to_bytes(&hash)?);
+                Ok(vec)
+            }
+            BaseKey::ConfirmedBlock(hash) => {
+                let mut vec = vec![INDEX_CONFIRMED_BLOCK];
+                vec.extend(bcs::to_bytes(&hash)?);
+                Ok(vec)
+            }
+            BaseKey::Blob(blob_id) => {
+                let mut vec = vec![INDEX_BLOB];
+                vec.extend(bcs::to_bytes(&blob_id)?);
+                Ok(vec)
+            }
+            BaseKey::BlobState(blob_id) => {
+                let mut vec = vec![INDEX_BLOB_STATE];
+                vec.extend(bcs::to_bytes(&blob_id)?);
+                Ok(vec)
+            }
+        }
+    }
+}
+
 /// An implementation of [`DualStoreRootKeyAssignment`] that stores the
 /// chain states into the first store.
 pub struct ChainStatesFirstAssignment;
@@ -398,14 +439,14 @@ where
             user_contracts: self.user_contracts.clone(),
             user_services: self.user_services.clone(),
         };
-        let root_key = bcs::to_bytes(&BaseKey::ChainState(chain_id))?;
+        let root_key = BaseKey::ChainState(chain_id).to_bytes()?;
         let store = self.store.clone_with_root_key(&root_key)?;
         let context = ViewContext::create_root_context(store, runtime_context).await?;
         ChainStateView::load(context).await
     }
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
-        let blob_key = bcs::to_bytes(&BaseKey::Blob(blob_id))?;
+        let blob_key = BaseKey::Blob(blob_id).to_bytes()?;
         let test = self.store.contains_key(&blob_key).await?;
         #[cfg(with_metrics)]
         CONTAINS_BLOB_COUNTER.with_label_values(&[]).inc();
@@ -415,7 +456,7 @@ where
     async fn missing_blobs(&self, blob_ids: &[BlobId]) -> Result<Vec<BlobId>, ViewError> {
         let mut keys = Vec::new();
         for blob_id in blob_ids {
-            let key = bcs::to_bytes(&BaseKey::Blob(*blob_id))?;
+            let key = BaseKey::Blob(*blob_id).to_bytes()?;
             keys.push(key);
         }
         let results = self.store.contains_keys(keys).await?;
@@ -431,7 +472,7 @@ where
     }
 
     async fn contains_blob_state(&self, blob_id: BlobId) -> Result<bool, ViewError> {
-        let blob_key = bcs::to_bytes(&BaseKey::BlobState(blob_id))?;
+        let blob_key = BaseKey::BlobState(blob_id).to_bytes()?;
         let test = self.store.contains_key(&blob_key).await?;
         #[cfg(with_metrics)]
         CONTAINS_BLOB_STATE_COUNTER.with_label_values(&[]).inc();
@@ -442,7 +483,7 @@ where
         &self,
         hash: CryptoHash,
     ) -> Result<Hashed<ConfirmedBlock>, ViewError> {
-        let value_key = bcs::to_bytes(&BaseKey::ConfirmedBlock(hash))?;
+        let value_key = BaseKey::ConfirmedBlock(hash).to_bytes()?;
         let maybe_value = self.store.read_value::<ConfirmedBlock>(&value_key).await?;
         #[cfg(with_metrics)]
         READ_HASHED_CONFIRMED_BLOCK_COUNTER
@@ -453,7 +494,7 @@ where
     }
 
     async fn read_blob(&self, blob_id: BlobId) -> Result<Blob, ViewError> {
-        let blob_key = bcs::to_bytes(&BaseKey::Blob(blob_id))?;
+        let blob_key = BaseKey::Blob(blob_id).to_bytes()?;
         let maybe_blob_bytes = self.store.read_value::<Vec<u8>>(&blob_key).await?;
         #[cfg(with_metrics)]
         READ_BLOB_COUNTER.with_label_values(&[]).inc();
@@ -467,7 +508,7 @@ where
         }
         let blob_keys = blob_ids
             .iter()
-            .map(|blob_id| bcs::to_bytes(&BaseKey::Blob(*blob_id)))
+            .map(|blob_id| BaseKey::Blob(*blob_id).to_bytes())
             .collect::<Result<Vec<_>, _>>()?;
         let maybe_blob_bytes = self.store.read_multi_values::<Vec<u8>>(blob_keys).await?;
         #[cfg(with_metrics)]
@@ -485,7 +526,7 @@ where
     }
 
     async fn read_blob_state(&self, blob_id: BlobId) -> Result<BlobState, ViewError> {
-        let blob_state_key = bcs::to_bytes(&BaseKey::BlobState(blob_id))?;
+        let blob_state_key = BaseKey::BlobState(blob_id).to_bytes()?;
         let maybe_blob_state = self.store.read_value::<BlobState>(&blob_state_key).await?;
         #[cfg(with_metrics)]
         READ_BLOB_STATE_COUNTER.with_label_values(&[]).inc();
@@ -500,7 +541,7 @@ where
         }
         let blob_state_keys = blob_ids
             .iter()
-            .map(|blob_id| bcs::to_bytes(&BaseKey::BlobState(*blob_id)))
+            .map(|blob_id| BaseKey::BlobState(*blob_id).to_bytes())
             .collect::<Result<_, _>>()?;
         let maybe_blob_states = self
             .store
@@ -576,7 +617,7 @@ where
         }
         let blob_state_keys = blob_ids
             .iter()
-            .map(|blob_id| bcs::to_bytes(&BaseKey::BlobState(*blob_id)))
+            .map(|blob_id| BaseKey::BlobState(*blob_id).to_bytes())
             .collect::<Result<_, _>>()?;
         let maybe_blob_states = self
             .store
@@ -719,8 +760,8 @@ where
         Ok(hashes
             .iter()
             .flat_map(|hash| {
-                let cert_key = bcs::to_bytes(&BaseKey::Certificate(*hash));
-                let value_key = bcs::to_bytes(&BaseKey::ConfirmedBlock(*hash));
+                let cert_key = BaseKey::Certificate(*hash).to_bytes();
+                let value_key = BaseKey::ConfirmedBlock(*hash).to_bytes();
                 vec![cert_key, value_key]
             })
             .collect::<Result<_, _>>()?)
