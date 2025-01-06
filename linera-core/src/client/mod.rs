@@ -157,6 +157,9 @@ where
     message_policy: MessagePolicy,
     /// Whether to block on cross-chain message delivery.
     cross_chain_message_delivery: CrossChainMessageDelivery,
+    /// An additional delay, after reaching a quorum, to wait for additional validator signatures,
+    /// as a fraction of time taken to reach quorum.
+    grace_period: f64,
     /// Chains that should be tracked by the client.
     // TODO(#2412): Merge with set of chains the client is receiving notifications from validators
     tracked_chains: Arc<RwLock<HashSet<ChainId>>>,
@@ -184,6 +187,7 @@ impl<P, S: Storage + Clone> Client<P, S> {
         tracked_chains: impl IntoIterator<Item = ChainId>,
         name: impl Into<String>,
         max_loaded_chains: NonZeroUsize,
+        grace_period: f64,
     ) -> Self {
         let tracked_chains = Arc::new(RwLock::new(tracked_chains.into_iter().collect()));
         let state = WorkerState::new_for_client(
@@ -204,6 +208,7 @@ impl<P, S: Storage + Clone> Client<P, S> {
             max_pending_message_bundles,
             message_policy: MessagePolicy::new(BlanketMessagePolicy::Accept, None),
             cross_chain_message_delivery,
+            grace_period,
             tracked_chains,
             notifier: Arc::new(ChannelNotifier::default()),
             storage,
@@ -267,6 +272,7 @@ impl<P, S: Storage + Clone> Client<P, S> {
                 max_pending_message_bundles: self.max_pending_message_bundles,
                 message_policy: self.message_policy.clone(),
                 cross_chain_message_delivery: self.cross_chain_message_delivery,
+                grace_period: self.grace_period,
             },
         }
     }
@@ -465,6 +471,9 @@ pub struct ChainClientOptions {
     pub message_policy: MessagePolicy,
     /// Whether to block on cross-chain message delivery.
     pub cross_chain_message_delivery: CrossChainMessageDelivery,
+    /// An additional delay, after reaching a quorum, to wait for additional validator signatures,
+    /// as a fraction of time taken to reach quorum.
+    pub grace_period: f64,
 }
 
 /// Client to operate a chain by interacting with validators and the given local storage
@@ -1111,6 +1120,7 @@ where
                         .await
                 })
             },
+            self.options.grace_period,
         )
         .await?;
         Ok(())
@@ -1146,6 +1156,7 @@ where
                 let action = action.clone();
                 Box::pin(async move { updater.send_chain_update(action).await })
             },
+            self.options.grace_period,
         )
         .await?;
         ensure!(
@@ -1516,6 +1527,7 @@ where
                         .await
                 })
             },
+            self.options.grace_period,
         )
         .await;
         let received_certificate_batches = match result {
@@ -1673,6 +1685,7 @@ where
                         .await
                 }
             },
+            self.options.grace_period,
         )
         .await?;
 
