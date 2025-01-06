@@ -263,9 +263,12 @@ struct ExpectedMetadata {
 /// their implementations.
 fn test_wit_type_implementation<T>(expected: ExpectedMetadata)
 where
-    T: WitType,
+    T: WitType + ?Sized + 'static,
+    Box<T>: WitType,
+    Rc<T>: WitType,
+    Arc<T>: WitType,
 {
-    test_single_wit_type_implementation::<T>(expected);
+    test_single_wit_type_implementation::<&'static T>(expected);
     test_single_wit_type_implementation::<Box<T>>(expected);
     test_single_wit_type_implementation::<Rc<T>>(expected);
     test_single_wit_type_implementation::<Arc<T>>(expected);
