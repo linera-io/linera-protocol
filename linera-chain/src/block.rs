@@ -17,29 +17,10 @@ use thiserror::Error;
 use crate::{data_types::ExecutedBlock, ChainError};
 
 /// Wrapper around an `ExecutedBlock` that has been validated.
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct ValidatedBlock {
     executed_block: Hashed<ExecutedBlock>,
-}
-
-impl Serialize for ValidatedBlock {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        self.executed_block.serialize(serializer)
-    }
-}
-
-impl<'de> Deserialize<'de> for ValidatedBlock {
-    fn deserialize<D>(deserializer: D) -> Result<ValidatedBlock, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        Ok(ValidatedBlock {
-            executed_block: Hashed::deserialize(deserializer)?,
-        })
-    }
 }
 
 impl ValidatedBlock {
@@ -88,30 +69,11 @@ impl ValidatedBlock {
 impl<'de> BcsHashable<'de> for ValidatedBlock {}
 
 /// Wrapper around an `ExecutedBlock` that has been confirmed.
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct ConfirmedBlock {
     // The executed block contained in this `ConfirmedBlock`.
     executed_block: Hashed<ExecutedBlock>,
-}
-
-impl Serialize for ConfirmedBlock {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        self.executed_block.serialize(serializer)
-    }
-}
-
-impl<'de> Deserialize<'de> for ConfirmedBlock {
-    fn deserialize<D>(deserializer: D) -> Result<ConfirmedBlock, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        Ok(ConfirmedBlock {
-            executed_block: Hashed::deserialize(deserializer)?,
-        })
-    }
 }
 
 #[async_graphql::Object(cache_control(no_cache))]
