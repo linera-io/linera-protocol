@@ -401,6 +401,20 @@ fn test_heap_allocated_fields() {
     );
 }
 
+/// Check that a slice type is properly stored in memory and lowered into its flat layout.
+#[test]
+fn test_slice() {
+    let data = [
+        SimpleWrapper(false),
+        SimpleWrapper(false),
+        SimpleWrapper(true),
+        SimpleWrapper(true),
+    ];
+
+    test_store_in_memory(data.as_slice(), &[8, 0, 0, 0, 4, 0, 0, 0], &[0, 0, 1, 1]);
+    test_lower_to_flat_layout(data.as_slice(), hlist![0_i32, 4_i32,], &[0, 0, 1, 1]);
+}
+
 /// Checks that a [`Vec`] type is properly stored in memory and lowered into its flat layout.
 #[test]
 fn test_vec() {
