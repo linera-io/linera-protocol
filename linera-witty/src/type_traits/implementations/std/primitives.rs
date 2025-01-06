@@ -98,7 +98,7 @@ where
 
 impl<'t, T> WitStore for &'t T
 where
-    T: WitStore,
+    T: WitStore + ?Sized,
 {
     fn store<Instance>(
         &self,
