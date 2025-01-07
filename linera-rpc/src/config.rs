@@ -112,7 +112,7 @@ pub struct ValidatorInternalNetworkPreConfig<P> {
     pub shards: Vec<ShardConfig>,
     /// The host name of the proxy on the internal network (IP or hostname).
     pub host: String,
-    /// The port the proxy listens on on the internal network.
+    /// The port the proxy listens on the internal network.
     pub port: u16,
     /// The host name of the proxy's metrics endpoint.
     pub metrics_host: String,
