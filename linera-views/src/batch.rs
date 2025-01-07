@@ -121,6 +121,9 @@ impl UnorderedBatch {
         &mut self,
         db: &DB,
     ) -> Result<(), DB::Error> {
+        if self.key_prefix_deletions.is_empty() {
+            return Ok(());
+        }
         let inserted_keys = self
             .simple_unordered_batch
             .insertions
