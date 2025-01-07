@@ -83,7 +83,8 @@ impl ValidatorNode for SimpleClient {
         &self,
         proposal: BlockProposal,
     ) -> Result<ChainInfoResponse, NodeError> {
-        self.query(proposal.into()).await
+        let request = RpcMessage::BlockProposal(Box::new(proposal));
+        self.query(request).await
     }
 
     /// Processes a hash certificate.
@@ -93,11 +94,11 @@ impl ValidatorNode for SimpleClient {
         delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
         let wait_for_outgoing_messages = delivery.wait_for_outgoing_messages();
-        let request = HandleLiteCertRequest {
+        let request = RpcMessage::LiteCertificate(Box::new(HandleLiteCertRequest {
             certificate: certificate.cloned(),
             wait_for_outgoing_messages,
-        };
-        self.query(request.into()).await
+        }));
+        self.query(request).await
     }
 
     /// Processes a validated certificate.
@@ -107,7 +108,8 @@ impl ValidatorNode for SimpleClient {
         blobs: Vec<Blob>,
     ) -> Result<ChainInfoResponse, NodeError> {
         let request = HandleValidatedCertificateRequest { certificate, blobs };
-        self.query(request.into()).await
+        let request = RpcMessage::ValidatedCertificate(Box::new(request));
+        self.query(request).await
     }
 
     /// Processes a confirmed certificate.
@@ -123,7 +125,8 @@ impl ValidatorNode for SimpleClient {
             blobs,
             wait_for_outgoing_messages,
         };
-        self.query(request.into()).await
+        let request = RpcMessage::ConfirmedCertificate(Box::new(request));
+        self.query(request).await
     }
 
     /// Processes a timeout certificate.
@@ -132,7 +135,8 @@ impl ValidatorNode for SimpleClient {
         certificate: TimeoutCertificate,
     ) -> Result<ChainInfoResponse, NodeError> {
         let request = HandleTimeoutCertificateRequest { certificate };
-        self.query(request.into()).await
+        let request = RpcMessage::TimeoutCertificate(Box::new(request));
+        self.query(request).await
     }
 
     /// Handles information queries for this chain.
@@ -140,7 +144,8 @@ impl ValidatorNode for SimpleClient {
         &self,
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, NodeError> {
-        self.query(query.into()).await
+        let request = RpcMessage::ChainInfoQuery(Box::new(query));
+        self.query(request).await
     }
 
     fn subscribe(

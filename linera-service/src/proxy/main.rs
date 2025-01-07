@@ -292,18 +292,19 @@ where
         match message {
             VersionInfoQuery => {
                 // We assume each shard is running the same version as the proxy
-                Ok(Some(linera_version::VersionInfo::default().into()))
+                Ok(Some(RpcMessage::VersionInfoResponse(
+                    linera_version::VersionInfo::default().into(),
+                )))
             }
-            GenesisConfigHashQuery => Ok(Some(RpcMessage::GenesisConfigHashResponse(
-                self.genesis_config.hash().into(),
-            ))),
-            DownloadBlobContent(blob_id) => Ok(Some(
-                self.storage
-                    .read_blob(*blob_id)
-                    .await?
-                    .into_content()
-                    .into(),
-            )),
+            GenesisConfigHashQuery => Ok(Some(RpcMessage::GenesisConfigHashResponse(Box::new(
+                self.genesis_config.hash(),
+            )))),
+            DownloadBlobContent(blob_id) => {
+                let content = self.storage.read_blob(*blob_id).await?.into_content();
+                Ok(Some(RpcMessage::DownloadBlobContentResponse(Box::new(
+                    content,
+                ))))
+            }
             DownloadConfirmedBlock(hash) => {
                 Ok(Some(RpcMessage::DownloadConfirmedBlockResponse(Box::new(
                     self.storage
@@ -313,7 +314,8 @@ where
                 ))))
             }
             DownloadCertificates(hashes) => {
-                Ok(Some(self.storage.read_certificates(hashes).await?.into()))
+                let certificates = self.storage.read_certificates(hashes).await?;
+                Ok(Some(RpcMessage::DownloadCertificatesResponse(certificates)))
             }
             BlobLastUsedBy(blob_id) => Ok(Some(RpcMessage::BlobLastUsedByResponse(Box::new(
                 self.storage.read_blob_state(*blob_id).await?.last_used_by,
