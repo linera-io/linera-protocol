@@ -27,7 +27,7 @@ futures = "0.3.24"
 futures-util = "0.3.26"
 getrandom = { version = "0.2.12", default-features = false, features = ["custom"] }
 hex = "0.4.3"
-alloy = { version = "0.7.0", default-features = false }
+alloy = { version = "0.9.2", default-features = false }
 linera-sdk = { path = "../linera-sdk" }
 linera-views = { path = "../linera-views", default-features = false }
 log = "0.4.20"
