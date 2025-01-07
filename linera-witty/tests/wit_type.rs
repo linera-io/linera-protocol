@@ -240,6 +240,23 @@ fn test_vec() {
     });
 }
 
+/// Checks the memory size, layout and WIT declaration derived for a boxed slice type.
+#[test]
+fn test_boxed_slice() {
+    test_wit_type_implementation::<Box<[TupleWithPadding]>>(ExpectedMetadata {
+        size: 8,
+        alignment: 4,
+        flat_layout_length: 2,
+        declaration: concat!(
+            "    record tuple-with-padding {\n",
+            "        inner0: u16,\n",
+            "        inner1: u32,\n",
+            "        inner2: s64,\n",
+            "    }\n"
+        ),
+    });
+}
+
 /// Check the memory size, layout and WIT declaration derived for a type that has a slice
 /// field.
 #[test]
