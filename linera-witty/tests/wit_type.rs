@@ -11,9 +11,9 @@ use std::{collections::BTreeMap, rc::Rc, sync::Arc};
 use linera_witty::{HList, Layout, RegisterWitTypes, WitType};
 
 use self::types::{
-    Branch, Enum, Leaf, RecordWithDoublePadding, SimpleWrapper, SpecializedGenericEnum,
-    SpecializedGenericStruct, StructWithHeapFields, StructWithLists, TupleWithPadding,
-    TupleWithoutPadding,
+    Branch, Enum, Leaf, RecordWithDoublePadding, SimpleWrapper, SliceWrapper,
+    SpecializedGenericEnum, SpecializedGenericStruct, StructWithHeapFields, StructWithLists,
+    TupleWithPadding, TupleWithoutPadding,
 };
 
 /// Checks the memory size, layout and WIT type declaration derived for a wrapper type.
@@ -235,6 +235,27 @@ fn test_vec() {
         declaration: concat!(
             "    record simple-wrapper {\n",
             "        inner0: bool,\n",
+            "    }\n"
+        ),
+    });
+}
+
+/// Check the memory size, layout and WIT declaration derived for a type that has a slice
+/// field.
+#[test]
+fn test_slice_field() {
+    test_wit_type_implementation::<SliceWrapper>(ExpectedMetadata {
+        size: 8,
+        alignment: 4,
+        flat_layout_length: 2,
+        declaration: concat!(
+            "    record slice-wrapper {\n",
+            "        inner0: list<tuple-without-padding>,\n",
+            "    }\n\n",
+            "    record tuple-without-padding {\n",
+            "        inner0: u64,\n",
+            "        inner1: s32,\n",
+            "        inner2: s16,\n",
             "    }\n"
         ),
     });

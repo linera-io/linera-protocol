@@ -85,3 +85,7 @@ pub struct StructWithLists {
     pub vec: Vec<SimpleWrapper>,
     pub second_vec: Vec<TupleWithPadding>,
 }
+
+/// A type that wraps a slice.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, WitType, WitStore)]
+pub struct SliceWrapper<'slice>(pub &'slice [TupleWithoutPadding]);
