@@ -41,8 +41,8 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, BlockProposal, ChainAndHeight, ExecutedBlock, IncomingBundle, LiteVote,
-        MessageAction,
+        BlockProposal, ChainAndHeight, ExecutedBlock, IncomingBundle, LiteVote, MessageAction,
+        Proposal,
     },
     types::{
         CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate,
@@ -248,7 +248,7 @@ impl<P, S: Storage + Clone> Client<P, S> {
         block_hash: Option<CryptoHash>,
         timestamp: Timestamp,
         next_block_height: BlockHeight,
-        pending_block: Option<Block>,
+        pending_block: Option<Proposal>,
         pending_blobs: BTreeMap<BlobId, Blob>,
     ) -> ChainClient<P, S> {
         // If the entry already exists we assume that the entry is more up to date than
@@ -673,7 +673,7 @@ impl<P: 'static, S: Storage> ChainClient<P, S> {
 
     /// Gets a guarded reference to the next pending block.
     #[instrument(level = "trace", skip(self))]
-    pub fn pending_block(&self) -> ChainGuardMapped<Option<Block>> {
+    pub fn pending_block(&self) -> ChainGuardMapped<Option<Proposal>> {
         Unsend::new(self.state().inner.map(|state| state.pending_block()))
     }
 
@@ -1841,7 +1841,7 @@ where
     #[tracing::instrument(level = "trace", skip(block))]
     async fn stage_block_execution_and_discard_failing_messages(
         &self,
-        mut block: Block,
+        mut block: Proposal,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), ChainClientError> {
         loop {
             let result = self.stage_block_execution(block.clone()).await;
@@ -1882,7 +1882,7 @@ where
     #[instrument(level = "trace", skip(block))]
     async fn stage_block_execution(
         &self,
-        block: Block,
+        block: Proposal,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), ChainClientError> {
         loop {
             let result = self
@@ -2055,7 +2055,7 @@ where
                 self.next_timestamp(&incoming_bundles, state.timestamp()),
             )
         };
-        let block = Block {
+        let block = Proposal {
             epoch: self.epoch().await?,
             chain_id: self.chain_id,
             incoming_bundles,
@@ -2201,7 +2201,7 @@ where
                 self.next_timestamp(&incoming_bundles, state.timestamp()),
             )
         };
-        let block = Block {
+        let block = Proposal {
             epoch: self.epoch().await?,
             chain_id: self.chain_id,
             incoming_bundles,

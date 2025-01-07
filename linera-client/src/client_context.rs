@@ -36,7 +36,7 @@ use {
         data_types::Amount,
         identifiers::{AccountOwner, ApplicationId, Owner},
     },
-    linera_chain::data_types::{Block, BlockProposal, ExecutedBlock, SignatureAggregator, Vote},
+    linera_chain::data_types::{BlockProposal, ExecutedBlock, Proposal, SignatureAggregator, Vote},
     linera_chain::types::{CertificateValue, GenericCertificate},
     linera_core::data_types::ChainInfoQuery,
     linera_execution::{

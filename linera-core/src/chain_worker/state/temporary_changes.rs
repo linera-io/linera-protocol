@@ -14,8 +14,8 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, BlockExecutionOutcome, BlockProposal, ChannelFullName, ExecutedBlock,
-        IncomingBundle, Medium, MessageAction, ProposalContent,
+        BlockExecutionOutcome, BlockProposal, ChannelFullName, ExecutedBlock, IncomingBundle,
+        Medium, MessageAction, Proposal, ProposalContent,
     },
     manager,
     types::ValidatedBlock,
@@ -126,7 +126,7 @@ where
     /// Executes a block without persisting any changes to the state.
     pub(super) async fn stage_block_execution(
         &mut self,
-        block: Block,
+        block: Proposal,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), WorkerError> {
         let local_time = self.0.storage.clock().current_time();
         let signer = block.authenticated_signer;

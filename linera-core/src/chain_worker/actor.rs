@@ -17,7 +17,7 @@ use linera_base::{
     identifiers::{ChainId, UserApplicationId},
 };
 use linera_chain::{
-    data_types::{Block, BlockProposal, ExecutedBlock, MessageBundle, Origin, Target},
+    data_types::{BlockProposal, ExecutedBlock, MessageBundle, Origin, Proposal, Target},
     types::{ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
     ChainStateView,
 };
@@ -84,7 +84,7 @@ where
 
     /// Execute a block but discard any changes to the chain state.
     StageBlockExecution {
-        block: Block,
+        block: Proposal,
         #[debug(skip)]
         callback: oneshot::Sender<Result<(ExecutedBlock, ChainInfoResponse), WorkerError>>,
     },

@@ -19,7 +19,7 @@ use linera_base::{
     identifiers::{BlobId, ChainId, UserApplicationId},
 };
 use linera_chain::{
-    data_types::{Block, BlockProposal, ExecutedBlock, Medium, MessageBundle, Origin, Target},
+    data_types::{BlockProposal, ExecutedBlock, Medium, MessageBundle, Origin, Proposal, Target},
     types::{ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
     ChainError, ChainStateView,
 };
@@ -176,7 +176,7 @@ where
     /// Executes a block without persisting any changes to the state.
     pub(super) async fn stage_block_execution(
         &mut self,
-        block: Block,
+        block: Proposal,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), WorkerError> {
         ChainWorkerStateWithTemporaryChanges::new(self)
             .await
@@ -546,7 +546,7 @@ where
 }
 
 /// Returns an error if the block is not at the expected epoch.
-fn check_block_epoch(chain_epoch: Epoch, block: &Block) -> Result<(), WorkerError> {
+fn check_block_epoch(chain_epoch: Epoch, block: &Proposal) -> Result<(), WorkerError> {
     ensure!(
         block.epoch == chain_epoch,
         WorkerError::InvalidEpoch {

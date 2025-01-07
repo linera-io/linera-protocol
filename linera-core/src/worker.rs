@@ -24,7 +24,8 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, BlockExecutionOutcome, BlockProposal, ExecutedBlock, MessageBundle, Origin, Target,
+        BlockExecutionOutcome, BlockProposal, ExecutedBlock, MessageBundle, Origin, Proposal,
+        Target,
     },
     types::{
         CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate,
@@ -512,7 +513,7 @@ where
     #[instrument(level = "trace", skip(self, block))]
     pub async fn stage_block_execution(
         &self,
-        block: Block,
+        block: Proposal,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), WorkerError> {
         self.query_chain_worker(block.chain_id, move |callback| {
             ChainWorkerRequest::StageBlockExecution { block, callback }

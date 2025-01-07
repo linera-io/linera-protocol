@@ -28,9 +28,9 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, BlockExecutionOutcome, BlockProposal, ChainAndHeight, ChannelFullName,
-        IncomingBundle, LiteValue, LiteVote, Medium, MessageAction, MessageBundle, Origin,
-        OutgoingMessage, PostedMessage, SignatureAggregator,
+        BlockExecutionOutcome, BlockProposal, ChainAndHeight, ChannelFullName, IncomingBundle,
+        LiteValue, LiteVote, Medium, MessageAction, MessageBundle, Origin, OutgoingMessage,
+        PostedMessage, Proposal, SignatureAggregator,
     },
     test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt, VoteTestExt},
     types::{
@@ -302,7 +302,7 @@ where
         })
         .collect::<Vec<_>>();
 
-    let block = Block {
+    let block = Proposal {
         epoch,
         incoming_bundles,
         authenticated_signer,

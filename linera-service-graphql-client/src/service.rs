@@ -199,7 +199,7 @@ mod from {
         }
     }
 
-    impl From<block::BlockBlockValueExecutedBlockBlock> for linera_chain::data_types::Block {
+    impl From<block::BlockBlockValueExecutedBlockBlock> for linera_chain::data_types::Proposal {
         fn from(val: block::BlockBlockValueExecutedBlockBlock) -> Self {
             let block::BlockBlockValueExecutedBlockBlock {
                 chain_id,
@@ -215,7 +215,7 @@ mod from {
                 .into_iter()
                 .map(IncomingBundle::from)
                 .collect();
-            linera_chain::data_types::Block {
+            linera_chain::data_types::Proposal {
                 chain_id,
                 epoch,
                 incoming_bundles,

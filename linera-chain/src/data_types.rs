@@ -48,7 +48,7 @@ mod data_types_tests;
 ///   received ahead of time in the inbox of the chain.
 /// * This constraint does not apply to the execution of confirmed blocks.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
-pub struct Block {
+pub struct Proposal {
     /// The chain to which this block belongs.
     pub chain_id: ChainId,
     /// The number identifying the current configuration.
@@ -76,7 +76,7 @@ pub struct Block {
     pub previous_block_hash: Option<CryptoHash>,
 }
 
-impl Block {
+impl Proposal {
     /// Returns all the published blob IDs in this block's operations.
     pub fn published_blob_ids(&self) -> BTreeSet<BlobId> {
         let mut blob_ids = BTreeSet::new();
@@ -398,7 +398,7 @@ impl OutgoingMessage {
 /// A [`Block`], together with the outcome from its execution.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
 pub struct ExecutedBlock {
-    pub block: Block,
+    pub block: Proposal,
     pub outcome: BlockExecutionOutcome,
 }
 
@@ -732,7 +732,7 @@ impl ExecutedBlock {
 }
 
 impl BlockExecutionOutcome {
-    pub fn with(self, block: Block) -> ExecutedBlock {
+    pub fn with(self, block: Proposal) -> ExecutedBlock {
         ExecutedBlock {
             block,
             outcome: self,
@@ -763,7 +763,7 @@ impl BlockExecutionOutcome {
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ProposalContent {
     /// The proposed block.
-    pub block: Block,
+    pub block: Proposal,
     /// The consensus round in which this proposal is made.
     pub round: Round,
     /// If this is a retry from an earlier round, the execution outcome.
@@ -772,7 +772,7 @@ pub struct ProposalContent {
 }
 
 impl BlockProposal {
-    pub fn new_initial(round: Round, block: Block, secret: &KeyPair, blobs: Vec<Blob>) -> Self {
+    pub fn new_initial(round: Round, block: Proposal, secret: &KeyPair, blobs: Vec<Blob>) -> Self {
         let content = ProposalContent {
             round,
             block,

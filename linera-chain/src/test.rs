@@ -17,15 +17,17 @@ use linera_execution::{
 
 use crate::{
     block::ConfirmedBlock,
-    data_types::{Block, BlockProposal, IncomingBundle, PostedMessage, SignatureAggregator, Vote},
+    data_types::{
+        BlockProposal, IncomingBundle, PostedMessage, Proposal, SignatureAggregator, Vote,
+    },
     types::{CertificateValue, GenericCertificate},
 };
 
 /// Creates a new child of the given block, with the same timestamp.
-pub fn make_child_block(parent: &Hashed<ConfirmedBlock>) -> Block {
+pub fn make_child_block(parent: &Hashed<ConfirmedBlock>) -> Proposal {
     let parent_value = parent.inner();
     let parent_block = &parent_value.executed_block().block;
-    Block {
+    Proposal {
         epoch: parent_block.epoch,
         chain_id: parent_block.chain_id,
         incoming_bundles: vec![],
@@ -38,8 +40,8 @@ pub fn make_child_block(parent: &Hashed<ConfirmedBlock>) -> Block {
 }
 
 /// Creates a block at height 0 for a new chain.
-pub fn make_first_block(chain_id: ChainId) -> Block {
-    Block {
+pub fn make_first_block(chain_id: ChainId) -> Proposal {
+    Proposal {
         epoch: Epoch::ZERO,
         chain_id,
         incoming_bundles: vec![],
@@ -84,7 +86,7 @@ pub trait BlockTestExt: Sized {
     fn into_proposal_with_round(self, key_pair: &KeyPair, round: Round) -> BlockProposal;
 }
 
-impl BlockTestExt for Block {
+impl BlockTestExt for Proposal {
     fn with_authenticated_signer(mut self, authenticated_signer: Option<Owner>) -> Self {
         self.authenticated_signer = authenticated_signer;
         self

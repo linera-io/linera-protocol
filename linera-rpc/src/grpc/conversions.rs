@@ -914,7 +914,7 @@ pub mod tests {
         data_types::{Amount, Round, Timestamp},
     };
     use linera_chain::{
-        data_types::{Block, BlockExecutionOutcome},
+        data_types::{BlockExecutionOutcome, Proposal},
         test::make_first_block,
         types::CertificateKind,
     };
@@ -928,7 +928,7 @@ pub mod tests {
 
     impl<'de> BcsSignable<'de> for Foo {}
 
-    fn get_block() -> Block {
+    fn get_block() -> Proposal {
         make_first_block(ChainId::root(0))
     }
 

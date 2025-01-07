@@ -40,8 +40,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     data_types::{
-        Block, BlockExecutionOutcome, ChainAndHeight, ChannelFullName, EventRecord, IncomingBundle,
-        MessageAction, MessageBundle, Origin, OutgoingMessage, PostedMessage, Target, Transaction,
+        BlockExecutionOutcome, ChainAndHeight, ChannelFullName, EventRecord, IncomingBundle,
+        MessageAction, MessageBundle, Origin, OutgoingMessage, PostedMessage, Proposal, Target,
+        Transaction,
     },
     inbox::{Cursor, InboxError, InboxStateView},
     manager::ChainManager,
@@ -238,7 +239,7 @@ pub struct ChainTipState {
 impl ChainTipState {
     /// Checks that the proposed block is suitable, i.e. at the expected height and with the
     /// expected parent.
-    pub fn verify_block_chaining(&self, new_block: &Block) -> Result<(), ChainError> {
+    pub fn verify_block_chaining(&self, new_block: &Proposal) -> Result<(), ChainError> {
         ensure!(
             new_block.height == self.next_block_height,
             ChainError::UnexpectedBlockHeight {
@@ -273,7 +274,7 @@ impl ChainTipState {
     /// Checks if the measurement counters would be valid.
     pub fn verify_counters(
         &self,
-        new_block: &Block,
+        new_block: &Proposal,
         outcome: &BlockExecutionOutcome,
     ) -> Result<(), ChainError> {
         let num_incoming_bundles = u32::try_from(new_block.incoming_bundles.len())
@@ -581,7 +582,10 @@ where
     }
 
     /// Removes the incoming message bundles in the block from the inboxes.
-    pub async fn remove_bundles_from_inboxes(&mut self, block: &Block) -> Result<(), ChainError> {
+    pub async fn remove_bundles_from_inboxes(
+        &mut self,
+        block: &Proposal,
+    ) -> Result<(), ChainError> {
         let chain_id = self.chain_id();
         let mut bundles_by_origin: BTreeMap<_, Vec<&MessageBundle>> = Default::default();
         for IncomingBundle { bundle, origin, .. } in &block.incoming_bundles {
@@ -651,7 +655,7 @@ where
     /// * Returns the outcome of the execution.
     pub async fn execute_block(
         &mut self,
-        block: &Block,
+        block: &Proposal,
         local_time: Timestamp,
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
     ) -> Result<BlockExecutionOutcome, ChainError> {
@@ -918,7 +922,7 @@ where
         message_id: MessageId,
         posted_message: &PostedMessage,
         incoming_bundle: &IncomingBundle,
-        block: &Block,
+        block: &Proposal,
         txn_index: u32,
         local_time: Timestamp,
         txn_tracker: &mut TransactionTracker,
