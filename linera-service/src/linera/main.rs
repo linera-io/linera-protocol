@@ -1770,6 +1770,11 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
                     );
                     println!("The list of namespaces is {:?}", namespaces);
                 }
+                DatabaseToolCommand::ListBlobIds { .. } => {
+                    let blob_ids = Box::pin(full_storage_config.list_blob_ids()).await?;
+                    info!("Blob IDs listed in {} ms", start_time.elapsed().as_millis());
+                    println!("The list of blob IDs is {:?}", blob_ids);
+                }
             }
             Ok(0)
         }
