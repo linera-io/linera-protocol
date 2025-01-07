@@ -437,7 +437,7 @@ async fn test_reentrant_collection_view_has_pending_changes_after_try_load_entry
     Ok(())
 }
 
-/// Check if an acquiring multiple write-locks to sub-views causes the collection to have pending
+/// Check if acquiring multiple write-locks to sub-views causes the collection to have pending
 /// changes.
 #[tokio::test]
 async fn test_reentrant_collection_view_has_pending_changes_after_try_load_entries_mut(
