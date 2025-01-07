@@ -6,7 +6,7 @@
 #[path = "common/types.rs"]
 mod types;
 
-use std::{fmt::Debug, rc::Rc, sync::Arc};
+use std::{fmt::Debug, iter, rc::Rc, sync::Arc};
 
 use assert_matches::assert_matches;
 use linera_witty::{hlist, InstanceWithMemory, Layout, MockInstance, RuntimeError, WitLoad};
@@ -362,6 +362,33 @@ fn test_vec() {
 
     test_load_from_memory(&[8, 0, 0, 0, 2, 0, 0, 0, 0, 1], expected.clone());
     test_lift_from_flat_layout(hlist![0_i32, 2_i32], expected, &[0, 1]);
+}
+
+/// Checks that a boxed slice type is properly loaded from memory and lifted from its flat
+/// layout.
+#[test]
+fn test_boxed_slice() {
+    let expected: Box<[Enum]> = Box::new([
+        Enum::Empty,
+        Enum::SmallerVariantWithStrictAlignment {
+            inner: 0x2726_2524_2322_2120,
+        },
+    ]);
+
+    let memory = iter::empty()
+        .chain([8, 0, 0, 0, 2, 0, 0, 0])
+        .chain(iter::empty().chain([0]).chain(1..8).chain(8..24))
+        .chain(
+            iter::empty()
+                .chain([2])
+                .chain(25..32)
+                .chain([0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27])
+                .chain(40..48),
+        )
+        .collect::<Vec<u8>>();
+
+    test_load_from_memory(&memory, expected.clone());
+    test_lift_from_flat_layout(hlist![0_i32, 2_i32], expected, &memory[8..]);
 }
 
 /// Checks that a type with list fields is properly loaded from memory and lifted from its
