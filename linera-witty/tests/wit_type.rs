@@ -176,7 +176,7 @@ fn test_specialized_generic_enum_type() {
     });
 }
 
-/// Check the memory size, layout and WIT declaration derived for a complex type that has heap
+/// Checks the memory size, layout and WIT declaration derived for a complex type that has heap
 /// allocated fields.
 #[test]
 fn test_heap_allocated_fields() {

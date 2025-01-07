@@ -353,7 +353,7 @@ fn test_specialized_generic_enum_type() {
     );
 }
 
-/// Check that a type with fields stored in the heap is properly stored in memory and lowered into
+/// Checks that a type with fields stored in the heap is properly stored in memory and lowered into
 /// its flat layout.
 #[test]
 fn test_heap_allocated_fields() {
