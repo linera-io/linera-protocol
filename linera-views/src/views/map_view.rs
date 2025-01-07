@@ -79,7 +79,7 @@ where
     T: Clone + DeserializeOwned,
 {
     /// Convert to a Cow.
-    fn to_cow(&self) -> Result<Cow<'a, T>, ViewError> {
+    fn to_value(&self) -> Result<Cow<'a, T>, ViewError> {
         match self {
             ValueOrBytes::Value(value) => Ok(Cow::Borrowed(value)),
             ValueOrBytes::Bytes(bytes) => Ok(Cow::Owned(bcs::from_bytes(bytes)?)),
@@ -92,7 +92,7 @@ where
     T: Serialize,
 {
     /// Convert to bytes.
-    pub fn bytes(self) -> Result<Vec<u8>, ViewError> {
+    pub fn into_bytes(self) -> Result<Vec<u8>, ViewError> {
         match self {
             ValueOrBytes::Value(value) => Ok(bcs::to_bytes(value)?),
             ValueOrBytes::Bytes(bytes) => Ok(bytes),
@@ -716,7 +716,7 @@ where
     {
         self.for_each_key_value_or_bytes_while(
             |key, value| {
-                let value = value.to_cow()?;
+                let value = value.to_value()?;
                 f(key, value)
             },
             prefix,
@@ -928,7 +928,7 @@ where
             |index, value| {
                 count += 1;
                 hasher.update_with_bytes(index)?;
-                let bytes = value.bytes()?;
+                let bytes = value.into_bytes()?;
                 hasher.update_with_bytes(&bytes)?;
                 Ok(())
             },
