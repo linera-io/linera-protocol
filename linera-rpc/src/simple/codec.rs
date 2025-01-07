@@ -137,7 +137,7 @@ mod tests {
         message_contents: ChainInfoQuery,
         trailing_bytes: Vec<u8>,
     ) {
-        let message = RpcMessage::from(message_contents);
+        let message = RpcMessage::ChainInfoQuery(Box::new(message_contents));
         let payload = bincode::serialize(&message).expect("RpcMessage is serializable");
 
         let mut buffer = BytesMut::with_capacity(
@@ -174,7 +174,7 @@ mod tests {
         leading_bytes: Vec<u8>,
         message_contents: ChainInfoQuery,
     ) {
-        let message = RpcMessage::from(message_contents);
+        let message = RpcMessage::ChainInfoQuery(Box::new(message_contents));
         let serialized_message =
             bincode::serialize(&message).expect("Serialization should succeed");
 

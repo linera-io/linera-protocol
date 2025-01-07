@@ -806,12 +806,13 @@ impl Runnable for Job {
                 let messages = certificates
                     .iter()
                     .map(|certificate| {
-                        HandleConfirmedCertificateRequest {
-                            certificate: certificate.clone(),
-                            blobs: vec![],
-                            wait_for_outgoing_messages: true,
-                        }
-                        .into()
+                        RpcMessage::ConfirmedCertificate(Box::new(
+                            HandleConfirmedCertificateRequest {
+                                certificate: certificate.clone(),
+                                blobs: vec![],
+                                wait_for_outgoing_messages: true,
+                            },
+                        ))
                     })
                     .collect();
                 let responses = context

@@ -800,7 +800,7 @@ where
                 key_pair,
                 vec![],
             );
-            proposals.push(proposal.into());
+            proposals.push(RpcMessage::BlockProposal(Box::new(proposal)));
             next_recipient = chain.chain_id;
         }
         proposals
