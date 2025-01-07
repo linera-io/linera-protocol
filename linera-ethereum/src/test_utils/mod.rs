@@ -1,22 +1,15 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//use alloy::providers::fillers::WalletFiller;
-//use alloy::network::EthereumWallet;
-use alloy::providers::fillers::BlobGasFiller;
 use alloy::{
-    network::Ethereum,
     node_bindings::{Anvil, AnvilInstance},
     primitives::{Address, U256},
     providers::{
-        fillers::{ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller},
         ProviderBuilder, RootProvider,
     },
-    signers::Signer,
     sol,
     transports::http::reqwest::Client,
 };
-use alloy_signer_local::PrivateKeySigner;
 use linera_base::port::get_free_port;
 use url::Url;
 
@@ -44,49 +37,27 @@ pub struct AnvilTest {
     pub anvil_instance: AnvilInstance,
     pub endpoint: String,
     pub ethereum_client: EthereumClient<HttpProvider>,
-    pub wallet_info: (PrivateKeySigner, String),
     pub rpc_url: Url,
-    pub provider: FillProvider<
-            JoinFill<alloy::providers::Identity, JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller,ChainIdFiller>>>>,
-        RootProvider<alloy::transports::http::Http<Client>>,
-        alloy::transports::http::Http<Client>,
-        Ethereum,
-    >,
+    pub provider: RootProvider<alloy::transports::http::Http<Client>>,
 }
 
 pub async fn get_anvil() -> anyhow::Result<AnvilTest> {
     let port = get_free_port().await?;
     let anvil_instance = Anvil::new().port(port).try_spawn()?;
-    let index = 0;
-    let wallet: PrivateKeySigner = anvil_instance.keys()[index].clone().into();
-    let address = format!("{:?}", anvil_instance.addresses()[index]);
-    let wallet_info = (wallet.clone(), address);
     let endpoint = anvil_instance.endpoint();
     let ethereum_client = EthereumClient::new(endpoint.clone())?;
     let rpc_url = Url::parse(&endpoint)?;
-    let provider = ProviderBuilder::new()
-        .with_recommended_fillers()
-        .on_http(rpc_url.clone());
-//        .wallet(wallet)
+    let provider = ProviderBuilder::new().on_http(rpc_url.clone());
     Ok(AnvilTest {
         anvil_instance,
         endpoint,
         ethereum_client,
-        wallet_info,
         rpc_url,
         provider,
     })
 }
 
 impl AnvilTest {
-    pub fn get_wallet(&self, index: usize) -> (PrivateKeySigner, String) {
-        let address = self.anvil_instance.addresses()[index];
-        let address = format!("{:?}", address);
-        let wallet: PrivateKeySigner = self.anvil_instance.keys()[index].clone().into();
-        let wallet = wallet.with_chain_id(Some(self.anvil_instance.chain_id()));
-        (wallet, address)
-    }
-
     pub fn get_address(&self, index: usize) -> String {
         let address = self.anvil_instance.addresses()[index];
         format!("{:?}", address)
