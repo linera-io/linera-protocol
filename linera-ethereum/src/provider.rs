@@ -1,8 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_lock::Mutex;
-use async_trait::async_trait;
 use alloy::{
     primitives::{Address, Bytes, U256},
     providers::{Provider, ProviderBuilder, RootProvider},
@@ -12,6 +10,8 @@ use alloy::{
     },
     transports::http::reqwest::{header::CONTENT_TYPE, Client},
 };
+use async_lock::Mutex;
+use async_trait::async_trait;
 use url::Url;
 
 use crate::client::{EthereumQueries, JsonRpcClient};

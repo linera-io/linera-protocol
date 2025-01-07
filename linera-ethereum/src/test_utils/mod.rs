@@ -4,9 +4,7 @@
 use alloy::{
     node_bindings::{Anvil, AnvilInstance},
     primitives::{Address, U256},
-    providers::{
-        ProviderBuilder, RootProvider,
-    },
+    providers::{ProviderBuilder, RootProvider},
     sol,
     transports::http::reqwest::Client,
 };
@@ -32,7 +30,6 @@ sol!(
     "./contracts/EventNumerics.json"
 );
 
-#[expect(clippy::type_complexity)]
 pub struct AnvilTest {
     pub anvil_instance: AnvilInstance,
     pub endpoint: String,

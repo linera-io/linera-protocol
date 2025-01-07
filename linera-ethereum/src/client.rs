@@ -3,7 +3,6 @@
 
 use std::fmt::Debug;
 
-use async_trait::async_trait;
 use alloy::{
     primitives::{Address, Bytes, U256, U64},
     rpc::types::eth::{
@@ -11,6 +10,7 @@ use alloy::{
         BlockId, BlockNumberOrTag, Filter, Log,
     },
 };
+use async_trait::async_trait;
 use linera_base::ensure;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::value::RawValue;
