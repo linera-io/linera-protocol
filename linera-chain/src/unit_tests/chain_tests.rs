@@ -246,8 +246,11 @@ async fn test_application_permissions() -> anyhow::Result<()> {
     let valid_block = make_first_block(chain_id)
         .with_incoming_bundle(bundle)
         .with_operation(app_operation.clone());
-    let outcome = chain.execute_block(&valid_block, time, None).await?;
-    let value = Hashed::new(ConfirmedBlock::new(outcome.with(valid_block)));
+    let executed_block = chain
+        .execute_block(&valid_block, time, None)
+        .await?
+        .with(valid_block);
+    let value = Hashed::new(ConfirmedBlock::new(executed_block));
 
     // In the second block, other operations are still not allowed.
     let invalid_block = make_child_block(&value.clone())

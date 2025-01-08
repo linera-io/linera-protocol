@@ -28,9 +28,9 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        BlockExecutionOutcome, BlockProposal, ChainAndHeight, ChannelFullName, IncomingBundle,
-        LiteValue, LiteVote, Medium, MessageAction, MessageBundle, Origin, OutgoingMessage,
-        PostedMessage, Proposal, SignatureAggregator,
+        BlockExecutionOutcome, BlockProposal, ChainAndHeight, ChannelFullName, ExecutedBlock,
+        IncomingBundle, LiteValue, LiteVote, Medium, MessageAction, MessageBundle, Origin,
+        OutgoingMessage, PostedMessage, Proposal, SignatureAggregator,
     },
     test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt, VoteTestExt},
     types::{
@@ -404,7 +404,7 @@ fn update_recipient_direct(
     recipient: ChainId,
     certificate: &ConfirmedBlockCertificate,
 ) -> CrossChainRequest {
-    let sender = certificate.inner().executed_block().block.chain_id;
+    let sender = certificate.inner().block().header.chain_id;
     let bundles = certificate.message_bundles_for(&Medium::Direct, recipient);
     CrossChainRequest::UpdateRecipient {
         sender,
@@ -681,18 +681,17 @@ where
         .await?;
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
-    assert_eq!(
-        &chain
-            .manager
-            .get()
-            .validated_vote()
-            .unwrap()
-            .value()
-            .inner()
-            .executed_block()
-            .block,
-        &block_proposal0.content.block
-    ); // Multi-leader round - it's not confirmed yet.
+    let executed_block: ExecutedBlock = chain
+        .manager
+        .get()
+        .validated_vote()
+        .unwrap()
+        .value()
+        .inner()
+        .block()
+        .clone()
+        .into();
+    assert_eq!(&executed_block.block, &block_proposal0.content.proposal); // Multi-leader round - it's not confirmed yet.
     assert!(chain.manager.get().confirmed_vote().is_none());
     let block_certificate0 = make_certificate(
         &committee,
@@ -712,18 +711,18 @@ where
         .await?;
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
-    assert_eq!(
-        &chain
-            .manager
-            .get()
-            .confirmed_vote()
-            .unwrap()
-            .value()
-            .inner()
-            .executed_block()
-            .block,
-        &block_proposal0.content.block
-    ); // Should be confirmed after handling the certificate.
+    let executed_block: ExecutedBlock = chain
+        .manager
+        .get()
+        .validated_vote()
+        .unwrap()
+        .value()
+        .inner()
+        .block()
+        .clone()
+        .into();
+
+    assert_eq!(&executed_block.block, &block_proposal0.content.proposal); // Should be confirmed after handling the certificate.
     assert!(chain.manager.get().validated_vote().is_none());
     drop(chain);
 
@@ -739,18 +738,17 @@ where
 
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
-    assert_eq!(
-        &chain
-            .manager
-            .get()
-            .validated_vote()
-            .unwrap()
-            .value()
-            .inner()
-            .executed_block()
-            .block,
-        &block_proposal1.content.block
-    );
+    let executed_block: ExecutedBlock = chain
+        .manager
+        .get()
+        .validated_vote()
+        .unwrap()
+        .value()
+        .inner()
+        .block()
+        .clone()
+        .into();
+    assert_eq!(&executed_block.block, &block_proposal1.content.proposal);
     assert!(chain.manager.get().confirmed_vote().is_none());
     drop(chain);
     assert_matches!(
@@ -1084,7 +1082,7 @@ where
                     .await,
                     oracle_responses: vec![Vec::new(); 2],
                 }
-                .with(block_proposal.content.block),
+                .with(block_proposal.content.proposal),
             )),
         );
         worker

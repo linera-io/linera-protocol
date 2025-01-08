@@ -27,7 +27,7 @@ use linera_execution::{
 use super::TestValidator;
 use crate::ToBcsBytes;
 
-/// A helper type to build [`Block`]s using the builder pattern, and then signing them into
+/// A helper type to build block using the builder pattern, and then signing them into
 /// [`ConfirmedBlockCertificate`]s using a [`TestValidator`].
 pub struct BlockBuilder {
     block: Proposal,
@@ -208,7 +208,7 @@ impl BlockBuilder {
         self.with_incoming_bundles(bundles)
     }
 
-    /// Tries to sign the prepared [`Block`] with the [`TestValidator`]'s keys and return the
+    /// Tries to sign the prepared block with the [`TestValidator`]'s keys and return the
     /// resulting [`Certificate`]. Returns an error if block execution fails.
     pub(crate) async fn try_sign(self) -> anyhow::Result<ConfirmedBlockCertificate> {
         let (executed_block, _) = self

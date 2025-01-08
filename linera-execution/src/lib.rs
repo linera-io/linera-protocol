@@ -34,7 +34,7 @@ use derive_more::Display;
 use js_sys::wasm_bindgen::JsValue;
 use linera_base::{
     abi::Abi,
-    crypto::CryptoHash,
+    crypto::{BcsHashable, CryptoHash},
     data_types::{
         Amount, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, DecompressionError,
         Resources, SendMessageRequest, Timestamp, UserApplicationDescription,
@@ -728,6 +728,8 @@ pub enum Operation {
         bytes: Vec<u8>,
     },
 }
+
+impl<'de> BcsHashable<'de> for Operation {}
 
 /// A message to be sent and possibly executed in the receiver's block.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]

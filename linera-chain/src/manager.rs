@@ -247,7 +247,7 @@ impl ChainManager {
     /// Verifies the safety of a proposed block with respect to voting rules.
     pub fn check_proposed_block(&self, proposal: &BlockProposal) -> Result<Outcome, ChainError> {
         let new_round = proposal.content.round;
-        let new_block = &proposal.content.block;
+        let new_block = &proposal.content.proposal;
         let owner = &proposal.owner;
 
         // When a block is certified, incrementing its height must succeed.
@@ -293,7 +293,7 @@ impl ChainManager {
                 && proposal.validated_block_certificate.is_none()
             {
                 ensure!(
-                    old_proposal.content.block == *new_block,
+                    old_proposal.content.proposal == *new_block,
                     ChainError::HasLockedBlock(new_block.height, Round::Fast)
                 )
             }
@@ -306,7 +306,7 @@ impl ChainManager {
                     .validated_block_certificate
                     .as_ref()
                     .is_some_and(|cert| locked.round <= cert.round),
-                ChainError::HasLockedBlock(locked.executed_block().block.height, locked.round)
+                ChainError::HasLockedBlock(locked.block().header.height, locked.round)
             )
         }
         Ok(Outcome::Accept)
@@ -369,10 +369,10 @@ impl ChainManager {
         &self,
         certificate: &ValidatedBlockCertificate,
     ) -> Result<Outcome, ChainError> {
-        let new_block = &certificate.executed_block().block;
+        let new_block = certificate.block();
         let new_round = certificate.round;
         if let Some(Vote { value, round, .. }) = &self.confirmed_vote {
-            if value.inner().executed_block().block == *new_block && *round == new_round {
+            if value.inner().block() == new_block && *round == new_round {
                 return Ok(Outcome::Skip); // We already voted to confirm this block.
             }
         }
@@ -462,7 +462,7 @@ impl ChainManager {
         if key_pair.is_some() && round < self.current_round {
             return;
         }
-        let confirmed_block = ConfirmedBlock::new(validated.inner().executed_block().clone());
+        let confirmed_block = ConfirmedBlock::new(validated.inner().block().clone().into());
         self.locked = Some(validated);
         self.locked_blobs = blobs;
         self.update_current_round(local_time);
@@ -684,7 +684,7 @@ impl ChainManagerInfo {
     /// Returns whether a proposal with this content was already handled.
     pub fn already_handled_proposal(&self, round: Round, block: &Proposal) -> bool {
         self.requested_proposed.as_ref().is_some_and(|proposal| {
-            proposal.content.round == round && proposal.content.block == *block
+            proposal.content.round == round && proposal.content.proposal == *block
         })
     }
 

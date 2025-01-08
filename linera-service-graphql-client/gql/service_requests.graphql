@@ -216,14 +216,23 @@ query Block($hash: CryptoHash, $chainId: ChainId!) {
     hash
     value {
       status
-      executedBlock {
-        block {
+      block {
+        header {
+          version
           chainId
           epoch
           height
           timestamp
-          authenticatedSigner
+          stateHash
           previousBlockHash
+          authenticatedSigner
+          bundlesHash
+          operationsHash
+          messagesHash
+          oracleResponsesHash
+          eventsHash
+        }
+        body {
           incomingBundles {
             origin
             bundle {
@@ -243,8 +252,6 @@ query Block($hash: CryptoHash, $chainId: ChainId!) {
             action
           }
           operations
-        }
-        outcome {
           messages {
             destination
             authenticatedSigner
@@ -253,7 +260,6 @@ query Block($hash: CryptoHash, $chainId: ChainId!) {
             kind
             message
           }
-          stateHash
           oracleResponses
           events {
             streamId {
@@ -274,14 +280,23 @@ query Blocks($from: CryptoHash, $chainId: ChainId!, $limit: Int) {
     hash
     value {
       status
-      executedBlock {
-        block {
+      block {
+        header {
+          version
           chainId
           epoch
           height
           timestamp
-          authenticatedSigner
+          stateHash
           previousBlockHash
+          authenticatedSigner
+          bundlesHash
+          operationsHash
+          messagesHash
+          oracleResponsesHash
+          eventsHash
+        }
+        body {
           incomingBundles {
             origin
             bundle {
@@ -301,8 +316,6 @@ query Blocks($from: CryptoHash, $chainId: ChainId!, $limit: Int) {
             action
           }
           operations
-        }
-        outcome {
           messages {
             destination
             authenticatedSigner
@@ -311,7 +324,6 @@ query Blocks($from: CryptoHash, $chainId: ChainId!, $limit: Int) {
             kind
             message
           }
-          stateHash
           oracleResponses
           events {
             streamId {

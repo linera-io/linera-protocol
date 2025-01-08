@@ -879,8 +879,8 @@ where
                     debug_assert!(requested_sent_certificate_hashes.len() <= 1);
                     if let Some(cert_hash) = requested_sent_certificate_hashes.pop() {
                         if let Ok(cert) = validator.download_certificate(cert_hash).await {
-                            if cert.inner().executed_block().block.chain_id == chain_id
-                                && cert.inner().executed_block().block.height == block_height
+                            if cert.inner().block().header.chain_id == chain_id
+                                && cert.inner().block().header.height == block_height
                             {
                                 cert.check(&self.initial_committee).unwrap();
                                 count += 1;

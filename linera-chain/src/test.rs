@@ -26,16 +26,16 @@ use crate::{
 /// Creates a new child of the given block, with the same timestamp.
 pub fn make_child_block(parent: &Hashed<ConfirmedBlock>) -> Proposal {
     let parent_value = parent.inner();
-    let parent_block = &parent_value.executed_block().block;
+    let parent_header = &parent_value.block().header;
     Proposal {
-        epoch: parent_block.epoch,
-        chain_id: parent_block.chain_id,
+        epoch: parent_header.epoch,
+        chain_id: parent_header.chain_id,
         incoming_bundles: vec![],
         operations: vec![],
         previous_block_hash: Some(parent.hash()),
-        height: parent_block.height.try_add_one().unwrap(),
-        authenticated_signer: parent_block.authenticated_signer,
-        timestamp: parent_block.timestamp,
+        height: parent_header.height.try_add_one().unwrap(),
+        authenticated_signer: parent_header.authenticated_signer,
+        timestamp: parent_header.timestamp,
     }
 }
 

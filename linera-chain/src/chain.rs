@@ -148,8 +148,9 @@ static STATE_HASH_COMPUTATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(||
     )
 });
 
-/// The BCS-serialized size of an empty `ExecutedBlock`.
-const EMPTY_EXECUTED_BLOCK_SIZE: usize = 91;
+/// The BCS-serialized size of an empty [`Block`].
+// TODO: UPDATE
+const EMPTY_BLOCK_SIZE: usize = 91;
 
 /// An origin, cursor and timestamp of a unskippable bundle in our inbox.
 #[derive(Debug, Clone, Serialize, Deserialize, async_graphql::SimpleObject)]
@@ -584,17 +585,18 @@ where
     /// Removes the incoming message bundles in the block from the inboxes.
     pub async fn remove_bundles_from_inboxes(
         &mut self,
-        block: &Proposal,
+        timestamp: Timestamp,
+        incoming_bundles: &[IncomingBundle],
     ) -> Result<(), ChainError> {
         let chain_id = self.chain_id();
         let mut bundles_by_origin: BTreeMap<_, Vec<&MessageBundle>> = Default::default();
-        for IncomingBundle { bundle, origin, .. } in &block.incoming_bundles {
+        for IncomingBundle { bundle, origin, .. } in incoming_bundles {
             ensure!(
-                bundle.timestamp <= block.timestamp,
+                bundle.timestamp <= timestamp,
                 ChainError::IncorrectBundleTimestamp {
                     chain_id,
                     bundle_timestamp: bundle.timestamp,
-                    block_timestamp: block.timestamp,
+                    block_timestamp: timestamp,
                 }
             );
             let bundles = bundles_by_origin.entry(origin).or_default();
@@ -702,7 +704,7 @@ where
             account: block.authenticated_signer,
         };
         resource_controller
-            .track_executed_block_size(EMPTY_EXECUTED_BLOCK_SIZE)
+            .track_block_size(EMPTY_BLOCK_SIZE)
             .and_then(|()| {
                 resource_controller
                     .track_executed_block_size_sequence_extension(0, block.incoming_bundles.len())
@@ -768,7 +770,7 @@ where
             match transaction {
                 Transaction::ReceiveMessages(incoming_bundle) => {
                     resource_controller
-                        .track_executed_block_size_of(&incoming_bundle)
+                        .track_block_size_of(&incoming_bundle)
                         .with_execution_context(chain_execution_context)?;
                     for (message_id, posted_message) in incoming_bundle.messages_and_ids() {
                         Box::pin(self.execute_message_in_block(
@@ -786,7 +788,7 @@ where
                 }
                 Transaction::ExecuteOperation(operation) => {
                     resource_controller
-                        .track_executed_block_size_of(&operation)
+                        .track_block_size_of(&operation)
                         .with_execution_context(chain_execution_context)?;
                     #[cfg(with_metrics)]
                     let _operation_latency = OPERATION_EXECUTION_LATENCY.measure_latency();
@@ -842,7 +844,7 @@ where
                 }
             }
             resource_controller
-                .track_executed_block_size_of(&(&txn_oracle_responses, &txn_messages, &txn_events))
+                .track_block_size_of(&(&txn_oracle_responses, &txn_messages, &txn_events))
                 .with_execution_context(chain_execution_context)?;
             resource_controller
                 .track_executed_block_size_sequence_extension(oracle_responses.len(), 1)
@@ -1239,5 +1241,5 @@ fn empty_executed_block_size() {
         outcome: crate::data_types::BlockExecutionOutcome::default(),
     };
     let size = bcs::serialized_size(&executed_block).unwrap();
-    assert_eq!(size, EMPTY_EXECUTED_BLOCK_SIZE);
+    assert_eq!(size, EMPTY_BLOCK_SIZE);
 }

@@ -74,26 +74,30 @@ BlobType:
       ServiceBytecode: UNIT
 Block:
   STRUCT:
-    - chain_id:
-        TYPENAME: ChainId
-    - epoch:
-        TYPENAME: Epoch
+    - header:
+        TYPENAME: BlockHeader
+    - body:
+        TYPENAME: BlockBody
+BlockBody:
+  STRUCT:
     - incoming_bundles:
         SEQ:
           TYPENAME: IncomingBundle
     - operations:
         SEQ:
           TYPENAME: Operation
-    - height:
-        TYPENAME: BlockHeight
-    - timestamp:
-        TYPENAME: Timestamp
-    - authenticated_signer:
-        OPTION:
-          TYPENAME: Owner
-    - previous_block_hash:
-        OPTION:
-          TYPENAME: CryptoHash
+    - messages:
+        SEQ:
+          SEQ:
+            TYPENAME: OutgoingMessage
+    - oracle_responses:
+        SEQ:
+          SEQ:
+            TYPENAME: OracleResponse
+    - events:
+        SEQ:
+          SEQ:
+            TYPENAME: EventRecord
 BlockExecutionOutcome:
   STRUCT:
     - messages:
@@ -110,6 +114,35 @@ BlockExecutionOutcome:
         SEQ:
           SEQ:
             TYPENAME: EventRecord
+BlockHeader:
+  STRUCT:
+    - version: U8
+    - chain_id:
+        TYPENAME: ChainId
+    - epoch:
+        TYPENAME: Epoch
+    - height:
+        TYPENAME: BlockHeight
+    - timestamp:
+        TYPENAME: Timestamp
+    - state_hash:
+        TYPENAME: CryptoHash
+    - previous_block_hash:
+        OPTION:
+          TYPENAME: CryptoHash
+    - authenticated_signer:
+        OPTION:
+          TYPENAME: Owner
+    - bundles_hash:
+        TYPENAME: CryptoHash
+    - operations_hash:
+        TYPENAME: CryptoHash
+    - messages_hash:
+        TYPENAME: CryptoHash
+    - oracle_responses_hash:
+        TYPENAME: CryptoHash
+    - events_hash:
+        TYPENAME: CryptoHash
 BlockHeight:
   NEWTYPESTRUCT: U64
 BlockHeightRange:
@@ -273,10 +306,10 @@ ChainManagerInfo:
           TYPENAME: LiteVote
     - requested_confirmed:
         OPTION:
-          TYPENAME: ExecutedBlock
+          TYPENAME: Block
     - requested_validated:
         OPTION:
-          TYPENAME: ExecutedBlock
+          TYPENAME: Block
     - current_round:
         TYPENAME: Round
     - leader:
@@ -334,7 +367,7 @@ Committee:
 ConfirmedBlockCertificate:
   STRUCT:
     - value:
-        TYPENAME: ExecutedBlock
+        TYPENAME: Block
     - round:
         TYPENAME: Round
     - signatures:
@@ -399,12 +432,6 @@ EventRecord:
         TYPENAME: StreamId
     - key: BYTES
     - value: BYTES
-ExecutedBlock:
-  STRUCT:
-    - block:
-        TYPENAME: Block
-    - outcome:
-        TYPENAME: BlockExecutionOutcome
 GenericApplicationId:
   ENUM:
     0:
@@ -708,10 +735,32 @@ PostedMessage:
     - index: U32
     - message:
         TYPENAME: Message
+Proposal:
+  STRUCT:
+    - chain_id:
+        TYPENAME: ChainId
+    - epoch:
+        TYPENAME: Epoch
+    - incoming_bundles:
+        SEQ:
+          TYPENAME: IncomingBundle
+    - operations:
+        SEQ:
+          TYPENAME: Operation
+    - height:
+        TYPENAME: BlockHeight
+    - timestamp:
+        TYPENAME: Timestamp
+    - authenticated_signer:
+        OPTION:
+          TYPENAME: Owner
+    - previous_block_hash:
+        OPTION:
+          TYPENAME: CryptoHash
 ProposalContent:
   STRUCT:
-    - block:
-        TYPENAME: Block
+    - proposal:
+        TYPENAME: Proposal
     - round:
         TYPENAME: Round
     - outcome:
@@ -853,7 +902,7 @@ RpcMessage:
     19:
       DownloadConfirmedBlockResponse:
         NEWTYPE:
-          TYPENAME: ExecutedBlock
+          TYPENAME: Block
     20:
       DownloadCertificatesResponse:
         NEWTYPE:
@@ -1097,7 +1146,7 @@ UserApplicationDescription:
 ValidatedBlockCertificate:
   STRUCT:
     - value:
-        TYPENAME: ExecutedBlock
+        TYPENAME: Block
     - round:
         TYPENAME: Round
     - signatures:

@@ -179,7 +179,7 @@ impl Runnable for Job {
                     .await
                     .context("Failed to open chain")?;
                 let id = ChainId::child(message_id);
-                let timestamp = certificate.executed_block().block.timestamp;
+                let timestamp = certificate.block().header.timestamp;
                 context
                     .update_wallet_for_new_chain(id, key_pair, timestamp)
                     .await?;
@@ -226,7 +226,7 @@ impl Runnable for Job {
                 // No key pair. This chain can be assigned explicitly using the assign command.
                 let key_pair = None;
                 let id = ChainId::child(message_id);
-                let timestamp = certificate.executed_block().block.timestamp;
+                let timestamp = certificate.block().header.timestamp;
                 context
                     .update_wallet_for_new_chain(id, key_pair, timestamp)
                     .await?;
@@ -569,7 +569,7 @@ impl Runnable for Job {
                     .await
                     .unwrap()
                     .into_iter()
-                    .map(|c| c.executed_block().messages().len())
+                    .map(|c| c.block().messages().len())
                     .sum::<usize>();
                 info!("Subscribed {} chains to new committees", n);
                 let maybe_certificate = context
@@ -775,7 +775,7 @@ impl Runnable for Job {
                 for rpc_msg in &proposals {
                     if let RpcMessage::BlockProposal(proposal) = rpc_msg {
                         let executed_block = context
-                            .stage_block_execution(proposal.content.block.clone())
+                            .stage_block_execution(proposal.content.proposal.clone())
                             .await?;
                         let value = Hashed::new(ConfirmedBlock::new(executed_block));
                         values.insert(value.hash(), value);
@@ -1283,7 +1283,7 @@ impl Job {
             .certificate_for(&message_id)
             .await
             .context("could not find OpenChain message")?;
-        let executed_block = certificate.executed_block();
+        let executed_block = certificate.block();
         let Some(Message::System(SystemMessage::OpenChain(config))) = executed_block
             .message_by_id(&message_id)
             .map(|msg| &msg.message)
@@ -1301,7 +1301,7 @@ impl Job {
         context
             .wallet_mut()
             .mutate(|w| {
-                w.assign_new_chain_to_key(public_key, chain_id, executed_block.block.timestamp)
+                w.assign_new_chain_to_key(public_key, chain_id, executed_block.header.timestamp)
             })
             .await?
             .context("could not assign the new chain")?;
@@ -1345,7 +1345,7 @@ impl Job {
             };
             let certificate = storage.read_certificate(hash).await?;
             let committee = committees
-                .get(&certificate.executed_block().block.epoch)
+                .get(&certificate.block().header.epoch)
                 .ok_or_else(|| anyhow!("tip of chain {chain_id} is outdated."))?;
             certificate.check(committee)?;
         }

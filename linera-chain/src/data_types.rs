@@ -230,6 +230,8 @@ impl IncomingBundle {
     }
 }
 
+impl<'de> BcsHashable<'de> for IncomingBundle {}
+
 /// What to do with a message picked from the inbox.
 #[derive(Copy, Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum MessageAction {
@@ -335,6 +337,8 @@ pub struct OutgoingMessage {
     pub message: Message,
 }
 
+impl<'de> BcsHashable<'de> for OutgoingMessage {}
+
 /// A message together with kind, authentication and grant information.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
 pub struct PostedMessage {
@@ -395,7 +399,7 @@ impl OutgoingMessage {
     }
 }
 
-/// A [`Block`], together with the outcome from its execution.
+/// A [`Proposal`], together with the outcome from its execution.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
 pub struct ExecutedBlock {
     pub block: Proposal,
@@ -404,7 +408,7 @@ pub struct ExecutedBlock {
 
 impl<'de> BcsHashable<'de> for ExecutedBlock {}
 
-/// The messages and the state hash resulting from a [`Block`]'s execution.
+/// The messages and the state hash resulting from a [`Proposal`]'s execution.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
 #[cfg_attr(with_testing, derive(Default))]
 pub struct BlockExecutionOutcome {
@@ -432,6 +436,8 @@ pub struct EventRecord {
     #[serde(with = "serde_bytes")]
     pub value: Vec<u8>,
 }
+
+impl<'de> BcsHashable<'de> for EventRecord {}
 
 /// The hash and chain ID of a `CertificateValue`.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -739,7 +745,7 @@ impl BlockExecutionOutcome {
         }
     }
 
-    pub fn oracle_blob_ids(&self) -> HashSet<BlobId> {
+    fn oracle_blob_ids(&self) -> HashSet<BlobId> {
         let mut required_blob_ids = HashSet::new();
         for responses in &self.oracle_responses {
             for response in responses {
@@ -763,7 +769,7 @@ impl BlockExecutionOutcome {
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ProposalContent {
     /// The proposed block.
-    pub block: Proposal,
+    pub proposal: Proposal,
     /// The consensus round in which this proposal is made.
     pub round: Round,
     /// If this is a retry from an earlier round, the execution outcome.
@@ -772,10 +778,15 @@ pub struct ProposalContent {
 }
 
 impl BlockProposal {
-    pub fn new_initial(round: Round, block: Proposal, secret: &KeyPair, blobs: Vec<Blob>) -> Self {
+    pub fn new_initial(
+        round: Round,
+        proposal: Proposal,
+        secret: &KeyPair,
+        blobs: Vec<Blob>,
+    ) -> Self {
         let content = ProposalContent {
             round,
-            block,
+            proposal,
             outcome: None,
         };
         let signature = Signature::new(&content, secret);
@@ -795,11 +806,27 @@ impl BlockProposal {
         blobs: Vec<Blob>,
     ) -> Self {
         let lite_cert = validated_block_certificate.lite_certificate().cloned();
-        let executed_block = validated_block_certificate.into_inner().into_inner();
+        let block = validated_block_certificate.into_inner().into_inner();
+        let proposal = Proposal {
+            chain_id: block.header.chain_id,
+            epoch: block.header.epoch,
+            incoming_bundles: block.body.incoming_bundles,
+            operations: block.body.operations,
+            height: block.header.height,
+            timestamp: block.header.timestamp,
+            authenticated_signer: block.header.authenticated_signer,
+            previous_block_hash: block.header.previous_block_hash,
+        };
+        let outcome = BlockExecutionOutcome {
+            messages: block.body.messages,
+            state_hash: block.header.state_hash,
+            oracle_responses: block.body.oracle_responses,
+            events: block.body.events,
+        };
         let content = ProposalContent {
-            block: executed_block.block,
+            proposal,
             round,
-            outcome: Some(executed_block.outcome),
+            outcome: Some(outcome),
         };
         let signature = Signature::new(&content, secret);
         Self {

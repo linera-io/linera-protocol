@@ -20,7 +20,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{BlockProposal, ExecutedBlock, Medium, MessageBundle, Origin, Proposal, Target},
-    types::{ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
+    types::{Block, ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
     ChainError, ChainStateView,
 };
 use linera_execution::{
@@ -54,7 +54,7 @@ where
     chain: ChainStateView<StorageClient::Context>,
     shared_chain_view: Option<Arc<RwLock<ChainStateView<StorageClient::Context>>>>,
     service_runtime_endpoint: Option<ServiceRuntimeEndpoint>,
-    executed_block_values: Arc<ValueCache<CryptoHash, Hashed<ExecutedBlock>>>,
+    executed_block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
     tracked_chains: Option<Arc<sync::RwLock<HashSet<ChainId>>>>,
     delivery_notifier: DeliveryNotifier,
     knows_chain_is_active: bool,
@@ -69,7 +69,7 @@ where
     pub async fn load(
         config: ChainWorkerConfig,
         storage: StorageClient,
-        executed_block_values: Arc<ValueCache<CryptoHash, Hashed<ExecutedBlock>>>,
+        executed_block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
         tracked_chains: Option<Arc<sync::RwLock<HashSet<ChainId>>>>,
         delivery_notifier: DeliveryNotifier,
         chain_id: ChainId,
@@ -326,10 +326,9 @@ where
     /// are read from the chain manager or from storage.
     async fn get_required_blobs(
         &self,
-        executed_block: &ExecutedBlock,
+        mut blob_ids: HashSet<BlobId>,
         blobs: &[Blob],
     ) -> Result<BTreeMap<BlobId, Blob>, WorkerError> {
-        let mut blob_ids = executed_block.required_blob_ids();
         let manager = self.chain.manager.get();
 
         let mut found_blobs = BTreeMap::new();
@@ -546,12 +545,16 @@ where
 }
 
 /// Returns an error if the block is not at the expected epoch.
-fn check_block_epoch(chain_epoch: Epoch, block: &Proposal) -> Result<(), WorkerError> {
+fn check_block_epoch(
+    chain_epoch: Epoch,
+    block_chain: ChainId,
+    block_epoch: Epoch,
+) -> Result<(), WorkerError> {
     ensure!(
-        block.epoch == chain_epoch,
+        block_epoch == chain_epoch,
         WorkerError::InvalidEpoch {
-            chain_id: block.chain_id,
-            epoch: block.epoch,
+            chain_id: block_chain,
+            epoch: block_epoch,
             chain_epoch
         }
     );

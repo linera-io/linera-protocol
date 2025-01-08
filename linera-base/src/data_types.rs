@@ -803,6 +803,8 @@ impl FromStr for OracleResponse {
     }
 }
 
+impl<'de> BcsHashable<'de> for OracleResponse {}
+
 /// Description of the necessary information to run a user application.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Hash, Serialize)]
 pub struct UserApplicationDescription {

@@ -235,7 +235,7 @@ where
         .await?;
     let cert = receiver.process_inbox().await?.0.pop().unwrap();
     {
-        let messages = &cert.executed_block().block.incoming_bundles;
+        let messages = &cert.block().body.incoming_bundles;
         // Both `Claim` messages were included in the block.
         assert_eq!(messages.len(), 2);
         // The first one was rejected.
@@ -478,7 +478,7 @@ where
         ..message_id
     };
     assert_matches!(
-        certificate.executed_block().messages()[0][sub_message_id.index as usize].message,
+        certificate.block().messages()[0][sub_message_id.index as usize].message,
         Message::System(SystemMessage::Subscribe { .. })
     );
     assert_eq!(
@@ -551,7 +551,7 @@ where
     assert!(sender.pending_block().is_none());
     assert!(sender.key_pair().await.is_ok());
     assert_matches!(
-        certificate.executed_block().block.operations[open_chain_message_id.index as usize],
+        certificate.block().body.operations[open_chain_message_id.index as usize],
         Operation::System(SystemOperation::OpenChain(_)),
         "Unexpected certificate value",
     );
@@ -630,7 +630,7 @@ where
     assert!(sender.pending_block().is_none());
     assert!(sender.key_pair().await.is_ok());
     assert_matches!(
-        certificate.executed_block().block.operations[open_chain_message_id.index as usize],
+        certificate.block().body.operations[open_chain_message_id.index as usize],
         Operation::System(SystemOperation::OpenChain(_)),
         "Unexpected certificate value",
     );
@@ -737,7 +737,7 @@ where
 
     let certificate = client1.close_chain().await.unwrap().unwrap().unwrap();
     assert_matches!(
-        certificate.executed_block().block.operations[..],
+        certificate.block().body.operations[..],
         [Operation::System(SystemOperation::CloseChain)],
         "Unexpected certificate value",
     );
@@ -776,11 +776,11 @@ where
         .unwrap();
     client1.synchronize_from_validators().await.unwrap();
     let (certificates, _) = client1.process_inbox().await.unwrap();
-    let block = &certificates[0].executed_block().block;
-    assert!(block.operations.is_empty());
-    assert_eq!(block.incoming_bundles.len(), 1);
+    let block = certificates[0].block();
+    assert!(block.body.operations.is_empty());
+    assert_eq!(block.body.incoming_bundles.len(), 1);
     assert_matches!(
-        &block.incoming_bundles[0],
+        &block.body.incoming_bundles[0],
         IncomingBundle {
             origin: Origin { sender, medium: Medium::Direct },
             action: MessageAction::Reject,
@@ -1313,9 +1313,7 @@ where
         .await
         .unwrap()
         .unwrap();
-    assert!(publish_certificate
-        .executed_block()
-        .requires_blob(&blob0_id));
+    assert!(publish_certificate.block().requires_blob(&blob0_id));
 
     // Validators goes back up
     builder.set_fault_type([2], FaultType::Honest).await;
@@ -1332,7 +1330,7 @@ where
         .unwrap();
     assert_eq!(certificate.round, Round::MultiLeader(0));
     // The blob is not new on this chain, so it is not required.
-    assert!(!certificate.executed_block().requires_blob(&blob0_id));
+    assert!(!certificate.block().requires_blob(&blob0_id));
 
     // Validators 0, 1, 2 now don't process validated block certificates. Client 2A tries to
     // commit a block that reads blob 0 and publishes blob 1. Client 2A will have that block
@@ -1402,8 +1400,8 @@ where
     // Latest block should be the burn
     assert!(hashed_certificate_values[0]
         .inner()
-        .executed_block()
-        .block
+        .block()
+        .body
         .operations
         .contains(&Operation::System(SystemOperation::Transfer {
             owner: None,
@@ -1413,11 +1411,7 @@ where
 
     // Block before that should be b0
     assert_eq!(
-        hashed_certificate_values[1]
-            .inner()
-            .executed_block()
-            .block
-            .operations,
+        hashed_certificate_values[1].inner().block().body.operations,
         blob_0_1_operations,
     );
 
@@ -1472,9 +1466,7 @@ where
         .await
         .unwrap()
         .unwrap();
-    assert!(publish_certificate
-        .executed_block()
-        .requires_blob(&blob0_id));
+    assert!(publish_certificate.block().requires_blob(&blob0_id));
 
     builder
         .set_fault_type([0, 1, 2], FaultType::DontProcessValidated)
@@ -1510,7 +1502,7 @@ where
                 .requested_proposed
                 .unwrap()
                 .content
-                .block
+                .proposal
                 .operations,
             blob_0_1_operations,
         );
@@ -1535,8 +1527,8 @@ where
     // Latest block should be the burn
     assert!(hashed_certificate_values[0]
         .inner()
-        .executed_block()
-        .block
+        .block()
+        .body
         .operations
         .contains(&Operation::System(SystemOperation::Transfer {
             owner: None,
@@ -1547,8 +1539,8 @@ where
     // Previous should be the `ChangeOwnership` operation, as the blob operations shouldn't be executed here.
     assert!(hashed_certificate_values[1]
         .inner()
-        .executed_block()
-        .block
+        .block()
+        .body
         .operations
         .contains(&owner_change_op));
     Ok(())
@@ -1614,9 +1606,7 @@ where
         .await
         .unwrap()
         .unwrap();
-    assert!(publish_certificate0
-        .executed_block()
-        .requires_blob(&blob0_id));
+    assert!(publish_certificate0.block().requires_blob(&blob0_id));
 
     let blob2_bytes = b"blob2".to_vec();
     let blob2_id = Blob::new(BlobContent::new_data(blob2_bytes.clone())).id();
@@ -1628,9 +1618,7 @@ where
         .await
         .unwrap()
         .unwrap();
-    assert!(publish_certificate2
-        .executed_block()
-        .requires_blob(&blob2_id));
+    assert!(publish_certificate2.block().requires_blob(&blob2_id));
 
     builder
         .set_fault_type([0, 1], FaultType::DontProcessValidated)
@@ -1684,7 +1672,7 @@ where
                 .requested_proposed
                 .unwrap()
                 .content
-                .block
+                .proposal
                 .operations,
             blob_0_1_operations,
         );
@@ -1694,8 +1682,8 @@ where
                 validator_manager
                     .requested_locked
                     .unwrap()
-                    .executed_block()
-                    .block
+                    .block()
+                    .body
                     .operations,
                 blob_0_1_operations,
             );
@@ -1751,7 +1739,7 @@ where
             .requested_proposed
             .unwrap()
             .content
-            .block
+            .proposal
             .operations,
         blob_2_3_operations,
     );
@@ -1759,8 +1747,8 @@ where
         validator_manager
             .requested_locked
             .unwrap()
-            .executed_block()
-            .block
+            .block()
+            .body
             .operations,
         blob_2_3_operations,
     );
@@ -1783,8 +1771,8 @@ where
     // Latest block should be the burn
     assert!(hashed_certificate_values[0]
         .inner()
-        .executed_block()
-        .block
+        .block()
+        .body
         .operations
         .contains(&Operation::System(SystemOperation::Transfer {
             owner: None,
@@ -1794,19 +1782,15 @@ where
 
     // Block before that should be b1
     assert_eq!(
-        hashed_certificate_values[1]
-            .inner()
-            .executed_block()
-            .block
-            .operations,
+        hashed_certificate_values[1].inner().block().body.operations,
         blob_2_3_operations,
     );
 
     // Previous should be the `ChangeOwnership` operation
     assert!(hashed_certificate_values[2]
         .inner()
-        .executed_block()
-        .block
+        .block()
+        .body
         .operations
         .contains(&owner_change_op));
     Ok(())
@@ -2282,8 +2266,8 @@ where
         .unwrap();
     // This read a new blob, so it cannot be a fast block.
     assert_eq!(certificate.round, Round::MultiLeader(0));
-    let executed_block = certificate.executed_block();
-    assert_eq!(executed_block.block.incoming_bundles.len(), 1);
+    let executed_block = certificate.block();
+    assert_eq!(executed_block.body.incoming_bundles.len(), 1);
     assert_eq!(executed_block.required_blob_ids().len(), 1);
 
     // This will go way over the limit, because of the different overheads.

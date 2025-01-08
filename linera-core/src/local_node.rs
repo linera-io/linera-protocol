@@ -182,8 +182,7 @@ where
         &self,
         block: Proposal,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), LocalNodeError> {
-        let (executed_block, info) = self.node.state.stage_block_execution(block).await?;
-        Ok((executed_block, info))
+        Ok(self.node.state.stage_block_execution(block).await?)
     }
 
     /// Reads blobs from storage.
