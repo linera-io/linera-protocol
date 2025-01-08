@@ -73,7 +73,7 @@ impl WitStore for String {
         <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
     {
         let length = u32::try_from(self.len())?;
-        let destination = memory.allocate(length)?;
+        let destination = memory.allocate(length, 1)?;
 
         destination.store(memory, location)?;
         length.store(memory, location.after::<GuestPointer>())?;
@@ -90,7 +90,7 @@ impl WitStore for String {
         <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
     {
         let length = u32::try_from(self.len())?;
-        let destination = memory.allocate(length)?;
+        let destination = memory.allocate(length, 1)?;
 
         memory.write(destination, self.as_bytes())?;
 

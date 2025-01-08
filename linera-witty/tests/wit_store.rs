@@ -484,7 +484,7 @@ fn test_single_store_in_memory<T>(
     let mut memory = instance.memory().unwrap();
 
     let length = expected_without_allocation.len() as u32;
-    let address = memory.allocate(length).unwrap();
+    let address = memory.allocate(length, 1).unwrap();
 
     data.store(&mut memory, address).unwrap();
 

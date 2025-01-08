@@ -228,7 +228,7 @@ where
 
     assert_eq!(layout_length, T::SIZE);
 
-    let layout_address = memory.allocate(layout_length).unwrap();
+    let layout_address = memory.allocate(layout_length, 1).unwrap();
     let heap_address = layout_address.after::<T>();
 
     input.store(&mut memory, layout_address).unwrap();

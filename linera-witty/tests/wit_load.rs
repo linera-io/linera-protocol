@@ -273,7 +273,7 @@ fn test_invalid_discriminant() {
         17,
     ];
 
-    let address = memory.allocate(memory_bytes.len() as u32).unwrap();
+    let address = memory.allocate(memory_bytes.len() as u32, 1).unwrap();
 
     memory.write(address, &memory_bytes).unwrap();
 
@@ -421,7 +421,7 @@ where
     let mut instance = MockInstance::<()>::default();
     let mut memory = instance.memory().unwrap();
 
-    let address = memory.allocate(input.len() as u32).unwrap();
+    let address = memory.allocate(input.len() as u32, 1).unwrap();
 
     memory.write(address, input).unwrap();
 
@@ -456,7 +456,7 @@ fn test_single_lift_from_flat_layout<T>(
     let mut instance = MockInstance::<()>::default();
     let mut memory = instance.memory().unwrap();
 
-    let start_address = memory.allocate(initial_memory.len() as u32).unwrap();
+    let start_address = memory.allocate(initial_memory.len() as u32, 1).unwrap();
 
     memory.write(start_address, initial_memory).unwrap();
 
