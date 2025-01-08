@@ -53,10 +53,12 @@ query ChainInbox($chainId: ChainId!, $origin: Origin!) {
           }
           addedBundles {
             entries {
-              height
               timestamp
               certificateHash
-              transactionIndex
+              cursor {
+                height
+                index
+              }
               messages {
                 authenticatedSigner
                 grant
@@ -69,10 +71,12 @@ query ChainInbox($chainId: ChainId!, $origin: Origin!) {
           }
           removedBundles {
             entries {
-              height
               timestamp
               certificateHash
-              transactionIndex
+              cursor {
+                height
+                index
+              }
               messages {
                 authenticatedSigner
                 grant
@@ -141,10 +145,12 @@ query Chain(
           }
           addedBundles {
             entries {
-              height
               timestamp
               certificateHash
-              transactionIndex
+              cursor {
+                height
+                index
+              }
               messages {
                 authenticatedSigner
                 grant
@@ -157,10 +163,12 @@ query Chain(
           }
           removedBundles {
             entries {
-              height
               timestamp
               certificateHash
-              transactionIndex
+              cursor {
+                height
+                index
+              }
               messages {
                 authenticatedSigner
                 grant
@@ -227,10 +235,12 @@ query Block($hash: CryptoHash, $chainId: ChainId!) {
           incomingBundles {
             origin
             bundle {
-              height
               timestamp
               certificateHash
-              transactionIndex
+              cursor {
+                height
+                index
+              }
               messages {
                 authenticatedSigner
                 grant
@@ -285,10 +295,12 @@ query Blocks($from: CryptoHash, $chainId: ChainId!, $limit: Int) {
           incomingBundles {
             origin
             bundle {
-              height
               timestamp
               certificateHash
-              transactionIndex
+              cursor {
+                height
+                index
+              }
               messages {
                 authenticatedSigner
                 grant

@@ -21,9 +21,11 @@ fn make_bundle(
     };
     MessageBundle {
         certificate_hash,
-        height: BlockHeight::from(height),
+        cursor: Cursor {
+            height: BlockHeight::from(height),
+            index,
+        },
         timestamp: Timestamp::default(),
-        transaction_index: index,
         messages: vec![message.to_posted(index, MessageKind::Simple)],
     }
 }

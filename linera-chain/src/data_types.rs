@@ -29,6 +29,7 @@ use linera_execution::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    inbox::Cursor,
     types::{
         CertificateKind, CertificateValue, GenericCertificate, LiteCertificate,
         ValidatedBlockCertificate,
@@ -201,7 +202,7 @@ impl IncomingBundle {
     pub fn messages_and_ids(&self) -> impl Iterator<Item = (MessageId, &PostedMessage)> {
         let chain_and_height = ChainAndHeight {
             chain_id: self.origin.sender,
-            height: self.bundle.height,
+            height: self.bundle.cursor.height,
         };
         let messages = self.bundle.messages.iter();
         messages.map(move |posted_message| {
@@ -260,14 +261,12 @@ pub struct Target {
 /// A set of messages from a single block, for a single destination.
 #[derive(Debug, Eq, PartialEq, Clone, Hash, Serialize, Deserialize, SimpleObject)]
 pub struct MessageBundle {
-    /// The block height.
-    pub height: BlockHeight,
     /// The block's timestamp.
     pub timestamp: Timestamp,
     /// The confirmed block certificate hash.
     pub certificate_hash: CryptoHash,
-    /// The index of the transaction in the block that is sending this bundle.
-    pub transaction_index: u32,
+    /// The cursor of the block.
+    pub cursor: Cursor,
     /// The relevant messages.
     pub messages: Vec<PostedMessage>,
 }
@@ -653,10 +652,12 @@ impl ExecutedBlock {
                 index += txn_messages.len() as u32;
                 (!messages.is_empty()).then(|| {
                     let bundle = MessageBundle {
-                        height: block_height,
                         timestamp: block_timestamp,
                         certificate_hash,
-                        transaction_index,
+                        cursor: Cursor {
+                            height: block_height,
+                            index: transaction_index,
+                        },
                         messages,
                     };
                     (block_epoch, bundle)

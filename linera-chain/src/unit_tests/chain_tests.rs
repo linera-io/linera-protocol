@@ -33,6 +33,7 @@ use linera_views::{
 use crate::{
     block::ConfirmedBlock,
     data_types::{IncomingBundle, MessageAction, MessageBundle, Origin},
+    inbox::Cursor,
     test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt},
     ChainError, ChainExecutionContext, ChainStateView,
 };
@@ -141,8 +142,10 @@ async fn test_block_size_limit() {
         origin: Origin::chain(admin_id()),
         bundle: MessageBundle {
             certificate_hash: CryptoHash::test_hash("certificate"),
-            height: BlockHeight(1),
-            transaction_index: 0,
+            cursor: Cursor {
+                height: BlockHeight(1),
+                index: 0,
+            },
             timestamp: time,
             messages: vec![Message::System(SystemMessage::OpenChain(config))
                 .to_posted(0, MessageKind::Protected)],
@@ -216,8 +219,10 @@ async fn test_application_permissions() -> anyhow::Result<()> {
         origin: Origin::chain(admin_id()),
         bundle: MessageBundle {
             certificate_hash: CryptoHash::test_hash("certificate"),
-            height: BlockHeight(1),
-            transaction_index: 0,
+            cursor: Cursor {
+                height: BlockHeight(1),
+                index: 0,
+            },
             timestamp: Timestamp::from(0),
             messages: vec![
                 open_chain_message.to_posted(0, MessageKind::Protected),

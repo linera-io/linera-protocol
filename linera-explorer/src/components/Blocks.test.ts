@@ -26,7 +26,10 @@ test('Blocks mounting', () => {
                     },
                     bundle: {
                       certificateHash: "f1c748c5e39591125250e85d57fdeac0b7ba44a32c12c616eb4537f93b6e5d0a",
-                      height: 5,
+                      cursor: {
+                        height: 5,
+                        index: 0,
+                      },
                       messages: [{
                         authenticatedSigner: null,
                         message: { System: { BytecodePublished: { operation_index: 0 } } },
@@ -34,7 +37,6 @@ test('Blocks mounting', () => {
                         index: 4,
                         kind: "Tracked"
                       }],
-                      transactionIndex: 0,
                       timestamp: 1694097510206912
                     },
                     action: "Accept",

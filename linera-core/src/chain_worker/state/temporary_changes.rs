@@ -92,7 +92,7 @@ where
         Ok(bundles
             .find(|bundle| {
                 bundle.certificate_hash == certificate_hash
-                    && bundle.height == height
+                    && bundle.cursor.height == height
                     && bundle.messages.iter().any(|msg| msg.index == index)
             })
             .cloned())

@@ -136,6 +136,7 @@ mod from {
             BlockExecutionOutcome, EventRecord, ExecutedBlock, IncomingBundle, MessageBundle,
             OutgoingMessage, PostedMessage,
         },
+        inbox::Cursor,
         types::ConfirmedBlock,
     };
 
@@ -159,19 +160,30 @@ mod from {
     impl From<block::BlockBlockValueExecutedBlockBlockIncomingBundlesBundle> for MessageBundle {
         fn from(val: block::BlockBlockValueExecutedBlockBlockIncomingBundlesBundle) -> Self {
             let block::BlockBlockValueExecutedBlockBlockIncomingBundlesBundle {
-                height,
                 timestamp,
                 certificate_hash,
-                transaction_index,
+                cursor,
                 messages,
             } = val;
             let messages = messages.into_iter().map(PostedMessage::from).collect();
             MessageBundle {
-                height,
+                cursor: cursor.into(),
                 timestamp,
                 certificate_hash,
-                transaction_index: transaction_index as u32,
                 messages,
+            }
+        }
+    }
+
+    impl From<block::BlockBlockValueExecutedBlockBlockIncomingBundlesBundleCursor> for Cursor {
+        fn from(val: block::BlockBlockValueExecutedBlockBlockIncomingBundlesBundleCursor) -> Self {
+            let block::BlockBlockValueExecutedBlockBlockIncomingBundlesBundleCursor {
+                height,
+                index,
+            } = val;
+            Cursor {
+                height,
+                index: index as u32,
             }
         }
     }

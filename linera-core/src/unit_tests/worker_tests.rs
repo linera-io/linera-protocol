@@ -32,6 +32,7 @@ use linera_chain::{
         IncomingBundle, LiteValue, LiteVote, Medium, MessageAction, MessageBundle, Origin,
         OutgoingMessage, PostedMessage, SignatureAggregator,
     },
+    inbox::Cursor,
     test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt, VoteTestExt},
     types::{
         CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate, Timeout,
@@ -928,9 +929,11 @@ where
                 origin: Origin::chain(ChainId::root(1)),
                 bundle: MessageBundle {
                     certificate_hash: certificate0.hash(),
-                    height: BlockHeight::ZERO,
+                    cursor: Cursor {
+                        height: BlockHeight::ZERO,
+                        index: 0,
+                    },
                     timestamp: Timestamp::from(0),
-                    transaction_index: 0,
                     messages: vec![
                         system_credit_message(Amount::ONE).to_posted(0, MessageKind::Tracked)
                     ],
@@ -941,9 +944,11 @@ where
                 origin: Origin::chain(ChainId::root(1)),
                 bundle: MessageBundle {
                     certificate_hash: certificate0.hash(),
-                    height: BlockHeight::ZERO,
+                    cursor: Cursor {
+                        height: BlockHeight::ZERO,
+                        index: 1,
+                    },
                     timestamp: Timestamp::from(0),
-                    transaction_index: 1,
                     messages: vec![system_credit_message(Amount::from_tokens(2))
                         .to_posted(0, MessageKind::Tracked)],
                 },
@@ -953,9 +958,11 @@ where
                 origin: Origin::chain(ChainId::root(1)),
                 bundle: MessageBundle {
                     certificate_hash: certificate1.hash(),
-                    height: BlockHeight::from(1),
+                    cursor: Cursor {
+                        height: BlockHeight::from(1),
+                        index: 0,
+                    },
                     timestamp: Timestamp::from(0),
-                    transaction_index: 0,
                     messages: vec![
                         system_credit_message(Amount::from_tokens(2)) // wrong amount
                             .to_posted(0, MessageKind::Tracked),
@@ -979,9 +986,11 @@ where
                 origin: Origin::chain(ChainId::root(1)),
                 bundle: MessageBundle {
                     certificate_hash: certificate0.hash(),
-                    height: BlockHeight::ZERO,
+                    cursor: Cursor {
+                        height: BlockHeight::ZERO,
+                        index: 1,
+                    },
                     timestamp: Timestamp::from(0),
-                    transaction_index: 1,
                     messages: vec![system_credit_message(Amount::from_tokens(2))
                         .to_posted(1, MessageKind::Tracked)],
                 },
@@ -1003,9 +1012,11 @@ where
                 origin: Origin::chain(ChainId::root(1)),
                 bundle: MessageBundle {
                     certificate_hash: certificate1.hash(),
-                    height: BlockHeight::from(1),
+                    cursor: Cursor {
+                        height: BlockHeight::from(1),
+                        index: 0,
+                    },
                     timestamp: Timestamp::from(0),
-                    transaction_index: 0,
                     messages: vec![system_credit_message(Amount::from_tokens(3))
                         .to_posted(0, MessageKind::Tracked)],
                 },
@@ -1015,9 +1026,11 @@ where
                 origin: Origin::chain(ChainId::root(1)),
                 bundle: MessageBundle {
                     certificate_hash: certificate0.hash(),
-                    height: BlockHeight::ZERO,
+                    cursor: Cursor {
+                        height: BlockHeight::ZERO,
+                        index: 0,
+                    },
                     timestamp: Timestamp::from(0),
-                    transaction_index: 0,
                     messages: vec![
                         system_credit_message(Amount::ONE).to_posted(0, MessageKind::Tracked)
                     ],
@@ -1028,9 +1041,11 @@ where
                 origin: Origin::chain(ChainId::root(1)),
                 bundle: MessageBundle {
                     certificate_hash: certificate0.hash(),
-                    height: BlockHeight::ZERO,
+                    cursor: Cursor {
+                        height: BlockHeight::ZERO,
+                        index: 1,
+                    },
                     timestamp: Timestamp::from(0),
-                    transaction_index: 1,
                     messages: vec![system_credit_message(Amount::from_tokens(2))
                         .to_posted(1, MessageKind::Tracked)],
                 },
@@ -1052,9 +1067,11 @@ where
                 origin: Origin::chain(ChainId::root(1)),
                 bundle: MessageBundle {
                     certificate_hash: certificate0.hash(),
-                    height: BlockHeight::ZERO,
+                    cursor: Cursor {
+                        height: BlockHeight::ZERO,
+                        index: 0,
+                    },
                     timestamp: Timestamp::from(0),
-                    transaction_index: 0,
                     messages: vec![
                         system_credit_message(Amount::ONE).to_posted(0, MessageKind::Tracked)
                     ],
@@ -1098,9 +1115,11 @@ where
                 origin: Origin::chain(ChainId::root(1)),
                 bundle: MessageBundle {
                     certificate_hash: certificate0.hash(),
-                    height: BlockHeight::from(0),
+                    cursor: Cursor {
+                        height: BlockHeight::from(0),
+                        index: 1,
+                    },
                     timestamp: Timestamp::from(0),
-                    transaction_index: 1,
                     messages: vec![system_credit_message(Amount::from_tokens(2))
                         .to_posted(1, MessageKind::Tracked)],
                 },
@@ -1110,9 +1129,11 @@ where
                 origin: Origin::chain(ChainId::root(1)),
                 bundle: MessageBundle {
                     certificate_hash: certificate1.hash(),
-                    height: BlockHeight::from(1),
+                    cursor: Cursor {
+                        height: BlockHeight::from(1),
+                        index: 0,
+                    },
                     timestamp: Timestamp::from(0),
-                    transaction_index: 0,
                     messages: vec![system_credit_message(Amount::from_tokens(3))
                         .to_posted(0, MessageKind::Tracked)],
                 },
@@ -1356,9 +1377,11 @@ where
         origin: Origin::chain(ChainId::root(3)),
         bundle: MessageBundle {
             certificate_hash: CryptoHash::test_hash("certificate"),
-            height: BlockHeight::ZERO,
+            cursor: Cursor {
+                height: BlockHeight::ZERO,
+                index: 0,
+            },
             timestamp: Timestamp::from(0),
-            transaction_index: 0,
             messages: vec![Message::System(SystemMessage::OpenChain(OpenChainConfig {
                 ownership,
                 admin_id,
@@ -1522,9 +1545,11 @@ where
             origin: Origin::chain(ChainId::root(3)),
             bundle: MessageBundle {
                 certificate_hash: CryptoHash::test_hash("certificate"),
-                height: BlockHeight::ZERO,
+                cursor: Cursor {
+                    height: BlockHeight::ZERO,
+                    index: 0,
+                },
                 timestamp: Timestamp::from(0),
-                transaction_index: 0,
                 messages: vec![system_credit_message(Amount::from_tokens(995))
                     .to_posted(0, MessageKind::Tracked)],
             },
@@ -1561,9 +1586,11 @@ where
             .unwrap(),
         MessageBundle {
             certificate_hash,
-            height,
+            cursor: Cursor {
+                height,
+                index: 0,
+            },
             timestamp,
-            transaction_index: 0,
             messages,
         } if certificate_hash == CryptoHash::test_hash("certificate")
             && height == BlockHeight::ZERO
@@ -1698,9 +1725,11 @@ where
         inbox.added_bundles.front().await?.unwrap(),
         MessageBundle {
             certificate_hash,
-            height,
+            cursor: Cursor {
+                height,
+                index: 0,
+            },
             timestamp,
-            transaction_index: 0,
             messages,
         } if certificate_hash == certificate.hash()
         && height == BlockHeight::ZERO
@@ -1779,9 +1808,11 @@ where
             .unwrap(),
         MessageBundle {
             certificate_hash,
-            height,
+            cursor: Cursor {
+                height,
+                index: 0,
+            },
             timestamp,
-            transaction_index: 0,
             messages,
         } if certificate_hash == certificate.hash()
         && height == BlockHeight::ZERO
@@ -1982,9 +2013,11 @@ where
             origin: Origin::chain(ChainId::root(1)),
             bundle: MessageBundle {
                 certificate_hash: certificate.hash(),
-                height: BlockHeight::ZERO,
+                cursor: Cursor {
+                    height: BlockHeight::ZERO,
+                    index: 0,
+                },
                 timestamp: Timestamp::from(0),
-                transaction_index: 0,
                 messages: vec![system_credit_message(Amount::from_tokens(5))
                     .to_posted(0, MessageKind::Tracked)],
             },
@@ -2164,9 +2197,11 @@ where
             origin: Origin::chain(ChainId::root(1)),
             bundle: MessageBundle {
                 certificate_hash: certificate00.hash(),
-                height: BlockHeight::from(0),
+                cursor: Cursor {
+                    height: BlockHeight::from(0),
+                    index: 0,
+                },
                 timestamp: Timestamp::from(0),
-                transaction_index: 0,
                 messages: vec![Message::System(SystemMessage::Credit {
                     source: None,
                     target: Some(AccountOwner::User(sender)),
@@ -2245,9 +2280,11 @@ where
                 origin: Origin::chain(ChainId::root(1)),
                 bundle: MessageBundle {
                     certificate_hash: certificate1.hash(),
-                    height: BlockHeight::from(2),
+                    cursor: Cursor {
+                        height: BlockHeight::from(2),
+                        index: 0,
+                    },
                     timestamp: Timestamp::from(0),
-                    transaction_index: 0,
                     messages: vec![Message::System(SystemMessage::Credit {
                         source: Some(AccountOwner::User(sender)),
                         target: Some(AccountOwner::User(recipient)),
@@ -2261,9 +2298,11 @@ where
                 origin: Origin::chain(ChainId::root(1)),
                 bundle: MessageBundle {
                     certificate_hash: certificate2.hash(),
-                    height: BlockHeight::from(3),
+                    cursor: Cursor {
+                        height: BlockHeight::from(3),
+                        index: 0,
+                    },
                     timestamp: Timestamp::from(0),
-                    transaction_index: 0,
                     messages: vec![Message::System(SystemMessage::Credit {
                         source: Some(AccountOwner::User(sender)),
                         target: Some(AccountOwner::User(recipient)),
@@ -2303,9 +2342,11 @@ where
             origin: Origin::chain(ChainId::root(2)),
             bundle: MessageBundle {
                 certificate_hash: certificate.hash(),
-                height: BlockHeight::from(0),
+                cursor: Cursor {
+                    height: BlockHeight::from(0),
+                    index: 0,
+                },
                 timestamp: Timestamp::from(0),
-                transaction_index: 0,
                 messages: vec![Message::System(SystemMessage::Credit {
                     source: Some(AccountOwner::User(sender)),
                     target: Some(AccountOwner::User(recipient)),
@@ -2594,9 +2635,11 @@ where
                         origin: Origin::chain(admin_id),
                         bundle: MessageBundle {
                             certificate_hash: certificate0.hash(),
-                            height: BlockHeight::from(0),
+                            cursor: Cursor {
+                                height: BlockHeight::from(0),
+                                index: 0,
+                            },
                             timestamp: Timestamp::from(0),
-                            transaction_index: 0,
                             messages: vec![Message::System(SystemMessage::OpenChain(
                                 OpenChainConfig {
                                     ownership: ChainOwnership::single(key_pair.public()),
@@ -2615,9 +2658,11 @@ where
                         origin: admin_channel_origin.clone(),
                         bundle: MessageBundle {
                             certificate_hash: certificate1.hash(),
-                            height: BlockHeight::from(1),
+                            cursor: Cursor {
+                                height: BlockHeight::from(1),
+                                index: 0,
+                            },
                             timestamp: Timestamp::from(0),
-                            transaction_index: 0,
                             messages: vec![Message::System(SystemMessage::CreateCommittee {
                                 epoch: Epoch::from(1),
                                 committee: committee.clone(),
@@ -2630,9 +2675,11 @@ where
                         origin: Origin::chain(admin_id),
                         bundle: MessageBundle {
                             certificate_hash: certificate1.hash(),
-                            height: BlockHeight::from(1),
+                            cursor: Cursor {
+                                height: BlockHeight::from(1),
+                                index: 1,
+                            },
                             timestamp: Timestamp::from(0),
-                            transaction_index: 1,
                             messages: vec![system_credit_message(Amount::from_tokens(2))
                                 .to_posted(1, MessageKind::Tracked)],
                         },
@@ -2974,9 +3021,11 @@ where
                         origin: Origin::chain(user_id),
                         bundle: MessageBundle {
                             certificate_hash: certificate0.hash(),
-                            height: BlockHeight::ZERO,
                             timestamp: Timestamp::from(0),
-                            transaction_index: 0,
+                            cursor: Cursor {
+                                height: BlockHeight::ZERO,
+                                index: 0,
+                            },
                             messages: vec![system_credit_message(Amount::ONE)
                                 .to_posted(0, MessageKind::Tracked)],
                         },

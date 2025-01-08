@@ -14,7 +14,7 @@ pub mod types {
 
 mod chain;
 pub mod data_types;
-mod inbox;
+pub mod inbox;
 pub mod manager;
 mod outbox;
 #[cfg(with_testing)]

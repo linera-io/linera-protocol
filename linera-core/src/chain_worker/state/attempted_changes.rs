@@ -265,7 +265,7 @@ where
             {
                 let message_id = MessageId {
                     chain_id: incoming_bundle.origin.sender,
-                    height: incoming_bundle.bundle.height,
+                    height: incoming_bundle.bundle.cursor.height,
                     index: posted_message.index,
                 };
                 let local_time = self.state.storage.clock().current_time();
@@ -432,7 +432,7 @@ where
             last_anticipated_block_height,
             bundles,
         )?;
-        let Some(last_updated_height) = bundles.last().map(|bundle| bundle.height) else {
+        let Some(last_updated_height) = bundles.last().map(|bundle| bundle.cursor.height) else {
             return Ok(None);
         };
         // Process the received messages in certificates.
@@ -440,8 +440,8 @@ where
         let mut previous_height = None;
         let mut new_outbox_entries = false;
         for bundle in bundles {
-            let add_to_received_log = previous_height != Some(bundle.height);
-            previous_height = Some(bundle.height);
+            let add_to_received_log = previous_height != Some(bundle.cursor.height);
+            previous_height = Some(bundle.cursor.height);
             // Update the staged chain state with the received block.
             if self
                 .state
@@ -634,17 +634,17 @@ impl<'a> CrossChainUpdateHelper<'a> {
         for (i, (epoch, bundle)) in bundles.iter().enumerate() {
             // Make sure that heights are not decreasing.
             ensure!(
-                latest_height <= Some(bundle.height),
+                latest_height <= Some(bundle.cursor.height),
                 WorkerError::InvalidCrossChainRequest
             );
-            latest_height = Some(bundle.height);
+            latest_height = Some(bundle.cursor.height);
             // Check if the block has been received already.
-            if bundle.height < next_height_to_receive {
+            if bundle.cursor.height < next_height_to_receive {
                 skipped_len = i + 1;
             }
             // Check if the height is trusted or the epoch is trusted.
             if self.allow_messages_from_deprecated_epochs
-                || Some(bundle.height) <= last_anticipated_block_height
+                || Some(bundle.cursor.height) <= last_anticipated_block_height
                 || Some(*epoch) >= self.current_epoch
                 || self.committees.contains_key(epoch)
             {
@@ -655,7 +655,7 @@ impl<'a> CrossChainUpdateHelper<'a> {
             let (_, sample_bundle) = &bundles[skipped_len - 1];
             debug!(
                 "Ignoring repeated messages to {recipient:.8} from {origin:} at height {}",
-                sample_bundle.height,
+                sample_bundle.cursor.height,
             );
         }
         if skipped_len < bundles.len() && trusted_len < bundles.len() {
@@ -663,7 +663,7 @@ impl<'a> CrossChainUpdateHelper<'a> {
             warn!(
                 "Refusing messages to {recipient:.8} from {origin:} at height {} \
                  because the epoch {} is not trusted any more",
-                sample_bundle.height, sample_epoch,
+                sample_bundle.cursor.height, sample_epoch,
             );
         }
         let bundles = if skipped_len < trusted_len {

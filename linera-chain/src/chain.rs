@@ -173,7 +173,7 @@ pub struct BundleInInbox {
 impl BundleInInbox {
     fn new(origin: Origin, bundle: &MessageBundle) -> Self {
         BundleInInbox {
-            cursor: Cursor::from(bundle),
+            cursor: bundle.cursor,
             origin,
         }
     }
@@ -425,7 +425,7 @@ where
                     return Err(ChainError::MissingCrossChainUpdate {
                         chain_id,
                         origin: origin.into(),
-                        height: bundle.height,
+                        height: bundle.cursor.height,
                     });
                 }
                 Ok::<(), ChainError>(())
@@ -453,7 +453,7 @@ where
         let inbox = self.inboxes.try_load_entry(origin).await?;
         match inbox {
             Some(inbox) => match inbox.removed_bundles.back().await? {
-                Some(bundle) => Ok(Some(bundle.height)),
+                Some(bundle) => Ok(Some(bundle.cursor.height)),
                 None => Ok(None),
             },
             None => Ok(None),
@@ -477,11 +477,11 @@ where
         let chain_id = self.chain_id();
         tracing::trace!(
             "Processing new messages to {chain_id:.8} from {origin} at height {}",
-            bundle.height,
+            bundle.cursor.height,
         );
         let chain_and_height = ChainAndHeight {
             chain_id: origin.sender,
-            height: bundle.height,
+            height: bundle.cursor.height,
         };
         let mut subscribe_names_and_ids = Vec::new();
         let mut unsubscribe_names_and_ids = Vec::new();
@@ -604,7 +604,7 @@ where
                 "Removing {:?} from {chain_id:.8}'s inbox for {origin:}",
                 bundles
                     .iter()
-                    .map(|bundle| bundle.height)
+                    .map(|bundle| bundle.cursor.height)
                     .collect::<Vec<_>>()
             );
             for bundle in bundles {
@@ -676,7 +676,7 @@ where
             if !self.is_active() {
                 let message_id = MessageId {
                     chain_id: in_bundle.origin.sender,
-                    height: in_bundle.bundle.height,
+                    height: in_bundle.bundle.cursor.height,
                     index: posted_message.index,
                 };
                 self.execute_init_message(message_id, config, block.timestamp, local_time)

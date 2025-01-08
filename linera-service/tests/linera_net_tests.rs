@@ -3194,7 +3194,7 @@ async fn test_end_to_end_repeated_transfers(config: impl LineraNetConfig) -> Res
             .query_node(&format!(
                 "query {{ block(hash: \"{hash2}\", chainId: \"{chain_id2}\") {{ \
                     value {{ executedBlock {{ block {{ incomingBundles {{ \
-                        origin bundle {{ height }} \
+                        origin bundle {{ cursor {{ height }} }} \
                     }} }} }} }} \
                 }} }}"
             ))
@@ -3205,7 +3205,7 @@ async fn test_end_to_end_repeated_transfers(config: impl LineraNetConfig) -> Res
         assert_eq!(origin.sender, chain_id1);
         assert_eq!(origin.medium, Medium::Direct);
         let sender_height =
-            serde_json::from_value::<BlockHeight>(bundle["bundle"]["height"].take())?;
+            serde_json::from_value::<BlockHeight>(bundle["bundle"]["cursor"]["height"].take())?;
         assert_eq!(sender_height + BlockHeight(1), next_height1);
     }
 

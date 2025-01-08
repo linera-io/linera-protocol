@@ -555,10 +555,6 @@ A set of messages from a single block, for a single destination.
 """
 type MessageBundle {
 	"""
-	The block height.
-	"""
-	height: BlockHeight!
-	"""
 	The block's timestamp.
 	"""
 	timestamp: Timestamp!
@@ -567,9 +563,9 @@ type MessageBundle {
 	"""
 	certificateHash: CryptoHash!
 	"""
-	The index of the transaction in the block that is sending this bundle.
+	The cursor of the block.
 	"""
-	transactionIndex: Int!
+	cursor: Cursor!
 	"""
 	The relevant messages.
 	"""

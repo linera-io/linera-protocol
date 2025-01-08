@@ -381,6 +381,11 @@ CryptoHash:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 32
+Cursor:
+  STRUCT:
+    - height:
+        TYPENAME: BlockHeight
+    - index: U32
 Destination:
   ENUM:
     0:
@@ -502,13 +507,12 @@ MessageAction:
       Reject: UNIT
 MessageBundle:
   STRUCT:
-    - height:
-        TYPENAME: BlockHeight
     - timestamp:
         TYPENAME: Timestamp
     - certificate_hash:
         TYPENAME: CryptoHash
-    - transaction_index: U32
+    - cursor:
+        TYPENAME: Cursor
     - messages:
         SEQ:
           TYPENAME: PostedMessage

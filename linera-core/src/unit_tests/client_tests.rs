@@ -239,10 +239,10 @@ where
         // Both `Claim` messages were included in the block.
         assert_eq!(messages.len(), 2);
         // The first one was rejected.
-        assert_eq!(messages[0].bundle.height, BlockHeight::from(2));
+        assert_eq!(messages[0].bundle.cursor.height, BlockHeight::from(2));
         assert_eq!(messages[0].action, MessageAction::Reject);
         // The second was accepted.
-        assert_eq!(messages[1].bundle.height, BlockHeight::from(3));
+        assert_eq!(messages[1].bundle.cursor.height, BlockHeight::from(3));
         assert_eq!(messages[1].action, MessageAction::Accept);
     }
 
