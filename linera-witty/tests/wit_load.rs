@@ -374,10 +374,30 @@ fn test_list_fields() {
             SimpleWrapper(true),
             SimpleWrapper(false),
         ],
+        second_vec: vec![
+            TupleWithPadding(0x1a19, 0x201f_1e1d, 0x2827_2625_2423_2221),
+            TupleWithPadding(0x2a29, 0x302f_2e2d, 0x3837_3635_3433_3231),
+        ],
     };
 
-    test_load_from_memory(&[8, 0, 0, 0, 3, 0, 0, 0, 1, 1, 0], expected.clone());
-    test_lift_from_flat_layout(hlist![0_i32, 3_i32], expected, &[1, 1, 0]);
+    test_load_from_memory(
+        &[
+            16, 0, 0, 0, 3, 0, 0, 0, 24, 0, 0, 0, 2, 0, 0, 0, 1, 1, 0, 20, 21, 22, 23, 24, 0x19,
+            0x1a, 27, 28, 0x1d, 0x1e, 0x1f, 0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28,
+            0x29, 0x2a, 43, 44, 0x2d, 0x2e, 0x2f, 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37,
+            0x38,
+        ],
+        expected.clone(),
+    );
+    test_lift_from_flat_layout(
+        hlist![0_i32, 3_i32, 8_i32, 2_i32],
+        expected,
+        &[
+            1, 1, 0, 0, 0, 0, 0, 0, 0x19, 0x1a, 0, 0, 0x1d, 0x1e, 0x1f, 0x20, 0x21, 0x22, 0x23,
+            0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2a, 0, 0, 0x2d, 0x2e, 0x2f, 0x30, 0x31, 0x32,
+            0x33, 0x34, 0x35, 0x36, 0x37, 0x38,
+        ],
+    );
 }
 
 /// Tests that the type `T` and wrapped versions of it can be loaded from an `input` sequence of

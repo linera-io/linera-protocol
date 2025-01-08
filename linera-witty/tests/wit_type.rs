@@ -230,15 +230,21 @@ fn test_vec() {
 #[test]
 fn test_list_fields() {
     test_wit_type_implementation::<StructWithLists>(ExpectedMetadata {
-        size: 8,
+        size: 16,
         alignment: 4,
-        flat_layout_length: 2,
+        flat_layout_length: 4,
         declaration: concat!(
             "    record simple-wrapper {\n",
             "        inner0: bool,\n",
             "    }\n\n",
             "    record struct-with-lists {\n",
             "        vec: list<simple-wrapper>,\n",
+            "        second-vec: list<tuple-with-padding>,\n",
+            "    }\n\n",
+            "    record tuple-with-padding {\n",
+            "        inner0: u16,\n",
+            "        inner1: u32,\n",
+            "        inner2: s64,\n",
             "    }\n"
         ),
     });

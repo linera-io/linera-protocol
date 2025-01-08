@@ -425,10 +425,24 @@ fn test_list_fields() {
             SimpleWrapper(false),
             SimpleWrapper(true),
         ],
+        second_vec: vec![TupleWithPadding(1, 0, -1), TupleWithPadding(10, 11, 12)],
     };
 
-    test_store_in_memory(data.clone(), &[8, 0, 0, 0, 4, 0, 0, 0], &[0, 1, 0, 1]);
-    test_lower_to_flat_layout(data, hlist![0_i32, 4_i32,], &[0, 1, 0, 1]);
+    let expected_heap = [0, 1, 0, 1]
+        .into_iter()
+        .chain([0; 4])
+        .chain([
+            1, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        ])
+        .chain([10, 0, 0, 0, 11, 0, 0, 0, 12, 0, 0, 0, 0, 0, 0, 0])
+        .collect::<Vec<_>>();
+
+    test_store_in_memory(
+        data.clone(),
+        &[16, 0, 0, 0, 4, 0, 0, 0, 24, 0, 0, 0, 2, 0, 0, 0],
+        &expected_heap,
+    );
+    test_lower_to_flat_layout(data, hlist![0_i32, 4_i32, 8_i32, 2_i32], &expected_heap);
 }
 
 /// Tests that the `data` of type `T` and wrapped versions of it can be stored as a sequence of

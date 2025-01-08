@@ -83,4 +83,5 @@ pub struct StructWithHeapFields {
 #[derive(Clone, Debug, Eq, PartialEq, WitType, WitLoad, WitStore)]
 pub struct StructWithLists {
     pub vec: Vec<SimpleWrapper>,
+    pub second_vec: Vec<TupleWithPadding>,
 }
