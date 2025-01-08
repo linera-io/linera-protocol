@@ -22,7 +22,7 @@ where
     let mut first_instance = MockInstance::<()>::default();
     let mut first_memory = first_instance.memory()?;
 
-    let first_address = first_memory.allocate(T::SIZE, 1)?;
+    let first_address = first_memory.allocate(T::SIZE, <T::Layout as Layout>::ALIGNMENT)?;
 
     input.store(&mut first_memory, first_address)?;
 
@@ -34,7 +34,7 @@ where
     let mut second_instance = MockInstance::<()>::default();
     let mut second_memory = second_instance.memory()?;
 
-    let second_address = second_memory.allocate(T::SIZE, 1)?;
+    let second_address = second_memory.allocate(T::SIZE, <T::Layout as Layout>::ALIGNMENT)?;
 
     loaded_instance.store(&mut second_memory, second_address)?;
 
