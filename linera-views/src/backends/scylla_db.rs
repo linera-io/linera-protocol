@@ -19,6 +19,7 @@ use futures::{future::join_all, FutureExt as _, StreamExt};
 use linera_base::ensure;
 use scylla::{
     statement::batch::BatchType,
+    prepared_statement::PreparedStatement,
     query::Query,
     transport::PagingState,
     transport::errors::{DbError, QueryError},
@@ -91,7 +92,7 @@ const MAX_BATCH_SIZE: usize = 5000;
 struct ScyllaDbClient {
     session: Session,
     namespace: String,
-    read_value: Query,
+    read_value: PreparedStatement,
     contains_key: Query,
     write_batch_delete_prefix_unbounded: Query,
     write_batch_delete_prefix_bounded: Query,
@@ -128,13 +129,16 @@ impl ScyllaDbClient {
         Ok(())
     }
 
-    fn new(session: Session, namespace: &str) -> Self {
+    async fn new(session: Session, namespace: &str) -> Result<Self, ScyllaDbStoreInternalError> {
         let namespace = namespace.to_string();
         let query = format!(
             "SELECT v FROM kv.{} WHERE root_key = ? AND k = ? ALLOW FILTERING",
             namespace
         );
-        let read_value = Query::new(query);
+        let read_value = session
+            .prepare(query)
+            .await?;
+
         let query = format!(
             "SELECT root_key FROM kv.{} WHERE root_key = ? AND k = ? ALLOW FILTERING",
             namespace
@@ -178,7 +182,7 @@ impl ScyllaDbClient {
         );
         let find_key_values_by_prefix_bounded = Query::new(query);
 
-        Self {
+        Ok(Self {
             session,
             namespace,
             read_value,
@@ -191,7 +195,7 @@ impl ScyllaDbClient {
             find_keys_by_prefix_bounded,
             find_key_values_by_prefix_unbounded,
             find_key_values_by_prefix_bounded,
-        }
+        })
     }
 
     async fn read_value_internal(
@@ -203,13 +207,13 @@ impl ScyllaDbClient {
         let session = &self.session;
         // Read the value of a key
         let values = (root_key.to_vec(), key);
-        let query = &self.read_value;
 
-        let mut rows = session
-            .query_iter(query.clone(), &values)
+        let results = session
+            .execute_unpaged(&self.read_value, &values)
             .await?
-            .rows_stream::<(Vec<u8>,)>()?;
-        Ok(match rows.next().await {
+            .into_rows_result()?;
+        let mut rows = results.rows::<(Vec<u8>,)>()?;
+        Ok(match rows.next() {
             Some(row) => Some(row?.0),
             None => None,
         })
@@ -646,7 +650,7 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
             .build()
             .boxed()
             .await?;
-        let store = ScyllaDbClient::new(session, namespace);
+        let store = ScyllaDbClient::new(session, namespace).await?;
         let store = Arc::new(store);
         let semaphore = config
             .common_config
@@ -812,7 +816,7 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
         let prepared = session
             .prepare(&*query)
             .await?;
-        let _result = session.execute_unpaged(&prepared, &[]).await?;
+        session.execute_unpaged(&prepared, &[]).await?;
 
         // Create a table if it doesn't exist
         // The schema appears too complicated for non-trivial reasons.
@@ -826,7 +830,7 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
         let prepared = session
             .prepare(&*query)
             .await?;
-        let _result = session.execute_unpaged(&prepared, &[]).await?;
+        session.execute_unpaged(&prepared, &[]).await?;
         Ok(())
     }
 
