@@ -15,12 +15,12 @@ use super::{
     Network, OnClientDrop,
 };
 
-pub struct ExistingNetTestingConfig {
+pub struct RemoteNetTestingConfig {
     faucet: Faucet,
 }
 
-impl ExistingNetTestingConfig {
-    /// Creates a new [`ExistingNetTestingConfig`] for running tests with an existing Linera
+impl RemoteNetTestingConfig {
+    /// Creates a new [`RemoteNetTestingConfig`] for running tests with an external Linera
     /// network.
     ///
     /// The `faucet_url` is used to connect to the network and obtain its configuration,
@@ -39,14 +39,14 @@ impl ExistingNetTestingConfig {
 }
 
 #[async_trait]
-impl LineraNetConfig for ExistingNetTestingConfig {
-    type Net = ExistingNet;
+impl LineraNetConfig for RemoteNetTestingConfig {
+    type Net = RemoteNet;
 
     async fn instantiate(self) -> Result<(Self::Net, ClientWrapper)> {
         let seed = 37;
-        let mut net = ExistingNet::new(Some(seed), &self.faucet)
+        let mut net = RemoteNet::new(Some(seed), &self.faucet)
             .await
-            .expect("Creating ExistingNet should not fail");
+            .expect("Creating RemoteNet should not fail");
 
         let client = net.make_client().await;
         // The tests assume we've created a genesis config with 2
@@ -78,7 +78,7 @@ impl LineraNetConfig for ExistingNetTestingConfig {
 
 /// Remote net
 #[derive(Clone)]
-pub struct ExistingNet {
+pub struct RemoteNet {
     network: Network,
     testing_prng_seed: Option<u64>,
     next_client_id: usize,
@@ -86,10 +86,10 @@ pub struct ExistingNet {
 }
 
 #[async_trait]
-impl LineraNet for ExistingNet {
+impl LineraNet for RemoteNet {
     async fn ensure_is_running(&mut self) -> Result<()> {
         // Leaving this just returning for now.
-        // We would have to connect to each validator in the existing net then run
+        // We would have to connect to each validator in the remote net then run
         // ensure_connected_cluster_is_running
         Ok(())
     }
@@ -113,12 +113,12 @@ impl LineraNet for ExistingNet {
     }
 
     async fn terminate(&mut self) -> Result<()> {
-        // We're not killing the existing network :)
+        // We're not killing the remote net :)
         Ok(())
     }
 }
 
-impl ExistingNet {
+impl RemoteNet {
     async fn new(testing_prng_seed: Option<u64>, faucet: &Faucet) -> Result<Self> {
         let tmp_dir = Arc::new(tempdir()?);
         // Write json config to disk
