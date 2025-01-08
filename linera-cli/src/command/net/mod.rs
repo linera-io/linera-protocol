@@ -37,6 +37,7 @@ impl Options {
 mod start {
     // We no longer create wallets as part of this command.
     // Instead, use `linera wallet create`.
+
     use std::num::NonZeroU8;
 
     #[derive(clap::Args, Debug)]
@@ -47,9 +48,9 @@ mod start {
         /// The number of tokens each root chain starts with.
         #[arg(long, default_value_t = 1_000_000)]
         root_tokens: u128,
-        /// The number of validator to run on the net.
+        /// The number of validators to run on the net.
         #[arg(long, default_value_t = nonzero_lit::u8!(1))]
-        validator: NonZeroU8,
+        validators: NonZeroU8,
         /// The number of shards that comprise each validator.
         #[arg(long, default_value_t = nonzero_lit::u8!(1))]
         validator_shards: NonZeroU8,

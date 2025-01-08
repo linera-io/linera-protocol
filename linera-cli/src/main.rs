@@ -42,7 +42,7 @@ enum Command {
 
 impl Options {
     fn run(&self) -> eyre::Result<()> {
-        println!("{self:?}");
+        dbg!(self);
 
         if self.help_markdown {
             clap_markdown::print_help_markdown::<Options>();
@@ -51,8 +51,7 @@ impl Options {
 
         let Some(command) = &self.command else {
             Self::command().print_help()?;
-            println!();
-            eyre::bail!("no command provided")
+            return Ok(())
         };
 
         let output = self.runtime.build()?.block_on(match command {

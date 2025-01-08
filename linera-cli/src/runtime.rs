@@ -2,6 +2,7 @@
 #[group(id = "runtime")]
 pub struct Options {
     /// The number of additional worker threads to use for I/O.
+    ///
     /// Defaults to the number of cores on the system.
     #[arg(long, global = true)]
     threads: Option<u16>,
