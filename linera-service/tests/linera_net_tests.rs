@@ -91,7 +91,7 @@ fn get_fungible_account_owner(client: &ClientWrapper) -> AccountOwner {
 struct EthereumTrackerApp(ApplicationWrapper<ethereum_tracker::EthereumTrackerAbi>);
 
 #[cfg(feature = "ethereum")]
-use linera_alloy::primitives::U256;
+use alloy::primitives::U256;
 
 #[cfg(feature = "ethereum")]
 impl EthereumTrackerApp {

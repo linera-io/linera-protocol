@@ -1,9 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_lock::Mutex;
-use async_trait::async_trait;
-use linera_alloy::{
+use alloy::{
     primitives::{Address, Bytes, U256},
     providers::{Provider, ProviderBuilder, RootProvider},
     rpc::types::eth::{
@@ -12,11 +10,13 @@ use linera_alloy::{
     },
     transports::http::reqwest::{header::CONTENT_TYPE, Client},
 };
+use async_lock::Mutex;
+use async_trait::async_trait;
 use url::Url;
 
 use crate::client::{EthereumQueries, JsonRpcClient};
 
-pub type HttpProvider = RootProvider<linera_alloy::transports::http::Http<Client>>;
+pub type HttpProvider = RootProvider<alloy::transports::http::Http<Client>>;
 
 use crate::{
     client::get_block_id,
