@@ -98,10 +98,10 @@ struct ScyllaDbClient {
     write_batch_delete_prefix_bounded: Query,
     write_batch_deletion: Query,
     write_batch_insertion: Query,
-    find_keys_by_prefix_unbounded: Query,
-    find_keys_by_prefix_bounded: Query,
-    find_key_values_by_prefix_unbounded: Query,
-    find_key_values_by_prefix_bounded: Query,
+    find_keys_by_prefix_unbounded: PreparedStatement,
+    find_keys_by_prefix_bounded: PreparedStatement,
+    find_key_values_by_prefix_unbounded: PreparedStatement,
+    find_key_values_by_prefix_bounded: PreparedStatement,
 }
 
 impl ScyllaDbClient {
@@ -166,23 +166,31 @@ impl ScyllaDbClient {
             "SELECT k FROM kv.{} WHERE root_key = ? AND k >= ? ALLOW FILTERING",
             namespace
         );
-        let find_keys_by_prefix_unbounded = Query::new(query);
+        let find_keys_by_prefix_unbounded = session
+            .prepare(query)
+            .await?;
         let query = format!(
             "SELECT k FROM kv.{} WHERE root_key = ? AND k >= ? AND k < ? ALLOW FILTERING",
             namespace
         );
-        let find_keys_by_prefix_bounded = Query::new(query);
+        let find_keys_by_prefix_bounded = session
+            .prepare(query)
+            .await?;
 
         let query = format!(
             "SELECT k,v FROM kv.{} WHERE root_key = ? AND k >= ? ALLOW FILTERING",
             namespace
         );
-        let find_key_values_by_prefix_unbounded = Query::new(query);
+        let find_key_values_by_prefix_unbounded = session
+            .prepare(query)
+            .await?;
         let query = format!(
             "SELECT k,v FROM kv.{} WHERE root_key = ? AND k >= ? AND k < ? ALLOW FILTERING",
             namespace
         );
-        let find_key_values_by_prefix_bounded = Query::new(query);
+        let find_key_values_by_prefix_bounded = session
+            .prepare(query)
+            .await?;
 
         Ok(Self {
             session,
@@ -392,11 +400,11 @@ impl ScyllaDbClient {
         let rows = match get_upper_bound_option(&key_prefix) {
             None => {
                 let values = (root_key.to_vec(), key_prefix.clone());
-                session.query_iter(query_unbounded.clone(), values).await?
+                session.execute_iter(query_unbounded.clone(), values).await?
             }
             Some(upper_bound) => {
                 let values = (root_key.to_vec(), key_prefix.clone(), upper_bound);
-                session.query_iter(query_bounded.clone(), values).await?
+                session.execute_iter(query_bounded.clone(), values).await?
             }
         };
         let mut rows = rows.rows_stream::<(Vec<u8>,)>()?;
@@ -423,11 +431,11 @@ impl ScyllaDbClient {
         let rows = match get_upper_bound_option(&key_prefix) {
             None => {
                 let values = (root_key.to_vec(), key_prefix.clone());
-                session.query_iter(query_unbounded.clone(), values).await?
+                session.execute_iter(query_unbounded.clone(), values).await?
             }
             Some(upper_bound) => {
                 let values = (root_key.to_vec(), key_prefix.clone(), upper_bound);
-                session.query_iter(query_bounded.clone(), values).await?
+                session.execute_iter(query_bounded.clone(), values).await?
             }
         };
         let mut rows = rows.rows_stream::<(Vec<u8>,Vec<u8>)>()?;
