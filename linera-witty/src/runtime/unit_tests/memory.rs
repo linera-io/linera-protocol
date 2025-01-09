@@ -7,7 +7,7 @@ use super::GuestPointer;
 
 /// Test aligning memory addresses.
 ///
-/// Check that the resulting address is aligned and that it never advances more than the alignment
+/// Checks that the resulting address is aligned and that it never advances more than the alignment
 /// amount.
 #[test]
 fn align_guest_pointer() {

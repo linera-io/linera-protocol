@@ -17,7 +17,7 @@ use self::types::{
     TupleWithoutPadding,
 };
 
-/// Check that a wrapper type is properly loaded from memory and lifted from its flat layout.
+/// Checks that a wrapper type is properly loaded from memory and lifted from its flat layout.
 #[test]
 fn test_simple_bool_wrapper() {
     test_load_from_memory(&[1], SimpleWrapper(true));
@@ -27,7 +27,7 @@ fn test_simple_bool_wrapper() {
     test_lift_from_flat_layout(hlist![0], SimpleWrapper(false), &[]);
 }
 
-/// Check that a type with multiple fields ordered in a way that doesn't require any padding is
+/// Checks that a type with multiple fields ordered in a way that doesn't require any padding is
 /// properly loaded from memory and lifted from its flat layout.
 #[test]
 fn test_tuple_struct_without_padding() {
@@ -44,7 +44,7 @@ fn test_tuple_struct_without_padding() {
     );
 }
 
-/// Check that a type with multiple fields ordered in a way that requires padding between two of its
+/// Checks that a type with multiple fields ordered in a way that requires padding between two of its
 /// fields is properly loaded from memory and lifted from its flat layout.
 #[test]
 fn test_tuple_struct_with_padding() {
@@ -61,7 +61,7 @@ fn test_tuple_struct_with_padding() {
     );
 }
 
-/// Check that a type with multiple named fields ordered in a way that requires padding before two
+/// Checks that a type with multiple named fields ordered in a way that requires padding before two
 /// fields is properly loaded from memory and lifted from its flat layout.
 #[test]
 fn test_named_struct_with_double_padding() {
@@ -90,7 +90,7 @@ fn test_named_struct_with_double_padding() {
     );
 }
 
-/// Check that a type that contains a field with a type that also has `WitStore` derived for it is
+/// Checks that a type that contains a field with a type that also has `WitStore` derived for it is
 /// properly loaded from memory and lifted from its flat layout.
 #[test]
 fn test_nested_types() {
@@ -129,7 +129,7 @@ fn test_nested_types() {
     );
 }
 
-/// Check that an enum type's variants are properly loaded from memory and lifted from its flat
+/// Checks that an enum type's variants are properly loaded from memory and lifted from its flat
 /// layout.
 #[test]
 fn test_enum_type() {
@@ -184,7 +184,7 @@ fn test_enum_type() {
     );
 }
 
-/// Check that a generic type with a specialization request is properly loaded from memory and
+/// Checks that a generic type with a specialization request is properly loaded from memory and
 /// lifted from its flat layout.
 #[test]
 fn test_specialized_generic_struct() {
@@ -207,7 +207,7 @@ fn test_specialized_generic_struct() {
     );
 }
 
-/// Check that a generic enum with a specialization request type's variants are properly loaded
+/// Checks that a generic enum with a specialization request type's variants are properly loaded
 /// from memory and lifted from its flat layout.
 #[test]
 fn test_specialized_generic_enum_type() {
@@ -244,7 +244,7 @@ fn test_specialized_generic_enum_type() {
     test_lift_from_flat_layout(hlist![2_i32, 1_i32, 0x0c0b_0a09_i32], expected, &[]);
 }
 
-/// Check that an invalid discriminant reports a useful error.
+/// Checks that an invalid discriminant reports a useful error.
 #[test]
 fn test_invalid_discriminant() {
     let mut instance = MockInstance::<()>::default();
@@ -308,7 +308,7 @@ fn test_invalid_discriminant() {
     );
 }
 
-/// Check that a type with fields stored in the heap is properly loaded from memory and lifted from
+/// Checks that a type with fields stored in the heap is properly loaded from memory and lifted from
 /// its flat layout.
 #[test]
 fn test_heap_allocated_fields() {
@@ -354,7 +354,7 @@ fn test_heap_allocated_fields() {
     );
 }
 
-/// Check that a [`Vec`] type is properly loaded from memory and lifted from its flat
+/// Checks that a [`Vec`] type is properly loaded from memory and lifted from its flat
 /// layout.
 #[test]
 fn test_vec() {
@@ -364,7 +364,7 @@ fn test_vec() {
     test_lift_from_flat_layout(hlist![0_i32, 2_i32], expected, &[0, 1]);
 }
 
-/// Check that a type with list fields is properly loaded from memory and lifted from its
+/// Checks that a type with list fields is properly loaded from memory and lifted from its
 /// flat layout.
 #[test]
 fn test_list_fields() {

@@ -16,7 +16,7 @@ use self::types::{
     TupleWithoutPadding,
 };
 
-/// Check that a wrapper type is properly stored in memory and lowered into its flat layout.
+/// Checks that a wrapper type is properly stored in memory and lowered into its flat layout.
 #[test]
 fn test_simple_bool_wrapper() {
     test_store_in_memory(SimpleWrapper(true), &[1], &[]);
@@ -26,7 +26,7 @@ fn test_simple_bool_wrapper() {
     test_lower_to_flat_layout(SimpleWrapper(false), hlist![0], &[]);
 }
 
-/// Check that a type with multiple fields ordered in a way that doesn't require any padding is
+/// Checks that a type with multiple fields ordered in a way that doesn't require any padding is
 /// properly stored in memory and lowered into its flat layout.
 #[test]
 fn test_tuple_struct_without_padding() {
@@ -47,7 +47,7 @@ fn test_tuple_struct_without_padding() {
     );
 }
 
-/// Check that a type with multiple fields ordered in a way that requires padding between two of its
+/// Checks that a type with multiple fields ordered in a way that requires padding between two of its
 /// fields is properly stored in memory and lowered into its flat layout.
 #[test]
 fn test_tuple_struct_with_padding() {
@@ -68,7 +68,7 @@ fn test_tuple_struct_with_padding() {
     );
 }
 
-/// Check that a type with multiple named fields ordered in a way that requires padding before two
+/// Checks that a type with multiple named fields ordered in a way that requires padding before two
 /// fields is properly stored in memory and lowered into its flat layout.
 #[test]
 fn test_named_struct_with_double_padding() {
@@ -99,7 +99,7 @@ fn test_named_struct_with_double_padding() {
     );
 }
 
-/// Check that a type that contains a field with a type that also has `WitStore` derived for it is
+/// Checks that a type that contains a field with a type that also has `WitStore` derived for it is
 /// properly stored in memory and lowered into its flat layout.
 #[test]
 fn test_nested_types() {
@@ -140,7 +140,7 @@ fn test_nested_types() {
     );
 }
 
-/// Check that an enum type's variants are properly stored in memory and lowered into its flat
+/// Checks that an enum type's variants are properly stored in memory and lowered into its flat
 /// layout.
 #[test]
 fn test_enum_type() {
@@ -231,7 +231,7 @@ fn test_enum_type() {
     );
 }
 
-/// Check that a generic type with a specialization request is properly stored in memory and
+/// Checks that a generic type with a specialization request is properly stored in memory and
 /// lowered into its flat layout.
 #[test]
 fn test_specialized_generic_struct() {
@@ -259,7 +259,7 @@ fn test_specialized_generic_struct() {
     );
 }
 
-/// Check that a generic enum with a specialization request type's variants are properly stored in
+/// Checks that a generic enum with a specialization request type's variants are properly stored in
 /// memory and lowered into its flat layout.
 #[test]
 fn test_specialized_generic_enum_type() {
@@ -401,7 +401,7 @@ fn test_heap_allocated_fields() {
     );
 }
 
-/// Check that a [`Vec`] type is properly stored in memory and lowered into its flat layout.
+/// Checks that a [`Vec`] type is properly stored in memory and lowered into its flat layout.
 #[test]
 fn test_vec() {
     let data = vec![
@@ -414,7 +414,7 @@ fn test_vec() {
     test_lower_to_flat_layout(data, hlist![0_i32, 3_i32,], &[1, 0, 1]);
 }
 
-/// Check that a type with list fields is properly stored in memory and lowered into its
+/// Checks that a type with list fields is properly stored in memory and lowered into its
 /// flat layout.
 #[test]
 fn test_list_fields() {
