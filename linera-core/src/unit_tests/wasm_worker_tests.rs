@@ -12,6 +12,7 @@
 
 use std::collections::BTreeSet;
 
+use assert_matches::assert_matches;
 use linera_base::{
     crypto::KeyPair,
     data_types::{
@@ -46,6 +47,7 @@ use linera_views::{memory::MemoryStore, views::CryptoHashView};
 use test_case::test_case;
 
 use super::{init_worker_with_chains, make_certificate};
+use crate::worker::WorkerError;
 
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
@@ -153,6 +155,12 @@ where
     ));
     let publish_certificate = make_certificate(&committee, &worker, publish_block_proposal);
 
+    assert_matches!(
+        worker
+            .fully_handle_certificate_with_notifications(publish_certificate.clone(), vec![], &())
+            .await,
+        Err(WorkerError::BlobsNotFound(_))
+    );
     storage
         .write_blobs(&[contract_blob.clone(), service_blob.clone()])
         .await?;
