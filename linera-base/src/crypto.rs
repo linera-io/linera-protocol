@@ -185,16 +185,7 @@ impl Serialize for CryptoHashVec {
     where
         S: serde::ser::Serializer,
     {
-        // if serializer.is_human_readable() {
-        //     let s = self
-        //         .0
-        //         .iter()
-        //         .map(|hash| hash.to_string())
-        //         .collect::<Vec<_>>();
-        //     serializer.collect_seq(s)
-        // } else {
         serializer.serialize_newtype_struct("CryptoHashVec", &self.0)
-        // }
     }
 }
 
