@@ -714,7 +714,7 @@ where
     let executed_block: ExecutedBlock = chain
         .manager
         .get()
-        .validated_vote()
+        .confirmed_vote()
         .unwrap()
         .value()
         .inner()
