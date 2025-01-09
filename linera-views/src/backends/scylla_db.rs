@@ -18,9 +18,9 @@ use async_trait::async_trait;
 use futures::{future::join_all, FutureExt as _, StreamExt};
 use linera_base::ensure;
 use scylla::{
+    batch::BatchStatement,
     statement::batch::BatchType,
     prepared_statement::PreparedStatement,
-    query::Query,
     transport::PagingState,
     transport::errors::{DbError, QueryError},
     Session, SessionBuilder,
@@ -94,10 +94,10 @@ struct ScyllaDbClient {
     namespace: String,
     read_value: PreparedStatement,
     contains_key: PreparedStatement,
-    write_batch_delete_prefix_unbounded: Query,
-    write_batch_delete_prefix_bounded: Query,
-    write_batch_deletion: Query,
-    write_batch_insertion: Query,
+    write_batch_delete_prefix_unbounded: BatchStatement,
+    write_batch_delete_prefix_bounded: BatchStatement,
+    write_batch_deletion: BatchStatement,
+    write_batch_insertion: BatchStatement,
     find_keys_by_prefix_unbounded: PreparedStatement,
     find_keys_by_prefix_bounded: PreparedStatement,
     find_key_values_by_prefix_unbounded: PreparedStatement,
@@ -148,19 +148,27 @@ impl ScyllaDbClient {
             .await?;
 
         let query = format!("DELETE FROM kv.{} WHERE root_key = ? AND k >= ?", namespace);
-        let write_batch_delete_prefix_unbounded = Query::new(query);
+        let write_batch_delete_prefix_unbounded = session
+            .prepare(query)
+            .await?.into();
         let query = format!(
             "DELETE FROM kv.{} WHERE root_key = ? AND k >= ? AND k < ?",
             namespace
         );
-        let write_batch_delete_prefix_bounded = Query::new(query);
+        let write_batch_delete_prefix_bounded = session
+            .prepare(query)
+            .await?.into();
         let query = format!("DELETE FROM kv.{} WHERE root_key = ? AND k = ?", namespace);
-        let write_batch_deletion = Query::new(query);
+        let write_batch_deletion = session
+            .prepare(query)
+            .await?.into();
         let query = format!(
             "INSERT INTO kv.{} (root_key, k, v) VALUES (?, ?, ?)",
             namespace
         );
-        let write_batch_insertion = Query::new(query);
+        let write_batch_insertion = session
+            .prepare(query)
+            .await?.into();
 
         let query = format!(
             "SELECT k FROM kv.{} WHERE root_key = ? AND k >= ? ALLOW FILTERING",
