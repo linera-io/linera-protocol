@@ -1125,7 +1125,7 @@ where
         #[cfg(with_metrics)]
         let _hash_latency = KEY_VALUE_STORE_VIEW_HASH_LATENCY.measure_latency();
         let mut hasher = sha3::Sha3_256::default();
-        let mut count = 0;
+        let mut count = 0u32;
         self.for_each_index_value(|index, value| -> Result<(), ViewError> {
             count += 1;
             hasher.update_with_bytes(index)?;
