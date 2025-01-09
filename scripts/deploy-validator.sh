@@ -69,7 +69,7 @@ if [ -z "$REMOTE_IMAGE" ]; then
   echo "Building local image from commit $GIT_COMMIT..."
   docker build --build-arg git_commit="$GIT_COMMIT" -f  docker/Dockerfile . -t linera
 else
-  export LINERA_IMAGE="us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:$BRANCH_NAME"
+  export LINERA_IMAGE="us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:${BRANCH_NAME}_release"
   echo "Using remote image $LINERA_IMAGE..."
 fi
 
