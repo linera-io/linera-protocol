@@ -297,8 +297,11 @@ where
         );
 
         let required_blob_ids = executed_block.required_blob_ids();
-        let blobs_result = self.state.get_required_blobs(executed_block, &[]).await;
-        let blobs_result = blobs_result.map(|blobs| blobs.into_values().collect::<Vec<_>>());
+        let blobs_result = self
+            .state
+            .get_required_blobs(executed_block, &[])
+            .await
+            .map(|blobs| blobs.into_values().collect::<Vec<_>>());
 
         if let Ok(blobs) = &blobs_result {
             self.state
