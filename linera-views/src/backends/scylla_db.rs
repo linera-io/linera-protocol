@@ -93,7 +93,7 @@ struct ScyllaDbClient {
     session: Session,
     namespace: String,
     read_value: PreparedStatement,
-    contains_key: Query,
+    contains_key: PreparedStatement,
     write_batch_delete_prefix_unbounded: Query,
     write_batch_delete_prefix_bounded: Query,
     write_batch_deletion: Query,
@@ -143,7 +143,9 @@ impl ScyllaDbClient {
             "SELECT root_key FROM kv.{} WHERE root_key = ? AND k = ? ALLOW FILTERING",
             namespace
         );
-        let contains_key = Query::new(query);
+        let contains_key = session
+            .prepare(query)
+            .await?;
 
         let query = format!("DELETE FROM kv.{} WHERE root_key = ? AND k >= ?", namespace);
         let write_batch_delete_prefix_unbounded = Query::new(query);
@@ -322,12 +324,13 @@ impl ScyllaDbClient {
         let session = &self.session;
         // Read the value of a key
         let values = (root_key.to_vec(), key);
-        let query = &self.contains_key;
-        let mut rows = session
-            .query_iter(query.clone(), &values)
+
+        let results = session
+            .execute_unpaged(&self.contains_key, &values)
             .await?
-            .rows_stream::<(Vec<u8>,)>()?;
-        Ok(rows.next().await.is_some())
+            .into_rows_result()?;
+        let mut rows = results.rows::<(Vec<u8>,)>()?;
+        Ok(rows.next().is_some())
     }
 
     async fn write_batch_internal(
