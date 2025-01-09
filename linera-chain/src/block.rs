@@ -9,7 +9,7 @@ use std::{
 
 use async_graphql::SimpleObject;
 use linera_base::{
-    crypto::{BcsHashable, CryptoHash},
+    crypto::{BcsHashable, CryptoHash, CryptoHashVec},
     data_types::{Blob, BlockHeight, OracleResponse, Timestamp},
     hashed::Hashed,
     identifiers::{BlobId, BlobType, ChainId, MessageId, Owner},
@@ -472,20 +472,24 @@ impl Block {
 
     pub fn new(proposal: Proposal, outcome: BlockExecutionOutcome) -> Self {
         fn hash_vec<'de, T: BcsHashable<'de>>(it: &Vec<T>) -> CryptoHash {
-            CryptoHash::new(&it.iter().map(CryptoHash::new).collect::<Vec<_>>())
+            let v = CryptoHashVec(it.iter().map(CryptoHash::new).collect::<Vec<_>>());
+            CryptoHash::new(&v)
         }
         let bundles_hash = hash_vec(&proposal.incoming_bundles);
-        let messages_hash =
-            CryptoHash::new(&outcome.messages.iter().map(hash_vec).collect::<Vec<_>>());
+        let messages_hash = CryptoHash::new(&CryptoHashVec(
+            outcome.messages.iter().map(hash_vec).collect::<Vec<_>>(),
+        ));
         let operations_hash = hash_vec(&proposal.operations);
-        let oracle_responses_hash = CryptoHash::new(
-            &outcome
+        let oracle_responses_hash = CryptoHash::new(&CryptoHashVec(
+            outcome
                 .oracle_responses
                 .iter()
                 .map(hash_vec)
                 .collect::<Vec<_>>(),
-        );
-        let events_hash = CryptoHash::new(&outcome.events.iter().map(hash_vec).collect::<Vec<_>>());
+        ));
+        let events_hash = CryptoHash::new(&CryptoHashVec(
+            outcome.events.iter().map(hash_vec).collect::<Vec<_>>(),
+        ));
 
         let header = BlockHeader {
             version: 0,

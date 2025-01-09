@@ -41,6 +41,14 @@ type HasherOutput = generic_array::GenericArray<u8, HasherOutputSize>;
 #[cfg_attr(with_testing, derive(Default))]
 pub struct CryptoHash(HasherOutput);
 
+/// A vector of cryptographic hashes.
+/// This is used to represent a hash of a list of hashes.
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash)]
+#[cfg_attr(with_testing, derive(Default))]
+pub struct CryptoHashVec(pub Vec<CryptoHash>);
+
+impl<'de> BcsHashable<'de> for CryptoHashVec {}
+
 /// A signature value.
 #[derive(Eq, PartialEq, Copy, Clone)]
 pub struct Signature(pub dalek::Signature);
@@ -169,6 +177,38 @@ impl Serialize for CryptoHash {
         } else {
             serializer.serialize_newtype_struct("CryptoHash", &self.0)
         }
+    }
+}
+
+impl Serialize for CryptoHashVec {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::ser::Serializer,
+    {
+        // if serializer.is_human_readable() {
+        //     let s = self
+        //         .0
+        //         .iter()
+        //         .map(|hash| hash.to_string())
+        //         .collect::<Vec<_>>();
+        //     serializer.collect_seq(s)
+        // } else {
+        serializer.serialize_newtype_struct("CryptoHashVec", &self.0)
+        // }
+    }
+}
+
+impl<'de> Deserialize<'de> for CryptoHashVec {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::de::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(rename = "CryptoHashVec")]
+        struct Foo(Vec<HasherOutput>);
+
+        let value = Foo::deserialize(deserializer)?;
+        Ok(Self(value.0.into_iter().map(CryptoHash).collect()))
     }
 }
 
@@ -375,8 +415,6 @@ pub trait HasTypeName {
 /// * We use `serde_name` to extract a seed from the name of structs and enums.
 /// * We use `BCS` to generate canonical bytes suitable for hashing.
 pub trait BcsHashable<'de>: Serialize + Deserialize<'de> {}
-
-impl<'de> BcsHashable<'de> for Vec<CryptoHash> {}
 
 /// Activate the blanket implementation of `Signable` based on serde and BCS.
 /// * We use `serde_name` to extract a seed from the name of structs and enums.
