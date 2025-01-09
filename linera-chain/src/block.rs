@@ -10,18 +10,18 @@ use std::{
 use async_graphql::SimpleObject;
 use linera_base::{
     crypto::{BcsHashable, CryptoHash, CryptoHashVec},
-    data_types::{Blob, BlockHeight, OracleResponse, Timestamp},
+    data_types::{BlockHeight, OracleResponse, Timestamp},
     hashed::Hashed,
     identifiers::{BlobId, BlobType, ChainId, MessageId, Owner},
 };
-use linera_execution::{committee::Epoch, system::OpenChainConfig, Operation, SystemOperation};
+use linera_execution::{committee::Epoch, Operation, SystemOperation};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
     data_types::{
-        BlockExecutionOutcome, EventRecord, ExecutedBlock, IncomingBundle, Medium, MessageAction,
-        MessageBundle, OutgoingMessage, PostedMessage, Proposal, Transaction,
+        BlockExecutionOutcome, EventRecord, ExecutedBlock, IncomingBundle, Medium, MessageBundle,
+        OutgoingMessage, Proposal,
     },
     ChainError,
 };
@@ -34,7 +34,7 @@ pub struct ValidatedBlock(Hashed<Block>);
 impl ValidatedBlock {
     /// Creates a new `ValidatedBlock` from an `ExecutedBlock`.
     pub fn new(block: ExecutedBlock) -> Self {
-        Self(Hashed::new(block.into()))
+        Self(Hashed::new(Block::new(block.proposal, block.outcome)))
     }
 
     pub fn from_hashed(block: Hashed<Block>) -> Self {
@@ -95,7 +95,7 @@ impl<'de> BcsHashable<'de> for ConfirmedBlock {}
 
 impl ConfirmedBlock {
     pub fn new(block: ExecutedBlock) -> Self {
-        Self(Hashed::new(block.into()))
+        Self(Hashed::new(Block::new(block.proposal, block.outcome)))
     }
 
     pub fn from_hashed(block: Hashed<Block>) -> Self {
@@ -267,12 +267,6 @@ impl BlockBody {
 
         required_blob_ids
     }
-
-    pub fn has_oracle_responses(&self) -> bool {
-        self.oracle_responses
-            .iter()
-            .any(|responses| !responses.is_empty())
-    }
 }
 
 impl Block {
@@ -372,7 +366,7 @@ impl Block {
     }
 
     /// Returns all the published blob IDs in this block's operations.
-    pub fn published_blob_ids(&self) -> BTreeSet<BlobId> {
+    fn published_blob_ids(&self) -> BTreeSet<BlobId> {
         let mut blob_ids = BTreeSet::new();
         for operation in &self.body.operations {
             if let Operation::System(SystemOperation::PublishDataBlob { blob_hash }) = operation {
@@ -387,87 +381,6 @@ impl Block {
         }
 
         blob_ids
-    }
-
-    /// Returns whether the block contains only rejected incoming messages, which
-    /// makes it admissible even on closed chains.
-    pub fn has_only_rejected_messages(&self) -> bool {
-        self.body.operations.is_empty()
-            && self
-                .body
-                .incoming_bundles
-                .iter()
-                .all(|message| message.action == MessageAction::Reject)
-    }
-
-    /// Returns an iterator over all incoming [`PostedMessage`]s in this block.
-    pub fn incoming_messages(&self) -> impl Iterator<Item = &PostedMessage> {
-        self.body
-            .incoming_bundles
-            .iter()
-            .flat_map(|incoming_bundle| &incoming_bundle.bundle.messages)
-    }
-
-    /// Returns the number of incoming messages.
-    pub fn message_count(&self) -> usize {
-        self.body
-            .incoming_bundles
-            .iter()
-            .map(|im| im.bundle.messages.len())
-            .sum()
-    }
-
-    /// Returns an iterator over all transactions, by index.
-    pub fn transactions(&self) -> impl Iterator<Item = (u32, Transaction<'_>)> {
-        let bundles = self
-            .body
-            .incoming_bundles
-            .iter()
-            .map(Transaction::ReceiveMessages);
-        let operations = self
-            .body
-            .operations
-            .iter()
-            .map(Transaction::ExecuteOperation);
-        (0u32..).zip(bundles.chain(operations))
-    }
-
-    /// If the block's first message is `OpenChain`, returns the bundle, the message and
-    /// the configuration for the new chain.
-    pub fn starts_with_open_chain_message(
-        &self,
-    ) -> Option<(&IncomingBundle, &PostedMessage, &OpenChainConfig)> {
-        let in_bundle = self.body.incoming_bundles.first()?;
-        if in_bundle.action != MessageAction::Accept {
-            return None;
-        }
-        let posted_message = in_bundle.bundle.messages.first()?;
-        let config = posted_message.message.matches_open_chain()?;
-        Some((in_bundle, posted_message, config))
-    }
-
-    pub fn check_proposal_size(
-        &self,
-        maximum_block_proposal_size: u64,
-        blobs: &[Blob],
-    ) -> Result<(), ChainError> {
-        let size = linera_base::bcs::serialized_size(&(self, blobs))?;
-        linera_base::ensure!(
-            size <= usize::try_from(maximum_block_proposal_size).unwrap_or(usize::MAX),
-            ChainError::BlockProposalTooLarge
-        );
-        Ok(())
-    }
-
-    pub fn eq_proposal(&self, proposal: &Proposal) -> bool {
-        self.header.chain_id == proposal.chain_id
-            && self.header.epoch == proposal.epoch
-            && self.header.height == proposal.height
-            && self.header.timestamp == proposal.timestamp
-            && self.body.incoming_bundles == proposal.incoming_bundles
-            && self.body.operations == proposal.operations
-            && self.header.authenticated_signer == proposal.authenticated_signer
-            && self.header.previous_block_hash == proposal.previous_block_hash
     }
 
     pub fn new(proposal: Proposal, outcome: BlockExecutionOutcome) -> Self {
@@ -492,7 +405,7 @@ impl Block {
         ));
 
         let header = BlockHeader {
-            version: 0,
+            version: 1,
             chain_id: proposal.chain_id,
             epoch: proposal.epoch,
             height: proposal.height,
@@ -519,12 +432,6 @@ impl Block {
     }
 }
 
-impl From<ExecutedBlock> for Block {
-    fn from(executed_block: ExecutedBlock) -> Self {
-        Block::new(executed_block.block, executed_block.outcome)
-    }
-}
-
 impl From<Block> for ExecutedBlock {
     fn from(block: Block) -> Self {
         let proposal = Proposal {
@@ -545,10 +452,7 @@ impl From<Block> for ExecutedBlock {
             events: block.body.events,
         };
 
-        ExecutedBlock {
-            block: proposal,
-            outcome,
-        }
+        ExecutedBlock { proposal, outcome }
     }
 }
 

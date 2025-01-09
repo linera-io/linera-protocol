@@ -691,7 +691,7 @@ where
         .block()
         .clone()
         .into();
-    assert_eq!(&executed_block.block, &block_proposal0.content.proposal); // Multi-leader round - it's not confirmed yet.
+    assert_eq!(&executed_block.proposal, &block_proposal0.content.proposal); // Multi-leader round - it's not confirmed yet.
     assert!(chain.manager.get().confirmed_vote().is_none());
     let block_certificate0 = make_certificate(
         &committee,
@@ -722,7 +722,7 @@ where
         .clone()
         .into();
 
-    assert_eq!(&executed_block.block, &block_proposal0.content.proposal); // Should be confirmed after handling the certificate.
+    assert_eq!(&executed_block.proposal, &block_proposal0.content.proposal); // Should be confirmed after handling the certificate.
     assert!(chain.manager.get().validated_vote().is_none());
     drop(chain);
 
@@ -748,7 +748,7 @@ where
         .block()
         .clone()
         .into();
-    assert_eq!(&executed_block.block, &block_proposal1.content.proposal);
+    assert_eq!(&executed_block.proposal, &block_proposal1.content.proposal);
     assert!(chain.manager.get().confirmed_vote().is_none());
     drop(chain);
     assert_matches!(

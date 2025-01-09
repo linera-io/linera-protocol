@@ -402,7 +402,7 @@ impl OutgoingMessage {
 /// A [`Proposal`], together with the outcome from its execution.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
 pub struct ExecutedBlock {
-    pub block: Proposal,
+    pub proposal: Proposal,
     pub outcome: BlockExecutionOutcome,
 }
 
@@ -644,9 +644,9 @@ impl ExecutedBlock {
         certificate_hash: CryptoHash,
     ) -> impl Iterator<Item = (Epoch, MessageBundle)> + 'a {
         let mut index = 0u32;
-        let block_height = self.block.height;
-        let block_timestamp = self.block.timestamp;
-        let block_epoch = self.block.epoch;
+        let block_height = self.proposal.height;
+        let block_timestamp = self.proposal.timestamp;
+        let block_epoch = self.proposal.epoch;
 
         (0u32..)
             .zip(self.messages())
@@ -677,7 +677,7 @@ impl ExecutedBlock {
         operation_index: usize,
         message_index: u32,
     ) -> Option<MessageId> {
-        let block = &self.block;
+        let block = &self.proposal;
         let transaction_index = block.incoming_bundles.len().checked_add(operation_index)?;
         if message_index
             >= u32::try_from(self.outcome.messages.get(transaction_index)?.len()).ok()?
@@ -703,7 +703,7 @@ impl ExecutedBlock {
             height,
             index,
         } = message_id;
-        if self.block.chain_id != *chain_id || self.block.height != *height {
+        if self.proposal.chain_id != *chain_id || self.proposal.height != *height {
             return None;
         }
         let mut index = usize::try_from(*index).ok()?;
@@ -719,28 +719,28 @@ impl ExecutedBlock {
     /// Returns the message ID belonging to the `index`th outgoing message in this block.
     pub fn message_id(&self, index: u32) -> MessageId {
         MessageId {
-            chain_id: self.block.chain_id,
-            height: self.block.height,
+            chain_id: self.proposal.chain_id,
+            height: self.proposal.height,
             index,
         }
     }
 
     pub fn required_blob_ids(&self) -> HashSet<BlobId> {
         let mut blob_ids = self.outcome.oracle_blob_ids();
-        blob_ids.extend(self.block.published_blob_ids());
+        blob_ids.extend(self.proposal.published_blob_ids());
         blob_ids
     }
 
     pub fn requires_blob(&self, blob_id: &BlobId) -> bool {
         self.outcome.oracle_blob_ids().contains(blob_id)
-            || self.block.published_blob_ids().contains(blob_id)
+            || self.proposal.published_blob_ids().contains(blob_id)
     }
 }
 
 impl BlockExecutionOutcome {
     pub fn with(self, block: Proposal) -> ExecutedBlock {
         ExecutedBlock {
-            block,
+            proposal: block,
             outcome: self,
         }
     }
@@ -807,26 +807,11 @@ impl BlockProposal {
     ) -> Self {
         let lite_cert = validated_block_certificate.lite_certificate().cloned();
         let block = validated_block_certificate.into_inner().into_inner();
-        let proposal = Proposal {
-            chain_id: block.header.chain_id,
-            epoch: block.header.epoch,
-            incoming_bundles: block.body.incoming_bundles,
-            operations: block.body.operations,
-            height: block.header.height,
-            timestamp: block.header.timestamp,
-            authenticated_signer: block.header.authenticated_signer,
-            previous_block_hash: block.header.previous_block_hash,
-        };
-        let outcome = BlockExecutionOutcome {
-            messages: block.body.messages,
-            state_hash: block.header.state_hash,
-            oracle_responses: block.body.oracle_responses,
-            events: block.body.events,
-        };
+        let executed_block: ExecutedBlock = block.into();
         let content = ProposalContent {
-            proposal,
+            proposal: executed_block.proposal,
             round,
-            outcome: Some(outcome),
+            outcome: Some(executed_block.outcome),
         };
         let signature = Signature::new(&content, secret);
         Self {

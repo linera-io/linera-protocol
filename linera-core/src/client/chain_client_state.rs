@@ -30,7 +30,7 @@ pub struct ChainClientState {
     /// The block we are currently trying to propose for the next height, if any.
     ///
     /// This is always at the same height as `next_block_height`.
-    pending_block: Option<Proposal>,
+    pending_proposal: Option<Proposal>,
     /// Known key pairs from present and past identities.
     known_key_pairs: BTreeMap<Owner, KeyPair>,
 
@@ -61,12 +61,12 @@ impl ChainClientState {
             block_hash,
             timestamp,
             next_block_height,
-            pending_block: None,
+            pending_proposal: None,
             pending_blobs,
             client_mutex: Arc::default(),
         };
         if let Some(block) = pending_block {
-            state.set_pending_block(block);
+            state.set_pending_proposal(block);
         }
         state
     }
@@ -83,13 +83,13 @@ impl ChainClientState {
         self.next_block_height
     }
 
-    pub fn pending_block(&self) -> &Option<Proposal> {
-        &self.pending_block
+    pub fn pending_proposal(&self) -> &Option<Proposal> {
+        &self.pending_proposal
     }
 
-    pub(super) fn set_pending_block(&mut self, block: Proposal) {
+    pub(super) fn set_pending_proposal(&mut self, block: Proposal) {
         if block.height == self.next_block_height {
-            self.pending_block = Some(block);
+            self.pending_proposal = Some(block);
         } else {
             tracing::error!(
                 "Not setting pending block at height {}, because next_block_height is {}.",
@@ -134,7 +134,7 @@ impl ChainClientState {
     }
 
     pub(super) fn clear_pending_block(&mut self) {
-        self.pending_block = None;
+        self.pending_proposal = None;
         self.pending_blobs.clear();
     }
 

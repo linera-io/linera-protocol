@@ -673,8 +673,8 @@ impl<P: 'static, S: Storage> ChainClient<P, S> {
 
     /// Gets a guarded reference to the next pending block.
     #[instrument(level = "trace", skip(self))]
-    pub fn pending_block(&self) -> ChainGuardMapped<Option<Proposal>> {
-        Unsend::new(self.state().inner.map(|state| state.pending_block()))
+    pub fn pending_proposal(&self) -> ChainGuardMapped<Option<Proposal>> {
+        Unsend::new(self.state().inner.map(|state| state.pending_proposal()))
     }
 
     /// Gets a guarded reference to the set of pending blobs.
@@ -1041,7 +1041,7 @@ where
     ) -> Result<GenericCertificate<T>, ChainClientError> {
         // Remember what we are trying to do before sending the proposal to the validators.
         self.state_mut()
-            .set_pending_block(proposal.content.proposal.clone());
+            .set_pending_proposal(proposal.content.proposal.clone());
         let required_blob_ids = value.inner().required_blob_ids();
         let proposed_blobs = proposal.blobs.clone();
         let submit_action = CommunicateAction::SubmitBlock {
@@ -2013,7 +2013,6 @@ where
         match self.process_pending_block_without_prepare().await? {
             ClientOutcome::Committed(Some(certificate))
                 if certificate.block() == confirmed_value.inner().block() =>
-            // TODO: double check this. Previously we were comparing the Proposal only.
             {
                 Ok(ExecuteBlockOutcome::Executed(certificate))
             }
@@ -2043,7 +2042,7 @@ where
         let (previous_block_hash, height, timestamp) = {
             let state = self.state();
             ensure!(
-                state.pending_block().is_none(),
+                state.pending_proposal().is_none(),
                 ChainClientError::BlockProposalError(
                     "Client state already has a pending block; \
                     use the `linera retry-pending-block` command to commit that first"
@@ -2073,11 +2072,11 @@ where
         let blobs = self
             .read_local_blobs(executed_block.required_blob_ids())
             .await?;
-        let block = &executed_block.block;
+        let block = &executed_block.proposal;
         let committee = self.local_committee().await?;
         let max_size = committee.policy().maximum_block_proposal_size;
         block.check_proposal_size(max_size, &blobs)?;
-        self.state_mut().set_pending_block(block.clone());
+        self.state_mut().set_pending_proposal(block.clone());
         Ok(Hashed::new(ConfirmedBlock::new(executed_block)))
     }
 
@@ -2380,7 +2379,7 @@ where
             {
                 // The fast block counts as "locked", too. If there is one, re-propose that.
                 proposal.content.proposal.clone()
-            } else if let Some(block) = self.state().pending_block() {
+            } else if let Some(block) = self.state().pending_proposal() {
                 block.clone() // Otherwise we are free to propose our own pending block.
             } else {
                 return Ok(ClientOutcome::Committed(None)); // Nothing to do.
@@ -2395,19 +2394,18 @@ where
         };
 
         // Collect the blobs required for execution.
-        // let block = &block.block;
         let blobs = self
-            .read_local_blobs(executed_block.block.published_blob_ids())
+            .read_local_blobs(executed_block.proposal.published_blob_ids())
             .await?;
         let already_handled_locally = info
             .manager
-            .already_handled_proposal(round, &executed_block.block);
+            .already_handled_proposal(round, &executed_block.proposal);
         let key_pair = self.key_pair().await?;
         // Create the final block proposal.
         let proposal = if let Some(cert) = info.manager.requested_locked {
             Box::new(BlockProposal::new_retry(round, *cert, &key_pair, blobs))
         } else {
-            let block = executed_block.block.clone();
+            let block = executed_block.proposal.clone();
             Box::new(BlockProposal::new_initial(round, block, &key_pair, blobs))
         };
         if !already_handled_locally {
@@ -2486,7 +2484,7 @@ where
         executed_block: &ExecutedBlock,
     ) -> Result<Either<Round, RoundTimeout>, ChainClientError> {
         let manager = &info.manager;
-        let block = &executed_block.block;
+        let block = &executed_block.proposal;
         // If there is a conflicting proposal in the current round, we can only propose if the
         // next round can be started without a timeout, i.e. if we are in a multi-leader round.
         // Similarly, we cannot propose a block that uses oracles in the fast round.

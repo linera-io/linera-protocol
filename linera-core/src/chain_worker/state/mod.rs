@@ -54,7 +54,7 @@ where
     chain: ChainStateView<StorageClient::Context>,
     shared_chain_view: Option<Arc<RwLock<ChainStateView<StorageClient::Context>>>>,
     service_runtime_endpoint: Option<ServiceRuntimeEndpoint>,
-    executed_block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
+    block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
     tracked_chains: Option<Arc<sync::RwLock<HashSet<ChainId>>>>,
     delivery_notifier: DeliveryNotifier,
     knows_chain_is_active: bool,
@@ -69,7 +69,7 @@ where
     pub async fn load(
         config: ChainWorkerConfig,
         storage: StorageClient,
-        executed_block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
+        block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
         tracked_chains: Option<Arc<sync::RwLock<HashSet<ChainId>>>>,
         delivery_notifier: DeliveryNotifier,
         chain_id: ChainId,
@@ -83,7 +83,7 @@ where
             chain,
             shared_chain_view: None,
             service_runtime_endpoint,
-            executed_block_values,
+            block_values,
             tracked_chains,
             delivery_notifier,
             knows_chain_is_active: false,
@@ -378,7 +378,7 @@ where
             if !tracked_chains
                 .read()
                 .expect("Panics should not happen while holding a lock to `tracked_chains`")
-                .contains(&executed_block.block.chain_id)
+                .contains(&executed_block.proposal.chain_id)
             {
                 return; // The parent chain is not tracked; don't track the child.
             }

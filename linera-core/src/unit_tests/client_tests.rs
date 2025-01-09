@@ -106,7 +106,7 @@ where
             .unwrap()
             .unwrap();
         assert_eq!(sender.next_block_height(), BlockHeight::from(1));
-        assert!(sender.pending_block().is_none());
+        assert!(sender.pending_proposal().is_none());
         assert_eq!(
             sender.local_balance().await.unwrap(),
             Amount::from_millis(999)
@@ -276,7 +276,7 @@ where
     let new_owner = Owner::from(new_key_pair.public());
     let certificate = sender.rotate_key_pair(new_key_pair).await.unwrap().unwrap();
     assert_eq!(sender.next_block_height(), BlockHeight::from(1));
-    assert!(sender.pending_block().is_none());
+    assert!(sender.pending_proposal().is_none());
     assert_eq!(sender.identity().await.unwrap(), new_owner);
     assert_eq!(
         builder
@@ -317,7 +317,7 @@ where
         .unwrap()
         .unwrap();
     assert_eq!(sender.next_block_height(), BlockHeight::from(1));
-    assert!(sender.pending_block().is_none());
+    assert!(sender.pending_proposal().is_none());
     assert_matches!(
         sender.key_pair().await.map(|kp| KeyPair::public(&kp)), // KeyPair isn't Debug; using PublicKey.
         Err(ChainClientError::CannotFindKeyForChain(_))
@@ -361,7 +361,7 @@ where
         .unwrap()
         .unwrap();
     assert_eq!(sender.next_block_height(), BlockHeight::from(1));
-    assert!(sender.pending_block().is_none());
+    assert!(sender.pending_proposal().is_none());
     assert!(sender.key_pair().await.is_ok());
     assert_eq!(
         builder
@@ -492,7 +492,7 @@ where
     );
 
     assert_eq!(sender.next_block_height(), BlockHeight::from(1));
-    assert!(sender.pending_block().is_none());
+    assert!(sender.pending_proposal().is_none());
     assert!(sender.key_pair().await.is_ok());
     // Make a client to try the new chain.
     let new_id = ChainId::child(message_id);
@@ -548,7 +548,7 @@ where
     assert_eq!(new_id, new_id2);
     assert_eq!(sender.next_block_height(), BlockHeight::from(1));
     assert_eq!(parent.next_block_height(), BlockHeight::from(1));
-    assert!(sender.pending_block().is_none());
+    assert!(sender.pending_proposal().is_none());
     assert!(sender.key_pair().await.is_ok());
     assert_matches!(
         certificate.block().body.operations[open_chain_message_id.index as usize],
@@ -627,7 +627,7 @@ where
     let new_id2 = ChainId::child(open_chain_message_id);
     assert_eq!(new_id, new_id2);
     assert_eq!(sender.next_block_height(), BlockHeight::from(2));
-    assert!(sender.pending_block().is_none());
+    assert!(sender.pending_proposal().is_none());
     assert!(sender.key_pair().await.is_ok());
     assert_matches!(
         certificate.block().body.operations[open_chain_message_id.index as usize],
@@ -694,7 +694,7 @@ where
         .unwrap()
         .unwrap();
     assert_eq!(sender.next_block_height(), BlockHeight::from(2));
-    assert!(sender.pending_block().is_none());
+    assert!(sender.pending_proposal().is_none());
     assert!(sender.key_pair().await.is_ok());
     // Make a client to try the new chain.
     let client = builder
@@ -742,7 +742,7 @@ where
         "Unexpected certificate value",
     );
     assert_eq!(client1.next_block_height(), BlockHeight::from(1));
-    assert!(client1.pending_block().is_none());
+    assert!(client1.pending_proposal().is_none());
     assert!(client1.key_pair().await.is_ok());
     assert_eq!(
         builder
@@ -838,7 +838,7 @@ where
         "unexpected result"
     );
     assert_eq!(sender.next_block_height(), BlockHeight::ZERO);
-    assert!(sender.pending_block().is_some());
+    assert!(sender.pending_proposal().is_some());
     assert_eq!(
         sender.local_balance().await.unwrap(),
         Amount::from_tokens(4)
@@ -881,7 +881,7 @@ where
         .unwrap();
 
     assert_eq!(client1.next_block_height(), BlockHeight::from(1));
-    assert!(client1.pending_block().is_none());
+    assert!(client1.pending_proposal().is_none());
     assert_eq!(client1.local_balance().await.unwrap(), Amount::ZERO);
     assert_eq!(
         client1.query_system_application(SystemQuery).await.unwrap(),
@@ -918,7 +918,7 @@ where
         .await
         .unwrap();
     assert_eq!(client2.next_block_height(), BlockHeight::from(1));
-    assert!(client2.pending_block().is_none());
+    assert!(client2.pending_proposal().is_none());
     assert_eq!(
         client2.local_balance().await.unwrap(),
         Amount::from_tokens(2)
@@ -967,7 +967,7 @@ where
         Amount::from_millis(999)
     );
     assert_eq!(client1.next_block_height(), BlockHeight::from(1));
-    assert!(client1.pending_block().is_none());
+    assert!(client1.pending_proposal().is_none());
     // The receiver doesn't know about the transfer.
     client2.process_inbox().await.unwrap();
     assert_eq!(client2.local_balance().await.unwrap(), Amount::ZERO);
@@ -1059,10 +1059,10 @@ where
     // Blocks were executed locally.
     assert_eq!(client1.local_balance().await.unwrap(), Amount::ONE);
     assert_eq!(client1.next_block_height(), BlockHeight::from(2));
-    assert!(client1.pending_block().is_none());
+    assert!(client1.pending_proposal().is_none());
     assert_eq!(client2.local_balance().await.unwrap(), Amount::ZERO);
     assert_eq!(client2.next_block_height(), BlockHeight::from(1));
-    assert!(client2.pending_block().is_none());
+    assert!(client2.pending_proposal().is_none());
     // Last one was not confirmed remotely, hence a conservative balance.
     assert_eq!(client2.local_balance().await.unwrap(), Amount::ZERO);
     // Let the receiver confirm in last resort.
@@ -1117,7 +1117,7 @@ where
     let committee = Committee::new(validators, ResourceControlPolicy::only_fuel());
     admin.stage_new_committee(committee).await.unwrap();
     assert_eq!(admin.next_block_height(), BlockHeight::from(3));
-    assert!(admin.pending_block().is_none());
+    assert!(admin.pending_proposal().is_none());
     assert!(admin.key_pair().await.is_ok());
     assert_eq!(admin.epoch().await.unwrap(), Epoch::from(2));
 
@@ -1355,7 +1355,7 @@ where
         .await;
 
     assert!(b0_result.is_err());
-    assert!(client2_a.pending_block().is_some());
+    assert!(client2_a.pending_proposal().is_some());
 
     for i in 0..=2 {
         let info = builder
@@ -1488,7 +1488,7 @@ where
         .await;
 
     assert!(b0_result.is_err());
-    assert!(client2_a.pending_block().is_some());
+    assert!(client2_a.pending_proposal().is_some());
 
     for i in 0..=2 {
         let validator_manager = builder
@@ -1643,7 +1643,7 @@ where
         .await;
 
     assert!(b0_result.is_err());
-    assert!(client3_a.pending_block().is_some());
+    assert!(client3_a.pending_proposal().is_some());
 
     let manager = client3_a
         .chain_info_with_manager_values()
@@ -1968,7 +1968,7 @@ where
     assert_eq!(manager.current_round, Round::MultiLeader(0));
     let result = client1.publish_data_blob(b"blob1".to_vec()).await;
     assert!(result.is_err());
-    assert!(client1.pending_block().is_some());
+    assert!(client1.pending_proposal().is_some());
     assert!(!client1.pending_blobs().is_empty());
 
     // Finally, the validators are online and honest again.
@@ -1983,7 +1983,7 @@ where
         manager.requested_locked.unwrap().round,
         Round::MultiLeader(1)
     );
-    assert!(client0.pending_block().is_some());
+    assert!(client0.pending_proposal().is_some());
 
     // Client 0 now only tries to burn 1 token. Before that, they automatically finalize the
     // pending block, which publishes the blob, leaving 10 - 1 = 9.
@@ -1994,7 +1994,7 @@ where
         client0.local_balance().await.unwrap(),
         Amount::from_tokens(9)
     );
-    assert!(client0.pending_block().is_none());
+    assert!(client0.pending_proposal().is_none());
 
     // Burn another token so Client 1 sees that the blob is already published
     client1.prepare_chain().await.unwrap();
@@ -2005,7 +2005,7 @@ where
         client1.local_balance().await.unwrap(),
         Amount::from_tokens(8)
     );
-    assert!(client1.pending_block().is_none());
+    assert!(client1.pending_proposal().is_none());
     assert!(client1.pending_blobs().is_empty());
     Ok(())
 }
@@ -2137,7 +2137,7 @@ where
         Round::MultiLeader(0)
     );
     assert_eq!(manager.current_round, Round::MultiLeader(1));
-    assert!(client1.pending_block().is_some());
+    assert!(client1.pending_proposal().is_some());
     client1.burn(None, Amount::from_tokens(4)).await.unwrap();
 
     // Burning 3 and 4 tokens got finalized; the pending 2 tokens got skipped.

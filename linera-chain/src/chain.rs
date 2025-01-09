@@ -149,7 +149,6 @@ static STATE_HASH_COMPUTATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(||
 });
 
 /// The BCS-serialized size of an empty [`Block`].
-// TODO: UPDATE
 const EMPTY_BLOCK_SIZE: usize = 91;
 
 /// An origin, cursor and timestamp of a unskippable bundle in our inbox.
@@ -1237,7 +1236,7 @@ where
 #[test]
 fn empty_executed_block_size() {
     let executed_block = crate::data_types::ExecutedBlock {
-        block: crate::test::make_first_block(ChainId::root(0)),
+        proposal: crate::test::make_first_block(ChainId::root(0)),
         outcome: crate::data_types::BlockExecutionOutcome::default(),
     };
     let size = bcs::serialized_size(&executed_block).unwrap();
