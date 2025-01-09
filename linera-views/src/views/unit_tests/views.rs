@@ -258,7 +258,7 @@ impl TestContextFactory for ScyllaDbContextFactory {
     }
 }
 
-/// Check if a cloned view contains the staged changes from its source.
+/// Checks if a cloned view contains the staged changes from its source.
 #[test_case(PhantomData::<TestCollectionView<_>>; "with CollectionView")]
 #[test_case(PhantomData::<TestLogView<_>>; "with LogView")]
 #[test_case(PhantomData::<TestMapView<_>>; "with MapView")]
@@ -282,7 +282,7 @@ where
     Ok(())
 }
 
-/// Check if new staged changes are separate between the cloned view and its source.
+/// Checks if new staged changes are separate between the cloned view and its source.
 #[test_case(PhantomData::<TestCollectionView<_>>; "with CollectionView")]
 #[test_case(PhantomData::<TestLogView<_>>; "with LogView")]
 #[test_case(PhantomData::<TestMapView<_>>; "with MapView")]
@@ -312,7 +312,7 @@ where
     Ok(())
 }
 
-/// Check if the cached hash value persisted in storage is cleared when flushing a cleared
+/// Checks if the cached hash value persisted in storage is cleared when flushing a cleared
 /// [`HashableRegisterView`].
 ///
 /// Otherwise `rollback` may set the cached staged hash value to an incorrect value.
@@ -381,7 +381,7 @@ async fn test_reentrant_collection_view_has_no_pending_changes_after_try_load_en
     Ok(())
 }
 
-/// Check if a [`ReentrantCollectionView`] has pending changes after adding an entry.
+/// Checks if a [`ReentrantCollectionView`] has pending changes after adding an entry.
 #[tokio::test]
 async fn test_reentrant_collection_view_has_pending_changes_after_new_entry() -> anyhow::Result<()>
 {
@@ -405,7 +405,7 @@ async fn test_reentrant_collection_view_has_pending_changes_after_new_entry() ->
     Ok(())
 }
 
-/// Check if a acquiring a write-lock to a sub-view causes the collection to have pending changes.
+/// Checks if a acquiring a write-lock to a sub-view causes the collection to have pending changes.
 #[tokio::test]
 async fn test_reentrant_collection_view_has_pending_changes_after_try_load_entry_mut(
 ) -> anyhow::Result<()> {
@@ -437,7 +437,7 @@ async fn test_reentrant_collection_view_has_pending_changes_after_try_load_entry
     Ok(())
 }
 
-/// Check if a acquiring multiple write-locks to sub-views causes the collection to have pending
+/// Checks if a acquiring multiple write-locks to sub-views causes the collection to have pending
 /// changes.
 #[tokio::test]
 async fn test_reentrant_collection_view_has_pending_changes_after_try_load_entries_mut(

@@ -9,7 +9,7 @@ use syn::{parse_quote, DeriveInput, Ident};
 
 use super::{super::apply_specialization_attribute, Specialization, Specializations};
 
-/// Check that the [`DeriveInput`] of a `struct` is changed.
+/// Checks that the [`DeriveInput`] of a `struct` is changed.
 #[test]
 fn derive_input_changes() {
     let mut input: DeriveInput = parse_quote! {
@@ -66,7 +66,7 @@ fn derive_input_changes() {
     );
 }
 
-/// Check that [`Specialization`] generates correctly specialized [`Generics`].
+/// Checks that [`Specialization`] generates correctly specialized [`Generics`].
 #[test]
 fn generics_are_specialized() {
     let specializations = Specializations(vec![
