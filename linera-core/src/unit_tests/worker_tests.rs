@@ -728,7 +728,7 @@ where
     drop(chain);
 
     worker
-        .handle_confirmed_certificate(certificate0, vec![], None)
+        .handle_confirmed_certificate(certificate0, None)
         .await?;
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     drop(chain);
@@ -858,7 +858,7 @@ where
     // Missing earlier blocks
     assert_matches!(
         worker
-            .handle_confirmed_certificate(certificate1.clone(), vec![], None)
+            .handle_confirmed_certificate(certificate1.clone(), None)
             .await,
         Err(WorkerError::MissingEarlierBlocks { .. })
     );
@@ -1088,7 +1088,7 @@ where
             )),
         );
         worker
-            .handle_confirmed_certificate(certificate.clone(), vec![], None)
+            .handle_confirmed_certificate(certificate.clone(), None)
             .await?;
 
         // Then receive the next two messages.
@@ -3922,7 +3922,7 @@ where
     ));
     let certificate = make_certificate(&committee, &worker, value);
     worker
-        .handle_confirmed_certificate(certificate, vec![], None)
+        .handle_confirmed_certificate(certificate, None)
         .await?;
 
     for query_context in query_contexts_after_new_block.clone() {

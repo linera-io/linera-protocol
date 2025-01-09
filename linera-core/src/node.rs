@@ -71,7 +71,6 @@ pub trait ValidatorNode {
     async fn handle_confirmed_certificate(
         &self,
         certificate: GenericCertificate<ConfirmedBlock>,
-        blobs: Vec<Blob>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError>;
 

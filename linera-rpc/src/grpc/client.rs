@@ -207,13 +207,11 @@ impl ValidatorNode for GrpcClient {
     async fn handle_confirmed_certificate(
         &self,
         certificate: GenericCertificate<ConfirmedBlock>,
-        blobs: Vec<Blob>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<linera_core::data_types::ChainInfoResponse, NodeError> {
         let wait_for_outgoing_messages: bool = delivery.wait_for_outgoing_messages();
         let request = HandleConfirmedCertificateRequest {
             certificate,
-            blobs,
             wait_for_outgoing_messages,
         };
         GrpcClient::try_into_chain_info(client_delegate!(

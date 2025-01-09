@@ -418,9 +418,6 @@ HandleConfirmedCertificateRequest:
     - certificate:
         TYPENAME: ConfirmedBlockCertificate
     - wait_for_outgoing_messages: BOOL
-    - blobs:
-        SEQ:
-          TYPENAME: BlobContent
 HandleLiteCertRequest:
   STRUCT:
     - certificate:

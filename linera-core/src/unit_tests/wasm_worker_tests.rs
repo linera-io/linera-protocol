@@ -103,7 +103,7 @@ where
     let creator_key_pair = KeyPair::generate();
     let creator_chain = ChainDescription::Root(2);
     let (committee, worker) = init_worker_with_chains(
-        storage,
+        storage.clone(),
         vec![
             (publisher_chain, publisher_key_pair.public(), Amount::ZERO),
             (creator_chain, creator_key_pair.public(), Amount::ZERO),
@@ -153,12 +153,11 @@ where
     ));
     let publish_certificate = make_certificate(&committee, &worker, publish_block_proposal);
 
+    storage
+        .write_blobs(&[contract_blob.clone(), service_blob.clone()])
+        .await?;
     let info = worker
-        .fully_handle_certificate_with_notifications(
-            publish_certificate.clone(),
-            vec![contract_blob.clone(), service_blob.clone()],
-            &(),
-        )
+        .fully_handle_certificate_with_notifications(publish_certificate.clone(), vec![], &())
         .await
         .unwrap()
         .info;

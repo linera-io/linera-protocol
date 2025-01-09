@@ -530,6 +530,7 @@ where
         &self,
         blob_ids: &[BlobId],
         blob_state: BlobState,
+        overwrite: bool,
     ) -> Result<Vec<Epoch>, ViewError> {
         if blob_ids.is_empty() {
             return Ok(Vec::new());
@@ -549,7 +550,7 @@ where
             let (should_write, latest_epoch) = match maybe_blob_state {
                 None => (true, blob_state.epoch),
                 Some(current_blob_state) => (
-                    current_blob_state.epoch < blob_state.epoch,
+                    overwrite && current_blob_state.epoch < blob_state.epoch,
                     current_blob_state.epoch.max(blob_state.epoch),
                 ),
             };

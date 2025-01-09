@@ -229,8 +229,9 @@ where
                 // The certificate is confirmed, so the blobs must be in storage.
                 let maybe_blobs = self.local_node.read_blobs_from_storage(blob_ids).await?;
                 let blobs = maybe_blobs.ok_or_else(|| original_err.clone())?;
+                self.remote_node.upload_blobs(blobs.clone()).await?;
                 self.remote_node
-                    .handle_confirmed_certificate(certificate, blobs, delivery)
+                    .handle_confirmed_certificate(certificate, delivery)
                     .await
             }
             _ => result,

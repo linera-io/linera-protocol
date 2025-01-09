@@ -140,6 +140,7 @@ pub trait Storage: Sized {
         &self,
         blob_ids: &[BlobId],
         blob_state: BlobState,
+        overwrite: bool,
     ) -> Result<Vec<Epoch>, ViewError>;
 
     /// Writes several blobs.

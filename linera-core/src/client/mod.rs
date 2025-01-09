@@ -395,9 +395,18 @@ where
         certificate: GenericCertificate<T>,
         blobs: Vec<Blob>,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
-        self.local_node
-            .handle_certificate(certificate, blobs, &self.notifier)
-            .await
+        let result = self
+            .local_node
+            .handle_certificate(certificate.clone(), blobs.clone(), &self.notifier)
+            .await;
+        if let Err(LocalNodeError::BlobsNotFound(_)) = &result {
+            self.local_node.store_blobs(&blobs).await?;
+            return self
+                .local_node
+                .handle_certificate(certificate, vec![], &self.notifier)
+                .await;
+        }
+        result
     }
 }
 

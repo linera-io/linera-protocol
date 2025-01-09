@@ -148,11 +148,10 @@ where
     async fn handle_confirmed_certificate(
         &self,
         certificate: GenericCertificate<ConfirmedBlock>,
-        blobs: Vec<Blob>,
         _delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
         self.spawn_and_receive(move |validator, sender| {
-            validator.do_handle_certificate(certificate, blobs, sender)
+            validator.do_handle_certificate(certificate, vec![], sender)
         })
         .await
     }

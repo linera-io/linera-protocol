@@ -64,7 +64,6 @@ impl ValidatorNode for DummyValidatorNode {
     async fn handle_confirmed_certificate(
         &self,
         _: GenericCertificate<ConfirmedBlock>,
-        _: Vec<Blob>,
         _delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
         Err(NodeError::UnexpectedMessage)

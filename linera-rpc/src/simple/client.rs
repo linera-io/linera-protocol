@@ -116,13 +116,11 @@ impl ValidatorNode for SimpleClient {
     async fn handle_confirmed_certificate(
         &self,
         certificate: ConfirmedBlockCertificate,
-        blobs: Vec<Blob>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
         let wait_for_outgoing_messages = delivery.wait_for_outgoing_messages();
         let request = HandleConfirmedCertificateRequest {
             certificate,
-            blobs,
             wait_for_outgoing_messages,
         };
         let request = RpcMessage::ConfirmedCertificate(Box::new(request));

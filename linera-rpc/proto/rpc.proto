@@ -261,9 +261,6 @@ message HandleConfirmedCertificateRequest {
   // Wait until all outgoing cross-chain messages from this certificate have
   // been received by the target chains.
   bool wait_for_outgoing_messages = 3;
-
-  // Blobs required by this certificate
-  bytes blobs = 4;
 }
 
 // A certified statement from the committee.
