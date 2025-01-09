@@ -476,10 +476,7 @@ where
     }
 
     #[instrument(skip_all, err(Display))]
-    async fn upload_blob_content(
-        &self,
-        request: Request<BlobContent>,
-    ) -> Result<Response<BlobId>, Status> {
+    async fn upload_blob(&self, request: Request<BlobContent>) -> Result<Response<BlobId>, Status> {
         let content: linera_sdk::base::BlobContent = request.into_inner().try_into()?;
         let blob = Blob::new(content);
         let id = blob.id();

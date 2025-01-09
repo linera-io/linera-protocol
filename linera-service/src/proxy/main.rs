@@ -300,14 +300,14 @@ where
             GenesisConfigHashQuery => Ok(Some(RpcMessage::GenesisConfigHashResponse(Box::new(
                 self.genesis_config.hash(),
             )))),
-            UploadBlobContent(content) => {
+            UploadBlob(content) => {
                 let blob = Blob::new(*content);
                 let id = blob.id();
                 ensure!(
                     self.storage.maybe_write_blobs(&[blob]).await?[0],
                     "Blob not found"
                 );
-                Ok(Some(RpcMessage::UploadBlobContentResponse(Box::new(id))))
+                Ok(Some(RpcMessage::UploadBlobResponse(Box::new(id))))
             }
             DownloadBlobContent(blob_id) => {
                 let content = self.storage.read_blob(*blob_id).await?.into_content();
@@ -350,9 +350,7 @@ where
             | MissingBlobIdsResponse(_)
             | DownloadConfirmedBlockResponse(_)
             | DownloadCertificatesResponse(_)
-            | UploadBlobContentResponse(_) => {
-                Err(anyhow::Error::from(NodeError::UnexpectedMessage))
-            }
+            | UploadBlobResponse(_) => Err(anyhow::Error::from(NodeError::UnexpectedMessage)),
         }
     }
 }

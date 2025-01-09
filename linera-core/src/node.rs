@@ -104,7 +104,7 @@ pub trait ValidatorNode {
 
     // Uploads a blob content. Returns an error if the validator has not seen a
     // certificate using this blob.
-    async fn upload_blob_content(&self, content: BlobContent) -> Result<BlobId, NodeError>;
+    async fn upload_blob(&self, content: BlobContent) -> Result<BlobId, NodeError>;
 
     async fn download_blob_content(&self, blob_id: BlobId) -> Result<BlobContent, NodeError>;
 

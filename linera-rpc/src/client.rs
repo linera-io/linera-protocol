@@ -172,12 +172,12 @@ impl ValidatorNode for Client {
         })
     }
 
-    async fn upload_blob_content(&self, content: BlobContent) -> Result<BlobId, NodeError> {
+    async fn upload_blob(&self, content: BlobContent) -> Result<BlobId, NodeError> {
         Ok(match self {
-            Client::Grpc(grpc_client) => grpc_client.upload_blob_content(content).await?,
+            Client::Grpc(grpc_client) => grpc_client.upload_blob(content).await?,
 
             #[cfg(with_simple_network)]
-            Client::Simple(simple_client) => simple_client.upload_blob_content(content).await?,
+            Client::Simple(simple_client) => simple_client.upload_blob(content).await?,
         })
     }
 

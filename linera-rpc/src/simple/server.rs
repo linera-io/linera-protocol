@@ -360,8 +360,8 @@ where
             | RpcMessage::MissingBlobIdsResponse(_)
             | RpcMessage::DownloadCertificates(_)
             | RpcMessage::DownloadCertificatesResponse(_)
-            | RpcMessage::UploadBlobContent(_)
-            | RpcMessage::UploadBlobContentResponse(_) => Err(NodeError::UnexpectedMessage),
+            | RpcMessage::UploadBlob(_)
+            | RpcMessage::UploadBlobResponse(_) => Err(NodeError::UnexpectedMessage),
         };
 
         self.server.packets_processed += 1;

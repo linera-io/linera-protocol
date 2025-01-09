@@ -348,9 +348,9 @@ impl ValidatorNode for GrpcClient {
     }
 
     #[instrument(target = "grpc_client", skip(self), err, fields(address = self.address))]
-    async fn upload_blob_content(&self, content: BlobContent) -> Result<BlobId, NodeError> {
+    async fn upload_blob(&self, content: BlobContent) -> Result<BlobId, NodeError> {
         let req = api::BlobContent::try_from(content)?;
-        Ok(client_delegate!(self, upload_blob_content, req)?.try_into()?)
+        Ok(client_delegate!(self, upload_blob, req)?.try_into()?)
     }
 
     #[instrument(target = "grpc_client", skip(self), err, fields(address = self.address))]

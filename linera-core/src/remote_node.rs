@@ -221,7 +221,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
     pub(crate) async fn upload_blobs(&self, blobs: Vec<Blob>) -> Result<(), NodeError> {
         let tasks = blobs
             .into_iter()
-            .map(|blob| self.node.upload_blob_content(blob.into()));
+            .map(|blob| self.node.upload_blob(blob.into()));
         try_join_all(tasks).await?;
         Ok(())
     }

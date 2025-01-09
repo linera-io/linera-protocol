@@ -179,11 +179,9 @@ where
         Ok(CryptoHash::test_hash("genesis config"))
     }
 
-    async fn upload_blob_content(&self, content: BlobContent) -> Result<BlobId, NodeError> {
-        self.spawn_and_receive(move |validator, sender| {
-            validator.do_upload_blob_content(content, sender)
-        })
-        .await
+    async fn upload_blob(&self, content: BlobContent) -> Result<BlobId, NodeError> {
+        self.spawn_and_receive(move |validator, sender| validator.do_upload_blob(content, sender))
+            .await
     }
 
     async fn download_blob_content(&self, blob_id: BlobId) -> Result<BlobContent, NodeError> {
@@ -462,7 +460,7 @@ where
         sender.send(Ok(stream))
     }
 
-    async fn do_upload_blob_content(
+    async fn do_upload_blob(
         self,
         content: BlobContent,
         sender: oneshot::Sender<Result<BlobId, NodeError>>,
