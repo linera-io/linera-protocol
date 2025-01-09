@@ -120,11 +120,12 @@ where
         self.memory.write(&mut *self.instance, location, bytes)
     }
 
-    /// Returns a newly allocated buffer of `size` bytes in the guest module's memory.
+    /// Returns a newly allocated buffer of `size` bytes in the guest module's memory
+    /// aligned to the requested `alignment`.
     ///
     /// Calls the guest module to allocate the memory, so the resulting allocation is managed by
     /// the guest.
-    pub fn allocate(&mut self, size: u32) -> Result<GuestPointer, RuntimeError> {
+    pub fn allocate(&mut self, size: u32, alignment: u32) -> Result<GuestPointer, RuntimeError> {
         if self.cabi_realloc.is_none() {
             self.cabi_realloc = Some(<Instance as InstanceWithFunction<
                 HList![i32, i32, i32, i32],
@@ -133,14 +134,16 @@ where
         }
 
         let size = i32::try_from(size).map_err(|_| RuntimeError::AllocationTooLarge)?;
+        let alignment = i32::try_from(alignment).map_err(|_| RuntimeError::InvalidAlignment)?;
 
         let cabi_realloc = self
             .cabi_realloc
             .as_ref()
             .expect("`cabi_realloc` function was not loaded before it was called");
 
-        let hlist_pat![allocation_address] =
-            self.instance.call(cabi_realloc, hlist![0, 0, 1, size])?;
+        let hlist_pat![allocation_address] = self
+            .instance
+            .call(cabi_realloc, hlist![0, 0, alignment, size])?;
 
         Ok(GuestPointer(
             allocation_address

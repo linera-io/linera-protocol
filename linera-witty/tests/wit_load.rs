@@ -13,7 +13,8 @@ use linera_witty::{hlist, InstanceWithMemory, Layout, MockInstance, RuntimeError
 
 use self::types::{
     Branch, Enum, Leaf, RecordWithDoublePadding, SimpleWrapper, SpecializedGenericEnum,
-    SpecializedGenericStruct, StructWithHeapFields, TupleWithPadding, TupleWithoutPadding,
+    SpecializedGenericStruct, StructWithHeapFields, StructWithLists, TupleWithPadding,
+    TupleWithoutPadding,
 };
 
 /// Check that a wrapper type is properly loaded from memory and lifted from its flat layout.
@@ -272,7 +273,7 @@ fn test_invalid_discriminant() {
         17,
     ];
 
-    let address = memory.allocate(memory_bytes.len() as u32).unwrap();
+    let address = memory.allocate(memory_bytes.len() as u32, 1).unwrap();
 
     memory.write(address, &memory_bytes).unwrap();
 
@@ -353,6 +354,52 @@ fn test_heap_allocated_fields() {
     );
 }
 
+/// Check that a [`Vec`] type is properly loaded from memory and lifted from its flat
+/// layout.
+#[test]
+fn test_vec() {
+    let expected = vec![SimpleWrapper(false), SimpleWrapper(true)];
+
+    test_load_from_memory(&[8, 0, 0, 0, 2, 0, 0, 0, 0, 1], expected.clone());
+    test_lift_from_flat_layout(hlist![0_i32, 2_i32], expected, &[0, 1]);
+}
+
+/// Check that a type with list fields is properly loaded from memory and lifted from its
+/// flat layout.
+#[test]
+fn test_list_fields() {
+    let expected = StructWithLists {
+        vec: vec![
+            SimpleWrapper(true),
+            SimpleWrapper(true),
+            SimpleWrapper(false),
+        ],
+        second_vec: vec![
+            TupleWithPadding(0x1a19, 0x201f_1e1d, 0x2827_2625_2423_2221),
+            TupleWithPadding(0x2a29, 0x302f_2e2d, 0x3837_3635_3433_3231),
+        ],
+    };
+
+    test_load_from_memory(
+        &[
+            16, 0, 0, 0, 3, 0, 0, 0, 24, 0, 0, 0, 2, 0, 0, 0, 1, 1, 0, 20, 21, 22, 23, 24, 0x19,
+            0x1a, 27, 28, 0x1d, 0x1e, 0x1f, 0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28,
+            0x29, 0x2a, 43, 44, 0x2d, 0x2e, 0x2f, 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37,
+            0x38,
+        ],
+        expected.clone(),
+    );
+    test_lift_from_flat_layout(
+        hlist![0_i32, 3_i32, 8_i32, 2_i32],
+        expected,
+        &[
+            1, 1, 0, 0, 0, 0, 0, 0, 0x19, 0x1a, 0, 0, 0x1d, 0x1e, 0x1f, 0x20, 0x21, 0x22, 0x23,
+            0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2a, 0, 0, 0x2d, 0x2e, 0x2f, 0x30, 0x31, 0x32,
+            0x33, 0x34, 0x35, 0x36, 0x37, 0x38,
+        ],
+    );
+}
+
 /// Tests that the type `T` and wrapped versions of it can be loaded from an `input` sequence of
 /// bytes in memory and that it matches the `expected` value.
 fn test_load_from_memory<T>(input: &[u8], expected: T)
@@ -374,7 +421,7 @@ where
     let mut instance = MockInstance::<()>::default();
     let mut memory = instance.memory().unwrap();
 
-    let address = memory.allocate(input.len() as u32).unwrap();
+    let address = memory.allocate(input.len() as u32, 1).unwrap();
 
     memory.write(address, input).unwrap();
 
@@ -409,7 +456,7 @@ fn test_single_lift_from_flat_layout<T>(
     let mut instance = MockInstance::<()>::default();
     let mut memory = instance.memory().unwrap();
 
-    let start_address = memory.allocate(initial_memory.len() as u32).unwrap();
+    let start_address = memory.allocate(initial_memory.len() as u32, 1).unwrap();
 
     memory.write(start_address, initial_memory).unwrap();
 
