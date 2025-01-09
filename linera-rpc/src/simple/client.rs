@@ -164,6 +164,11 @@ impl ValidatorNode for SimpleClient {
         self.query(RpcMessage::GenesisConfigHashQuery).await
     }
 
+    async fn upload_blob_content(&self, content: BlobContent) -> Result<BlobId, NodeError> {
+        self.query(RpcMessage::UploadBlobContent(Box::new(content)))
+            .await
+    }
+
     async fn download_blob_content(&self, blob_id: BlobId) -> Result<BlobContent, NodeError> {
         self.query(RpcMessage::DownloadBlobContent(Box::new(blob_id)))
             .await
@@ -208,8 +213,7 @@ impl ValidatorNode for SimpleClient {
     }
 
     async fn missing_blob_ids(&self, blob_ids: Vec<BlobId>) -> Result<Vec<BlobId>, NodeError> {
-        self.query(RpcMessage::MissingBlobIds(Box::new(blob_ids)))
-            .await
+        self.query(RpcMessage::MissingBlobIds(blob_ids)).await
     }
 }
 

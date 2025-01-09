@@ -33,11 +33,12 @@ pub enum RpcMessage {
     ConfirmedCertificate(Box<HandleConfirmedCertificateRequest>),
     LiteCertificate(Box<HandleLiteCertRequest<'static>>),
     ChainInfoQuery(Box<ChainInfoQuery>),
+    UploadBlobContent(Box<BlobContent>),
     DownloadBlobContent(Box<BlobId>),
     DownloadConfirmedBlock(Box<CryptoHash>),
     DownloadCertificates(Vec<CryptoHash>),
     BlobLastUsedBy(Box<BlobId>),
-    MissingBlobIds(Box<Vec<BlobId>>),
+    MissingBlobIds(Vec<BlobId>),
     VersionInfoQuery,
     GenesisConfigHashQuery,
 
@@ -47,11 +48,12 @@ pub enum RpcMessage {
     Error(Box<NodeError>),
     VersionInfoResponse(Box<VersionInfo>),
     GenesisConfigHashResponse(Box<CryptoHash>),
+    UploadBlobContentResponse(Box<BlobId>),
     DownloadBlobContentResponse(Box<BlobContent>),
     DownloadConfirmedBlockResponse(Box<ConfirmedBlock>),
     DownloadCertificatesResponse(Vec<ConfirmedBlockCertificate>),
     BlobLastUsedByResponse(Box<CryptoHash>),
-    MissingBlobIdsResponse(Box<Vec<BlobId>>),
+    MissingBlobIdsResponse(Vec<BlobId>),
 
     // Internal to a validator
     CrossChainRequest(Box<CrossChainRequest>),
@@ -79,6 +81,8 @@ impl RpcMessage {
             | VersionInfoResponse(_)
             | GenesisConfigHashQuery
             | GenesisConfigHashResponse(_)
+            | UploadBlobContent(_)
+            | UploadBlobContentResponse(_)
             | DownloadBlobContent(_)
             | DownloadBlobContentResponse(_)
             | DownloadConfirmedBlock(_)
@@ -104,6 +108,7 @@ impl RpcMessage {
         match self {
             VersionInfoQuery
             | GenesisConfigHashQuery
+            | UploadBlobContent(_)
             | DownloadBlobContent(_)
             | DownloadConfirmedBlock(_)
             | BlobLastUsedBy(_)
@@ -121,6 +126,7 @@ impl RpcMessage {
             | ChainInfoResponse(_)
             | VersionInfoResponse(_)
             | GenesisConfigHashResponse(_)
+            | UploadBlobContentResponse(_)
             | DownloadBlobContentResponse(_)
             | DownloadConfirmedBlockResponse(_)
             | BlobLastUsedByResponse(_)
@@ -201,7 +207,18 @@ impl TryFrom<RpcMessage> for Vec<BlobId> {
     type Error = NodeError;
     fn try_from(message: RpcMessage) -> Result<Self, Self::Error> {
         match message {
-            RpcMessage::MissingBlobIdsResponse(blob_ids) => Ok(*blob_ids),
+            RpcMessage::MissingBlobIdsResponse(blob_ids) => Ok(blob_ids),
+            RpcMessage::Error(error) => Err(*error),
+            _ => Err(NodeError::UnexpectedMessage),
+        }
+    }
+}
+
+impl TryFrom<RpcMessage> for BlobId {
+    type Error = NodeError;
+    fn try_from(message: RpcMessage) -> Result<Self, Self::Error> {
+        match message {
+            RpcMessage::UploadBlobContentResponse(blob_id) => Ok(*blob_id),
             RpcMessage::Error(error) => Err(*error),
             _ => Err(NodeError::UnexpectedMessage),
         }

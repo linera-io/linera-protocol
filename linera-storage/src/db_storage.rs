@@ -576,6 +576,25 @@ where
         Ok(())
     }
 
+    async fn maybe_write_blobs(&self, blobs: &[Blob]) -> Result<Vec<bool>, ViewError> {
+        if blobs.is_empty() {
+            return Ok(Vec::new());
+        }
+        let blob_state_keys = blobs
+            .iter()
+            .map(|blob| bcs::to_bytes(&BaseKey::BlobState(blob.id())))
+            .collect::<Result<_, _>>()?;
+        let blob_states = self.store.contains_keys(blob_state_keys).await?;
+        let mut batch = Batch::new();
+        for (blob, has_state) in blobs.iter().zip(&blob_states) {
+            if *has_state {
+                Self::add_blob_to_batch(blob, &mut batch)?;
+            }
+        }
+        self.write_batch(batch).await?;
+        Ok(blob_states)
+    }
+
     async fn write_blobs(&self, blobs: &[Blob]) -> Result<(), ViewError> {
         if blobs.is_empty() {
             return Ok(());

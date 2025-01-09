@@ -64,6 +64,10 @@ service ValidatorNode {
   // Downloads a blob content.
   rpc DownloadBlobContent(BlobId) returns (BlobContent);
 
+  // Uploads a blob content. Returns an error if the validator has not seen a
+  // certificate using this blob.
+  rpc UploadBlobContent(BlobContent) returns (BlobId);
+
   // Downloads a certificate.
   rpc DownloadCertificate(CryptoHash) returns (Certificate);
 

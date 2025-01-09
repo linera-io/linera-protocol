@@ -359,7 +359,9 @@ where
             | RpcMessage::MissingBlobIds(_)
             | RpcMessage::MissingBlobIdsResponse(_)
             | RpcMessage::DownloadCertificates(_)
-            | RpcMessage::DownloadCertificatesResponse(_) => Err(NodeError::UnexpectedMessage),
+            | RpcMessage::DownloadCertificatesResponse(_)
+            | RpcMessage::UploadBlobContent(_)
+            | RpcMessage::UploadBlobContentResponse(_) => Err(NodeError::UnexpectedMessage),
         };
 
         self.server.packets_processed += 1;

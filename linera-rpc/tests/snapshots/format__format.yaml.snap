@@ -801,74 +801,82 @@ RpcMessage:
         NEWTYPE:
           TYPENAME: ChainInfoQuery
     6:
+      UploadBlobContent:
+        NEWTYPE:
+          TYPENAME: BlobContent
+    7:
       DownloadBlobContent:
         NEWTYPE:
           TYPENAME: BlobId
-    7:
+    8:
       DownloadConfirmedBlock:
         NEWTYPE:
           TYPENAME: CryptoHash
-    8:
+    9:
       DownloadCertificates:
         NEWTYPE:
           SEQ:
             TYPENAME: CryptoHash
-    9:
+    10:
       BlobLastUsedBy:
         NEWTYPE:
           TYPENAME: BlobId
-    10:
+    11:
       MissingBlobIds:
         NEWTYPE:
           SEQ:
             TYPENAME: BlobId
-    11:
-      VersionInfoQuery: UNIT
     12:
-      GenesisConfigHashQuery: UNIT
+      VersionInfoQuery: UNIT
     13:
+      GenesisConfigHashQuery: UNIT
+    14:
       Vote:
         NEWTYPE:
           TYPENAME: LiteVote
-    14:
+    15:
       ChainInfoResponse:
         NEWTYPE:
           TYPENAME: ChainInfoResponse
-    15:
+    16:
       Error:
         NEWTYPE:
           TYPENAME: NodeError
-    16:
+    17:
       VersionInfoResponse:
         NEWTYPE:
           TYPENAME: VersionInfo
-    17:
+    18:
       GenesisConfigHashResponse:
         NEWTYPE:
           TYPENAME: CryptoHash
-    18:
+    19:
+      UploadBlobContentResponse:
+        NEWTYPE:
+          TYPENAME: BlobId
+    20:
       DownloadBlobContentResponse:
         NEWTYPE:
           TYPENAME: BlobContent
-    19:
+    21:
       DownloadConfirmedBlockResponse:
         NEWTYPE:
           TYPENAME: ExecutedBlock
-    20:
+    22:
       DownloadCertificatesResponse:
         NEWTYPE:
           SEQ:
             TYPENAME: ConfirmedBlockCertificate
-    21:
+    23:
       BlobLastUsedByResponse:
         NEWTYPE:
           TYPENAME: CryptoHash
-    22:
+    24:
       MissingBlobIdsResponse:
         NEWTYPE:
           SEQ:
             TYPENAME: BlobId
-    23:
+    25:
       CrossChainRequest:
         NEWTYPE:
           TYPENAME: CrossChainRequest

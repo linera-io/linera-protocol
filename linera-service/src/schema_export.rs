@@ -97,6 +97,10 @@ impl ValidatorNode for DummyValidatorNode {
         Err(NodeError::UnexpectedMessage)
     }
 
+    async fn upload_blob_content(&self, _: BlobContent) -> Result<BlobId, NodeError> {
+        Err(NodeError::UnexpectedMessage)
+    }
+
     async fn download_blob_content(&self, _: BlobId) -> Result<BlobContent, NodeError> {
         Err(NodeError::UnexpectedMessage)
     }
