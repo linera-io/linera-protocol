@@ -45,8 +45,9 @@ use linera_chain::{
         MessageAction,
     },
     types::{
-        CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate,
-        LiteCertificate, Timeout, TimeoutCertificate, ValidatedBlock, ValidatedBlockCertificate,
+        CertificateKind, CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate,
+        GenericCertificate, LiteCertificate, Timeout, TimeoutCertificate, ValidatedBlock,
+        ValidatedBlockCertificate,
     },
     ChainError, ChainExecutionContext, ChainStateView,
 };
@@ -395,18 +396,24 @@ where
         certificate: GenericCertificate<T>,
         blobs: Vec<Blob>,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
-        let result = self
-            .local_node
-            .handle_certificate(certificate.clone(), blobs.clone(), &self.notifier)
-            .await;
-        if let Err(LocalNodeError::BlobsNotFound(_)) = &result {
-            self.local_node.store_blobs(&blobs).await?;
-            return self
+        if T::KIND == CertificateKind::Confirmed {
+            let result = self
                 .local_node
-                .handle_certificate(certificate, vec![], &self.notifier)
+                .handle_certificate(certificate.clone(), vec![], &self.notifier)
                 .await;
+            if let Err(LocalNodeError::BlobsNotFound(_)) = &result {
+                self.local_node.store_blobs(&blobs).await?;
+                return self
+                    .local_node
+                    .handle_certificate(certificate, vec![], &self.notifier)
+                    .await;
+            }
+            result
+        } else {
+            self.local_node
+                .handle_certificate(certificate, blobs, &self.notifier)
+                .await
         }
-        result
     }
 }
 
@@ -1760,7 +1767,7 @@ where
         if let Some(cert) = info.manager.requested_locked {
             let hash = cert.hash();
             let blobs = info.manager.locked_blobs.clone();
-            if let Err(err) = self.client.handle_certificate(*cert.clone(), blobs).await {
+            if let Err(err) = self.process_certificate(*cert.clone(), blobs).await {
                 warn!(
                     "Skipping certificate {hash} from validator {}: {err}",
                     remote_node.name
