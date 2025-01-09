@@ -232,7 +232,7 @@ where
         parameters: &A::Parameters,
         argument: &A::InstantiationArgument,
         required_application_ids: Vec<ApplicationId>,
-    ) -> ApplicationId {
+    ) -> ApplicationId<A::Abi> {
         let parameters = bcs::to_bytes(parameters)
             .expect("Failed to serialize `Parameters` type for a cross-application call");
         let argument = bcs::to_bytes(argument).expect(
@@ -248,7 +248,7 @@ where
             &argument,
             &converted_application_ids,
         );
-        application_id.into()
+        ApplicationId::from(application_id).with_abi::<A::Abi>()
     }
 
     /// Calls another application.
