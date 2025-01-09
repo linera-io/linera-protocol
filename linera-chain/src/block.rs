@@ -471,8 +471,8 @@ impl Block {
     }
 
     pub fn new(proposal: Proposal, outcome: BlockExecutionOutcome) -> Self {
-        fn hash_vec<'de, T: BcsHashable<'de>>(it: &Vec<T>) -> CryptoHash {
-            let v = CryptoHashVec(it.iter().map(CryptoHash::new).collect::<Vec<_>>());
+        fn hash_vec<'de, T: BcsHashable<'de>>(it: impl AsRef<[T]>) -> CryptoHash {
+            let v = CryptoHashVec(it.as_ref().iter().map(CryptoHash::new).collect::<Vec<_>>());
             CryptoHash::new(&v)
         }
         let bundles_hash = hash_vec(&proposal.incoming_bundles);
