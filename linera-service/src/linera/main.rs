@@ -1218,6 +1218,7 @@ impl Runnable for Job {
             | Net(_)
             | Storage { .. }
             | Wallet(_)
+            | ExtractScriptFromMarkdown { .. }
             | HelpMarkdown => {
                 unreachable!()
             }
@@ -1410,6 +1411,7 @@ fn main() -> anyhow::Result<()> {
 fn log_file_name_for(command: &ClientCommand) -> Cow<'static, str> {
     match command {
         ClientCommand::HelpMarkdown
+        | ClientCommand::ExtractScriptFromMarkdown { .. }
         | ClientCommand::Transfer { .. }
         | ClientCommand::OpenChain { .. }
         | ClientCommand::OpenMultiOwnerChain { .. }
@@ -1453,6 +1455,20 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
     match &options.command {
         ClientCommand::HelpMarkdown => {
             clap_markdown::print_help_markdown::<ClientOptions>();
+            Ok(0)
+        }
+
+        ClientCommand::ExtractScriptFromMarkdown {
+            path,
+            pause_after_gql_mutations,
+        } => {
+            let file = crate::util::Markdown::new(path)?;
+            let sleep = if pause_after_gql_mutations.is_zero() {
+                None
+            } else {
+                Some(*pause_after_gql_mutations)
+            };
+            file.extract_bash_script_to(std::io::stdout(), sleep)?;
             Ok(0)
         }
 

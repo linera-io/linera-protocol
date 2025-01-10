@@ -9,9 +9,10 @@ mod common;
 use std::{env, path::PathBuf};
 
 use common::INTEGRATION_TEST_GUARD;
+use linera_client::client_options::DEFAULT_PAUSE_AFTER_GQL_MUTATIONS_SECS;
 use linera_service::{test_name, util::Markdown};
 use tempfile::tempdir;
-use tokio::{process::Command, time::Duration};
+use tokio::process::Command;
 
 #[test_case::test_case(".." ; "main")]
 #[test_case::test_case("../examples/amm" ; "amm")]
@@ -34,7 +35,8 @@ async fn test_script_in_readme_with_storage_service(path: &str) -> std::io::Resu
     let tmp_dir = tempdir()?;
     let path = tmp_dir.path().join("test.sh");
     let mut script = fs_err::File::create(&path)?;
-    file.extract_bash_script_to(&mut script, Some(Duration::from_secs(3)))?;
+    let duration = linera_client::util::parse_secs(DEFAULT_PAUSE_AFTER_GQL_MUTATIONS_SECS).unwrap();
+    file.extract_bash_script_to(&mut script, Some(duration))?;
 
     let mut command = Command::new("bash");
     command

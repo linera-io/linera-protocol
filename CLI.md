@@ -55,6 +55,7 @@ This document contains the help content for the `linera` command-line program.
 * [`linera storage check_absence`↴](#linera-storage-check_absence)
 * [`linera storage initialize`↴](#linera-storage-initialize)
 * [`linera storage list_namespaces`↴](#linera-storage-list_namespaces)
+* [`linera extract-script-from-markdown`↴](#linera-extract-script-from-markdown)
 
 ## `linera`
 
@@ -98,6 +99,7 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 * `project` — Manage Linera projects
 * `net` — Manage a local Linera Network
 * `storage` — Operation on the storage
+* `extract-script-from-markdown` — Extract a Bash and GraphQL script embedded in a markdown file and print it on stdout
 
 ###### **Options:**
 
@@ -1000,6 +1002,24 @@ List the namespaces of the database
 ###### **Options:**
 
 * `--storage <STORAGE_CONFIG>` — Storage configuration for the blockchain history
+
+
+
+## `linera extract-script-from-markdown`
+
+Extract a Bash and GraphQL script embedded in a markdown file and print it on stdout
+
+**Usage:** `linera extract-script-from-markdown [OPTIONS] <PATH>`
+
+###### **Arguments:**
+
+* `<PATH>` — The source file
+
+###### **Options:**
+
+* `--pause-after-gql-mutations <PAUSE_AFTER_GQL_MUTATIONS>` — Insert a pause of N seconds after GraphQL queries
+
+  Default value: `3`
 
 
 
