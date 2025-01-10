@@ -83,7 +83,7 @@ pub struct StructWithHeapFields {
 #[derive(Clone, Debug, Eq, PartialEq, WitType, WitLoad, WitStore)]
 pub struct StructWithLists {
     pub vec: Vec<SimpleWrapper>,
-    pub second_vec: Vec<TupleWithPadding>,
+    pub boxed_slice: Box<[TupleWithPadding]>,
 }
 
 /// A type that wraps a slice.

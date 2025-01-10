@@ -292,7 +292,7 @@ fn test_list_fields() {
             "    }\n\n",
             "    record struct-with-lists {\n",
             "        vec: list<simple-wrapper>,\n",
-            "        second-vec: list<tuple-with-padding>,\n",
+            "        boxed-slice: list<tuple-with-padding>,\n",
             "    }\n\n",
             "    record tuple-with-padding {\n",
             "        inner0: u16,\n",

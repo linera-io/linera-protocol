@@ -401,30 +401,42 @@ fn test_list_fields() {
             SimpleWrapper(true),
             SimpleWrapper(false),
         ],
-        second_vec: vec![
-            TupleWithPadding(0x1a19, 0x201f_1e1d, 0x2827_2625_2423_2221),
-            TupleWithPadding(0x2a29, 0x302f_2e2d, 0x3837_3635_3433_3231),
-        ],
+        boxed_slice: Box::new([
+            TupleWithPadding(0x1918, 0x1f1e_1d1c, 0x2726_2524_2322_2120),
+            TupleWithPadding(0x2928, 0x2f2e_2d2c, 0x3736_3534_3332_3130),
+        ]),
     };
 
-    test_load_from_memory(
-        &[
-            16, 0, 0, 0, 3, 0, 0, 0, 24, 0, 0, 0, 2, 0, 0, 0, 1, 1, 0, 20, 21, 22, 23, 24, 0x19,
-            0x1a, 27, 28, 0x1d, 0x1e, 0x1f, 0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28,
-            0x29, 0x2a, 43, 44, 0x2d, 0x2e, 0x2f, 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37,
-            0x38,
-        ],
-        expected.clone(),
-    );
-    test_lift_from_flat_layout(
-        hlist![0_i32, 3_i32, 8_i32, 2_i32],
-        expected,
-        &[
-            1, 1, 0, 0, 0, 0, 0, 0, 0x19, 0x1a, 0, 0, 0x1d, 0x1e, 0x1f, 0x20, 0x21, 0x22, 0x23,
-            0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2a, 0, 0, 0x2d, 0x2e, 0x2f, 0x30, 0x31, 0x32,
-            0x33, 0x34, 0x35, 0x36, 0x37, 0x38,
-        ],
-    );
+    let vec_metadata = [16, 0, 0, 0, 3, 0, 0, 0];
+    let vec_contents = [1, 1, 0];
+
+    let boxed_metadata = [24, 0, 0, 0, 2, 0, 0, 0];
+    let boxed_contents = iter::empty()
+        .chain(
+            iter::empty()
+                .chain([0x18, 0x19])
+                .chain(26..28)
+                .chain([0x1c, 0x1d, 0x1e, 0x1f])
+                .chain([0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27]),
+        )
+        .chain(
+            iter::empty()
+                .chain([0x28, 0x29])
+                .chain(42..44)
+                .chain([0x2c, 0x2d, 0x2e, 0x2f])
+                .chain([0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37]),
+        );
+
+    let memory = iter::empty()
+        .chain(vec_metadata)
+        .chain(boxed_metadata)
+        .chain(vec_contents)
+        .chain(19..24)
+        .chain(boxed_contents)
+        .collect::<Vec<u8>>();
+
+    test_load_from_memory(&memory, expected.clone());
+    test_lift_from_flat_layout(hlist![0_i32, 3_i32, 8_i32, 2_i32], expected, &memory[16..]);
 }
 
 /// Tests that the type `T` and wrapped versions of it can be loaded from an `input` sequence of

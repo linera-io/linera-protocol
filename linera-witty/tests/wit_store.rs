@@ -511,16 +511,31 @@ fn test_list_fields() {
             SimpleWrapper(false),
             SimpleWrapper(true),
         ],
-        second_vec: vec![TupleWithPadding(1, 0, -1), TupleWithPadding(10, 11, 12)],
+        boxed_slice: Box::new([TupleWithPadding(1, 0, -1), TupleWithPadding(10, 11, 12)]),
     };
 
-    let expected_heap = [0, 1, 0, 1]
-        .into_iter()
+    let vec_contents = [0, 1, 0, 1];
+
+    let boxed_contents = iter::empty()
+        .chain(
+            iter::empty()
+                .chain([1, 0])
+                .chain([0; 2])
+                .chain([0, 0, 0, 0])
+                .chain([0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]),
+        )
+        .chain(
+            iter::empty()
+                .chain([10, 0])
+                .chain([0; 2])
+                .chain([11, 0, 0, 0])
+                .chain([12, 0, 0, 0, 0, 0, 0, 0]),
+        );
+
+    let expected_heap = iter::empty()
+        .chain(vec_contents)
         .chain([0; 4])
-        .chain([
-            1, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-        ])
-        .chain([10, 0, 0, 0, 11, 0, 0, 0, 12, 0, 0, 0, 0, 0, 0, 0])
+        .chain(boxed_contents)
         .collect::<Vec<_>>();
 
     test_store_in_memory(
