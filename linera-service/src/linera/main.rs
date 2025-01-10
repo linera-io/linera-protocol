@@ -1639,6 +1639,9 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
                 path: _,
                 storage: _,
                 external_protocol: _,
+                with_faucet_chain,
+                faucet_port,
+                faucet_amount,
             } => {
                 net_up_utils::handle_net_up_kubernetes(
                     *extra_wallets,
@@ -1651,6 +1654,9 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
                     *no_build,
                     docker_image_name.clone(),
                     policy_config.into_policy(),
+                    *with_faucet_chain,
+                    *faucet_port,
+                    *faucet_amount,
                 )
                 .boxed()
                 .await?;
@@ -1668,6 +1674,9 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
                 path,
                 storage,
                 external_protocol,
+                with_faucet_chain,
+                faucet_port,
+                faucet_amount,
                 ..
             } => {
                 net_up_utils::handle_net_up_service(
@@ -1681,6 +1690,9 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
                     path,
                     storage,
                     external_protocol.clone(),
+                    *with_faucet_chain,
+                    *faucet_port,
+                    *faucet_amount,
                 )
                 .boxed()
                 .await?;

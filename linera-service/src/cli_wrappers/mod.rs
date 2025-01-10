@@ -35,7 +35,8 @@ use anyhow::Result;
 use async_trait::async_trait;
 use linera_execution::ResourceControlPolicy;
 pub use wallet::{
-    ApplicationWrapper, ClientWrapper, Faucet, FaucetOption, NodeService, OnClientDrop,
+    ApplicationWrapper, ClientWrapper, Faucet, FaucetOption, FaucetService, NodeService,
+    OnClientDrop,
 };
 
 /// The information needed to start a Linera net of a particular kind.
