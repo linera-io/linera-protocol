@@ -257,6 +257,23 @@ fn test_boxed_slice() {
     });
 }
 
+/// Checks the memory size, layout and WIT declaration derived for an rc-ed slice type.
+#[test]
+fn test_rced_slice() {
+    test_wit_type_implementation::<Rc<[Leaf]>>(ExpectedMetadata {
+        size: 8,
+        alignment: 4,
+        flat_layout_length: 2,
+        declaration: concat!(
+            "    record leaf {\n",
+            "        first: bool,\n",
+            "        second: u128,\n",
+            "    }\n\n",
+            "    type u128 = tuple<u64, u64>;\n"
+        ),
+    });
+}
+
 /// Check the memory size, layout and WIT declaration derived for a type that has a slice
 /// field.
 #[test]
