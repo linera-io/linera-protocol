@@ -343,6 +343,13 @@ impl UserData {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct CreateApplicationResult {
+    pub app_id: UserApplicationId,
+    pub message: RawOutgoingMessage<SystemMessage, Amount>,
+    pub blobs_to_register: Vec<BlobId>,
+}
+
 #[derive(Error, Debug)]
 pub enum SystemExecutionError {
     #[error(transparent)]
@@ -634,31 +641,23 @@ where
                 instantiation_argument,
                 required_application_ids,
             } => {
-                let id = UserApplicationId {
-                    bytecode_id,
-                    creation: context.next_message_id(txn_tracker.next_message_index()),
-                };
-                for application in required_application_ids.iter().chain(iter::once(&id)) {
-                    self.check_and_record_bytecode_blobs(&application.bytecode_id, txn_tracker)
-                        .await?;
-                }
-                self.registry
-                    .register_new_application(
-                        id,
-                        parameters.clone(),
-                        required_application_ids.clone(),
+                let next_message_id = context.next_message_id(txn_tracker.next_message_index());
+                let CreateApplicationResult {
+                    app_id,
+                    message,
+                    blobs_to_register,
+                } = self
+                    .create_application(
+                        next_message_id,
+                        bytecode_id,
+                        parameters,
+                        required_application_ids,
                     )
                     .await?;
-                // Send a message to ourself to increment the message ID.
-                let message = RawOutgoingMessage {
-                    destination: Destination::Recipient(context.chain_id),
-                    authenticated: false,
-                    grant: Amount::ZERO,
-                    kind: MessageKind::Protected,
-                    message: SystemMessage::ApplicationCreated,
-                };
+                self.record_bytecode_blobs(blobs_to_register, txn_tracker)
+                    .await?;
                 outcome.messages.push(message);
-                new_application = Some((id, instantiation_argument.clone()));
+                new_application = Some((app_id, instantiation_argument.clone()));
             }
             RequestApplication {
                 chain_id,
@@ -1024,6 +1023,49 @@ where
         Ok(messages)
     }
 
+    pub async fn create_application(
+        &mut self,
+        next_message_id: MessageId,
+        bytecode_id: BytecodeId,
+        parameters: Vec<u8>,
+        required_application_ids: Vec<UserApplicationId>,
+    ) -> Result<CreateApplicationResult, SystemExecutionError> {
+        let id = UserApplicationId {
+            bytecode_id,
+            creation: next_message_id,
+        };
+        let mut blobs_to_register = vec![];
+        for application in required_application_ids.iter().chain(iter::once(&id)) {
+            let (contract_bytecode_blob_id, service_bytecode_blob_id) =
+                self.check_bytecode_blobs(&application.bytecode_id).await?;
+            // We only remember to register the blobs that aren't recorded in `used_blobs`
+            // already.
+            if !self.used_blobs.contains(&contract_bytecode_blob_id).await? {
+                blobs_to_register.push(contract_bytecode_blob_id);
+            }
+            if !self.used_blobs.contains(&service_bytecode_blob_id).await? {
+                blobs_to_register.push(service_bytecode_blob_id);
+            }
+        }
+        self.registry
+            .register_new_application(id, parameters.clone(), required_application_ids.clone())
+            .await?;
+        // Send a message to ourself to increment the message ID.
+        let message = RawOutgoingMessage {
+            destination: Destination::Recipient(next_message_id.chain_id),
+            authenticated: false,
+            grant: Amount::ZERO,
+            kind: MessageKind::Protected,
+            message: SystemMessage::ApplicationCreated,
+        };
+
+        Ok(CreateApplicationResult {
+            app_id: id,
+            message,
+            blobs_to_register,
+        })
+    }
+
     /// Records a blob that is used in this block. If this is the first use on this chain, creates
     /// an oracle response for it.
     pub(crate) async fn blob_used(
@@ -1072,11 +1114,10 @@ where
         }
     }
 
-    async fn check_and_record_bytecode_blobs(
+    async fn check_bytecode_blobs(
         &mut self,
         bytecode_id: &BytecodeId,
-        txn_tracker: &mut TransactionTracker,
-    ) -> Result<(), SystemExecutionError> {
+    ) -> Result<(BlobId, BlobId), SystemExecutionError> {
         let contract_bytecode_blob_id =
             BlobId::new(bytecode_id.contract_blob_hash, BlobType::ContractBytecode);
 
@@ -1105,10 +1146,32 @@ where
             missing_blobs.is_empty(),
             SystemExecutionError::BlobsNotFound(missing_blobs)
         );
-        self.blob_used(Some(txn_tracker), contract_bytecode_blob_id)
-            .await?;
-        self.blob_used(Some(txn_tracker), service_bytecode_blob_id)
-            .await?;
+
+        Ok((contract_bytecode_blob_id, service_bytecode_blob_id))
+    }
+
+    async fn record_bytecode_blobs(
+        &mut self,
+        blob_ids: Vec<BlobId>,
+        txn_tracker: &mut TransactionTracker,
+    ) -> Result<(), SystemExecutionError> {
+        for blob_id in blob_ids {
+            self.blob_used(Some(txn_tracker), blob_id).await?;
+        }
         Ok(())
+    }
+
+    async fn check_and_record_bytecode_blobs(
+        &mut self,
+        bytecode_id: &BytecodeId,
+        txn_tracker: &mut TransactionTracker,
+    ) -> Result<(), SystemExecutionError> {
+        let (contract_bytecode_blob_id, service_bytecode_blob_id) =
+            self.check_bytecode_blobs(bytecode_id).await?;
+        self.record_bytecode_blobs(
+            vec![contract_bytecode_blob_id, service_bytecode_blob_id],
+            txn_tracker,
+        )
+        .await
     }
 }
