@@ -1,5 +1,3 @@
-<!-- cargo-rdme start -->
-
 # A Social Media Example Application
 
 This example illustrates how to use channels for cross-chain messages.
@@ -23,6 +21,12 @@ There are corresponding `Subscribe`, `Unsubscribe` and `Posts` cross-chain
 message variants that are created when these operations are handled. The first two are
 sent directly to the chain we want to subscribe to or unsubscribe from. The latter goes
 to the channel.
+
+<!--
+TODO the following documentation involves `sleep`ing to avoid some race conditions. See:
+ - https://github.com/linera-io/linera-protocol/issues/1176
+ - https://github.com/linera-io/linera-protocol/issues/1177
+-->
 
 ## Usage
 
@@ -187,5 +191,3 @@ query {
   }
 }
 ```
-
-<!-- cargo-rdme end -->

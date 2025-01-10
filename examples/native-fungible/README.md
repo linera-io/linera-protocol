@@ -1,17 +1,15 @@
-<!-- cargo-rdme start -->
-
 # Native Fungible Token Example Application
 
 This app is very similar to the [Fungible Token Example Application](https://github.com/linera-io/linera-protocol/blob/main/examples/fungible/README.md#fungible-token-example-application). The difference is that this is a native token that will use system API calls for operations.
 The general aspects of how it works can be referred to the linked README. Bash commands will always be included here for testing purposes.
 
-# How It Works
+## How It Works
 
 Refer to [Fungible Token Example Application - How It Works](https://github.com/linera-io/linera-protocol/blob/main/examples/fungible/README.md#how-it-works).
 
-# Usage
+## Usage
 
-## Setting Up
+### Setting Up
 
 Most of this can also be referred to the [fungible app README](https://github.com/linera-io/linera-protocol/blob/main/examples/fungible/README.md#setting-up), except for at the end when compiling and publishing the bytecode, what you'll need to do will be slightly different.
 
@@ -34,7 +32,7 @@ BYTECODE_ID="$(linera publish-bytecode \
 
 Here, we stored the new bytecode ID in a variable `BYTECODE_ID` to be reused it later.
 
-## Creating a Token
+### Creating a Token
 
 Most of this can also be referred to the [fungible app README](https://github.com/linera-io/linera-protocol/blob/main/examples/fungible/README.md#creating-a-token), except for at the end when creating the application, you always need to pass `NAT` as the `ticker_symbol` because the Native Fungible App has it hardcoded to that.
 
@@ -57,7 +55,7 @@ APP_ID=$(linera create-application $BYTECODE_ID \
 )
 ```
 
-## Using the Token Application
+### Using the Token Application
 
 Refer to [Fungible Token Example Application - Using the Token Application](https://github.com/linera-io/linera-protocol/blob/main/examples/fungible/README.md#using-the-token-application).
 
@@ -66,7 +64,7 @@ PORT=8080
 linera service --port $PORT &
 ```
 
-### Using GraphiQL
+#### Using GraphiQL
 
 Type each of these in the GraphiQL interface and substitute the env variables with their actual values that we've defined above.
 
@@ -142,7 +140,7 @@ query {
 }
 ```
 
-### Using web frontend
+#### Using web frontend
 
 Refer to [Fungible Token Example Application - Using web frontend](https://github.com/linera-io/linera-protocol/blob/main/examples/fungible/README.md#using-web-frontend).
 
@@ -158,5 +156,3 @@ BROWSER=none npm start &
 echo "http://localhost:3000/$CHAIN_1?app=$APP_ID&owner=$OWNER_1&port=$PORT"
 echo "http://localhost:3000/$CHAIN_1?app=$APP_ID&owner=$OWNER_2&port=$PORT"
 ```
-
-<!-- cargo-rdme end -->
