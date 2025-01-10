@@ -391,6 +391,45 @@ fn test_boxed_slice() {
     test_lift_from_flat_layout(hlist![0_i32, 2_i32], expected, &memory[8..]);
 }
 
+/// Checks that an rc-ed slice type is properly loaded from memory and lifted from its flat
+/// layout.
+#[test]
+fn test_rced_slice() {
+    let expected: Rc<[Leaf]> = Rc::new([
+        Leaf {
+            first: false,
+            second: 0x1716_1514_1312_1110_0f0e_0d0c_0b0a_0908,
+        },
+        Leaf {
+            first: true,
+            second: 0x2f2e_2d2c_2b2a_2928_2726_2524_2322_2120,
+        },
+        Leaf {
+            first: false,
+            second: 0x4746_4544_4342_4140_3f3e_3d3c_3b3a_3938,
+        },
+    ]);
+
+    let memory = iter::empty()
+        .chain([8, 0, 0, 0, 3, 0, 0, 0])
+        .chain(iter::empty().chain([0]).chain(1..8).chain([
+            0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15,
+            0x16, 0x17,
+        ]))
+        .chain(iter::empty().chain([1]).chain(25..32).chain([
+            0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d,
+            0x2e, 0x2f,
+        ]))
+        .chain(iter::empty().chain([0]).chain(49..56).chain([
+            0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e, 0x3f, 0x40, 0x41, 0x42, 0x43, 0x44, 0x45,
+            0x46, 0x47,
+        ]))
+        .collect::<Vec<u8>>();
+
+    test_load_from_memory(&memory, expected.clone());
+    test_lift_from_flat_layout(hlist![0_i32, 3_i32], expected, &memory[8..]);
+}
+
 /// Checks that a type with list fields is properly loaded from memory and lifted from its
 /// flat layout.
 #[test]
