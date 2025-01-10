@@ -9,7 +9,7 @@
 
 use std::{
     collections::{hash_map::Entry, HashMap},
-    ops::{ControlFlow, Deref},
+    ops::Deref,
     sync::Arc,
 };
 
@@ -21,10 +21,7 @@ use scylla::{
     batch::BatchStatement,
     prepared_statement::PreparedStatement,
     statement::batch::BatchType,
-    transport::{
-        errors::{DbError, QueryError},
-        PagingState,
-    },
+    transport::errors::{DbError, QueryError},
     Session, SessionBuilder,
 };
 use thiserror::Error;
@@ -689,53 +686,33 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
             .build()
             .boxed()
             .await?;
+        let result = session.query_iter("DESCRIBE KEYSPACE kv", &[]).await;
         let miss_msg = "'kv' not found in keyspaces";
-        let mut paging_state = PagingState::start();
-        let mut namespaces = Vec::new();
-        loop {
-            let result = session
-                .query_single_page("DESCRIBE KEYSPACE kv", &[], paging_state)
-                .await;
-
-            let (result, paging_state_response) = match result {
-                Ok(result) => result,
-                Err(error) => {
-                    let invalid_or_not_found = match &error {
-                        QueryError::DbError(db_error, msg) => {
-                            *db_error == DbError::Invalid && msg.as_str() == miss_msg
-                        }
-                        _ => false,
-                    };
-                    if invalid_or_not_found {
-                        return Ok(Vec::new());
-                    } else {
-                        return Err(ScyllaDbStoreInternalError::ScyllaDbQueryError(error));
+        let result = match result {
+            Ok(result) => result,
+            Err(error) => {
+                let invalid_or_not_found = match &error {
+                    QueryError::DbError(db_error, msg) => {
+                        *db_error == DbError::Invalid && msg.as_str() == miss_msg
                     }
-                }
-            };
-
-            for row in result
-                .into_rows_result()?
-                .rows::<(String, String, String, String)>()?
-            {
-                let (_, object_kind, name, _) = row?;
-                if object_kind == "table" {
-                    namespaces.push(name);
+                    _ => false,
+                };
+                if invalid_or_not_found {
+                    return Ok(Vec::new());
+                } else {
+                    return Err(ScyllaDbStoreInternalError::ScyllaDbQueryError(error));
                 }
             }
-
-            match paging_state_response.into_paging_control_flow() {
-                ControlFlow::Break(()) => {
-                    // No more pages to be fetched.
-                    return Ok(namespaces);
-                }
-                ControlFlow::Continue(new_paging_state) => {
-                    // Update paging state from the response, so that query
-                    // will be resumed from where it ended the last time.
-                    paging_state = new_paging_state;
-                }
+        };
+        let mut namespaces = Vec::new();
+        let mut rows_stream = result.rows_stream::<(String, String, String, String)>()?;
+        while let Some(row) = rows_stream.next().await {
+            let (_, object_kind, name, _) = row?;
+            if object_kind == "table" {
+                namespaces.push(name);
             }
         }
+        Ok(namespaces)
     }
 
     async fn delete_all(store_config: &Self::Config) -> Result<(), ScyllaDbStoreInternalError> {
