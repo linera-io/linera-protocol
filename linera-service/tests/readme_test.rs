@@ -6,10 +6,11 @@
 
 mod common;
 
-use std::env;
+use std::{env, path::PathBuf};
 
 use common::INTEGRATION_TEST_GUARD;
-use linera_service::{test_name, util::QuotedBashAndGraphQlScript};
+use linera_service::{test_name, util::Markdown};
+use tempfile::tempdir;
 use tokio::{process::Command, time::Duration};
 
 #[test_case::test_case(".." ; "main")]
@@ -29,10 +30,12 @@ async fn test_script_in_readme_with_storage_service(path: &str) -> std::io::Resu
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {} for path {}", test_name!(), path);
 
-    let script = QuotedBashAndGraphQlScript::from_markdown(
-        format!("{path}/README.md"),
-        Some(Duration::from_secs(3)),
-    )?;
+    let file = Markdown::new(PathBuf::from(path).join("README.md"))?;
+    let tmp_dir = tempdir()?;
+    let path = tmp_dir.path().join("test.sh");
+    let mut script = fs_err::File::create(&path)?;
+    file.extract_bash_script_to(&mut script, Some(Duration::from_secs(3)))?;
+
     let mut command = Command::new("bash");
     command
         // Run from the root of the repo.

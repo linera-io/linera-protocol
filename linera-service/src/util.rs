@@ -1,9 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(with_testing)]
-use std::path::{Path, PathBuf};
-use std::{num::ParseIntError, time::Duration};
+use std::{num::ParseIntError, path::Path, time::Duration};
 
 use anyhow::{bail, Context as _, Result};
 use async_graphql::http::GraphiQLSource;
@@ -62,12 +60,6 @@ pub fn read_json<T: serde::de::DeserializeOwned>(
 }
 
 #[cfg(with_testing)]
-use {
-    std::io::Write,
-    tempfile::{tempdir, TempDir},
-};
-
-#[cfg(with_testing)]
 #[macro_export]
 macro_rules! test_name {
     () => {
@@ -77,47 +69,28 @@ macro_rules! test_name {
     };
 }
 
-#[cfg(with_testing)]
-pub struct QuotedBashAndGraphQlScript {
-    tmp_dir: TempDir,
-    path: PathBuf,
+pub struct Markdown<B> {
+    buffer: B,
 }
 
-#[cfg(with_testing)]
-impl QuotedBashAndGraphQlScript {
-    pub fn from_markdown<P: AsRef<Path>>(
-        source_path: P,
-        pause_after_gql_mutations: Option<Duration>,
-    ) -> Result<Self, std::io::Error> {
-        let file = std::io::BufReader::new(fs_err::File::open(source_path.as_ref())?);
-        let tmp_dir = tempdir()?;
-        let quotes = Self::read_bash_and_gql_quotes(file, pause_after_gql_mutations)?;
-
-        let path = tmp_dir.path().join("test.sh");
-
-        let mut test_script = fs_err::File::create(&path)?;
-        for quote in quotes {
-            writeln!(&mut test_script, "{}", quote)?;
-        }
-
-        Ok(Self { tmp_dir, path })
+impl Markdown<std::io::BufReader<fs_err::File>> {
+    pub fn new(path: impl AsRef<Path>) -> std::io::Result<Self> {
+        let buffer = std::io::BufReader::new(fs_err::File::open(path.as_ref())?);
+        Ok(Self { buffer })
     }
+}
 
-    pub fn tmp_dir(&self) -> &Path {
-        self.tmp_dir.as_ref()
-    }
-
-    pub fn path(&self) -> &Path {
-        &self.path
-    }
-
+impl<B> Markdown<B>
+where
+    B: std::io::BufRead,
+{
     #[expect(clippy::while_let_on_iterator)]
-    fn read_bash_and_gql_quotes(
-        reader: impl std::io::BufRead,
+    pub fn extract_bash_script_to(
+        self,
+        mut output: impl std::io::Write,
         pause_after_gql_mutations: Option<Duration>,
-    ) -> std::io::Result<Vec<String>> {
-        let mut result = Vec::new();
-        let mut lines = reader.lines();
+    ) -> Result<(), std::io::Error> {
+        let mut lines = self.buffer.lines();
 
         while let Some(line) = lines.next() {
             let line = line?;
@@ -140,7 +113,7 @@ impl QuotedBashAndGraphQlScript {
                             quote += "\n";
                         }
                     }
-                    result.push(quote);
+                    writeln!(output, "{}", quote)?;
                 }
             } else if let Some(uri) = line.strip_prefix("```gql,uri=") {
                 let mut quote = String::new();
@@ -153,24 +126,27 @@ impl QuotedBashAndGraphQlScript {
                     quote += "\n";
                 }
 
-                result.push(format!("QUERY=\"{}\"", quote.replace('"', "\\\"")));
-                result.push("JSON_QUERY=$(jq -n --arg q \"$QUERY\" '{\"query\": $q}')".to_string());
-                result.push(format!(
-                    "QUERY_RESULT=$(curl -w '\\n' -g -X POST -H \"Content-Type: application/json\" -d \"$JSON_QUERY\" {uri} \
+                writeln!(output, "QUERY=\"{}\"", quote.replace('"', "\\\""))?;
+                writeln!(
+                    output,
+                    "JSON_QUERY=$(jq -n --arg q \"$QUERY\" '{{\"query\": $q}}')"
+                )?;
+                writeln!(output, "QUERY_RESULT=$(curl -w '\\n' -g -X POST -H \"Content-Type: application/json\" -d \"$JSON_QUERY\" {uri} \
                         | tee /dev/stderr \
                         | jq -e .data \n)"
-                ));
+                )?;
 
                 if let Some(pause) = pause_after_gql_mutations {
                     // Hack: let's add a pause after mutations.
                     if quote.starts_with("mutation") {
-                        result.push(format!("\nsleep {}\n", pause.as_secs()));
+                        writeln!(output, "\nsleep {}", pause.as_secs())?;
                     }
                 }
             }
         }
 
-        Ok(result)
+        output.flush()?;
+        Ok(())
     }
 }
 
@@ -222,8 +198,10 @@ third line
 this will be ignored
 ```
     "#;
-    let cursor = std::io::Cursor::new(readme);
-    let parsed = QuotedBashAndGraphQlScript::read_bash_and_gql_quotes(cursor, None).unwrap();
-    let expected = vec!["some bash\n".to_string(), "some other bash\n".to_string()];
-    assert_eq!(parsed, expected)
+    let buffer = std::io::Cursor::new(readme);
+    let markdown = Markdown { buffer };
+    let mut script = Vec::new();
+    markdown.extract_bash_script_to(&mut script, None).unwrap();
+    let expected = "some bash\n\nsome other bash\n\n";
+    assert_eq!(String::from_utf8_lossy(&script), expected);
 }
