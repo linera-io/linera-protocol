@@ -207,39 +207,69 @@ pub enum ConversionError {
     Timeout,
 }
 
+/// Block defines the atomic unit of growth of the Linera chain.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
 pub struct Block {
+    /// Header of the block containing metadata of the block.
     pub header: BlockHeader,
+    /// Body of the block containing all of the data.
     pub body: BlockBody,
 }
 
+/// Succint representation of a block.
+/// Contains all the metadata to follow the chain of blocks or verifying
+/// inclusion (event, message, oracle response, etc.) in the block's body.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
 pub struct BlockHeader {
+    /// The block version.
     pub version: u8, // TODO: More granular versioning. #3078
+    /// The chain to which this block belongs.
     pub chain_id: ChainId,
+    /// The number identifying the current configuration.
     pub epoch: Epoch,
+    /// The block height.
     pub height: BlockHeight,
+    /// The timestamp when this block was created.
     pub timestamp: Timestamp,
+    /// The hash of the chain's execution state after this block.
     pub state_hash: CryptoHash,
+    /// Certified hash of the previous block in the
+    /// chain, if any.
     pub previous_block_hash: Option<CryptoHash>,
+    /// The user signing for the operations in the block and paying for their execution
+    /// fees. If set, this must be the `owner` in the block proposal. `None` means that
+    /// the default account of the chain is used. This value is also used as recipient of
+    /// potential refunds for the message grants created by the operations.
     pub authenticated_signer: Option<Owner>,
 
     // Inputs to the block, chosen by the block proposer.
+    /// Cryptographic hash of all the incoming bundles in the block.
     pub bundles_hash: CryptoHash,
+    /// Cryptographic hash of all the operations in the block.
     pub operations_hash: CryptoHash,
 
     // Outcome of the block execution.
+    /// Cryptographic hash of all the messages in the block.
     pub messages_hash: CryptoHash,
+    /// Cryptographic hash of all the oracle responses in the block.
     pub oracle_responses_hash: CryptoHash,
+    /// Cryptographic hash of all the events in the block.
     pub events_hash: CryptoHash,
 }
 
+/// The body of a block containing all the data included in the block.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
 pub struct BlockBody {
+    /// A selection of incoming messages to be executed first. Successive messages of same
+    /// sender and height are grouped together for conciseness.
     pub incoming_bundles: Vec<IncomingBundle>,
+    /// The operations to execute.
     pub operations: Vec<Operation>,
+    /// The list of outgoing messages for each transaction.
     pub messages: Vec<Vec<OutgoingMessage>>,
+    /// The record of oracle responses for each transaction.
     pub oracle_responses: Vec<Vec<OracleResponse>>,
+    /// The list of events produced by each transaction.
     pub events: Vec<Vec<EventRecord>>,
 }
 

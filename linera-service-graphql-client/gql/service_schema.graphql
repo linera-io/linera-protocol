@@ -45,32 +45,108 @@ input ApplicationPermissions {
 	closeChain: [ApplicationId!]! = []
 }
 
+"""
+Block defines the atomic unit of growth of the Linera chain.
+"""
 type Block {
+	"""
+	Header of the block containing metadata of the block.
+	"""
 	header: BlockHeader!
+	"""
+	Body of the block containing all of the data.
+	"""
 	body: BlockBody!
 }
 
+"""
+The body of a block containing all the data included in the block.
+"""
 type BlockBody {
+	"""
+	A selection of incoming messages to be executed first. Successive messages of same
+	sender and height are grouped together for conciseness.
+	"""
 	incomingBundles: [IncomingBundle!]!
+	"""
+	The operations to execute.
+	"""
 	operations: [Operation!]!
+	"""
+	The list of outgoing messages for each transaction.
+	"""
 	messages: [[OutgoingMessage!]!]!
+	"""
+	The record of oracle responses for each transaction.
+	"""
 	oracleResponses: [[OracleResponse!]!]!
+	"""
+	The list of events produced by each transaction.
+	"""
 	events: [[EventRecord!]!]!
 }
 
+"""
+Succint representation of a block.
+Contains all the metadata to follow the chain of blocks or verifying
+inclusion (event, message, oracle response, etc.) in the block's body.
+"""
 type BlockHeader {
+	"""
+	The block version.
+	"""
 	version: Int!
+	"""
+	The chain to which this block belongs.
+	"""
 	chainId: ChainId!
+	"""
+	The number identifying the current configuration.
+	"""
 	epoch: Epoch!
+	"""
+	The block height.
+	"""
 	height: BlockHeight!
+	"""
+	The timestamp when this block was created.
+	"""
 	timestamp: Timestamp!
+	"""
+	The hash of the chain's execution state after this block.
+	"""
 	stateHash: CryptoHash!
+	"""
+	Certified hash of the previous block in the
+	chain, if any.
+	"""
 	previousBlockHash: CryptoHash
+	"""
+	The user signing for the operations in the block and paying for their execution
+	fees. If set, this must be the `owner` in the block proposal. `None` means that
+	the default account of the chain is used. This value is also used as recipient of
+	potential refunds for the message grants created by the operations.
+	"""
 	authenticatedSigner: Owner
+	"""
+	Cryptographic hash of all the incoming bundles in the block.
+	"""
 	bundlesHash: CryptoHash!
+	"""
+	Cryptographic hash of all the operations in the block.
+	"""
 	operationsHash: CryptoHash!
+	"""
+	Cryptographic hash of all the messages in the block.
+	"""
 	messagesHash: CryptoHash!
+	"""
+	Cryptographic hash of all the oracle responses in the block.
+	"""
 	oracleResponsesHash: CryptoHash!
+	"""
+	Cryptographic hash of all the events in the block.
+	"""
 	eventsHash: CryptoHash!
 }
 
