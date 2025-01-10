@@ -88,6 +88,7 @@ where
     pub fn extract_bash_script_to(
         self,
         mut output: impl std::io::Write,
+        pause_after_linera_service: Option<Duration>,
         pause_after_gql_mutations: Option<Duration>,
     ) -> Result<(), std::io::Error> {
         let mut lines = self.buffer.lines();
@@ -108,9 +109,10 @@ where
                         quote += &line;
                         quote += "\n";
 
-                        if line.contains("linera service") {
-                            quote += "sleep 3";
-                            quote += "\n";
+                        if let Some(pause) = pause_after_linera_service {
+                            if line.contains("linera service") {
+                                quote += &format!("sleep {}\n", pause.as_secs());
+                            }
                         }
                     }
                     writeln!(output, "{}", quote)?;
@@ -133,13 +135,13 @@ where
                 )?;
                 writeln!(output, "QUERY_RESULT=$(curl -w '\\n' -g -X POST -H \"Content-Type: application/json\" -d \"$JSON_QUERY\" {uri} \
                         | tee /dev/stderr \
-                        | jq -e .data \n)"
+                        | jq -e .data)"
                 )?;
 
                 if let Some(pause) = pause_after_gql_mutations {
                     // Hack: let's add a pause after mutations.
                     if quote.starts_with("mutation") {
-                        writeln!(output, "\nsleep {}", pause.as_secs())?;
+                        writeln!(output, "sleep {}\n", pause.as_secs())?;
                     }
                 }
             }
@@ -201,7 +203,9 @@ this will be ignored
     let buffer = std::io::Cursor::new(readme);
     let markdown = Markdown { buffer };
     let mut script = Vec::new();
-    markdown.extract_bash_script_to(&mut script, None).unwrap();
+    markdown
+        .extract_bash_script_to(&mut script, None, None)
+        .unwrap();
     let expected = "some bash\n\nsome other bash\n\n";
     assert_eq!(String::from_utf8_lossy(&script), expected);
 }

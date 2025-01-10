@@ -1017,6 +1017,9 @@ Extract a Bash and GraphQL script embedded in a markdown file and print it on st
 
 ###### **Options:**
 
+* `--pause-after-linera-service <PAUSE_AFTER_LINERA_SERVICE>` — Insert a pause of N seconds after calls to `linera service`
+
+  Default value: `3`
 * `--pause-after-gql-mutations <PAUSE_AFTER_GQL_MUTATIONS>` — Insert a pause of N seconds after GraphQL queries
 
   Default value: `3`

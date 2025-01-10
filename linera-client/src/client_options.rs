@@ -900,6 +900,10 @@ pub enum ClientCommand {
         /// The source file
         path: PathBuf,
 
+        /// Insert a pause of N seconds after calls to `linera service`.
+        #[arg(long, default_value = DEFAULT_PAUSE_AFTER_LINERA_SERVICE_SECS, value_parser = util::parse_secs)]
+        pause_after_linera_service: Duration,
+
         /// Insert a pause of N seconds after GraphQL queries.
         #[arg(long, default_value = DEFAULT_PAUSE_AFTER_GQL_MUTATIONS_SECS, value_parser = util::parse_secs)]
         pause_after_gql_mutations: Duration,
@@ -907,6 +911,7 @@ pub enum ClientCommand {
 }
 
 // Exported for readme e2e tests.
+pub static DEFAULT_PAUSE_AFTER_LINERA_SERVICE_SECS: &str = "3";
 pub static DEFAULT_PAUSE_AFTER_GQL_MUTATIONS_SECS: &str = "3";
 
 #[derive(Clone, clap::Parser)]

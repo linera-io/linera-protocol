@@ -1460,15 +1460,25 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
 
         ClientCommand::ExtractScriptFromMarkdown {
             path,
+            pause_after_linera_service,
             pause_after_gql_mutations,
         } => {
             let file = crate::util::Markdown::new(path)?;
-            let sleep = if pause_after_gql_mutations.is_zero() {
+            let pause_after_linera_service = if pause_after_linera_service.is_zero() {
+                None
+            } else {
+                Some(*pause_after_linera_service)
+            };
+            let pause_after_gql_mutations = if pause_after_gql_mutations.is_zero() {
                 None
             } else {
                 Some(*pause_after_gql_mutations)
             };
-            file.extract_bash_script_to(std::io::stdout(), sleep)?;
+            file.extract_bash_script_to(
+                std::io::stdout(),
+                pause_after_linera_service,
+                pause_after_gql_mutations,
+            )?;
             Ok(0)
         }
 

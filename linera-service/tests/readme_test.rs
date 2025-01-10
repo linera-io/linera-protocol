@@ -9,7 +9,12 @@ mod common;
 use std::{env, path::PathBuf};
 
 use common::INTEGRATION_TEST_GUARD;
-use linera_client::client_options::DEFAULT_PAUSE_AFTER_GQL_MUTATIONS_SECS;
+use linera_client::{
+    client_options::{
+        DEFAULT_PAUSE_AFTER_GQL_MUTATIONS_SECS, DEFAULT_PAUSE_AFTER_LINERA_SERVICE_SECS,
+    },
+    util::parse_secs,
+};
 use linera_service::{test_name, util::Markdown};
 use tempfile::tempdir;
 use tokio::process::Command;
@@ -35,8 +40,13 @@ async fn test_script_in_readme_with_storage_service(path: &str) -> std::io::Resu
     let tmp_dir = tempdir()?;
     let path = tmp_dir.path().join("test.sh");
     let mut script = fs_err::File::create(&path)?;
-    let duration = linera_client::util::parse_secs(DEFAULT_PAUSE_AFTER_GQL_MUTATIONS_SECS).unwrap();
-    file.extract_bash_script_to(&mut script, Some(duration))?;
+    let pause_after_linera_service = parse_secs(DEFAULT_PAUSE_AFTER_LINERA_SERVICE_SECS).unwrap();
+    let pause_after_gql_mutations = parse_secs(DEFAULT_PAUSE_AFTER_GQL_MUTATIONS_SECS).unwrap();
+    file.extract_bash_script_to(
+        &mut script,
+        Some(pause_after_linera_service),
+        Some(pause_after_gql_mutations),
+    )?;
 
     let mut command = Command::new("bash");
     command
