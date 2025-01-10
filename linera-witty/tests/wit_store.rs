@@ -461,6 +461,35 @@ fn test_boxed_slice() {
     test_lower_to_flat_layout(data, hlist![0_i32, 4_i32,], &heap_memory);
 }
 
+/// Check that a rc-ed slice type is properly stored in memory and lowered into its flat layout.
+#[test]
+fn test_rced_slice() {
+    let data: Rc<[Leaf]> = Rc::new([
+        Leaf {
+            first: true,
+            second: 0x0011_2233_4455_6677_8899_aabb_ccdd_eeff,
+        },
+        Leaf {
+            first: false,
+            second: 0xffee_ddcc_bbaa_9988_7766_5544_3322_1100,
+        },
+    ]);
+
+    let heap_memory = iter::empty()
+        .chain(iter::empty().chain([1]).chain([0; 7]).chain([
+            0xff, 0xee, 0xdd, 0xcc, 0xbb, 0xaa, 0x99, 0x88, 0x77, 0x66, 0x55, 0x44, 0x33, 0x22,
+            0x11, 0x00,
+        ]))
+        .chain(iter::empty().chain([0]).chain([0; 7]).chain([
+            0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd,
+            0xee, 0xff,
+        ]))
+        .collect::<Vec<u8>>();
+
+    test_store_in_memory(data.clone(), &[8, 0, 0, 0, 2, 0, 0, 0], &heap_memory);
+    test_lower_to_flat_layout(data, hlist![0_i32, 2_i32,], &heap_memory);
+}
+
 /// Check that a type with a slice field is properly stored in memory and lowered into its
 /// flat layout.
 #[test]
