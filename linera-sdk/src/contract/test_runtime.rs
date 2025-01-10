@@ -23,6 +23,14 @@ use serde::Serialize;
 
 use crate::{Contract, DataBlobHash, KeyValueStore, ViewStorageContext};
 
+struct ExpectedCreateApplicationCall {
+    bytecode_id: BytecodeId,
+    parameters: Vec<u8>,
+    argument: Vec<u8>,
+    required_application_ids: Vec<ApplicationId>,
+    application_id: ApplicationId,
+}
+
 /// A mock of the common runtime to interface with the host executing the contract.
 pub struct MockContractRuntime<Application>
 where
@@ -55,13 +63,7 @@ where
     expected_assert_data_blob_exists_requests: VecDeque<(DataBlobHash, Option<()>)>,
     expected_open_chain_calls:
         VecDeque<(ChainOwnership, ApplicationPermissions, Amount, MessageId)>,
-    expected_create_application_calls: VecDeque<(
-        BytecodeId,
-        Vec<u8>,
-        Vec<u8>,
-        Vec<ApplicationId>,
-        ApplicationId,
-    )>,
+    expected_create_application_calls: VecDeque<ExpectedCreateApplicationCall>,
     key_value_store: KeyValueStore,
 }
 
@@ -635,20 +637,21 @@ where
         parameters: &A::Parameters,
         argument: &A::InstantiationArgument,
         required_application_ids: Vec<ApplicationId>,
-        app_id: ApplicationId,
+        application_id: ApplicationId,
     ) {
         let parameters = bcs::to_bytes(parameters)
             .expect("Failed to serialize `Parameters` type for a cross-application call");
         let argument = bcs::to_bytes(argument).expect(
             "Failed to serialize `InstantiationArgument` type for a cross-application call",
         );
-        self.expected_create_application_calls.push_back((
-            bytecode_id,
-            parameters,
-            argument,
-            required_application_ids,
-            app_id,
-        ));
+        self.expected_create_application_calls
+            .push_back(ExpectedCreateApplicationCall {
+                bytecode_id,
+                parameters,
+                argument,
+                required_application_ids,
+                application_id,
+            });
     }
 
     /// Creates a new on-chain application, based on the supplied bytecode and parameters.
@@ -659,13 +662,13 @@ where
         argument: &A::InstantiationArgument,
         required_application_ids: Vec<ApplicationId>,
     ) -> ApplicationId<A::Abi> {
-        let (
-            expected_bytecode_id,
-            expected_parameters,
-            expected_argument,
-            expected_required_app_ids,
-            app_id,
-        ) = self
+        let ExpectedCreateApplicationCall {
+            bytecode_id: expected_bytecode_id,
+            parameters: expected_parameters,
+            argument: expected_argument,
+            required_application_ids: expected_required_app_ids,
+            application_id,
+        } = self
             .expected_create_application_calls
             .pop_front()
             .expect("Unexpected create_application call");
@@ -678,7 +681,7 @@ where
         assert_eq!(parameters, expected_parameters);
         assert_eq!(argument, expected_argument);
         assert_eq!(required_application_ids, expected_required_app_ids);
-        app_id.with_abi::<A::Abi>()
+        application_id.with_abi::<A::Abi>()
     }
 
     /// Configures the handler for cross-application calls made during the test.
