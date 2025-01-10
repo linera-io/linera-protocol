@@ -1,5 +1,3 @@
-<!-- cargo-rdme start -->
-
 # Matching Engine Example Application
 
 This sample application demonstrates a matching engine, showcasing the DeFi capabilities
@@ -36,9 +34,9 @@ When inserting an order it goes through the following steps:
 When an order is created from a remote chain, it transfers the tokens of the same owner
 from the remote chain to the chain of the matching engine, and a `ExecuteOrder` message is sent with the order details.
 
-# Usage
+## Usage
 
-## Setting Up
+### Setting Up
 
 Before getting started, make sure that the binary tools `linera*` corresponding to
 your version of `linera-sdk` are in your PATH. For scripting purposes, we also assume
@@ -111,7 +109,7 @@ linera --wait-for-outgoing-messages request-application \
     --requester-chain-id $CHAIN_2 $MATCHING_ENGINE
 ```
 
-## Using the Matching Engine Application
+### Using the Matching Engine Application
 
 First, a node service for the current wallet has to be started:
 
@@ -120,7 +118,7 @@ PORT=8080
 linera service --port $PORT &
 ```
 
-### Using GraphiQL
+#### Using GraphiQL
 
 Type each of these in the GraphiQL interface and substitute the env variables with their actual values that we've defined above.
 
@@ -157,7 +155,7 @@ query {
 }
 ```
 
-### Atomic Swaps
+#### Atomic Swaps
 
 In general, if you send tokens to a chain owned by someone else, you rely on them
 for asset availability: If they don't handle your messages, you don't have access to
@@ -256,5 +254,3 @@ query {
   }
 }
 ```
-
-<!-- cargo-rdme end -->

@@ -1,5 +1,3 @@
-<!-- cargo-rdme start -->
-
 # Non-Fungible Token Example Application
 
 This example application implements non-fungible tokens (NFTs), showcasing the creation and management of unique digital assets. It highlights cross-chain messages, demonstrating how NFTs can be minted, transferred, and claimed across different chains, emphasizing the instantiation and auto-deployment of applications within the Linera blockchain ecosystem.
@@ -8,7 +6,7 @@ Once this application's bytecode is published on a Linera chain, that applicatio
 
 Some portions of this are very similar to the `fungible` README, and we'll refer to it throughout. Bash commands will always be included here for testing purposes.
 
-# How It Works
+## How It Works
 
 Each chain maintains a subset of NFTs, represented as unique token identifiers. NFT ownership is tracked across one or multiple chains, allowing for rich, cross-chain interactions.
 
@@ -24,9 +22,9 @@ NFTs can be transferred to various destinations, including:
 - The same account on a different chain.
 - Other accounts on different chains.
 
-# Usage
+## Usage
 
-## Setting Up
+### Setting Up
 
 Most of this can be referred to the [fungible app README](https://github.com/linera-io/linera-protocol/blob/main/examples/fungible/README.md#setting-up), except for at the end when compiling and publishing the bytecode, what you'll need to do will be slightly different.
 
@@ -48,7 +46,7 @@ BYTECODE_ID=$(linera publish-bytecode \
 
 Here, we stored the new bytecode ID in a variable `BYTECODE_ID` to be reused later.
 
-## Creating an NFT
+### Creating an NFT
 
 Unlike fungible tokens, each NFT is unique and identified by a unique token ID. Also unlike fungible tokens, when creating the NFT application you don't need to specify an initial state or parameters. NFTs will be minted later.
 
@@ -71,7 +69,7 @@ APP_ID=$(linera create-application $BYTECODE_ID)
 
 This will store the application ID in a new variable `APP_ID`.
 
-## Using the NFT Application
+### Using the NFT Application
 
 Operations such as minting NFTs, transferring NFTs, and claiming NFTs from other chains follow a similar approach to fungible tokens, with adjustments for the unique nature of NFTs.
 
@@ -82,7 +80,7 @@ PORT=8080
 linera service --port $PORT &
 ```
 
-### Using GraphiQL
+#### Using GraphiQL
 
 Type each of these in the GraphiQL interface and substitute the env variables with their actual values that we've defined above.
 
@@ -170,7 +168,7 @@ mutation {
 }
 ```
 
-### Using Web Frontend
+#### Using Web Frontend
 
 Installing and starting the web server:
 
@@ -188,5 +186,3 @@ echo "http://localhost:3000/$CHAIN_1?app=$APP_ID&owner=$OWNER_2&port=$PORT"
 ```
 
 For the final part, refer to [Fungible Token Example Application - Using web frontend](https://github.com/linera-io/linera-protocol/blob/main/examples/fungible/README.md#using-web-frontend).
-
-<!-- cargo-rdme end -->

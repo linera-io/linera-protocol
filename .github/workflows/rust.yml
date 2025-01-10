@@ -332,13 +332,6 @@ jobs:
     - name: Check for outdated README.md
       run: |
         (set -e; for I in linera-*; do if [ -d "$I" ]; then echo $I; cargo rdme --check --no-fail-on-warnings -w $I; fi; done)
-        (set -e; cd examples; for dir in */; do
-            if [ -f "${dir}README.md" ] && grep -q "<!-- cargo-rdme start -->" "${dir}README.md"; then
-                dir_name="${dir%/}"
-                echo "${dir_name}"
-                cargo rdme --check --no-fail-on-warnings -w "${dir_name}"
-            fi
-        done)
 
   lint-wasm-applications:
     runs-on: ubuntu-latest

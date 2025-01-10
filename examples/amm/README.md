@@ -1,12 +1,10 @@
-<!-- cargo-rdme start -->
-
 # Automated Market Maker (AMM) Example Application
 
 This example implements an Automated Market Maker (AMM) which demonstrates DeFi capabilities of the
 Linera protocol. Prerequisite for the AMM application is the `fungible` application, as we will
 be adding/removing liquidity and also performing a swap.
 
-# How it works
+## How it works
 
 It supports the following operations. All operations need to be executed remotely.
 
@@ -25,9 +23,9 @@ It supports the following operations. All operations need to be executed remotel
   the amounts from both tokens as a removal of liquidity. The owner, in this context, is the user
   removing liquidity, which currently can only be a chain owner.
 
-# Usage
+## Usage
 
-## Setting Up
+### Setting Up
 
 Before getting started, make sure that the binary tools `linera*` corresponding to
 your version of `linera-sdk` are in your PATH. For scripting purposes, we also assume
@@ -86,7 +84,7 @@ AMM_APPLICATION_ID=$(linera --wait-for-outgoing-messages \
   --required-application-ids $FUN1_APP_ID $FUN2_APP_ID)
 ```
 
-## Using the AMM Application
+### Using the AMM Application
 
 First, a node service for the current wallet has to be started:
 
@@ -95,7 +93,7 @@ PORT=8080
 linera service --port $PORT &
 ```
 
-### Using GraphiQL
+#### Using GraphiQL
 
 Type each of these in the GraphiQL interface and substitute the env variables with their actual
 values that we've defined above.
@@ -246,7 +244,7 @@ mutation {
 }
 ```
 
-### Atomic Swaps
+#### Atomic Swaps
 
 In general, if you send tokens to a chain owned by someone else, you rely on them
 for asset availability: If they don't handle your messages, you don't have access to
@@ -323,5 +321,3 @@ query {
     }
 }
 ```
-
-<!-- cargo-rdme end -->
