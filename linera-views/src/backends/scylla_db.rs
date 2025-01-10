@@ -466,15 +466,15 @@ pub enum ScyllaDbStoreInternalError {
     #[error("The value must have at most MAX_VALUE_SIZE")]
     ValueTooLong,
 
-    /// A type check error in ScyllaDB
+    /// A deserialization error in ScyllaDB
     #[error(transparent)]
     DeserializationError(#[from] scylla::deserialize::DeserializationError),
 
-    /// A type check error in ScyllaDB
+    /// A row error in ScyllaDB
     #[error(transparent)]
     RowsError(#[from] scylla::transport::query_result::RowsError),
 
-    /// A type check error in ScyllaDB
+    /// A type error in the accessed data in ScyllaDB
     #[error(transparent)]
     IntoRowsResultError(#[from] scylla::transport::query_result::IntoRowsResultError),
 
@@ -845,8 +845,6 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
             .await?;
 
         let query = format!("DROP TABLE IF EXISTS kv.{};", namespace);
-
-        // Some prin
         let prepared = session.prepare(&*query).await?;
         let _result = session.execute_unpaged(&prepared, &[]).await?;
         Ok(())
