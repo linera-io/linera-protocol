@@ -273,35 +273,53 @@ pub struct BlockBody {
     pub events: Vec<Vec<EventRecord>>,
 }
 
-impl BlockHeader {
-    /// Returns the message ID belonging to the `index`th outgoing message in this block.
-    pub fn message_id(&self, index: u32) -> MessageId {
-        MessageId {
-            chain_id: self.chain_id,
-            height: self.height,
-            index,
-        }
-    }
-}
-
-impl BlockBody {
-    pub fn oracle_blob_ids(&self) -> HashSet<BlobId> {
-        let mut required_blob_ids = HashSet::new();
-        for responses in &self.oracle_responses {
-            for response in responses {
-                if let OracleResponse::Blob(blob_id) = response {
-                    required_blob_ids.insert(*blob_id);
-                }
-            }
-        }
-
-        required_blob_ids
-    }
-}
-
 impl Block {
-    pub fn messages(&self) -> &Vec<Vec<OutgoingMessage>> {
-        &self.body.messages
+    pub fn new(proposal: Proposal, outcome: BlockExecutionOutcome) -> Self {
+        fn hash_vec<'de, T: BcsHashable<'de>>(it: impl AsRef<[T]>) -> CryptoHash {
+            let v = CryptoHashVec(it.as_ref().iter().map(CryptoHash::new).collect::<Vec<_>>());
+            CryptoHash::new(&v)
+        }
+        let bundles_hash = hash_vec(&proposal.incoming_bundles);
+        let messages_hash = CryptoHash::new(&CryptoHashVec(
+            outcome.messages.iter().map(hash_vec).collect::<Vec<_>>(),
+        ));
+        let operations_hash = hash_vec(&proposal.operations);
+        let oracle_responses_hash = CryptoHash::new(&CryptoHashVec(
+            outcome
+                .oracle_responses
+                .iter()
+                .map(hash_vec)
+                .collect::<Vec<_>>(),
+        ));
+        let events_hash = CryptoHash::new(&CryptoHashVec(
+            outcome.events.iter().map(hash_vec).collect::<Vec<_>>(),
+        ));
+
+        let header = BlockHeader {
+            version: 1,
+            chain_id: proposal.chain_id,
+            epoch: proposal.epoch,
+            height: proposal.height,
+            timestamp: proposal.timestamp,
+            state_hash: outcome.state_hash,
+            previous_block_hash: proposal.previous_block_hash,
+            authenticated_signer: proposal.authenticated_signer,
+            bundles_hash,
+            operations_hash,
+            messages_hash,
+            oracle_responses_hash,
+            events_hash,
+        };
+
+        let body = BlockBody {
+            incoming_bundles: proposal.incoming_bundles,
+            operations: proposal.operations,
+            messages: outcome.messages,
+            oracle_responses: outcome.oracle_responses,
+            events: outcome.events,
+        };
+
+        Self { header, body }
     }
 
     /// Returns the bundles of messages sent via the given medium to the specified
@@ -363,9 +381,19 @@ impl Block {
         )
         .ok()?;
         let index = first_message_index.checked_add(message_index)?;
-        Some(self.header.message_id(index))
+        Some(self.message_id(index))
     }
 
+    /// Returns the message ID belonging to the `index`th outgoing message in this block.
+    pub fn message_id(&self, index: u32) -> MessageId {
+        MessageId {
+            chain_id: self.header.chain_id,
+            height: self.header.height,
+            index,
+        }
+    }
+
+    /// Returns the outgoing message with the specified id, or `None` if there is no such message.
     pub fn message_by_id(&self, message_id: &MessageId) -> Option<&OutgoingMessage> {
         let MessageId {
             chain_id,
@@ -385,14 +413,17 @@ impl Block {
         None
     }
 
+    /// Returns all the blob IDs required by this block.
+    /// Either as oracle responses or as published blobs.
     pub fn required_blob_ids(&self) -> HashSet<BlobId> {
-        let mut blob_ids = self.body.oracle_blob_ids();
+        let mut blob_ids = self.oracle_blob_ids();
         blob_ids.extend(self.published_blob_ids());
         blob_ids
     }
 
+    /// Returns whether this block requires the blob with the specified ID.
     pub fn requires_blob(&self, blob_id: &BlobId) -> bool {
-        self.body.oracle_blob_ids().contains(blob_id) || self.published_blob_ids().contains(blob_id)
+        self.oracle_blob_ids().contains(blob_id) || self.published_blob_ids().contains(blob_id)
     }
 
     /// Returns all the published blob IDs in this block's operations.
@@ -413,52 +444,23 @@ impl Block {
         blob_ids
     }
 
-    pub fn new(proposal: Proposal, outcome: BlockExecutionOutcome) -> Self {
-        fn hash_vec<'de, T: BcsHashable<'de>>(it: impl AsRef<[T]>) -> CryptoHash {
-            let v = CryptoHashVec(it.as_ref().iter().map(CryptoHash::new).collect::<Vec<_>>());
-            CryptoHash::new(&v)
+    /// Returns set of blob ids that were a result of an oracle call.
+    pub fn oracle_blob_ids(&self) -> HashSet<BlobId> {
+        let mut required_blob_ids = HashSet::new();
+        for responses in &self.body.oracle_responses {
+            for response in responses {
+                if let OracleResponse::Blob(blob_id) = response {
+                    required_blob_ids.insert(*blob_id);
+                }
+            }
         }
-        let bundles_hash = hash_vec(&proposal.incoming_bundles);
-        let messages_hash = CryptoHash::new(&CryptoHashVec(
-            outcome.messages.iter().map(hash_vec).collect::<Vec<_>>(),
-        ));
-        let operations_hash = hash_vec(&proposal.operations);
-        let oracle_responses_hash = CryptoHash::new(&CryptoHashVec(
-            outcome
-                .oracle_responses
-                .iter()
-                .map(hash_vec)
-                .collect::<Vec<_>>(),
-        ));
-        let events_hash = CryptoHash::new(&CryptoHashVec(
-            outcome.events.iter().map(hash_vec).collect::<Vec<_>>(),
-        ));
 
-        let header = BlockHeader {
-            version: 1,
-            chain_id: proposal.chain_id,
-            epoch: proposal.epoch,
-            height: proposal.height,
-            timestamp: proposal.timestamp,
-            state_hash: outcome.state_hash,
-            previous_block_hash: proposal.previous_block_hash,
-            authenticated_signer: proposal.authenticated_signer,
-            bundles_hash,
-            operations_hash,
-            messages_hash,
-            oracle_responses_hash,
-            events_hash,
-        };
+        required_blob_ids
+    }
 
-        let body = BlockBody {
-            incoming_bundles: proposal.incoming_bundles,
-            operations: proposal.operations,
-            messages: outcome.messages,
-            oracle_responses: outcome.oracle_responses,
-            events: outcome.events,
-        };
-
-        Self { header, body }
+    /// Returns reference to the outgoing messages in the block.
+    pub fn messages(&self) -> &Vec<Vec<OutgoingMessage>> {
+        &self.body.messages
     }
 }
 
