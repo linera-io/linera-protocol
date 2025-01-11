@@ -4,16 +4,17 @@ pub struct Options {
     command: Command,
 }
 
+pub type Name = String;
+
 #[derive(clap::Subcommand, Debug)]
 enum Command {
     /// Create a new wallet.
-    ///
-    /// # Storage backends
-    /// TODO document
     Create(create::Options),
     /// Destroy a wallet.
     /// *THIS OPERATION CANNOT BE UNDONE*.
     Destroy(destroy::Options),
+    /// Modify a wallet.
+    Set(set::Options),
     /// Add a new keypair.
     Keygen,
 }
@@ -35,7 +36,7 @@ mod create {
         #[clap(long, value_hint = clap::ValueHint::Url, value_name = "URL")]
         faucet: Option<url::Url>,
         #[clap(long, value_hint = clap::ValueHint::FilePath, value_name = "PATH")]
-        /// The path to a genesis configuration to use to create the wallet.
+        /// The path to a genesis configuration file to use to create the wallet.
         genesis_config: Option<std::path::PathBuf>,
     }
 
@@ -49,16 +50,18 @@ mod create {
         // TODO support editing the wallet after creation
         #[arg(long)]
         default: bool,
-        /// The storage backend to use for this wallet.
-        // TODO think harder about this, particularly the format
-        /// If RocksDB was enabled, will default to creating a new
-        /// RocksDB storage for the wallet.
         #[cfg(with_rocksdb)]
-        #[arg(long)]
-        storage: Option<linera_client::storage::StorageConfigNamespace>,
+        #[arg(long, value_hint = clap::ValueHint::FilePath, value_name = "PATH")]
+        /// The storage configuration file for this wallet.  See `linera storage` for
+        /// format and creation.
+        ///
+        /// Defaults to creating a new RocksDB storage for the wallet.
+        storage: Option<std::path::PathBuf>,
         #[cfg(not(with_rocksdb))]
-        #[arg(long)]
-        storage: linera_client::storage::StorageConfigNamespace,
+        #[arg(long, value_hint = clap::ValueHint::FilePath, value_name = "PATH")]
+        /// The storage configuration file for this wallet.  See `linera storage` for
+        /// format and creation.
+        storage: std::path::PathBuf,
     }
 }
 
