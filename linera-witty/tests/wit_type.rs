@@ -274,6 +274,24 @@ fn test_rced_slice() {
     });
 }
 
+/// Checks the memory size, layout and WIT declaration derived for an arc-ed slice type.
+#[test]
+fn test_arced_slice() {
+    test_wit_type_implementation::<Arc<[RecordWithDoublePadding]>>(ExpectedMetadata {
+        size: 8,
+        alignment: 4,
+        flat_layout_length: 2,
+        declaration: concat!(
+            "    record record-with-double-padding {\n",
+            "        first: u16,\n",
+            "        second: u32,\n",
+            "        third: s8,\n",
+            "        fourth: s64,\n",
+            "    }\n"
+        ),
+    });
+}
+
 /// Check the memory size, layout and WIT declaration derived for a type that has a slice
 /// field.
 #[test]
