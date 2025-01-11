@@ -490,6 +490,49 @@ fn test_rced_slice() {
     test_lower_to_flat_layout(data, hlist![0_i32, 2_i32,], &heap_memory);
 }
 
+/// Check that a rc-ed slice type is properly stored in memory and lowered into its flat layout.
+#[test]
+fn test_arced_slice() {
+    let data: Arc<[RecordWithDoublePadding]> = Arc::new([
+        RecordWithDoublePadding {
+            first: 0x0300,
+            second: 0x4422_1100,
+            third: -2,
+            fourth: -3,
+        },
+        RecordWithDoublePadding {
+            first: 32_767,
+            second: 9,
+            third: 127,
+            fourth: -32_768,
+        },
+    ]);
+
+    let heap_memory = iter::empty()
+        .chain(
+            iter::empty()
+                .chain([0x00, 0x03])
+                .chain([0; 2])
+                .chain([0x00, 0x11, 0x22, 0x44])
+                .chain([0xfe])
+                .chain([0; 7])
+                .chain([0xfd, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]),
+        )
+        .chain(
+            iter::empty()
+                .chain([0xff, 0x7f])
+                .chain([0; 2])
+                .chain([9, 0, 0, 0])
+                .chain([0x7f])
+                .chain([0; 7])
+                .chain([0x00, 0x80, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]),
+        )
+        .collect::<Vec<u8>>();
+
+    test_store_in_memory(data.clone(), &[8, 0, 0, 0, 2, 0, 0, 0], &heap_memory);
+    test_lower_to_flat_layout(data, hlist![0_i32, 2_i32,], &heap_memory);
+}
+
 /// Check that a type with a slice field is properly stored in memory and lowered into its
 /// flat layout.
 #[test]
