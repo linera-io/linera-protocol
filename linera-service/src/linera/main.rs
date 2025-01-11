@@ -1410,9 +1410,7 @@ fn main() -> anyhow::Result<()> {
 /// Returns the log file name to use based on the [`ClientCommand`] that will run.
 fn log_file_name_for(command: &ClientCommand) -> Cow<'static, str> {
     match command {
-        ClientCommand::HelpMarkdown
-        | ClientCommand::ExtractScriptFromMarkdown { .. }
-        | ClientCommand::Transfer { .. }
+        ClientCommand::Transfer { .. }
         | ClientCommand::OpenChain { .. }
         | ClientCommand::OpenMultiOwnerChain { .. }
         | ClientCommand::ChangeOwnership { .. }
@@ -1448,6 +1446,9 @@ fn log_file_name_for(command: &ClientCommand) -> Cow<'static, str> {
         ClientCommand::Storage { .. } => "storage".into(),
         ClientCommand::Service { port, .. } => format!("service-{port}").into(),
         ClientCommand::Faucet { .. } => "faucet".into(),
+        ClientCommand::HelpMarkdown | ClientCommand::ExtractScriptFromMarkdown { .. } => {
+            "tool".into()
+        }
     }
 }
 

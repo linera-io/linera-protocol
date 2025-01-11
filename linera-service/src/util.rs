@@ -1,7 +1,12 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{num::ParseIntError, path::Path, time::Duration};
+use std::{
+    io::{BufRead, BufReader, Write},
+    num::ParseIntError,
+    path::Path,
+    time::Duration,
+};
 
 use anyhow::{bail, Context as _, Result};
 use async_graphql::http::GraphiQLSource;
@@ -53,9 +58,7 @@ pub async fn listen_for_shutdown_signals(shutdown_sender: CancellationToken) {
     }
 }
 
-pub fn read_json<T: serde::de::DeserializeOwned>(
-    path: impl Into<std::path::PathBuf>,
-) -> anyhow::Result<T> {
+pub fn read_json<T: serde::de::DeserializeOwned>(path: impl Into<std::path::PathBuf>) -> Result<T> {
     Ok(serde_json::from_reader(fs_err::File::open(path)?)?)
 }
 
@@ -73,24 +76,24 @@ pub struct Markdown<B> {
     buffer: B,
 }
 
-impl Markdown<std::io::BufReader<fs_err::File>> {
+impl Markdown<BufReader<fs_err::File>> {
     pub fn new(path: impl AsRef<Path>) -> std::io::Result<Self> {
-        let buffer = std::io::BufReader::new(fs_err::File::open(path.as_ref())?);
+        let buffer = BufReader::new(fs_err::File::open(path.as_ref())?);
         Ok(Self { buffer })
     }
 }
 
 impl<B> Markdown<B>
 where
-    B: std::io::BufRead,
+    B: BufRead,
 {
     #[expect(clippy::while_let_on_iterator)]
     pub fn extract_bash_script_to(
         self,
-        mut output: impl std::io::Write,
+        mut output: impl Write,
         pause_after_linera_service: Option<Duration>,
         pause_after_gql_mutations: Option<Duration>,
-    ) -> Result<(), std::io::Error> {
+    ) -> std::io::Result<()> {
         let mut lines = self.buffer.lines();
 
         while let Some(line) = lines.next() {
@@ -131,11 +134,17 @@ where
                 writeln!(output, "QUERY=\"{}\"", quote.replace('"', "\\\""))?;
                 writeln!(
                     output,
-                    "JSON_QUERY=$(jq -n --arg q \"$QUERY\" '{{\"query\": $q}}')"
+                    "JSON_QUERY=$( jq -n --arg q \"$QUERY\" '{{\"query\": $q}}' )"
                 )?;
-                writeln!(output, "QUERY_RESULT=$(curl -w '\\n' -g -X POST -H \"Content-Type: application/json\" -d \"$JSON_QUERY\" {uri} \
-                        | tee /dev/stderr \
-                        | jq -e .data)"
+                writeln!(
+                    output,
+                    "QUERY_RESULT=$( \
+                     curl -w '\\n' -g -X POST \
+                       -H \"Content-Type: application/json\" \
+                       -d \"$JSON_QUERY\" {uri} \
+                     | tee /dev/stderr \
+                     | jq -e .data \
+                     )"
                 )?;
 
                 if let Some(pause) = pause_after_gql_mutations {

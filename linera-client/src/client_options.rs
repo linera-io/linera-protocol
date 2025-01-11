@@ -896,6 +896,7 @@ pub enum ClientCommand {
 
     /// Extract a Bash and GraphQL script embedded in a markdown file and print it on
     /// stdout.
+    #[command(hide = true)]
     ExtractScriptFromMarkdown {
         /// The source file
         path: PathBuf,
