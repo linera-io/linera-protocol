@@ -441,41 +441,84 @@ fn test_list_fields() {
             SimpleWrapper(false),
         ],
         boxed_slice: Box::new([
-            TupleWithPadding(0x1918, 0x1f1e_1d1c, 0x2726_2524_2322_2120),
-            TupleWithPadding(0x2928, 0x2f2e_2d2c, 0x3736_3534_3332_3130),
+            TupleWithPadding(0x2120, 0x2726_2524, 0x2f2e_2d2c_2b2a_2928),
+            TupleWithPadding(0x3130, 0x3736_3534, 0x3f3e_3d3c_3b3a_3938),
+        ]),
+        rced_slice: Rc::new([
+            Leaf {
+                first: true,
+                second: 0x5756_5554_5352_5150_4f4e_4d4c_4b4a_4948,
+            },
+            Leaf {
+                first: true,
+                second: 0x6f6e_6d6c_6b6a_6968_6766_6564_6362_6160,
+            },
+            Leaf {
+                first: false,
+                second: 0x8786_8584_8382_8180_7f7e_7d7c_7b7a_7978,
+            },
+            Leaf {
+                first: false,
+                second: 0x9f9e_9d9c_9b9a_9998_9796_9594_9392_9190,
+            },
         ]),
     };
 
-    let vec_metadata = [16, 0, 0, 0, 3, 0, 0, 0];
+    let vec_metadata = [24, 0, 0, 0, 3, 0, 0, 0];
     let vec_contents = [1, 1, 0];
 
-    let boxed_metadata = [24, 0, 0, 0, 2, 0, 0, 0];
+    let boxed_metadata = [32, 0, 0, 0, 2, 0, 0, 0];
     let boxed_contents = iter::empty()
         .chain(
             iter::empty()
-                .chain([0x18, 0x19])
-                .chain(26..28)
-                .chain([0x1c, 0x1d, 0x1e, 0x1f])
-                .chain([0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27]),
+                .chain([0x20, 0x21])
+                .chain(34..36)
+                .chain([0x24, 0x25, 0x26, 0x27])
+                .chain([0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f]),
         )
         .chain(
             iter::empty()
-                .chain([0x28, 0x29])
-                .chain(42..44)
-                .chain([0x2c, 0x2d, 0x2e, 0x2f])
-                .chain([0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37]),
+                .chain([0x30, 0x31])
+                .chain(50..52)
+                .chain([0x34, 0x35, 0x36, 0x37])
+                .chain([0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e, 0x3f]),
         );
+
+    let rced_metadata = [64, 0, 0, 0, 4, 0, 0, 0];
+    let rced_contents = iter::empty()
+        .chain(iter::empty().chain([1]).chain(65..72).chain([
+            0x48, 0x49, 0x4a, 0x4b, 0x4c, 0x4d, 0x4e, 0x4f, 0x50, 0x51, 0x52, 0x53, 0x54, 0x55,
+            0x56, 0x57,
+        ]))
+        .chain(iter::empty().chain([1]).chain(89..96).chain([
+            0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69, 0x6a, 0x6b, 0x6c, 0x6d,
+            0x6e, 0x6f,
+        ]))
+        .chain(iter::empty().chain([0]).chain(113..120).chain([
+            0x78, 0x79, 0x7a, 0x7b, 0x7c, 0x7d, 0x7e, 0x7f, 0x80, 0x81, 0x82, 0x83, 0x84, 0x85,
+            0x86, 0x87,
+        ]))
+        .chain(iter::empty().chain([0]).chain(137..144).chain([
+            0x90, 0x91, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97, 0x98, 0x99, 0x9a, 0x9b, 0x9c, 0x9d,
+            0x9e, 0x9f,
+        ]));
 
     let memory = iter::empty()
         .chain(vec_metadata)
         .chain(boxed_metadata)
+        .chain(rced_metadata)
         .chain(vec_contents)
-        .chain(19..24)
+        .chain(27..32)
         .chain(boxed_contents)
+        .chain(rced_contents)
         .collect::<Vec<u8>>();
 
     test_load_from_memory(&memory, expected.clone());
-    test_lift_from_flat_layout(hlist![0_i32, 3_i32, 8_i32, 2_i32], expected, &memory[16..]);
+    test_lift_from_flat_layout(
+        hlist![0_i32, 3_i32, 8_i32, 2_i32, 40_i32, 4_i32],
+        expected,
+        &memory[24..],
+    );
 }
 
 /// Tests that the type `T` and wrapped versions of it can be loaded from an `input` sequence of

@@ -541,6 +541,20 @@ fn test_list_fields() {
             SimpleWrapper(true),
         ],
         boxed_slice: Box::new([TupleWithPadding(1, 0, -1), TupleWithPadding(10, 11, 12)]),
+        rced_slice: Rc::new([
+            Leaf {
+                first: true,
+                second: 0x0011_2233_4455_6677_8899_aabb_ccdd_eeff,
+            },
+            Leaf {
+                first: false,
+                second: 0xffee_ddcc_bbaa_9988_7766_5544_3322_1100,
+            },
+            Leaf {
+                first: false,
+                second: 0xf0e1_d2c3_b4a5_9687_7869_5a4b_3c2d_1e0f,
+            },
+        ]),
     };
 
     let vec_contents = [0, 1, 0, 1];
@@ -561,18 +575,39 @@ fn test_list_fields() {
                 .chain([12, 0, 0, 0, 0, 0, 0, 0]),
         );
 
+    let rced_contents = iter::empty()
+        .chain(iter::empty().chain([1]).chain([0; 7]).chain([
+            0xff, 0xee, 0xdd, 0xcc, 0xbb, 0xaa, 0x99, 0x88, 0x77, 0x66, 0x55, 0x44, 0x33, 0x22,
+            0x11, 0x00,
+        ]))
+        .chain(iter::empty().chain([0]).chain([0; 7]).chain([
+            0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd,
+            0xee, 0xff,
+        ]))
+        .chain(iter::empty().chain([0]).chain([0; 7]).chain([
+            0x0f, 0x1e, 0x2d, 0x3c, 0x4b, 0x5a, 0x69, 0x78, 0x87, 0x96, 0xa5, 0xb4, 0xc3, 0xd2,
+            0xe1, 0xf0,
+        ]));
+
     let expected_heap = iter::empty()
         .chain(vec_contents)
         .chain([0; 4])
         .chain(boxed_contents)
+        .chain(rced_contents)
         .collect::<Vec<_>>();
 
     test_store_in_memory(
         data.clone(),
-        &[16, 0, 0, 0, 4, 0, 0, 0, 24, 0, 0, 0, 2, 0, 0, 0],
+        &[
+            24, 0, 0, 0, 4, 0, 0, 0, 32, 0, 0, 0, 2, 0, 0, 0, 64, 0, 0, 0, 3, 0, 0, 0,
+        ],
         &expected_heap,
     );
-    test_lower_to_flat_layout(data, hlist![0_i32, 4_i32, 8_i32, 2_i32], &expected_heap);
+    test_lower_to_flat_layout(
+        data,
+        hlist![0_i32, 4_i32, 8_i32, 2_i32, 40_i32, 3_i32],
+        &expected_heap,
+    );
 }
 
 /// Tests that the `data` of type `T` and wrapped versions of it can be stored as a sequence of
