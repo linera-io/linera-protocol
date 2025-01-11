@@ -38,6 +38,7 @@ pub enum RpcMessage {
     DownloadCertificates(Vec<CryptoHash>),
     BlobLastUsedBy(Box<BlobId>),
     MissingBlobIds(Box<Vec<BlobId>>),
+    ListAllBlobIds,
     VersionInfoQuery,
     GenesisConfigHashQuery,
 
@@ -52,6 +53,7 @@ pub enum RpcMessage {
     DownloadCertificatesResponse(Vec<ConfirmedBlockCertificate>),
     BlobLastUsedByResponse(Box<CryptoHash>),
     MissingBlobIdsResponse(Box<Vec<BlobId>>),
+    ListAllBlobIdsResponse(Box<Vec<BlobId>>),
 
     // Internal to a validator
     CrossChainRequest(Box<CrossChainRequest>),
@@ -88,6 +90,8 @@ impl RpcMessage {
             | BlobLastUsedByResponse(_)
             | MissingBlobIds(_)
             | MissingBlobIdsResponse(_)
+            | ListAllBlobIds
+            | ListAllBlobIdsResponse(_)
             | DownloadCertificatesResponse(_) => {
                 return None;
             }
@@ -108,6 +112,7 @@ impl RpcMessage {
             | DownloadConfirmedBlock(_)
             | BlobLastUsedBy(_)
             | MissingBlobIds(_)
+            | ListAllBlobIds
             | DownloadCertificates(_) => true,
             BlockProposal(_)
             | LiteCertificate(_)
@@ -125,6 +130,7 @@ impl RpcMessage {
             | DownloadConfirmedBlockResponse(_)
             | BlobLastUsedByResponse(_)
             | MissingBlobIdsResponse(_)
+            | ListAllBlobIdsResponse(_)
             | DownloadCertificatesResponse(_) => false,
         }
     }
@@ -202,6 +208,7 @@ impl TryFrom<RpcMessage> for Vec<BlobId> {
     fn try_from(message: RpcMessage) -> Result<Self, Self::Error> {
         match message {
             RpcMessage::MissingBlobIdsResponse(blob_ids) => Ok(*blob_ids),
+            RpcMessage::ListAllBlobIdsResponse(blob_ids) => Ok(*blob_ids),
             RpcMessage::Error(error) => Err(*error),
             _ => Err(NodeError::UnexpectedMessage),
         }

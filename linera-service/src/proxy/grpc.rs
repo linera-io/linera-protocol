@@ -468,6 +468,21 @@ where
     }
 
     #[instrument(skip_all, err(Display))]
+    async fn get_list_all_blob_ids(
+        &self,
+        _request: Request<()>,
+    ) -> Result<Response<BlobIds>, Status> {
+        // We assume each shard is running the same version as the proxy
+        let blob_ids = self
+            .0
+            .storage
+            .list_all_blob_ids()
+            .await
+            .map_err(|err| Status::from_error(Box::new(err)))?;
+        Ok(Response::new(blob_ids.try_into()?))
+    }
+
+    #[instrument(skip_all, err(Display))]
     async fn get_genesis_config_hash(
         &self,
         _request: Request<()>,

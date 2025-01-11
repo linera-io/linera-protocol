@@ -29,7 +29,7 @@ use linera_base::{
     command::resolve_binary,
     crypto::CryptoHash,
     data_types::Amount,
-    identifiers::{Account, AccountOwner, ApplicationId, ChainId},
+    identifiers::{Account, AccountOwner, ApplicationId, BlobId, BlobType, ChainId},
 };
 use linera_chain::data_types::{Medium, Origin};
 use linera_core::worker::{Notification, Reason};
@@ -989,9 +989,12 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
 
     let client2 = net.make_client().await;
     client2.wallet_init(&[], FaucetOption::None).await?;
+    let client3 = net.make_client().await;
+    client3.wallet_init(&[], FaucetOption::None).await?;
 
     let chain1 = client1.load_wallet()?.default_chain().unwrap();
     let chain2 = client1.open_and_assign(&client2, Amount::ONE).await?;
+    let _chain3 = client1.open_and_assign(&client3, Amount::ZERO).await?;
 
     // The players
     let account_owner1 = get_fungible_account_owner(&client1);
@@ -1023,6 +1026,10 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
         .publish_data_blob(&chain1, nft1_blob_bytes.clone())
         .await?;
     assert_eq!(nft1_blob_hash, blob_hash);
+    let blob_id1 = BlobId {
+        hash: blob_hash,
+        blob_type: BlobType::Data,
+    };
 
     let nft1_blob_hash = DataBlobHash(nft1_blob_hash);
 
@@ -1153,6 +1160,14 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
         .publish_data_blob(&chain2, nft2_blob_bytes.clone())
         .await?;
     assert_eq!(nft2_blob_hash, blob_hash);
+    let blob_id2 = BlobId {
+        hash: blob_hash,
+        blob_type: BlobType::Data,
+    };
+    let read_blob_ids = client3.list_all_blob_ids().await?;
+    for blob_id in &[blob_id1, blob_id2] {
+        assert!(read_blob_ids.contains(blob_id))
+    }
 
     let nft2_blob_hash = DataBlobHash(nft2_blob_hash);
 

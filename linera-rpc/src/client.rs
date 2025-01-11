@@ -164,6 +164,15 @@ impl ValidatorNode for Client {
         })
     }
 
+    async fn get_list_all_blob_ids(&self) -> Result<Vec<BlobId>, NodeError> {
+        Ok(match self {
+            Client::Grpc(grpc_client) => grpc_client.get_list_all_blob_ids().await?,
+
+            #[cfg(with_simple_network)]
+            Client::Simple(simple_client) => simple_client.get_list_all_blob_ids().await?,
+        })
+    }
+
     async fn get_genesis_config_hash(&self) -> Result<CryptoHash, NodeError> {
         Ok(match self {
             Client::Grpc(grpc_client) => grpc_client.get_genesis_config_hash().await?,

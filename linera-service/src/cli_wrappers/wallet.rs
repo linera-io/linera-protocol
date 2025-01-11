@@ -22,7 +22,7 @@ use linera_base::{
     command::{resolve_binary, CommandExt},
     crypto::{CryptoHash, PublicKey},
     data_types::{Amount, Bytecode},
-    identifiers::{Account, ApplicationId, BytecodeId, ChainId, MessageId, Owner},
+    identifiers::{Account, ApplicationId, BlobId, BytecodeId, ChainId, MessageId, Owner},
 };
 use linera_client::{config::GenesisConfig, wallet::Wallet};
 use linera_core::worker::Notification;
@@ -503,6 +503,21 @@ impl ClientWrapper {
             .parse()
             .context("error while parsing the result of `linera query-validator`")?;
         Ok(hash)
+    }
+
+    /// Runs `linera list-all-blob-ids`
+    pub async fn list_all_blob_ids(&self) -> Result<Vec<BlobId>> {
+        let mut command = self.command().await?;
+        command.arg("list-all-blob-ids");
+        let stdout = command.spawn_and_wait_for_stdout().await?;
+        let mut blob_ids = Vec::new();
+        for input in stdout.split('\n') {
+            if !input.is_empty() {
+                let blob_id = BlobId::from_str(input)?;
+                blob_ids.push(blob_id);
+            }
+        }
+        Ok(blob_ids)
     }
 
     /// Runs `linera query-validators`.
