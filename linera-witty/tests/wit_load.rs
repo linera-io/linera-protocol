@@ -430,6 +430,51 @@ fn test_rced_slice() {
     test_lift_from_flat_layout(hlist![0_i32, 3_i32], expected, &memory[8..]);
 }
 
+/// Checks that an arc-ed slice type is properly loaded from memory and lifted from its flat
+/// layout.
+#[test]
+fn test_arced_slice() {
+    let expected: Arc<[RecordWithDoublePadding]> = Arc::new([
+        RecordWithDoublePadding {
+            first: 0x0908,
+            second: 0x0f0e_0d0c,
+            third: 0x10,
+            fourth: 0x1f1e_1d1c_1b1a_1918,
+        },
+        RecordWithDoublePadding {
+            first: 0x2120,
+            second: 0x2726_2524,
+            third: 0x28,
+            fourth: 0x3736_3534_3332_3130,
+        },
+    ]);
+
+    let memory = iter::empty()
+        .chain([8, 0, 0, 0, 2, 0, 0, 0])
+        .chain(
+            iter::empty()
+                .chain([0x08, 0x09])
+                .chain(10..12)
+                .chain([0x0c, 0x0d, 0x0e, 0x0f])
+                .chain([0x10])
+                .chain(17..24)
+                .chain([0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f]),
+        )
+        .chain(
+            iter::empty()
+                .chain([0x20, 0x21])
+                .chain(34..36)
+                .chain([0x24, 0x25, 0x26, 0x27])
+                .chain([0x28])
+                .chain(41..48)
+                .chain([0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37]),
+        )
+        .collect::<Vec<u8>>();
+
+    test_load_from_memory(&memory, expected.clone());
+    test_lift_from_flat_layout(hlist![0_i32, 2_i32], expected, &memory[8..]);
+}
+
 /// Checks that a type with list fields is properly loaded from memory and lifted from its
 /// flat layout.
 #[test]
