@@ -23,12 +23,14 @@ use linera_service::{
         local_net::{
             get_node_port, Database, LocalNet, LocalNetConfig, PathProvider, ProcessInbox,
         },
-        ClientWrapper, Faucet, FaucetOption, LineraNet, LineraNetConfig, Network, OnClientDrop,
+        ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network, OnClientDrop,
     },
     faucet::ClaimOutcome,
     test_name,
 };
 use test_case::test_case;
+#[cfg(feature = "storage-service")]
+use {linera_base::port::get_free_port, linera_service::cli_wrappers::Faucet};
 
 #[cfg(feature = "benchmark")]
 fn get_fungible_account_owner(client: &ClientWrapper) -> AccountOwner {
@@ -732,6 +734,8 @@ async fn test_storage_service_linera_net_up_simple() -> Result<()> {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
+    let port = get_free_port().await?;
+
     let mut command = Command::new(env!("CARGO_BIN_EXE_linera"));
     command.args([
         "net",
@@ -739,7 +743,7 @@ async fn test_storage_service_linera_net_up_simple() -> Result<()> {
         "--with-faucet-chain",
         "1",
         "--faucet-port",
-        "7999",
+        &port.to_string(),
     ]);
     let mut child = command
         .stdout(Stdio::piped())
@@ -771,7 +775,7 @@ async fn test_storage_service_linera_net_up_simple() -> Result<()> {
     assert_eq!(exports.next().unwrap()?, "");
 
     // Test faucet.
-    let faucet = Faucet::new("http://localhost:7999/".to_string());
+    let faucet = Faucet::new(format!("http://localhost:{}/", port));
     faucet.version_info().await.unwrap();
 
     // Send SIGINT to the child process.
