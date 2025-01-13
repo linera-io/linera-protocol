@@ -239,7 +239,6 @@ where
     pub(super) async fn process_confirmed_block(
         &mut self,
         certificate: ConfirmedBlockCertificate,
-        blobs: &[Blob],
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         let executed_block = certificate.executed_block();
@@ -298,33 +297,33 @@ where
         );
 
         let required_blob_ids = executed_block.required_blob_ids();
-        // Verify that no unrelated blobs were provided.
-        self.state
-            .check_for_unneeded_blobs(&required_blob_ids, blobs)?;
-        let blobs = self.state.get_required_blobs(executed_block, blobs).await?;
-        let blobs = blobs.into_values().collect::<Vec<_>>();
+        let blobs_result = self
+            .state
+            .get_required_blobs(executed_block, &[])
+            .await
+            .map(|blobs| blobs.into_values().collect::<Vec<_>>());
 
-        let certificate_hash = certificate.hash();
-
-        self.state
-            .storage
-            .write_blobs_and_certificate(&blobs, &certificate)
-            .await?;
+        if let Ok(blobs) = &blobs_result {
+            self.state
+                .storage
+                .write_blobs_and_certificate(blobs, &certificate)
+                .await?;
+        }
 
         // Update the blob state with last used certificate hash.
         let blob_state = BlobState {
-            last_used_by: certificate_hash,
+            last_used_by: certificate.hash(),
             chain_id: block.chain_id,
             block_height,
             epoch: block.epoch,
         };
+        let overwrite = blobs_result.is_ok(); // Overwrite only if we wrote the certificate.
+        let blob_ids = required_blob_ids.into_iter().collect::<Vec<_>>();
         self.state
             .storage
-            .maybe_write_blob_states(
-                &required_blob_ids.into_iter().collect::<Vec<_>>(),
-                blob_state,
-            )
+            .maybe_write_blob_states(&blob_ids, blob_state, overwrite)
             .await?;
+        blobs_result?;
 
         // Execute the block and update inboxes.
         self.state.chain.remove_bundles_from_inboxes(block).await?;

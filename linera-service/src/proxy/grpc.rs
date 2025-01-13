@@ -41,7 +41,7 @@ use linera_rpc::{
         GRPC_MAX_MESSAGE_SIZE,
     },
 };
-use linera_sdk::views::ViewError;
+use linera_sdk::{base::Blob, views::ViewError};
 use linera_storage::Storage;
 use prost::Message;
 use tokio::{select, task::JoinSet};
@@ -473,6 +473,18 @@ where
         _request: Request<()>,
     ) -> Result<Response<CryptoHash>, Status> {
         Ok(Response::new(self.0.genesis_config.hash().into()))
+    }
+
+    #[instrument(skip_all, err(Display))]
+    async fn upload_blob(&self, request: Request<BlobContent>) -> Result<Response<BlobId>, Status> {
+        let content: linera_sdk::base::BlobContent = request.into_inner().try_into()?;
+        let blob = Blob::new(content);
+        let id = blob.id();
+        let result = self.0.storage.maybe_write_blobs(&[blob]).await;
+        if !result.map_err(Self::error_to_status)?[0] {
+            return Err(Status::not_found("Blob not found"));
+        }
+        Ok(Response::new(id.try_into()?))
     }
 
     #[instrument(skip_all, err(Display))]

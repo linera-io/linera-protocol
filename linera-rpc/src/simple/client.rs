@@ -116,13 +116,11 @@ impl ValidatorNode for SimpleClient {
     async fn handle_confirmed_certificate(
         &self,
         certificate: ConfirmedBlockCertificate,
-        blobs: Vec<Blob>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
         let wait_for_outgoing_messages = delivery.wait_for_outgoing_messages();
         let request = HandleConfirmedCertificateRequest {
             certificate,
-            blobs,
             wait_for_outgoing_messages,
         };
         let request = RpcMessage::ConfirmedCertificate(Box::new(request));
@@ -162,6 +160,10 @@ impl ValidatorNode for SimpleClient {
 
     async fn get_genesis_config_hash(&self) -> Result<CryptoHash, NodeError> {
         self.query(RpcMessage::GenesisConfigHashQuery).await
+    }
+
+    async fn upload_blob(&self, content: BlobContent) -> Result<BlobId, NodeError> {
+        self.query(RpcMessage::UploadBlob(Box::new(content))).await
     }
 
     async fn download_blob_content(&self, blob_id: BlobId) -> Result<BlobContent, NodeError> {
@@ -208,8 +210,7 @@ impl ValidatorNode for SimpleClient {
     }
 
     async fn missing_blob_ids(&self, blob_ids: Vec<BlobId>) -> Result<Vec<BlobId>, NodeError> {
-        self.query(RpcMessage::MissingBlobIds(Box::new(blob_ids)))
-            .await
+        self.query(RpcMessage::MissingBlobIds(blob_ids)).await
     }
 }
 

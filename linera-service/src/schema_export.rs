@@ -64,7 +64,6 @@ impl ValidatorNode for DummyValidatorNode {
     async fn handle_confirmed_certificate(
         &self,
         _: GenericCertificate<ConfirmedBlock>,
-        _: Vec<Blob>,
         _delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
         Err(NodeError::UnexpectedMessage)
@@ -94,6 +93,10 @@ impl ValidatorNode for DummyValidatorNode {
     }
 
     async fn get_genesis_config_hash(&self) -> Result<CryptoHash, NodeError> {
+        Err(NodeError::UnexpectedMessage)
+    }
+
+    async fn upload_blob(&self, _: BlobContent) -> Result<BlobId, NodeError> {
         Err(NodeError::UnexpectedMessage)
     }
 

@@ -530,6 +530,7 @@ where
         &self,
         blob_ids: &[BlobId],
         blob_state: BlobState,
+        overwrite: bool,
     ) -> Result<Vec<Epoch>, ViewError> {
         if blob_ids.is_empty() {
             return Ok(Vec::new());
@@ -549,7 +550,7 @@ where
             let (should_write, latest_epoch) = match maybe_blob_state {
                 None => (true, blob_state.epoch),
                 Some(current_blob_state) => (
-                    current_blob_state.epoch < blob_state.epoch,
+                    overwrite && current_blob_state.epoch < blob_state.epoch,
                     current_blob_state.epoch.max(blob_state.epoch),
                 ),
             };
@@ -574,6 +575,25 @@ where
         Self::add_blob_state_to_batch(blob_id, blob_state, &mut batch)?;
         self.write_batch(batch).await?;
         Ok(())
+    }
+
+    async fn maybe_write_blobs(&self, blobs: &[Blob]) -> Result<Vec<bool>, ViewError> {
+        if blobs.is_empty() {
+            return Ok(Vec::new());
+        }
+        let blob_state_keys = blobs
+            .iter()
+            .map(|blob| bcs::to_bytes(&BaseKey::BlobState(blob.id())))
+            .collect::<Result<_, _>>()?;
+        let blob_states = self.store.contains_keys(blob_state_keys).await?;
+        let mut batch = Batch::new();
+        for (blob, has_state) in blobs.iter().zip(&blob_states) {
+            if *has_state {
+                Self::add_blob_to_batch(blob, &mut batch)?;
+            }
+        }
+        self.write_batch(batch).await?;
+        Ok(blob_states)
     }
 
     async fn write_blobs(&self, blobs: &[Blob]) -> Result<(), ViewError> {

@@ -809,7 +809,6 @@ impl Runnable for Job {
                         RpcMessage::ConfirmedCertificate(Box::new(
                             HandleConfirmedCertificateRequest {
                                 certificate: certificate.clone(),
-                                blobs: vec![],
                                 wait_for_outgoing_messages: true,
                             },
                         ))

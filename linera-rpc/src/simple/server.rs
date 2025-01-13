@@ -292,7 +292,7 @@ where
                 match self
                     .server
                     .state
-                    .handle_confirmed_certificate(request.certificate, request.blobs, sender)
+                    .handle_confirmed_certificate(request.certificate, sender)
                     .await
                 {
                     Ok((info, actions)) => {
@@ -359,7 +359,9 @@ where
             | RpcMessage::MissingBlobIds(_)
             | RpcMessage::MissingBlobIdsResponse(_)
             | RpcMessage::DownloadCertificates(_)
-            | RpcMessage::DownloadCertificatesResponse(_) => Err(NodeError::UnexpectedMessage),
+            | RpcMessage::DownloadCertificatesResponse(_)
+            | RpcMessage::UploadBlob(_)
+            | RpcMessage::UploadBlobResponse(_) => Err(NodeError::UnexpectedMessage),
         };
 
         self.server.packets_processed += 1;

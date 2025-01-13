@@ -124,6 +124,10 @@ pub trait Storage: Sized {
         blob_state: &BlobState,
     ) -> Result<(), ViewError>;
 
+    /// Writes the given blobs, but only if they already have a blob state. Returns `true` for the
+    /// blobs that were written.
+    async fn maybe_write_blobs(&self, blobs: &[Blob]) -> Result<Vec<bool>, ViewError>;
+
     /// Attempts to write the given blob state. Returns the latest `Epoch` to have used this blob.
     async fn maybe_write_blob_state(
         &self,
@@ -136,6 +140,7 @@ pub trait Storage: Sized {
         &self,
         blob_ids: &[BlobId],
         blob_state: BlobState,
+        overwrite: bool,
     ) -> Result<Vec<Epoch>, ViewError>;
 
     /// Writes several blobs.

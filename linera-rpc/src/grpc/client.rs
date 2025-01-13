@@ -207,13 +207,11 @@ impl ValidatorNode for GrpcClient {
     async fn handle_confirmed_certificate(
         &self,
         certificate: GenericCertificate<ConfirmedBlock>,
-        blobs: Vec<Blob>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<linera_core::data_types::ChainInfoResponse, NodeError> {
         let wait_for_outgoing_messages: bool = delivery.wait_for_outgoing_messages();
         let request = HandleConfirmedCertificateRequest {
             certificate,
-            blobs,
             wait_for_outgoing_messages,
         };
         GrpcClient::try_into_chain_info(client_delegate!(
@@ -347,6 +345,12 @@ impl ValidatorNode for GrpcClient {
     async fn get_genesis_config_hash(&self) -> Result<CryptoHash, NodeError> {
         let req = ();
         Ok(client_delegate!(self, get_genesis_config_hash, req)?.try_into()?)
+    }
+
+    #[instrument(target = "grpc_client", skip(self), err, fields(address = self.address))]
+    async fn upload_blob(&self, content: BlobContent) -> Result<BlobId, NodeError> {
+        let req = api::BlobContent::try_from(content)?;
+        Ok(client_delegate!(self, upload_blob, req)?.try_into()?)
     }
 
     #[instrument(target = "grpc_client", skip(self), err, fields(address = self.address))]

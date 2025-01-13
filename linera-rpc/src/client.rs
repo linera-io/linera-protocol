@@ -94,20 +94,19 @@ impl ValidatorNode for Client {
     async fn handle_confirmed_certificate(
         &self,
         certificate: ConfirmedBlockCertificate,
-        blobs: Vec<Blob>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
         match self {
             Client::Grpc(grpc_client) => {
                 grpc_client
-                    .handle_confirmed_certificate(certificate, blobs, delivery)
+                    .handle_confirmed_certificate(certificate, delivery)
                     .await
             }
 
             #[cfg(with_simple_network)]
             Client::Simple(simple_client) => {
                 simple_client
-                    .handle_confirmed_certificate(certificate, blobs, delivery)
+                    .handle_confirmed_certificate(certificate, delivery)
                     .await
             }
         }
@@ -170,6 +169,15 @@ impl ValidatorNode for Client {
 
             #[cfg(with_simple_network)]
             Client::Simple(simple_client) => simple_client.get_genesis_config_hash().await?,
+        })
+    }
+
+    async fn upload_blob(&self, content: BlobContent) -> Result<BlobId, NodeError> {
+        Ok(match self {
+            Client::Grpc(grpc_client) => grpc_client.upload_blob(content).await?,
+
+            #[cfg(with_simple_network)]
+            Client::Simple(simple_client) => simple_client.upload_blob(content).await?,
         })
     }
 

@@ -71,7 +71,6 @@ pub trait ValidatorNode {
     async fn handle_confirmed_certificate(
         &self,
         certificate: GenericCertificate<ConfirmedBlock>,
-        blobs: Vec<Blob>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError>;
 
@@ -102,6 +101,10 @@ pub trait ValidatorNode {
 
     /// Subscribes to receiving notifications for a collection of chains.
     async fn subscribe(&self, chains: Vec<ChainId>) -> Result<Self::NotificationStream, NodeError>;
+
+    // Uploads a blob content. Returns an error if the validator has not seen a
+    // certificate using this blob.
+    async fn upload_blob(&self, content: BlobContent) -> Result<BlobId, NodeError>;
 
     async fn download_blob_content(&self, blob_id: BlobId) -> Result<BlobContent, NodeError>;
 
