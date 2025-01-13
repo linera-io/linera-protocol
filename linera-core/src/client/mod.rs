@@ -1766,8 +1766,7 @@ where
         }
         if let Some(cert) = info.manager.requested_locked {
             let hash = cert.hash();
-            let blobs = info.manager.locked_blobs.clone();
-            if let Err(err) = self.process_certificate(*cert.clone(), blobs).await {
+            if let Err(err) = self.try_process_locked_block_from(remote_node, cert).await {
                 warn!(
                     "Skipping certificate {hash} from validator {}: {err}",
                     remote_node.name
@@ -1775,6 +1774,30 @@ where
             }
         }
         Ok(())
+    }
+
+    async fn try_process_locked_block_from(
+        &self,
+        remote_node: &RemoteNode<P::Node>,
+        certificate: Box<GenericCertificate<ValidatedBlock>>,
+    ) -> Result<(), ChainClientError> {
+        let chain_id = certificate.inner().chain_id();
+        match self.process_certificate(*certificate.clone(), vec![]).await {
+            Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
+                let mut blobs = Vec::new();
+                for blob_id in blob_ids {
+                    let blob_content = remote_node
+                        .node
+                        .download_pending_blob(chain_id, blob_id)
+                        .await?;
+                    blobs.push(Blob::new(blob_content));
+                }
+                self.process_certificate(*certificate, blobs).await?;
+                Ok(())
+            }
+            Err(err) => Err(err.into()),
+            Ok(()) => Ok(()),
+        }
     }
 
     /// Downloads and processes from the specified validator a confirmed block certificates that

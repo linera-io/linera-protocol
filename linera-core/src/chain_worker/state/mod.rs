@@ -294,6 +294,18 @@ where
         Ok((response, actions))
     }
 
+    /// Returns the requested blob, if it belongs to the current locked block or pending proposal.
+    pub(super) async fn download_pending_blob(&self, blob_id: BlobId) -> Result<Blob, WorkerError> {
+        let manager = self.chain.manager.get();
+        manager
+            .proposed
+            .as_ref()
+            .and_then(|proposal| proposal.blobs.iter().find(|blob| blob.id() == blob_id))
+            .or_else(|| manager.locked_blobs.get(&blob_id))
+            .cloned()
+            .ok_or_else(|| WorkerError::BlobsNotFound(vec![blob_id]))
+    }
+
     /// Ensures that the current chain is active, returning an error otherwise.
     fn ensure_is_active(&mut self) -> Result<(), WorkerError> {
         if !self.knows_chain_is_active {

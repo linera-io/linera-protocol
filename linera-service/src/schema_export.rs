@@ -84,6 +84,10 @@ impl ValidatorNode for DummyValidatorNode {
         Err(NodeError::UnexpectedMessage)
     }
 
+    async fn download_pending_blob(&self, _: ChainId, _: BlobId) -> Result<BlobContent, NodeError> {
+        Err(NodeError::UnexpectedMessage)
+    }
+
     async fn subscribe(&self, _: Vec<ChainId>) -> Result<NotificationStream, NodeError> {
         Err(NodeError::UnexpectedMessage)
     }

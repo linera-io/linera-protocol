@@ -339,6 +339,24 @@ where
                 // No user to respond to.
                 Ok(None)
             }
+            RpcMessage::DownloadPendingBlob(request) => {
+                let (chain_id, blob_id) = *request;
+                match self
+                    .server
+                    .state
+                    .download_pending_blob(chain_id, blob_id)
+                    .await
+                {
+                    Ok(blob) => Ok(Some(RpcMessage::DownloadPendingBlobResponse(Box::new(
+                        blob.into(),
+                    )))),
+                    Err(error) => {
+                        let nickname = self.server.state.nickname();
+                        error!(nickname, %error, "Failed to handle pending blob request");
+                        Err(error.into())
+                    }
+                }
+            }
 
             RpcMessage::VersionInfoQuery => {
                 Ok(Some(RpcMessage::VersionInfoResponse(Box::default())))
@@ -352,6 +370,7 @@ where
             | RpcMessage::GenesisConfigHashResponse(_)
             | RpcMessage::DownloadBlob(_)
             | RpcMessage::DownloadBlobResponse(_)
+            | RpcMessage::DownloadPendingBlobResponse(_)
             | RpcMessage::DownloadConfirmedBlock(_)
             | RpcMessage::DownloadConfirmedBlockResponse(_)
             | RpcMessage::BlobLastUsedBy(_)
