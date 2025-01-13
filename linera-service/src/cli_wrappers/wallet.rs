@@ -1012,14 +1012,12 @@ impl Drop for ClientWrapper {
         let chain_ids = match self.find_owned_chains() {
             Ok(ids) => ids,
             Err(err) => {
-                warn!("Skipping closing chains because of error: {}", err);
+                warn!("Not closing chains because an error occurred: {}", err);
                 return;
             }
         };
-
         let binary_path = self.binary_path.lock().unwrap();
-        let binary_path = binary_path.as_ref().expect("Binary was used successfully");
-
+        let binary_path = binary_path.as_ref().expect("Binary was used before");
         let working_directory = self.path_provider.path();
 
         for chain_id in chain_ids {
