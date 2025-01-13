@@ -598,6 +598,20 @@ fn test_list_fields() {
                 second: 0xf0e1_d2c3_b4a5_9687_7869_5a4b_3c2d_1e0f,
             },
         ]),
+        arced_slice: Arc::new([
+            RecordWithDoublePadding {
+                first: 0x1020,
+                second: 0x0a0b_0c0d,
+                third: 0x7a,
+                fourth: -0x0abb_ccdd_eeff_0011,
+            },
+            RecordWithDoublePadding {
+                first: 0x1525,
+                second: 0x8191_a1b1,
+                third: -0x7a,
+                fourth: 0x0abb_ccdd_eeff_0011,
+            },
+        ]),
     };
 
     let vec_contents = [0, 1, 0, 1];
@@ -632,23 +646,45 @@ fn test_list_fields() {
             0xe1, 0xf0,
         ]));
 
+    let arced_contents = iter::empty()
+        .chain(
+            iter::empty()
+                .chain([0x20, 0x10])
+                .chain([0; 2])
+                .chain([0x0d, 0x0c, 0x0b, 0x0a])
+                .chain([0x7a])
+                .chain([0; 7])
+                .chain([0xef, 0xff, 0x00, 0x11, 0x22, 0x33, 0x44, 0xf5]),
+        )
+        .chain(
+            iter::empty()
+                .chain([0x25, 0x15])
+                .chain([0; 2])
+                .chain([0xb1, 0xa1, 0x91, 0x81])
+                .chain([0x86])
+                .chain([0; 7])
+                .chain([0x11, 0x00, 0xff, 0xee, 0xdd, 0xcc, 0xbb, 0x0a]),
+        );
+
     let expected_heap = iter::empty()
         .chain(vec_contents)
         .chain([0; 4])
         .chain(boxed_contents)
         .chain(rced_contents)
+        .chain(arced_contents)
         .collect::<Vec<_>>();
 
     test_store_in_memory(
         data.clone(),
         &[
-            24, 0, 0, 0, 4, 0, 0, 0, 32, 0, 0, 0, 2, 0, 0, 0, 64, 0, 0, 0, 3, 0, 0, 0,
+            32, 0, 0, 0, 4, 0, 0, 0, 40, 0, 0, 0, 2, 0, 0, 0, 72, 0, 0, 0, 3, 0, 0, 0, 144, 0, 0,
+            0, 2, 0, 0, 0,
         ],
         &expected_heap,
     );
     test_lower_to_flat_layout(
         data,
-        hlist![0_i32, 4_i32, 8_i32, 2_i32, 40_i32, 3_i32],
+        hlist![0_i32, 4_i32, 8_i32, 2_i32, 40_i32, 3_i32, 112_i32, 2_i32],
         &expected_heap,
     );
 }

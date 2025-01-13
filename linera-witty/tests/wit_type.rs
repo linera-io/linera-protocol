@@ -318,13 +318,19 @@ fn test_slice_field() {
 #[test]
 fn test_list_fields() {
     test_wit_type_implementation::<StructWithLists>(ExpectedMetadata {
-        size: 24,
+        size: 32,
         alignment: 4,
-        flat_layout_length: 6,
+        flat_layout_length: 8,
         declaration: concat!(
             "    record leaf {\n",
             "        first: bool,\n",
             "        second: u128,\n",
+            "    }\n\n",
+            "    record record-with-double-padding {\n",
+            "        first: u16,\n",
+            "        second: u32,\n",
+            "        third: s8,\n",
+            "        fourth: s64,\n",
             "    }\n\n",
             "    record simple-wrapper {\n",
             "        inner0: bool,\n",
@@ -333,6 +339,7 @@ fn test_list_fields() {
             "        vec: list<simple-wrapper>,\n",
             "        boxed-slice: list<tuple-with-padding>,\n",
             "        rced-slice: list<leaf>,\n",
+            "        arced-slice: list<record-with-double-padding>,\n",
             "    }\n\n",
             "    record tuple-with-padding {\n",
             "        inner0: u16,\n",

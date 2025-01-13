@@ -486,83 +486,120 @@ fn test_list_fields() {
             SimpleWrapper(false),
         ],
         boxed_slice: Box::new([
-            TupleWithPadding(0x2120, 0x2726_2524, 0x2f2e_2d2c_2b2a_2928),
-            TupleWithPadding(0x3130, 0x3736_3534, 0x3f3e_3d3c_3b3a_3938),
+            TupleWithPadding(0x2928, 0x2f2e_2d2c, 0x3736_3534_3332_3130),
+            TupleWithPadding(0x3938, 0x3f3e_3d3c, 0x4746_4544_4342_4140),
         ]),
         rced_slice: Rc::new([
             Leaf {
                 first: true,
-                second: 0x5756_5554_5352_5150_4f4e_4d4c_4b4a_4948,
+                second: 0x5f5e_5d5c_5b5a_5958_5756_5554_5352_5150,
             },
             Leaf {
                 first: true,
-                second: 0x6f6e_6d6c_6b6a_6968_6766_6564_6362_6160,
+                second: 0x7776_7574_7372_7170_6f6e_6d6c_6b6a_6968,
             },
             Leaf {
                 first: false,
-                second: 0x8786_8584_8382_8180_7f7e_7d7c_7b7a_7978,
+                second: 0x8f8e_8d8c_8b8a_8988_8786_8584_8382_8180,
             },
             Leaf {
                 first: false,
-                second: 0x9f9e_9d9c_9b9a_9998_9796_9594_9392_9190,
+                second: 0xa7a6_a5a4_a3a2_a1a0_9f9e_9d9c_9b9a_9998,
+            },
+        ]),
+        arced_slice: Arc::new([
+            RecordWithDoublePadding {
+                first: 0xa9a8,
+                second: 0xafae_adac,
+                third: 0xb0_u8 as i8,
+                fourth: 0xbfbe_bdbc_bbba_b9b8_u64 as i64,
+            },
+            RecordWithDoublePadding {
+                first: 0xc1c0,
+                second: 0xc7c6_c5c4,
+                third: 0xc8_u8 as i8,
+                fourth: 0xd7d6_d5d4_d3d2_d1d0_u64 as i64,
             },
         ]),
     };
 
-    let vec_metadata = [24, 0, 0, 0, 3, 0, 0, 0];
+    let vec_metadata = [32, 0, 0, 0, 3, 0, 0, 0];
     let vec_contents = [1, 1, 0];
 
-    let boxed_metadata = [32, 0, 0, 0, 2, 0, 0, 0];
+    let boxed_metadata = [40, 0, 0, 0, 2, 0, 0, 0];
     let boxed_contents = iter::empty()
         .chain(
             iter::empty()
-                .chain([0x20, 0x21])
-                .chain(34..36)
-                .chain([0x24, 0x25, 0x26, 0x27])
-                .chain([0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f]),
+                .chain([0x28, 0x29])
+                .chain(42..44)
+                .chain([0x2c, 0x2d, 0x2e, 0x2f])
+                .chain([0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37]),
         )
         .chain(
             iter::empty()
-                .chain([0x30, 0x31])
-                .chain(50..52)
-                .chain([0x34, 0x35, 0x36, 0x37])
-                .chain([0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e, 0x3f]),
+                .chain([0x38, 0x39])
+                .chain(58..60)
+                .chain([0x3c, 0x3d, 0x3e, 0x3f])
+                .chain([0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47]),
         );
 
-    let rced_metadata = [64, 0, 0, 0, 4, 0, 0, 0];
+    let rced_metadata = [72, 0, 0, 0, 4, 0, 0, 0];
     let rced_contents = iter::empty()
-        .chain(iter::empty().chain([1]).chain(65..72).chain([
-            0x48, 0x49, 0x4a, 0x4b, 0x4c, 0x4d, 0x4e, 0x4f, 0x50, 0x51, 0x52, 0x53, 0x54, 0x55,
-            0x56, 0x57,
+        .chain(iter::empty().chain([1]).chain(73..80).chain([
+            0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5a, 0x5b, 0x5c, 0x5d,
+            0x5e, 0x5f,
         ]))
-        .chain(iter::empty().chain([1]).chain(89..96).chain([
-            0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69, 0x6a, 0x6b, 0x6c, 0x6d,
-            0x6e, 0x6f,
+        .chain(iter::empty().chain([1]).chain(97..104).chain([
+            0x68, 0x69, 0x6a, 0x6b, 0x6c, 0x6d, 0x6e, 0x6f, 0x70, 0x71, 0x72, 0x73, 0x74, 0x75,
+            0x76, 0x77,
         ]))
-        .chain(iter::empty().chain([0]).chain(113..120).chain([
-            0x78, 0x79, 0x7a, 0x7b, 0x7c, 0x7d, 0x7e, 0x7f, 0x80, 0x81, 0x82, 0x83, 0x84, 0x85,
-            0x86, 0x87,
+        .chain(iter::empty().chain([0]).chain(121..128).chain([
+            0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87, 0x88, 0x89, 0x8a, 0x8b, 0x8c, 0x8d,
+            0x8e, 0x8f,
         ]))
-        .chain(iter::empty().chain([0]).chain(137..144).chain([
-            0x90, 0x91, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97, 0x98, 0x99, 0x9a, 0x9b, 0x9c, 0x9d,
-            0x9e, 0x9f,
+        .chain(iter::empty().chain([0]).chain(145..152).chain([
+            0x98, 0x99, 0x9a, 0x9b, 0x9c, 0x9d, 0x9e, 0x9f, 0xa0, 0xa1, 0xa2, 0xa3, 0xa4, 0xa5,
+            0xa6, 0xa7,
         ]));
+
+    let arced_metadata = [168, 0, 0, 0, 2, 0, 0, 0];
+    let arced_contents = iter::empty()
+        .chain(
+            iter::empty()
+                .chain([0xa8, 0xa9])
+                .chain(170..172)
+                .chain([0xac, 0xad, 0xae, 0xaf])
+                .chain([0xb0])
+                .chain(177..184)
+                .chain([0xb8, 0xb9, 0xba, 0xbb, 0xbc, 0xbd, 0xbe, 0xbf]),
+        )
+        .chain(
+            iter::empty()
+                .chain([0xc0, 0xc1])
+                .chain(194..196)
+                .chain([0xc4, 0xc5, 0xc6, 0xc7])
+                .chain([0xc8])
+                .chain(201..208)
+                .chain([0xd0, 0xd1, 0xd2, 0xd3, 0xd4, 0xd5, 0xd6, 0xd7]),
+        );
 
     let memory = iter::empty()
         .chain(vec_metadata)
         .chain(boxed_metadata)
         .chain(rced_metadata)
+        .chain(arced_metadata)
         .chain(vec_contents)
-        .chain(27..32)
+        .chain(35..40)
         .chain(boxed_contents)
         .chain(rced_contents)
+        .chain(arced_contents)
         .collect::<Vec<u8>>();
 
     test_load_from_memory(&memory, expected.clone());
     test_lift_from_flat_layout(
-        hlist![0_i32, 3_i32, 8_i32, 2_i32, 40_i32, 4_i32],
+        hlist![0_i32, 3_i32, 8_i32, 2_i32, 40_i32, 4_i32, 136_i32, 2_i32],
         expected,
-        &memory[24..],
+        &memory[32..],
     );
 }
 

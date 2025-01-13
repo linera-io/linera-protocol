@@ -85,6 +85,7 @@ pub struct StructWithLists {
     pub vec: Vec<SimpleWrapper>,
     pub boxed_slice: Box<[TupleWithPadding]>,
     pub rced_slice: Rc<[Leaf]>,
+    pub arced_slice: Arc<[RecordWithDoublePadding]>,
 }
 
 /// A type that wraps a slice.
