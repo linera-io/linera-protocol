@@ -9,13 +9,13 @@ use std::{
 
 use async_graphql::SimpleObject;
 use linera_base::{
-    crypto::{BcsHashable, CryptoHash, CryptoHashVec},
+    crypto::{BcsHashable, CryptoHash},
     data_types::{BlockHeight, OracleResponse, Timestamp},
     hashed::Hashed,
     identifiers::{BlobId, BlobType, ChainId, MessageId, Owner},
 };
 use linera_execution::{committee::Epoch, Operation, SystemOperation};
-use serde::{Deserialize, Serialize};
+use serde::{ser::SerializeStruct, Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
@@ -208,12 +208,71 @@ pub enum ConversionError {
 }
 
 /// Block defines the atomic unit of growth of the Linera chain.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, SimpleObject)]
 pub struct Block {
     /// Header of the block containing metadata of the block.
     pub header: BlockHeader,
     /// Body of the block containing all of the data.
     pub body: BlockBody,
+}
+
+impl Serialize for Block {
+    fn serialize<S: serde::ser::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut state = serializer.serialize_struct("Block", 2)?;
+        state.serialize_field("header", &self.header)?;
+        state.serialize_field("body", &self.body)?;
+        state.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for Block {
+    fn deserialize<D: serde::de::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(rename = "Block")]
+        struct Inner {
+            header: BlockHeader,
+            body: BlockBody,
+        }
+        let inner = Inner::deserialize(deserializer)?;
+
+        let bundles_hash = hashing::hash_vec(&inner.body.incoming_bundles);
+        if inner.header.bundles_hash != bundles_hash {
+            return Err(serde::de::Error::custom(
+                "Invalid bundles hash in block header",
+            ));
+        }
+
+        let messages_hash = hashing::hash_vec_vec(&inner.body.messages);
+        if inner.header.messages_hash != messages_hash {
+            return Err(serde::de::Error::custom(
+                "Invalid messages hash in block header",
+            ));
+        }
+
+        let operations_hash = hashing::hash_vec(&inner.body.operations);
+        if inner.header.operations_hash != operations_hash {
+            return Err(serde::de::Error::custom(
+                "Invalid operations hash in block header",
+            ));
+        }
+        let oracle_responses_hash = hashing::hash_vec_vec(&inner.body.oracle_responses);
+        if inner.header.oracle_responses_hash != oracle_responses_hash {
+            return Err(serde::de::Error::custom(
+                "Invalid oracle responses hash in block header",
+            ));
+        }
+        let events_hash = hashing::hash_vec_vec(&inner.body.events);
+        if inner.header.events_hash != events_hash {
+            return Err(serde::de::Error::custom(
+                "Invalid events hash in block header",
+            ));
+        }
+
+        Ok(Self {
+            header: inner.header,
+            body: inner.body,
+        })
+    }
 }
 
 /// Succint representation of a block.
@@ -275,25 +334,11 @@ pub struct BlockBody {
 
 impl Block {
     pub fn new(proposal: Proposal, outcome: BlockExecutionOutcome) -> Self {
-        fn hash_vec<'de, T: BcsHashable<'de>>(it: impl AsRef<[T]>) -> CryptoHash {
-            let v = CryptoHashVec(it.as_ref().iter().map(CryptoHash::new).collect::<Vec<_>>());
-            CryptoHash::new(&v)
-        }
-        let bundles_hash = hash_vec(&proposal.incoming_bundles);
-        let messages_hash = CryptoHash::new(&CryptoHashVec(
-            outcome.messages.iter().map(hash_vec).collect::<Vec<_>>(),
-        ));
-        let operations_hash = hash_vec(&proposal.operations);
-        let oracle_responses_hash = CryptoHash::new(&CryptoHashVec(
-            outcome
-                .oracle_responses
-                .iter()
-                .map(hash_vec)
-                .collect::<Vec<_>>(),
-        ));
-        let events_hash = CryptoHash::new(&CryptoHashVec(
-            outcome.events.iter().map(hash_vec).collect::<Vec<_>>(),
-        ));
+        let bundles_hash = hashing::hash_vec(&proposal.incoming_bundles);
+        let messages_hash = hashing::hash_vec_vec(&outcome.messages);
+        let operations_hash = hashing::hash_vec(&proposal.operations);
+        let oracle_responses_hash = hashing::hash_vec_vec(&outcome.oracle_responses);
+        let events_hash = hashing::hash_vec_vec(&outcome.events);
 
         let header = BlockHeader {
             version: 1,
@@ -489,3 +534,17 @@ impl From<Block> for ExecutedBlock {
 }
 
 impl<'de> BcsHashable<'de> for Block {}
+
+mod hashing {
+    use linera_base::crypto::{BcsHashable, CryptoHash, CryptoHashVec};
+
+    pub(super) fn hash_vec<'de, T: BcsHashable<'de>>(it: impl AsRef<[T]>) -> CryptoHash {
+        let v = CryptoHashVec(it.as_ref().iter().map(CryptoHash::new).collect::<Vec<_>>());
+        CryptoHash::new(&v)
+    }
+
+    pub(super) fn hash_vec_vec<'de, T: BcsHashable<'de>>(it: impl AsRef<[Vec<T>]>) -> CryptoHash {
+        let v = CryptoHashVec(it.as_ref().iter().map(hash_vec).collect::<Vec<_>>());
+        CryptoHash::new(&v)
+    }
+}
