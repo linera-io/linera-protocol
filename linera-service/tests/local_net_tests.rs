@@ -752,9 +752,10 @@ async fn test_storage_service_linera_net_up_simple() -> Result<()> {
 
     let stdout = BufReader::new(child.stdout.take().unwrap());
     let stderr = BufReader::new(child.stderr.take().unwrap());
+    let mut lines = stderr.lines();
 
     let mut is_ready = false;
-    for line in stderr.lines() {
+    for line in &mut lines {
         let line = line?;
         if line.starts_with("READY!") {
             is_ready = true;
@@ -762,6 +763,14 @@ async fn test_storage_service_linera_net_up_simple() -> Result<()> {
         }
     }
     assert!(is_ready, "Unexpected EOF for stderr");
+
+    // Echo faucet stderr for debugging and to empty the buffer.
+    std::thread::spawn(move || {
+        for line in lines {
+            let line = line.unwrap();
+            eprintln!("{}", line);
+        }
+    });
 
     let mut exports = stdout.lines();
     assert!(exports
