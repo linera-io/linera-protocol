@@ -7,6 +7,9 @@ homepage.workspace = true
 license.workspace = true
 edition.workspace = true
 
+[features]
+rocksdb = []
+
 [dependencies]
 anyhow = { workspace = true, features = ["backtrace"] }
 clap.workspace = true
