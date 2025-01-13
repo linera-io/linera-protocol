@@ -27,7 +27,7 @@ use linera_execution::{
 use super::TestValidator;
 use crate::ToBcsBytes;
 
-/// A helper type to build block using the builder pattern, and then signing them into
+/// A helper type to build a block proposal using the builder pattern, and then signing them into
 /// [`ConfirmedBlockCertificate`]s using a [`TestValidator`].
 pub struct BlockBuilder {
     block: Proposal,

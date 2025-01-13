@@ -275,7 +275,7 @@ impl<'de> Deserialize<'de> for Block {
     }
 }
 
-/// Succint representation of a block.
+/// Succinct representation of a block.
 /// Contains all the metadata to follow the chain of blocks or verifying
 /// inclusion (event, message, oracle response, etc.) in the block's body.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]

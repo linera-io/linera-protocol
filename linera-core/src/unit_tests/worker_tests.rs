@@ -722,7 +722,8 @@ where
         .clone()
         .into();
 
-    assert_eq!(&executed_block.proposal, &block_proposal0.content.proposal); // Should be confirmed after handling the certificate.
+    // Should be confirmed after handling the certificate.
+    assert_eq!(&executed_block.proposal, &block_proposal0.content.proposal);
     assert!(chain.manager.get().validated_vote().is_none());
     drop(chain);
 
