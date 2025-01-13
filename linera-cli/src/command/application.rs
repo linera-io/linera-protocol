@@ -39,63 +39,19 @@ struct PublishOptions {
     json_params: serde_json::Value,
 }
 
-mod code {
-    // Different ways of representing application code,
-    // All fields here are optional due to https://github.com/clap-rs/clap/issues/5092; use `requires` to express non-optionality.
-    #[derive(clap::Parser, Clone, Debug)]
-    #[group(id = "code::Id")]
-    pub struct Id {
-        /// The code ID of the application code, as produced by `linera application publish`.
-        #[arg(long, value_name = "CODE_ID", conflicts_with = "code::Source", conflicts_with = "code::Compiled")]
-        id: Option<linera_base::identifiers::BytecodeId>,
-    }
-
-    #[derive(clap::Parser, Clone, Debug)]
-    #[group(id = "code::Source")]
-    pub struct Source {
-        /// The path to a Linera application project.
-        #[arg(long, value_hint = clap::ValueHint::FilePath, value_name = "PATH", conflicts_with = "code::Id", conflicts_with = "code::Compiled")]
-        project: Option<std::path::PathBuf>,
-    }
-
-    #[derive(clap::Parser, Clone, Debug)]
-    #[group(id = "code::Compiled")]
-    pub struct Compiled {
-        /// The path to a Linera application contract bytecode.
-        #[arg(
-            long,
-            value_hint = clap::ValueHint::FilePath,
-            value_name = "PATH",
-            conflicts_with = "code::Id",
-            conflicts_with = "code::Source",
-            requires = "service",
-        )]
-        contract: Option<std::path::PathBuf>,
-        /// The path to a Linera application service bytecode.
-        #[arg(
-            long,
-            value_hint = clap::ValueHint::FilePath,
-            value_name = "PATH",
-            conflicts_with = "code::Id",
-            conflicts_with = "code::Source",
-            requires = "contract",
-        )]
-        service: Option<std::path::PathBuf>,
-    }
-
-}
-
-
 #[derive(clap::Parser, Clone, Debug)]
-#[group(multiple = false)]
+#[group(required = true, multiple = false)]
 // The presence of this struct is a hack due to https://github.com/clap-rs/clap/issues/2621
 struct Code {
-    #[command(flatten)]
-    id: Option<code::Id>,
-    #[command(flatten)]
-    source: Option<code::Source>,
-    #[command(flatten)]
-    compiled: Option<code::Compiled>,
+    /// The code ID of the application code, as produced by `linera application publish`.
+    #[arg(long, value_name = "CODE_ID")]
+    id: Option<linera_base::identifiers::BytecodeId>,
+    /// The path to a Linera application project, as produced by `linera application new`.
+    #[arg(long, value_hint = clap::ValueHint::FilePath, value_name = "PATH")]
+    source: Option<std::path::PathBuf>,
+    /// The path to the compiled bytecode of a Linera application contract and service.
+    #[arg(long, value_hint = clap::ValueHint::FilePath, num_args = 2, value_names = ["CONTRACT_PATH", "VALUE_PATH"])]
+    compiled: Option<Vec<std::path::PathBuf>>,
 }
 
 mod publish {
