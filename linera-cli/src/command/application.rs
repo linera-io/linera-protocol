@@ -1,5 +1,8 @@
 use linera_base::identifiers::{BytecodeId, ChainId};
 
+// intended usage:
+// linera application run $(linera application create $(linera application publish --source CODE_PATH) --json-params null) --json-args 3
+
 #[derive(clap::Parser, Debug)]
 pub struct Options {
     /// The chain to use.
@@ -31,46 +34,39 @@ impl Options {
     }
 }
 
-#[derive(clap::Parser, Clone, Debug)]
-// Options required to convert bytecode into application.
-struct PublishOptions {
-    /// The static application parameters, as a JSON string.
-    #[arg(long, default_value = "null")]
-    json_params: serde_json::Value,
-}
-
-#[derive(clap::Parser, Clone, Debug)]
-#[group(required = true, multiple = false)]
-// The presence of this struct is a hack due to https://github.com/clap-rs/clap/issues/2621
-struct Code {
-    /// The code ID of the application code, as produced by `linera application publish`.
-    #[arg(long, value_name = "CODE_ID")]
-    id: Option<linera_base::identifiers::BytecodeId>,
-    /// The path to a Linera application project, as produced by `linera application new`.
-    #[arg(long, value_hint = clap::ValueHint::FilePath, value_name = "PATH")]
-    source: Option<std::path::PathBuf>,
-    /// The path to the compiled bytecode of a Linera application contract and service.
-    #[arg(long, value_hint = clap::ValueHint::FilePath, num_args = 2, value_names = ["CONTRACT_PATH", "VALUE_PATH"])]
-    compiled: Option<Vec<std::path::PathBuf>>,
-}
-
 mod publish {
-    use super::*;
-
     #[derive(clap::Parser, Clone, Debug)]
+    #[group(required = true, multiple = false)]
     pub struct Options {
-        #[command(flatten)]
-        code: Code,
+        /// The path to a Linera application project, as produced by `linera application new`.
+        #[arg(long, value_hint = clap::ValueHint::FilePath, value_name = "PATH")]
+        source: Option<std::path::PathBuf>,
+        /// The path to the compiled bytecode of a Linera application contract and service.
+        #[arg(long, value_hint = clap::ValueHint::FilePath, num_args = 2, value_names = ["CONTRACT_PATH", "SERVICE_PATH"])]
+        compiled: Option<Vec<std::path::PathBuf>>,
+    }
+}
+
+mod create {
+    #[derive(clap::Args, Debug)]
+    pub struct Options {
+        /// The code ID of the application code, as produced by `linera application publish`.
+        #[arg(value_name = "CODE_ID")]
+        code: linera_base::identifiers::BytecodeId,
+
+        /// The static application parameters, as a JSON string.
+        #[arg(long, default_value = "null")]
+        json_params: serde_json::Value,
     }
 }
 
 mod run {
-    use super::*;
-
     #[derive(clap::Args, Debug)]
     pub struct Options {
-        #[command(flatten)]
-        code: Code,
+        #[arg(value_name = "APPLICATION_ID")]
+        application: linera_base::identifiers::ApplicationId,
+
+        /// The runtime arguments of the application, as a JSON string.
         #[arg(default_value = "null")]
         json_args: serde_json::Value,
     }
