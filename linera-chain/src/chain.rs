@@ -153,7 +153,7 @@ const EMPTY_EXECUTED_BLOCK_SIZE: usize = 91;
 
 /// The BCS-serialized size of an empty [`Block`].
 #[cfg(test)]
-const EMPTY_BLOCK_SIZE: usize = 252;
+const EMPTY_BLOCK_SIZE: usize = 92;
 
 /// An origin, cursor and timestamp of a unskippable bundle in our inbox.
 #[derive(Debug, Clone, Serialize, Deserialize, async_graphql::SimpleObject)]
