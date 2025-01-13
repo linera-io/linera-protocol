@@ -23,7 +23,7 @@ use linera_service::{
         local_net::{
             get_node_port, Database, LocalNet, LocalNetConfig, PathProvider, ProcessInbox,
         },
-        ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network, OnClientDrop,
+        ClientWrapper, Faucet, FaucetOption, LineraNet, LineraNetConfig, Network, OnClientDrop,
     },
     faucet::ClaimOutcome,
     test_name,
@@ -733,7 +733,14 @@ async fn test_storage_service_linera_net_up_simple() -> Result<()> {
     tracing::info!("Starting test {}", test_name!());
 
     let mut command = Command::new(env!("CARGO_BIN_EXE_linera"));
-    command.args(["net", "up"]);
+    command.args([
+        "net",
+        "up",
+        "--with-faucet-chain",
+        "1",
+        "--faucet-port",
+        "7999",
+    ]);
     let mut child = command
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -742,31 +749,39 @@ async fn test_storage_service_linera_net_up_simple() -> Result<()> {
     let stdout = BufReader::new(child.stdout.take().unwrap());
     let stderr = BufReader::new(child.stderr.take().unwrap());
 
+    let mut is_ready = false;
     for line in stderr.lines() {
         let line = line?;
         if line.starts_with("READY!") {
-            let mut exports = stdout.lines();
-            assert!(exports
-                .next()
-                .unwrap()?
-                .starts_with("export LINERA_WALLET="));
-            assert!(exports
-                .next()
-                .unwrap()?
-                .starts_with("export LINERA_STORAGE="));
-            assert_eq!(exports.next().unwrap()?, "");
-
-            // Send SIGINT to the child process.
-            Command::new("kill")
-                .args(["-s", "INT", &child.id().to_string()])
-                .output()?;
-
-            assert!(exports.next().is_none());
-            assert!(child.wait()?.success());
-            return Ok(());
+            is_ready = true;
+            break;
         }
     }
-    panic!("Unexpected EOF for stderr");
+    assert!(is_ready, "Unexpected EOF for stderr");
+
+    let mut exports = stdout.lines();
+    assert!(exports
+        .next()
+        .unwrap()?
+        .starts_with("export LINERA_WALLET="));
+    assert!(exports
+        .next()
+        .unwrap()?
+        .starts_with("export LINERA_STORAGE="));
+    assert_eq!(exports.next().unwrap()?, "");
+
+    // Test faucet.
+    let faucet = Faucet::new("http://localhost:7999/".to_string());
+    faucet.version_info().await.unwrap();
+
+    // Send SIGINT to the child process.
+    Command::new("kill")
+        .args(["-s", "INT", &child.id().to_string()])
+        .output()?;
+
+    assert!(exports.next().is_none());
+    assert!(child.wait()?.success());
+    return Ok(());
 }
 
 #[cfg(feature = "benchmark")]
