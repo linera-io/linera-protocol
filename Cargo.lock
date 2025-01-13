@@ -4310,6 +4310,7 @@ dependencies = [
  "eyre",
  "futures",
  "inquire",
+ "linera-base",
  "linera-client",
  "linera-execution",
  "linera-service",

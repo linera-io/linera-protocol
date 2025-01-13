@@ -20,6 +20,7 @@ erased-serde = "0.4.5"
 eyre = "0.6.12"
 futures.workspace = true
 inquire = "0.7.5"
+linera-base.workspace = true
 linera-client.workspace = true
 linera-execution.workspace = true
 linera-service.workspace = true

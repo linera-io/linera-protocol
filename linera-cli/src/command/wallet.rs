@@ -12,8 +12,6 @@ enum Command {
     Init(init::Options),
     /// Display the contents of the wallet.
     Show,
-    /// Add a new keypair.
-    Keygen,
 }
 
 pub type Output = Box<dyn crate::io::Output>;

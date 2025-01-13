@@ -6,18 +6,12 @@ mod runtime;
 use clap::{CommandFactory as _, Parser as _};
 use futures::FutureExt as _;
 
-type WalletName = String;
-
 #[derive(clap::Parser, Debug)]
 #[command(version)]
 struct Options {
     /// Print CLI help in Markdown format, and exit.
     #[arg(long, hide = true, global = true)]
     help_markdown: bool,
-
-    /// The name of the wallet to use for wallet operations.
-    #[arg(long, short, default_value = "default")]
-    wallet: WalletName,
 
     #[command(flatten)]
     io: io::Options,
@@ -37,6 +31,8 @@ enum Command {
     Wallet(command::wallet::Options),
     /// Commands for deploying and managing applications.
     Application(command::application::Options),
+    /// Commands for managing keypairs.
+    Key(command::key::Options),
     // Storage
     // Chain
     // Blob
@@ -64,6 +60,7 @@ impl Options {
             Command::Net(options) => options.run(&self.io).boxed(),
             Command::Wallet(options) => options.run().boxed(),
             Command::Application(options) => options.run().boxed(),
+            Command::Key(options) => options.run().boxed(),
         })?;
 
         self.io.output(&output)

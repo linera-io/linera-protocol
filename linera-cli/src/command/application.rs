@@ -6,7 +6,7 @@ pub struct Options {
     ///
     /// Defaults to the default chain of the wallet.
     #[arg(long, short, global = true)]
-    chain: ChainId,
+    chain: Option<ChainId>,
 
     #[command(subcommand)]
     command: Command,
@@ -14,8 +14,13 @@ pub struct Options {
 
 #[derive(clap::Subcommand, Debug)]
 enum Command {
-    /// Create a new application.
-    Create(create::Options),
+    /// Run an application.
+    Run(run::Options),
+    /// Create an application by instantiating the application code with its static
+    /// parameters.
+    Create,
+    /// Publish compiled application code to the network.
+    Publish(publish::Options),
 }
 
 pub type Output = Box<dyn crate::io::Output>;
@@ -26,38 +31,92 @@ impl Options {
     }
 }
 
-/// The forms an application can take on the command line.
-enum Application {
-    Project(std::path::PathBuf),
-    Bytecode(ApplicationId),
+#[derive(clap::Parser, Clone, Debug)]
+// Options required to convert bytecode into application.
+struct PublishOptions {
+    /// The static application parameters, as a JSON string.
+    #[arg(long, default_value = "null")]
+    json_params: serde_json::Value,
 }
 
-mod init {
+mod code {
+    // Different ways of representing application code,
+    // All fields here are optional due to https://github.com/clap-rs/clap/issues/5092; use `requires` to express non-optionality.
     #[derive(clap::Parser, Clone, Debug)]
-    #[group(required = true, multiple = false)]
-    // The presence of this struct is a hack due to https://github.com/clap-rs/clap/issues/2621
-    struct Upstream {
-        /// The URL of a faucet to use to init the wallet.
-        #[arg(long, value_hint = clap::ValueHint::Url, value_name = "URL")]
-        faucet: Option<url::Url>,
-        #[arg(long, value_hint = clap::ValueHint::FilePath, value_name = "PATH")]
-        /// The path to a genesis configuration file to use to initialize the wallet.
-        genesis_config: Option<std::path::PathBuf>,
+    #[group(id = "code::Id")]
+    pub struct Id {
+        /// The code ID of the application code, as produced by `linera application publish`.
+        #[arg(long, value_name = "CODE_ID", conflicts_with = "code::Source", conflicts_with = "code::Compiled")]
+        id: Option<linera_base::identifiers::BytecodeId>,
     }
+
+    #[derive(clap::Parser, Clone, Debug)]
+    #[group(id = "code::Source")]
+    pub struct Source {
+        /// The path to a Linera application project.
+        #[arg(long, value_hint = clap::ValueHint::FilePath, value_name = "PATH", conflicts_with = "code::Id", conflicts_with = "code::Compiled")]
+        project: Option<std::path::PathBuf>,
+    }
+
+    #[derive(clap::Parser, Clone, Debug)]
+    #[group(id = "code::Compiled")]
+    pub struct Compiled {
+        /// The path to a Linera application contract bytecode.
+        #[arg(
+            long,
+            value_hint = clap::ValueHint::FilePath,
+            value_name = "PATH",
+            conflicts_with = "code::Id",
+            conflicts_with = "code::Source",
+            requires = "service",
+        )]
+        contract: Option<std::path::PathBuf>,
+        /// The path to a Linera application service bytecode.
+        #[arg(
+            long,
+            value_hint = clap::ValueHint::FilePath,
+            value_name = "PATH",
+            conflicts_with = "code::Id",
+            conflicts_with = "code::Source",
+            requires = "contract",
+        )]
+        service: Option<std::path::PathBuf>,
+    }
+
+}
+
+
+#[derive(clap::Parser, Clone, Debug)]
+#[group(multiple = false)]
+// The presence of this struct is a hack due to https://github.com/clap-rs/clap/issues/2621
+struct Code {
+    #[command(flatten)]
+    id: Option<code::Id>,
+    #[command(flatten)]
+    source: Option<code::Source>,
+    #[command(flatten)]
+    compiled: Option<code::Compiled>,
+}
+
+mod publish {
+    use super::*;
+
+    #[derive(clap::Parser, Clone, Debug)]
+    pub struct Options {
+        #[command(flatten)]
+        code: Code,
+    }
+}
+
+mod run {
+    use super::*;
 
     #[derive(clap::Args, Debug)]
     pub struct Options {
-        /// The name of the wallet to initialize.
-        name: String,
-        #[clap(flatten)]
-        upstream: Upstream,
-        #[arg(long, value_hint = clap::ValueHint::FilePath, value_name = "PATH")]
-        /// The storage configuration file for this wallet.  See `linera storage` for
-        /// format and creation.
-        ///
-        #[cfg_attr(with_rocksdb, doc = "Defaults to creating a new RocksDB storage for the wallet.")]
-        #[cfg_attr(not(with_rocksdb), doc = "Defaults to creating a new in-memory storage for the wallet.")]
-        storage: Option<std::path::PathBuf>,
+        #[command(flatten)]
+        code: Code,
+        #[arg(default_value = "null")]
+        json_args: serde_json::Value,
     }
 }
 

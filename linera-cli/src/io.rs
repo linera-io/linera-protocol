@@ -55,3 +55,4 @@ impl Options {
 }
 
 pub type BoxOutput = Box<dyn Output>;
+pub type Result = eyre::Result<BoxOutput>;
