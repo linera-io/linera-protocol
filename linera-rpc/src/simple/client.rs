@@ -166,8 +166,8 @@ impl ValidatorNode for SimpleClient {
         self.query(RpcMessage::UploadBlob(Box::new(content))).await
     }
 
-    async fn download_blob_content(&self, blob_id: BlobId) -> Result<BlobContent, NodeError> {
-        self.query(RpcMessage::DownloadBlobContent(Box::new(blob_id)))
+    async fn download_blob(&self, blob_id: BlobId) -> Result<BlobContent, NodeError> {
+        self.query(RpcMessage::DownloadBlob(Box::new(blob_id)))
             .await
     }
 

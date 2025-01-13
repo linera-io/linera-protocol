@@ -488,7 +488,7 @@ where
     }
 
     #[instrument(skip_all, err(Display))]
-    async fn download_blob_content(
+    async fn download_blob(
         &self,
         request: Request<BlobId>,
     ) -> Result<Response<BlobContent>, Status> {

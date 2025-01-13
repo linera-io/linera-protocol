@@ -802,7 +802,7 @@ RpcMessage:
         NEWTYPE:
           TYPENAME: BlobContent
     7:
-      DownloadBlobContent:
+      DownloadBlob:
         NEWTYPE:
           TYPENAME: BlobId
     8:
@@ -852,7 +852,7 @@ RpcMessage:
         NEWTYPE:
           TYPENAME: BlobId
     20:
-      DownloadBlobContentResponse:
+      DownloadBlobResponse:
         NEWTYPE:
           TYPENAME: BlobContent
     21:

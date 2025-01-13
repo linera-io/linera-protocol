@@ -350,8 +350,8 @@ where
             | RpcMessage::VersionInfoResponse(_)
             | RpcMessage::GenesisConfigHashQuery
             | RpcMessage::GenesisConfigHashResponse(_)
-            | RpcMessage::DownloadBlobContent(_)
-            | RpcMessage::DownloadBlobContentResponse(_)
+            | RpcMessage::DownloadBlob(_)
+            | RpcMessage::DownloadBlobResponse(_)
             | RpcMessage::DownloadConfirmedBlock(_)
             | RpcMessage::DownloadConfirmedBlockResponse(_)
             | RpcMessage::BlobLastUsedBy(_)
