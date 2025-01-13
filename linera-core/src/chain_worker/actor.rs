@@ -14,7 +14,7 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{Blob, BlockHeight, Timestamp, UserApplicationDescription},
     hashed::Hashed,
-    identifiers::{ChainId, UserApplicationId},
+    identifiers::{BlobId, ChainId, UserApplicationId},
 };
 use linera_chain::{
     data_types::{Block, BlockProposal, ExecutedBlock, MessageBundle, Origin, Target},
@@ -140,6 +140,13 @@ where
         query: ChainInfoQuery,
         #[debug(skip)]
         callback: oneshot::Sender<Result<(ChainInfoResponse, NetworkActions), WorkerError>>,
+    },
+
+    /// Get a blob if it belongs to the current locked block or pending proposal.
+    DownloadPendingBlob {
+        blob_id: BlobId,
+        #[debug(skip)]
+        callback: oneshot::Sender<Result<Blob, WorkerError>>,
     },
 
     /// Update the received certificate trackers to at least the given values.
@@ -329,6 +336,9 @@ where
                     .is_ok(),
                 ChainWorkerRequest::HandleChainInfoQuery { query, callback } => callback
                     .send(self.worker.handle_chain_info_query(query).await)
+                    .is_ok(),
+                ChainWorkerRequest::DownloadPendingBlob { blob_id, callback } => callback
+                    .send(self.worker.download_pending_blob(blob_id).await)
                     .is_ok(),
                 ChainWorkerRequest::UpdateReceivedCertificateTrackers {
                     new_trackers,

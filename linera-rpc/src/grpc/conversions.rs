@@ -24,7 +24,7 @@ use linera_execution::committee::ValidatorName;
 use thiserror::Error;
 use tonic::{Code, Status};
 
-use super::api;
+use super::api::{self, PendingBlobRequest};
 use crate::{
     HandleConfirmedCertificateRequest, HandleLiteCertRequest, HandleTimeoutCertificateRequest,
     HandleValidatedCertificateRequest,
@@ -687,6 +687,49 @@ impl TryFrom<api::ChainInfoResponse> for ChainInfoResponse {
             .transpose()?;
         let info = bincode::deserialize(chain_info_response.chain_info.as_slice())?;
         Ok(Self { info, signature })
+    }
+}
+
+impl TryFrom<(ChainId, BlobId)> for api::PendingBlobRequest {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from((chain_id, blob_id): (ChainId, BlobId)) -> Result<Self, Self::Error> {
+        Ok(Self {
+            chain_id: Some(chain_id.into()),
+            blob_id: Some(blob_id.try_into()?),
+        })
+    }
+}
+
+impl TryFrom<api::PendingBlobRequest> for (ChainId, BlobId) {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(request: PendingBlobRequest) -> Result<Self, Self::Error> {
+        Ok((
+            try_proto_convert(request.chain_id)?,
+            try_proto_convert(request.blob_id)?,
+        ))
+    }
+}
+
+impl TryFrom<BlobContent> for api::PendingBlobResult {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(blob: BlobContent) -> Result<Self, Self::Error> {
+        Ok(Self {
+            inner: Some(api::pending_blob_result::Inner::Blob(blob.try_into()?)),
+        })
+    }
+}
+
+impl TryFrom<NodeError> for api::PendingBlobResult {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(node_error: NodeError) -> Result<Self, Self::Error> {
+        let error = bincode::serialize(&node_error)?;
+        Ok(api::PendingBlobResult {
+            inner: Some(api::pending_blob_result::Inner::Error(error)),
+        })
     }
 }
 

@@ -35,6 +35,7 @@ pub enum RpcMessage {
     ChainInfoQuery(Box<ChainInfoQuery>),
     UploadBlob(Box<BlobContent>),
     DownloadBlob(Box<BlobId>),
+    DownloadPendingBlob(Box<(ChainId, BlobId)>),
     DownloadConfirmedBlock(Box<CryptoHash>),
     DownloadCertificates(Vec<CryptoHash>),
     BlobLastUsedBy(Box<BlobId>),
@@ -50,6 +51,7 @@ pub enum RpcMessage {
     GenesisConfigHashResponse(Box<CryptoHash>),
     UploadBlobResponse(Box<BlobId>),
     DownloadBlobResponse(Box<BlobContent>),
+    DownloadPendingBlobResponse(Box<BlobContent>),
     DownloadConfirmedBlockResponse(Box<ConfirmedBlock>),
     DownloadCertificatesResponse(Vec<ConfirmedBlockCertificate>),
     BlobLastUsedByResponse(Box<CryptoHash>),
@@ -74,6 +76,7 @@ impl RpcMessage {
             ConfirmedCertificate(request) => request.certificate.inner().chain_id(),
             ChainInfoQuery(query) => query.chain_id,
             CrossChainRequest(request) => request.target_chain_id(),
+            DownloadPendingBlob(request) => request.0,
             Vote(_)
             | Error(_)
             | ChainInfoResponse(_)
@@ -85,6 +88,7 @@ impl RpcMessage {
             | UploadBlobResponse(_)
             | DownloadBlob(_)
             | DownloadBlobResponse(_)
+            | DownloadPendingBlobResponse(_)
             | DownloadConfirmedBlock(_)
             | DownloadConfirmedBlockResponse(_)
             | DownloadCertificates(_)
@@ -127,6 +131,8 @@ impl RpcMessage {
             | VersionInfoResponse(_)
             | GenesisConfigHashResponse(_)
             | UploadBlobResponse(_)
+            | DownloadPendingBlob(_)
+            | DownloadPendingBlobResponse(_)
             | DownloadBlobResponse(_)
             | DownloadConfirmedBlockResponse(_)
             | BlobLastUsedByResponse(_)
@@ -162,7 +168,8 @@ impl TryFrom<RpcMessage> for BlobContent {
     type Error = NodeError;
     fn try_from(message: RpcMessage) -> Result<Self, Self::Error> {
         match message {
-            RpcMessage::DownloadBlobResponse(blob) => Ok(*blob),
+            RpcMessage::DownloadBlobResponse(blob)
+            | RpcMessage::DownloadPendingBlobResponse(blob) => Ok(*blob),
             RpcMessage::Error(error) => Err(*error),
             _ => Err(NodeError::UnexpectedMessage),
         }

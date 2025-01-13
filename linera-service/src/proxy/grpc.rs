@@ -34,7 +34,8 @@ use linera_rpc::{
             validator_worker_client::ValidatorWorkerClient,
             BlobContent, BlobId, BlobIds, BlockProposal, Certificate, CertificatesBatchRequest,
             CertificatesBatchResponse, ChainInfoQuery, ChainInfoResult, CryptoHash,
-            LiteCertificate, Notification, SubscriptionRequest, VersionInfo,
+            LiteCertificate, Notification, PendingBlobRequest, PendingBlobResult,
+            SubscriptionRequest, VersionInfo,
         },
         pool::GrpcConnectionPool,
         GrpcProtoConversionError, GrpcProxyable, GRPC_CHUNKED_MESSAGE_FILL_LIMIT,
@@ -500,6 +501,30 @@ where
             .await
             .map_err(Self::error_to_status)?;
         Ok(Response::new(blob.into_content().try_into()?))
+    }
+
+    #[instrument(skip_all, err(Display))]
+    async fn download_pending_blob(
+        &self,
+        request: Request<PendingBlobRequest>,
+    ) -> Result<Response<PendingBlobResult>, Status> {
+        let (mut client, inner) = self.worker_client(request).await?;
+        match client.download_pending_blob(inner).await {
+            Ok(blob_result) => {
+                #[cfg(with_metrics)]
+                PROXY_REQUEST_SUCCESS
+                    .with_label_values(&["download_pending_blob"])
+                    .inc();
+                Ok(blob_result)
+            }
+            Err(status) => {
+                #[cfg(with_metrics)]
+                PROXY_REQUEST_ERROR
+                    .with_label_values(&["download_pending_blob"])
+                    .inc();
+                Err(status)
+            }
+        }
     }
 
     #[instrument(skip_all, err(Display))]

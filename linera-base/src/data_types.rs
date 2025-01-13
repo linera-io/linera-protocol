@@ -1092,7 +1092,7 @@ impl Blob {
         self.content.into_bytes()
     }
 
-    /// Loads data blob content from a file.
+    /// Loads data blob from a file.
     pub async fn load_data_blob_from_file(path: impl AsRef<Path>) -> io::Result<Self> {
         Ok(Self::new_data(fs::read(path)?))
     }

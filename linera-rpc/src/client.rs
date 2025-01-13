@@ -190,6 +190,25 @@ impl ValidatorNode for Client {
         })
     }
 
+    async fn download_pending_blob(
+        &self,
+        chain_id: ChainId,
+        blob_id: BlobId,
+    ) -> Result<BlobContent, NodeError> {
+        Ok(match self {
+            Client::Grpc(grpc_client) => {
+                grpc_client.download_pending_blob(chain_id, blob_id).await?
+            }
+
+            #[cfg(with_simple_network)]
+            Client::Simple(simple_client) => {
+                simple_client
+                    .download_pending_blob(chain_id, blob_id)
+                    .await?
+            }
+        })
+    }
+
     async fn download_certificate(
         &self,
         hash: CryptoHash,
