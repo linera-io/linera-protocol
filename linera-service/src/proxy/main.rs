@@ -309,11 +309,9 @@ where
                 );
                 Ok(Some(RpcMessage::UploadBlobResponse(Box::new(id))))
             }
-            DownloadBlobContent(blob_id) => {
+            DownloadBlob(blob_id) => {
                 let content = self.storage.read_blob(*blob_id).await?.into_content();
-                Ok(Some(RpcMessage::DownloadBlobContentResponse(Box::new(
-                    content,
-                ))))
+                Ok(Some(RpcMessage::DownloadBlobResponse(Box::new(content))))
             }
             DownloadConfirmedBlock(hash) => {
                 Ok(Some(RpcMessage::DownloadConfirmedBlockResponse(Box::new(
@@ -345,7 +343,7 @@ where
             | ChainInfoResponse(_)
             | VersionInfoResponse(_)
             | GenesisConfigHashResponse(_)
-            | DownloadBlobContentResponse(_)
+            | DownloadBlobResponse(_)
             | BlobLastUsedByResponse(_)
             | MissingBlobIdsResponse(_)
             | DownloadConfirmedBlockResponse(_)

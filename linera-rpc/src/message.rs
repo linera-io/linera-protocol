@@ -34,7 +34,7 @@ pub enum RpcMessage {
     LiteCertificate(Box<HandleLiteCertRequest<'static>>),
     ChainInfoQuery(Box<ChainInfoQuery>),
     UploadBlob(Box<BlobContent>),
-    DownloadBlobContent(Box<BlobId>),
+    DownloadBlob(Box<BlobId>),
     DownloadConfirmedBlock(Box<CryptoHash>),
     DownloadCertificates(Vec<CryptoHash>),
     BlobLastUsedBy(Box<BlobId>),
@@ -49,7 +49,7 @@ pub enum RpcMessage {
     VersionInfoResponse(Box<VersionInfo>),
     GenesisConfigHashResponse(Box<CryptoHash>),
     UploadBlobResponse(Box<BlobId>),
-    DownloadBlobContentResponse(Box<BlobContent>),
+    DownloadBlobResponse(Box<BlobContent>),
     DownloadConfirmedBlockResponse(Box<ConfirmedBlock>),
     DownloadCertificatesResponse(Vec<ConfirmedBlockCertificate>),
     BlobLastUsedByResponse(Box<CryptoHash>),
@@ -83,8 +83,8 @@ impl RpcMessage {
             | GenesisConfigHashResponse(_)
             | UploadBlob(_)
             | UploadBlobResponse(_)
-            | DownloadBlobContent(_)
-            | DownloadBlobContentResponse(_)
+            | DownloadBlob(_)
+            | DownloadBlobResponse(_)
             | DownloadConfirmedBlock(_)
             | DownloadConfirmedBlockResponse(_)
             | DownloadCertificates(_)
@@ -109,7 +109,7 @@ impl RpcMessage {
             VersionInfoQuery
             | GenesisConfigHashQuery
             | UploadBlob(_)
-            | DownloadBlobContent(_)
+            | DownloadBlob(_)
             | DownloadConfirmedBlock(_)
             | BlobLastUsedBy(_)
             | MissingBlobIds(_)
@@ -127,7 +127,7 @@ impl RpcMessage {
             | VersionInfoResponse(_)
             | GenesisConfigHashResponse(_)
             | UploadBlobResponse(_)
-            | DownloadBlobContentResponse(_)
+            | DownloadBlobResponse(_)
             | DownloadConfirmedBlockResponse(_)
             | BlobLastUsedByResponse(_)
             | MissingBlobIdsResponse(_)
@@ -162,7 +162,7 @@ impl TryFrom<RpcMessage> for BlobContent {
     type Error = NodeError;
     fn try_from(message: RpcMessage) -> Result<Self, Self::Error> {
         match message {
-            RpcMessage::DownloadBlobContentResponse(blob) => Ok(*blob),
+            RpcMessage::DownloadBlobResponse(blob) => Ok(*blob),
             RpcMessage::Error(error) => Err(*error),
             _ => Err(NodeError::UnexpectedMessage),
         }

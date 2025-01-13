@@ -106,7 +106,7 @@ pub trait ValidatorNode {
     // certificate using this blob.
     async fn upload_blob(&self, content: BlobContent) -> Result<BlobId, NodeError>;
 
-    async fn download_blob_content(&self, blob_id: BlobId) -> Result<BlobContent, NodeError>;
+    async fn download_blob(&self, blob_id: BlobId) -> Result<BlobContent, NodeError>;
 
     async fn download_certificate(
         &self,
