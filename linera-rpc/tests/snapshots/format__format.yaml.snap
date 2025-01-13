@@ -133,16 +133,6 @@ BlockHeader:
     - authenticated_signer:
         OPTION:
           TYPENAME: Owner
-    - bundles_hash:
-        TYPENAME: CryptoHash
-    - operations_hash:
-        TYPENAME: CryptoHash
-    - messages_hash:
-        TYPENAME: CryptoHash
-    - oracle_responses_hash:
-        TYPENAME: CryptoHash
-    - events_hash:
-        TYPENAME: CryptoHash
 BlockHeight:
   NEWTYPESTRUCT: U64
 BlockHeightRange:

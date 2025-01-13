@@ -219,7 +219,18 @@ pub struct Block {
 impl Serialize for Block {
     fn serialize<S: serde::ser::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut state = serializer.serialize_struct("Block", 2)?;
-        state.serialize_field("header", &self.header)?;
+
+        let header = SerializedHeader {
+            version: self.header.version,
+            chain_id: self.header.chain_id,
+            epoch: self.header.epoch,
+            height: self.header.height,
+            timestamp: self.header.timestamp,
+            state_hash: self.header.state_hash,
+            previous_block_hash: self.header.previous_block_hash,
+            authenticated_signer: self.header.authenticated_signer,
+        };
+        state.serialize_field("header", &header)?;
         state.serialize_field("body", &self.body)?;
         state.end()
     }
@@ -230,46 +241,35 @@ impl<'de> Deserialize<'de> for Block {
         #[derive(Deserialize)]
         #[serde(rename = "Block")]
         struct Inner {
-            header: BlockHeader,
+            header: SerializedHeader,
             body: BlockBody,
         }
         let inner = Inner::deserialize(deserializer)?;
 
         let bundles_hash = hashing::hash_vec(&inner.body.incoming_bundles);
-        if inner.header.bundles_hash != bundles_hash {
-            return Err(serde::de::Error::custom(
-                "Invalid bundles hash in block header",
-            ));
-        }
-
         let messages_hash = hashing::hash_vec_vec(&inner.body.messages);
-        if inner.header.messages_hash != messages_hash {
-            return Err(serde::de::Error::custom(
-                "Invalid messages hash in block header",
-            ));
-        }
-
         let operations_hash = hashing::hash_vec(&inner.body.operations);
-        if inner.header.operations_hash != operations_hash {
-            return Err(serde::de::Error::custom(
-                "Invalid operations hash in block header",
-            ));
-        }
         let oracle_responses_hash = hashing::hash_vec_vec(&inner.body.oracle_responses);
-        if inner.header.oracle_responses_hash != oracle_responses_hash {
-            return Err(serde::de::Error::custom(
-                "Invalid oracle responses hash in block header",
-            ));
-        }
         let events_hash = hashing::hash_vec_vec(&inner.body.events);
-        if inner.header.events_hash != events_hash {
-            return Err(serde::de::Error::custom(
-                "Invalid events hash in block header",
-            ));
-        }
+
+        let header = BlockHeader {
+            version: inner.header.version,
+            chain_id: inner.header.chain_id,
+            epoch: inner.header.epoch,
+            height: inner.header.height,
+            timestamp: inner.header.timestamp,
+            state_hash: inner.header.state_hash,
+            previous_block_hash: inner.header.previous_block_hash,
+            authenticated_signer: inner.header.authenticated_signer,
+            bundles_hash,
+            operations_hash,
+            messages_hash,
+            oracle_responses_hash,
+            events_hash,
+        };
 
         Ok(Self {
-            header: inner.header,
+            header,
             body: inner.body,
         })
     }
@@ -534,6 +534,19 @@ impl From<Block> for ExecutedBlock {
 }
 
 impl<'de> BcsHashable<'de> for Block {}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename = "BlockHeader")]
+struct SerializedHeader {
+    version: u8,
+    chain_id: ChainId,
+    epoch: Epoch,
+    height: BlockHeight,
+    timestamp: Timestamp,
+    state_hash: CryptoHash,
+    previous_block_hash: Option<CryptoHash>,
+    authenticated_signer: Option<Owner>,
+}
 
 mod hashing {
     use linera_base::crypto::{BcsHashable, CryptoHash, CryptoHashVec};
