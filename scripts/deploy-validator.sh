@@ -14,18 +14,8 @@ docker_compose_plugin_installed() {
     docker compose version >/dev/null 2>&1
 }
 
-if ! command_exists cargo; then
-    echo "Error: Cargo is not installed. Please install Cargo (Rust) before running this script."
-    exit 1
-fi
-
 if ! command_exists docker; then
     echo "Error: Docker is not installed. Please install Docker before running this script."
-    exit 1
-fi
-
-if ! command_exists protoc; then
-    echo "Error: Protoc is not installed. Please refer to the Linera documentation for installation instructions."
     exit 1
 fi
 
@@ -62,14 +52,12 @@ GENESIS_URL="https://storage.googleapis.com/linera-io-dev-public/$FORMATTED_BRAN
 VALIDATOR_CONFIG="docker/validator-config.toml"
 GENESIS_CONFIG="docker/genesis.json"
 
-echo "Building Linera binaries"
-cargo install --locked --path linera-service
-
 if [ -z "$REMOTE_IMAGE" ]; then
   echo "Building local image from commit $GIT_COMMIT..."
   docker build --build-arg git_commit="$GIT_COMMIT" -f  docker/Dockerfile . -t linera
+  export LINERA_IMAGE=linera
 else
-  export LINERA_IMAGE="us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:$BRANCH_NAME"
+  export LINERA_IMAGE="us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:${BRANCH_NAME}_release"
   echo "Using remote image $LINERA_IMAGE..."
 fi
 
@@ -121,7 +109,7 @@ cd docker
 
 # Generate validator keys
 echo "Generating validator keys..."
-PUBLIC_KEY=$(linera-server generate --validators validator-config.toml)
+PUBLIC_KEY=$(docker run --rm -v "$(pwd):/config" -w /config $LINERA_IMAGE /linera-server generate --validators validator-config.toml)
 
 echo "Validator setup completed successfully."
 echo "Starting docker compose..."
