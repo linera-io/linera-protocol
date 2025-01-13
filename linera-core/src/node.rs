@@ -106,8 +106,10 @@ pub trait ValidatorNode {
     // certificate using this blob.
     async fn upload_blob(&self, content: BlobContent) -> Result<BlobId, NodeError>;
 
+    /// Downloads a blob. Returns an error if the validator does not have the blob.
     async fn download_blob(&self, blob_id: BlobId) -> Result<BlobContent, NodeError>;
 
+    /// Downloads a blob that belongs to a pending proposal or the locked block on a chain.
     async fn download_pending_blob(
         &self,
         chain_id: ChainId,

@@ -509,6 +509,7 @@ where
         request: Request<PendingBlobRequest>,
     ) -> Result<Response<PendingBlobResult>, Status> {
         let (mut client, inner) = self.worker_client(request).await?;
+        #[cfg_attr(not(with_metrics), expect(clippy::needless_match))]
         match client.download_pending_blob(inner).await {
             Ok(blob_result) => {
                 #[cfg(with_metrics)]

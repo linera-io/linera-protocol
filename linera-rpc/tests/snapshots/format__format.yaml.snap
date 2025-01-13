@@ -285,9 +285,6 @@ ChainManagerInfo:
     - round_timeout:
         OPTION:
           TYPENAME: Timestamp
-    - locked_blobs:
-        SEQ:
-          TYPENAME: BlobContent
 ChainOwnership:
   STRUCT:
     - super_owners:
