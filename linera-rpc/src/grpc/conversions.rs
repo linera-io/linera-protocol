@@ -398,11 +398,9 @@ impl TryFrom<api::HandleConfirmedCertificateRequest> for HandleConfirmedCertific
             certificate.inner().chain_id() == req_chain_id,
             GrpcProtoConversionError::InconsistentChainId
         );
-        let blobs = bincode::deserialize(&cert_request.blobs)?;
         Ok(HandleConfirmedCertificateRequest {
             certificate,
             wait_for_outgoing_messages: cert_request.wait_for_outgoing_messages,
-            blobs,
         })
     }
 }
@@ -414,7 +412,6 @@ impl TryFrom<HandleConfirmedCertificateRequest> for api::HandleConfirmedCertific
         Ok(Self {
             chain_id: Some(request.certificate.inner().chain_id().into()),
             certificate: Some(request.certificate.try_into()?),
-            blobs: bincode::serialize(&request.blobs)?,
             wait_for_outgoing_messages: request.wait_for_outgoing_messages,
         })
     }

@@ -1,5 +1,3 @@
-<!-- cargo-rdme start -->
-
 # Crowd-funding Example Application
 
 This example application implements crowd-funding campaigns using fungible tokens in
@@ -10,7 +8,7 @@ Once an application is built and its bytecode published on a Linera chain, the
 published bytecode can be used to create different instances. Each instance or crowd-funding
 represents a different campaign.
 
-# How It Works
+## How It Works
 
 The chain that created the campaign is called the "campaign chain". It is owned by the
 creator (and beneficiary) of the campaign.
@@ -20,7 +18,7 @@ their own chain(s). If enough tokens are pledged before the campaign expires, th
 _successful_ and the creator can receive all the funds, including ones exceeding the funding
 target. Otherwise, the campaign is _unsuccessful_ and contributors should be refunded.
 
-# Caveat
+## Caveat
 
 Currently, only the owner of the campaign can create blocks that contain the `Cancel`
 operation. In the future, campaign chains will not be single-owner chains and should
@@ -30,9 +28,15 @@ appropriate (even without the owner's cooperation).
 Optionally, contributors may also be able to create a block to accept a new epoch
 (i.e. a change of validators).
 
-# Usage
+<!--
+TODO: The following documentation involves `sleep`ing to avoid some race conditions. See:
+  - https://github.com/linera-io/linera-protocol/issues/1176
+  - https://github.com/linera-io/linera-protocol/issues/1177
+-->
 
-## Setting Up
+## Usage
+
+### Setting Up
 
 The WebAssembly binaries for the bytecode can be built and published using [steps from the
 book](https://linera-io.github.io/linera-documentation/getting_started/first_app.html),
@@ -98,7 +102,7 @@ default chain of each wallet and call them `$OWNER_0` and `$OWNER_1`. Remember t
 chain IDs as `$CHAIN_0` (the chain where we just published the application) and `$CHAIN_1`
 (some user chain in wallet 2).
 
-## Creating tokens
+### Creating tokens
 
 Compile the Wasm binaries for the two applications `fungible` and `crowd-funding`, publish
 them as applications, and give them initial states. This initial state is where the tokens
@@ -121,7 +125,7 @@ sleep 8
 
 We will remember the application ID for the newly created token as `$APP_ID_0`.
 
-## Creating a crowd-funding campaign
+### Creating a crowd-funding campaign
 
 Similarly, we're going to create a crowd-funding campaign on the default chain. We have
 to specify our fungible application as a dependency and a parameter:
@@ -139,7 +143,7 @@ APP_ID_1=$(linera --with-wallet 0 \
 sleep 5
 ```
 
-## Interacting with the campaign
+### Interacting with the campaign
 
 First, a node service has to be started for each wallet, using two different ports:
 
@@ -258,5 +262,3 @@ query {
   accounts { entry(key: "User:$OWNER_0") { value } }
 }
 ```
-
-<!-- cargo-rdme end -->

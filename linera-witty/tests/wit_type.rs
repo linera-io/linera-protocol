@@ -12,10 +12,11 @@ use linera_witty::{HList, Layout, RegisterWitTypes, WitType};
 
 use self::types::{
     Branch, Enum, Leaf, RecordWithDoublePadding, SimpleWrapper, SpecializedGenericEnum,
-    SpecializedGenericStruct, StructWithHeapFields, TupleWithPadding, TupleWithoutPadding,
+    SpecializedGenericStruct, StructWithHeapFields, StructWithLists, TupleWithPadding,
+    TupleWithoutPadding,
 };
 
-/// Check the memory size, layout and WIT type declaration derived for a wrapper type.
+/// Checks the memory size, layout and WIT type declaration derived for a wrapper type.
 #[test]
 fn test_simple_bool_wrapper() {
     test_wit_type_implementation::<SimpleWrapper>(ExpectedMetadata {
@@ -30,7 +31,7 @@ fn test_simple_bool_wrapper() {
     });
 }
 
-/// Check the memory size, layout and WIT type declaration derived for a type with multiple fields
+/// Checks the memory size, layout and WIT type declaration derived for a type with multiple fields
 /// ordered in a way that doesn't require any padding.
 #[test]
 fn test_tuple_struct_without_padding() {
@@ -48,7 +49,7 @@ fn test_tuple_struct_without_padding() {
     });
 }
 
-/// Check the memory size, layout and WIT type declaration derived for a type with multiple fields
+/// Checks the memory size, layout and WIT type declaration derived for a type with multiple fields
 /// ordered in a way that requires padding between all fields.
 #[test]
 fn test_tuple_struct_with_padding() {
@@ -66,7 +67,7 @@ fn test_tuple_struct_with_padding() {
     });
 }
 
-/// Check the memory size, layout and WIT type declaration derived for a type with multiple named
+/// Checks the memory size, layout and WIT type declaration derived for a type with multiple named
 /// fields ordered in a way that requires padding before two fields.
 #[test]
 fn test_named_struct_with_double_padding() {
@@ -85,7 +86,7 @@ fn test_named_struct_with_double_padding() {
     });
 }
 
-/// Check the memory size, layout and WIT type declarations derived for a type that contains a
+/// Checks the memory size, layout and WIT type declarations derived for a type that contains a
 /// field with a type that also has `WitType` derived for it.
 #[test]
 fn test_nested_types() {
@@ -121,7 +122,7 @@ fn test_nested_types() {
     });
 }
 
-/// Check the memory size, layout and WIT type declaration derived for an `enum` type.
+/// Checks the memory size, layout and WIT type declaration derived for an `enum` type.
 #[test]
 fn test_enum_type() {
     test_wit_type_implementation::<Enum>(ExpectedMetadata {
@@ -140,7 +141,7 @@ fn test_enum_type() {
     });
 }
 
-/// Check the memory size, layout and WIT type declaration derived for a specialized generic
+/// Checks the memory size, layout and WIT type declaration derived for a specialized generic
 /// `struct` type.
 #[test]
 fn test_specialized_generic_struct() {
@@ -158,7 +159,7 @@ fn test_specialized_generic_struct() {
     });
 }
 
-/// Check the memory size, layout and WIT type declaration derived for a specialized generic `enum`
+/// Checks the memory size, layout and WIT type declaration derived for a specialized generic `enum`
 /// type.
 #[test]
 fn test_specialized_generic_enum_type() {
@@ -205,6 +206,46 @@ fn test_heap_allocated_fields() {
             "        arced: enum,\n",
             "    }\n\n",
             "    type u128 = tuple<u64, u64>;\n",
+        ),
+    });
+}
+
+/// Checks the memory size, layout and WIT declaration derived for a [`Vec`] type.
+#[test]
+fn test_vec() {
+    test_wit_type_implementation::<Vec<SimpleWrapper>>(ExpectedMetadata {
+        size: 8,
+        alignment: 4,
+        flat_layout_length: 2,
+        declaration: concat!(
+            "    record simple-wrapper {\n",
+            "        inner0: bool,\n",
+            "    }\n"
+        ),
+    });
+}
+
+/// Checks the memory size, layout and WIT declaration derived for a type that has list
+/// fields.
+#[test]
+fn test_list_fields() {
+    test_wit_type_implementation::<StructWithLists>(ExpectedMetadata {
+        size: 16,
+        alignment: 4,
+        flat_layout_length: 4,
+        declaration: concat!(
+            "    record simple-wrapper {\n",
+            "        inner0: bool,\n",
+            "    }\n\n",
+            "    record struct-with-lists {\n",
+            "        vec: list<simple-wrapper>,\n",
+            "        second-vec: list<tuple-with-padding>,\n",
+            "    }\n\n",
+            "    record tuple-with-padding {\n",
+            "        inner0: u16,\n",
+            "        inner1: u32,\n",
+            "        inner2: s64,\n",
+            "    }\n"
         ),
     });
 }

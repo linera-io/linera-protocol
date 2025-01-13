@@ -148,11 +148,10 @@ where
     async fn handle_confirmed_certificate(
         &self,
         certificate: GenericCertificate<ConfirmedBlock>,
-        blobs: Vec<Blob>,
         _delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
         self.spawn_and_receive(move |validator, sender| {
-            validator.do_handle_certificate(certificate, blobs, sender)
+            validator.do_handle_certificate(certificate, vec![], sender)
         })
         .await
     }
@@ -180,11 +179,14 @@ where
         Ok(CryptoHash::test_hash("genesis config"))
     }
 
-    async fn download_blob_content(&self, blob_id: BlobId) -> Result<BlobContent, NodeError> {
-        self.spawn_and_receive(move |validator, sender| {
-            validator.do_download_blob_content(blob_id, sender)
-        })
-        .await
+    async fn upload_blob(&self, content: BlobContent) -> Result<BlobId, NodeError> {
+        self.spawn_and_receive(move |validator, sender| validator.do_upload_blob(content, sender))
+            .await
+    }
+
+    async fn download_blob(&self, blob_id: BlobId) -> Result<BlobContent, NodeError> {
+        self.spawn_and_receive(move |validator, sender| validator.do_download_blob(blob_id, sender))
+            .await
     }
 
     async fn download_certificate(
@@ -456,7 +458,24 @@ where
         sender.send(Ok(stream))
     }
 
-    async fn do_download_blob_content(
+    async fn do_upload_blob(
+        self,
+        content: BlobContent,
+        sender: oneshot::Sender<Result<BlobId, NodeError>>,
+    ) -> Result<(), Result<BlobId, NodeError>> {
+        let validator = self.client.lock().await;
+        let blob = Blob::new(content);
+        let id = blob.id();
+        let storage = validator.state.storage_client();
+        let result = match storage.maybe_write_blobs(&[blob]).await {
+            Ok(has_state) if has_state.first() == Some(&true) => Ok(id),
+            Ok(_) => Err(NodeError::BlobsNotFound(vec![id])),
+            Err(error) => Err(error.into()),
+        };
+        sender.send(result)
+    }
+
+    async fn do_download_blob(
         self,
         blob_id: BlobId,
         sender: oneshot::Sender<Result<BlobContent, NodeError>>,

@@ -969,6 +969,7 @@ pub struct BlobContent {
     blob_type: BlobType,
     /// The binary data.
     #[serde(with = "serde_bytes")]
+    #[debug(skip)]
     bytes: Box<[u8]>,
 }
 

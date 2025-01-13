@@ -435,6 +435,7 @@ where
 
         loop {
             // Try applying f. Return if committed.
+            client.prepare_chain().await?;
             let result = f(client).await;
             self.update_and_save_wallet(client).await?;
             let timeout = match result? {

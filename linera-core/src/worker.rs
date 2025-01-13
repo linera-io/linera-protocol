@@ -446,11 +446,9 @@ impl ProcessableCertificate for ConfirmedBlock {
     async fn process_certificate<S: Storage + Clone + Send + Sync + 'static>(
         worker: &WorkerState<S>,
         certificate: ConfirmedBlockCertificate,
-        blobs: Vec<Blob>,
+        _blobs: Vec<Blob>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        worker
-            .handle_confirmed_certificate(certificate, blobs, None)
-            .await
+        worker.handle_confirmed_certificate(certificate, None).await
     }
 }
 
@@ -552,12 +550,11 @@ where
     /// Processes a confirmed block (aka a commit).
     #[instrument(
         level = "trace",
-        skip(self, certificate, blobs, notify_when_messages_are_delivered)
+        skip(self, certificate, notify_when_messages_are_delivered)
     )]
     async fn process_confirmed_block(
         &self,
         certificate: ConfirmedBlockCertificate,
-        blobs: &[Blob],
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         let chain_id = certificate.block().header.chain_id;
@@ -566,7 +563,6 @@ where
             .query_chain_worker(chain_id, move |callback| {
                 ChainWorkerRequest::ProcessConfirmedBlock {
                     certificate,
-                    blobs: blobs.to_owned(),
                     notify_when_messages_are_delivered,
                     callback,
                 }
@@ -817,12 +813,8 @@ where
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         match self.full_certificate(certificate).await? {
             Either::Left(confirmed) => {
-                self.handle_confirmed_certificate(
-                    confirmed,
-                    vec![],
-                    notify_when_messages_are_delivered,
-                )
-                .await
+                self.handle_confirmed_certificate(confirmed, notify_when_messages_are_delivered)
+                    .await
             }
             Either::Right(validated) => self.handle_validated_certificate(validated, vec![]).await,
         }
@@ -837,7 +829,6 @@ where
     pub async fn handle_confirmed_certificate(
         &self,
         certificate: ConfirmedBlockCertificate,
-        blobs: Vec<Blob>,
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         trace!("{} <-- {:?}", self.nickname, certificate);
@@ -866,7 +857,7 @@ where
             }
         }
 
-        self.process_confirmed_block(certificate, &blobs, notify_when_messages_are_delivered)
+        self.process_confirmed_block(certificate, notify_when_messages_are_delivered)
             .await
     }
 

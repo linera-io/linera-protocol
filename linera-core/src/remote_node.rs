@@ -4,7 +4,7 @@
 use std::collections::HashSet;
 
 use custom_debug_derive::Debug;
-use futures::{stream::FuturesUnordered, StreamExt};
+use futures::{future::try_join_all, stream::FuturesUnordered, StreamExt};
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Blob, BlockHeight},
@@ -68,13 +68,12 @@ impl<N: ValidatorNode> RemoteNode<N> {
     pub(crate) async fn handle_confirmed_certificate(
         &self,
         certificate: ConfirmedBlockCertificate,
-        blobs: Vec<Blob>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<Box<ChainInfo>, NodeError> {
         let chain_id = certificate.inner().chain_id();
         let response = self
             .node
-            .handle_confirmed_certificate(certificate, blobs, delivery)
+            .handle_confirmed_certificate(certificate, delivery)
             .await?;
         self.check_and_return_info(response, chain_id)
     }
@@ -148,7 +147,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
                 _ => return result,
             }
         }
-        self.handle_confirmed_certificate(certificate.clone(), vec![], delivery)
+        self.handle_confirmed_certificate(certificate.clone(), delivery)
             .await
     }
 
@@ -217,6 +216,16 @@ impl<N: ValidatorNode> RemoteNode<N> {
         Ok(certificate)
     }
 
+    /// Uploads the blobs to the validator.
+    #[instrument(level = "trace")]
+    pub(crate) async fn upload_blobs(&self, blobs: Vec<Blob>) -> Result<(), NodeError> {
+        let tasks = blobs
+            .into_iter()
+            .map(|blob| self.node.upload_blob(blob.into()));
+        try_join_all(tasks).await?;
+        Ok(())
+    }
+
     /// Tries to download the given blobs from this node. Returns `None` if not all could be found.
     #[instrument(level = "trace")]
     pub(crate) async fn try_download_blobs(&self, blob_ids: &[BlobId]) -> Option<Vec<Blob>> {
@@ -233,7 +242,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
 
     #[instrument(level = "trace")]
     async fn try_download_blob(&self, blob_id: BlobId) -> Option<Blob> {
-        match self.node.download_blob_content(blob_id).await {
+        match self.node.download_blob(blob_id).await {
             Ok(blob) => {
                 let blob = Blob::new(blob);
                 if blob.id() != blob_id {

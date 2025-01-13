@@ -711,6 +711,15 @@ pub trait ContractRuntime: BaseRuntime {
     /// Closes the current chain.
     fn close_chain(&mut self) -> Result<(), ExecutionError>;
 
+    /// Creates a new application on chain.
+    fn create_application(
+        &mut self,
+        bytecode_id: BytecodeId,
+        parameters: Vec<u8>,
+        argument: Vec<u8>,
+        required_application_ids: Vec<UserApplicationId>,
+    ) -> Result<UserApplicationId, ExecutionError>;
+
     /// Writes a batch of changes.
     fn write_batch(&mut self, batch: Batch) -> Result<(), ExecutionError>;
 }

@@ -84,7 +84,7 @@ where
         let length = u32::try_from(self.len())?;
         let size = length * T::SIZE;
 
-        let destination = memory.allocate(size)?;
+        let destination = memory.allocate(size, <T::Layout as Layout>::ALIGNMENT)?;
 
         destination.store(memory, location)?;
         length.store(memory, location.after::<GuestPointer>())?;
@@ -105,7 +105,7 @@ where
         let length = u32::try_from(self.len())?;
         let size = length * T::SIZE;
 
-        let destination = memory.allocate(size)?;
+        let destination = memory.allocate(size, <T::Layout as Layout>::ALIGNMENT)?;
 
         self.iter().zip(0..).try_for_each(|(element, index)| {
             element.store(memory, destination.index::<T>(index))

@@ -809,7 +809,6 @@ impl Runnable for Job {
                         RpcMessage::ConfirmedCertificate(Box::new(
                             HandleConfirmedCertificateRequest {
                                 certificate: certificate.clone(),
-                                blobs: vec![],
                                 wait_for_outgoing_messages: true,
                             },
                         ))
@@ -1218,6 +1217,7 @@ impl Runnable for Job {
             | Net(_)
             | Storage { .. }
             | Wallet(_)
+            | ExtractScriptFromMarkdown { .. }
             | HelpMarkdown => {
                 unreachable!()
             }
@@ -1409,8 +1409,7 @@ fn main() -> anyhow::Result<()> {
 /// Returns the log file name to use based on the [`ClientCommand`] that will run.
 fn log_file_name_for(command: &ClientCommand) -> Cow<'static, str> {
     match command {
-        ClientCommand::HelpMarkdown
-        | ClientCommand::Transfer { .. }
+        ClientCommand::Transfer { .. }
         | ClientCommand::OpenChain { .. }
         | ClientCommand::OpenMultiOwnerChain { .. }
         | ClientCommand::ChangeOwnership { .. }
@@ -1446,6 +1445,9 @@ fn log_file_name_for(command: &ClientCommand) -> Cow<'static, str> {
         ClientCommand::Storage { .. } => "storage".into(),
         ClientCommand::Service { port, .. } => format!("service-{port}").into(),
         ClientCommand::Faucet { .. } => "faucet".into(),
+        ClientCommand::HelpMarkdown | ClientCommand::ExtractScriptFromMarkdown { .. } => {
+            "tool".into()
+        }
     }
 }
 
@@ -1453,6 +1455,24 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
     match &options.command {
         ClientCommand::HelpMarkdown => {
             clap_markdown::print_help_markdown::<ClientOptions>();
+            Ok(0)
+        }
+
+        ClientCommand::ExtractScriptFromMarkdown {
+            path,
+            pause_after_linera_service,
+            pause_after_gql_mutations,
+        } => {
+            let file = crate::util::Markdown::new(path)?;
+            let pause_after_linera_service =
+                Some(*pause_after_linera_service).filter(|p| !p.is_zero());
+            let pause_after_gql_mutations =
+                Some(*pause_after_gql_mutations).filter(|p| !p.is_zero());
+            file.extract_bash_script_to(
+                std::io::stdout(),
+                pause_after_linera_service,
+                pause_after_gql_mutations,
+            )?;
             Ok(0)
         }
 

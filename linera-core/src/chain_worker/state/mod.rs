@@ -237,12 +237,11 @@ where
     pub(super) async fn process_confirmed_block(
         &mut self,
         certificate: ConfirmedBlockCertificate,
-        blobs: &[Blob],
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         ChainWorkerStateWithAttemptedChanges::new(self)
             .await
-            .process_confirmed_block(certificate, blobs, notify_when_messages_are_delivered)
+            .process_confirmed_block(certificate, notify_when_messages_are_delivered)
             .await
     }
 

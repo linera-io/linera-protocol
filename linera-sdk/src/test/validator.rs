@@ -45,6 +45,7 @@ use crate::ContractAbi;
 pub struct TestValidator {
     key_pair: KeyPair,
     committee: Committee,
+    storage: DbStorage<MemoryStore, TestClock>,
     worker: WorkerState<DbStorage<MemoryStore, TestClock>>,
     clock: TestClock,
     chains: Arc<DashMap<ChainId, ActiveChain>>,
@@ -55,6 +56,7 @@ impl Clone for TestValidator {
         TestValidator {
             key_pair: self.key_pair.copy(),
             committee: self.committee.clone(),
+            storage: self.storage.clone(),
             worker: self.worker.clone(),
             clock: self.clock.clone(),
             chains: self.chains.clone(),
@@ -75,13 +77,14 @@ impl TestValidator {
         let worker = WorkerState::new(
             "Single validator node".to_string(),
             Some(key_pair.copy()),
-            storage,
+            storage.clone(),
             NonZeroUsize::new(20).expect("Chain worker limit should not be zero"),
         );
 
         let validator = TestValidator {
             key_pair,
             committee,
+            storage,
             worker,
             clock,
             chains: Arc::default(),
@@ -134,6 +137,11 @@ impl TestValidator {
             .await;
 
         (validator, application_id, creator)
+    }
+
+    /// Returns this validator's storage.
+    pub(crate) fn storage(&self) -> &DbStorage<MemoryStore, TestClock> {
+        &self.storage
     }
 
     /// Returns the locked [`WorkerState`] of this validator.

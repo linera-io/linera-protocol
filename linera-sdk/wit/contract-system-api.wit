@@ -21,6 +21,7 @@ interface contract-system-api {
     get-chain-ownership: func() -> chain-ownership;
     open-chain: func(chain-ownership: chain-ownership, application-permissions: application-permissions, balance: amount) -> tuple<message-id, chain-id>;
     close-chain: func() -> result<tuple<>, close-chain-error>;
+    create-application: func(bytecode-id: bytecode-id, parameters: list<u8>, argument: list<u8>, required-application-ids: list<application-id>) -> application-id;
     try-call-application: func(authenticated: bool, callee-id: application-id, argument: list<u8>) -> list<u8>;
     emit: func(name: stream-name, key: list<u8>, value: list<u8>);
     query-service: func(application-id: application-id, query: list<u8>) -> list<u8>;

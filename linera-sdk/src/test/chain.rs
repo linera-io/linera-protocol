@@ -23,6 +23,7 @@ use linera_execution::{
     system::{SystemExecutionError, SystemOperation, CREATE_APPLICATION_MESSAGE_INDEX},
     ExecutionError, Query, Response,
 };
+use linera_storage::Storage as _;
 use serde::Serialize;
 use tokio::{fs, sync::Mutex};
 
@@ -139,11 +140,21 @@ impl ActiveChain {
         // TODO(#2066): Remove boxing once call-stack is shallower
         let certificate = Box::pin(block.try_sign()).await?;
 
-        self.validator
+        let result = self
+            .validator
             .worker()
-            .fully_handle_certificate_with_notifications(certificate.clone(), blobs, &())
-            .await
-            .expect("Rejected certificate");
+            .fully_handle_certificate_with_notifications(certificate.clone(), blobs.clone(), &())
+            .await;
+        if let Err(WorkerError::BlobsNotFound(_)) = &result {
+            self.validator.storage().maybe_write_blobs(&blobs).await?;
+            self.validator
+                .worker()
+                .fully_handle_certificate_with_notifications(certificate.clone(), vec![], &())
+                .await
+                .expect("Rejected certificate");
+        } else {
+            result.expect("Rejected certificate");
+        }
 
         *tip = Some(certificate.clone());
 

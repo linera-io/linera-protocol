@@ -1,5 +1,3 @@
-<!-- cargo-rdme start -->
-
 # Fungible Token Example Application
 
 This example application implements fungible tokens. This demonstrates in particular
@@ -9,7 +7,7 @@ Once this application is built and its bytecode published on a Linera chain, the
 published bytecode can be used to create multiple application instances, where each
 instance represents a different fungible token.
 
-# How It Works
+## How It Works
 
 Individual chains have a set of accounts, where each account has an owner and a balance. The
 same owner can have accounts on multiple chains, with a different balance on each chain. This
@@ -25,9 +23,9 @@ Tokens can be transferred from an account to different destinations, such as:
 - the same account on another chain,
 - other accounts on other chains.
 
-# Usage
+## Usage
 
-## Setting Up
+### Setting Up
 
 The WebAssembly binaries for the bytecode can be built and published using [steps from the
 book](https://linera-io.github.io/linera-documentation/getting_started/first_app.html),
@@ -71,7 +69,7 @@ BYTECODE_ID=$(linera publish-bytecode \
 
 Here, we stored the new bytecode ID in a variable `BYTECODE_ID` to be reused it later.
 
-## Creating a Token
+### Creating a Token
 
 In order to use the published bytecode to create a token application, the initial state must be
 specified. This initial state is where the tokens are minted. After the token is created, no
@@ -112,7 +110,7 @@ APP_ID=$(linera create-application $BYTECODE_ID \
 
 This will store the application ID in a new variable `APP_ID`.
 
-## Using the Token Application
+### Using the Token Application
 
 Before using the token, a source and target address should be selected. The source address
 should ideally be on the default chain (used to create the token) and one of the accounts chosen
@@ -125,7 +123,7 @@ PORT=8080
 linera service --port $PORT &
 ```
 
-### Using GraphiQL
+#### Using GraphiQL
 
 Type each of these in the GraphiQL interface and substitute the env variables with their actual values that we've defined above.
 
@@ -201,7 +199,7 @@ query {
 }
 ```
 
-### Using web frontend
+#### Using web frontend
 
 Installing and starting the web server:
 
@@ -231,5 +229,3 @@ echo "http://localhost:3000/$CHAIN_1?app=$APP_ID&owner=$OWNER_2&port=$PORT"
 OWNER_2 doesn't have the applications loaded initially. Using the first page to
 transfer tokens from OWNER_1 to OWNER_2 at CHAIN_2 will instantly update the UI of the
 second page.
-
-<!-- cargo-rdme end -->

@@ -207,13 +207,11 @@ impl ValidatorNode for GrpcClient {
     async fn handle_confirmed_certificate(
         &self,
         certificate: GenericCertificate<ConfirmedBlock>,
-        blobs: Vec<Blob>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<linera_core::data_types::ChainInfoResponse, NodeError> {
         let wait_for_outgoing_messages: bool = delivery.wait_for_outgoing_messages();
         let request = HandleConfirmedCertificateRequest {
             certificate,
-            blobs,
             wait_for_outgoing_messages,
         };
         GrpcClient::try_into_chain_info(client_delegate!(
@@ -350,9 +348,15 @@ impl ValidatorNode for GrpcClient {
     }
 
     #[instrument(target = "grpc_client", skip(self), err, fields(address = self.address))]
-    async fn download_blob_content(&self, blob_id: BlobId) -> Result<BlobContent, NodeError> {
+    async fn upload_blob(&self, content: BlobContent) -> Result<BlobId, NodeError> {
+        let req = api::BlobContent::try_from(content)?;
+        Ok(client_delegate!(self, upload_blob, req)?.try_into()?)
+    }
+
+    #[instrument(target = "grpc_client", skip(self), err, fields(address = self.address))]
+    async fn download_blob(&self, blob_id: BlobId) -> Result<BlobContent, NodeError> {
         let req = api::BlobId::try_from(blob_id)?;
-        Ok(client_delegate!(self, download_blob_content, req)?.try_into()?)
+        Ok(client_delegate!(self, download_blob, req)?.try_into()?)
     }
 
     #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]

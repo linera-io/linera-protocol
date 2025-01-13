@@ -114,7 +114,6 @@ where
     /// Process a confirmed block (a commit).
     ProcessConfirmedBlock {
         certificate: ConfirmedBlockCertificate,
-        blobs: Vec<Blob>,
         #[debug(with = "elide_option")]
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
         #[debug(skip)]
@@ -299,7 +298,6 @@ where
                     .is_ok(),
                 ChainWorkerRequest::ProcessConfirmedBlock {
                     certificate,
-                    blobs,
                     notify_when_messages_are_delivered,
                     callback,
                 } => callback
@@ -307,7 +305,6 @@ where
                         self.worker
                             .process_confirmed_block(
                                 certificate,
-                                &blobs,
                                 notify_when_messages_are_delivered,
                             )
                             .await,

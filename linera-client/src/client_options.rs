@@ -303,10 +303,6 @@ impl ClientOptions {
 
 #[derive(Clone, clap::Subcommand)]
 pub enum ClientCommand {
-    /// Print CLI help in Markdown format, and exit.
-    #[command(hide = true)]
-    HelpMarkdown,
-
     /// Transfer funds
     Transfer {
         /// Sending chain ID (must be one of our chains)
@@ -893,7 +889,31 @@ pub enum ClientCommand {
     /// Operation on the storage.
     #[command(subcommand)]
     Storage(DatabaseToolCommand),
+
+    /// Print CLI help in Markdown format, and exit.
+    #[command(hide = true)]
+    HelpMarkdown,
+
+    /// Extract a Bash and GraphQL script embedded in a markdown file and print it on
+    /// stdout.
+    #[command(hide = true)]
+    ExtractScriptFromMarkdown {
+        /// The source file
+        path: PathBuf,
+
+        /// Insert a pause of N seconds after calls to `linera service`.
+        #[arg(long, default_value = DEFAULT_PAUSE_AFTER_LINERA_SERVICE_SECS, value_parser = util::parse_secs)]
+        pause_after_linera_service: Duration,
+
+        /// Insert a pause of N seconds after GraphQL queries.
+        #[arg(long, default_value = DEFAULT_PAUSE_AFTER_GQL_MUTATIONS_SECS, value_parser = util::parse_secs)]
+        pause_after_gql_mutations: Duration,
+    },
 }
+
+// Exported for readme e2e tests.
+pub static DEFAULT_PAUSE_AFTER_LINERA_SERVICE_SECS: &str = "3";
+pub static DEFAULT_PAUSE_AFTER_GQL_MUTATIONS_SECS: &str = "3";
 
 #[derive(Clone, clap::Parser)]
 pub enum DatabaseToolCommand {

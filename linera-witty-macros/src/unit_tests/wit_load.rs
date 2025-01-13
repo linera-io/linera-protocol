@@ -10,7 +10,7 @@ use syn::{parse_quote, Fields, ItemEnum, ItemStruct};
 
 use super::{derive_for_enum, derive_for_struct};
 
-/// Check the generated code for the body of the implementation of `WitLoad` for a unit struct.
+/// Checks the generated code for the body of the implementation of `WitLoad` for a unit struct.
 #[test]
 fn zero_sized_type() {
     let input = Fields::Unit;
@@ -51,7 +51,7 @@ fn zero_sized_type() {
     assert_eq!(output.to_string(), expected.to_string());
 }
 
-/// Check the generated code for the body of the implementation of `WitLoad` for a named struct.
+/// Checks the generated code for the body of the implementation of `WitLoad` for a named struct.
 #[test]
 fn named_struct() {
     let input: ItemStruct = parse_quote! {
@@ -103,7 +103,7 @@ fn named_struct() {
     assert_eq!(output.to_string(), expected.to_string());
 }
 
-/// Check the generated code for the body of the implementation of `WitLoad` for a tuple struct.
+/// Checks the generated code for the body of the implementation of `WitLoad` for a tuple struct.
 #[test]
 fn tuple_struct() {
     let input: ItemStruct = parse_quote! {
@@ -152,7 +152,7 @@ fn tuple_struct() {
     assert_eq!(output.to_string(), expected.to_string());
 }
 
-/// Check the generated code for the body of the implementation of `WitType` for an enum.
+/// Checks the generated code for the body of the implementation of `WitType` for an enum.
 #[test]
 fn enum_type() {
     let input: ItemEnum = parse_quote! {
@@ -270,7 +270,7 @@ fn enum_type() {
     assert_eq!(output.to_string(), expected.to_string());
 }
 
-/// Check the generated code for the body of the implementation of `WitLoad` for a named struct
+/// Checks the generated code for the body of the implementation of `WitLoad` for a named struct
 /// with some ignored fields.
 #[test]
 fn named_struct_with_skipped_fields() {
@@ -355,7 +355,7 @@ fn named_struct_with_skipped_fields() {
     assert_eq!(output.to_string(), expected.to_string());
 }
 
-/// Check the generated code for the body of the implementation of `WitLoad` for a tuple struct
+/// Checks the generated code for the body of the implementation of `WitLoad` for a tuple struct
 /// with some ignored fields.
 #[test]
 fn tuple_struct_with_skipped_fields() {
@@ -419,7 +419,7 @@ fn tuple_struct_with_skipped_fields() {
     assert_eq!(output.to_string(), expected.to_string());
 }
 
-/// Check the generated code for the body of the implementation of `WitType` for an enum with some
+/// Checks the generated code for the body of the implementation of `WitType` for an enum with some
 /// ignored fields.
 #[test]
 fn enum_type_with_skipped_fields() {

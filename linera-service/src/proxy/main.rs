@@ -5,7 +5,7 @@
 
 use std::{net::SocketAddr, path::PathBuf, time::Duration};
 
-use anyhow::{bail, Result};
+use anyhow::{bail, ensure, Result};
 use async_trait::async_trait;
 use futures::{FutureExt as _, SinkExt, StreamExt};
 use linera_client::{
@@ -21,6 +21,7 @@ use linera_rpc::{
     simple::{MessageHandler, TransportProtocol},
     RpcMessage,
 };
+use linera_sdk::base::Blob;
 #[cfg(with_metrics)]
 use linera_service::prometheus_server;
 use linera_service::util;
@@ -299,11 +300,18 @@ where
             GenesisConfigHashQuery => Ok(Some(RpcMessage::GenesisConfigHashResponse(Box::new(
                 self.genesis_config.hash(),
             )))),
-            DownloadBlobContent(blob_id) => {
+            UploadBlob(content) => {
+                let blob = Blob::new(*content);
+                let id = blob.id();
+                ensure!(
+                    self.storage.maybe_write_blobs(&[blob]).await?[0],
+                    "Blob not found"
+                );
+                Ok(Some(RpcMessage::UploadBlobResponse(Box::new(id))))
+            }
+            DownloadBlob(blob_id) => {
                 let content = self.storage.read_blob(*blob_id).await?.into_content();
-                Ok(Some(RpcMessage::DownloadBlobContentResponse(Box::new(
-                    content,
-                ))))
+                Ok(Some(RpcMessage::DownloadBlobResponse(Box::new(content))))
             }
             DownloadConfirmedBlock(hash) => {
                 Ok(Some(RpcMessage::DownloadConfirmedBlockResponse(Box::new(
@@ -320,9 +328,9 @@ where
             BlobLastUsedBy(blob_id) => Ok(Some(RpcMessage::BlobLastUsedByResponse(Box::new(
                 self.storage.read_blob_state(*blob_id).await?.last_used_by,
             )))),
-            MissingBlobIds(blob_ids) => Ok(Some(RpcMessage::MissingBlobIdsResponse(Box::new(
+            MissingBlobIds(blob_ids) => Ok(Some(RpcMessage::MissingBlobIdsResponse(
                 self.storage.missing_blobs(&blob_ids).await?,
-            )))),
+            ))),
             BlockProposal(_)
             | LiteCertificate(_)
             | TimeoutCertificate(_)
@@ -335,13 +343,12 @@ where
             | ChainInfoResponse(_)
             | VersionInfoResponse(_)
             | GenesisConfigHashResponse(_)
-            | DownloadBlobContentResponse(_)
+            | DownloadBlobResponse(_)
             | BlobLastUsedByResponse(_)
             | MissingBlobIdsResponse(_)
             | DownloadConfirmedBlockResponse(_)
-            | DownloadCertificatesResponse(_) => {
-                Err(anyhow::Error::from(NodeError::UnexpectedMessage))
-            }
+            | DownloadCertificatesResponse(_)
+            | UploadBlobResponse(_) => Err(anyhow::Error::from(NodeError::UnexpectedMessage)),
         }
     }
 }

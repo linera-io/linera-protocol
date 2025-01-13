@@ -22,7 +22,7 @@ where
     let mut first_instance = MockInstance::<()>::default();
     let mut first_memory = first_instance.memory()?;
 
-    let first_address = first_memory.allocate(T::SIZE)?;
+    let first_address = first_memory.allocate(T::SIZE, <T::Layout as Layout>::ALIGNMENT)?;
 
     input.store(&mut first_memory, first_address)?;
 
@@ -34,11 +34,11 @@ where
     let mut second_instance = MockInstance::<()>::default();
     let mut second_memory = second_instance.memory()?;
 
-    let second_address = second_memory.allocate(T::SIZE)?;
+    let second_address = second_memory.allocate(T::SIZE, <T::Layout as Layout>::ALIGNMENT)?;
 
     loaded_instance.store(&mut second_memory, second_address)?;
 
-    let total_allocated_memory = first_memory.allocate(0)?.0;
+    let total_allocated_memory = first_memory.allocate(0, 1)?.0;
 
     assert_eq!(
         first_memory.read(first_address, total_allocated_memory)?,
@@ -57,7 +57,7 @@ where
 {
     let mut first_instance = MockInstance::<()>::default();
     let mut first_memory = first_instance.memory()?;
-    let first_start_address = first_memory.allocate(0)?;
+    let first_start_address = first_memory.allocate(0, 1)?;
 
     let first_lowered_layout = input.lower(&mut first_memory)?;
     let lifted_instance = T::lift_from(first_lowered_layout, &first_memory)?;
@@ -67,13 +67,13 @@ where
     // Create a clean separate memory instance
     let mut second_instance = MockInstance::<()>::default();
     let mut second_memory = second_instance.memory()?;
-    let second_start_address = second_memory.allocate(0)?;
+    let second_start_address = second_memory.allocate(0, 1)?;
 
     let second_lowered_layout = lifted_instance.lower(&mut second_memory)?;
 
     assert_eq!(first_lowered_layout, second_lowered_layout);
 
-    let total_allocated_memory = first_memory.allocate(0)?.0;
+    let total_allocated_memory = first_memory.allocate(0, 1)?.0;
 
     assert_eq!(
         first_memory.read(first_start_address, total_allocated_memory)?,

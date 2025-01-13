@@ -537,7 +537,6 @@ where
         let start = Instant::now();
         let HandleConfirmedCertificateRequest {
             certificate,
-            blobs,
             wait_for_outgoing_messages,
         } = request.into_inner().try_into()?;
         trace!(?certificate, "Handling certificate");
@@ -545,7 +544,7 @@ where
         match self
             .state
             .clone()
-            .handle_confirmed_certificate(certificate, blobs, sender)
+            .handle_confirmed_certificate(certificate, sender)
             .await
         {
             Ok((info, actions)) => {

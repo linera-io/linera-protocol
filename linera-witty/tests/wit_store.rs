@@ -12,10 +12,11 @@ use linera_witty::{hlist, InstanceWithMemory, Layout, MockInstance, WitStore};
 
 use self::types::{
     Branch, Enum, Leaf, RecordWithDoublePadding, SimpleWrapper, SpecializedGenericEnum,
-    SpecializedGenericStruct, StructWithHeapFields, TupleWithPadding, TupleWithoutPadding,
+    SpecializedGenericStruct, StructWithHeapFields, StructWithLists, TupleWithPadding,
+    TupleWithoutPadding,
 };
 
-/// Check that a wrapper type is properly stored in memory and lowered into its flat layout.
+/// Checks that a wrapper type is properly stored in memory and lowered into its flat layout.
 #[test]
 fn test_simple_bool_wrapper() {
     test_store_in_memory(SimpleWrapper(true), &[1], &[]);
@@ -25,7 +26,7 @@ fn test_simple_bool_wrapper() {
     test_lower_to_flat_layout(SimpleWrapper(false), hlist![0], &[]);
 }
 
-/// Check that a type with multiple fields ordered in a way that doesn't require any padding is
+/// Checks that a type with multiple fields ordered in a way that doesn't require any padding is
 /// properly stored in memory and lowered into its flat layout.
 #[test]
 fn test_tuple_struct_without_padding() {
@@ -46,7 +47,7 @@ fn test_tuple_struct_without_padding() {
     );
 }
 
-/// Check that a type with multiple fields ordered in a way that requires padding between two of its
+/// Checks that a type with multiple fields ordered in a way that requires padding between two of its
 /// fields is properly stored in memory and lowered into its flat layout.
 #[test]
 fn test_tuple_struct_with_padding() {
@@ -67,7 +68,7 @@ fn test_tuple_struct_with_padding() {
     );
 }
 
-/// Check that a type with multiple named fields ordered in a way that requires padding before two
+/// Checks that a type with multiple named fields ordered in a way that requires padding before two
 /// fields is properly stored in memory and lowered into its flat layout.
 #[test]
 fn test_named_struct_with_double_padding() {
@@ -98,7 +99,7 @@ fn test_named_struct_with_double_padding() {
     );
 }
 
-/// Check that a type that contains a field with a type that also has `WitStore` derived for it is
+/// Checks that a type that contains a field with a type that also has `WitStore` derived for it is
 /// properly stored in memory and lowered into its flat layout.
 #[test]
 fn test_nested_types() {
@@ -139,7 +140,7 @@ fn test_nested_types() {
     );
 }
 
-/// Check that an enum type's variants are properly stored in memory and lowered into its flat
+/// Checks that an enum type's variants are properly stored in memory and lowered into its flat
 /// layout.
 #[test]
 fn test_enum_type() {
@@ -230,7 +231,7 @@ fn test_enum_type() {
     );
 }
 
-/// Check that a generic type with a specialization request is properly stored in memory and
+/// Checks that a generic type with a specialization request is properly stored in memory and
 /// lowered into its flat layout.
 #[test]
 fn test_specialized_generic_struct() {
@@ -258,7 +259,7 @@ fn test_specialized_generic_struct() {
     );
 }
 
-/// Check that a generic enum with a specialization request type's variants are properly stored in
+/// Checks that a generic enum with a specialization request type's variants are properly stored in
 /// memory and lowered into its flat layout.
 #[test]
 fn test_specialized_generic_enum_type() {
@@ -400,6 +401,50 @@ fn test_heap_allocated_fields() {
     );
 }
 
+/// Checks that a [`Vec`] type is properly stored in memory and lowered into its flat layout.
+#[test]
+fn test_vec() {
+    let data = vec![
+        SimpleWrapper(true),
+        SimpleWrapper(false),
+        SimpleWrapper(true),
+    ];
+
+    test_store_in_memory(data.clone(), &[8, 0, 0, 0, 3, 0, 0, 0], &[1, 0, 1]);
+    test_lower_to_flat_layout(data, hlist![0_i32, 3_i32,], &[1, 0, 1]);
+}
+
+/// Checks that a type with list fields is properly stored in memory and lowered into its
+/// flat layout.
+#[test]
+fn test_list_fields() {
+    let data = StructWithLists {
+        vec: vec![
+            SimpleWrapper(false),
+            SimpleWrapper(true),
+            SimpleWrapper(false),
+            SimpleWrapper(true),
+        ],
+        second_vec: vec![TupleWithPadding(1, 0, -1), TupleWithPadding(10, 11, 12)],
+    };
+
+    let expected_heap = [0, 1, 0, 1]
+        .into_iter()
+        .chain([0; 4])
+        .chain([
+            1, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        ])
+        .chain([10, 0, 0, 0, 11, 0, 0, 0, 12, 0, 0, 0, 0, 0, 0, 0])
+        .collect::<Vec<_>>();
+
+    test_store_in_memory(
+        data.clone(),
+        &[16, 0, 0, 0, 4, 0, 0, 0, 24, 0, 0, 0, 2, 0, 0, 0],
+        &expected_heap,
+    );
+    test_lower_to_flat_layout(data, hlist![0_i32, 4_i32, 8_i32, 2_i32], &expected_heap);
+}
+
 /// Tests that the `data` of type `T` and wrapped versions of it can be stored as a sequence of
 /// bytes in memory and that they match the `expected` bytes.
 fn test_store_in_memory<T>(
@@ -439,7 +484,7 @@ fn test_single_store_in_memory<T>(
     let mut memory = instance.memory().unwrap();
 
     let length = expected_without_allocation.len() as u32;
-    let address = memory.allocate(length).unwrap();
+    let address = memory.allocate(length, 1).unwrap();
 
     data.store(&mut memory, address).unwrap();
 

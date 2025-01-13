@@ -209,6 +209,13 @@ where
             .collect())
     }
 
+    /// Writes the given blobs to storage if there is an appropriate blob state.
+    pub async fn store_blobs(&self, blobs: &[Blob]) -> Result<(), LocalNodeError> {
+        let storage = self.storage_client();
+        storage.maybe_write_blobs(blobs).await?;
+        Ok(())
+    }
+
     /// Returns a read-only view of the [`ChainStateView`] of a chain referenced by its
     /// [`ChainId`].
     ///

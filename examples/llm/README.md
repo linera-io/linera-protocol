@@ -1,5 +1,3 @@
-<!-- cargo-rdme start -->
-
 # LLM Example Application
 
 This example application runs a large language model in an application's service.
@@ -17,7 +15,7 @@ CAVEAT:
   ([#2160](https://github.com/linera-io/linera-protocol/issues/2160)).
 
 
-# How It Works
+## How It Works
 
 Models and tokenizers are served locally using a local Python server. They are expected
 at `model.bin` and `tokenizer.json`.
@@ -29,7 +27,7 @@ When the first prompt is submitted, the application's service uses the `fetch_ur
 system API to fetch the model and tokenizer. Subsequently, the model bytes are converted
 to the GGUF format where it can be used for inference.
 
-# Usage
+## Usage
 
 We're assuming that a local wallet is set up and connected to a running test network
 (local or otherwise).
@@ -42,7 +40,7 @@ CHAIN=e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65
 See the file `linera-protocol/examples/fungible/README.md` or the [online developer
 manual](https://linera.dev) for instructions.
 
-## Using the LLM Application
+### Using the LLM Application
 
 First, deploy the application:
 ```bash
@@ -73,5 +71,3 @@ Finally, navigate to `localhost:3000` to interact with the Linera ChatBot.
 ```bash
 echo "http://localhost:3000/$CHAIN?app=$APP_ID&port=$PORT"
 ```
-
-<!-- cargo-rdme end -->

@@ -23,9 +23,9 @@ use prometheus::HistogramVec;
 use reqwest::{header::CONTENT_TYPE, Client};
 
 use crate::{
-    system::{OpenChainConfig, Recipient},
+    system::{CreateApplicationResult, OpenChainConfig, Recipient},
     util::RespondExt,
-    ExecutionError, ExecutionRuntimeContext, ExecutionStateView, RawExecutionOutcome,
+    BytecodeId, ExecutionError, ExecutionRuntimeContext, ExecutionStateView, RawExecutionOutcome,
     RawOutgoingMessage, SystemExecutionError, SystemMessage, UserApplicationDescription,
     UserApplicationId, UserContractCode, UserServiceCode,
 };
@@ -289,6 +289,25 @@ where
                 }
             }
 
+            CreateApplication {
+                next_message_id,
+                bytecode_id,
+                parameters,
+                required_application_ids,
+                callback,
+            } => {
+                let create_application_result = self
+                    .system
+                    .create_application(
+                        next_message_id,
+                        bytecode_id,
+                        parameters,
+                        required_application_ids,
+                    )
+                    .await?;
+                callback.respond(Ok(create_application_result));
+            }
+
             FetchUrl { url, callback } => {
                 let bytes = reqwest::get(url).await?.bytes().await?.to_vec();
                 callback.respond(bytes);
@@ -465,6 +484,15 @@ pub enum ExecutionRequest {
         application_id: UserApplicationId,
         #[debug(skip)]
         callback: oneshot::Sender<Result<(), ExecutionError>>,
+    },
+
+    CreateApplication {
+        next_message_id: MessageId,
+        bytecode_id: BytecodeId,
+        parameters: Vec<u8>,
+        required_application_ids: Vec<UserApplicationId>,
+        #[debug(skip)]
+        callback: oneshot::Sender<Result<CreateApplicationResult, ExecutionError>>,
     },
 
     FetchUrl {
