@@ -148,11 +148,7 @@ static STATE_HASH_COMPUTATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(||
     )
 });
 
-/// The BCS-serialized size of an empty [`crate::data_types::ExecutedBlock`].
-const EMPTY_EXECUTED_BLOCK_SIZE: usize = 91;
-
 /// The BCS-serialized size of an empty [`Block`].
-#[cfg(test)]
 const EMPTY_BLOCK_SIZE: usize = 92;
 
 /// An origin, cursor and timestamp of a unskippable bundle in our inbox.
@@ -707,7 +703,7 @@ where
             account: block.authenticated_signer,
         };
         resource_controller
-            .track_block_size(EMPTY_EXECUTED_BLOCK_SIZE)
+            .track_block_size(EMPTY_BLOCK_SIZE)
             .and_then(|()| {
                 resource_controller
                     .track_executed_block_size_sequence_extension(0, block.incoming_bundles.len())
@@ -1235,16 +1231,6 @@ where
         }
         Ok(())
     }
-}
-
-#[test]
-fn empty_executed_block_size() {
-    let executed_block = crate::data_types::ExecutedBlock {
-        proposal: crate::test::make_first_block(ChainId::root(0)),
-        outcome: crate::data_types::BlockExecutionOutcome::default(),
-    };
-    let size = bcs::serialized_size(&executed_block).unwrap();
-    assert_eq!(size, EMPTY_EXECUTED_BLOCK_SIZE);
 }
 
 #[test]

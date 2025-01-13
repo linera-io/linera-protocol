@@ -400,13 +400,11 @@ impl OutgoingMessage {
 }
 
 /// A [`Proposal`], together with the outcome from its execution.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, SimpleObject)]
 pub struct ExecutedBlock {
     pub proposal: Proposal,
     pub outcome: BlockExecutionOutcome,
 }
-
-impl<'de> BcsHashable<'de> for ExecutedBlock {}
 
 /// The messages and the state hash resulting from a [`Proposal`]'s execution.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
