@@ -908,7 +908,7 @@ RpcMessage:
       DownloadConfirmedBlockResponse:
         NEWTYPE:
           TYPENAME: Block
-    20:
+    22:
       DownloadCertificatesResponse:
         NEWTYPE:
           SEQ:

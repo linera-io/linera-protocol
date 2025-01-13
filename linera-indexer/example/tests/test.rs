@@ -171,7 +171,7 @@ async fn test_end_to_end_operations_indexer(config: impl LineraNetConfig) {
                 (
                     OperationKey {
                         chain_id: chain0,
-                        height: exeuted_block.header.height,
+                        height: last_block.value.block.header.height,
                         index: 0
                     },
                     last_hash,
