@@ -951,7 +951,7 @@ pub mod tests {
 
     use linera_base::{
         crypto::{BcsSignable, CryptoHash, KeyPair},
-        data_types::{Amount, Round, Timestamp},
+        data_types::{Amount, Blob, Round, Timestamp},
     };
     use linera_chain::{
         data_types::{Block, BlockExecutionOutcome},
@@ -1083,6 +1083,20 @@ pub mod tests {
             request_fallback: true,
         };
         round_trip_check::<_, api::ChainInfoQuery>(chain_info_query_some);
+    }
+
+    #[test]
+    pub fn test_pending_blob_request() {
+        let chain_id = ChainId::root(2);
+        let blob_id = Blob::new(BlobContent::new_data(*b"foo")).id();
+        let pending_blob_request = (chain_id, blob_id);
+        round_trip_check::<_, api::PendingBlobRequest>(pending_blob_request);
+    }
+
+    #[test]
+    pub fn test_pending_blob_result() {
+        let blob = BlobContent::new_data(*b"foo");
+        round_trip_check::<_, api::PendingBlobResult>(blob);
     }
 
     #[test]
