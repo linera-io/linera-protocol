@@ -480,6 +480,22 @@ async fn test_reentrant_collection_view_has_pending_changes_after_try_load_entri
     Ok(())
 }
 
+/// Checks if a cleared [`RegisterView`] has no pending changes after flushing.
+#[tokio::test]
+async fn test_flushing_cleared_register_view() -> anyhow::Result<()> {
+    let context = create_test_memory_context();
+    let mut view = RegisterView::<_, bool>::load(context.clone()).await?;
+
+    assert!(!view.has_pending_changes().await);
+    view.clear();
+    assert!(view.has_pending_changes().await);
+
+    save_view(&context, &mut view).await?;
+    assert!(!view.has_pending_changes().await);
+
+    Ok(())
+}
+
 /// Saves a [`View`] into the [`MemoryContext<()>`] storage simulation.
 async fn save_view<C>(context: &C, view: &mut impl View<C>) -> anyhow::Result<()>
 where
