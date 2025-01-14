@@ -1635,7 +1635,7 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
                 binaries,
                 no_build,
                 docker_image_name,
-                path: _,
+                path,
                 storage: _,
                 external_protocol: _,
                 with_faucet_chain,
@@ -1656,6 +1656,7 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
                     *with_faucet_chain,
                     *faucet_port,
                     *faucet_amount,
+                    path,
                 )
                 .boxed()
                 .await?;
