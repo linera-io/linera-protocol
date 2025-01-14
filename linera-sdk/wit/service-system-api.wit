@@ -14,7 +14,7 @@ interface service-system-api {
     schedule-operation: func(operation: list<u8>);
     try-query-application: func(application: application-id, argument: list<u8>) -> list<u8>;
     fetch-url: func(url: string) -> list<u8>;
-    perform-http-request: func(method: http-method, query: string, headers: list<tuple<string, list<u8>>>, payload: list<u8>) -> list<u8>;
+    perform-http-request: func(method: http-method, query: string, headers: list<tuple<string, list<u8>>>, payload: list<u8>) -> http-response;
     read-data-blob: func(hash: crypto-hash) -> list<u8>;
     assert-data-blob-exists: func(hash: crypto-hash);
     assert-before: func(timestamp: timestamp);
@@ -54,6 +54,11 @@ interface service-system-api {
         part4: u64,
     }
 
+    record http-header {
+        name: string,
+        value: list<u8>,
+    }
+
     enum http-method {
         get,
         post,
@@ -64,6 +69,12 @@ interface service-system-api {
         connect,
         patch,
         trace,
+    }
+
+    record http-response {
+        status: u16,
+        headers: list<http-header>,
+        body: list<u8>,
     }
 
     enum log-level {

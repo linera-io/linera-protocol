@@ -703,7 +703,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeHandle<UserInstance> {
         url: &str,
         headers: Vec<(String, Vec<u8>)>,
         payload: Vec<u8>,
-    ) -> Result<Vec<u8>, ExecutionError> {
+    ) -> Result<http::Response, ExecutionError> {
         self.inner()
             .perform_http_request(method, url, headers, payload)
     }
@@ -954,15 +954,15 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         url: &str,
         headers: Vec<(String, Vec<u8>)>,
         payload: Vec<u8>,
-    ) -> Result<Vec<u8>, ExecutionError> {
+    ) -> Result<http::Response, ExecutionError> {
         ensure!(
             cfg!(feature = "unstable-oracles"),
             ExecutionError::UnstableOracle
         );
-        let bytes =
+        let response =
             if let Some(response) = self.transaction_tracker.next_replayed_oracle_response()? {
                 match response {
-                    OracleResponse::Http(bytes) => bytes,
+                    OracleResponse::Http(response) => response,
                     _ => return Err(ExecutionError::OracleResponseMismatch),
                 }
             } else {
@@ -978,8 +978,8 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
                     .recv_response()?
             };
         self.transaction_tracker
-            .add_oracle_response(OracleResponse::Http(bytes.clone()));
-        Ok(bytes)
+            .add_oracle_response(OracleResponse::Http(response.clone()));
+        Ok(response)
     }
 
     fn assert_before(&mut self, timestamp: Timestamp) -> Result<(), ExecutionError> {

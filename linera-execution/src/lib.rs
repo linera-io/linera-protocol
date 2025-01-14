@@ -618,7 +618,7 @@ pub trait BaseRuntime {
         url: &str,
         headers: Vec<(String, Vec<u8>)>,
         payload: Vec<u8>,
-    ) -> Result<Vec<u8>, ExecutionError>;
+    ) -> Result<http::Response, ExecutionError>;
 
     /// Ensures that the current time at block validation is `< timestamp`. Note that block
     /// validation happens at or after the block timestamp, but isn't necessarily the same.
