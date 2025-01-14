@@ -408,11 +408,7 @@ where
             {
                 let value = Hashed::new(ValidatedBlock::new(executed_block.clone()));
                 if let Some(certificate) = lite_cert.clone().with_value(value) {
-                    self.locked.set(Some(certificate));
-                    self.locked_blobs.clear();
-                    for (blob_id, blob) in blobs {
-                        self.locked_blobs.insert(&blob_id, blob)?;
-                    }
+                    self.set_locked(certificate, blobs)?;
                 }
             }
         }
@@ -462,11 +458,7 @@ where
             return Ok(());
         }
         let confirmed_block = ConfirmedBlock::new(validated.inner().executed_block().clone());
-        self.locked.set(Some(validated));
-        self.locked_blobs.clear();
-        for (blob_id, blob) in blobs {
-            self.locked_blobs.insert(&blob_id, blob)?;
-        }
+        self.set_locked(validated, blobs)?;
         self.update_current_round(local_time);
         if let Some(key_pair) = key_pair {
             // Vote to confirm.
@@ -602,6 +594,20 @@ where
     /// Returns whether the owner is a super owner.
     fn is_super(&self, owner: &Owner) -> bool {
         self.ownership.get().super_owners.contains_key(owner)
+    }
+
+    /// Sets the locked block and the associated blobs.
+    fn set_locked(
+        &mut self,
+        certificate: ValidatedBlockCertificate,
+        blobs: BTreeMap<BlobId, Blob>,
+    ) -> Result<(), ViewError> {
+        self.locked.set(Some(certificate));
+        self.locked_blobs.clear();
+        for (blob_id, blob) in blobs {
+            self.locked_blobs.insert(&blob_id, blob)?;
+        }
+        Ok(())
     }
 }
 
