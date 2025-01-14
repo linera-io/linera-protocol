@@ -221,6 +221,7 @@ where
         let round_duration = ownership.round_timeout(current_round);
         let round_timeout = round_duration.map(|rd| local_time.saturating_add(rd));
 
+        self.clear();
         self.seed.set(height.0);
         self.ownership.set(ownership);
         self.distribution.set(distribution);
