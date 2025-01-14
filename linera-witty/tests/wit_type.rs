@@ -11,9 +11,9 @@ use std::{collections::BTreeMap, rc::Rc, sync::Arc};
 use linera_witty::{HList, Layout, RegisterWitTypes, WitType};
 
 use self::types::{
-    Branch, Enum, Leaf, RecordWithDoublePadding, SimpleWrapper, SpecializedGenericEnum,
-    SpecializedGenericStruct, StructWithHeapFields, StructWithLists, TupleWithPadding,
-    TupleWithoutPadding,
+    Branch, Enum, Leaf, RecordWithDoublePadding, SimpleWrapper, SliceWrapper,
+    SpecializedGenericEnum, SpecializedGenericStruct, StructWithHeapFields, StructWithLists,
+    TupleWithPadding, TupleWithoutPadding,
 };
 
 /// Checks the memory size, layout and WIT type declaration derived for a wrapper type.
@@ -210,6 +210,21 @@ fn test_heap_allocated_fields() {
     });
 }
 
+/// Checks the memory size, layout and WIT declaration derived for a slice type.
+#[test]
+fn test_slice() {
+    test_wit_type_implementation::<[SimpleWrapper]>(ExpectedMetadata {
+        size: 8,
+        alignment: 4,
+        flat_layout_length: 2,
+        declaration: concat!(
+            "    record simple-wrapper {\n",
+            "        inner0: bool,\n",
+            "    }\n"
+        ),
+    });
+}
+
 /// Checks the memory size, layout and WIT declaration derived for a [`Vec`] type.
 #[test]
 fn test_vec() {
@@ -225,27 +240,113 @@ fn test_vec() {
     });
 }
 
-/// Checks the memory size, layout and WIT declaration derived for a type that has list
-/// fields.
+/// Checks the memory size, layout and WIT declaration derived for a boxed slice type.
 #[test]
-fn test_list_fields() {
-    test_wit_type_implementation::<StructWithLists>(ExpectedMetadata {
-        size: 16,
+fn test_boxed_slice() {
+    test_wit_type_implementation::<Box<[TupleWithPadding]>>(ExpectedMetadata {
+        size: 8,
         alignment: 4,
-        flat_layout_length: 4,
+        flat_layout_length: 2,
         declaration: concat!(
-            "    record simple-wrapper {\n",
-            "        inner0: bool,\n",
-            "    }\n\n",
-            "    record struct-with-lists {\n",
-            "        vec: list<simple-wrapper>,\n",
-            "        second-vec: list<tuple-with-padding>,\n",
-            "    }\n\n",
             "    record tuple-with-padding {\n",
             "        inner0: u16,\n",
             "        inner1: u32,\n",
             "        inner2: s64,\n",
             "    }\n"
+        ),
+    });
+}
+
+/// Checks the memory size, layout and WIT declaration derived for an rc-ed slice type.
+#[test]
+fn test_rced_slice() {
+    test_wit_type_implementation::<Rc<[Leaf]>>(ExpectedMetadata {
+        size: 8,
+        alignment: 4,
+        flat_layout_length: 2,
+        declaration: concat!(
+            "    record leaf {\n",
+            "        first: bool,\n",
+            "        second: u128,\n",
+            "    }\n\n",
+            "    type u128 = tuple<u64, u64>;\n"
+        ),
+    });
+}
+
+/// Checks the memory size, layout and WIT declaration derived for an arc-ed slice type.
+#[test]
+fn test_arced_slice() {
+    test_wit_type_implementation::<Arc<[RecordWithDoublePadding]>>(ExpectedMetadata {
+        size: 8,
+        alignment: 4,
+        flat_layout_length: 2,
+        declaration: concat!(
+            "    record record-with-double-padding {\n",
+            "        first: u16,\n",
+            "        second: u32,\n",
+            "        third: s8,\n",
+            "        fourth: s64,\n",
+            "    }\n"
+        ),
+    });
+}
+
+/// Check the memory size, layout and WIT declaration derived for a type that has a slice
+/// field.
+#[test]
+fn test_slice_field() {
+    test_wit_type_implementation::<SliceWrapper>(ExpectedMetadata {
+        size: 8,
+        alignment: 4,
+        flat_layout_length: 2,
+        declaration: concat!(
+            "    record slice-wrapper {\n",
+            "        inner0: list<tuple-without-padding>,\n",
+            "    }\n\n",
+            "    record tuple-without-padding {\n",
+            "        inner0: u64,\n",
+            "        inner1: s32,\n",
+            "        inner2: s16,\n",
+            "    }\n"
+        ),
+    });
+}
+
+/// Checks the memory size, layout and WIT declaration derived for a type that has list
+/// fields.
+#[test]
+fn test_list_fields() {
+    test_wit_type_implementation::<StructWithLists>(ExpectedMetadata {
+        size: 32,
+        alignment: 4,
+        flat_layout_length: 8,
+        declaration: concat!(
+            "    record leaf {\n",
+            "        first: bool,\n",
+            "        second: u128,\n",
+            "    }\n\n",
+            "    record record-with-double-padding {\n",
+            "        first: u16,\n",
+            "        second: u32,\n",
+            "        third: s8,\n",
+            "        fourth: s64,\n",
+            "    }\n\n",
+            "    record simple-wrapper {\n",
+            "        inner0: bool,\n",
+            "    }\n\n",
+            "    record struct-with-lists {\n",
+            "        vec: list<simple-wrapper>,\n",
+            "        boxed-slice: list<tuple-with-padding>,\n",
+            "        rced-slice: list<leaf>,\n",
+            "        arced-slice: list<record-with-double-padding>,\n",
+            "    }\n\n",
+            "    record tuple-with-padding {\n",
+            "        inner0: u16,\n",
+            "        inner1: u32,\n",
+            "        inner2: s64,\n",
+            "    }\n\n",
+            "    type u128 = tuple<u64, u64>;\n"
         ),
     });
 }
@@ -263,9 +364,12 @@ struct ExpectedMetadata {
 /// their implementations.
 fn test_wit_type_implementation<T>(expected: ExpectedMetadata)
 where
-    T: WitType,
+    T: WitType + ?Sized + 'static,
+    Box<T>: WitType,
+    Rc<T>: WitType,
+    Arc<T>: WitType,
 {
-    test_single_wit_type_implementation::<T>(expected);
+    test_single_wit_type_implementation::<&'static T>(expected);
     test_single_wit_type_implementation::<Box<T>>(expected);
     test_single_wit_type_implementation::<Rc<T>>(expected);
     test_single_wit_type_implementation::<Arc<T>>(expected);
