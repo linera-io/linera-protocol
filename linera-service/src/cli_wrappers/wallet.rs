@@ -32,7 +32,7 @@ use serde::{de::DeserializeOwned, ser::Serialize};
 use serde_json::{json, Value};
 use tempfile::TempDir;
 use tokio::process::{Child, Command};
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 
 use crate::{
     cli_wrappers::{
@@ -99,53 +99,6 @@ impl ClientWrapper {
             path_provider,
             on_drop,
         }
-    }
-
-    /// Runs `linera wallet show --short --owned` to find the list of chain ids in the
-    /// wallet. Not async to be usable in `Drop`.
-    pub fn find_owned_chains(&self) -> Result<Vec<String>> {
-        let binary_path = self.binary_path.lock().unwrap();
-
-        let Some(binary_path) = binary_path.as_ref() else {
-            bail!(
-                "The command binary was never resolved. \
-                 Make sure that the client has been used once before."
-            );
-        };
-
-        let working_directory = self.path_provider.path();
-        let mut wallet_show_command = std::process::Command::new(binary_path);
-
-        for argument in self.command_arguments() {
-            wallet_show_command.arg(&*argument);
-        }
-
-        let Ok(wallet_show_output) = wallet_show_command
-            .current_dir(working_directory)
-            .args(["wallet", "show", "--short", "--owned"])
-            .output()
-        else {
-            bail!("Failed to execute `wallet show --short` to list chains in the wallet");
-        };
-
-        if !wallet_show_output.status.success() {
-            bail!("Failed to list chains in the wallet");
-        }
-
-        let Ok(chain_list_string) = String::from_utf8(wallet_show_output.stdout) else {
-            bail!(
-                "Failed to list chains because `linera wallet show --short` \
-                returned a non-UTF-8 output"
-            );
-        };
-
-        let chain_ids = chain_list_string
-            .split('\n')
-            .map(|line| line.trim().to_string())
-            .filter(|line| !line.is_empty())
-            .collect();
-
-        Ok(chain_ids)
     }
 
     /// Runs `linera project new`.
@@ -1005,23 +958,61 @@ impl ClientWrapper {
 
 impl Drop for ClientWrapper {
     fn drop(&mut self) {
+        use std::process::Command as SyncCommand;
+
         if self.on_drop != OnClientDrop::CloseChains {
             return;
         }
 
-        let chain_ids = match self.find_owned_chains() {
-            Ok(ids) => ids,
-            Err(err) => {
-                warn!("Not closing chains because an error occurred: {}", err);
-                return;
-            }
+        let Ok(binary_path) = self.binary_path.lock() else {
+            error!("Failed to close chains because a thread panicked with a lock to `binary_path`");
+            return;
         };
-        let binary_path = self.binary_path.lock().unwrap();
-        let binary_path = binary_path.as_ref().expect("Binary was used before");
+
+        let Some(binary_path) = binary_path.as_ref() else {
+            warn!(
+                "Assuming no chains need to be closed, because the command binary was never \
+                resolved and therefore presumably never called"
+            );
+            return;
+        };
+
         let working_directory = self.path_provider.path();
+        let mut wallet_show_command = SyncCommand::new(binary_path);
+
+        for argument in self.command_arguments() {
+            wallet_show_command.arg(&*argument);
+        }
+
+        let Ok(wallet_show_output) = wallet_show_command
+            .current_dir(working_directory)
+            .args(["wallet", "show", "--short", "--owned"])
+            .output()
+        else {
+            warn!("Failed to execute `wallet show --short` to list chains to close");
+            return;
+        };
+
+        if !wallet_show_output.status.success() {
+            warn!("Failed to list chains in the wallet to close them");
+            return;
+        }
+
+        let Ok(chain_list_string) = String::from_utf8(wallet_show_output.stdout) else {
+            warn!(
+                "Failed to close chains because `linera wallet show --short` \
+                returned a non-UTF-8 output"
+            );
+            return;
+        };
+
+        let chain_ids = chain_list_string
+            .split('\n')
+            .map(|line| line.trim())
+            .filter(|line| !line.is_empty());
 
         for chain_id in chain_ids {
-            let mut close_chain_command = std::process::Command::new(binary_path);
+            let mut close_chain_command = SyncCommand::new(binary_path);
 
             for argument in self.command_arguments() {
                 close_chain_command.arg(&*argument);
@@ -1029,10 +1020,7 @@ impl Drop for ClientWrapper {
 
             close_chain_command.current_dir(working_directory);
 
-            match close_chain_command
-                .args(["close-chain", &chain_id])
-                .status()
-            {
+            match close_chain_command.args(["close-chain", chain_id]).status() {
                 Ok(status) if status.success() => (),
                 Ok(failure) => warn!("Failed to close chain {chain_id}: {failure}"),
                 Err(error) => warn!("Failed to close chain {chain_id}: {error}"),

@@ -4,7 +4,7 @@
 use std::{num::NonZeroU16, str::FromStr};
 
 use colored::Colorize as _;
-use linera_base::{data_types::Amount, time::Duration};
+use linera_base::{data_types::Amount, identifiers::ChainId, time::Duration};
 use linera_client::storage::{StorageConfig, StorageConfigNamespace};
 use linera_execution::ResourceControlPolicy;
 use linera_service::{
@@ -320,16 +320,10 @@ async fn create_wallets_and_faucets(
 
     // Run the faucet,
     let faucet_service = if let Some(faucet_chain) = with_faucet_chain {
-        let chain_ids = client
-            .find_owned_chains()
-            .expect("Cannot retrieve chains from linera wallet");
-        let chain_id = chain_ids.get(faucet_chain as usize).expect(
-            "Was expecting a number `faucet_chain` in the range `0..=num_other_initial_chains`",
-        );
         let service = client
             .run_faucet(
                 Some(faucet_port.into()),
-                str::parse(chain_id)?,
+                ChainId::root(faucet_chain),
                 faucet_amount,
             )
             .await?;

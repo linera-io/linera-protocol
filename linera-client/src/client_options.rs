@@ -1054,7 +1054,7 @@ pub enum NetCommand {
         #[arg(long, default_value = "grpc")]
         external_protocol: String,
 
-        /// If present, a faucet is started using the given chain root nummber (0 for the
+        /// If present, a faucet is started using the given chain root number (0 for the
         /// admin chain, 1 for the first non-admin initial chain, etc).
         #[arg(long)]
         with_faucet_chain: Option<u32>,
