@@ -70,17 +70,24 @@
 
 use std::collections::BTreeMap;
 
+use async_graphql::SimpleObject;
 use custom_debug_derive::Debug;
 use futures::future::Either;
 use linera_base::{
     crypto::{KeyPair, PublicKey},
     data_types::{ArithmeticError, Blob, BlockHeight, Round, Timestamp},
-    doc_scalar, ensure,
+    ensure,
     hashed::Hashed,
     identifiers::{BlobId, ChainId, Owner},
     ownership::ChainOwnership,
 };
-use linera_execution::committee::Epoch;
+use linera_execution::{committee::Epoch, ExecutionRuntimeContext};
+use linera_views::{
+    context::Context,
+    map_view::MapView,
+    register_view::RegisterView,
+    views::{ClonableView, View, ViewError},
+};
 use rand_chacha::{rand_core::SeedableRng, ChaCha8Rng};
 use rand_distr::{Distribution, WeightedAliasIndex};
 use serde::{Deserialize, Serialize};
@@ -99,85 +106,75 @@ pub enum Outcome {
     Skip,
 }
 
+pub type ValidatedOrConfirmedVote<'a> = Either<&'a Vote<ValidatedBlock>, &'a Vote<ConfirmedBlock>>;
+
 /// The state of the certification process for a chain's next block.
-#[derive(Default, Clone, Debug, Serialize, Deserialize)]
-pub struct ChainManager {
+#[derive(Debug, View, ClonableView, SimpleObject)]
+pub struct ChainManager<C>
+where
+    C: Clone + Context + Send + Sync + 'static,
+{
     /// The public keys, weights and types of the chain's owners.
-    pub ownership: ChainOwnership,
+    pub ownership: RegisterView<C, ChainOwnership>,
     /// The seed for the pseudo-random number generator that determines the round leaders.
-    pub seed: u64,
+    pub seed: RegisterView<C, u64>,
     /// The probability distribution for choosing a round leader.
-    #[debug(skip_if = Option::is_none)]
-    pub distribution: Option<WeightedAliasIndex<u64>>,
+    #[graphql(skip)] // Derived from ownership.
+    pub distribution: RegisterView<C, Option<WeightedAliasIndex<u64>>>,
     /// The probability distribution for choosing a fallback round leader.
-    #[debug(skip_if = Option::is_none)]
-    pub fallback_distribution: Option<WeightedAliasIndex<u64>>,
+    #[graphql(skip)] // Derived from validator weights.
+    pub fallback_distribution: RegisterView<C, Option<WeightedAliasIndex<u64>>>,
     /// Highest-round authenticated block that we have received and checked. If there are multiple
     /// proposals in the same round, this contains only the first one.
-    #[debug(skip_if = Option::is_none)]
-    pub proposed: Option<BlockProposal>,
+    #[graphql(skip)]
+    pub proposed: RegisterView<C, Option<BlockProposal>>,
     /// Latest validated proposal that we have voted to confirm (or would have, if we are not a
     /// validator).
-    #[debug(skip_if = Option::is_none)]
-    pub locked: Option<ValidatedBlockCertificate>,
+    #[graphql(skip)]
+    pub locked: RegisterView<C, Option<ValidatedBlockCertificate>>,
     /// These are blobs published or read by the locked block.
-    #[debug(skip_if = BTreeMap::is_empty)]
-    pub locked_blobs: BTreeMap<BlobId, Blob>,
+    pub locked_blobs: MapView<C, BlobId, Blob>,
     /// Latest leader timeout certificate we have received.
-    #[debug(skip_if = Option::is_none)]
-    pub timeout: Option<TimeoutCertificate>,
+    #[graphql(skip)]
+    pub timeout: RegisterView<C, Option<TimeoutCertificate>>,
     /// Latest vote we cast to confirm a block.
-    #[debug(skip_if = Option::is_none)]
-    pub confirmed_vote: Option<Vote<ConfirmedBlock>>,
+    #[graphql(skip)]
+    pub confirmed_vote: RegisterView<C, Option<Vote<ConfirmedBlock>>>,
     /// Latest vote we cast to validate a block.
-    #[debug(skip_if = Option::is_none)]
-    pub validated_vote: Option<Vote<ValidatedBlock>>,
+    #[graphql(skip)]
+    pub validated_vote: RegisterView<C, Option<Vote<ValidatedBlock>>>,
     /// Latest timeout vote we cast.
-    #[debug(skip_if = Option::is_none)]
-    pub timeout_vote: Option<Vote<Timeout>>,
+    #[graphql(skip)]
+    pub timeout_vote: RegisterView<C, Option<Vote<Timeout>>>,
     /// Fallback vote we cast.
-    #[debug(skip_if = Option::is_none)]
-    pub fallback_vote: Option<Vote<Timeout>>,
+    #[graphql(skip)]
+    pub fallback_vote: RegisterView<C, Option<Vote<Timeout>>>,
     /// The time after which we are ready to sign a timeout certificate for the current round.
-    #[debug(skip_if = Option::is_none)]
-    pub round_timeout: Option<Timestamp>,
+    pub round_timeout: RegisterView<C, Option<Timestamp>>,
     /// The lowest round where we can still vote to validate or confirm a block. This is
     /// the round to which the timeout applies.
     ///
     /// Having a leader timeout certificate in any given round causes the next one to become
     /// current. Seeing a validated block certificate or a valid proposal in any round causes that
     /// round to become current, unless a higher one already is.
-    pub current_round: Round,
+    pub current_round: RegisterView<C, Round>,
     /// The owners that take over in fallback mode.
-    #[debug(skip_if = BTreeMap::is_empty)]
-    pub fallback_owners: BTreeMap<Owner, (PublicKey, u64)>,
+    pub fallback_owners: RegisterView<C, BTreeMap<Owner, (PublicKey, u64)>>,
 }
 
-doc_scalar!(
-    ChainManager,
-    "The state of the certification process for a chain's next block"
-);
-
-impl ChainManager {
+impl<C> ChainManager<C>
+where
+    C: Context + Clone + Send + Sync + 'static,
+    C::Extra: ExecutionRuntimeContext,
+{
     /// Replaces `self` with a new chain manager.
     pub fn reset<'a>(
         &mut self,
-        ownership: &ChainOwnership,
+        ownership: ChainOwnership,
         height: BlockHeight,
         local_time: Timestamp,
         fallback_owners: impl Iterator<Item = (PublicKey, u64)> + 'a,
     ) -> Result<(), ChainError> {
-        *self = ChainManager::new(ownership.clone(), height.0, local_time, fallback_owners)?;
-        Ok(())
-    }
-
-    /// Creates a new `ChainManager`, and starts the first round.
-    fn new<'a>(
-        ownership: ChainOwnership,
-        seed: u64,
-        local_time: Timestamp,
-        fallback_owners: impl Iterator<Item = (PublicKey, u64)> + 'a,
-    ) -> Result<Self, ChainError> {
         let distribution = if !ownership.owners.is_empty() {
             let weights = ownership
                 .owners
@@ -205,43 +202,34 @@ impl ChainManager {
         let round_duration = ownership.round_timeout(current_round);
         let round_timeout = round_duration.map(|rd| local_time.saturating_add(rd));
 
-        Ok(ChainManager {
-            ownership,
-            seed,
-            distribution,
-            fallback_distribution,
-            proposed: None,
-            locked: None,
-            timeout: None,
-            confirmed_vote: None,
-            validated_vote: None,
-            timeout_vote: None,
-            fallback_vote: None,
-            round_timeout,
-            current_round,
-            fallback_owners,
-            locked_blobs: BTreeMap::new(),
-        })
+        self.seed.set(height.0);
+        self.ownership.set(ownership);
+        self.distribution.set(distribution);
+        self.fallback_distribution.set(fallback_distribution);
+        self.fallback_owners.set(fallback_owners);
+        self.current_round.set(current_round);
+        self.round_timeout.set(round_timeout);
+        Ok(())
     }
 
     /// Returns the most recent confirmed vote we cast.
     pub fn confirmed_vote(&self) -> Option<&Vote<ConfirmedBlock>> {
-        self.confirmed_vote.as_ref()
+        self.confirmed_vote.get().as_ref()
     }
 
     /// Returns the most recent validated vote we cast.
     pub fn validated_vote(&self) -> Option<&Vote<ValidatedBlock>> {
-        self.validated_vote.as_ref()
+        self.validated_vote.get().as_ref()
     }
 
     /// Returns the most recent timeout vote we cast.
     pub fn timeout_vote(&self) -> Option<&Vote<Timeout>> {
-        self.timeout_vote.as_ref()
+        self.timeout_vote.get().as_ref()
     }
 
     /// Returns the most recent fallback vote we cast.
     pub fn fallback_vote(&self) -> Option<&Vote<Timeout>> {
-        self.fallback_vote.as_ref()
+        self.fallback_vote.get().as_ref()
     }
 
     /// Verifies the safety of a proposed block with respect to voting rules.
@@ -256,12 +244,13 @@ impl ChainManager {
             ChainError::InvalidBlockHeight
         );
         let expected_round = match &proposal.validated_block_certificate {
-            None => self.current_round,
+            None => *self.current_round.get(),
             Some(cert) => self
                 .ownership
+                .get()
                 .next_round(cert.round)
                 .ok_or_else(|| ChainError::ArithmeticError(ArithmeticError::Overflow))?
-                .max(self.current_round),
+                .max(*self.current_round.get()),
         };
         // In leader rotation mode, the round must equal the expected one exactly.
         // Only the first single-leader round can be entered at any time.
@@ -278,7 +267,7 @@ impl ChainManager {
                 ChainError::WrongRound(expected_round)
             );
         }
-        if let Some(old_proposal) = &self.proposed {
+        if let Some(old_proposal) = self.proposed.get() {
             if old_proposal.content == proposal.content {
                 return Ok(Outcome::Skip); // We already voted for this proposal; nothing to do.
             }
@@ -300,7 +289,7 @@ impl ChainManager {
         }
         // If we have a locked block, the proposal must contain a certificate that validates the
         // proposed block and is no older than the locked block.
-        if let Some(locked) = &self.locked {
+        if let Some(locked) = self.locked.get() {
             ensure!(
                 proposal
                     .validated_block_certificate
@@ -324,20 +313,21 @@ impl ChainManager {
         let Some(key_pair) = key_pair else {
             return false; // We are not a validator.
         };
-        let Some(round_timeout) = self.round_timeout else {
+        let Some(round_timeout) = *self.round_timeout.get() else {
             return false; // The current round does not time out.
         };
-        if local_time < round_timeout || self.ownership.owners.is_empty() {
+        if local_time < round_timeout || self.ownership.get().owners.is_empty() {
             return false; // Round has not timed out yet, or there are no regular owners.
         }
-        let current_round = self.current_round;
-        if let Some(vote) = &self.timeout_vote {
+        let current_round = *self.current_round.get();
+        if let Some(vote) = self.timeout_vote.get() {
             if vote.round == current_round {
                 return false; // We already signed this timeout.
             }
         }
         let value = Hashed::new(Timeout::new(chain_id, height, epoch));
-        self.timeout_vote = Some(Vote::new(value, current_round, key_pair));
+        self.timeout_vote
+            .set(Some(Vote::new(value, current_round, key_pair)));
         true
     }
 
@@ -355,12 +345,13 @@ impl ChainManager {
         let Some(key_pair) = key_pair else {
             return false; // We are not a validator.
         };
-        if self.fallback_vote.is_some() || self.current_round >= Round::Validator(0) {
+        if self.fallback_vote.get().is_some() || *self.current_round.get() >= Round::Validator(0) {
             return false; // We already signed this or are already in fallback mode.
         }
         let value = Hashed::new(Timeout::new(chain_id, height, epoch));
         let last_regular_round = Round::SingleLeader(u32::MAX);
-        self.fallback_vote = Some(Vote::new(value, last_regular_round, key_pair));
+        self.fallback_vote
+            .set(Some(Vote::new(value, last_regular_round, key_pair)));
         true
     }
 
@@ -371,20 +362,20 @@ impl ChainManager {
     ) -> Result<Outcome, ChainError> {
         let new_block = &certificate.executed_block().block;
         let new_round = certificate.round;
-        if let Some(Vote { value, round, .. }) = &self.confirmed_vote {
+        if let Some(Vote { value, round, .. }) = self.confirmed_vote.get() {
             if value.inner().executed_block().block == *new_block && *round == new_round {
                 return Ok(Outcome::Skip); // We already voted to confirm this block.
             }
         }
 
-        if let Some(Vote { round, .. }) = &self.validated_vote {
+        if let Some(Vote { round, .. }) = self.validated_vote.get() {
             ensure!(new_round >= *round, ChainError::InsufficientRound(*round))
         }
 
         // We don't compare to `current_round` here: Non-validators must update their locked block
         // even if it is older than the current round. Validators will only sign in the current
         // round, though. (See `create_final_vote` below.)
-        if let Some(locked) = &self.locked {
+        if let Some(locked) = self.locked.get() {
             if locked.hash() == certificate.hash() && locked.round == certificate.round {
                 return Ok(Outcome::Skip);
             }
@@ -404,47 +395,55 @@ impl ChainManager {
         key_pair: Option<&KeyPair>,
         local_time: Timestamp,
         blobs: BTreeMap<BlobId, Blob>,
-    ) -> Option<Either<&Vote<ValidatedBlock>, &Vote<ConfirmedBlock>>> {
+    ) -> Result<Option<ValidatedOrConfirmedVote>, ViewError> {
         let round = proposal.content.round;
 
         // If the validated block certificate is more recent, update our locked block.
         if let Some(lite_cert) = &proposal.validated_block_certificate {
             if self
                 .locked
+                .get()
                 .as_ref()
                 .map_or(true, |locked| locked.round < lite_cert.round)
             {
                 let value = Hashed::new(ValidatedBlock::new(executed_block.clone()));
                 if let Some(certificate) = lite_cert.clone().with_value(value) {
-                    self.locked = Some(certificate);
-                    self.locked_blobs = blobs;
+                    self.locked.set(Some(certificate));
+                    self.locked_blobs.clear();
+                    for (blob_id, blob) in blobs {
+                        self.locked_blobs.insert(&blob_id, blob)?;
+                    }
                 }
             }
         }
 
         // Record the proposed block, so it can be supplied to clients that request it.
-        self.proposed = Some(proposal);
+        self.proposed.set(Some(proposal));
         self.update_current_round(local_time);
 
         if let Some(key_pair) = key_pair {
             // If this is a fast block, vote to confirm. Otherwise vote to validate.
             if round.is_fast() {
-                self.validated_vote = None;
-                Some(Either::Right(self.confirmed_vote.insert(Vote::new(
-                    Hashed::new(ConfirmedBlock::new(executed_block)),
-                    round,
-                    key_pair,
+                self.validated_vote.set(None);
+                Ok(Some(Either::Right(self.confirmed_vote.get_mut().insert(
+                    Vote::new(
+                        Hashed::new(ConfirmedBlock::new(executed_block)),
+                        round,
+                        key_pair,
+                    ),
                 ))))
             } else {
-                self.confirmed_vote = None;
-                Some(Either::Left(&*self.validated_vote.insert(Vote::new(
-                    Hashed::new(ValidatedBlock::new(executed_block)),
-                    round,
-                    key_pair,
+                self.confirmed_vote.set(None);
+                Ok(Some(Either::Left(&*self.validated_vote.get_mut().insert(
+                    Vote::new(
+                        Hashed::new(ValidatedBlock::new(executed_block)),
+                        round,
+                        key_pair,
+                    ),
                 ))))
             }
         } else {
-            None
+            Ok(None)
         }
     }
 
@@ -455,24 +454,28 @@ impl ChainManager {
         key_pair: Option<&KeyPair>,
         local_time: Timestamp,
         blobs: BTreeMap<BlobId, Blob>,
-    ) {
+    ) -> Result<(), ViewError> {
         let round = validated.round;
         // Validators only change their locked block if the new one is included in a proposal in the
         // current round, or it is itself in the current round.
-        if key_pair.is_some() && round < self.current_round {
-            return;
+        if key_pair.is_some() && round < *self.current_round.get() {
+            return Ok(());
         }
         let confirmed_block = ConfirmedBlock::new(validated.inner().executed_block().clone());
-        self.locked = Some(validated);
-        self.locked_blobs = blobs;
+        self.locked.set(Some(validated));
+        self.locked_blobs.clear();
+        for (blob_id, blob) in blobs {
+            self.locked_blobs.insert(&blob_id, blob)?;
+        }
         self.update_current_round(local_time);
         if let Some(key_pair) = key_pair {
             // Vote to confirm.
             let vote = Vote::new(Hashed::new(confirmed_block), round, key_pair);
             // Ok to overwrite validation votes with confirmation votes at equal or higher round.
-            self.confirmed_vote = Some(vote);
-            self.validated_vote = None;
+            self.confirmed_vote.set(Some(vote));
+            self.validated_vote.set(None);
         }
+        Ok(())
     }
 
     /// Updates `current_round` and `round_timeout` if necessary.
@@ -481,23 +484,36 @@ impl ChainManager {
     fn update_current_round(&mut self, local_time: Timestamp) {
         let current_round = self
             .timeout
+            .get()
             .iter()
             .map(|certificate| {
                 self.ownership
+                    .get()
                     .next_round(certificate.round)
                     .unwrap_or(Round::Validator(u32::MAX))
             })
-            .chain(self.locked.iter().map(|certificate| certificate.round))
-            .chain(self.proposed.iter().map(|proposal| proposal.content.round))
+            .chain(
+                self.locked
+                    .get()
+                    .iter()
+                    .map(|certificate| certificate.round),
+            )
+            .chain(
+                self.proposed
+                    .get()
+                    .iter()
+                    .map(|proposal| proposal.content.round),
+            )
             .max()
             .unwrap_or_default()
-            .max(self.ownership.first_round());
-        if current_round <= self.current_round {
+            .max(self.ownership.get().first_round());
+        if current_round <= *self.current_round.get() {
             return;
         }
-        let round_duration = self.ownership.round_timeout(current_round);
-        self.round_timeout = round_duration.map(|rd| local_time.saturating_add(rd));
-        self.current_round = current_round;
+        let round_duration = self.ownership.get().round_timeout(current_round);
+        self.round_timeout
+            .set(round_duration.map(|rd| local_time.saturating_add(rd)));
+        self.current_round.set(current_round);
     }
 
     /// Updates the round number and timer if the timeout certificate is from a higher round than
@@ -508,19 +524,19 @@ impl ChainManager {
         local_time: Timestamp,
     ) {
         let round = certificate.round;
-        if let Some(known_certificate) = &self.timeout {
+        if let Some(known_certificate) = self.timeout.get() {
             if known_certificate.round >= round {
                 return;
             }
         }
-        self.timeout = Some(certificate);
+        self.timeout.set(Some(certificate));
         self.update_current_round(local_time);
     }
 
     /// Returns the public key of the block proposal's signer, if they are a valid owner and allowed
     /// to propose a block in the proposal's round.
     pub fn verify_owner(&self, proposal: &BlockProposal) -> Option<PublicKey> {
-        if let Some(public_key) = self.ownership.super_owners.get(&proposal.owner) {
+        if let Some(public_key) = self.ownership.get().super_owners.get(&proposal.owner) {
             return Some(*public_key);
         }
         match proposal.content.round {
@@ -530,18 +546,19 @@ impl ChainManager {
             Round::MultiLeader(_) => {
                 // Not in leader rotation mode; any owner is allowed to propose.
                 self.ownership
+                    .get()
                     .owners
                     .get(&proposal.owner)
                     .map(|(public_key, _)| *public_key)
             }
             Round::SingleLeader(r) => {
                 let index = self.round_leader_index(r)?;
-                let (leader, (public_key, _)) = self.ownership.owners.iter().nth(index)?;
+                let (leader, (public_key, _)) = self.ownership.get().owners.iter().nth(index)?;
                 (*leader == proposal.owner).then_some(*public_key)
             }
             Round::Validator(r) => {
                 let index = self.fallback_round_leader_index(r)?;
-                let (leader, (public_key, _)) = self.fallback_owners.iter().nth(index)?;
+                let (leader, (public_key, _)) = self.fallback_owners.get().iter().nth(index)?;
                 (*leader == proposal.owner).then_some(*public_key)
             }
         }
@@ -553,11 +570,11 @@ impl ChainManager {
         match round {
             Round::SingleLeader(r) => {
                 let index = self.round_leader_index(r)?;
-                self.ownership.owners.keys().nth(index)
+                self.ownership.get().owners.keys().nth(index)
             }
             Round::Validator(r) => {
                 let index = self.fallback_round_leader_index(r)?;
-                self.fallback_owners.keys().nth(index)
+                self.fallback_owners.get().keys().nth(index)
             }
             Round::Fast | Round::MultiLeader(_) => None,
         }
@@ -565,22 +582,26 @@ impl ChainManager {
 
     /// Returns the index of the leader who is allowed to propose a block in the given round.
     fn round_leader_index(&self, round: u32) -> Option<usize> {
-        let seed = u64::from(round).rotate_left(32).wrapping_add(self.seed);
+        let seed = u64::from(round)
+            .rotate_left(32)
+            .wrapping_add(*self.seed.get());
         let mut rng = ChaCha8Rng::seed_from_u64(seed);
-        Some(self.distribution.as_ref()?.sample(&mut rng))
+        Some(self.distribution.get().as_ref()?.sample(&mut rng))
     }
 
     /// Returns the index of the fallback leader who is allowed to propose a block in the given
     /// round.
     fn fallback_round_leader_index(&self, round: u32) -> Option<usize> {
-        let seed = u64::from(round).rotate_left(32).wrapping_add(self.seed);
+        let seed = u64::from(round)
+            .rotate_left(32)
+            .wrapping_add(*self.seed.get());
         let mut rng = ChaCha8Rng::seed_from_u64(seed);
-        Some(self.fallback_distribution.as_ref()?.sample(&mut rng))
+        Some(self.fallback_distribution.get().as_ref()?.sample(&mut rng))
     }
 
     /// Returns whether the owner is a super owner.
     fn is_super(&self, owner: &Owner) -> bool {
-        self.ownership.super_owners.contains_key(owner)
+        self.ownership.get().super_owners.contains_key(owner)
     }
 }
 
@@ -626,42 +647,59 @@ pub struct ChainManagerInfo {
     pub round_timeout: Option<Timestamp>,
 }
 
-impl From<&ChainManager> for ChainManagerInfo {
-    fn from(manager: &ChainManager) -> Self {
-        let current_round = manager.current_round;
+impl<C> From<&ChainManager<C>> for ChainManagerInfo
+where
+    C: Context + Clone + Send + Sync + 'static,
+    C::Extra: ExecutionRuntimeContext,
+{
+    fn from(manager: &ChainManager<C>) -> Self {
+        let current_round = *manager.current_round.get();
         let pending = manager
             .confirmed_vote
+            .get()
             .as_ref()
             .map(|vote| vote.lite())
-            .or_else(move || manager.validated_vote.as_ref().map(|vote| vote.lite()));
+            .or_else(move || {
+                manager
+                    .validated_vote
+                    .get()
+                    .as_ref()
+                    .map(|vote| vote.lite())
+            });
         ChainManagerInfo {
-            ownership: manager.ownership.clone(),
+            ownership: manager.ownership.get().clone(),
             requested_proposed: None,
             requested_locked: None,
-            timeout: manager.timeout.clone().map(Box::new),
+            timeout: manager.timeout.get().clone().map(Box::new),
             pending,
-            timeout_vote: manager.timeout_vote.as_ref().map(Vote::lite),
-            fallback_vote: manager.fallback_vote.as_ref().map(Vote::lite),
+            timeout_vote: manager.timeout_vote.get().as_ref().map(Vote::lite),
+            fallback_vote: manager.fallback_vote.get().as_ref().map(Vote::lite),
             requested_confirmed: None,
             requested_validated: None,
             current_round,
             leader: manager.round_leader(current_round).cloned(),
-            round_timeout: manager.round_timeout,
+            round_timeout: *manager.round_timeout.get(),
         }
     }
 }
 
 impl ChainManagerInfo {
     /// Adds requested certificate values and proposals to the `ChainManagerInfo`.
-    pub fn add_values(&mut self, manager: &ChainManager) {
-        self.requested_proposed = manager.proposed.clone().map(Box::new);
-        self.requested_locked = manager.locked.clone().map(Box::new);
+    pub fn add_values<C>(&mut self, manager: &ChainManager<C>)
+    where
+        C: Context + Clone + Send + Sync + 'static,
+        C::Extra: ExecutionRuntimeContext,
+    {
+        self.requested_proposed = manager.proposed.get().clone().map(Box::new);
+        self.requested_locked = manager.locked.get().clone().map(Box::new);
         self.requested_confirmed = manager
             .confirmed_vote
+            .get()
             .as_ref()
             .map(|vote| Box::new(vote.value.clone()));
         self.requested_validated = manager
             .validated_vote
+            .get()
             .as_ref()
             .map(|vote| Box::new(vote.value.clone()));
     }

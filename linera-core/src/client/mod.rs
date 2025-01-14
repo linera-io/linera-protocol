@@ -1955,12 +1955,7 @@ where
 
             let maybe_blob = {
                 let chain_state_view = self.chain_state_view().await?;
-                chain_state_view
-                    .manager
-                    .get()
-                    .locked_blobs
-                    .get(&blob_id)
-                    .cloned()
+                chain_state_view.manager.locked_blobs.get(&blob_id).await?
             };
 
             if let Some(blob) = maybe_blob {

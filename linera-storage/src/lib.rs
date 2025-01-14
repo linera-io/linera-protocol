@@ -208,8 +208,8 @@ pub trait Storage: Sized {
         let id = description.into();
         let mut chain = self.load_chain(id).await?;
         assert!(!chain.is_active(), "Attempting to create a chain twice");
-        chain.manager.get_mut().reset(
-            &ChainOwnership::single(public_key),
+        chain.manager.reset(
+            ChainOwnership::single(public_key),
             BlockHeight(0),
             self.clock().current_time(),
             committee.keys_and_weights(),

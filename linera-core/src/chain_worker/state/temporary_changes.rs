@@ -191,7 +191,6 @@ where
             .0
             .chain
             .manager
-            .get()
             .verify_owner(proposal)
             .ok_or(WorkerError::InvalidOwner)?;
         proposal.check_signature(public_key)?;
@@ -205,7 +204,7 @@ where
         // Check if the chain is ready for this new block proposal.
         // This should always pass for nodes without voting key.
         self.0.chain.tip_state.get().verify_block_chaining(block)?;
-        if self.0.chain.manager.get().check_proposed_block(proposal)? == manager::Outcome::Skip {
+        if self.0.chain.manager.check_proposed_block(proposal)? == manager::Outcome::Skip {
             return Ok(None);
         }
         // Update the inboxes so that we can verify the provided hashed certificate values are
@@ -340,7 +339,7 @@ where
             info.requested_received_log = chain.received_log.read(start..).await?;
         }
         if query.request_manager_values {
-            info.manager.add_values(chain.manager.get());
+            info.manager.add_values(&chain.manager);
         }
         Ok(ChainInfoResponse::new(info, self.0.config.key_pair()))
     }

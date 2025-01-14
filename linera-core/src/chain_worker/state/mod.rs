@@ -296,13 +296,16 @@ where
 
     /// Returns the requested blob, if it belongs to the current locked block or pending proposal.
     pub(super) async fn download_pending_blob(&self, blob_id: BlobId) -> Result<Blob, WorkerError> {
-        let manager = self.chain.manager.get();
+        let manager = &self.chain.manager;
+        if let Some(proposal) = manager.proposed.get() {
+            if let Some(blob) = proposal.blobs.iter().find(|blob| blob.id() == blob_id) {
+                return Ok(blob.clone());
+            }
+        }
         manager
-            .proposed
-            .as_ref()
-            .and_then(|proposal| proposal.blobs.iter().find(|blob| blob.id() == blob_id))
-            .or_else(|| manager.locked_blobs.get(&blob_id))
-            .cloned()
+            .locked_blobs
+            .get(&blob_id)
+            .await?
             .ok_or_else(|| WorkerError::BlobsNotFound(vec![blob_id]))
     }
 
@@ -341,12 +344,13 @@ where
         blobs: &[Blob],
     ) -> Result<BTreeMap<BlobId, Blob>, WorkerError> {
         let mut blob_ids = executed_block.required_blob_ids();
-        let manager = self.chain.manager.get();
+        let manager = &self.chain.manager;
 
         let mut found_blobs = BTreeMap::new();
 
         for blob in manager
             .proposed
+            .get()
             .iter()
             .flat_map(|proposal| &proposal.blobs)
             .chain(blobs)
@@ -355,15 +359,14 @@ where
                 found_blobs.insert(blob.id(), blob.clone());
             }
         }
-        blob_ids.retain(|blob_id| {
-            if let Some(blob) = manager.locked_blobs.get(blob_id) {
-                found_blobs.insert(*blob_id, blob.clone());
-                false
+        let mut missing_blob_ids = Vec::new();
+        for blob_id in blob_ids {
+            if let Some(blob) = manager.locked_blobs.get(&blob_id).await? {
+                found_blobs.insert(blob_id, blob);
             } else {
-                true
+                missing_blob_ids.push(blob_id);
             }
-        });
-        let missing_blob_ids = blob_ids.into_iter().collect::<Vec<_>>();
+        }
         let blobs_from_storage = self.storage.read_blobs(&missing_blob_ids).await?;
         let mut not_found_blob_ids = Vec::new();
         for (blob_id, maybe_blob) in missing_blob_ids.into_iter().zip(blobs_from_storage) {

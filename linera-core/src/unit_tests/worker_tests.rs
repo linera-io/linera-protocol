@@ -454,8 +454,8 @@ where
     );
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
-    assert!(chain.manager.get().confirmed_vote().is_none());
-    assert!(chain.manager.get().validated_vote().is_none());
+    assert!(chain.manager.confirmed_vote().is_none());
+    assert!(chain.manager.validated_vote().is_none());
     Ok(())
 }
 
@@ -504,8 +504,8 @@ where
     );
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
-    assert!(chain.manager.get().confirmed_vote().is_none());
-    assert!(chain.manager.get().validated_vote().is_none());
+    assert!(chain.manager.confirmed_vote().is_none());
+    assert!(chain.manager.validated_vote().is_none());
     Ok(())
 }
 
@@ -617,8 +617,8 @@ where
     );
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
-    assert!(chain.manager.get().confirmed_vote().is_none());
-    assert!(chain.manager.get().validated_vote().is_none());
+    assert!(chain.manager.confirmed_vote().is_none());
+    assert!(chain.manager.validated_vote().is_none());
     Ok(())
 }
 
@@ -672,8 +672,8 @@ where
     );
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
-    assert!(chain.manager.get().confirmed_vote().is_none());
-    assert!(chain.manager.get().validated_vote().is_none());
+    assert!(chain.manager.confirmed_vote().is_none());
+    assert!(chain.manager.validated_vote().is_none());
 
     drop(chain);
     worker
@@ -684,7 +684,6 @@ where
     assert_eq!(
         &chain
             .manager
-            .get()
             .validated_vote()
             .unwrap()
             .value()
@@ -693,17 +692,11 @@ where
             .block,
         &block_proposal0.content.block
     ); // Multi-leader round - it's not confirmed yet.
-    assert!(chain.manager.get().confirmed_vote().is_none());
+    assert!(chain.manager.confirmed_vote().is_none());
     let block_certificate0 = make_certificate(
         &committee,
         &worker,
-        chain
-            .manager
-            .get()
-            .validated_vote()
-            .unwrap()
-            .value()
-            .clone(),
+        chain.manager.validated_vote().unwrap().value().clone(),
     );
     drop(chain);
 
@@ -715,7 +708,6 @@ where
     assert_eq!(
         &chain
             .manager
-            .get()
             .confirmed_vote()
             .unwrap()
             .value()
@@ -724,7 +716,7 @@ where
             .block,
         &block_proposal0.content.block
     ); // Should be confirmed after handling the certificate.
-    assert!(chain.manager.get().validated_vote().is_none());
+    assert!(chain.manager.validated_vote().is_none());
     drop(chain);
 
     worker
@@ -742,7 +734,6 @@ where
     assert_eq!(
         &chain
             .manager
-            .get()
             .validated_vote()
             .unwrap()
             .value()
@@ -751,7 +742,7 @@ where
             .block,
         &block_proposal1.content.block
     );
-    assert!(chain.manager.get().confirmed_vote().is_none());
+    assert!(chain.manager.confirmed_vote().is_none());
     drop(chain);
     assert_matches!(
         worker.handle_block_proposal(block_proposal0).await,
@@ -1166,8 +1157,8 @@ where
     );
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
-    assert!(chain.manager.get().confirmed_vote().is_none());
-    assert!(chain.manager.get().validated_vote().is_none());
+    assert!(chain.manager.confirmed_vote().is_none());
+    assert!(chain.manager.validated_vote().is_none());
     Ok(())
 }
 
@@ -1199,18 +1190,12 @@ where
     chain_info_response.check(&ValidatorName(worker.public_key()))?;
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
-    assert!(chain.manager.get().confirmed_vote().is_none()); // It was a multi-leader
-                                                             // round.
+    assert!(chain.manager.confirmed_vote().is_none()); // It was a multi-leader
+                                                       // round.
     let validated_certificate = make_certificate(
         &committee,
         &worker,
-        chain
-            .manager
-            .get()
-            .validated_vote()
-            .unwrap()
-            .value()
-            .clone(),
+        chain.manager.validated_vote().unwrap().value().clone(),
     );
     drop(chain);
 
@@ -1220,8 +1205,8 @@ where
     chain_info_response.check(&ValidatorName(worker.public_key()))?;
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
-    assert!(chain.manager.get().validated_vote().is_none()); // Should be confirmed by now.
-    let pending_vote = chain.manager.get().confirmed_vote().unwrap().lite();
+    assert!(chain.manager.validated_vote().is_none()); // Should be confirmed by now.
+    let pending_vote = chain.manager.confirmed_vote().unwrap().lite();
     assert_eq!(
         chain_info_response.info.manager.pending.unwrap(),
         pending_vote
@@ -2017,7 +2002,7 @@ where
             *recipient_chain.execution_state.system.balance.get(),
             Amount::from_tokens(4)
         );
-        let ownership = &recipient_chain.manager.get().ownership;
+        let ownership = &recipient_chain.manager.ownership.get();
         assert!(
             ownership
                 .owners
