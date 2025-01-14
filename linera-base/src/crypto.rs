@@ -43,7 +43,7 @@ pub struct CryptoHash(HasherOutput);
 
 /// A vector of cryptographic hashes.
 /// This is used to represent a hash of a list of hashes.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Serialize, Deserialize)]
 #[cfg_attr(with_testing, derive(Default))]
 pub struct CryptoHashVec(pub Vec<CryptoHash>);
 
@@ -177,29 +177,6 @@ impl Serialize for CryptoHash {
         } else {
             serializer.serialize_newtype_struct("CryptoHash", &self.0)
         }
-    }
-}
-
-impl Serialize for CryptoHashVec {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::ser::Serializer,
-    {
-        serializer.serialize_newtype_struct("CryptoHashVec", &self.0)
-    }
-}
-
-impl<'de> Deserialize<'de> for CryptoHashVec {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::de::Deserializer<'de>,
-    {
-        #[derive(Deserialize)]
-        #[serde(rename = "CryptoHashVec")]
-        struct Foo(Vec<HasherOutput>);
-
-        let value = Foo::deserialize(deserializer)?;
-        Ok(Self(value.0.into_iter().map(CryptoHash).collect()))
     }
 }
 
