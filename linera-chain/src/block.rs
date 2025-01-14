@@ -208,8 +208,9 @@ pub enum ConversionError {
 }
 
 /// Block defines the atomic unit of growth of the Linera chain.
+///
 /// As part of the block body, contains all the incoming messages
-/// and operations to executed which define state transition of the chain.
+/// and operations to execute which define state transition of the chain.
 /// Resulting messages produced by the operations are also included in the block body,
 /// together with oracle responses and events.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, SimpleObject)]
