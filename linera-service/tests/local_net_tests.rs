@@ -29,6 +29,8 @@ use linera_service::{
     test_name,
 };
 use test_case::test_case;
+#[cfg(feature = "storage-service")]
+use {linera_base::port::get_free_port, linera_service::cli_wrappers::Faucet};
 
 #[cfg(feature = "benchmark")]
 fn get_fungible_account_owner(client: &ClientWrapper) -> AccountOwner {
@@ -732,8 +734,17 @@ async fn test_storage_service_linera_net_up_simple() -> Result<()> {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
+    let port = get_free_port().await?;
+
     let mut command = Command::new(env!("CARGO_BIN_EXE_linera"));
-    command.args(["net", "up"]);
+    command.args([
+        "net",
+        "up",
+        "--with-faucet-chain",
+        "1",
+        "--faucet-port",
+        &port.to_string(),
+    ]);
     let mut child = command
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -741,32 +752,49 @@ async fn test_storage_service_linera_net_up_simple() -> Result<()> {
 
     let stdout = BufReader::new(child.stdout.take().unwrap());
     let stderr = BufReader::new(child.stderr.take().unwrap());
+    let mut lines = stderr.lines();
 
-    for line in stderr.lines() {
+    let mut is_ready = false;
+    for line in &mut lines {
         let line = line?;
         if line.starts_with("READY!") {
-            let mut exports = stdout.lines();
-            assert!(exports
-                .next()
-                .unwrap()?
-                .starts_with("export LINERA_WALLET="));
-            assert!(exports
-                .next()
-                .unwrap()?
-                .starts_with("export LINERA_STORAGE="));
-            assert_eq!(exports.next().unwrap()?, "");
-
-            // Send SIGINT to the child process.
-            Command::new("kill")
-                .args(["-s", "INT", &child.id().to_string()])
-                .output()?;
-
-            assert!(exports.next().is_none());
-            assert!(child.wait()?.success());
-            return Ok(());
+            is_ready = true;
+            break;
         }
     }
-    panic!("Unexpected EOF for stderr");
+    assert!(is_ready, "Unexpected EOF for stderr");
+
+    // Echo faucet stderr for debugging and to empty the buffer.
+    std::thread::spawn(move || {
+        for line in lines {
+            let line = line.unwrap();
+            eprintln!("{}", line);
+        }
+    });
+
+    let mut exports = stdout.lines();
+    assert!(exports
+        .next()
+        .unwrap()?
+        .starts_with("export LINERA_WALLET="));
+    assert!(exports
+        .next()
+        .unwrap()?
+        .starts_with("export LINERA_STORAGE="));
+    assert_eq!(exports.next().unwrap()?, "");
+
+    // Test faucet.
+    let faucet = Faucet::new(format!("http://localhost:{}/", port));
+    faucet.version_info().await.unwrap();
+
+    // Send SIGINT to the child process.
+    Command::new("kill")
+        .args(["-s", "INT", &child.id().to_string()])
+        .output()?;
+
+    assert!(exports.next().is_none());
+    assert!(child.wait()?.success());
+    return Ok(());
 }
 
 #[cfg(feature = "benchmark")]

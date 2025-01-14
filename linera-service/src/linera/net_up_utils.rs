@@ -1,16 +1,17 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::str::FromStr;
+use std::{num::NonZeroU16, str::FromStr};
 
 use colored::Colorize as _;
-use linera_base::{data_types::Amount, time::Duration};
+use linera_base::{data_types::Amount, identifiers::ChainId, time::Duration};
 use linera_client::storage::{StorageConfig, StorageConfigNamespace};
 use linera_execution::ResourceControlPolicy;
 use linera_service::{
     cli_wrappers::{
         local_net::{Database, LocalNetConfig, PathProvider, StorageConfigBuilder},
-        ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network, NetworkConfig,
+        ClientWrapper, FaucetOption, FaucetService, LineraNet, LineraNetConfig, Network,
+        NetworkConfig,
     },
     util::listen_for_shutdown_signals,
 };
@@ -113,6 +114,9 @@ pub async fn handle_net_up_kubernetes(
     no_build: bool,
     docker_image_name: String,
     policy: ResourceControlPolicy,
+    with_faucet_chain: Option<u32>,
+    faucet_port: NonZeroU16,
+    faucet_amount: Amount,
 ) -> anyhow::Result<()> {
     if num_initial_validators < 1 {
         panic!("The local test network must have at least one validator.");
@@ -136,9 +140,17 @@ pub async fn handle_net_up_kubernetes(
         docker_image_name,
         policy,
     };
-    let (mut net, client1) = config.instantiate().await?;
-    net_up(extra_wallets, &mut net, client1).await?;
-    wait_for_shutdown(shutdown_notifier, &mut net).await
+    let (mut net, client) = config.instantiate().await?;
+    let faucet_service = create_wallets_and_faucets(
+        extra_wallets,
+        &mut net,
+        client,
+        with_faucet_chain,
+        faucet_port,
+        faucet_amount,
+    )
+    .await?;
+    wait_for_shutdown(shutdown_notifier, &mut net, faucet_service).await
 }
 
 #[expect(clippy::too_many_arguments)]
@@ -153,6 +165,9 @@ pub async fn handle_net_up_service(
     path: &Option<String>,
     storage: &Option<String>,
     external_protocol: String,
+    with_faucet_chain: Option<u32>,
+    faucet_port: NonZeroU16,
+    faucet_amount: Amount,
 ) -> anyhow::Result<()> {
     if num_initial_validators < 1 {
         panic!("The local test network must have at least one validator.");
@@ -190,29 +205,46 @@ pub async fn handle_net_up_service(
         storage_config_builder,
         path_provider,
     };
-    let (mut net, client1) = config.instantiate().await?;
-    net_up(extra_wallets, &mut net, client1).await?;
-    wait_for_shutdown(shutdown_notifier, &mut net).await
+    let (mut net, client) = config.instantiate().await?;
+    let faucet_service = create_wallets_and_faucets(
+        extra_wallets,
+        &mut net,
+        client,
+        with_faucet_chain,
+        faucet_port,
+        faucet_amount,
+    )
+    .await?;
+    wait_for_shutdown(shutdown_notifier, &mut net, faucet_service).await
 }
 
 async fn wait_for_shutdown(
     shutdown_notifier: CancellationToken,
     net: &mut impl LineraNet,
+    faucet_service: Option<FaucetService>,
 ) -> anyhow::Result<()> {
     shutdown_notifier.cancelled().await;
-    eprintln!("\nTerminating the local test network");
+    eprintln!();
+    if let Some(service) = faucet_service {
+        eprintln!("Terminating the faucet service");
+        service.terminate().await?;
+    }
+    eprintln!("Terminating the local test network");
     net.terminate().await?;
-    eprintln!("\nDone.");
+    eprintln!("Done.");
 
     Ok(())
 }
 
-async fn net_up(
+async fn create_wallets_and_faucets(
     extra_wallets: Option<usize>,
     net: &mut impl LineraNet,
-    client1: ClientWrapper,
-) -> Result<(), anyhow::Error> {
-    let default_chain = client1
+    client: ClientWrapper,
+    with_faucet_chain: Option<u32>,
+    faucet_port: NonZeroU16,
+    faucet_amount: Amount,
+) -> Result<Option<FaucetService>, anyhow::Error> {
+    let default_chain = client
         .default_chain()
         .expect("Initialized clients should always have a default chain");
 
@@ -241,7 +273,7 @@ async fn net_up(
         "{}",
         format!(
             "export LINERA_WALLET{suffix}=\"{}\"",
-            client1.wallet_path().display()
+            client.wallet_path().display()
         )
         .bold()
     );
@@ -249,7 +281,7 @@ async fn net_up(
         "{}",
         format!(
             "export LINERA_STORAGE{suffix}=\"{}\"\n",
-            client1.storage_path()
+            client.storage_path()
         )
         .bold()
     );
@@ -260,7 +292,7 @@ async fn net_up(
             let extra_wallet = net.make_client().await;
             extra_wallet.wallet_init(&[], FaucetOption::None).await?;
             let unassigned_key = extra_wallet.keygen().await?;
-            let new_chain_msg_id = client1
+            let new_chain_msg_id = client
                 .open_chain(default_chain, Some(unassigned_key), Amount::ZERO)
                 .await?
                 .0;
@@ -286,9 +318,23 @@ async fn net_up(
         }
     }
 
+    // Run the faucet,
+    let faucet_service = if let Some(faucet_chain) = with_faucet_chain {
+        let service = client
+            .run_faucet(
+                Some(faucet_port.into()),
+                ChainId::root(faucet_chain),
+                faucet_amount,
+            )
+            .await?;
+        Some(service)
+    } else {
+        None
+    };
+
     eprintln!(
         "\nREADY!\nPress ^C to terminate the local test network and clean the temporary directory."
     );
 
-    Ok(())
+    Ok(faucet_service)
 }

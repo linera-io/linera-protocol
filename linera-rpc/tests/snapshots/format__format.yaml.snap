@@ -308,9 +308,6 @@ ChainManagerInfo:
     - round_timeout:
         OPTION:
           TYPENAME: Timestamp
-    - locked_blobs:
-        SEQ:
-          TYPENAME: BlobContent
 ChainOwnership:
   STRUCT:
     - super_owners:
@@ -845,74 +842,84 @@ RpcMessage:
         NEWTYPE:
           TYPENAME: BlobId
     8:
+      DownloadPendingBlob:
+        NEWTYPE:
+          TUPLE:
+            - TYPENAME: ChainId
+            - TYPENAME: BlobId
+    9:
       DownloadConfirmedBlock:
         NEWTYPE:
           TYPENAME: CryptoHash
-    9:
+    10:
       DownloadCertificates:
         NEWTYPE:
           SEQ:
             TYPENAME: CryptoHash
-    10:
+    11:
       BlobLastUsedBy:
         NEWTYPE:
           TYPENAME: BlobId
-    11:
+    12:
       MissingBlobIds:
         NEWTYPE:
           SEQ:
             TYPENAME: BlobId
-    12:
-      VersionInfoQuery: UNIT
     13:
-      GenesisConfigHashQuery: UNIT
+      VersionInfoQuery: UNIT
     14:
+      GenesisConfigHashQuery: UNIT
+    15:
       Vote:
         NEWTYPE:
           TYPENAME: LiteVote
-    15:
+    16:
       ChainInfoResponse:
         NEWTYPE:
           TYPENAME: ChainInfoResponse
-    16:
+    17:
       Error:
         NEWTYPE:
           TYPENAME: NodeError
-    17:
+    18:
       VersionInfoResponse:
         NEWTYPE:
           TYPENAME: VersionInfo
-    18:
+    19:
       GenesisConfigHashResponse:
         NEWTYPE:
           TYPENAME: CryptoHash
-    19:
+    20:
       UploadBlobResponse:
         NEWTYPE:
           TYPENAME: BlobId
-    20:
+    21:
       DownloadBlobResponse:
         NEWTYPE:
           TYPENAME: BlobContent
-    21:
+    22:
+      DownloadPendingBlobResponse:
+        NEWTYPE:
+          TYPENAME: BlobContent
+    23:
       DownloadConfirmedBlockResponse:
         NEWTYPE:
           TYPENAME: Block
-    22:
+    24:
       DownloadCertificatesResponse:
         NEWTYPE:
           SEQ:
             TYPENAME: ConfirmedBlockCertificate
-    23:
+    25:
       BlobLastUsedByResponse:
         NEWTYPE:
           TYPENAME: CryptoHash
-    24:
+    26:
       MissingBlobIdsResponse:
         NEWTYPE:
           SEQ:
             TYPENAME: BlobId
-    25:
+    27:
       CrossChainRequest:
         NEWTYPE:
           TYPENAME: CrossChainRequest

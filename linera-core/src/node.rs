@@ -102,11 +102,19 @@ pub trait ValidatorNode {
     /// Subscribes to receiving notifications for a collection of chains.
     async fn subscribe(&self, chains: Vec<ChainId>) -> Result<Self::NotificationStream, NodeError>;
 
-    // Uploads a blob content. Returns an error if the validator has not seen a
+    // Uploads a blob. Returns an error if the validator has not seen a
     // certificate using this blob.
     async fn upload_blob(&self, content: BlobContent) -> Result<BlobId, NodeError>;
 
+    /// Downloads a blob. Returns an error if the validator does not have the blob.
     async fn download_blob(&self, blob_id: BlobId) -> Result<BlobContent, NodeError>;
+
+    /// Downloads a blob that belongs to a pending proposal or the locked block on a chain.
+    async fn download_pending_blob(
+        &self,
+        chain_id: ChainId,
+        blob_id: BlobId,
+    ) -> Result<BlobContent, NodeError>;
 
     async fn download_certificate(
         &self,

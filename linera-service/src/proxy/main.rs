@@ -344,6 +344,8 @@ where
             | VersionInfoResponse(_)
             | GenesisConfigHashResponse(_)
             | DownloadBlobResponse(_)
+            | DownloadPendingBlob(_)
+            | DownloadPendingBlobResponse(_)
             | BlobLastUsedByResponse(_)
             | MissingBlobIdsResponse(_)
             | DownloadConfirmedBlockResponse(_)

@@ -624,9 +624,6 @@ pub struct ChainManagerInfo {
     /// The timestamp when the current round times out.
     #[debug(skip_if = Option::is_none)]
     pub round_timeout: Option<Timestamp>,
-    /// These are blobs belonging to the locked block.
-    #[debug(skip_if = Vec::is_empty)]
-    pub locked_blobs: Vec<Blob>,
 }
 
 impl From<&ChainManager> for ChainManagerInfo {
@@ -650,7 +647,6 @@ impl From<&ChainManager> for ChainManagerInfo {
             current_round,
             leader: manager.round_leader(current_round).cloned(),
             round_timeout: manager.round_timeout,
-            locked_blobs: Vec::new(),
         }
     }
 }
@@ -660,7 +656,6 @@ impl ChainManagerInfo {
     pub fn add_values(&mut self, manager: &ChainManager) {
         self.requested_proposed = manager.proposed.clone().map(Box::new);
         self.requested_locked = manager.locked.clone().map(Box::new);
-        self.locked_blobs = manager.locked_blobs.values().cloned().collect();
         self.requested_confirmed = manager
             .confirmed_vote
             .as_ref()

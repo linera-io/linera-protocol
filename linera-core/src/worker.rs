@@ -926,6 +926,32 @@ where
 
     #[instrument(skip_all, fields(
         nick = self.nickname,
+        chain_id = format!("{:.8}", chain_id)
+    ))]
+    pub async fn download_pending_blob(
+        &self,
+        chain_id: ChainId,
+        blob_id: BlobId,
+    ) -> Result<Blob, WorkerError> {
+        trace!(
+            "{} <-- download_pending_blob({chain_id:8}, {blob_id:8})",
+            self.nickname
+        );
+        let result = self
+            .query_chain_worker(chain_id, move |callback| {
+                ChainWorkerRequest::DownloadPendingBlob { blob_id, callback }
+            })
+            .await;
+        trace!(
+            "{} --> {:?}",
+            self.nickname,
+            result.as_ref().map(|_| blob_id)
+        );
+        result
+    }
+
+    #[instrument(skip_all, fields(
+        nick = self.nickname,
         chain_id = format!("{:.8}", request.target_chain_id())
     ))]
     pub async fn handle_cross_chain_request(

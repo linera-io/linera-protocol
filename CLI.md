@@ -903,6 +903,13 @@ Start a Local Linera Network
 * `--external-protocol <EXTERNAL_PROTOCOL>` — External protocol used, either grpc or grpcs
 
   Default value: `grpc`
+* `--with-faucet-chain <WITH_FAUCET_CHAIN>` — If present, a faucet is started using the given chain root number (0 for the admin chain, 1 for the first non-admin initial chain, etc)
+* `--faucet-port <FAUCET_PORT>` — The port on which to run the faucet server
+
+  Default value: `8080`
+* `--faucet-amount <FAUCET_AMOUNT>` — The number of tokens to send to each new chain created by the faucet
+
+  Default value: `1000`
 
 
 
