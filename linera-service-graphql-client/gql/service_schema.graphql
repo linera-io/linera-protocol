@@ -196,7 +196,11 @@ type ChainManager {
 	"""
 	roundTimeout: Timestamp
 	"""
-	The lowest round where we can still vote to validate or confirm a block. This is
+	The owners that take over in fallback mode.
+	"""
+	fallbackOwners: JSONObject!
+	"""
+	Returns the lowest round where we can still vote to validate or confirm a block. This is
 	the round to which the timeout applies.
 	
 	Having a leader timeout certificate in any given round causes the next one to become
@@ -204,10 +208,6 @@ type ChainManager {
 	round to become current, unless a higher one already is.
 	"""
 	currentRound: Round!
-	"""
-	The owners that take over in fallback mode.
-	"""
-	fallbackOwners: JSONObject!
 }
 
 """

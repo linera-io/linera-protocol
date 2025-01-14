@@ -70,7 +70,7 @@
 
 use std::collections::BTreeMap;
 
-use async_graphql::SimpleObject;
+use async_graphql::{ComplexObject, SimpleObject};
 use custom_debug_derive::Debug;
 use futures::future::Either;
 use linera_base::{
@@ -110,6 +110,7 @@ pub type ValidatedOrConfirmedVote<'a> = Either<&'a Vote<ValidatedBlock>, &'a Vot
 
 /// The state of the certification process for a chain's next block.
 #[derive(Debug, View, ClonableView, SimpleObject)]
+#[graphql(complex)]
 pub struct ChainManager<C>
 where
     C: Clone + Context + Send + Sync + 'static,
@@ -157,9 +158,27 @@ where
     /// Having a leader timeout certificate in any given round causes the next one to become
     /// current. Seeing a validated block certificate or a valid proposal in any round causes that
     /// round to become current, unless a higher one already is.
+    #[graphql(skip)] // Part of `ComplexObject` below.
     pub current_round: RegisterView<C, Round>,
     /// The owners that take over in fallback mode.
     pub fallback_owners: RegisterView<C, BTreeMap<Owner, (PublicKey, u64)>>,
+}
+
+#[ComplexObject]
+impl<C> ChainManager<C>
+where
+    C: Context + Clone + Send + Sync + 'static,
+{
+    /// Returns the lowest round where we can still vote to validate or confirm a block. This is
+    /// the round to which the timeout applies.
+    ///
+    /// Having a leader timeout certificate in any given round causes the next one to become
+    /// current. Seeing a validated block certificate or a valid proposal in any round causes that
+    /// round to become current, unless a higher one already is.
+    #[graphql(derived(name = "current_round"))]
+    async fn _current_round(&self) -> Round {
+        *self.current_round.get()
+    }
 }
 
 impl<C> ChainManager<C>
@@ -232,6 +251,16 @@ where
         self.fallback_vote.get().as_ref()
     }
 
+    /// Returns the lowest round where we can still vote to validate or confirm a block. This is
+    /// the round to which the timeout applies.
+    ///
+    /// Having a leader timeout certificate in any given round causes the next one to become
+    /// current. Seeing a validated block certificate or a valid proposal in any round causes that
+    /// round to become current, unless a higher one already is.
+    pub fn current_round(&self) -> Round {
+        *self.current_round.get()
+    }
+
     /// Verifies the safety of a proposed block with respect to voting rules.
     pub fn check_proposed_block(&self, proposal: &BlockProposal) -> Result<Outcome, ChainError> {
         let new_round = proposal.content.round;
@@ -244,13 +273,13 @@ where
             ChainError::InvalidBlockHeight
         );
         let expected_round = match &proposal.validated_block_certificate {
-            None => *self.current_round.get(),
+            None => self.current_round(),
             Some(cert) => self
                 .ownership
                 .get()
                 .next_round(cert.round)
                 .ok_or_else(|| ChainError::ArithmeticError(ArithmeticError::Overflow))?
-                .max(*self.current_round.get()),
+                .max(self.current_round()),
         };
         // In leader rotation mode, the round must equal the expected one exactly.
         // Only the first single-leader round can be entered at any time.
@@ -319,7 +348,7 @@ where
         if local_time < round_timeout || self.ownership.get().owners.is_empty() {
             return false; // Round has not timed out yet, or there are no regular owners.
         }
-        let current_round = *self.current_round.get();
+        let current_round = self.current_round();
         if let Some(vote) = self.timeout_vote.get() {
             if vote.round == current_round {
                 return false; // We already signed this timeout.
@@ -345,7 +374,7 @@ where
         let Some(key_pair) = key_pair else {
             return false; // We are not a validator.
         };
-        if self.fallback_vote.get().is_some() || *self.current_round.get() >= Round::Validator(0) {
+        if self.fallback_vote.get().is_some() || self.current_round() >= Round::Validator(0) {
             return false; // We already signed this or are already in fallback mode.
         }
         let value = Hashed::new(Timeout::new(chain_id, height, epoch));
@@ -454,7 +483,7 @@ where
         let round = validated.round;
         // Validators only change their locked block if the new one is included in a proposal in the
         // current round, or it is itself in the current round.
-        if key_pair.is_some() && round < *self.current_round.get() {
+        if key_pair.is_some() && round < self.current_round() {
             return Ok(());
         }
         let confirmed_block = ConfirmedBlock::new(validated.inner().executed_block().clone());
@@ -499,7 +528,7 @@ where
             .max()
             .unwrap_or_default()
             .max(self.ownership.get().first_round());
-        if current_round <= *self.current_round.get() {
+        if current_round <= self.current_round() {
             return;
         }
         let round_duration = self.ownership.get().round_timeout(current_round);
@@ -659,7 +688,7 @@ where
     C::Extra: ExecutionRuntimeContext,
 {
     fn from(manager: &ChainManager<C>) -> Self {
-        let current_round = *manager.current_round.get();
+        let current_round = manager.current_round();
         let pending = manager
             .confirmed_vote
             .get()

@@ -100,14 +100,14 @@ where
                 actions,
             ));
         }
-        let old_round = *self.state.chain.manager.current_round.get();
+        let old_round = self.state.chain.manager.current_round();
         let timeout_chainid = certificate.inner().chain_id;
         let timeout_height = certificate.inner().height;
         self.state
             .chain
             .manager
             .handle_timeout_certificate(certificate, self.state.storage.clock().current_time());
-        let round = *self.state.chain.manager.current_round.get();
+        let round = self.state.chain.manager.current_round();
         if round > old_round {
             actions.notifications.push(Notification {
                 chain_id: timeout_chainid,
@@ -214,7 +214,7 @@ where
         self.state
             .check_for_unneeded_blobs(&required_blob_ids, blobs)?;
         let blobs = self.state.get_required_blobs(executed_block, blobs).await?;
-        let old_round = *self.state.chain.manager.current_round.get();
+        let old_round = self.state.chain.manager.current_round();
         self.state.chain.manager.create_final_vote(
             certificate,
             self.state.config.key_pair(),
@@ -223,7 +223,7 @@ where
         )?;
         let info = ChainInfoResponse::new(&self.state.chain, self.state.config.key_pair());
         self.save().await?;
-        let round = *self.state.chain.manager.current_round.get();
+        let round = self.state.chain.manager.current_round();
         if round > old_round {
             actions.notifications.push(Notification {
                 chain_id: self.state.chain_id(),
