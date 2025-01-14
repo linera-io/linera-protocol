@@ -157,6 +157,9 @@ where
         Instance: InstanceWithMemory,
         <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
     {
+        // There's no need to account for padding between the elements, because the element's size
+        // is always aligned:
+        // https://github.com/WebAssembly/component-model/blob/cbdd15d9033446558571824af52a78022aaa3f58/design/mvp/CanonicalABI.md#element-size
         let length = u32::try_from(self.len())?;
         let size = length * T::SIZE;
 
@@ -178,6 +181,9 @@ where
         Instance: InstanceWithMemory,
         <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
     {
+        // There's no need to account for padding between the elements, because the element's size
+        // is always aligned:
+        // https://github.com/WebAssembly/component-model/blob/cbdd15d9033446558571824af52a78022aaa3f58/design/mvp/CanonicalABI.md#element-size
         let length = u32::try_from(self.len())?;
         let size = length * T::SIZE;
 
