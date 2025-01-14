@@ -499,6 +499,16 @@ where
         Ok(())
     }
 
+    /// Returns the requested blob if it belongs to the proposal or the locked block.
+    pub async fn pending_blob(&self, blob_id: &BlobId) -> Result<Option<Blob>, ViewError> {
+        if let Some(proposal) = self.proposed.get() {
+            if let Some(blob) = proposal.blobs.iter().find(|blob| blob.id() == *blob_id) {
+                return Ok(Some(blob.clone()));
+            }
+        }
+        self.locked_blobs.get(blob_id).await
+    }
+
     /// Updates `current_round` and `round_timeout` if necessary.
     ///
     /// This must be after every change to `timeout`, `locked` or `proposed`.

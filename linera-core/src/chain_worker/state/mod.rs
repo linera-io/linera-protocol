@@ -296,17 +296,8 @@ where
 
     /// Returns the requested blob, if it belongs to the current locked block or pending proposal.
     pub(super) async fn download_pending_blob(&self, blob_id: BlobId) -> Result<Blob, WorkerError> {
-        let manager = &self.chain.manager;
-        if let Some(proposal) = manager.proposed.get() {
-            if let Some(blob) = proposal.blobs.iter().find(|blob| blob.id() == blob_id) {
-                return Ok(blob.clone());
-            }
-        }
-        manager
-            .locked_blobs
-            .get(&blob_id)
-            .await?
-            .ok_or_else(|| WorkerError::BlobsNotFound(vec![blob_id]))
+        let maybe_blob = self.chain.manager.pending_blob(&blob_id).await?;
+        maybe_blob.ok_or_else(|| WorkerError::BlobsNotFound(vec![blob_id]))
     }
 
     /// Ensures that the current chain is active, returning an error otherwise.
@@ -344,24 +335,16 @@ where
         blobs: &[Blob],
     ) -> Result<BTreeMap<BlobId, Blob>, WorkerError> {
         let mut blob_ids = executed_block.required_blob_ids();
-        let manager = &self.chain.manager;
-
         let mut found_blobs = BTreeMap::new();
 
-        for blob in manager
-            .proposed
-            .get()
-            .iter()
-            .flat_map(|proposal| &proposal.blobs)
-            .chain(blobs)
-        {
+        for blob in blobs {
             if blob_ids.remove(&blob.id()) {
                 found_blobs.insert(blob.id(), blob.clone());
             }
         }
         let mut missing_blob_ids = Vec::new();
         for blob_id in blob_ids {
-            if let Some(blob) = manager.locked_blobs.get(&blob_id).await? {
+            if let Some(blob) = self.chain.manager.pending_blob(&blob_id).await? {
                 found_blobs.insert(blob_id, blob);
             } else {
                 missing_blob_ids.push(blob_id);
