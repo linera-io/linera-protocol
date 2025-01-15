@@ -4366,7 +4366,6 @@ dependencies = [
  "custom_debug_derive",
  "ed25519-dalek",
  "futures",
- "generic-array",
  "getrandom",
  "hex",
  "is-terminal",

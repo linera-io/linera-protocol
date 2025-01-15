@@ -41,7 +41,6 @@ chrono.workspace = true
 custom_debug_derive.workspace = true
 ed25519-dalek.workspace = true
 futures.workspace = true
-generic-array.workspace = true
 getrandom = { workspace = true, optional = true }
 hex.workspace = true
 is-terminal.workspace = true

@@ -3352,7 +3352,6 @@ dependencies = [
  "custom_debug_derive",
  "ed25519-dalek",
  "futures",
- "generic-array",
  "hex",
  "is-terminal",
  "linera-witty",
