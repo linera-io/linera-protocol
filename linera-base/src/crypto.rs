@@ -166,7 +166,7 @@ impl Serialize for CryptoHash {
         if serializer.is_human_readable() {
             serializer.serialize_str(&self.to_string())
         } else {
-            serializer.serialize_newtype_struct("CryptoHash", &self.0.as_slice())
+            serializer.serialize_newtype_struct("CryptoHash", &self.0)
         }
     }
 }
@@ -719,7 +719,6 @@ impl TestString {
 #[cfg(with_testing)]
 impl<'de> BcsSignable<'de> for TestString {}
 
-#[cfg(with_getrandom)]
 #[test]
 fn test_signatures() {
     #[derive(Debug, Serialize, Deserialize)]
