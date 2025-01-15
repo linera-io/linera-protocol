@@ -7,7 +7,6 @@ use linera_base::command::resolve_binary;
 use linera_views::{
     lru_caching::LruCachingConfig,
     store::{CommonStoreInternalConfig, KeyValueStoreError},
-    views::MIN_VIEW_TAG,
 };
 use thiserror::Error;
 use tonic::Status;
@@ -23,11 +22,13 @@ pub const MAX_PAYLOAD_SIZE: usize = 4000000;
 
 /// Key tags to create the sub keys used for storing data on storage.
 #[repr(u8)]
-pub enum KeyTag {
-    /// Prefix for the storage of the keys of the map
-    Key = MIN_VIEW_TAG,
-    /// Prefix for the storage of existence or not of the namespaces.
+pub enum KeyPrefix {
+    /// Key prefix for the storage of the keys of the map
+    Key,
+    /// Key prefix for the storage of existence or not of the namespaces.
     Namespace,
+    /// Key prefix for the root key
+    RootKey,
 }
 
 #[derive(Debug, Error)]

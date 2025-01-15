@@ -299,6 +299,21 @@ where
         Ok(namespaces)
     }
 
+    async fn list_root_keys(
+        config: &Self::Config,
+        namespace: &str,
+    ) -> Result<Vec<Vec<u8>>, Self::Error> {
+        let mut root_keys = S1::list_root_keys(&config.first_config, namespace)
+            .await
+            .map_err(DualStoreError::First)?;
+        root_keys.extend(
+            S2::list_root_keys(&config.second_config, namespace)
+                .await
+                .map_err(DualStoreError::Second)?,
+        );
+        Ok(root_keys)
+    }
+
     async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, Self::Error> {
         Ok(S1::exists(&config.first_config, namespace)
             .await

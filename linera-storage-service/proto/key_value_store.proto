@@ -1,6 +1,8 @@
 syntax = "proto3";
 package key_value_store.v1;
 
+import "google/protobuf/empty.proto";
+
 message KeyValue {
   bytes key = 1;
   bytes value = 2;
@@ -92,9 +94,6 @@ message RequestWriteBatchExtended {
   repeated Statement statements = 1;
 }
 
-message ReplyWriteBatchExtended {
-}
-
 
 message RequestSpecificChunk {
   int64 message_index = 1;
@@ -108,9 +107,6 @@ message ReplySpecificChunk {
 
 message RequestCreateNamespace {
   bytes namespace = 1;
-}
-
-message ReplyCreateNamespace {
 }
 
 
@@ -127,23 +123,20 @@ message RequestDeleteNamespace {
   bytes namespace = 1;
 }
 
-message ReplyDeleteNamespace {
-}
-
-
-message RequestListAll {
-}
 
 message ReplyListAll {
   repeated bytes namespaces = 1;
 }
 
 
-message RequestDeleteAll {
+message RequestListRootKeys {
+  bytes namespace = 1;
 }
 
-message ReplyDeleteAll {
+message ReplyListRootKeys {
+  repeated bytes root_keys = 1;
 }
+
 
 service StoreProcessor {
   rpc ProcessReadValue (RequestReadValue) returns (ReplyReadValue) {}
@@ -152,11 +145,12 @@ service StoreProcessor {
   rpc ProcessReadMultiValues (RequestReadMultiValues) returns (ReplyReadMultiValues) {}
   rpc ProcessFindKeysByPrefix (RequestFindKeysByPrefix) returns (ReplyFindKeysByPrefix) {}
   rpc ProcessFindKeyValuesByPrefix (RequestFindKeyValuesByPrefix) returns (ReplyFindKeyValuesByPrefix) {}
-  rpc ProcessWriteBatchExtended (RequestWriteBatchExtended) returns (ReplyWriteBatchExtended) {}
+  rpc ProcessWriteBatchExtended (RequestWriteBatchExtended) returns (google.protobuf.Empty) {}
   rpc ProcessSpecificChunk (RequestSpecificChunk) returns (ReplySpecificChunk) {}
-  rpc ProcessCreateNamespace (RequestCreateNamespace) returns (ReplyCreateNamespace) {}
+  rpc ProcessCreateNamespace (RequestCreateNamespace) returns (google.protobuf.Empty) {}
   rpc ProcessExistsNamespace (RequestExistsNamespace) returns (ReplyExistsNamespace) {}
-  rpc ProcessDeleteNamespace (RequestDeleteNamespace) returns (ReplyDeleteNamespace) {}
-  rpc ProcessListAll (RequestListAll) returns (ReplyListAll) {}
-  rpc ProcessDeleteAll (RequestDeleteAll) returns (ReplyDeleteAll) {}
+  rpc ProcessDeleteNamespace (RequestDeleteNamespace) returns (google.protobuf.Empty) {}
+  rpc ProcessListAll (google.protobuf.Empty) returns (ReplyListAll) {}
+  rpc ProcessListRootKeys (RequestListRootKeys) returns (ReplyListRootKeys) {}
+  rpc ProcessDeleteAll (google.protobuf.Empty) returns (google.protobuf.Empty) {}
 }

@@ -530,6 +530,9 @@ async fn run_test_batch_from_state<C: LocalRestrictedKeyValueStore>(
         batch_insert.put_key_value_bytes(key, value);
     }
     key_value_store.write_batch(batch_insert).await.unwrap();
+    let key_values = read_key_values_prefix(key_value_store, &key_prefix).await;
+    assert_eq!(key_values, kv_state);
+
     update_state_from_batch(&mut kv_state, &batch);
     key_value_store.write_batch(batch).await.unwrap();
     let key_values = read_key_values_prefix(key_value_store, &key_prefix).await;
@@ -635,10 +638,10 @@ where
         .collect::<BTreeSet<_>>()
 }
 
-/// Exercises the functionalities of the `AdminKeyValueStore`.
+/// Exercises the namespace functionalities of the `AdminKeyValueStore`.
 /// This tests everything except the `delete_all` which would
 /// interact with other namespaces.
-pub async fn admin_test<S: TestKeyValueStore>()
+pub async fn namespace_admin_test<S: TestKeyValueStore>()
 where
     S::Error: Debug,
 {
@@ -699,4 +702,68 @@ where
             .await
             .expect("A successful deletion");
     }
+}
+
+/// Tests listing the root keys.
+pub async fn root_key_admin_test<S: TestKeyValueStore>()
+where
+    S::Error: Debug,
+{
+    let config = S::new_test_config().await.expect("config");
+    let namespace = generate_test_namespace();
+    let mut root_keys = Vec::new();
+    let mut keys = BTreeSet::new();
+    S::create(&config, &namespace).await.expect("creation");
+    let prefix = vec![0];
+    {
+        let size = 3;
+        let mut rng = make_deterministic_rng();
+        let store = S::connect(&config, &namespace, &[]).await.expect("store");
+        root_keys.push(vec![]);
+        let mut batch = Batch::new();
+        for _ in 0..2 {
+            let key = get_random_byte_vector(&mut rng, &prefix, 4);
+            batch.put_key_value_bytes(key.clone(), vec![]);
+            keys.insert((vec![], key));
+        }
+        store.write_batch(batch).await.expect("write batch");
+
+        for _ in 0..20 {
+            let root_key = get_random_byte_vector(&mut rng, &[], 4);
+            let cloned_store = store.clone_with_root_key(&root_key).expect("cloned store");
+            root_keys.push(root_key.clone());
+            let size_select = rng.gen_range(0..size);
+            let mut batch = Batch::new();
+            for _ in 0..size_select {
+                let key = get_random_byte_vector(&mut rng, &prefix, 4);
+                batch.put_key_value_bytes(key.clone(), vec![]);
+                keys.insert((root_key.clone(), key));
+            }
+            cloned_store.write_batch(batch).await.expect("write batch");
+        }
+    }
+
+    let read_root_keys = S::list_root_keys(&config, &namespace)
+        .await
+        .expect("read_root_keys");
+    let set_root_keys = root_keys.iter().cloned().collect::<HashSet<_>>();
+    for read_root_key in &read_root_keys {
+        assert!(set_root_keys.contains(read_root_key));
+    }
+
+    let mut read_keys = BTreeSet::new();
+    for root_key in read_root_keys {
+        let store = S::connect(&config, &namespace, &root_key)
+            .await
+            .expect("store");
+        let keys = store.find_keys_by_prefix(&prefix).await.expect("keys");
+        for key in keys.iterator() {
+            let key = key.expect("key");
+            let mut big_key = prefix.clone();
+            let key = key.to_vec();
+            big_key.extend(key);
+            read_keys.insert((root_key.clone(), big_key));
+        }
+    }
+    assert_eq!(keys, read_keys);
 }

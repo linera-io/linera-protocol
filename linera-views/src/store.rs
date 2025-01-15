@@ -179,6 +179,13 @@ pub trait LocalAdminKeyValueStore: WithError + Sized {
     /// Obtains the list of existing namespaces.
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, Self::Error>;
 
+    /// Lists the root keys of the namespace.
+    /// It is possible that some root keys have no keys.
+    async fn list_root_keys(
+        config: &Self::Config,
+        namespace: &str,
+    ) -> Result<Vec<Vec<u8>>, Self::Error>;
+
     /// Deletes all the existing namespaces.
     fn delete_all(config: &Self::Config) -> impl Future<Output = Result<(), Self::Error>> {
         async {
