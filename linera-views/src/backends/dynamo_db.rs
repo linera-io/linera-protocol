@@ -13,6 +13,7 @@ use aws_sdk_dynamodb::{
         batch_write_item::BatchWriteItemError,
         create_table::CreateTableError,
         delete_table::DeleteTableError,
+        describe_table::DescribeTableError,
         get_item::GetItemError,
         list_tables::ListTablesError,
         query::{QueryError, QueryOutput},
@@ -398,6 +399,27 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
             }
         }
         Ok(namespaces)
+    }
+
+    async fn get_root_keys(
+        config: &Self::Config,
+        namespace: &str,
+    ) -> Result<Vec<Vec<u8>>, DynamoDbStoreInternalError> {
+        use aws_sdk_dynamodb::operation::describe_table::DescribeTableOutput;
+        let client = Client::from_conf(config.config.clone());
+        let response : DescribeTableOutput = client.describe_table().table_name(namespace).send().await?;
+        let Some(table_description) = response.table() else {
+            return Ok(Vec::new());
+        };
+        let Some(key_schema) = table_description.key_schema.clone() else {
+            return Ok(Vec::new());
+        };
+        let mut root_keys = Vec::new();
+        for key in key_schema {
+            let root_key = key.attribute_name();
+            root_keys.push(root_key.into());
+        }
+        Ok(root_keys)
     }
 
     async fn delete_all(config: &Self::Config) -> Result<(), DynamoDbStoreInternalError> {
@@ -992,6 +1014,10 @@ pub enum DynamoDbStoreInternalError {
     /// An error occurred while listing tables
     #[error(transparent)]
     ListTables(#[from] Box<SdkError<ListTablesError>>),
+
+    /// An error occurred while describing tables
+    #[error(transparent)]
+    DescribeTables(#[from] Box<SdkError<DescribeTableError>>),
 
     /// The transact maximum size is MAX_TRANSACT_WRITE_ITEM_SIZE.
     #[error("The transact must have length at most MAX_TRANSACT_WRITE_ITEM_SIZE")]
