@@ -116,7 +116,16 @@ query Chain(
       blockHash
       nextBlockHeight
     }
-    manager
+    manager {
+      ownership
+      seed
+      lockedBlobs {
+        keys
+      }
+      roundTimeout
+      fallbackOwners
+      currentRound
+    }
     confirmedLog {
       entries
     }
