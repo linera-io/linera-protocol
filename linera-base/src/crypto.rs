@@ -6,8 +6,8 @@
 
 use std::{borrow::Cow, fmt, io, num::ParseIntError, str::FromStr};
 
+use alloy_primitives::{FixedBytes, Keccak256, B256};
 use ed25519_dalek::{self as dalek, Signer, Verifier};
-use generic_array::typenum::Unsigned;
 use linera_witty::{
     GuestPointer, HList, InstanceWithMemory, Layout, Memory, Runtime, RuntimeError, RuntimeMemory,
     WitLoad, WitStore, WitType,
@@ -33,13 +33,12 @@ pub struct KeyPair(dalek::SigningKey);
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash)]
 pub struct PublicKey(pub [u8; dalek::PUBLIC_KEY_LENGTH]);
 
-type HasherOutputSize = <sha3::Sha3_256 as sha3::digest::OutputSizeUser>::OutputSize;
-type HasherOutput = generic_array::GenericArray<u8, HasherOutputSize>;
+type HasherOutputSize = FixedBytes<32>;
 
-/// A Sha3-256 value.
+/// A Keccak256 value.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash)]
 #[cfg_attr(with_testing, derive(Default))]
-pub struct CryptoHash(HasherOutput);
+pub struct CryptoHash(B256);
 
 /// A signature value.
 #[derive(Eq, PartialEq, Copy, Clone)]
@@ -57,7 +56,7 @@ pub enum CryptoError {
     NonHexDigits(#[from] hex::FromHexError),
     #[error(
         "Byte slice has length {0} but a `CryptoHash` requires exactly {expected} bytes",
-        expected = HasherOutputSize::to_usize(),
+        expected = HasherOutputSize::len_bytes(),
     )]
     IncorrectHashSize(usize),
     #[error(
@@ -167,7 +166,7 @@ impl Serialize for CryptoHash {
         if serializer.is_human_readable() {
             serializer.serialize_str(&self.to_string())
         } else {
-            serializer.serialize_newtype_struct("CryptoHash", &self.0)
+            serializer.serialize_newtype_struct("CryptoHash", &self.0.as_slice())
         }
     }
 }
@@ -184,7 +183,7 @@ impl<'de> Deserialize<'de> for CryptoHash {
         } else {
             #[derive(Deserialize)]
             #[serde(rename = "CryptoHash")]
-            struct Foo(HasherOutput);
+            struct Foo(B256);
 
             let value = Foo::deserialize(deserializer)?;
             Ok(Self(value.0))
@@ -300,24 +299,22 @@ impl TryFrom<&[u8]> for CryptoHash {
     type Error = CryptoError;
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
-        if value.len() != HasherOutputSize::to_usize() {
+        if value.len() != B256::len_bytes() {
             return Err(CryptoError::IncorrectHashSize(value.len()));
         }
-        let mut bytes = HasherOutput::default();
-        bytes.copy_from_slice(value);
-        Ok(Self(bytes))
+        Ok(Self(B256::from_slice(value)))
     }
 }
 
 impl From<[u64; 4]> for CryptoHash {
     fn from(integers: [u64; 4]) -> Self {
-        CryptoHash(u64_array_to_le_bytes(integers).into())
+        CryptoHash(u64_array_to_be_bytes(integers).into())
     }
 }
 
 impl From<CryptoHash> for [u64; 4] {
     fn from(crypto_hash: CryptoHash) -> Self {
-        le_bytes_to_u64_array(&crypto_hash.0)
+        be_bytes_to_u64_array(crypto_hash.0.as_ref())
     }
 }
 
@@ -396,6 +393,20 @@ where
     }
 }
 
+// Temporary struct to extend `Keccak256` with `io::Write`.
+struct Keccak256Ext(Keccak256);
+
+impl io::Write for Keccak256Ext {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.0.update(buf);
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
 impl<Hasher> Hashable<Hasher> for [u8]
 where
     Hasher: io::Write,
@@ -417,15 +428,13 @@ where
 impl CryptoHash {
     /// Computes a hash.
     pub fn new<'de, T: BcsHashable<'de>>(value: &T) -> Self {
-        use sha3::digest::Digest;
-
-        let mut hasher = sha3::Sha3_256::default();
+        let mut hasher = Keccak256Ext(Keccak256::new());
         value.write(&mut hasher);
-        CryptoHash(hasher.finalize())
+        CryptoHash(hasher.0.finalize())
     }
 
     /// Reads the bytes of the hash value.
-    pub fn as_bytes(&self) -> &HasherOutput {
+    pub fn as_bytes(&self) -> &B256 {
         &self.0
     }
 
@@ -683,15 +692,14 @@ impl Arbitrary for CryptoHash {
     type Strategy = strategy::Map<VecStrategy<RangeInclusive<u8>>, fn(Vec<u8>) -> CryptoHash>;
 
     fn arbitrary_with((): Self::Parameters) -> Self::Strategy {
-        vec(u8::MIN..=u8::MAX, HasherOutputSize::to_usize()).prop_map(|vector| {
-            CryptoHash(generic_array::GenericArray::clone_from_slice(&vector[..]))
-        })
+        vec(u8::MIN..=u8::MAX, HasherOutputSize::len_bytes())
+            .prop_map(|vector| CryptoHash(B256::from_slice(&vector[..])))
     }
 }
 
 impl<'de> BcsHashable<'de> for PublicKey {}
 
-doc_scalar!(CryptoHash, "A Sha3-256 value");
+doc_scalar!(CryptoHash, "A Keccak256 value");
 doc_scalar!(PublicKey, "A signature public key");
 doc_scalar!(Signature, "A signature value");
 
@@ -747,6 +755,18 @@ fn le_bytes_to_u64_array(bytes: &[u8]) -> [u64; 4] {
     integers
 }
 
+/// Reads the `bytes` as four big-endian unsigned 64-bit integers and returns them.
+fn be_bytes_to_u64_array(bytes: &[u8]) -> [u64; 4] {
+    let mut integers = [0u64; 4];
+
+    integers[0] = u64::from_be_bytes(bytes[0..8].try_into().expect("incorrect indices"));
+    integers[1] = u64::from_be_bytes(bytes[8..16].try_into().expect("incorrect indices"));
+    integers[2] = u64::from_be_bytes(bytes[16..24].try_into().expect("incorrect indices"));
+    integers[3] = u64::from_be_bytes(bytes[24..32].try_into().expect("incorrect indices"));
+
+    integers
+}
+
 /// Returns the bytes that represent the `integers` in little-endian.
 fn u64_array_to_le_bytes(integers: [u64; 4]) -> [u8; 32] {
     let mut bytes = [0u8; 32];
@@ -757,4 +777,59 @@ fn u64_array_to_le_bytes(integers: [u64; 4]) -> [u8; 32] {
     bytes[24..32].copy_from_slice(&integers[3].to_le_bytes());
 
     bytes
+}
+
+/// Returns the bytes that represent the `integers` in big-endian.
+fn u64_array_to_be_bytes(integers: [u64; 4]) -> [u8; 32] {
+    let mut bytes = [0u8; 32];
+
+    bytes[0..8].copy_from_slice(&integers[0].to_be_bytes());
+    bytes[8..16].copy_from_slice(&integers[1].to_be_bytes());
+    bytes[16..24].copy_from_slice(&integers[2].to_be_bytes());
+    bytes[24..32].copy_from_slice(&integers[3].to_be_bytes());
+
+    bytes
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_u64_array_to_be_bytes() {
+        let input = [
+            0x0123456789ABCDEF,
+            0xFEDCBA9876543210,
+            0x0011223344556677,
+            0x8899AABBCCDDEEFF,
+        ];
+        let expected_output = [
+            0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF, 0xFE, 0xDC, 0xBA, 0x98, 0x76, 0x54,
+            0x32, 0x10, 0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB,
+            0xCC, 0xDD, 0xEE, 0xFF,
+        ];
+
+        let output = u64_array_to_be_bytes(input);
+        assert_eq!(output, expected_output);
+        assert_eq!(input, be_bytes_to_u64_array(&u64_array_to_be_bytes(input)));
+    }
+
+    #[test]
+    fn test_u64_array_to_le_bytes() {
+        let input = [
+            0x0123456789ABCDEF,
+            0xFEDCBA9876543210,
+            0x0011223344556677,
+            0x8899AABBCCDDEEFF,
+        ];
+        let expected_output = [
+            0xEF, 0xCD, 0xAB, 0x89, 0x67, 0x45, 0x23, 0x01, 0x10, 0x32, 0x54, 0x76, 0x98, 0xBA,
+            0xDC, 0xFE, 0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11, 0x00, 0xFF, 0xEE, 0xDD, 0xCC,
+            0xBB, 0xAA, 0x99, 0x88,
+        ];
+
+        let output = u64_array_to_le_bytes(input);
+        assert_eq!(output, expected_output);
+        assert_eq!(input, le_bytes_to_u64_array(&u64_array_to_le_bytes(input)));
+    }
 }
