@@ -158,7 +158,7 @@ where
     /// Having a leader timeout certificate in any given round causes the next one to become
     /// current. Seeing a validated block certificate or a valid proposal in any round causes that
     /// round to become current, unless a higher one already is.
-    #[graphql(skip)] // Part of `ComplexObject` below.
+    #[graphql(skip)]
     pub current_round: RegisterView<C, Round>,
     /// The owners that take over in fallback mode.
     pub fallback_owners: RegisterView<C, BTreeMap<Owner, (PublicKey, u64)>>,
@@ -177,14 +177,13 @@ where
     /// round to become current, unless a higher one already is.
     #[graphql(derived(name = "current_round"))]
     async fn _current_round(&self) -> Round {
-        *self.current_round.get()
+        self.current_round()
     }
 }
 
 impl<C> ChainManager<C>
 where
     C: Context + Clone + Send + Sync + 'static,
-    C::Extra: ExecutionRuntimeContext,
 {
     /// Replaces `self` with a new chain manager.
     pub fn reset<'a>(
@@ -696,7 +695,6 @@ pub struct ChainManagerInfo {
 impl<C> From<&ChainManager<C>> for ChainManagerInfo
 where
     C: Context + Clone + Send + Sync + 'static,
-    C::Extra: ExecutionRuntimeContext,
 {
     fn from(manager: &ChainManager<C>) -> Self {
         let current_round = manager.current_round();
