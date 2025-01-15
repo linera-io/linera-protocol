@@ -183,7 +183,7 @@ where
         check_block_epoch(epoch, block)?;
         certificate.check(committee)?;
         let mut actions = NetworkActions::default();
-        let already_validated_block = self
+        let already_committed_block = self
             .state
             .chain
             .tip_state
@@ -196,7 +196,7 @@ where
                 .check_validated_block(&certificate)
                 .map(|outcome| outcome == manager::Outcome::Skip)
         };
-        if already_validated_block || should_skip_validated_block()? {
+        if already_committed_block || should_skip_validated_block()? {
             // If we just processed the same pending block, return the chain info unchanged.
             return Ok((
                 ChainInfoResponse::new(&self.state.chain, self.state.config.key_pair()),

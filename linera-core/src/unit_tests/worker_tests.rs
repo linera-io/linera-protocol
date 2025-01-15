@@ -32,6 +32,7 @@ use linera_chain::{
         IncomingBundle, LiteValue, LiteVote, Medium, MessageAction, MessageBundle, Origin,
         OutgoingMessage, PostedMessage, SignatureAggregator,
     },
+    manager::LockedBlock,
     test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt, VoteTestExt},
     types::{
         CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate, Timeout,
@@ -3349,7 +3350,7 @@ where
     let (response, _) = worker.handle_chain_info_query(query_values.clone()).await?;
     assert_eq!(
         response.info.manager.requested_locked,
-        Some(Box::new(certificate1))
+        Some(Box::new(LockedBlock::Regular(certificate1)))
     );
 
     // Proposing block2 now would fail.
@@ -3376,7 +3377,7 @@ where
     let (response, _) = worker.handle_chain_info_query(query_values.clone()).await?;
     assert_eq!(
         response.info.manager.requested_locked,
-        Some(Box::new(certificate2))
+        Some(Box::new(LockedBlock::Regular(certificate2)))
     );
     let vote = response.info.manager.pending.as_ref().unwrap();
     assert_eq!(vote.value, lite_value2);
@@ -3421,7 +3422,7 @@ where
     let (response, _) = worker.handle_chain_info_query(query_values).await?;
     assert_eq!(
         response.info.manager.requested_locked,
-        Some(Box::new(certificate))
+        Some(Box::new(LockedBlock::Regular(certificate)))
     );
     Ok(())
 }
@@ -3619,7 +3620,7 @@ where
     let (response, _) = worker.handle_chain_info_query(query_values).await?;
     assert_eq!(
         response.info.manager.requested_locked,
-        Some(Box::new(certificate2))
+        Some(Box::new(LockedBlock::Regular(certificate2)))
     );
     let vote = response.info.manager.pending.as_ref().unwrap();
     assert_eq!(vote.value, lite_value2);
