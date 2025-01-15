@@ -263,14 +263,14 @@ where
         })
     }
 
-    fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, Self::Error> {
+    async fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, Self::Error> {
         let first_store = self
             .first_store
-            .clone_with_root_key(root_key)
+            .clone_with_root_key(root_key).await
             .map_err(DualStoreError::First)?;
         let second_store = self
             .second_store
-            .clone_with_root_key(root_key)
+            .clone_with_root_key(root_key).await
             .map_err(DualStoreError::Second)?;
         let store_in_use = A::assigned_store(root_key)?;
         Ok(Self {

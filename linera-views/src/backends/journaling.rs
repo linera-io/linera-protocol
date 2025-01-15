@@ -191,8 +191,8 @@ where
         Ok(Self { store })
     }
 
-    fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, Self::Error> {
-        let store = self.store.clone_with_root_key(root_key)?;
+    async fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, Self::Error> {
+        let store = self.store.clone_with_root_key(root_key).await?;
         Ok(Self { store })
     }
 

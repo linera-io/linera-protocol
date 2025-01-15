@@ -327,7 +327,7 @@ impl AdminKeyValueStore for MemoryStore {
         memory_stores.sync_connect(config, namespace, root_key, kill_on_drop)
     }
 
-    fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, MemoryStoreError> {
+    async fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, MemoryStoreError> {
         let max_stream_queries = self.max_stream_queries;
         let common_config = CommonStoreInternalConfig {
             max_concurrent_queries: None,

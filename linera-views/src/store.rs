@@ -174,7 +174,7 @@ pub trait LocalAdminKeyValueStore: WithError + Sized {
     ) -> Result<Self, Self::Error>;
 
     /// Takes a connection and creates a new one with a different `root_key`.
-    fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, Self::Error>;
+    async fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, Self::Error>;
 
     /// Obtains the list of existing namespaces.
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, Self::Error>;

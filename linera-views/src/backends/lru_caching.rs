@@ -302,8 +302,8 @@ where
         Ok(LruCachingStore::new(store, cache_size))
     }
 
-    fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, Self::Error> {
-        let store = self.store.clone_with_root_key(root_key)?;
+    async fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, Self::Error> {
+        let store = self.store.clone_with_root_key(root_key).await?;
         let cache_size = self.cache_size();
         Ok(LruCachingStore::new(store, cache_size))
     }

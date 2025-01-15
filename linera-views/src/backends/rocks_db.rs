@@ -442,7 +442,7 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
         RocksDbStoreInternal::build(config, namespace, effective_root_key)
     }
 
-    fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, RocksDbStoreInternalError> {
+    async fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, RocksDbStoreInternalError> {
         let mut store = self.clone();
         let mut effective_root_key = vec![0];
         effective_root_key.extend(root_key);
