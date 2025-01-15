@@ -638,7 +638,7 @@ where
 /// Exercises the functionalities of the `AdminKeyValueStore`.
 /// This tests everything except the `delete_all` which would
 /// interact with other namespaces.
-pub async fn admin_test<S: TestKeyValueStore>()
+pub async fn namespace_admin_test<S: TestKeyValueStore>()
 where
     S::Error: Debug,
 {
