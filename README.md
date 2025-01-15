@@ -83,7 +83,7 @@ linera net up
 linera query-validators
 
 # Query the chain balance of some of the chains.
-CHAIN1="e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65"
+CHAIN1="aee928d4bf3880353b4a3cd9b6f88e6cc6e5ed050860abae439e7782e9b2dfe8"
 CHAIN2="69705f85ac4c9fef6c02b4d83426aaaf05154c645ec1c61665f8e450f0468bc0"
 linera query-balance "$CHAIN1"
 linera query-balance "$CHAIN2"

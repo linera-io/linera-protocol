@@ -55,9 +55,9 @@ Refer to the [fungible app README](https://github.com/linera-io/linera-protocol/
 ```bash
 linera wallet show
 
-CHAIN_1=e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65  # default chain for the wallet
+CHAIN_1=aee928d4bf3880353b4a3cd9b6f88e6cc6e5ed050860abae439e7782e9b2dfe8  # default chain for the wallet
 OWNER_1=7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f  # owner of chain 1
-CHAIN_2=256e1dbc00482ddd619c293cc0df94d366afe7980022bb22d99e33036fd465dd  # another chain in the wallet
+CHAIN_2=63620ea465af9e9e0e8e4dd8d21593cc3a719feac5f096df8440f90738f4dbd8  # another chain in the wallet
 OWNER_2=598d18f67709fe76ed6a36b75a7c9889012d30b896800dfd027ee10e1afd49a3  # owner of chain 2
 ```
 

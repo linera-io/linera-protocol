@@ -11,7 +11,7 @@ test('Block mounting', () => {
           status: "confirmed",
           executedBlock: {
             block: {
-              chainId: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65",
+              chainId: "aee928d4bf3880353b4a3cd9b6f88e6cc6e5ed050860abae439e7782e9b2dfe8",
               epoch: "0",
               height: 6,
               timestamp: 1694097511817833,
@@ -20,7 +20,7 @@ test('Block mounting', () => {
               incomingBundles: [{
                 origin: {
                   medium: "Direct",
-                  sender: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65"
+                  sender: "aee928d4bf3880353b4a3cd9b6f88e6cc6e5ed050860abae439e7782e9b2dfe8"
                 },
                 bundle: {
                   certificateHash: "f1c748c5e39591125250e85d57fdeac0b7ba44a32c12c616eb4537f93b6e5d0a",
@@ -50,10 +50,10 @@ test('Block mounting', () => {
                     BytecodeLocations: {
                       locations: [
                         [
-                          "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65020000000000000000000000",
+                          "aee928d4bf3880353b4a3cd9b6f88e6cc6e5ed050860abae439e7782e9b2dfe8020000000000000000000000",
                           { certificateHash: "a4167c67ce9c94c301fd5cbbefeccf6c8e56d568a4c75ed85e93bfacee66bac5", operation_index: 0 }],
                         [
-                          "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65050000000000000000000000",
+                          "aee928d4bf3880353b4a3cd9b6f88e6cc6e5ed050860abae439e7782e9b2dfe8050000000000000000000000",
                           { certificateHash: "f1c748c5e39591125250e85d57fdeac0b7ba44a32c12c616eb4537f93b6e5d0a", operation_index: 0 }]]
                     }
                   }
