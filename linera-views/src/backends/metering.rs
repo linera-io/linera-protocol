@@ -453,9 +453,9 @@ where
         Ok(Self { counter, store })
     }
 
-    fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, Self::Error> {
+    async fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, Self::Error> {
         let _latency = self.counter.clone_with_root_key_latency.measure_latency();
-        let store = self.store.clone_with_root_key(root_key)?;
+        let store = self.store.clone_with_root_key(root_key).await?;
         let counter = self.counter.clone();
         Ok(Self { counter, store })
     }
