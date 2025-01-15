@@ -381,7 +381,7 @@ where
 
     /// Returns true if there are no more outgoing messages in flight up to the given
     /// block height.
-    pub fn all_messages_delivered_up_to(&mut self, height: BlockHeight) -> bool {
+    pub fn all_messages_delivered_up_to(&self, height: BlockHeight) -> bool {
         tracing::debug!(
             "Messages left in {:.8}'s outbox: {:?}",
             self.chain_id(),

@@ -493,7 +493,7 @@ where
     /// Returns true if there are no more outgoing messages in flight up to the given
     /// block height.
     pub async fn all_messages_to_tracked_chains_delivered_up_to(
-        &mut self,
+        &self,
         height: BlockHeight,
     ) -> Result<bool, WorkerError> {
         if self.chain.all_messages_delivered_up_to(height) {
