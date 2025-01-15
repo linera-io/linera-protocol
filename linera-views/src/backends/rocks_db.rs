@@ -279,18 +279,23 @@ impl RocksDbStoreInternal {
     }
 
     fn build(
-        path_with_guard: PathWithGuard,
-        spawn_mode: RocksDbSpawnMode,
-        max_stream_queries: usize,
+        config: &RocksDbStoreInternalConfig,
+        namespace: &str,
         effective_root_key: Vec<u8>,
     ) -> Result<RocksDbStoreInternal, RocksDbStoreInternalError> {
-        let path = path_with_guard.path_buf.clone();
-        if !std::path::Path::exists(&path) {
-            std::fs::create_dir(path.clone())?;
+        Self::check_namespace(namespace)?;
+        let mut path_buf = config.path_with_guard.path_buf.clone();
+        let mut path_with_guard = config.path_with_guard.clone();
+        path_buf.push(namespace);
+        path_with_guard.path_buf = path_buf.clone();
+        let max_stream_queries = config.common_config.max_stream_queries;
+        let spawn_mode = config.spawn_mode;
+        if !std::path::Path::exists(&path_buf) {
+            std::fs::create_dir(path_buf.clone())?;
         }
         let mut options = rocksdb::Options::default();
         options.create_if_missing(true);
-        let db = DB::open(&options, path)?;
+        let db = DB::open(&options, path_buf)?;
         let executor = RocksDbStoreExecutor {
             db: Arc::new(db),
             effective_root_key,
@@ -424,16 +429,17 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
         namespace: &str,
         root_key: &[u8],
     ) -> Result<Self, RocksDbStoreInternalError> {
-        Self::check_namespace(namespace)?;
-        let mut path_buf = config.path_with_guard.path_buf.clone();
-        let mut path_with_guard = config.path_with_guard.clone();
-        path_buf.push(namespace);
-        path_with_guard.path_buf = path_buf;
-        let max_stream_queries = config.common_config.max_stream_queries;
-        let spawn_mode = config.spawn_mode;
+        {
+            let effective_root_key = vec![1];
+            let store = RocksDbStoreInternal::build(config, namespace, effective_root_key)?;
+            let mut batch = Batch::new();
+            batch.put_key_value_bytes(root_key.to_vec(), vec![]);
+            store.write_batch(batch).await?;
+        }
+
         let mut effective_root_key = vec![0];
         effective_root_key.extend(root_key);
-        RocksDbStoreInternal::build(path_with_guard, spawn_mode, max_stream_queries, effective_root_key)
+        RocksDbStoreInternal::build(config, namespace, effective_root_key)
     }
 
     fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, RocksDbStoreInternalError> {
@@ -464,14 +470,8 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
     }
 
     async fn get_root_keys(config: &Self::Config, namespace: &str) -> Result<Vec<Vec<u8>>, RocksDbStoreInternalError> {
-        let mut path_buf = config.path_with_guard.path_buf.clone();
-        let mut path_with_guard = config.path_with_guard.clone();
-        path_buf.push(namespace);
-        path_with_guard.path_buf = path_buf;
-        let max_stream_queries = config.common_config.max_stream_queries;
-        let spawn_mode = config.spawn_mode;
         let effective_root_key = vec![1];
-        let store = RocksDbStoreInternal::build(path_with_guard, spawn_mode, max_stream_queries, effective_root_key)?;
+        let store = RocksDbStoreInternal::build(config, namespace, effective_root_key)?;
         Ok(store.find_keys_by_prefix(&[]).await?)
     }
 
