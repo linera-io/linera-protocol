@@ -312,6 +312,10 @@ where
         K::list_all(&config.inner_config).await
     }
 
+    async fn get_root_keys(config: &Self::Config, namespace: &str) -> Result<Vec<Vec<u8>>, Self::Error> {
+        K::get_root_keys(&config.inner_config, namespace).await
+    }
+
     async fn delete_all(config: &Self::Config) -> Result<(), Self::Error> {
         K::delete_all(&config.inner_config).await
     }
