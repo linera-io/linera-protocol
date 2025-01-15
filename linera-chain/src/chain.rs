@@ -195,7 +195,7 @@ where
     pub tip_state: RegisterView<C, ChainTipState>,
 
     /// Consensus state.
-    pub manager: RegisterView<C, ChainManager>,
+    pub manager: ChainManager<C>,
 
     /// Hashes of all certified blocks for this sender.
     /// This ends with `block_hash` and has length `usize::from(next_block_height)`.
@@ -381,7 +381,7 @@ where
 
     /// Returns true if there are no more outgoing messages in flight up to the given
     /// block height.
-    pub fn all_messages_delivered_up_to(&mut self, height: BlockHeight) -> bool {
+    pub fn all_messages_delivered_up_to(&self, height: BlockHeight) -> bool {
         tracing::debug!(
             "Messages left in {:.8}'s outbox: {:?}",
             self.chain_id(),
@@ -571,8 +571,8 @@ where
         self.execution_state_hash.set(Some(hash));
         let maybe_committee = self.execution_state.system.current_committee().into_iter();
         // Last, reset the consensus state based on the current ownership.
-        self.manager.get_mut().reset(
-            self.execution_state.system.ownership.get(),
+        self.manager.reset(
+            self.execution_state.system.ownership.get().clone(),
             BlockHeight(0),
             local_time,
             maybe_committee.flat_map(|(_, committee)| committee.keys_and_weights()),
@@ -873,8 +873,8 @@ where
         self.execution_state_hash.set(Some(state_hash));
         // Last, reset the consensus state based on the current ownership.
         let maybe_committee = self.execution_state.system.current_committee().into_iter();
-        self.manager.get_mut().reset(
-            self.execution_state.system.ownership.get(),
+        self.manager.reset(
+            self.execution_state.system.ownership.get().clone(),
             block.height.try_add_one()?,
             local_time,
             maybe_committee.flat_map(|(_, committee)| committee.keys_and_weights()),
