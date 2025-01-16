@@ -399,7 +399,7 @@ where
             user_services: self.user_services.clone(),
         };
         let root_key = bcs::to_bytes(&BaseKey::ChainState(chain_id))?;
-        let store = self.store.clone_with_root_key(&root_key)?;
+        let store = self.store.clone_with_root_key(&root_key).await?;
         let context = ViewContext::create_root_context(store, runtime_context).await?;
         ChainStateView::load(context).await
     }
