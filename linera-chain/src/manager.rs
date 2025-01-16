@@ -108,8 +108,8 @@ pub enum Outcome {
 
 pub type ValidatedOrConfirmedVote<'a> = Either<&'a Vote<ValidatedBlock>, &'a Vote<ConfirmedBlock>>;
 
-/// The current locked block: Validators are only allowed to sign any proposal with a different
-/// block if they see a `ValidatedBlock` certificate with a higher round.
+/// The current locked block: Validators are allowed to sign a different block (from the locked
+/// block) iff they see a `ValidatedBlockCertificate` for it with a higher round.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub enum LockedBlock {
