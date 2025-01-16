@@ -27,11 +27,11 @@ use crate::key_value_store::{
     store_processor_server::{StoreProcessor, StoreProcessorServer},
     KeyValue, OptValue, ReplyContainsKey, ReplyContainsKeys, ReplyCreateNamespace, ReplyDeleteAll,
     ReplyDeleteNamespace, ReplyExistsNamespace, ReplyFindKeyValuesByPrefix, ReplyFindKeysByPrefix,
-    ReplyListAll, ReplyReadMultiValues, ReplyReadValue, ReplySpecificChunk,
-    ReplyWriteBatchExtended, RequestContainsKey, RequestContainsKeys, RequestCreateNamespace,
-    RequestDeleteAll, RequestDeleteNamespace, RequestExistsNamespace, RequestFindKeyValuesByPrefix,
-    RequestFindKeysByPrefix, RequestListAll, RequestReadMultiValues, RequestReadValue,
-    RequestInsertRootKey, ReplyInsertRootKey, RequestGetRootKeys, ReplyGetRootKeys,
+    ReplyGetRootKeys, ReplyInsertRootKey, ReplyListAll, ReplyReadMultiValues, ReplyReadValue,
+    ReplySpecificChunk, ReplyWriteBatchExtended, RequestContainsKey, RequestContainsKeys,
+    RequestCreateNamespace, RequestDeleteAll, RequestDeleteNamespace, RequestExistsNamespace,
+    RequestFindKeyValuesByPrefix, RequestFindKeysByPrefix, RequestGetRootKeys,
+    RequestInsertRootKey, RequestListAll, RequestReadMultiValues, RequestReadValue,
     RequestSpecificChunk, RequestWriteBatchExtended,
 };
 
@@ -535,7 +535,12 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
-    #[instrument(target = "store_server", skip_all, err, fields(list_all = "get_root_keys"))]
+    #[instrument(
+        target = "store_server",
+        skip_all,
+        err,
+        fields(list_all = "get_root_keys")
+    )]
     async fn process_get_root_keys(
         &self,
         request: Request<RequestGetRootKeys>,
@@ -547,15 +552,23 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
-    #[instrument(target = "store_server", skip_all, err, fields(list_all = "insert_root_key"))]
+    #[instrument(
+        target = "store_server",
+        skip_all,
+        err,
+        fields(list_all = "insert_root_key")
+    )]
     async fn process_insert_root_key(
         &self,
         request: Request<RequestInsertRootKey>,
     ) -> Result<Response<ReplyInsertRootKey>, Status> {
         let request = request.into_inner();
-        let RequestInsertRootKey { namespace, root_key } = request;
+        let RequestInsertRootKey {
+            namespace,
+            root_key,
+        } = request;
         self.insert_root_key(&namespace, &root_key).await?;
-        let response = ReplyInsertRootKey { };
+        let response = ReplyInsertRootKey {};
         Ok(Response::new(response))
     }
 

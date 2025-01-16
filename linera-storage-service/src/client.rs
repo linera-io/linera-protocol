@@ -27,13 +27,12 @@ use crate::{
     key_value_store::{
         statement::Operation, store_processor_client::StoreProcessorClient, KeyValue,
         KeyValueAppend, ReplyContainsKey, ReplyContainsKeys, ReplyExistsNamespace,
-        ReplyFindKeyValuesByPrefix, ReplyFindKeysByPrefix, ReplyListAll, ReplyReadMultiValues,
-        ReplyReadValue, ReplySpecificChunk, RequestContainsKey, RequestContainsKeys,
-        RequestCreateNamespace, RequestDeleteAll, RequestDeleteNamespace, RequestExistsNamespace,
-        RequestFindKeyValuesByPrefix, RequestFindKeysByPrefix, RequestListAll,
-        RequestReadMultiValues, RequestReadValue, RequestSpecificChunk, RequestWriteBatchExtended,
-        RequestInsertRootKey, RequestGetRootKeys, ReplyGetRootKeys,
-        Statement,
+        ReplyFindKeyValuesByPrefix, ReplyFindKeysByPrefix, ReplyGetRootKeys, ReplyListAll,
+        ReplyReadMultiValues, ReplyReadValue, ReplySpecificChunk, RequestContainsKey,
+        RequestContainsKeys, RequestCreateNamespace, RequestDeleteAll, RequestDeleteNamespace,
+        RequestExistsNamespace, RequestFindKeyValuesByPrefix, RequestFindKeysByPrefix,
+        RequestGetRootKeys, RequestInsertRootKey, RequestListAll, RequestReadMultiValues,
+        RequestReadValue, RequestSpecificChunk, RequestWriteBatchExtended, Statement,
     },
 };
 
@@ -400,7 +399,10 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
         let endpoint = Endpoint::from_shared(endpoint)?;
         let channel = endpoint.connect_lazy();
         let mut client = StoreProcessorClient::new(channel.clone());
-        let query = RequestInsertRootKey { namespace, root_key };
+        let query = RequestInsertRootKey {
+            namespace,
+            root_key,
+        };
         let request = tonic::Request::new(query);
         let _response = client.process_insert_root_key(request).await?;
         Ok(Self {
@@ -419,7 +421,10 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
         let mut start_key = self.start_key[..prefix_len].to_vec();
         start_key.extend(root_key);
         let mut client = StoreProcessorClient::new(channel);
-        let query = RequestInsertRootKey { namespace, root_key: root_key.to_vec() };
+        let query = RequestInsertRootKey {
+            namespace,
+            root_key: root_key.to_vec(),
+        };
         let request = tonic::Request::new(query);
         let _response = client.process_insert_root_key(request).await?;
         let channel = self.channel.clone();
@@ -450,7 +455,10 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
         Ok(namespaces)
     }
 
-    async fn get_root_keys(config: &Self::Config, namespace: &str) -> Result<Vec<Vec<u8>>, ServiceStoreError> {
+    async fn get_root_keys(
+        config: &Self::Config,
+        namespace: &str,
+    ) -> Result<Vec<Vec<u8>>, ServiceStoreError> {
         let namespace = Self::namespace_as_vec(namespace)?;
         let query = RequestGetRootKeys { namespace };
         let request = tonic::Request::new(query);
