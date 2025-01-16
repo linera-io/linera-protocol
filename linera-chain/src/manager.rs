@@ -404,13 +404,15 @@ where
         // We don't compare to `current_round` here: Non-validators must update their locked block
         // even if it is older than the current round. Validators will only sign in the current
         // round, though. (See `create_final_vote` below.)
-        if let Some(LockedBlock::Regular(locked)) = self.locked.get() {
-            if locked.hash() == certificate.hash() && locked.round == certificate.round {
-                return Ok(Outcome::Skip);
+        if let Some(locked) = self.locked.get() {
+            if let LockedBlock::Regular(locked_cert) = locked {
+                if locked_cert.hash() == certificate.hash() && locked.round() == certificate.round {
+                    return Ok(Outcome::Skip); // We already handled this certificate.
+                }
             }
             ensure!(
-                new_round > locked.round,
-                ChainError::InsufficientRoundStrict(locked.round)
+                new_round > locked.round(),
+                ChainError::InsufficientRoundStrict(locked.round())
             );
         }
         Ok(Outcome::Accept)
@@ -443,7 +445,7 @@ where
                     self.set_locked(LockedBlock::Regular(certificate), blobs)?;
                 }
             }
-        } else if proposal.content.round.is_fast() {
+        } else if round.is_fast() {
             // The fast block also counts as locked.
             self.set_locked(LockedBlock::Fast(proposal.clone()), blobs)?;
         }
