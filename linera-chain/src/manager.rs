@@ -450,13 +450,17 @@ where
             self.set_locked(LockedBlock::Fast(proposal.clone()), blobs)?;
         }
 
+        // If we are a client, we record the proposed block, in case it affects the current
+        // round number. That way, we don't make another proposal in the same round.
         let Some(key_pair) = key_pair else {
-            // Record the proposed block, in case it affects the current round number.
-            self.set_proposed(proposal);
-            self.update_current_round(local_time);
+            if proposal.content.round < Round::SingleLeader(0) {
+                self.set_proposed(proposal);
+                self.update_current_round(local_time);
+            }
             return Ok(None);
         };
 
+        // Otherwise we are a validator:
         self.check_proposal_round(&proposal)?;
         // Record the proposed block, so it can be supplied to clients that request it.
         self.set_proposed(proposal);
