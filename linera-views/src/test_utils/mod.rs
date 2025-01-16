@@ -713,6 +713,7 @@ where
     S::create(&config, &namespace).await.expect("creation");
     let prefix = vec![0];
     {
+        let size = 3;
         let mut rng = make_deterministic_rng();
         let store = S::connect(&config, &namespace, &[]).await.expect("store");
         let size_select = rng.gen_range(0..size);
@@ -724,7 +725,6 @@ where
         }
         store.write_batch(batch).await.expect("write batch");
 
-        let size = 3;
         for _ in 0..20 {
             let root_key = get_random_byte_vector(&mut rng, &[], 4);
             let cloned_store = store

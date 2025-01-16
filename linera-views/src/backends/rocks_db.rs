@@ -482,7 +482,7 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
     ) -> Result<Vec<Vec<u8>>, RocksDbStoreInternalError> {
         let effective_root_key = vec![1];
         let store = RocksDbStoreInternal::build(config, namespace, effective_root_key)?;
-        Ok(store.find_keys_by_prefix(&[]).await?)
+        store.find_keys_by_prefix(&[]).await
     }
 
     async fn delete_all(config: &Self::Config) -> Result<(), RocksDbStoreInternalError> {
