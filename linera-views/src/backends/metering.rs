@@ -479,7 +479,10 @@ where
         Ok(namespaces)
     }
 
-    async fn get_root_keys(config: &Self::Config, namespace: &str) -> Result<Vec<Vec<u8>>, Self::Error> {
+    async fn get_root_keys(
+        config: &Self::Config,
+        namespace: &str,
+    ) -> Result<Vec<Vec<u8>>, Self::Error> {
         let name = K::get_name();
         let counter = get_counter(&name);
         let _latency = counter.get_root_keys_latency.measure_latency();
