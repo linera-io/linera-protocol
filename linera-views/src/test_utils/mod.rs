@@ -713,13 +713,24 @@ where
     S::create(&config, &namespace).await.expect("creation");
     let prefix = vec![0];
     {
-        let store = S::connect(&config, &namespace, &[]).await.expect("store");
-
         let mut rng = make_deterministic_rng();
+        let store = S::connect(&config, &namespace, &[]).await.expect("store");
+        let size_select = rng.gen_range(0..size);
+        let mut batch = Batch::new();
+        for _ in 0..size_select {
+            let key = get_random_byte_vector(&mut rng, &prefix, 4);
+            batch.put_key_value_bytes(key.clone(), vec![]);
+            keys.insert((vec![], key));
+        }
+        store.write_batch(batch).await.expect("write batch");
+
         let size = 3;
         for _ in 0..20 {
             let root_key = get_random_byte_vector(&mut rng, &[], 4);
-            let cloned_store = store.clone_with_root_key(&root_key).await.expect("cloned store");
+            let cloned_store = store
+                .clone_with_root_key(&root_key)
+                .await
+                .expect("cloned store");
             root_keys.push(root_key.clone());
             let size_select = rng.gen_range(0..size);
             let mut batch = Batch::new();
@@ -734,7 +745,9 @@ where
 
     let mut read_keys = BTreeSet::new();
     for root_key in root_keys {
-        let store = S::connect(&config, &namespace, &root_key).await.expect("store");
+        let store = S::connect(&config, &namespace, &root_key)
+            .await
+            .expect("store");
         let keys = store.find_keys_by_prefix(&prefix).await.expect("keys");
         for key in keys.iterator() {
             let key = key.expect("key");

@@ -23,8 +23,8 @@ use crate::{
     common::get_upper_bound,
     lru_caching::{LruCachingConfig, LruCachingStore},
     store::{
-        AdminKeyValueStore, CommonStoreInternalConfig, KeyValueStoreError,
-        ReadableKeyValueStore, WithError, WritableKeyValueStore,
+        AdminKeyValueStore, CommonStoreInternalConfig, KeyValueStoreError, ReadableKeyValueStore,
+        WithError, WritableKeyValueStore,
     },
     value_splitting::{ValueSplittingError, ValueSplittingStore},
 };
@@ -442,15 +442,15 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
         RocksDbStoreInternal::build(config, namespace, effective_root_key)
     }
 
-    async fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, RocksDbStoreInternalError> {
+    async fn clone_with_root_key(
+        &self,
+        root_key: &[u8],
+    ) -> Result<Self, RocksDbStoreInternalError> {
         let mut store = self.clone();
-        {
-            store.executor.effective_root_key = vec![1];
-            let mut batch = Batch::new();
-            batch.put_key_value_bytes(root_key.to_vec(), vec![]);
-            store.write_batch(batch).await?;
-        }
-
+        store.executor.effective_root_key = vec![1];
+        let mut batch = Batch::new();
+        batch.put_key_value_bytes(root_key.to_vec(), vec![]);
+        store.write_batch(batch).await?;
         let mut effective_root_key = vec![0];
         effective_root_key.extend(root_key);
         store.executor.effective_root_key = effective_root_key;
@@ -476,7 +476,10 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
         Ok(namespaces)
     }
 
-    async fn get_root_keys(config: &Self::Config, namespace: &str) -> Result<Vec<Vec<u8>>, RocksDbStoreInternalError> {
+    async fn get_root_keys(
+        config: &Self::Config,
+        namespace: &str,
+    ) -> Result<Vec<Vec<u8>>, RocksDbStoreInternalError> {
         let effective_root_key = vec![1];
         let store = RocksDbStoreInternal::build(config, namespace, effective_root_key)?;
         Ok(store.find_keys_by_prefix(&[]).await?)
