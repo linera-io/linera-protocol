@@ -166,7 +166,7 @@ impl Serialize for CryptoHash {
         if serializer.is_human_readable() {
             serializer.serialize_str(&self.to_string())
         } else {
-            serializer.serialize_newtype_struct("CryptoHash", &self.0)
+            serializer.serialize_newtype_struct("CryptoHash", &self.0 .0)
         }
     }
 }
@@ -183,10 +183,10 @@ impl<'de> Deserialize<'de> for CryptoHash {
         } else {
             #[derive(Deserialize)]
             #[serde(rename = "CryptoHash")]
-            struct Foo(B256);
+            struct Foo([u8; 32]);
 
             let value = Foo::deserialize(deserializer)?;
-            Ok(Self(value.0))
+            Ok(Self(value.0.into()))
         }
     }
 }
