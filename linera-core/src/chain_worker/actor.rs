@@ -149,6 +149,13 @@ where
         callback: oneshot::Sender<Result<Blob, WorkerError>>,
     },
 
+    /// Handle a blob that belongs to a pending proposal or validated block certificate.
+    HandlePendingBlob {
+        blob: Blob,
+        #[debug(skip)]
+        callback: oneshot::Sender<Result<ChainInfoResponse, WorkerError>>,
+    },
+
     /// Update the received certificate trackers to at least the given values.
     UpdateReceivedCertificateTrackers {
         new_trackers: BTreeMap<ValidatorName, u64>,
@@ -339,6 +346,9 @@ where
                     .is_ok(),
                 ChainWorkerRequest::DownloadPendingBlob { blob_id, callback } => callback
                     .send(self.worker.download_pending_blob(blob_id).await)
+                    .is_ok(),
+                ChainWorkerRequest::HandlePendingBlob { blob, callback } => callback
+                    .send(self.worker.handle_pending_blob(blob).await)
                     .is_ok(),
                 ChainWorkerRequest::UpdateReceivedCertificateTrackers {
                     new_trackers,

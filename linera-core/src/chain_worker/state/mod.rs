@@ -300,6 +300,17 @@ where
         maybe_blob.ok_or_else(|| WorkerError::BlobsNotFound(vec![blob_id]))
     }
 
+    /// Adds the blob to pending blocks or validated block certificates that are missing it.
+    pub(super) async fn handle_pending_blob(
+        &mut self,
+        blob: Blob,
+    ) -> Result<ChainInfoResponse, WorkerError> {
+        ChainWorkerStateWithAttemptedChanges::new(&mut *self)
+            .await
+            .handle_pending_blob(blob)
+            .await
+    }
+
     /// Ensures that the current chain is active, returning an error otherwise.
     fn ensure_is_active(&mut self) -> Result<(), WorkerError> {
         if !self.knows_chain_is_active {

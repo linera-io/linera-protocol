@@ -116,6 +116,13 @@ pub trait ValidatorNode {
         blob_id: BlobId,
     ) -> Result<BlobContent, NodeError>;
 
+    /// Handles a blob that belongs to a pending proposal or validated block certificate.
+    async fn handle_pending_blob(
+        &self,
+        chain_id: ChainId,
+        blob: Blob,
+    ) -> Result<ChainInfoResponse, NodeError>;
+
     async fn download_certificate(
         &self,
         hash: CryptoHash,

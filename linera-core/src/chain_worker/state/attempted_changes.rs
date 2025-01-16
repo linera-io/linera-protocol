@@ -560,6 +560,16 @@ where
         Ok(())
     }
 
+    pub(super) async fn handle_pending_blob(
+        &mut self,
+        _blob: Blob, // TODO
+    ) -> Result<ChainInfoResponse, WorkerError> {
+        Ok(ChainInfoResponse::new(
+            &self.state.chain,
+            self.state.config.key_pair(),
+        ))
+    }
+
     /// Stores the chain state in persistent storage.
     ///
     /// Waits until the [`ChainStateView`] is no longer shared before persisting the changes.

@@ -200,6 +200,17 @@ where
         .await
     }
 
+    async fn handle_pending_blob(
+        &self,
+        chain_id: ChainId,
+        blob: Blob,
+    ) -> Result<ChainInfoResponse, NodeError> {
+        self.spawn_and_receive(move |validator, sender| {
+            validator.do_handle_pending_blob(chain_id, blob, sender)
+        })
+        .await
+    }
+
     async fn download_certificate(
         &self,
         hash: CryptoHash,
@@ -514,6 +525,21 @@ where
             .await
             .map_err(Into::into);
         sender.send(result.map(|blob| blob.into_content()))
+    }
+
+    async fn do_handle_pending_blob(
+        self,
+        chain_id: ChainId,
+        blob: Blob,
+        sender: oneshot::Sender<Result<ChainInfoResponse, NodeError>>,
+    ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
+        let validator = self.client.lock().await;
+        let result = validator
+            .state
+            .handle_pending_blob(chain_id, blob)
+            .await
+            .map_err(Into::into);
+        sender.send(result)
     }
 
     async fn do_download_certificate(

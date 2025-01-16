@@ -819,78 +819,84 @@ RpcMessage:
             - TYPENAME: ChainId
             - TYPENAME: BlobId
     9:
+      HandlePendingBlob:
+        NEWTYPE:
+          TUPLE:
+            - TYPENAME: ChainId
+            - TYPENAME: BlobContent
+    10:
       DownloadConfirmedBlock:
         NEWTYPE:
           TYPENAME: CryptoHash
-    10:
+    11:
       DownloadCertificates:
         NEWTYPE:
           SEQ:
             TYPENAME: CryptoHash
-    11:
+    12:
       BlobLastUsedBy:
         NEWTYPE:
           TYPENAME: BlobId
-    12:
+    13:
       MissingBlobIds:
         NEWTYPE:
           SEQ:
             TYPENAME: BlobId
-    13:
-      VersionInfoQuery: UNIT
     14:
-      GenesisConfigHashQuery: UNIT
+      VersionInfoQuery: UNIT
     15:
+      GenesisConfigHashQuery: UNIT
+    16:
       Vote:
         NEWTYPE:
           TYPENAME: LiteVote
-    16:
+    17:
       ChainInfoResponse:
         NEWTYPE:
           TYPENAME: ChainInfoResponse
-    17:
+    18:
       Error:
         NEWTYPE:
           TYPENAME: NodeError
-    18:
+    19:
       VersionInfoResponse:
         NEWTYPE:
           TYPENAME: VersionInfo
-    19:
+    20:
       GenesisConfigHashResponse:
         NEWTYPE:
           TYPENAME: CryptoHash
-    20:
+    21:
       UploadBlobResponse:
         NEWTYPE:
           TYPENAME: BlobId
-    21:
+    22:
       DownloadBlobResponse:
         NEWTYPE:
           TYPENAME: BlobContent
-    22:
+    23:
       DownloadPendingBlobResponse:
         NEWTYPE:
           TYPENAME: BlobContent
-    23:
+    24:
       DownloadConfirmedBlockResponse:
         NEWTYPE:
           TYPENAME: ExecutedBlock
-    24:
+    25:
       DownloadCertificatesResponse:
         NEWTYPE:
           SEQ:
             TYPENAME: ConfirmedBlockCertificate
-    25:
+    26:
       BlobLastUsedByResponse:
         NEWTYPE:
           TYPENAME: CryptoHash
-    26:
+    27:
       MissingBlobIdsResponse:
         NEWTYPE:
           SEQ:
             TYPENAME: BlobId
-    27:
+    28:
       CrossChainRequest:
         NEWTYPE:
           TYPENAME: CrossChainRequest

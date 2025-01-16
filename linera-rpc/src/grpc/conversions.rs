@@ -712,6 +712,28 @@ impl TryFrom<api::PendingBlobRequest> for (ChainId, BlobId) {
     }
 }
 
+impl TryFrom<(ChainId, BlobContent)> for api::HandlePendingBlobRequest {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from((chain_id, blob_content): (ChainId, BlobContent)) -> Result<Self, Self::Error> {
+        Ok(Self {
+            chain_id: Some(chain_id.into()),
+            blob: Some(blob_content.try_into()?),
+        })
+    }
+}
+
+impl TryFrom<api::HandlePendingBlobRequest> for (ChainId, BlobContent) {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(request: api::HandlePendingBlobRequest) -> Result<Self, Self::Error> {
+        Ok((
+            try_proto_convert(request.chain_id)?,
+            try_proto_convert(request.blob)?,
+        ))
+    }
+}
+
 impl TryFrom<BlobContent> for api::PendingBlobResult {
     type Error = GrpcProtoConversionError;
 
@@ -1097,6 +1119,14 @@ pub mod tests {
     pub fn test_pending_blob_result() {
         let blob = BlobContent::new_data(*b"foo");
         round_trip_check::<_, api::PendingBlobResult>(blob);
+    }
+
+    #[test]
+    pub fn test_handle_pending_blob_request() {
+        let chain_id = ChainId::root(2);
+        let blob_content = BlobContent::new_data(*b"foo");
+        let pending_blob_request = (chain_id, blob_content);
+        round_trip_check::<_, api::HandlePendingBlobRequest>(pending_blob_request);
     }
 
     #[test]

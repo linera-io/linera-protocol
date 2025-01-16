@@ -19,6 +19,7 @@ use linera_chain::{
     },
 };
 use linera_core::{
+    data_types::ChainInfoResponse,
     node::{CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
     worker::Notification,
 };
@@ -382,6 +383,16 @@ impl ValidatorNode for GrpcClient {
     ) -> Result<BlobContent, NodeError> {
         let req = api::PendingBlobRequest::try_from((chain_id, blob_id))?;
         client_delegate!(self, download_pending_blob, req)?.try_into()
+    }
+
+    #[instrument(target = "grpc_client", skip(self), err, fields(address = self.address))]
+    async fn handle_pending_blob(
+        &self,
+        chain_id: ChainId,
+        blob: Blob,
+    ) -> Result<ChainInfoResponse, NodeError> {
+        let req = api::HandlePendingBlobRequest::try_from((chain_id, blob.into_content()))?;
+        GrpcClient::try_into_chain_info(client_delegate!(self, handle_pending_blob, req)?)
     }
 
     #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
