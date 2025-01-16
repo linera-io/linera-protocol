@@ -28,6 +28,8 @@ pub enum KeyTag {
     Key = MIN_VIEW_TAG,
     /// Prefix for the storage of existence or not of the namespaces.
     Namespace,
+    /// Prefix for the root key
+    RootKey,
 }
 
 #[derive(Debug, Error)]

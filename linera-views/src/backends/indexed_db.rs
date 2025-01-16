@@ -52,7 +52,7 @@ pub struct IndexedDbStore {
     /// The maximum number of queries used for the stream.
     pub max_stream_queries: usize,
     /// The used root key
-    effective_root_key: Vec<u8>,
+    start_key: Vec<u8>,
 }
 
 impl IndexedDbStore {
@@ -66,7 +66,7 @@ impl IndexedDbStore {
     }
 
     fn full_key(&self, key: &[u8]) -> Vec<u8> {
-        let mut full_key = self.effective_root_key.clone();
+        let mut full_key = self.start_key.clone();
         full_key.extend(key);
         full_key
     }
@@ -74,7 +74,7 @@ impl IndexedDbStore {
     async fn connect_internal(
         config: &IndexedDbStoreConfig,
         namespace: &str,
-        effective_root_key: Vec<u8>,
+        start_key: Vec<u8>,
     ) -> Result<Self, IndexedDbStoreError> {
         let namespace = namespace.to_string();
         let object_store_name = namespace.clone();
@@ -95,7 +95,7 @@ impl IndexedDbStore {
             database,
             object_store_name,
             max_stream_queries: config.common_config.max_stream_queries,
-            effective_root_key,
+            start_key,
         })
     }
 }
@@ -265,14 +265,14 @@ impl LocalAdminKeyValueStore for IndexedDbStore {
         namespace: &str,
         root_key: &[u8],
     ) -> Result<Self, IndexedDbStoreError> {
-        let effective_root_key = vec![1];
-        let mut store = Self::connect_internal(config, namespace, effective_root_key).await?;
+        let start_key = vec![1];
+        let mut store = Self::connect_internal(config, namespace, start_key).await?;
         let mut batch = Batch::new();
         batch.put_key_value_bytes(root_key.to_vec(), vec![]);
         store.write_batch(batch).await?;
-        let mut effective_root_key = vec![0];
-        effective_root_key.extend(root_key);
-        store.effective_root_key = effective_root_key;
+        let mut start_key = vec![0];
+        start_key.extend(root_key);
+        store.start_key = start_key;
         Ok(store)
     }
 
@@ -284,15 +284,15 @@ impl LocalAdminKeyValueStore for IndexedDbStore {
             database,
             object_store_name,
             max_stream_queries,
-            effective_root_key: vec![1],
+            start_key: vec![1],
         };
         let mut batch = Batch::new();
         batch.put_key_value_bytes(root_key.to_vec(), vec![]);
         store.write_batch(batch).await?;
 
-        let mut effective_root_key = vec![0];
-        effective_root_key.extend(root_key);
-        store.effective_root_key = effective_root_key;
+        let mut start_key = vec![0];
+        start_key.extend(root_key);
+        store.start_key = start_key;
         Ok(store)
     }
 
@@ -309,8 +309,8 @@ impl LocalAdminKeyValueStore for IndexedDbStore {
         config: &Self::Config,
         namespace: &str,
     ) -> Result<Vec<Vec<u8>>, IndexedDbStoreError> {
-        let effective_root_key = vec![1];
-        let store = Self::connect_internal(config, namespace, effective_root_key).await?;
+        let start_key = vec![1];
+        let store = Self::connect_internal(config, namespace, start_key).await?;
         store.find_keys_by_prefix(&[]).await
     }
 
