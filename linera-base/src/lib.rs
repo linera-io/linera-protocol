@@ -21,6 +21,7 @@ pub mod data_types;
 pub mod dyn_convert;
 mod graphql;
 pub mod hashed;
+pub mod http;
 pub mod identifiers;
 mod limited_writer;
 pub mod ownership;
