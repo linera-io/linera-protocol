@@ -363,7 +363,10 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
         })
     }
 
-    async fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, DynamoDbStoreInternalError> {
+    async fn clone_with_root_key(
+        &self,
+        root_key: &[u8],
+    ) -> Result<Self, DynamoDbStoreInternalError> {
         let client = self.client.clone();
         let namespace = self.namespace.clone();
         let semaphore = self.semaphore.clone();
@@ -407,7 +410,8 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
     ) -> Result<Vec<Vec<u8>>, DynamoDbStoreInternalError> {
         use aws_sdk_dynamodb::operation::describe_table::DescribeTableOutput;
         let client = Client::from_conf(config.config.clone());
-        let response : DescribeTableOutput = client.describe_table().table_name(namespace).send().await?;
+        let response: DescribeTableOutput =
+            client.describe_table().table_name(namespace).send().await?;
         let Some(table_description) = response.table() else {
             return Ok(Vec::new());
         };
