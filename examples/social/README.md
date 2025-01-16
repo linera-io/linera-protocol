@@ -56,7 +56,7 @@ APP_ID=$(linera --with-wallet 0 project publish-and-create examples/social)
 This will output the new application ID, e.g.:
 
 ```rust
-aee928d4bf3880353b4a3cd9b6f88e6cc6e5ed050860abae439e7782e9b2dfe8010000000000000000000000aee928d4bf3880353b4a3cd9b6f88e6cc6e5ed050860abae439e7782e9b2dfe8030000000000000000000000
+20dc1ed01670501414eb59defe71f9a7b817fe2da18fcdd5e704bbac32f5bd97a020afcb645167bcaacd1d8cee9083605f42a95de24e056f3a958c7ca91f9f728ac320aee928d4bf3880353b4a3cd9b6f88e6cc6e5ed050860abae439e7782e9b2dfe8020000000000000000000000
 ```
 
 With the `wallet show` command you can find the ID of the application creator's chain:
