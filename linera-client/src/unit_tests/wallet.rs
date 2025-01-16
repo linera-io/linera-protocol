@@ -15,7 +15,7 @@ use rand::SeedableRng as _;
 use super::util::make_genesis_config;
 use crate::{client_context::ClientContext, config::WalletState, wallet::Wallet};
 
-/// Tests wether we can correctly save a wallet that contains pending blobs.
+/// Tests whether we can correctly save a wallet that contains pending blobs.
 #[test_log::test(tokio::test)]
 async fn test_save_wallet_with_pending_blobs() -> anyhow::Result<()> {
     let mut rng = rand::rngs::StdRng::seed_from_u64(42);
