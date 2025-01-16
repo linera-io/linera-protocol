@@ -213,7 +213,7 @@ pub enum NodeError {
     #[error("We don't have the value for the certificate.")]
     MissingCertificateValue,
 
-    #[error("Reponse doesn't contain requested ceritifcates: {0:?}")]
+    #[error("Response doesn't contain requested ceritifcates: {0:?}")]
     MissingCertificates(Vec<CryptoHash>),
 
     #[error("Validator's response to block proposal failed to include a vote")]
