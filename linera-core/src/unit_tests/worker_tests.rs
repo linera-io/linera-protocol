@@ -32,6 +32,7 @@ use linera_chain::{
         IncomingBundle, LiteValue, LiteVote, Medium, MessageAction, MessageBundle, Origin,
         OutgoingMessage, PostedMessage, SignatureAggregator,
     },
+    manager::LockedBlock,
     test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt, VoteTestExt},
     types::{
         CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate, Timeout,
@@ -3349,7 +3350,7 @@ where
     let (response, _) = worker.handle_chain_info_query(query_values.clone()).await?;
     assert_eq!(
         response.info.manager.requested_locked,
-        Some(Box::new(certificate1))
+        Some(Box::new(LockedBlock::Regular(certificate1)))
     );
 
     // Proposing block2 now would fail.
@@ -3376,7 +3377,7 @@ where
     let (response, _) = worker.handle_chain_info_query(query_values.clone()).await?;
     assert_eq!(
         response.info.manager.requested_locked,
-        Some(Box::new(certificate2))
+        Some(Box::new(LockedBlock::Regular(certificate2)))
     );
     let vote = response.info.manager.pending.as_ref().unwrap();
     assert_eq!(vote.value, lite_value2);
@@ -3421,7 +3422,7 @@ where
     let (response, _) = worker.handle_chain_info_query(query_values).await?;
     assert_eq!(
         response.info.manager.requested_locked,
-        Some(Box::new(certificate))
+        Some(Box::new(LockedBlock::Regular(certificate)))
     );
     Ok(())
 }
@@ -3561,6 +3562,7 @@ where
     let value1 = Hashed::new(ConfirmedBlock::new(executed_block1));
     let (response, _) = worker.handle_block_proposal(proposal1).await?;
     let vote = response.info.manager.pending.as_ref().unwrap();
+    assert_eq!(vote.round, Round::Fast);
     assert_eq!(vote.value.value_hash, value1.hash());
 
     // Set the clock to the end of the round.
@@ -3576,20 +3578,29 @@ where
     assert_eq!(response.info.manager.current_round, Round::MultiLeader(0));
     assert_eq!(response.info.manager.leader, None);
 
-    // Now any owner can propose a block. But block1 is locked.
+    // Now any owner can propose a block. But block1 is locked. Re-proposing it is allowed.
+    let proposal1b = block1
+        .clone()
+        .into_proposal_with_round(&key_pairs[1], Round::MultiLeader(0));
+    let (response, _) = worker.handle_block_proposal(proposal1b).await?;
+    let vote = response.info.manager.pending.as_ref().unwrap();
+    assert_eq!(vote.round, Round::MultiLeader(0));
+    assert_eq!(vote.value.value_hash, value1.hash());
+
+    // Proposing a different block is not.
     let block2 = make_child_block(&value0)
         .with_simple_transfer(ChainId::root(1), Amount::ONE)
         .with_authenticated_signer(Some(pub_key1.into()));
     let proposal2 = block2
         .clone()
-        .into_proposal_with_round(&key_pairs[1], Round::MultiLeader(0));
+        .into_proposal_with_round(&key_pairs[1], Round::MultiLeader(1));
     let result = worker.handle_block_proposal(proposal2).await;
     assert_matches!(result, Err(WorkerError::ChainError(err))
         if matches!(*err, ChainError::HasLockedBlock(_, Round::Fast))
     );
     let proposal3 = block1
         .clone()
-        .into_proposal_with_round(&key_pairs[1], Round::MultiLeader(0));
+        .into_proposal_with_round(&key_pairs[1], Round::MultiLeader(2));
     worker.handle_block_proposal(proposal3).await?;
 
     // A validated block certificate from a later round can override the locked fast block.
@@ -3598,7 +3609,7 @@ where
     let certificate2 =
         make_certificate_with_round(&committee, &worker, value2.clone(), Round::MultiLeader(0));
     let proposal = BlockProposal::new_retry(
-        Round::MultiLeader(1),
+        Round::MultiLeader(3),
         certificate2.clone(),
         &key_pairs[1],
         Vec::new(),
@@ -3609,11 +3620,11 @@ where
     let (response, _) = worker.handle_chain_info_query(query_values).await?;
     assert_eq!(
         response.info.manager.requested_locked,
-        Some(Box::new(certificate2))
+        Some(Box::new(LockedBlock::Regular(certificate2)))
     );
     let vote = response.info.manager.pending.as_ref().unwrap();
     assert_eq!(vote.value, lite_value2);
-    assert_eq!(vote.round, Round::MultiLeader(1));
+    assert_eq!(vote.round, Round::MultiLeader(3));
     Ok(())
 }
 
