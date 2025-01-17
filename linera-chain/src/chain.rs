@@ -149,7 +149,7 @@ static STATE_HASH_COMPUTATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(||
 });
 
 /// The BCS-serialized size of an empty [`Block`].
-const EMPTY_BLOCK_SIZE: usize = 92;
+const EMPTY_BLOCK_SIZE: usize = 91;
 
 /// An origin, cursor and timestamp of a unskippable bundle in our inbox.
 #[derive(Debug, Clone, Serialize, Deserialize, async_graphql::SimpleObject)]
