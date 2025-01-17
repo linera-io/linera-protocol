@@ -101,6 +101,39 @@ impl Query {
             balance: value,
         }
     }
+
+    /// Reads the transfer events emitted by the monitored Ethereum contract.
+    async fn read_transfer_events(&self, end_block: u64) -> Vec<TransferEvent> {
+        let start_block = *self.0.state.start_block.get();
+        let events = self
+            .read_events(
+                "Transfer(address indexed,address indexed,uint256)",
+                start_block,
+                end_block,
+            )
+            .await;
+
+        events
+            .into_iter()
+            .map(|event| {
+                let EthereumDataType::Address(source) = event.values[0].clone() else {
+                    panic!("wrong type for the first entry");
+                };
+                let EthereumDataType::Address(destination) = event.values[1].clone() else {
+                    panic!("wrong type for the second entry");
+                };
+                let EthereumDataType::Uint256(value) = event.values[2] else {
+                    panic!("wrong type for the third entry");
+                };
+
+                TransferEvent {
+                    source,
+                    value,
+                    destination,
+                }
+            })
+            .collect()
+    }
 }
 
 impl Query {
@@ -135,3 +168,12 @@ pub struct InitialEvent {
     balance: U256,
 }
 async_graphql::scalar!(InitialEvent);
+
+/// The transfer events emitted by the contract.
+#[derive(Clone, Default, Deserialize, Serialize)]
+pub struct TransferEvent {
+    source: String,
+    value: U256,
+    destination: String,
+}
+async_graphql::scalar!(TransferEvent);
