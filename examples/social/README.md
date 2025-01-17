@@ -64,7 +64,7 @@ With the `wallet show` command you can find the ID of the application creator's 
 ```bash
 linera --with-wallet 0 wallet show
 
-CHAIN_1=1db1936dad0717597a7743a8353c9c0191c14c3a129b258e9743aec2b4f05d03
+CHAIN_1=582843bc9322ed1928239ce3f6a855f6cd9ea94c8690907f113d6d7a8296a119
 CHAIN_2=aee928d4bf3880353b4a3cd9b6f88e6cc6e5ed050860abae439e7782e9b2dfe8
 ```
 
