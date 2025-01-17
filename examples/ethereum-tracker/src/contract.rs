@@ -9,7 +9,6 @@ use alloy::primitives::U256;
 use ethereum_tracker::{EthereumTrackerAbi, InstantiationArgument};
 use linera_sdk::{
     base::WithContractAbi,
-    ethereum::ContractEthereumClient,
     views::{RootView, View},
     Contract, ContractRuntime,
 };
@@ -76,13 +75,6 @@ impl Contract for EthereumTrackerContract {
 }
 
 impl EthereumTrackerContract {
-    fn get_endpoints(&self) -> (ContractEthereumClient, String) {
-        let url = self.state.ethereum_endpoint.get().clone();
-        let contract_address = self.state.contract_address.get().clone();
-        let ethereum_client = ContractEthereumClient { url };
-        (ethereum_client, contract_address)
-    }
-
     /// Reads the initial event emitted by the Ethereum contract, with the initial account and its
     /// balance.
     async fn read_initial(&mut self) {
