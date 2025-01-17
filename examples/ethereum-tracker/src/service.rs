@@ -7,14 +7,17 @@ mod state;
 
 use std::sync::Arc;
 
+use alloy::primitives::U256;
 use async_graphql::{EmptySubscription, Request, Response, Schema};
 use ethereum_tracker::{Operation, U256Cont};
 use linera_sdk::{
     base::WithServiceAbi,
+    ethereum::{EthereumDataType, EthereumEvent, EthereumQueries, ServiceEthereumClient},
     graphql::GraphQLMutationRoot,
     views::{MapView, View},
     Service, ServiceRuntime,
 };
+use serde::{Deserialize, Serialize};
 
 use self::state::EthereumTrackerState;
 
@@ -76,4 +79,59 @@ impl Query {
     async fn accounts(&self) -> &MapView<String, U256Cont> {
         &self.0.state.accounts
     }
+
+    /// Reads the initial Ethereum event emitted by the monitored contract.
+    async fn read_initial_event(&self) -> InitialEvent {
+        let start_block = *self.0.state.start_block.get();
+        let events = self
+            .read_events("Initial(address,uint256)", start_block, start_block + 1)
+            .await;
+
+        assert_eq!(events.len(), 1);
+        let event = &events[0];
+        let EthereumDataType::Address(address) = event.values[0].clone() else {
+            panic!("wrong type for the first entry");
+        };
+        let EthereumDataType::Uint256(value) = event.values[1] else {
+            panic!("wrong type for the second entry");
+        };
+
+        InitialEvent {
+            address,
+            balance: value,
+        }
+    }
 }
+
+impl Query {
+    /// Reads events of type `event_name` from the monitored contract emitted during the requested
+    /// block height range.
+    async fn read_events(
+        &self,
+        event_name: &str,
+        start_block: u64,
+        end_block: u64,
+    ) -> Vec<EthereumEvent> {
+        let url = self.0.state.ethereum_endpoint.get().clone();
+        let contract_address = self.0.state.contract_address.get().clone();
+        let ethereum_client = ServiceEthereumClient { url };
+
+        ethereum_client
+            .read_events(&contract_address, event_name, start_block, end_block)
+            .await
+            .unwrap_or_else(|error| {
+                panic!(
+                    "Failed to read Ethereum events for {contract_address} \
+                    from block {start_block} to block {end_block}: {error}"
+                )
+            })
+    }
+}
+
+/// The initial event emitted by the contract.
+#[derive(Clone, Default, Deserialize, Serialize)]
+pub struct InitialEvent {
+    address: String,
+    balance: U256,
+}
+async_graphql::scalar!(InitialEvent);
