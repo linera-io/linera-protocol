@@ -8,7 +8,7 @@ mod state;
 use ethereum_tracker::{EthereumTrackerAbi, InstantiationArgument, U256Cont};
 use linera_sdk::{
     base::WithContractAbi,
-    ethereum::{EthereumClient, EthereumDataType, EthereumQueries as _},
+    ethereum::{ContractEthereumClient, EthereumDataType, EthereumQueries as _},
     views::{RootView, View},
     Contract, ContractRuntime,
 };
@@ -69,10 +69,10 @@ impl Contract for EthereumTrackerContract {
 }
 
 impl EthereumTrackerContract {
-    fn get_endpoints(&self) -> (EthereumClient, String) {
+    fn get_endpoints(&self) -> (ContractEthereumClient, String) {
         let url = self.state.ethereum_endpoint.get().clone();
         let contract_address = self.state.contract_address.get().clone();
-        let ethereum_client = EthereumClient { url };
+        let ethereum_client = ContractEthereumClient { url };
         (ethereum_client, contract_address)
     }
 
