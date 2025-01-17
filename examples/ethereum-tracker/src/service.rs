@@ -93,6 +93,49 @@ impl Query {
 
         InitialEvent { address, balance }
     }
+
+    /// Reads the transfer events emitted by the monitored Ethereum contract.
+    async fn read_transfer_events(&self, end_block: u64) -> Vec<TransferEvent> {
+        let start_block = *self.service.state.start_block.get();
+        let events = self
+            .read_events(
+                "Transfer(address indexed,address indexed,uint256)",
+                start_block,
+                end_block,
+            )
+            .await;
+
+        events
+            .into_iter()
+            .map(|event| {
+                let mut event_values = event.values.into_iter();
+
+                let source_value = event_values
+                    .next()
+                    .expect("Missing source address in response");
+                let destination_value = event_values
+                    .next()
+                    .expect("Missing destination address in response");
+                let amount_value = event_values.next().expect("Missing amount in response");
+
+                let EthereumDataType::Address(source) = source_value else {
+                    panic!("Wrong type for the source address");
+                };
+                let EthereumDataType::Address(destination) = destination_value else {
+                    panic!("Wrong type for the destination address");
+                };
+                let EthereumDataType::Uint256(value) = amount_value else {
+                    panic!("Wrong type for the amount");
+                };
+
+                TransferEvent {
+                    source,
+                    value,
+                    destination,
+                }
+            })
+            .collect()
+    }
 }
 
 impl Query {
@@ -127,3 +170,12 @@ pub struct InitialEvent {
     balance: U256,
 }
 async_graphql::scalar!(InitialEvent);
+
+/// The transfer events emitted by the contract.
+#[derive(Clone, Default, Deserialize, Serialize)]
+pub struct TransferEvent {
+    source: String,
+    value: U256,
+    destination: String,
+}
+async_graphql::scalar!(TransferEvent);
