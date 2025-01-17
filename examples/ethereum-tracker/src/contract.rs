@@ -9,7 +9,7 @@ use alloy::primitives::U256;
 use ethereum_tracker::{EthereumTrackerAbi, InstantiationArgument};
 use linera_sdk::{
     base::WithContractAbi,
-    ethereum::{ContractEthereumClient, EthereumDataType, EthereumQueries as _},
+    ethereum::ContractEthereumClient,
     views::{RootView, View},
     Contract, ContractRuntime,
 };
@@ -115,38 +115,61 @@ impl EthereumTrackerContract {
             .expect("Failed to insert initial balance");
     }
 
-    async fn update(&mut self, to_block: u64) {
-        let event_name_expanded = "Transfer(address indexed,address indexed,uint256)";
-        let (ethereum_client, contract_address) = self.get_endpoints();
-        let start_block = self.state.start_block.get_mut();
-        let events = ethereum_client
-            .read_events(
-                &contract_address,
-                event_name_expanded,
-                *start_block,
-                to_block,
-            )
-            .await
-            .expect("Read a transfer event");
-        *start_block = to_block;
-        for event in events {
-            let EthereumDataType::Address(from) = event.values[0].clone() else {
-                panic!("wrong type for the first entry");
+    /// Updates the accounts based on the transfer events emitted up to the `end_block`.
+    async fn update(&mut self, end_block: u64) {
+        let request = async_graphql::Request::new(format!(
+            r#"query {{ readTransferEvents(endBlock: {end_block}) }}"#
+        ));
+
+        let application_id = self.runtime.application_id();
+        let response = self.runtime.query_service(application_id, request);
+
+        let async_graphql::Value::Object(data_object) = response.data else {
+            panic!("Unexpected response from `readTransferEvents`: {response:#?}");
+        };
+        let async_graphql::Value::List(ref events) = data_object["readTransferEvents"] else {
+            panic!("Unexpected response data from `readTransferEvents`: {data_object:#?}");
+        };
+
+        for event_value in events {
+            let async_graphql::Value::Object(event) = event_value else {
+                panic!("Unexpected event returned from `readTransferEvents`: {event_value:#?}");
             };
-            let EthereumDataType::Address(to) = event.values[1].clone() else {
-                panic!("wrong type for the second entry");
+
+            let async_graphql::Value::String(ref source) = event["source"] else {
+                panic!("Unexpected source address in transfer event: {event:#?}");
             };
-            let EthereumDataType::Uint256(value) = event.values[2] else {
-                panic!("wrong type for the third entry");
+            let async_graphql::Value::String(ref destination) = event["destination"] else {
+                panic!("Unexpected destination address in transfer event: {event:#?}");
             };
+            let async_graphql::Value::String(ref value_string) = event["value"] else {
+                panic!("Unexpected balance in transfer event: {event:#?}");
+            };
+
+            let value = value_string
+                .parse::<U256>()
+                .expect("Balance could not be parsed");
+
             {
-                let value_from = self.state.accounts.get_mut_or_default(&from).await.unwrap();
-                value_from.value -= value;
+                let source_balance = self
+                    .state
+                    .accounts
+                    .get_mut_or_default(source)
+                    .await
+                    .expect("Failed to read account balance for source address");
+                source_balance.value -= value;
             }
             {
-                let value_to = self.state.accounts.get_mut_or_default(&to).await.unwrap();
-                value_to.value += value;
+                let destination_balance = self
+                    .state
+                    .accounts
+                    .get_mut_or_default(destination)
+                    .await
+                    .expect("Failed to read account balance for destination address");
+                destination_balance.value += value;
             }
         }
+
+        self.state.start_block.set(end_block);
     }
 }
