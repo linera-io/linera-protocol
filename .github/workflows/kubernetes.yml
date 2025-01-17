@@ -35,7 +35,7 @@ permissions:
 
 jobs:
   kind-deployment-e2e-tests:
-    runs-on: ubuntu-latest-16-cores
+    runs-on: gcp-large
     timeout-minutes: 90
 
     steps:
