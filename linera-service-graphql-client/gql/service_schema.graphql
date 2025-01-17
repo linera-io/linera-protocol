@@ -49,7 +49,7 @@ input ApplicationPermissions {
 Block defines the atomic unit of growth of the Linera chain.
 
 As part of the block body, contains all the incoming messages
-and operations to execute which define state transition of the chain.
+and operations to execute which define a state transition of the chain.
 Resulting messages produced by the operations are also included in the block body,
 together with oracle responses and events.
 """
@@ -98,10 +98,6 @@ inclusion (event, message, oracle response, etc.) in the block's body.
 """
 type BlockHeader {
 	"""
-	The block version.
-	"""
-	version: Int!
-	"""
 	The chain to which this block belongs.
 	"""
 	chainId: ChainId!
@@ -122,8 +118,7 @@ type BlockHeader {
 	"""
 	stateHash: CryptoHash!
 	"""
-	Certified hash of the previous block in the
-	chain, if any.
+	Certified hash of the previous block in the chain, if any.
 	"""
 	previousBlockHash: CryptoHash
 	"""

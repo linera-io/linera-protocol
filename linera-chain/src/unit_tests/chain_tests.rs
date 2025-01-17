@@ -171,7 +171,7 @@ async fn test_block_size_limit() {
 
     // The valid block is accepted...
     let outcome = chain.execute_block(&valid_block, time, None).await.unwrap();
-    let block: Block = Block::new(valid_block, outcome);
+    let block = Block::new(valid_block, outcome);
 
     // ...because its size is exactly at the allowed limit.
     assert_eq!(

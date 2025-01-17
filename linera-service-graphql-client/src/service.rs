@@ -223,7 +223,6 @@ mod from {
         fn from(val: block::BlockBlockValueBlock) -> Self {
             let block::BlockBlockValueBlock { header, body } = val;
             let block::BlockBlockValueBlockHeader {
-                version,
                 chain_id,
                 epoch,
                 height,
@@ -246,7 +245,6 @@ mod from {
             } = body;
 
             let block_header = BlockHeader {
-                version: version as u8,
                 chain_id,
                 epoch,
                 height,

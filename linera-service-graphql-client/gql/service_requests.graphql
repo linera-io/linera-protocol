@@ -218,7 +218,6 @@ query Block($hash: CryptoHash, $chainId: ChainId!) {
       status
       block {
         header {
-          version
           chainId
           epoch
           height
@@ -282,7 +281,6 @@ query Blocks($from: CryptoHash, $chainId: ChainId!, $limit: Int) {
       status
       block {
         header {
-          version
           chainId
           epoch
           height

@@ -106,7 +106,7 @@ impl ConfirmedBlock {
         &self.0
     }
 
-    pub fn take_inner(self) -> Hashed<Block> {
+    pub fn into_inner(self) -> Hashed<Block> {
         self.0
     }
 
@@ -116,7 +116,7 @@ impl ConfirmedBlock {
     }
 
     /// Consumes this `ConfirmedBlock`, returning the `ExecutedBlock` it contains.
-    pub fn into_inner(self) -> Block {
+    pub fn into_block(self) -> Block {
         self.0.into_inner()
     }
 
@@ -210,7 +210,7 @@ pub enum ConversionError {
 /// Block defines the atomic unit of growth of the Linera chain.
 ///
 /// As part of the block body, contains all the incoming messages
-/// and operations to execute which define state transition of the chain.
+/// and operations to execute which define a state transition of the chain.
 /// Resulting messages produced by the operations are also included in the block body,
 /// together with oracle responses and events.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, SimpleObject)]
@@ -226,7 +226,6 @@ impl Serialize for Block {
         let mut state = serializer.serialize_struct("Block", 2)?;
 
         let header = SerializedHeader {
-            version: self.header.version,
             chain_id: self.header.chain_id,
             epoch: self.header.epoch,
             height: self.header.height,
@@ -258,7 +257,6 @@ impl<'de> Deserialize<'de> for Block {
         let events_hash = hashing::hash_vec_vec(&inner.body.events);
 
         let header = BlockHeader {
-            version: inner.header.version,
             chain_id: inner.header.chain_id,
             epoch: inner.header.epoch,
             height: inner.header.height,
@@ -285,8 +283,6 @@ impl<'de> Deserialize<'de> for Block {
 /// inclusion (event, message, oracle response, etc.) in the block's body.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
 pub struct BlockHeader {
-    /// The block version.
-    pub version: u8, // TODO: More granular versioning. #3078
     /// The chain to which this block belongs.
     pub chain_id: ChainId,
     /// The number identifying the current configuration.
@@ -297,8 +293,7 @@ pub struct BlockHeader {
     pub timestamp: Timestamp,
     /// The hash of the chain's execution state after this block.
     pub state_hash: CryptoHash,
-    /// Certified hash of the previous block in the
-    /// chain, if any.
+    /// Certified hash of the previous block in the chain, if any.
     pub previous_block_hash: Option<CryptoHash>,
     /// The user signing for the operations in the block and paying for their execution
     /// fees. If set, this must be the `owner` in the block proposal. `None` means that
@@ -346,7 +341,6 @@ impl Block {
         let events_hash = hashing::hash_vec_vec(&outcome.events);
 
         let header = BlockHeader {
-            version: 1,
             chain_id: proposal.chain_id,
             epoch: proposal.epoch,
             height: proposal.height,
@@ -543,7 +537,6 @@ impl<'de> BcsHashable<'de> for Block {}
 #[derive(Serialize, Deserialize)]
 #[serde(rename = "BlockHeader")]
 struct SerializedHeader {
-    version: u8,
     chain_id: ChainId,
     epoch: Epoch,
     height: BlockHeight,

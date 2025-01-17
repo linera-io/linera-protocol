@@ -384,7 +384,7 @@ where
 
         self.state
             .block_values
-            .insert(Cow::Owned(certificate.into_inner().take_inner()))
+            .insert(Cow::Owned(certificate.into_inner().into_inner()))
             .await;
 
         self.register_delivery_notifier(block_height, &actions, notify_when_messages_are_delivered)

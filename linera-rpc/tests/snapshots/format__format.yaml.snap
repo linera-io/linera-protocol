@@ -116,7 +116,6 @@ BlockExecutionOutcome:
             TYPENAME: EventRecord
 BlockHeader:
   STRUCT:
-    - version: U8
     - chain_id:
         TYPENAME: ChainId
     - epoch:
