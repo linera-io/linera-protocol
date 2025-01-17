@@ -16,6 +16,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::{contract::wit::contract_system_api, service::wit::service_system_api};
 
+// TODO(#3143): Unify the two types into a single `EthereumClient` type.
+
 /// A wrapper for a URL that implements `JsonRpcClient` and uses the JSON oracle to make requests.
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct ContractEthereumClient {
