@@ -162,7 +162,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
         ensure!(
             proposed.map_or(true, |proposal| proposal.content.proposal.chain_id
                 == chain_id)
-                && locked.map_or(true, |cert| cert.block().header.chain_id == chain_id)
+                && locked.map_or(true, |cert| cert.chain_id() == chain_id)
                 && response.check(&self.name).is_ok(),
             NodeError::InvalidChainInfoResponse
         );

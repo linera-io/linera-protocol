@@ -6,14 +6,14 @@
 #[path = "common/types.rs"]
 mod types;
 
-use std::{fmt::Debug, rc::Rc, sync::Arc};
+use std::{fmt::Debug, iter, rc::Rc, sync::Arc};
 
 use linera_witty::{hlist, InstanceWithMemory, Layout, MockInstance, WitStore};
 
 use self::types::{
-    Branch, Enum, Leaf, RecordWithDoublePadding, SimpleWrapper, SpecializedGenericEnum,
-    SpecializedGenericStruct, StructWithHeapFields, StructWithLists, TupleWithPadding,
-    TupleWithoutPadding,
+    Branch, Enum, Leaf, RecordWithDoublePadding, SimpleWrapper, SliceWrapper,
+    SpecializedGenericEnum, SpecializedGenericStruct, StructWithHeapFields, StructWithLists,
+    TupleWithPadding, TupleWithoutPadding,
 };
 
 /// Checks that a wrapper type is properly stored in memory and lowered into its flat layout.
@@ -401,6 +401,20 @@ fn test_heap_allocated_fields() {
     );
 }
 
+/// Check that a slice type is properly stored in memory and lowered into its flat layout.
+#[test]
+fn test_slice() {
+    let data = [
+        SimpleWrapper(false),
+        SimpleWrapper(false),
+        SimpleWrapper(true),
+        SimpleWrapper(true),
+    ];
+
+    test_store_in_memory(data.as_slice(), &[8, 0, 0, 0, 4, 0, 0, 0], &[0, 0, 1, 1]);
+    test_lower_to_flat_layout(data.as_slice(), hlist![0_i32, 4_i32,], &[0, 0, 1, 1]);
+}
+
 /// Checks that a [`Vec`] type is properly stored in memory and lowered into its flat layout.
 #[test]
 fn test_vec() {
@@ -414,6 +428,150 @@ fn test_vec() {
     test_lower_to_flat_layout(data, hlist![0_i32, 3_i32,], &[1, 0, 1]);
 }
 
+/// Check that a boxed slice type is properly stored in memory and lowered into its flat layout.
+#[test]
+fn test_boxed_slice() {
+    let data: Box<[Enum]> = Box::new([
+        Enum::LargeVariantWithLooseAlignment(10, 20, 30, 40, 50, 60, 70, 80, 90, 100),
+        Enum::Empty,
+        Enum::Empty,
+        Enum::SmallerVariantWithStrictAlignment { inner: 0xFFFF_FFFF },
+    ]);
+
+    let heap_memory = iter::empty()
+        .chain(
+            iter::empty()
+                .chain([1])
+                .chain([0; 7])
+                .chain([10, 20, 30, 40, 50, 60, 70, 80, 90, 100])
+                .chain([0; 6]),
+        )
+        .chain(iter::empty().chain([0]).chain([0; 23]))
+        .chain(iter::empty().chain([0]).chain([0; 23]))
+        .chain(
+            iter::empty()
+                .chain([2])
+                .chain([0; 7])
+                .chain([0xff, 0xff, 0xff, 0xff])
+                .chain([0; 12]),
+        )
+        .collect::<Vec<u8>>();
+
+    test_store_in_memory(data.clone(), &[8, 0, 0, 0, 4, 0, 0, 0], &heap_memory);
+    test_lower_to_flat_layout(data, hlist![0_i32, 4_i32,], &heap_memory);
+}
+
+/// Check that a rc-ed slice type is properly stored in memory and lowered into its flat layout.
+#[test]
+fn test_rced_slice() {
+    let data: Rc<[Leaf]> = Rc::new([
+        Leaf {
+            first: true,
+            second: 0x0011_2233_4455_6677_8899_aabb_ccdd_eeff,
+        },
+        Leaf {
+            first: false,
+            second: 0xffee_ddcc_bbaa_9988_7766_5544_3322_1100,
+        },
+    ]);
+
+    let heap_memory = iter::empty()
+        .chain(iter::empty().chain([1]).chain([0; 7]).chain([
+            0xff, 0xee, 0xdd, 0xcc, 0xbb, 0xaa, 0x99, 0x88, 0x77, 0x66, 0x55, 0x44, 0x33, 0x22,
+            0x11, 0x00,
+        ]))
+        .chain(iter::empty().chain([0]).chain([0; 7]).chain([
+            0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd,
+            0xee, 0xff,
+        ]))
+        .collect::<Vec<u8>>();
+
+    test_store_in_memory(data.clone(), &[8, 0, 0, 0, 2, 0, 0, 0], &heap_memory);
+    test_lower_to_flat_layout(data, hlist![0_i32, 2_i32,], &heap_memory);
+}
+
+/// Check that a rc-ed slice type is properly stored in memory and lowered into its flat layout.
+#[test]
+fn test_arced_slice() {
+    let data: Arc<[RecordWithDoublePadding]> = Arc::new([
+        RecordWithDoublePadding {
+            first: 0x0300,
+            second: 0x4422_1100,
+            third: -2,
+            fourth: -3,
+        },
+        RecordWithDoublePadding {
+            first: 32_767,
+            second: 9,
+            third: 127,
+            fourth: -32_768,
+        },
+    ]);
+
+    let heap_memory = iter::empty()
+        .chain(
+            iter::empty()
+                .chain([0x00, 0x03])
+                .chain([0; 2])
+                .chain([0x00, 0x11, 0x22, 0x44])
+                .chain([0xfe])
+                .chain([0; 7])
+                .chain([0xfd, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]),
+        )
+        .chain(
+            iter::empty()
+                .chain([0xff, 0x7f])
+                .chain([0; 2])
+                .chain([9, 0, 0, 0])
+                .chain([0x7f])
+                .chain([0; 7])
+                .chain([0x00, 0x80, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]),
+        )
+        .collect::<Vec<u8>>();
+
+    test_store_in_memory(data.clone(), &[8, 0, 0, 0, 2, 0, 0, 0], &heap_memory);
+    test_lower_to_flat_layout(data, hlist![0_i32, 2_i32,], &heap_memory);
+}
+
+/// Check that a type with a slice field is properly stored in memory and lowered into its
+/// flat layout.
+#[test]
+fn test_slice_field() {
+    let slice = [
+        TupleWithoutPadding(0, 1, 2),
+        TupleWithoutPadding(3, 4, 5),
+        TupleWithoutPadding(6, 7, 8),
+    ];
+    let data = SliceWrapper(&slice);
+
+    let expected_memory = iter::empty()
+        .chain(
+            iter::empty()
+                .chain([0, 0, 0, 0, 0, 0, 0, 0])
+                .chain([1, 0, 0, 0])
+                .chain([2, 0])
+                .chain([0; 2]),
+        )
+        .chain(
+            iter::empty()
+                .chain([3, 0, 0, 0, 0, 0, 0, 0])
+                .chain([4, 0, 0, 0])
+                .chain([5, 0])
+                .chain([0; 2]),
+        )
+        .chain(
+            iter::empty()
+                .chain([6, 0, 0, 0, 0, 0, 0, 0])
+                .chain([7, 0, 0, 0])
+                .chain([8, 0])
+                .chain([0; 2]),
+        )
+        .collect::<Vec<u8>>();
+
+    test_store_in_memory(data, &[8, 0, 0, 0, 3, 0, 0, 0], &expected_memory);
+    test_lower_to_flat_layout(data, hlist![0_i32, 3_i32], &expected_memory);
+}
+
 /// Checks that a type with list fields is properly stored in memory and lowered into its
 /// flat layout.
 #[test]
@@ -425,24 +583,110 @@ fn test_list_fields() {
             SimpleWrapper(false),
             SimpleWrapper(true),
         ],
-        second_vec: vec![TupleWithPadding(1, 0, -1), TupleWithPadding(10, 11, 12)],
+        boxed_slice: Box::new([TupleWithPadding(1, 0, -1), TupleWithPadding(10, 11, 12)]),
+        rced_slice: Rc::new([
+            Leaf {
+                first: true,
+                second: 0x0011_2233_4455_6677_8899_aabb_ccdd_eeff,
+            },
+            Leaf {
+                first: false,
+                second: 0xffee_ddcc_bbaa_9988_7766_5544_3322_1100,
+            },
+            Leaf {
+                first: false,
+                second: 0xf0e1_d2c3_b4a5_9687_7869_5a4b_3c2d_1e0f,
+            },
+        ]),
+        arced_slice: Arc::new([
+            RecordWithDoublePadding {
+                first: 0x1020,
+                second: 0x0a0b_0c0d,
+                third: 0x7a,
+                fourth: -0x0abb_ccdd_eeff_0011,
+            },
+            RecordWithDoublePadding {
+                first: 0x1525,
+                second: 0x8191_a1b1,
+                third: -0x7a,
+                fourth: 0x0abb_ccdd_eeff_0011,
+            },
+        ]),
     };
 
-    let expected_heap = [0, 1, 0, 1]
-        .into_iter()
+    let vec_contents = [0, 1, 0, 1];
+
+    let boxed_contents = iter::empty()
+        .chain(
+            iter::empty()
+                .chain([1, 0])
+                .chain([0; 2])
+                .chain([0, 0, 0, 0])
+                .chain([0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]),
+        )
+        .chain(
+            iter::empty()
+                .chain([10, 0])
+                .chain([0; 2])
+                .chain([11, 0, 0, 0])
+                .chain([12, 0, 0, 0, 0, 0, 0, 0]),
+        );
+
+    let rced_contents = iter::empty()
+        .chain(iter::empty().chain([1]).chain([0; 7]).chain([
+            0xff, 0xee, 0xdd, 0xcc, 0xbb, 0xaa, 0x99, 0x88, 0x77, 0x66, 0x55, 0x44, 0x33, 0x22,
+            0x11, 0x00,
+        ]))
+        .chain(iter::empty().chain([0]).chain([0; 7]).chain([
+            0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd,
+            0xee, 0xff,
+        ]))
+        .chain(iter::empty().chain([0]).chain([0; 7]).chain([
+            0x0f, 0x1e, 0x2d, 0x3c, 0x4b, 0x5a, 0x69, 0x78, 0x87, 0x96, 0xa5, 0xb4, 0xc3, 0xd2,
+            0xe1, 0xf0,
+        ]));
+
+    let arced_contents = iter::empty()
+        .chain(
+            iter::empty()
+                .chain([0x20, 0x10])
+                .chain([0; 2])
+                .chain([0x0d, 0x0c, 0x0b, 0x0a])
+                .chain([0x7a])
+                .chain([0; 7])
+                .chain([0xef, 0xff, 0x00, 0x11, 0x22, 0x33, 0x44, 0xf5]),
+        )
+        .chain(
+            iter::empty()
+                .chain([0x25, 0x15])
+                .chain([0; 2])
+                .chain([0xb1, 0xa1, 0x91, 0x81])
+                .chain([0x86])
+                .chain([0; 7])
+                .chain([0x11, 0x00, 0xff, 0xee, 0xdd, 0xcc, 0xbb, 0x0a]),
+        );
+
+    let expected_heap = iter::empty()
+        .chain(vec_contents)
         .chain([0; 4])
-        .chain([
-            1, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-        ])
-        .chain([10, 0, 0, 0, 11, 0, 0, 0, 12, 0, 0, 0, 0, 0, 0, 0])
+        .chain(boxed_contents)
+        .chain(rced_contents)
+        .chain(arced_contents)
         .collect::<Vec<_>>();
 
     test_store_in_memory(
         data.clone(),
-        &[16, 0, 0, 0, 4, 0, 0, 0, 24, 0, 0, 0, 2, 0, 0, 0],
+        &[
+            32, 0, 0, 0, 4, 0, 0, 0, 40, 0, 0, 0, 2, 0, 0, 0, 72, 0, 0, 0, 3, 0, 0, 0, 144, 0, 0,
+            0, 2, 0, 0, 0,
+        ],
         &expected_heap,
     );
-    test_lower_to_flat_layout(data, hlist![0_i32, 4_i32, 8_i32, 2_i32], &expected_heap);
+    test_lower_to_flat_layout(
+        data,
+        hlist![0_i32, 4_i32, 8_i32, 2_i32, 40_i32, 3_i32, 112_i32, 2_i32],
+        &expected_heap,
+    );
 }
 
 /// Tests that the `data` of type `T` and wrapped versions of it can be stored as a sequence of

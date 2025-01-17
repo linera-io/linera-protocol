@@ -46,6 +46,16 @@ input ApplicationPermissions {
 }
 
 """
+A blob of binary data, with its content-addressed blob ID.
+"""
+scalar Blob
+
+"""
+A content-addressed blob ID i.e. the hash of the `BlobContent`
+"""
+scalar BlobId
+
+"""
 Block defines the atomic unit of growth of the Linera chain.
 
 As part of the block body, contains all the incoming messages
@@ -199,9 +209,39 @@ The unique identifier (UID) of a chain. This is currently computed as the hash v
 scalar ChainId
 
 """
-The state of the certification process for a chain's next block
+The state of the certification process for a chain's next block.
 """
-scalar ChainManager
+type ChainManager {
+	"""
+	The public keys, weights and types of the chain's owners.
+	"""
+	ownership: ChainOwnership!
+	"""
+	The seed for the pseudo-random number generator that determines the round leaders.
+	"""
+	seed: Int!
+	"""
+	These are blobs published or read by the locked block.
+	"""
+	lockedBlobs: MapView_BlobId_Blob_3711e760!
+	"""
+	The time after which we are ready to sign a timeout certificate for the current round.
+	"""
+	roundTimeout: Timestamp
+	"""
+	The owners that take over in fallback mode.
+	"""
+	fallbackOwners: JSONObject!
+	"""
+	Returns the lowest round where we can still vote to validate or confirm a block. This is
+	the round to which the timeout applies.
+	
+	Having a leader timeout certificate in any given round causes the next one to become
+	current. Seeing a validated block certificate or a valid proposal in any round causes that
+	round to become current, unless a higher one already is.
+	"""
+	currentRound: Round!
+}
 
 """
 Represents the owner(s) of a chain
@@ -397,6 +437,14 @@ type Entry_AccountOwner_Amount_aaf96548 {
 """
 A GraphQL-visible map item, complete with key.
 """
+type Entry_BlobId_Blob_9f0b41f3 {
+	key: BlobId!
+	value: Blob
+}
+
+"""
+A GraphQL-visible map item, complete with key.
+"""
 type Entry_ChannelFullName_ChannelStateView_ef52a064 {
 	key: ChannelFullName!
 	value: ChannelStateView!
@@ -531,6 +579,10 @@ input MapFilters_AccountOwner_d6668c53 {
 	keys: [AccountOwner!]
 }
 
+input MapFilters_BlobId_4d2a0555 {
+	keys: [BlobId!]
+}
+
 input MapFilters_ChannelFullName_3b59bf69 {
 	keys: [ChannelFullName!]
 }
@@ -545,6 +597,10 @@ input MapFilters_Target_7aac1e1c {
 
 input MapInput_AccountOwner_d6668c53 {
 	filters: MapFilters_AccountOwner_d6668c53
+}
+
+input MapInput_BlobId_4d2a0555 {
+	filters: MapFilters_BlobId_4d2a0555
 }
 
 input MapInput_ChannelFullName_3b59bf69 {
@@ -563,6 +619,12 @@ type MapView_AccountOwner_Amount_11ef1379 {
 	keys(count: Int): [AccountOwner!]!
 	entry(key: AccountOwner!): Entry_AccountOwner_Amount_aaf96548!
 	entries(input: MapInput_AccountOwner_d6668c53): [Entry_AccountOwner_Amount_aaf96548!]!
+}
+
+type MapView_BlobId_Blob_3711e760 {
+	keys(count: Int): [BlobId!]!
+	entry(key: BlobId!): Entry_BlobId_Blob_9f0b41f3!
+	entries(input: MapInput_BlobId_4d2a0555): [Entry_BlobId_Blob_9f0b41f3!]!
 }
 
 """
@@ -965,6 +1027,11 @@ input ResourceControlPolicy {
 	"""
 	maximumBytesWrittenPerBlock: Int!
 }
+
+"""
+A number to identify successive attempts to decide a value in a consensus protocol.
+"""
+scalar Round
 
 """
 An event stream ID.

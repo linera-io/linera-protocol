@@ -80,25 +80,25 @@ impl WitStore for bool {
 
 impl<'t, T> WitType for &'t T
 where
-    T: WitType,
+    T: WitType + ?Sized,
 {
     const SIZE: u32 = T::SIZE;
 
     type Layout = T::Layout;
-    type Dependencies = HList![];
+    type Dependencies = T::Dependencies;
 
     fn wit_type_name() -> Cow<'static, str> {
-        panic!("Borrowed values can't be used in WIT files generated with Witty");
+        T::wit_type_name()
     }
 
     fn wit_type_declaration() -> Cow<'static, str> {
-        panic!("Borrowed values can't be used in WIT files generated with Witty");
+        T::wit_type_declaration()
     }
 }
 
 impl<'t, T> WitStore for &'t T
 where
-    T: WitStore,
+    T: WitStore + ?Sized,
 {
     fn store<Instance>(
         &self,

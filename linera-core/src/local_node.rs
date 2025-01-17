@@ -202,11 +202,14 @@ where
         chain_id: ChainId,
     ) -> Result<Option<Vec<Blob>>, LocalNodeError> {
         let chain = self.chain_state_view(chain_id).await?;
-        let manager = chain.manager.get();
-        Ok(blob_ids
-            .iter()
-            .map(|blob_id| manager.locked_blobs.get(blob_id).cloned())
-            .collect())
+        let mut blobs = Vec::new();
+        for blob_id in blob_ids {
+            match chain.manager.locked_blobs.get(blob_id).await? {
+                None => return Ok(None),
+                Some(blob) => blobs.push(blob),
+            }
+        }
+        Ok(Some(blobs))
     }
 
     /// Writes the given blobs to storage if there is an appropriate blob state.

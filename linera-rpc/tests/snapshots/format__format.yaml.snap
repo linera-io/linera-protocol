@@ -280,7 +280,7 @@ ChainManagerInfo:
           TYPENAME: BlockProposal
     - requested_locked:
         OPTION:
-          TYPENAME: ValidatedBlockCertificate
+          TYPENAME: LockedBlock
     - timeout:
         OPTION:
           TYPENAME: TimeoutCertificate
@@ -484,6 +484,16 @@ LiteVote:
         TYPENAME: ValidatorName
     - signature:
         TYPENAME: Signature
+LockedBlock:
+  ENUM:
+    0:
+      Fast:
+        NEWTYPE:
+          TYPENAME: BlockProposal
+    1:
+      Regular:
+        NEWTYPE:
+          TYPENAME: ValidatedBlockCertificate
 Medium:
   ENUM:
     0:

@@ -15,7 +15,7 @@ use linera_execution::system::Recipient;
 use linera_sdk::test::{ActiveChain, TestValidator};
 use tokio::runtime::Runtime;
 
-/// Benchmarks several transactions transfering tokens across chains.
+/// Benchmarks several transactions transferring tokens across chains.
 fn cross_chain_native_token_transfers(criterion: &mut Criterion) {
     let chain_count = 100;
     let accounts_per_chain = 1;

@@ -102,15 +102,14 @@ where
                 actions,
             ));
         }
-        let old_round = self.state.chain.manager.get().current_round;
+        let old_round = self.state.chain.manager.current_round();
         let timeout_chainid = certificate.inner().chain_id;
         let timeout_height = certificate.inner().height;
         self.state
             .chain
             .manager
-            .get_mut()
             .handle_timeout_certificate(certificate, self.state.storage.clock().current_time());
-        let round = self.state.chain.manager.get().current_round;
+        let round = self.state.chain.manager.current_round();
         if round > old_round {
             actions.notifications.push(Notification {
                 chain_id: timeout_chainid,
@@ -142,8 +141,8 @@ where
             BTreeMap::new()
         };
         let key_pair = self.state.config.key_pair();
-        let manager = self.state.chain.manager.get_mut();
-        match manager.create_vote(proposal, executed_block, key_pair, local_time, blobs) {
+        let manager = &mut self.state.chain.manager;
+        match manager.create_vote(proposal, executed_block, key_pair, local_time, blobs)? {
             // Cache the value we voted on, so the client doesn't have to send it again.
             Some(Either::Left(vote)) => {
                 self.state
@@ -186,7 +185,7 @@ where
         check_block_epoch(epoch, header.chain_id, header.epoch)?;
         certificate.check(committee)?;
         let mut actions = NetworkActions::default();
-        let already_validated_block = self
+        let already_committed_block = self
             .state
             .chain
             .tip_state
@@ -196,11 +195,10 @@ where
             self.state
                 .chain
                 .manager
-                .get()
                 .check_validated_block(&certificate)
                 .map(|outcome| outcome == manager::Outcome::Skip)
         };
-        if already_validated_block || should_skip_validated_block()? {
+        if already_committed_block || should_skip_validated_block()? {
             // If we just processed the same pending block, return the chain info unchanged.
             return Ok((
                 ChainInfoResponse::new(&self.state.chain, self.state.config.key_pair()),
@@ -221,16 +219,16 @@ where
             .state
             .get_required_blobs(required_blob_ids, blobs)
             .await?;
-        let old_round = self.state.chain.manager.get().current_round;
-        self.state.chain.manager.get_mut().create_final_vote(
+        let old_round = self.state.chain.manager.current_round();
+        self.state.chain.manager.create_final_vote(
             certificate,
             self.state.config.key_pair(),
             self.state.storage.clock().current_time(),
             blobs,
-        );
+        )?;
         let info = ChainInfoResponse::new(&self.state.chain, self.state.config.key_pair());
         self.save().await?;
-        let round = self.state.chain.manager.get().current_round;
+        let round = self.state.chain.manager.current_round();
         if round > old_round {
             actions.notifications.push(Notification {
                 chain_id: self.state.chain_id(),
@@ -537,8 +535,10 @@ where
             let height = chain.tip_state.get().next_block_height;
             let key_pair = self.state.config.key_pair();
             let local_time = self.state.storage.clock().current_time();
-            let manager = chain.manager.get_mut();
-            if manager.vote_timeout(chain_id, height, *epoch, key_pair, local_time) {
+            if chain
+                .manager
+                .vote_timeout(chain_id, height, *epoch, key_pair, local_time)
+            {
                 self.save().await?;
             }
         }
@@ -563,8 +563,10 @@ where
                 let chain_id = chain.chain_id();
                 let height = chain.tip_state.get().next_block_height;
                 let key_pair = self.state.config.key_pair();
-                let manager = chain.manager.get_mut();
-                if manager.vote_fallback(chain_id, height, *epoch, key_pair) {
+                if chain
+                    .manager
+                    .vote_fallback(chain_id, height, *epoch, key_pair)
+                {
                     self.save().await?;
                 }
             }

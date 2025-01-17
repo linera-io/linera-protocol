@@ -15,6 +15,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{IncomingBundle, Medium, MessageBundle, Origin, PostedMessage},
+    manager::LockedBlock,
     types::Timeout,
     ChainError, ChainExecutionContext,
 };
@@ -1372,10 +1373,13 @@ where
     // We make validator 3 (who does not have the block proposal) process the validated block.
     let info2_a = client2_a.chain_info_with_manager_values().await?;
     let locked = *info2_a.manager.requested_locked.unwrap();
+    let LockedBlock::Regular(validated) = locked else {
+        panic!("Unexpected locked fast block.");
+    };
     let blobs = vec![blob1];
     let response = builder
         .node(3)
-        .handle_validated_certificate(locked.clone(), blobs)
+        .handle_validated_certificate(validated.clone(), blobs)
         .await?;
     assert_eq!(
         response.info.manager.pending.unwrap().round,
@@ -1385,7 +1389,10 @@ where
     // Client 2B should be able to synchronize the locked block and the blobs from validator 3.
     client2_b.synchronize_from_validators().await.unwrap();
     let info2_b = client2_b.chain_info_with_manager_values().await?;
-    assert_eq!(locked, *info2_b.manager.requested_locked.unwrap());
+    assert_eq!(
+        LockedBlock::Regular(validated),
+        *info2_b.manager.requested_locked.unwrap()
+    );
     let bt_certificate = client2_b
         .burn(None, Amount::from_tokens(1))
         .await
@@ -1653,7 +1660,10 @@ where
     // Validator 2 may or may not have processed the validated block before the update was
     // canceled due to the errors from the faulty validators. Submit it again to make sure
     // it's there, so that client 2 can download and re-propose it later.
-    let validated_block_certificate = *manager.requested_locked.unwrap();
+    let locked = *manager.requested_locked.unwrap();
+    let LockedBlock::Regular(validated_block_certificate) = locked else {
+        panic!("Unexpected locked fast block.");
+    };
     let resubmission_result = builder
         .node(2)
         .handle_validated_certificate(validated_block_certificate, vec![blob1])
@@ -1678,15 +1688,11 @@ where
         );
 
         if i == 2 {
-            assert_eq!(
-                validator_manager
-                    .requested_locked
-                    .unwrap()
-                    .block()
-                    .body
-                    .operations,
-                blob_0_1_operations,
-            );
+            let locked = *validator_manager.requested_locked.unwrap();
+            let LockedBlock::Regular(validated) = locked else {
+                panic!("Unexpected locked fast block.");
+            };
+            assert_eq!(validated.block().body.operations, blob_0_1_operations,);
         } else {
             assert!(validator_manager.requested_locked.is_none());
         }
@@ -1721,7 +1727,10 @@ where
     // Validator 3 may or may not have processed the validated block before the update was
     // canceled due to the errors from the faulty validators. Submit it again to make sure
     // it's there, so that client 2 can download and re-propose it later.
-    let validated_block_certificate = *manager.requested_locked.unwrap();
+    let locked = *manager.requested_locked.unwrap();
+    let LockedBlock::Regular(validated_block_certificate) = locked else {
+        panic!("Unexpected locked fast block.");
+    };
     let resubmission_result = builder
         .node(3)
         .handle_validated_certificate(validated_block_certificate, vec![blob3])
@@ -1743,15 +1752,11 @@ where
             .operations,
         blob_2_3_operations,
     );
-    assert_eq!(
-        validator_manager
-            .requested_locked
-            .unwrap()
-            .block()
-            .body
-            .operations,
-        blob_2_3_operations,
-    );
+    let locked = *validator_manager.requested_locked.unwrap();
+    let LockedBlock::Regular(validated) = locked else {
+        panic!("Unexpected locked fast block.");
+    };
+    assert_eq!(validated.block().body.operations, blob_2_3_operations,);
 
     builder.set_fault_type([1], FaultType::Offline).await;
     builder.set_fault_type([0, 2, 3], FaultType::Honest).await;
@@ -1980,7 +1985,7 @@ where
         .unwrap()
         .manager;
     assert_eq!(
-        manager.requested_locked.unwrap().round,
+        manager.requested_locked.unwrap().round(),
         Round::MultiLeader(1)
     );
     assert!(client0.pending_proposal().is_some());
@@ -2096,7 +2101,10 @@ where
     // Validator 0 may or may not have processed the validated block before the update was
     // canceled due to the errors from the faulty validators. Submit it again to make sure
     // it's there, so that client 1 can download and re-propose it later.
-    let validated_block_certificate = *manager.requested_locked.unwrap();
+    let locked = *manager.requested_locked.unwrap();
+    let LockedBlock::Regular(validated_block_certificate) = locked else {
+        panic!("Unexpected locked fast block.");
+    };
     builder
         .node(0)
         .handle_validated_certificate(validated_block_certificate, Vec::new())
@@ -2133,7 +2141,7 @@ where
         .unwrap()
         .manager;
     assert_eq!(
-        manager.requested_locked.unwrap().round,
+        manager.requested_locked.unwrap().round(),
         Round::MultiLeader(0)
     );
     assert_eq!(manager.current_round, Round::MultiLeader(1));

@@ -14,7 +14,7 @@ use crate::{
 };
 
 /// A type that is representable by fundamental WIT types.
-pub trait WitType: Sized {
+pub trait WitType {
     /// The size of the type when laid out in memory.
     const SIZE: u32;
 
@@ -32,7 +32,7 @@ pub trait WitType: Sized {
 }
 
 /// A type that can be loaded from a guest Wasm module.
-pub trait WitLoad: WitType {
+pub trait WitLoad: WitType + Sized {
     /// Loads an instance of the type from the `location` in the guest's `memory`.
     fn load<Instance>(
         memory: &Memory<'_, Instance>,

@@ -104,7 +104,7 @@ impl RpcMessage {
         Some(chain_id)
     }
 
-    /// Wether this messsage is "local" i.e. will be executed locally on the proxy
+    /// Whether this message is "local" i.e. will be executed locally on the proxy
     /// or if it'll be proxied to the server.
     pub fn is_local_message(&self) -> bool {
         use RpcMessage::*;

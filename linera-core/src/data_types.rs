@@ -275,7 +275,7 @@ where
             chain_id: view.chain_id(),
             epoch: *system_state.epoch.get(),
             description: *system_state.description.get(),
-            manager: Box::new(ChainManagerInfo::from(view.manager.get())),
+            manager: Box::new(ChainManagerInfo::from(&view.manager)),
             chain_balance: *system_state.balance.get(),
             block_hash: tip_state.block_hash,
             next_block_height: tip_state.next_block_height,

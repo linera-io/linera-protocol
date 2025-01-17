@@ -338,11 +338,11 @@ where
         // Obtain the missing blocks and the manager state from the local node.
         let range: Range<usize> =
             initial_block_height.try_into()?..target_block_height.try_into()?;
-        let (keys, manager) = {
+        let (keys, timeout) = {
             let chain = self.local_node.chain_state_view(chain_id).await?;
             (
                 chain.confirmed_log.read(range).await?,
-                chain.manager.get().clone(),
+                chain.manager.timeout.get().clone(),
             )
         };
         if !keys.is_empty() {
@@ -353,7 +353,7 @@ where
                 self.send_confirmed_certificate(cert, delivery).await?;
             }
         }
-        if let Some(cert) = manager.timeout {
+        if let Some(cert) = timeout {
             if cert.inner().chain_id == chain_id {
                 // Timeouts are small and don't have blobs, so we can call `handle_certificate`
                 // directly.
