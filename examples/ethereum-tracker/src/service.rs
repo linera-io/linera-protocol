@@ -15,9 +15,11 @@ use linera_sdk::{
 
 use self::state::EthereumTrackerState;
 
-#[derive(Clone)]
+#[derive(Clone, async_graphql::SimpleObject)]
 pub struct EthereumTrackerService {
+    #[graphql(flatten)]
     state: Arc<EthereumTrackerState>,
+    #[graphql(skip)]
     runtime: Arc<ServiceRuntime<Self>>,
 }
 
@@ -42,11 +44,20 @@ impl Service for EthereumTrackerService {
 
     async fn handle_query(&self, request: Request) -> Response {
         let schema = Schema::build(
-            self.state.clone(),
+            Query {
+                service: self.clone(),
+            },
             Operation::mutation_root(self.runtime.clone()),
             EmptySubscription,
         )
         .finish();
         schema.execute(request).await
     }
+}
+
+/// The service handler for GraphQL queries.
+#[derive(async_graphql::SimpleObject)]
+pub struct Query {
+    #[graphql(flatten)]
+    service: EthereumTrackerService,
 }
