@@ -50,3 +50,9 @@ pub struct U256Cont {
     pub value: U256,
 }
 scalar!(U256Cont);
+
+impl From<U256> for U256Cont {
+    fn from(value: U256) -> Self {
+        U256Cont { value }
+    }
+}
