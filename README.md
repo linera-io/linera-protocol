@@ -25,7 +25,7 @@ from low to high levels in the dependency graph)
 
 * [`linera-views`](https://linera-io.github.io/linera-protocol/linera_views/index.html) A
   library mapping complex data structures onto a key-value store. The corresponding
-  procedural macros are implemented in `linera-views-derive`.
+  procedural macros are implemented in [`linera-views-derive`](https://github.com/linera-io/linera-views-derive/).
 
 * [`linera-execution`](https://linera-io.github.io/linera-protocol/linera_execution/index.html)
   Persistent data and the corresponding logics for runtime and execution of Linera
@@ -36,7 +36,7 @@ from low to high levels in the dependency graph)
   cross-chain messaging.
 
 * [`linera-storage`](https://linera-io.github.io/linera-protocol/linera_storage/index.html)
-  Defines the storage abstractions for the protocol on top of `linera-chain`.
+  Defines the storage abstractions for the protocol on top of [`linera-chain`](https://github.com/linera-io/linera-chain/).
 
 * [`linera-core`](https://linera-io.github.io/linera-protocol/linera_core/index.html) The
   core Linera protocol, including client and server logic, node synchronization, etc.
@@ -55,7 +55,7 @@ from low to high levels in the dependency graph)
 
 * [`linera-sdk`](https://linera-io.github.io/linera-protocol/linera_sdk/index.html) The
   library to develop Linera applications written in Rust for the Wasm virtual machine. The
-  corresponding procedural macros are implemented in `linera-sdk-derive`.
+  corresponding procedural macros are implemented in [`linera-sdk-derive`](https://github.com/linera-io/linera-sdk-derive/).
 
 * [`examples`](./examples) Examples of Linera applications written in Rust.
 
