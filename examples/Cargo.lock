@@ -3557,6 +3557,7 @@ dependencies = [
  "bcs",
  "cfg_aliases",
  "clap",
+ "futures",
  "linera-base",
  "linera-version",
  "linera-views",
