@@ -405,7 +405,7 @@ async fn test_reentrant_collection_view_has_pending_changes_after_new_entry() ->
     Ok(())
 }
 
-/// Check if an acquiring a write-lock to a sub-view causes the collection to have pending changes.
+/// Check if acquiring a write-lock to a sub-view causes the collection to have pending changes.
 #[tokio::test]
 async fn test_reentrant_collection_view_has_pending_changes_after_try_load_entry_mut(
 ) -> anyhow::Result<()> {
