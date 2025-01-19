@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["binary_parent","current_binary_parent","parse_version_message","resolve_binary","resolve_binary_in_same_directory_as"],"trait":["CommandExt"]};

@@ -1,0 +1,1 @@
+searchState.loadedDescShard("zerocopy_derive", 0, "Derive macros for zerocopy’s traits.")

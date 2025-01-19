@@ -1,0 +1,53 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="This module provides forward and reverse substring search routines."><title>memchr::memmem - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="memchr" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../memchr/index.html">memchr</a><span class="version">2.7.4</span></h2></div><h2 class="location"><a href="#">Module memmem</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#functions">Functions</a></li></ul></section><h2><a href="../index.html">In crate memchr</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">memchr</a>::<wbr><a class="mod" href="#">memmem</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/memchr/memmem/mod.rs.html#1-737">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>This module provides forward and reverse substring search routines.</p>
+<p>Unlike the standard library’s substring search routines, these work on
+arbitrary bytes. For all non-empty needles, these routines will report exactly
+the same values as the corresponding routines in the standard library. For
+the empty needle, the standard library reports matches only at valid UTF-8
+boundaries, where as these routines will report matches at every position.</p>
+<p>Other than being able to work on arbitrary bytes, the primary reason to prefer
+these routines over the standard library routines is that these will generally
+be faster. In some cases, significantly so.</p>
+<h2 id="example-iterating-over-substring-matches"><a class="doc-anchor" href="#example-iterating-over-substring-matches">§</a>Example: iterating over substring matches</h2>
+<p>This example shows how to use <a href="fn.find_iter.html" title="fn memchr::memmem::find_iter"><code>find_iter</code></a> to find occurrences of a substring
+in a haystack.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>memchr::memmem;
+
+<span class="kw">let </span>haystack = <span class="string">b"foo bar foo baz foo"</span>;
+
+<span class="kw">let </span><span class="kw-2">mut </span>it = memmem::find_iter(haystack, <span class="string">"foo"</span>);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="number">0</span>), it.next());
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="number">8</span>), it.next());
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="number">16</span>), it.next());
+<span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, it.next());</code></pre></div>
+<h2 id="example-iterating-over-substring-matches-in-reverse"><a class="doc-anchor" href="#example-iterating-over-substring-matches-in-reverse">§</a>Example: iterating over substring matches in reverse</h2>
+<p>This example shows how to use <a href="fn.rfind_iter.html" title="fn memchr::memmem::rfind_iter"><code>rfind_iter</code></a> to find occurrences of a substring
+in a haystack starting from the end of the haystack.</p>
+<p><strong>NOTE:</strong> This module does not implement double ended iterators, so reverse
+searches aren’t done by calling <code>rev</code> on a forward iterator.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>memchr::memmem;
+
+<span class="kw">let </span>haystack = <span class="string">b"foo bar foo baz foo"</span>;
+
+<span class="kw">let </span><span class="kw-2">mut </span>it = memmem::rfind_iter(haystack, <span class="string">"foo"</span>);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="number">16</span>), it.next());
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="number">8</span>), it.next());
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="number">0</span>), it.next());
+<span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, it.next());</code></pre></div>
+<h2 id="example-repeating-a-search-for-the-same-needle"><a class="doc-anchor" href="#example-repeating-a-search-for-the-same-needle">§</a>Example: repeating a search for the same needle</h2>
+<p>It may be possible for the overhead of constructing a substring searcher to be
+measurable in some workloads. In cases where the same needle is used to search
+many haystacks, it is possible to do construction once and thus to avoid it for
+subsequent searches. This can be done with a <a href="struct.Finder.html" title="struct memchr::memmem::Finder"><code>Finder</code></a> (or a <a href="struct.FinderRev.html" title="struct memchr::memmem::FinderRev"><code>FinderRev</code></a> for
+reverse searches).</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>memchr::memmem;
+
+<span class="kw">let </span>finder = memmem::Finder::new(<span class="string">"foo"</span>);
+
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="number">4</span>), finder.find(<span class="string">b"baz foo quux"</span>));
+<span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, finder.find(<span class="string">b"quux baz bar"</span>));</code></pre></div>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.FindIter.html" title="struct memchr::memmem::FindIter">FindIter</a></div><div class="desc docblock-short">An iterator over non-overlapping substring matches.</div></li><li><div class="item-name"><a class="struct" href="struct.FindRevIter.html" title="struct memchr::memmem::FindRevIter">FindRevIter</a></div><div class="desc docblock-short">An iterator over non-overlapping substring matches in reverse.</div></li><li><div class="item-name"><a class="struct" href="struct.Finder.html" title="struct memchr::memmem::Finder">Finder</a></div><div class="desc docblock-short">A single substring searcher fixed to a particular needle.</div></li><li><div class="item-name"><a class="struct" href="struct.FinderBuilder.html" title="struct memchr::memmem::FinderBuilder">FinderBuilder</a></div><div class="desc docblock-short">A builder for constructing non-default forward or reverse memmem finders.</div></li><li><div class="item-name"><a class="struct" href="struct.FinderRev.html" title="struct memchr::memmem::FinderRev">FinderRev</a></div><div class="desc docblock-short">A single substring reverse searcher fixed to a particular needle.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.Prefilter.html" title="enum memchr::memmem::Prefilter">Prefilter</a></div><div class="desc docblock-short">Prefilter controls whether heuristics are used to accelerate searching.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.find.html" title="fn memchr::memmem::find">find</a></div><div class="desc docblock-short">Returns the index of the first occurrence of the given needle.</div></li><li><div class="item-name"><a class="fn" href="fn.find_iter.html" title="fn memchr::memmem::find_iter">find_iter</a></div><div class="desc docblock-short">Returns an iterator over all non-overlapping occurrences of a substring in
+a haystack.</div></li><li><div class="item-name"><a class="fn" href="fn.rfind.html" title="fn memchr::memmem::rfind">rfind</a></div><div class="desc docblock-short">Returns the index of the last occurrence of the given needle.</div></li><li><div class="item-name"><a class="fn" href="fn.rfind_iter.html" title="fn memchr::memmem::rfind_iter">rfind_iter</a></div><div class="desc docblock-short">Returns a reverse iterator over all non-overlapping occurrences of a
+substring in a haystack.</div></li></ul></section></div></main></body></html>

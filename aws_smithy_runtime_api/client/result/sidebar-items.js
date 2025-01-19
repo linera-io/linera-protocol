@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["SdkError"],"mod":["builders"],"struct":["ConnectorError","ConstructionFailure","DispatchFailure","ResponseError","ServiceError","TimeoutError"],"trait":["CreateUnhandledError"]};

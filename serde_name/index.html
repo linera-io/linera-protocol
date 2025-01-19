@@ -1,0 +1,70 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="This crate provides fast and reliable ways to extract and to override the Serde name of a Rust container."><title>serde_name - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="serde_name" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../serde_name/index.html">serde_name</a><span class="version">0.2.1</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#functions">Functions</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">serde_name</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/serde_name/lib.rs.html#4-92">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>This crate provides fast and reliable ways to extract and to override the Serde name
+of a Rust container.</p>
+<h2 id="extracting-serde-names"><a class="doc-anchor" href="#extracting-serde-names">§</a>Extracting Serde names</h2>
+<p>Name extraction relies on the Deserialize trait of Serde:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Deserialize)]
+</span><span class="kw">struct </span>Foo {
+  bar: Bar,
+}
+
+<span class="attr">#[derive(Deserialize)]
+#[serde(rename = <span class="string">"ABC"</span>)]
+</span><span class="kw">enum </span>Bar { A, B, C }
+
+<span class="macro">assert_eq!</span>(trace_name::&lt;Foo&gt;(), <span class="prelude-val">Some</span>(<span class="string">"Foo"</span>));
+<span class="macro">assert_eq!</span>(trace_name::&lt;Bar&gt;(), <span class="prelude-val">Some</span>(<span class="string">"ABC"</span>));
+<span class="macro">assert_eq!</span>(trace_name::&lt;<span class="prelude-ty">Option</span>&lt;Bar&gt;&gt;(), <span class="prelude-val">None</span>);</code></pre></div>
+<h2 id="overriding-serde-names"><a class="doc-anchor" href="#overriding-serde-names">§</a>Overriding Serde names</h2>
+<p><code>SerializeNameAdapter</code> and <code>DeserializeNameAdapter</code> may be used to override the name
+of a container in the cases where <code>#[serde(rename = "..")]</code> is not flexible enough.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Serialize, Deserialize)]
+#[serde(remote = <span class="string">"Foo"</span>)] </span><span class="comment">// Generates Foo::(de)serialize instead of implementing Serde traits.
+</span><span class="kw">struct </span>Foo&lt;T&gt; {
+    data: T,
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">'de</span>, T&gt; Deserialize&lt;<span class="lifetime">'de</span>&gt; <span class="kw">for </span>Foo&lt;T&gt;
+<span class="kw">where
+    </span>T: Deserialize&lt;<span class="lifetime">'de</span>&gt;,
+{
+    <span class="kw">fn </span>deserialize&lt;D&gt;(deserializer: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, D::Error&gt;
+    <span class="kw">where
+        </span>D: serde::de::Deserializer&lt;<span class="lifetime">'de</span>&gt;,
+    {
+        Foo::deserialize(DeserializeNameAdapter::new(
+            deserializer,
+            std::any::type_name::&lt;<span class="self">Self</span>&gt;(),
+        ))
+    }
+}
+
+<span class="kw">impl</span>&lt;T&gt; Serialize <span class="kw">for </span>Foo&lt;T&gt;
+<span class="kw">where
+    </span>T: Serialize,
+{
+    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+    <span class="kw">where
+        </span>S: serde::ser::Serializer,
+    {
+        Foo::serialize(
+            <span class="self">self</span>,
+            SerializeNameAdapter::new(serializer, std::any::type_name::&lt;<span class="self">Self</span>&gt;()),
+        )
+    }
+}
+
+<span class="comment">// Testing the Deserialize implementation
+</span><span class="macro">assert!</span>(trace_name::&lt;Foo&lt;u64&gt;&gt;().unwrap().ends_with(<span class="string">"Foo&lt;u64&gt;"</span>));
+
+<span class="comment">// Testing the Serialize implementation
+</span><span class="kw">use </span>serde_reflection::<span class="kw-2">*</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>tracer = Tracer::new(TracerConfig::default());
+<span class="kw">let </span><span class="kw-2">mut </span>samples = Samples::new();
+<span class="kw">let </span>(<span class="kw-2">mut </span>ident, <span class="kw">_</span>) = tracer.trace_value(<span class="kw-2">&amp;mut </span>samples, <span class="kw-2">&amp;</span>Foo { data: <span class="number">1u64 </span>}).unwrap();
+ident.normalize().unwrap();
+<span class="macro">assert!</span>(<span class="macro">matches!</span>(ident, Format::TypeName(s) <span class="kw">if </span>s.ends_with(<span class="string">"Foo&lt;u64&gt;"</span>)));</code></pre></div>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.DeserializeNameAdapter.html" title="struct serde_name::DeserializeNameAdapter">DeserializeNameAdapter</a></div><div class="desc docblock-short">An adapter for <code>serde::de::Deserializer</code> implementations that lets you override the
+name of the top-level container.</div></li><li><div class="item-name"><a class="struct" href="struct.SerializeNameAdapter.html" title="struct serde_name::SerializeNameAdapter">SerializeNameAdapter</a></div><div class="desc docblock-short">An adapter for <code>serde::ser::Serializer</code> implementations that lets you override the
+name of the top-level container.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.trace_name.html" title="fn serde_name::trace_name">trace_name</a></div><div class="desc docblock-short">Compute the Serde name of a container.</div></li></ul></section></div></main></body></html>

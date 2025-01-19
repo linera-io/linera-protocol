@@ -1,0 +1,47 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Key Agreement: ECDH, including X25519."><title>ring::agreement - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="ring" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../ring/index.html">ring</a><span class="version">0.17.8</span></h2></div><h2 class="location"><a href="#">Module agreement</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#statics">Statics</a></li><li><a href="#functions">Functions</a></li></ul></section><h2><a href="../index.html">In crate ring</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">ring</a>::<wbr><a class="mod" href="#">agreement</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/ring/agreement.rs.html#15-301">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Key Agreement: ECDH, including X25519.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<p>Note that this example uses X25519, but ECDH using NIST P-256/P-384 is done
+exactly the same way, just substituting
+<code>agreement::ECDH_P256</code>/<code>agreement::ECDH_P384</code> for <code>agreement::X25519</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>ring::{agreement, rand};
+
+<span class="kw">let </span>rng = rand::SystemRandom::new();
+
+<span class="kw">let </span>my_private_key = agreement::EphemeralPrivateKey::generate(<span class="kw-2">&amp;</span>agreement::X25519, <span class="kw-2">&amp;</span>rng)<span class="question-mark">?</span>;
+
+<span class="comment">// Make `my_public_key` a byte slice containing my public key. In a real
+// application, this would be sent to the peer in an encoded protocol
+// message.
+</span><span class="kw">let </span>my_public_key = my_private_key.compute_public_key()<span class="question-mark">?</span>;
+
+<span class="kw">let </span>peer_public_key_bytes = {
+    <span class="comment">// In a real application, the peer public key would be parsed out of a
+    // protocol message. Here we just generate one.
+    </span><span class="kw">let </span>peer_private_key =
+        agreement::EphemeralPrivateKey::generate(<span class="kw-2">&amp;</span>agreement::X25519, <span class="kw-2">&amp;</span>rng)<span class="question-mark">?</span>;
+    peer_private_key.compute_public_key()<span class="question-mark">?
+</span>};
+
+<span class="kw">let </span>peer_public_key = agreement::UnparsedPublicKey::new(
+    <span class="kw-2">&amp;</span>agreement::X25519,
+    peer_public_key_bytes);
+
+agreement::agree_ephemeral(
+    my_private_key,
+    <span class="kw-2">&amp;</span>peer_public_key,
+    |_key_material| {
+        <span class="comment">// In a real application, we'd apply a KDF to the key material and the
+        // public keys (as recommended in RFC 7748) and then derive session
+        // keys from the result. We omit all that here.
+    </span>},
+)<span class="question-mark">?</span>;
+</code></pre></div>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Algorithm.html" title="struct ring::agreement::Algorithm">Algorithm</a></div><div class="desc docblock-short">A key agreement algorithm.</div></li><li><div class="item-name"><a class="struct" href="struct.EphemeralPrivateKey.html" title="struct ring::agreement::EphemeralPrivateKey">EphemeralPrivateKey</a></div><div class="desc docblock-short">An ephemeral private key for use (only) with <code>agree_ephemeral</code>. The
+signature of <code>agree_ephemeral</code> ensures that an <code>EphemeralPrivateKey</code> can be
+used for at most one key agreement.</div></li><li><div class="item-name"><a class="struct" href="struct.PublicKey.html" title="struct ring::agreement::PublicKey">PublicKey</a></div><div class="desc docblock-short">A public key for key agreement.</div></li><li><div class="item-name"><a class="struct" href="struct.UnparsedPublicKey.html" title="struct ring::agreement::UnparsedPublicKey">UnparsedPublicKey</a></div><div class="desc docblock-short">An unparsed, possibly malformed, public key for key agreement.</div></li></ul><h2 id="statics" class="section-header">Statics<a href="#statics" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="static" href="static.ECDH_P256.html" title="static ring::agreement::ECDH_P256">ECDH_P256</a></div><div class="desc docblock-short">ECDH using the NSA Suite B
+P-256 (secp256r1)
+curve.</div></li><li><div class="item-name"><a class="static" href="static.ECDH_P384.html" title="static ring::agreement::ECDH_P384">ECDH_P384</a></div><div class="desc docblock-short">ECDH using the NSA Suite B
+P-384 (secp384r1)
+curve.</div></li><li><div class="item-name"><a class="static" href="static.X25519.html" title="static ring::agreement::X25519">X25519</a></div><div class="desc docblock-short">X25519 (ECDH using Curve25519) as described in <a href="https://tools.ietf.org/html/rfc7748">RFC 7748</a>.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.agree_ephemeral.html" title="fn ring::agreement::agree_ephemeral">agree_ephemeral</a></div><div class="desc docblock-short">Performs a key agreement with an ephemeral private key and the given public
+key.</div></li></ul></section></div></main></body></html>

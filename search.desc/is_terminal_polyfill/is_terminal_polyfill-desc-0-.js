@@ -1,0 +1,1 @@
+searchState.loadedDescShard("is_terminal_polyfill", 0, "Polyfill for <code>is_terminal</code> stdlib feature for use with older …\nTrait to determine if a descriptor/handle refers to a …\nReturns <code>true</code> if the descriptor/handle refers to a …")

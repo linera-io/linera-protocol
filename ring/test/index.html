@@ -1,0 +1,97 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Testing framework."><title>ring::test - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="ring" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../ring/index.html">ring</a><span class="version">0.17.8</span></h2></div><h2 class="location"><a href="#">Module test</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#functions">Functions</a></li></ul></section><h2><a href="../index.html">In crate ring</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">ring</a>::<wbr><a class="mod" href="#">test</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/ring/test.rs.html#15-637">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Testing framework.</p>
+<p>Unlike the rest of <em>ring</em>, this testing framework uses panics pretty
+liberally. It was originally designed for internal use–it drives most of
+<em>ring</em>’s internal tests, and so it is optimized for getting <em>ring</em>’s tests
+written quickly at the expense of some usability. The documentation is
+lacking. The best way to learn it is to look at some examples. The digest
+tests are the most complicated because they use named sections. Other tests
+avoid named sections and so are easier to understand.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2><h3 id="writing-tests"><a class="doc-anchor" href="#writing-tests">§</a>Writing Tests</h3>
+<p>Input files look like this:</p>
+<div class="example-wrap"><pre class="language-text"><code># This is a comment.
+
+HMAC = SHA1
+Input = &quot;My test data&quot;
+Key = &quot;&quot;
+Output = 61afdecb95429ef494d61fdee15990cabf0826fc
+
+HMAC = SHA256
+Input = &quot;Sample message for keylen&lt;blocklen&quot;
+Key = 000102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F
+Output = A28CF43130EE696A98F14A37678B56BCFCBDD9E5CF69717FECF5480F0EBDF790
+</code></pre></div>
+<p>Test cases are separated with blank lines. Note how the bytes of the <code>Key</code>
+attribute are specified as a quoted string in the first test case and as
+hex in the second test case; you can use whichever form is more convenient
+and you can mix and match within the same file. The empty sequence of bytes
+can only be represented with the quoted string form (<code>""</code>).</p>
+<p>Here’s how you would consume the test data:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>ring::test;
+
+test::run(<span class="macro">test::test_file!</span>(<span class="string">"hmac_tests.txt"</span>), |section, test_case| {
+    <span class="macro">assert_eq!</span>(section, <span class="string">""</span>); <span class="comment">// This test doesn't use named sections.
+
+    </span><span class="kw">let </span>digest_alg = test_case.consume_digest_alg(<span class="string">"HMAC"</span>);
+    <span class="kw">let </span>input = test_case.consume_bytes(<span class="string">"Input"</span>);
+    <span class="kw">let </span>key = test_case.consume_bytes(<span class="string">"Key"</span>);
+    <span class="kw">let </span>output = test_case.consume_bytes(<span class="string">"Output"</span>);
+
+    <span class="comment">// Do the actual testing here
+</span>});</code></pre></div>
+<p>Note that <code>consume_digest_alg</code> automatically maps the string “SHA1” to a
+reference to <code>digest::SHA1_FOR_LEGACY_USE_ONLY</code>, “SHA256” to
+<code>digest::SHA256</code>, etc.</p>
+<h3 id="output-when-a-test-fails"><a class="doc-anchor" href="#output-when-a-test-fails">§</a>Output When a Test Fails</h3>
+<p>When a test case fails, the framework automatically prints out the test
+case. If the test case failed with a panic, then the backtrace of the panic
+will be printed too. For example, let’s say the failing test case looks
+like this:</p>
+<div class="example-wrap"><pre class="language-text"><code>Curve = P-256
+a = 2b11cb945c8cf152ffa4c9c2b1c965b019b35d0b7626919ef0ae6cb9d232f8af
+b = 18905f76a53755c679fb732b7762251075ba95fc5fedb60179e730d418a9143c
+r = 18905f76a53755c679fb732b7762251075ba95fc5fedb60179e730d418a9143c
+</code></pre></div>
+<p>If the test fails, this will be printed (if <code>$RUST_BACKTRACE</code> is <code>1</code>):</p>
+<div class="example-wrap"><pre class="language-text"><code>src/example_tests.txt: Test panicked.
+Curve = P-256
+a = 2b11cb945c8cf152ffa4c9c2b1c965b019b35d0b7626919ef0ae6cb9d232f8af
+b = 18905f76a53755c679fb732b7762251075ba95fc5fedb60179e730d418a9143c
+r = 18905f76a53755c679fb732b7762251075ba95fc5fedb60179e730d418a9143c
+thread &#39;example_test&#39; panicked at &#39;Test failed.&#39;, src\test.rs:206
+stack backtrace:
+   0:     0x7ff654a05c7c - std::rt::lang_start::h61f4934e780b4dfc
+   1:     0x7ff654a04f32 - std::rt::lang_start::h61f4934e780b4dfc
+   2:     0x7ff6549f505d - std::panicking::rust_panic_with_hook::hfe203e3083c2b544
+   3:     0x7ff654a0825b - rust_begin_unwind
+   4:     0x7ff6549f63af - std::panicking::begin_panic_fmt::h484cd47786497f03
+   5:     0x7ff654a07e9b - rust_begin_unwind
+   6:     0x7ff654a0ae95 - core::panicking::panic_fmt::h257ceb0aa351d801
+   7:     0x7ff654a0b190 - core::panicking::panic::h4bb1497076d04ab9
+   8:     0x7ff65496dc41 - from_file&lt;closure&gt;
+                        at C:\Users\Example\example\&lt;core macros&gt;:4
+   9:     0x7ff65496d49c - example_test
+                        at C:\Users\Example\example\src\example.rs:652
+  10:     0x7ff6549d192a - test::stats::Summary::new::ha139494ed2e4e01f
+  11:     0x7ff6549d51a2 - test::stats::Summary::new::ha139494ed2e4e01f
+  12:     0x7ff654a0a911 - _rust_maybe_catch_panic
+  13:     0x7ff6549d56dd - test::stats::Summary::new::ha139494ed2e4e01f
+  14:     0x7ff654a03783 - std::sys::thread::Thread::new::h2b08da6cd2517f79
+  15:     0x7ff968518101 - BaseThreadInitThunk
+</code></pre></div>
+<p>Notice that the output shows the name of the data file
+(<code>src/example_tests.txt</code>), the test inputs that led to the failure, and the
+stack trace to the line in the test code that panicked: entry 9 in the
+stack trace pointing to line 652 of the file <code>example.rs</code>.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.File.html" title="struct ring::test::File">File</a></div><div class="desc docblock-short">A test input file.</div></li><li><div class="item-name"><a class="struct" href="struct.TestCase.html" title="struct ring::test::TestCase">TestCase</a></div><div class="desc docblock-short">A test case. A test case consists of a set of named attributes. Every
+attribute in the test case must be consumed exactly once; this helps catch
+typos and omissions.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.compile_time_assert_clone.html" title="fn ring::test::compile_time_assert_clone">compile_time_assert_clone</a></div><div class="desc docblock-short"><code>compile_time_assert_clone::&lt;T&gt;();</code> fails to compile if <code>T</code> doesn’t
+implement <code>Clone</code>.</div></li><li><div class="item-name"><a class="fn" href="fn.compile_time_assert_copy.html" title="fn ring::test::compile_time_assert_copy">compile_time_assert_copy</a></div><div class="desc docblock-short"><code>compile_time_assert_copy::&lt;T&gt;();</code> fails to compile if <code>T</code> doesn’t
+implement <code>Copy</code>.</div></li><li><div class="item-name"><a class="fn" href="fn.compile_time_assert_eq.html" title="fn ring::test::compile_time_assert_eq">compile_time_assert_eq</a></div><div class="desc docblock-short"><code>compile_time_assert_eq::&lt;T&gt;();</code> fails to compile if <code>T</code> doesn’t
+implement <code>Eq</code>.</div></li><li><div class="item-name"><a class="fn" href="fn.compile_time_assert_send.html" title="fn ring::test::compile_time_assert_send">compile_time_assert_send</a></div><div class="desc docblock-short"><code>compile_time_assert_send::&lt;T&gt;();</code> fails to compile if <code>T</code> doesn’t
+implement <code>Send</code>.</div></li><li><div class="item-name"><a class="fn" href="fn.compile_time_assert_std_error_error.html" title="fn ring::test::compile_time_assert_std_error_error">compile_time_assert_std_error_error</a></div><div class="desc docblock-short"><code>compile_time_assert_std_error_error::&lt;T&gt;();</code> fails to compile if <code>T</code>
+doesn’t implement <code>std::error::Error</code>.</div></li><li><div class="item-name"><a class="fn" href="fn.compile_time_assert_sync.html" title="fn ring::test::compile_time_assert_sync">compile_time_assert_sync</a></div><div class="desc docblock-short"><code>compile_time_assert_sync::&lt;T&gt;();</code> fails to compile if <code>T</code> doesn’t
+implement <code>Sync</code>.</div></li><li><div class="item-name"><a class="fn" href="fn.from_hex.html" title="fn ring::test::from_hex">from_hex</a></div><div class="desc docblock-short">Decode an string of hex digits into a sequence of bytes. The input must
+have an even number of digits.</div></li><li><div class="item-name"><a class="fn" href="fn.run.html" title="fn ring::test::run">run</a></div><div class="desc docblock-short">Parses test cases out of the given file, calling <code>f</code> on each vector until
+<code>f</code> fails or until all the test vectors have been read. <code>f</code> can indicate
+failure either by returning <code>Err()</code> or by panicking.</div></li></ul></section></div></main></body></html>

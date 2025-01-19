@@ -1,0 +1,961 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="`ByteOrder` describes types that can serialize integers as bytes."><title>ByteOrder in zerocopy::byteorder - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="zerocopy" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../zerocopy/index.html">zerocopy</a><span class="version">0.7.35</span></h2></div><h2 class="location"><a href="#">ByteOrder</a></h2><div class="sidebar-elems"><section><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.from_slice_f32">from_slice_f32</a></li><li><a href="#tymethod.from_slice_f64">from_slice_f64</a></li><li><a href="#tymethod.from_slice_u128">from_slice_u128</a></li><li><a href="#tymethod.from_slice_u16">from_slice_u16</a></li><li><a href="#tymethod.from_slice_u32">from_slice_u32</a></li><li><a href="#tymethod.from_slice_u64">from_slice_u64</a></li><li><a href="#tymethod.read_u128">read_u128</a></li><li><a href="#tymethod.read_u128_into">read_u128_into</a></li><li><a href="#tymethod.read_u16">read_u16</a></li><li><a href="#tymethod.read_u16_into">read_u16_into</a></li><li><a href="#tymethod.read_u32">read_u32</a></li><li><a href="#tymethod.read_u32_into">read_u32_into</a></li><li><a href="#tymethod.read_u64">read_u64</a></li><li><a href="#tymethod.read_u64_into">read_u64_into</a></li><li><a href="#tymethod.read_uint">read_uint</a></li><li><a href="#tymethod.read_uint128">read_uint128</a></li><li><a href="#tymethod.write_u128">write_u128</a></li><li><a href="#tymethod.write_u128_into">write_u128_into</a></li><li><a href="#tymethod.write_u16">write_u16</a></li><li><a href="#tymethod.write_u16_into">write_u16_into</a></li><li><a href="#tymethod.write_u32">write_u32</a></li><li><a href="#tymethod.write_u32_into">write_u32_into</a></li><li><a href="#tymethod.write_u64">write_u64</a></li><li><a href="#tymethod.write_u64_into">write_u64_into</a></li><li><a href="#tymethod.write_uint">write_uint</a></li><li><a href="#tymethod.write_uint128">write_uint128</a></li></ul><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.from_slice_i128">from_slice_i128</a></li><li><a href="#method.from_slice_i16">from_slice_i16</a></li><li><a href="#method.from_slice_i32">from_slice_i32</a></li><li><a href="#method.from_slice_i64">from_slice_i64</a></li><li><a href="#method.read_f32">read_f32</a></li><li><a href="#method.read_f32_into">read_f32_into</a></li><li><a href="#method.read_f32_into_unchecked">read_f32_into_unchecked</a></li><li><a href="#method.read_f64">read_f64</a></li><li><a href="#method.read_f64_into">read_f64_into</a></li><li><a href="#method.read_f64_into_unchecked">read_f64_into_unchecked</a></li><li><a href="#method.read_i128">read_i128</a></li><li><a href="#method.read_i128_into">read_i128_into</a></li><li><a href="#method.read_i16">read_i16</a></li><li><a href="#method.read_i16_into">read_i16_into</a></li><li><a href="#method.read_i24">read_i24</a></li><li><a href="#method.read_i32">read_i32</a></li><li><a href="#method.read_i32_into">read_i32_into</a></li><li><a href="#method.read_i48">read_i48</a></li><li><a href="#method.read_i64">read_i64</a></li><li><a href="#method.read_i64_into">read_i64_into</a></li><li><a href="#method.read_int">read_int</a></li><li><a href="#method.read_int128">read_int128</a></li><li><a href="#method.read_u24">read_u24</a></li><li><a href="#method.read_u48">read_u48</a></li><li><a href="#method.write_f32">write_f32</a></li><li><a href="#method.write_f32_into">write_f32_into</a></li><li><a href="#method.write_f64">write_f64</a></li><li><a href="#method.write_f64_into">write_f64_into</a></li><li><a href="#method.write_i128">write_i128</a></li><li><a href="#method.write_i128_into">write_i128_into</a></li><li><a href="#method.write_i16">write_i16</a></li><li><a href="#method.write_i16_into">write_i16_into</a></li><li><a href="#method.write_i24">write_i24</a></li><li><a href="#method.write_i32">write_i32</a></li><li><a href="#method.write_i32_into">write_i32_into</a></li><li><a href="#method.write_i48">write_i48</a></li><li><a href="#method.write_i64">write_i64</a></li><li><a href="#method.write_i64_into">write_i64_into</a></li><li><a href="#method.write_i8_into">write_i8_into</a></li><li><a href="#method.write_int">write_int</a></li><li><a href="#method.write_int128">write_int128</a></li><li><a href="#method.write_u24">write_u24</a></li><li><a href="#method.write_u48">write_u48</a></li></ul><h3><a href="#object-safety">Object Safety</a></h3><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In zerocopy::byteorder</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="../index.html">zerocopy</a>::<wbr><a href="index.html">byteorder</a>::<wbr><a class="trait" href="#">ByteOrder</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/byteorder/lib.rs.html#212-222">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub trait ByteOrder: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Copy.html" title="trait core::marker::Copy">Copy</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html" title="trait core::fmt::Debug">Debug</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/default/trait.Default.html" title="trait core::default::Default">Default</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/cmp/trait.Eq.html" title="trait core::cmp::Eq">Eq</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/hash/trait.Hash.html" title="trait core::hash::Hash">Hash</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/cmp/trait.Ord.html" title="trait core::cmp::Ord">Ord</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/cmp/trait.PartialEq.html" title="trait core::cmp::PartialEq">PartialEq</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/cmp/trait.PartialOrd.html" title="trait core::cmp::PartialOrd">PartialOrd</a> + Sealed {
+<details class="toggle type-contents-toggle"><summary class="hideme"><span>Show 69 methods</span></summary>    // Required methods
+    fn <a href="#tymethod.read_u16" class="fn">read_u16</a>(buf: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u16.html">u16</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.read_u32" class="fn">read_u32</a>(buf: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.read_u64" class="fn">read_u64</a>(buf: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.read_u128" class="fn">read_u128</a>(buf: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u128.html">u128</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.read_uint" class="fn">read_uint</a>(buf: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], nbytes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.read_uint128" class="fn">read_uint128</a>(buf: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], nbytes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u128.html">u128</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.write_u16" class="fn">write_u16</a>(buf: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u16.html">u16</a>);
+<span class="item-spacer"></span>    fn <a href="#tymethod.write_u32" class="fn">write_u32</a>(buf: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>);
+<span class="item-spacer"></span>    fn <a href="#tymethod.write_u64" class="fn">write_u64</a>(buf: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>);
+<span class="item-spacer"></span>    fn <a href="#tymethod.write_u128" class="fn">write_u128</a>(buf: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u128.html">u128</a>);
+<span class="item-spacer"></span>    fn <a href="#tymethod.write_uint" class="fn">write_uint</a>(buf: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>, nbytes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>);
+<span class="item-spacer"></span>    fn <a href="#tymethod.write_uint128" class="fn">write_uint128</a>(buf: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u128.html">u128</a>, nbytes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>);
+<span class="item-spacer"></span>    fn <a href="#tymethod.read_u16_into" class="fn">read_u16_into</a>(src: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u16.html">u16</a>]);
+<span class="item-spacer"></span>    fn <a href="#tymethod.read_u32_into" class="fn">read_u32_into</a>(src: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>]);
+<span class="item-spacer"></span>    fn <a href="#tymethod.read_u64_into" class="fn">read_u64_into</a>(src: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>]);
+<span class="item-spacer"></span>    fn <a href="#tymethod.read_u128_into" class="fn">read_u128_into</a>(src: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u128.html">u128</a>]);
+<span class="item-spacer"></span>    fn <a href="#tymethod.write_u16_into" class="fn">write_u16_into</a>(src: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u16.html">u16</a>], dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]);
+<span class="item-spacer"></span>    fn <a href="#tymethod.write_u32_into" class="fn">write_u32_into</a>(src: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>], dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]);
+<span class="item-spacer"></span>    fn <a href="#tymethod.write_u64_into" class="fn">write_u64_into</a>(src: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>], dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]);
+<span class="item-spacer"></span>    fn <a href="#tymethod.write_u128_into" class="fn">write_u128_into</a>(src: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u128.html">u128</a>], dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]);
+<span class="item-spacer"></span>    fn <a href="#tymethod.from_slice_u16" class="fn">from_slice_u16</a>(numbers: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u16.html">u16</a>]);
+<span class="item-spacer"></span>    fn <a href="#tymethod.from_slice_u32" class="fn">from_slice_u32</a>(numbers: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>]);
+<span class="item-spacer"></span>    fn <a href="#tymethod.from_slice_u64" class="fn">from_slice_u64</a>(numbers: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>]);
+<span class="item-spacer"></span>    fn <a href="#tymethod.from_slice_u128" class="fn">from_slice_u128</a>(numbers: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u128.html">u128</a>]);
+<span class="item-spacer"></span>    fn <a href="#tymethod.from_slice_f32" class="fn">from_slice_f32</a>(numbers: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.f32.html">f32</a>]);
+<span class="item-spacer"></span>    fn <a href="#tymethod.from_slice_f64" class="fn">from_slice_f64</a>(numbers: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.f64.html">f64</a>]);
+
+    // Provided methods
+    fn <a href="#method.read_u24" class="fn">read_u24</a>(buf: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_u48" class="fn">read_u48</a>(buf: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.write_u24" class="fn">write_u24</a>(buf: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.write_u48" class="fn">write_u48</a>(buf: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_i16" class="fn">read_i16</a>(buf: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i16.html">i16</a> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_i24" class="fn">read_i24</a>(buf: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i32.html">i32</a> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_i32" class="fn">read_i32</a>(buf: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i32.html">i32</a> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_i48" class="fn">read_i48</a>(buf: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i64.html">i64</a> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_i64" class="fn">read_i64</a>(buf: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i64.html">i64</a> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_i128" class="fn">read_i128</a>(buf: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i128.html">i128</a> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_int" class="fn">read_int</a>(buf: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], nbytes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i64.html">i64</a> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_int128" class="fn">read_int128</a>(buf: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], nbytes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i128.html">i128</a> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_f32" class="fn">read_f32</a>(buf: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.f32.html">f32</a> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_f64" class="fn">read_f64</a>(buf: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.f64.html">f64</a> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.write_i16" class="fn">write_i16</a>(buf: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i16.html">i16</a>) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.write_i24" class="fn">write_i24</a>(buf: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i32.html">i32</a>) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.write_i32" class="fn">write_i32</a>(buf: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i32.html">i32</a>) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.write_i48" class="fn">write_i48</a>(buf: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i64.html">i64</a>) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.write_i64" class="fn">write_i64</a>(buf: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i64.html">i64</a>) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.write_i128" class="fn">write_i128</a>(buf: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i128.html">i128</a>) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.write_int" class="fn">write_int</a>(buf: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i64.html">i64</a>, nbytes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.write_int128" class="fn">write_int128</a>(buf: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i128.html">i128</a>, nbytes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.write_f32" class="fn">write_f32</a>(buf: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.f32.html">f32</a>) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.write_f64" class="fn">write_f64</a>(buf: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.f64.html">f64</a>) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_i16_into" class="fn">read_i16_into</a>(src: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i16.html">i16</a>]) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_i32_into" class="fn">read_i32_into</a>(src: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i32.html">i32</a>]) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_i64_into" class="fn">read_i64_into</a>(src: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i64.html">i64</a>]) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_i128_into" class="fn">read_i128_into</a>(src: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i128.html">i128</a>]) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_f32_into" class="fn">read_f32_into</a>(src: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.f32.html">f32</a>]) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_f32_into_unchecked" class="fn">read_f32_into_unchecked</a>(src: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.f32.html">f32</a>]) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_f64_into" class="fn">read_f64_into</a>(src: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.f64.html">f64</a>]) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_f64_into_unchecked" class="fn">read_f64_into_unchecked</a>(src: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.f64.html">f64</a>]) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.write_i8_into" class="fn">write_i8_into</a>(src: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i8.html">i8</a>], dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.write_i16_into" class="fn">write_i16_into</a>(src: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i16.html">i16</a>], dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.write_i32_into" class="fn">write_i32_into</a>(src: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i32.html">i32</a>], dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.write_i64_into" class="fn">write_i64_into</a>(src: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i64.html">i64</a>], dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.write_i128_into" class="fn">write_i128_into</a>(src: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i128.html">i128</a>], dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.write_f32_into" class="fn">write_f32_into</a>(src: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.f32.html">f32</a>], dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.write_f64_into" class="fn">write_f64_into</a>(src: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.f64.html">f64</a>], dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.from_slice_i16" class="fn">from_slice_i16</a>(src: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i16.html">i16</a>]) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.from_slice_i32" class="fn">from_slice_i32</a>(src: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i32.html">i32</a>]) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.from_slice_i64" class="fn">from_slice_i64</a>(src: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i64.html">i64</a>]) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.from_slice_i128" class="fn">from_slice_i128</a>(src: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i128.html">i128</a>]) { ... }
+</details>}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><code>ByteOrder</code> describes types that can serialize integers as bytes.</p>
+<p>Note that <code>Self</code> does not appear anywhere in this trait’s definition!
+Therefore, in order to use it, you’ll need to use syntax like
+<code>T::read_u16(&amp;[0, 1])</code> where <code>T</code> implements <code>ByteOrder</code>.</p>
+<p>This crate provides two types that implement <code>ByteOrder</code>: <a href="enum.BigEndian.html"><code>BigEndian</code></a>
+and <a href="enum.LittleEndian.html"><code>LittleEndian</code></a>.
+This trait is sealed and cannot be implemented for callers to avoid
+breaking backwards compatibility when adding new derived traits.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Write and read <code>u32</code> numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0</span>; <span class="number">4</span>];
+LittleEndian::write_u32(<span class="kw-2">&amp;mut </span>buf, <span class="number">1_000_000</span>);
+<span class="macro">assert_eq!</span>(<span class="number">1_000_000</span>, LittleEndian::read_u32(<span class="kw-2">&amp;</span>buf));</code></pre></div>
+<p>Write and read <code>i16</code> numbers in big endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, BigEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0</span>; <span class="number">2</span>];
+BigEndian::write_i16(<span class="kw-2">&amp;mut </span>buf, -<span class="number">5_000</span>);
+<span class="macro">assert_eq!</span>(-<span class="number">5_000</span>, BigEndian::read_i16(<span class="kw-2">&amp;</span>buf));</code></pre></div>
+</div></details><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.read_u16" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#229">source</a><h4 class="code-header">fn <a href="#tymethod.read_u16" class="fn">read_u16</a>(buf: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u16.html">u16</a></h4></section></summary><div class="docblock"><p>Reads an unsigned 16 bit integer from <code>buf</code>.</p>
+<h5 id="panics"><a class="doc-anchor" href="#panics">§</a>Panics</h5>
+<p>Panics when <code>buf.len() &lt; 2</code>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.read_u32" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#269">source</a><h4 class="code-header">fn <a href="#tymethod.read_u32" class="fn">read_u32</a>(buf: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a></h4></section></summary><div class="docblock"><p>Reads an unsigned 32 bit integer from <code>buf</code>.</p>
+<h5 id="panics-1"><a class="doc-anchor" href="#panics-1">§</a>Panics</h5>
+<p>Panics when <code>buf.len() &lt; 4</code>.</p>
+<h5 id="examples-1"><a class="doc-anchor" href="#examples-1">§</a>Examples</h5>
+<p>Write and read <code>u32</code> numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0</span>; <span class="number">4</span>];
+LittleEndian::write_u32(<span class="kw-2">&amp;mut </span>buf, <span class="number">1_000_000</span>);
+<span class="macro">assert_eq!</span>(<span class="number">1_000_000</span>, LittleEndian::read_u32(<span class="kw-2">&amp;</span>buf));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.read_u64" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#309">source</a><h4 class="code-header">fn <a href="#tymethod.read_u64" class="fn">read_u64</a>(buf: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a></h4></section></summary><div class="docblock"><p>Reads an unsigned 64 bit integer from <code>buf</code>.</p>
+<h5 id="panics-2"><a class="doc-anchor" href="#panics-2">§</a>Panics</h5>
+<p>Panics when <code>buf.len() &lt; 8</code>.</p>
+<h5 id="examples-2"><a class="doc-anchor" href="#examples-2">§</a>Examples</h5>
+<p>Write and read <code>u64</code> numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0</span>; <span class="number">8</span>];
+LittleEndian::write_u64(<span class="kw-2">&amp;mut </span>buf, <span class="number">1_000_000</span>);
+<span class="macro">assert_eq!</span>(<span class="number">1_000_000</span>, LittleEndian::read_u64(<span class="kw-2">&amp;</span>buf));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.read_u128" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#328">source</a><h4 class="code-header">fn <a href="#tymethod.read_u128" class="fn">read_u128</a>(buf: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u128.html">u128</a></h4></section></summary><div class="docblock"><p>Reads an unsigned 128 bit integer from <code>buf</code>.</p>
+<h5 id="panics-3"><a class="doc-anchor" href="#panics-3">§</a>Panics</h5>
+<p>Panics when <code>buf.len() &lt; 16</code>.</p>
+<h5 id="examples-3"><a class="doc-anchor" href="#examples-3">§</a>Examples</h5>
+<p>Write and read <code>u128</code> numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0</span>; <span class="number">16</span>];
+LittleEndian::write_u128(<span class="kw-2">&amp;mut </span>buf, <span class="number">1_000_000</span>);
+<span class="macro">assert_eq!</span>(<span class="number">1_000_000</span>, LittleEndian::read_u128(<span class="kw-2">&amp;</span>buf));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.read_uint" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#348">source</a><h4 class="code-header">fn <a href="#tymethod.read_uint" class="fn">read_uint</a>(buf: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], nbytes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a></h4></section></summary><div class="docblock"><p>Reads an unsigned n-bytes integer from <code>buf</code>.</p>
+<h5 id="panics-4"><a class="doc-anchor" href="#panics-4">§</a>Panics</h5>
+<p>Panics when <code>nbytes &lt; 1</code> or <code>nbytes &gt; 8</code> or
+<code>buf.len() &lt; nbytes</code></p>
+<h5 id="examples-4"><a class="doc-anchor" href="#examples-4">§</a>Examples</h5>
+<p>Write and read an n-byte number in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0</span>; <span class="number">3</span>];
+LittleEndian::write_uint(<span class="kw-2">&amp;mut </span>buf, <span class="number">1_000_000</span>, <span class="number">3</span>);
+<span class="macro">assert_eq!</span>(<span class="number">1_000_000</span>, LittleEndian::read_uint(<span class="kw-2">&amp;</span>buf, <span class="number">3</span>));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.read_uint128" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#368">source</a><h4 class="code-header">fn <a href="#tymethod.read_uint128" class="fn">read_uint128</a>(buf: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], nbytes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u128.html">u128</a></h4></section></summary><div class="docblock"><p>Reads an unsigned n-bytes integer from <code>buf</code>.</p>
+<h5 id="panics-5"><a class="doc-anchor" href="#panics-5">§</a>Panics</h5>
+<p>Panics when <code>nbytes &lt; 1</code> or <code>nbytes &gt; 16</code> or
+<code>buf.len() &lt; nbytes</code></p>
+<h5 id="examples-5"><a class="doc-anchor" href="#examples-5">§</a>Examples</h5>
+<p>Write and read an n-byte number in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0</span>; <span class="number">3</span>];
+LittleEndian::write_uint128(<span class="kw-2">&amp;mut </span>buf, <span class="number">1_000_000</span>, <span class="number">3</span>);
+<span class="macro">assert_eq!</span>(<span class="number">1_000_000</span>, LittleEndian::read_uint128(<span class="kw-2">&amp;</span>buf, <span class="number">3</span>));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.write_u16" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#387">source</a><h4 class="code-header">fn <a href="#tymethod.write_u16" class="fn">write_u16</a>(buf: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u16.html">u16</a>)</h4></section></summary><div class="docblock"><p>Writes an unsigned 16 bit integer <code>n</code> to <code>buf</code>.</p>
+<h5 id="panics-6"><a class="doc-anchor" href="#panics-6">§</a>Panics</h5>
+<p>Panics when <code>buf.len() &lt; 2</code>.</p>
+<h5 id="examples-6"><a class="doc-anchor" href="#examples-6">§</a>Examples</h5>
+<p>Write and read <code>u16</code> numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0</span>; <span class="number">2</span>];
+LittleEndian::write_u16(<span class="kw-2">&amp;mut </span>buf, <span class="number">1_000</span>);
+<span class="macro">assert_eq!</span>(<span class="number">1_000</span>, LittleEndian::read_u16(<span class="kw-2">&amp;</span>buf));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.write_u32" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#427">source</a><h4 class="code-header">fn <a href="#tymethod.write_u32" class="fn">write_u32</a>(buf: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>)</h4></section></summary><div class="docblock"><p>Writes an unsigned 32 bit integer <code>n</code> to <code>buf</code>.</p>
+<h5 id="panics-7"><a class="doc-anchor" href="#panics-7">§</a>Panics</h5>
+<p>Panics when <code>buf.len() &lt; 4</code>.</p>
+<h5 id="examples-7"><a class="doc-anchor" href="#examples-7">§</a>Examples</h5>
+<p>Write and read <code>u32</code> numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0</span>; <span class="number">4</span>];
+LittleEndian::write_u32(<span class="kw-2">&amp;mut </span>buf, <span class="number">1_000_000</span>);
+<span class="macro">assert_eq!</span>(<span class="number">1_000_000</span>, LittleEndian::read_u32(<span class="kw-2">&amp;</span>buf));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.write_u64" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#467">source</a><h4 class="code-header">fn <a href="#tymethod.write_u64" class="fn">write_u64</a>(buf: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>)</h4></section></summary><div class="docblock"><p>Writes an unsigned 64 bit integer <code>n</code> to <code>buf</code>.</p>
+<h5 id="panics-8"><a class="doc-anchor" href="#panics-8">§</a>Panics</h5>
+<p>Panics when <code>buf.len() &lt; 8</code>.</p>
+<h5 id="examples-8"><a class="doc-anchor" href="#examples-8">§</a>Examples</h5>
+<p>Write and read <code>u64</code> numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0</span>; <span class="number">8</span>];
+LittleEndian::write_u64(<span class="kw-2">&amp;mut </span>buf, <span class="number">1_000_000</span>);
+<span class="macro">assert_eq!</span>(<span class="number">1_000_000</span>, LittleEndian::read_u64(<span class="kw-2">&amp;</span>buf));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.write_u128" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#486">source</a><h4 class="code-header">fn <a href="#tymethod.write_u128" class="fn">write_u128</a>(buf: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u128.html">u128</a>)</h4></section></summary><div class="docblock"><p>Writes an unsigned 128 bit integer <code>n</code> to <code>buf</code>.</p>
+<h5 id="panics-9"><a class="doc-anchor" href="#panics-9">§</a>Panics</h5>
+<p>Panics when <code>buf.len() &lt; 16</code>.</p>
+<h5 id="examples-9"><a class="doc-anchor" href="#examples-9">§</a>Examples</h5>
+<p>Write and read <code>u128</code> numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0</span>; <span class="number">16</span>];
+LittleEndian::write_u128(<span class="kw-2">&amp;mut </span>buf, <span class="number">1_000_000</span>);
+<span class="macro">assert_eq!</span>(<span class="number">1_000_000</span>, LittleEndian::read_u128(<span class="kw-2">&amp;</span>buf));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.write_uint" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#506">source</a><h4 class="code-header">fn <a href="#tymethod.write_uint" class="fn">write_uint</a>(buf: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>, nbytes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>)</h4></section></summary><div class="docblock"><p>Writes an unsigned integer <code>n</code> to <code>buf</code> using only <code>nbytes</code>.</p>
+<h5 id="panics-10"><a class="doc-anchor" href="#panics-10">§</a>Panics</h5>
+<p>If <code>n</code> is not representable in <code>nbytes</code>, or if <code>nbytes</code> is <code>&gt; 8</code>, then
+this method panics.</p>
+<h5 id="examples-10"><a class="doc-anchor" href="#examples-10">§</a>Examples</h5>
+<p>Write and read an n-byte number in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0</span>; <span class="number">3</span>];
+LittleEndian::write_uint(<span class="kw-2">&amp;mut </span>buf, <span class="number">1_000_000</span>, <span class="number">3</span>);
+<span class="macro">assert_eq!</span>(<span class="number">1_000_000</span>, LittleEndian::read_uint(<span class="kw-2">&amp;</span>buf, <span class="number">3</span>));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.write_uint128" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#526">source</a><h4 class="code-header">fn <a href="#tymethod.write_uint128" class="fn">write_uint128</a>(buf: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u128.html">u128</a>, nbytes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>)</h4></section></summary><div class="docblock"><p>Writes an unsigned integer <code>n</code> to <code>buf</code> using only <code>nbytes</code>.</p>
+<h5 id="panics-11"><a class="doc-anchor" href="#panics-11">§</a>Panics</h5>
+<p>If <code>n</code> is not representable in <code>nbytes</code>, or if <code>nbytes</code> is <code>&gt; 16</code>, then
+this method panics.</p>
+<h5 id="examples-11"><a class="doc-anchor" href="#examples-11">§</a>Examples</h5>
+<p>Write and read an n-byte number in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0</span>; <span class="number">3</span>];
+LittleEndian::write_uint128(<span class="kw-2">&amp;mut </span>buf, <span class="number">1_000_000</span>, <span class="number">3</span>);
+<span class="macro">assert_eq!</span>(<span class="number">1_000_000</span>, LittleEndian::read_uint128(<span class="kw-2">&amp;</span>buf, <span class="number">3</span>));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.read_u16_into" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#997">source</a><h4 class="code-header">fn <a href="#tymethod.read_u16_into" class="fn">read_u16_into</a>(src: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u16.html">u16</a>])</h4></section></summary><div class="docblock"><p>Reads unsigned 16 bit integers from <code>src</code> into <code>dst</code>.</p>
+<h5 id="panics-12"><a class="doc-anchor" href="#panics-12">§</a>Panics</h5>
+<p>Panics when <code>src.len() != 2*dst.len()</code>.</p>
+<h5 id="examples-12"><a class="doc-anchor" href="#examples-12">§</a>Examples</h5>
+<p>Write and read <code>u16</code> numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>bytes = [<span class="number">0</span>; <span class="number">8</span>];
+<span class="kw">let </span>numbers_given = [<span class="number">1</span>, <span class="number">2</span>, <span class="number">0xf00f</span>, <span class="number">0xffee</span>];
+LittleEndian::write_u16_into(<span class="kw-2">&amp;</span>numbers_given, <span class="kw-2">&amp;mut </span>bytes);
+
+<span class="kw">let </span><span class="kw-2">mut </span>numbers_got = [<span class="number">0</span>; <span class="number">4</span>];
+LittleEndian::read_u16_into(<span class="kw-2">&amp;</span>bytes, <span class="kw-2">&amp;mut </span>numbers_got);
+<span class="macro">assert_eq!</span>(numbers_given, numbers_got);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.read_u32_into" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#1020">source</a><h4 class="code-header">fn <a href="#tymethod.read_u32_into" class="fn">read_u32_into</a>(src: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>])</h4></section></summary><div class="docblock"><p>Reads unsigned 32 bit integers from <code>src</code> into <code>dst</code>.</p>
+<h5 id="panics-13"><a class="doc-anchor" href="#panics-13">§</a>Panics</h5>
+<p>Panics when <code>src.len() != 4*dst.len()</code>.</p>
+<h5 id="examples-13"><a class="doc-anchor" href="#examples-13">§</a>Examples</h5>
+<p>Write and read <code>u32</code> numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>bytes = [<span class="number">0</span>; <span class="number">16</span>];
+<span class="kw">let </span>numbers_given = [<span class="number">1</span>, <span class="number">2</span>, <span class="number">0xf00f</span>, <span class="number">0xffee</span>];
+LittleEndian::write_u32_into(<span class="kw-2">&amp;</span>numbers_given, <span class="kw-2">&amp;mut </span>bytes);
+
+<span class="kw">let </span><span class="kw-2">mut </span>numbers_got = [<span class="number">0</span>; <span class="number">4</span>];
+LittleEndian::read_u32_into(<span class="kw-2">&amp;</span>bytes, <span class="kw-2">&amp;mut </span>numbers_got);
+<span class="macro">assert_eq!</span>(numbers_given, numbers_got);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.read_u64_into" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#1043">source</a><h4 class="code-header">fn <a href="#tymethod.read_u64_into" class="fn">read_u64_into</a>(src: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>])</h4></section></summary><div class="docblock"><p>Reads unsigned 64 bit integers from <code>src</code> into <code>dst</code>.</p>
+<h5 id="panics-14"><a class="doc-anchor" href="#panics-14">§</a>Panics</h5>
+<p>Panics when <code>src.len() != 8*dst.len()</code>.</p>
+<h5 id="examples-14"><a class="doc-anchor" href="#examples-14">§</a>Examples</h5>
+<p>Write and read <code>u64</code> numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>bytes = [<span class="number">0</span>; <span class="number">32</span>];
+<span class="kw">let </span>numbers_given = [<span class="number">1</span>, <span class="number">2</span>, <span class="number">0xf00f</span>, <span class="number">0xffee</span>];
+LittleEndian::write_u64_into(<span class="kw-2">&amp;</span>numbers_given, <span class="kw-2">&amp;mut </span>bytes);
+
+<span class="kw">let </span><span class="kw-2">mut </span>numbers_got = [<span class="number">0</span>; <span class="number">4</span>];
+LittleEndian::read_u64_into(<span class="kw-2">&amp;</span>bytes, <span class="kw-2">&amp;mut </span>numbers_got);
+<span class="macro">assert_eq!</span>(numbers_given, numbers_got);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.read_u128_into" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#1066">source</a><h4 class="code-header">fn <a href="#tymethod.read_u128_into" class="fn">read_u128_into</a>(src: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u128.html">u128</a>])</h4></section></summary><div class="docblock"><p>Reads unsigned 128 bit integers from <code>src</code> into <code>dst</code>.</p>
+<h5 id="panics-15"><a class="doc-anchor" href="#panics-15">§</a>Panics</h5>
+<p>Panics when <code>src.len() != 16*dst.len()</code>.</p>
+<h5 id="examples-15"><a class="doc-anchor" href="#examples-15">§</a>Examples</h5>
+<p>Write and read <code>u128</code> numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>bytes = [<span class="number">0</span>; <span class="number">64</span>];
+<span class="kw">let </span>numbers_given = [<span class="number">1</span>, <span class="number">2</span>, <span class="number">0xf00f</span>, <span class="number">0xffee</span>];
+LittleEndian::write_u128_into(<span class="kw-2">&amp;</span>numbers_given, <span class="kw-2">&amp;mut </span>bytes);
+
+<span class="kw">let </span><span class="kw-2">mut </span>numbers_got = [<span class="number">0</span>; <span class="number">4</span>];
+LittleEndian::read_u128_into(<span class="kw-2">&amp;</span>bytes, <span class="kw-2">&amp;mut </span>numbers_got);
+<span class="macro">assert_eq!</span>(numbers_given, numbers_got);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.write_u16_into" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#1330">source</a><h4 class="code-header">fn <a href="#tymethod.write_u16_into" class="fn">write_u16_into</a>(src: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u16.html">u16</a>], dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>])</h4></section></summary><div class="docblock"><p>Writes unsigned 16 bit integers from <code>src</code> into <code>dst</code>.</p>
+<h5 id="panics-16"><a class="doc-anchor" href="#panics-16">§</a>Panics</h5>
+<p>Panics when <code>dst.len() != 2*src.len()</code>.</p>
+<h5 id="examples-16"><a class="doc-anchor" href="#examples-16">§</a>Examples</h5>
+<p>Write and read <code>u16</code> numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>bytes = [<span class="number">0</span>; <span class="number">8</span>];
+<span class="kw">let </span>numbers_given = [<span class="number">1</span>, <span class="number">2</span>, <span class="number">0xf00f</span>, <span class="number">0xffee</span>];
+LittleEndian::write_u16_into(<span class="kw-2">&amp;</span>numbers_given, <span class="kw-2">&amp;mut </span>bytes);
+
+<span class="kw">let </span><span class="kw-2">mut </span>numbers_got = [<span class="number">0</span>; <span class="number">4</span>];
+LittleEndian::read_u16_into(<span class="kw-2">&amp;</span>bytes, <span class="kw-2">&amp;mut </span>numbers_got);
+<span class="macro">assert_eq!</span>(numbers_given, numbers_got);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.write_u32_into" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#1353">source</a><h4 class="code-header">fn <a href="#tymethod.write_u32_into" class="fn">write_u32_into</a>(src: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>], dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>])</h4></section></summary><div class="docblock"><p>Writes unsigned 32 bit integers from <code>src</code> into <code>dst</code>.</p>
+<h5 id="panics-17"><a class="doc-anchor" href="#panics-17">§</a>Panics</h5>
+<p>Panics when <code>dst.len() != 4*src.len()</code>.</p>
+<h5 id="examples-17"><a class="doc-anchor" href="#examples-17">§</a>Examples</h5>
+<p>Write and read <code>u32</code> numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>bytes = [<span class="number">0</span>; <span class="number">16</span>];
+<span class="kw">let </span>numbers_given = [<span class="number">1</span>, <span class="number">2</span>, <span class="number">0xf00f</span>, <span class="number">0xffee</span>];
+LittleEndian::write_u32_into(<span class="kw-2">&amp;</span>numbers_given, <span class="kw-2">&amp;mut </span>bytes);
+
+<span class="kw">let </span><span class="kw-2">mut </span>numbers_got = [<span class="number">0</span>; <span class="number">4</span>];
+LittleEndian::read_u32_into(<span class="kw-2">&amp;</span>bytes, <span class="kw-2">&amp;mut </span>numbers_got);
+<span class="macro">assert_eq!</span>(numbers_given, numbers_got);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.write_u64_into" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#1376">source</a><h4 class="code-header">fn <a href="#tymethod.write_u64_into" class="fn">write_u64_into</a>(src: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>], dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>])</h4></section></summary><div class="docblock"><p>Writes unsigned 64 bit integers from <code>src</code> into <code>dst</code>.</p>
+<h5 id="panics-18"><a class="doc-anchor" href="#panics-18">§</a>Panics</h5>
+<p>Panics when <code>dst.len() != 8*src.len()</code>.</p>
+<h5 id="examples-18"><a class="doc-anchor" href="#examples-18">§</a>Examples</h5>
+<p>Write and read <code>u64</code> numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>bytes = [<span class="number">0</span>; <span class="number">32</span>];
+<span class="kw">let </span>numbers_given = [<span class="number">1</span>, <span class="number">2</span>, <span class="number">0xf00f</span>, <span class="number">0xffee</span>];
+LittleEndian::write_u64_into(<span class="kw-2">&amp;</span>numbers_given, <span class="kw-2">&amp;mut </span>bytes);
+
+<span class="kw">let </span><span class="kw-2">mut </span>numbers_got = [<span class="number">0</span>; <span class="number">4</span>];
+LittleEndian::read_u64_into(<span class="kw-2">&amp;</span>bytes, <span class="kw-2">&amp;mut </span>numbers_got);
+<span class="macro">assert_eq!</span>(numbers_given, numbers_got);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.write_u128_into" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#1399">source</a><h4 class="code-header">fn <a href="#tymethod.write_u128_into" class="fn">write_u128_into</a>(src: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u128.html">u128</a>], dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>])</h4></section></summary><div class="docblock"><p>Writes unsigned 128 bit integers from <code>src</code> into <code>dst</code>.</p>
+<h5 id="panics-19"><a class="doc-anchor" href="#panics-19">§</a>Panics</h5>
+<p>Panics when <code>dst.len() != 16*src.len()</code>.</p>
+<h5 id="examples-19"><a class="doc-anchor" href="#examples-19">§</a>Examples</h5>
+<p>Write and read <code>u128</code> numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>bytes = [<span class="number">0</span>; <span class="number">64</span>];
+<span class="kw">let </span>numbers_given = [<span class="number">1</span>, <span class="number">2</span>, <span class="number">0xf00f</span>, <span class="number">0xffee</span>];
+LittleEndian::write_u128_into(<span class="kw-2">&amp;</span>numbers_given, <span class="kw-2">&amp;mut </span>bytes);
+
+<span class="kw">let </span><span class="kw-2">mut </span>numbers_got = [<span class="number">0</span>; <span class="number">4</span>];
+LittleEndian::read_u128_into(<span class="kw-2">&amp;</span>bytes, <span class="kw-2">&amp;mut </span>numbers_got);
+<span class="macro">assert_eq!</span>(numbers_given, numbers_got);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.from_slice_u16" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#1622">source</a><h4 class="code-header">fn <a href="#tymethod.from_slice_u16" class="fn">from_slice_u16</a>(numbers: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u16.html">u16</a>])</h4></section></summary><div class="docblock"><p>Converts the given slice of unsigned 16 bit integers to a particular
+endianness.</p>
+<p>If the endianness matches the endianness of the host platform, then
+this is a no-op.</p>
+<h5 id="examples-20"><a class="doc-anchor" href="#examples-20">§</a>Examples</h5>
+<p>Convert the host platform’s endianness to big-endian:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, BigEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>numbers = [<span class="number">5</span>, <span class="number">65000</span>];
+BigEndian::from_slice_u16(<span class="kw-2">&amp;mut </span>numbers);
+<span class="macro">assert_eq!</span>(numbers, [<span class="number">5u16</span>.to_be(), <span class="number">65000u16</span>.to_be()]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.from_slice_u32" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#1641">source</a><h4 class="code-header">fn <a href="#tymethod.from_slice_u32" class="fn">from_slice_u32</a>(numbers: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>])</h4></section></summary><div class="docblock"><p>Converts the given slice of unsigned 32 bit integers to a particular
+endianness.</p>
+<p>If the endianness matches the endianness of the host platform, then
+this is a no-op.</p>
+<h5 id="examples-21"><a class="doc-anchor" href="#examples-21">§</a>Examples</h5>
+<p>Convert the host platform’s endianness to big-endian:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, BigEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>numbers = [<span class="number">5</span>, <span class="number">65000</span>];
+BigEndian::from_slice_u32(<span class="kw-2">&amp;mut </span>numbers);
+<span class="macro">assert_eq!</span>(numbers, [<span class="number">5u32</span>.to_be(), <span class="number">65000u32</span>.to_be()]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.from_slice_u64" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#1660">source</a><h4 class="code-header">fn <a href="#tymethod.from_slice_u64" class="fn">from_slice_u64</a>(numbers: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>])</h4></section></summary><div class="docblock"><p>Converts the given slice of unsigned 64 bit integers to a particular
+endianness.</p>
+<p>If the endianness matches the endianness of the host platform, then
+this is a no-op.</p>
+<h5 id="examples-22"><a class="doc-anchor" href="#examples-22">§</a>Examples</h5>
+<p>Convert the host platform’s endianness to big-endian:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, BigEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>numbers = [<span class="number">5</span>, <span class="number">65000</span>];
+BigEndian::from_slice_u64(<span class="kw-2">&amp;mut </span>numbers);
+<span class="macro">assert_eq!</span>(numbers, [<span class="number">5u64</span>.to_be(), <span class="number">65000u64</span>.to_be()]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.from_slice_u128" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#1679">source</a><h4 class="code-header">fn <a href="#tymethod.from_slice_u128" class="fn">from_slice_u128</a>(numbers: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u128.html">u128</a>])</h4></section></summary><div class="docblock"><p>Converts the given slice of unsigned 128 bit integers to a particular
+endianness.</p>
+<p>If the endianness matches the endianness of the host platform, then
+this is a no-op.</p>
+<h5 id="examples-23"><a class="doc-anchor" href="#examples-23">§</a>Examples</h5>
+<p>Convert the host platform’s endianness to big-endian:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, BigEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>numbers = [<span class="number">5</span>, <span class="number">65000</span>];
+BigEndian::from_slice_u128(<span class="kw-2">&amp;mut </span>numbers);
+<span class="macro">assert_eq!</span>(numbers, [<span class="number">5u128</span>.to_be(), <span class="number">65000u128</span>.to_be()]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.from_slice_f32" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#1786">source</a><h4 class="code-header">fn <a href="#tymethod.from_slice_f32" class="fn">from_slice_f32</a>(numbers: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.f32.html">f32</a>])</h4></section></summary><div class="docblock"><p>Converts the given slice of IEEE754 single-precision (4 bytes) floating
+point numbers to a particular endianness.</p>
+<p>If the endianness matches the endianness of the host platform, then
+this is a no-op.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.from_slice_f64" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#1793">source</a><h4 class="code-header">fn <a href="#tymethod.from_slice_f64" class="fn">from_slice_f64</a>(numbers: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.f64.html">f64</a>])</h4></section></summary><div class="docblock"><p>Converts the given slice of IEEE754 double-precision (8 bytes) floating
+point numbers to a particular endianness.</p>
+<p>If the endianness matches the endianness of the host platform, then
+this is a no-op.</p>
+</div></details></div><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.read_u24" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#248">source</a><h4 class="code-header">fn <a href="#method.read_u24" class="fn">read_u24</a>(buf: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a></h4></section></summary><div class="docblock"><p>Reads an unsigned 24 bit integer from <code>buf</code>, stored in u32.</p>
+<h5 id="panics-20"><a class="doc-anchor" href="#panics-20">§</a>Panics</h5>
+<p>Panics when <code>buf.len() &lt; 3</code>.</p>
+<h5 id="examples-24"><a class="doc-anchor" href="#examples-24">§</a>Examples</h5>
+<p>Write and read 24 bit <code>u32</code> numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0</span>; <span class="number">3</span>];
+LittleEndian::write_u24(<span class="kw-2">&amp;mut </span>buf, <span class="number">1_000_000</span>);
+<span class="macro">assert_eq!</span>(<span class="number">1_000_000</span>, LittleEndian::read_u24(<span class="kw-2">&amp;</span>buf));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_u48" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#288">source</a><h4 class="code-header">fn <a href="#method.read_u48" class="fn">read_u48</a>(buf: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a></h4></section></summary><div class="docblock"><p>Reads an unsigned 48 bit integer from <code>buf</code>, stored in u64.</p>
+<h5 id="panics-21"><a class="doc-anchor" href="#panics-21">§</a>Panics</h5>
+<p>Panics when <code>buf.len() &lt; 6</code>.</p>
+<h5 id="examples-25"><a class="doc-anchor" href="#examples-25">§</a>Examples</h5>
+<p>Write and read 48 bit <code>u64</code> numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0</span>; <span class="number">6</span>];
+LittleEndian::write_u48(<span class="kw-2">&amp;mut </span>buf, <span class="number">1_000_000_000_000</span>);
+<span class="macro">assert_eq!</span>(<span class="number">1_000_000_000_000</span>, LittleEndian::read_u48(<span class="kw-2">&amp;</span>buf));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.write_u24" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#406">source</a><h4 class="code-header">fn <a href="#method.write_u24" class="fn">write_u24</a>(buf: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>)</h4></section></summary><div class="docblock"><p>Writes an unsigned 24 bit integer <code>n</code> to <code>buf</code>, stored in u32.</p>
+<h5 id="panics-22"><a class="doc-anchor" href="#panics-22">§</a>Panics</h5>
+<p>Panics when <code>buf.len() &lt; 3</code>.</p>
+<h5 id="examples-26"><a class="doc-anchor" href="#examples-26">§</a>Examples</h5>
+<p>Write and read 24 bit <code>u32</code> numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0</span>; <span class="number">3</span>];
+LittleEndian::write_u24(<span class="kw-2">&amp;mut </span>buf, <span class="number">1_000_000</span>);
+<span class="macro">assert_eq!</span>(<span class="number">1_000_000</span>, LittleEndian::read_u24(<span class="kw-2">&amp;</span>buf));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.write_u48" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#446">source</a><h4 class="code-header">fn <a href="#method.write_u48" class="fn">write_u48</a>(buf: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>)</h4></section></summary><div class="docblock"><p>Writes an unsigned 48 bit integer <code>n</code> to <code>buf</code>, stored in u64.</p>
+<h5 id="panics-23"><a class="doc-anchor" href="#panics-23">§</a>Panics</h5>
+<p>Panics when <code>buf.len() &lt; 6</code>.</p>
+<h5 id="examples-27"><a class="doc-anchor" href="#examples-27">§</a>Examples</h5>
+<p>Write and read 48 bit <code>u64</code> numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0</span>; <span class="number">6</span>];
+LittleEndian::write_u48(<span class="kw-2">&amp;mut </span>buf, <span class="number">1_000_000_000_000</span>);
+<span class="macro">assert_eq!</span>(<span class="number">1_000_000_000_000</span>, LittleEndian::read_u48(<span class="kw-2">&amp;</span>buf));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_i16" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#546">source</a><h4 class="code-header">fn <a href="#method.read_i16" class="fn">read_i16</a>(buf: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i16.html">i16</a></h4></section></summary><div class="docblock"><p>Reads a signed 16 bit integer from <code>buf</code>.</p>
+<h5 id="panics-24"><a class="doc-anchor" href="#panics-24">§</a>Panics</h5>
+<p>Panics when <code>buf.len() &lt; 2</code>.</p>
+<h5 id="examples-28"><a class="doc-anchor" href="#examples-28">§</a>Examples</h5>
+<p>Write and read <code>i16</code> numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0</span>; <span class="number">2</span>];
+LittleEndian::write_i16(<span class="kw-2">&amp;mut </span>buf, -<span class="number">1_000</span>);
+<span class="macro">assert_eq!</span>(-<span class="number">1_000</span>, LittleEndian::read_i16(<span class="kw-2">&amp;</span>buf));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_i24" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#568">source</a><h4 class="code-header">fn <a href="#method.read_i24" class="fn">read_i24</a>(buf: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i32.html">i32</a></h4></section></summary><div class="docblock"><p>Reads a signed 24 bit integer from <code>buf</code>, stored in i32.</p>
+<h5 id="panics-25"><a class="doc-anchor" href="#panics-25">§</a>Panics</h5>
+<p>Panics when <code>buf.len() &lt; 3</code>.</p>
+<h5 id="examples-29"><a class="doc-anchor" href="#examples-29">§</a>Examples</h5>
+<p>Write and read 24 bit <code>i32</code> numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0</span>; <span class="number">3</span>];
+LittleEndian::write_i24(<span class="kw-2">&amp;mut </span>buf, -<span class="number">1_000_000</span>);
+<span class="macro">assert_eq!</span>(-<span class="number">1_000_000</span>, LittleEndian::read_i24(<span class="kw-2">&amp;</span>buf));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_i32" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#590">source</a><h4 class="code-header">fn <a href="#method.read_i32" class="fn">read_i32</a>(buf: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i32.html">i32</a></h4></section></summary><div class="docblock"><p>Reads a signed 32 bit integer from <code>buf</code>.</p>
+<h5 id="panics-26"><a class="doc-anchor" href="#panics-26">§</a>Panics</h5>
+<p>Panics when <code>buf.len() &lt; 4</code>.</p>
+<h5 id="examples-30"><a class="doc-anchor" href="#examples-30">§</a>Examples</h5>
+<p>Write and read <code>i32</code> numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0</span>; <span class="number">4</span>];
+LittleEndian::write_i32(<span class="kw-2">&amp;mut </span>buf, -<span class="number">1_000_000</span>);
+<span class="macro">assert_eq!</span>(-<span class="number">1_000_000</span>, LittleEndian::read_i32(<span class="kw-2">&amp;</span>buf));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_i48" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#612">source</a><h4 class="code-header">fn <a href="#method.read_i48" class="fn">read_i48</a>(buf: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i64.html">i64</a></h4></section></summary><div class="docblock"><p>Reads a signed 48 bit integer from <code>buf</code>, stored in i64.</p>
+<h5 id="panics-27"><a class="doc-anchor" href="#panics-27">§</a>Panics</h5>
+<p>Panics when <code>buf.len() &lt; 6</code>.</p>
+<h5 id="examples-31"><a class="doc-anchor" href="#examples-31">§</a>Examples</h5>
+<p>Write and read 48 bit <code>i64</code> numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0</span>; <span class="number">6</span>];
+LittleEndian::write_i48(<span class="kw-2">&amp;mut </span>buf, -<span class="number">1_000_000_000_000</span>);
+<span class="macro">assert_eq!</span>(-<span class="number">1_000_000_000_000</span>, LittleEndian::read_i48(<span class="kw-2">&amp;</span>buf));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_i64" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#634">source</a><h4 class="code-header">fn <a href="#method.read_i64" class="fn">read_i64</a>(buf: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i64.html">i64</a></h4></section></summary><div class="docblock"><p>Reads a signed 64 bit integer from <code>buf</code>.</p>
+<h5 id="panics-28"><a class="doc-anchor" href="#panics-28">§</a>Panics</h5>
+<p>Panics when <code>buf.len() &lt; 8</code>.</p>
+<h5 id="examples-32"><a class="doc-anchor" href="#examples-32">§</a>Examples</h5>
+<p>Write and read <code>i64</code> numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0</span>; <span class="number">8</span>];
+LittleEndian::write_i64(<span class="kw-2">&amp;mut </span>buf, -<span class="number">1_000_000_000</span>);
+<span class="macro">assert_eq!</span>(-<span class="number">1_000_000_000</span>, LittleEndian::read_i64(<span class="kw-2">&amp;</span>buf));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_i128" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#656">source</a><h4 class="code-header">fn <a href="#method.read_i128" class="fn">read_i128</a>(buf: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i128.html">i128</a></h4></section></summary><div class="docblock"><p>Reads a signed 128 bit integer from <code>buf</code>.</p>
+<h5 id="panics-29"><a class="doc-anchor" href="#panics-29">§</a>Panics</h5>
+<p>Panics when <code>buf.len() &lt; 16</code>.</p>
+<h5 id="examples-33"><a class="doc-anchor" href="#examples-33">§</a>Examples</h5>
+<p>Write and read <code>i128</code> numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0</span>; <span class="number">16</span>];
+LittleEndian::write_i128(<span class="kw-2">&amp;mut </span>buf, -<span class="number">1_000_000_000</span>);
+<span class="macro">assert_eq!</span>(-<span class="number">1_000_000_000</span>, LittleEndian::read_i128(<span class="kw-2">&amp;</span>buf));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_int" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#679">source</a><h4 class="code-header">fn <a href="#method.read_int" class="fn">read_int</a>(buf: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], nbytes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i64.html">i64</a></h4></section></summary><div class="docblock"><p>Reads a signed n-bytes integer from <code>buf</code>.</p>
+<h5 id="panics-30"><a class="doc-anchor" href="#panics-30">§</a>Panics</h5>
+<p>Panics when <code>nbytes &lt; 1</code> or <code>nbytes &gt; 8</code> or
+<code>buf.len() &lt; nbytes</code></p>
+<h5 id="examples-34"><a class="doc-anchor" href="#examples-34">§</a>Examples</h5>
+<p>Write and read n-length signed numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0</span>; <span class="number">3</span>];
+LittleEndian::write_int(<span class="kw-2">&amp;mut </span>buf, -<span class="number">1_000</span>, <span class="number">3</span>);
+<span class="macro">assert_eq!</span>(-<span class="number">1_000</span>, LittleEndian::read_int(<span class="kw-2">&amp;</span>buf, <span class="number">3</span>));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_int128" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#702">source</a><h4 class="code-header">fn <a href="#method.read_int128" class="fn">read_int128</a>(buf: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], nbytes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i128.html">i128</a></h4></section></summary><div class="docblock"><p>Reads a signed n-bytes integer from <code>buf</code>.</p>
+<h5 id="panics-31"><a class="doc-anchor" href="#panics-31">§</a>Panics</h5>
+<p>Panics when <code>nbytes &lt; 1</code> or <code>nbytes &gt; 16</code> or
+<code>buf.len() &lt; nbytes</code></p>
+<h5 id="examples-35"><a class="doc-anchor" href="#examples-35">§</a>Examples</h5>
+<p>Write and read n-length signed numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0</span>; <span class="number">3</span>];
+LittleEndian::write_int128(<span class="kw-2">&amp;mut </span>buf, -<span class="number">1_000</span>, <span class="number">3</span>);
+<span class="macro">assert_eq!</span>(-<span class="number">1_000</span>, LittleEndian::read_int128(<span class="kw-2">&amp;</span>buf, <span class="number">3</span>));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_f32" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#725">source</a><h4 class="code-header">fn <a href="#method.read_f32" class="fn">read_f32</a>(buf: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.f32.html">f32</a></h4></section></summary><div class="docblock"><p>Reads a IEEE754 single-precision (4 bytes) floating point number.</p>
+<h5 id="panics-32"><a class="doc-anchor" href="#panics-32">§</a>Panics</h5>
+<p>Panics when <code>buf.len() &lt; 4</code>.</p>
+<h5 id="examples-36"><a class="doc-anchor" href="#examples-36">§</a>Examples</h5>
+<p>Write and read <code>f32</code> numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span>e = <span class="number">2.71828</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0</span>; <span class="number">4</span>];
+LittleEndian::write_f32(<span class="kw-2">&amp;mut </span>buf, e);
+<span class="macro">assert_eq!</span>(e, LittleEndian::read_f32(<span class="kw-2">&amp;</span>buf));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_f64" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#748">source</a><h4 class="code-header">fn <a href="#method.read_f64" class="fn">read_f64</a>(buf: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.f64.html">f64</a></h4></section></summary><div class="docblock"><p>Reads a IEEE754 double-precision (8 bytes) floating point number.</p>
+<h5 id="panics-33"><a class="doc-anchor" href="#panics-33">§</a>Panics</h5>
+<p>Panics when <code>buf.len() &lt; 8</code>.</p>
+<h5 id="examples-37"><a class="doc-anchor" href="#examples-37">§</a>Examples</h5>
+<p>Write and read <code>f64</code> numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span>phi = <span class="number">1.6180339887</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0</span>; <span class="number">8</span>];
+LittleEndian::write_f64(<span class="kw-2">&amp;mut </span>buf, phi);
+<span class="macro">assert_eq!</span>(phi, LittleEndian::read_f64(<span class="kw-2">&amp;</span>buf));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.write_i16" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#770">source</a><h4 class="code-header">fn <a href="#method.write_i16" class="fn">write_i16</a>(buf: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i16.html">i16</a>)</h4></section></summary><div class="docblock"><p>Writes a signed 16 bit integer <code>n</code> to <code>buf</code>.</p>
+<h5 id="panics-34"><a class="doc-anchor" href="#panics-34">§</a>Panics</h5>
+<p>Panics when <code>buf.len() &lt; 2</code>.</p>
+<h5 id="examples-38"><a class="doc-anchor" href="#examples-38">§</a>Examples</h5>
+<p>Write and read <code>i16</code> numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0</span>; <span class="number">2</span>];
+LittleEndian::write_i16(<span class="kw-2">&amp;mut </span>buf, -<span class="number">1_000</span>);
+<span class="macro">assert_eq!</span>(-<span class="number">1_000</span>, LittleEndian::read_i16(<span class="kw-2">&amp;</span>buf));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.write_i24" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#792">source</a><h4 class="code-header">fn <a href="#method.write_i24" class="fn">write_i24</a>(buf: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i32.html">i32</a>)</h4></section></summary><div class="docblock"><p>Writes a signed 24 bit integer <code>n</code> to <code>buf</code>, stored in i32.</p>
+<h5 id="panics-35"><a class="doc-anchor" href="#panics-35">§</a>Panics</h5>
+<p>Panics when <code>buf.len() &lt; 3</code>.</p>
+<h5 id="examples-39"><a class="doc-anchor" href="#examples-39">§</a>Examples</h5>
+<p>Write and read 24 bit <code>i32</code> numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0</span>; <span class="number">3</span>];
+LittleEndian::write_i24(<span class="kw-2">&amp;mut </span>buf, -<span class="number">1_000_000</span>);
+<span class="macro">assert_eq!</span>(-<span class="number">1_000_000</span>, LittleEndian::read_i24(<span class="kw-2">&amp;</span>buf));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.write_i32" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#814">source</a><h4 class="code-header">fn <a href="#method.write_i32" class="fn">write_i32</a>(buf: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i32.html">i32</a>)</h4></section></summary><div class="docblock"><p>Writes a signed 32 bit integer <code>n</code> to <code>buf</code>.</p>
+<h5 id="panics-36"><a class="doc-anchor" href="#panics-36">§</a>Panics</h5>
+<p>Panics when <code>buf.len() &lt; 4</code>.</p>
+<h5 id="examples-40"><a class="doc-anchor" href="#examples-40">§</a>Examples</h5>
+<p>Write and read <code>i32</code> numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0</span>; <span class="number">4</span>];
+LittleEndian::write_i32(<span class="kw-2">&amp;mut </span>buf, -<span class="number">1_000_000</span>);
+<span class="macro">assert_eq!</span>(-<span class="number">1_000_000</span>, LittleEndian::read_i32(<span class="kw-2">&amp;</span>buf));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.write_i48" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#836">source</a><h4 class="code-header">fn <a href="#method.write_i48" class="fn">write_i48</a>(buf: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i64.html">i64</a>)</h4></section></summary><div class="docblock"><p>Writes a signed 48 bit integer <code>n</code> to <code>buf</code>, stored in i64.</p>
+<h5 id="panics-37"><a class="doc-anchor" href="#panics-37">§</a>Panics</h5>
+<p>Panics when <code>buf.len() &lt; 6</code>.</p>
+<h5 id="examples-41"><a class="doc-anchor" href="#examples-41">§</a>Examples</h5>
+<p>Write and read 48 bit <code>i64</code> numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0</span>; <span class="number">6</span>];
+LittleEndian::write_i48(<span class="kw-2">&amp;mut </span>buf, -<span class="number">1_000_000_000_000</span>);
+<span class="macro">assert_eq!</span>(-<span class="number">1_000_000_000_000</span>, LittleEndian::read_i48(<span class="kw-2">&amp;</span>buf));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.write_i64" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#858">source</a><h4 class="code-header">fn <a href="#method.write_i64" class="fn">write_i64</a>(buf: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i64.html">i64</a>)</h4></section></summary><div class="docblock"><p>Writes a signed 64 bit integer <code>n</code> to <code>buf</code>.</p>
+<h5 id="panics-38"><a class="doc-anchor" href="#panics-38">§</a>Panics</h5>
+<p>Panics when <code>buf.len() &lt; 8</code>.</p>
+<h5 id="examples-42"><a class="doc-anchor" href="#examples-42">§</a>Examples</h5>
+<p>Write and read <code>i64</code> numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0</span>; <span class="number">8</span>];
+LittleEndian::write_i64(<span class="kw-2">&amp;mut </span>buf, -<span class="number">1_000_000_000</span>);
+<span class="macro">assert_eq!</span>(-<span class="number">1_000_000_000</span>, LittleEndian::read_i64(<span class="kw-2">&amp;</span>buf));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.write_i128" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#880">source</a><h4 class="code-header">fn <a href="#method.write_i128" class="fn">write_i128</a>(buf: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i128.html">i128</a>)</h4></section></summary><div class="docblock"><p>Writes a signed 128 bit integer <code>n</code> to <code>buf</code>.</p>
+<h5 id="panics-39"><a class="doc-anchor" href="#panics-39">§</a>Panics</h5>
+<p>Panics when <code>buf.len() &lt; 16</code>.</p>
+<h5 id="examples-43"><a class="doc-anchor" href="#examples-43">§</a>Examples</h5>
+<p>Write and read n-byte <code>i128</code> numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0</span>; <span class="number">16</span>];
+LittleEndian::write_i128(<span class="kw-2">&amp;mut </span>buf, -<span class="number">1_000_000_000</span>);
+<span class="macro">assert_eq!</span>(-<span class="number">1_000_000_000</span>, LittleEndian::read_i128(<span class="kw-2">&amp;</span>buf));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.write_int" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#903">source</a><h4 class="code-header">fn <a href="#method.write_int" class="fn">write_int</a>(buf: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i64.html">i64</a>, nbytes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>)</h4></section></summary><div class="docblock"><p>Writes a signed integer <code>n</code> to <code>buf</code> using only <code>nbytes</code>.</p>
+<h5 id="panics-40"><a class="doc-anchor" href="#panics-40">§</a>Panics</h5>
+<p>If <code>n</code> is not representable in <code>nbytes</code>, or if <code>nbytes</code> is <code>&gt; 8</code>, then
+this method panics.</p>
+<h5 id="examples-44"><a class="doc-anchor" href="#examples-44">§</a>Examples</h5>
+<p>Write and read an n-byte number in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0</span>; <span class="number">3</span>];
+LittleEndian::write_int(<span class="kw-2">&amp;mut </span>buf, -<span class="number">1_000</span>, <span class="number">3</span>);
+<span class="macro">assert_eq!</span>(-<span class="number">1_000</span>, LittleEndian::read_int(<span class="kw-2">&amp;</span>buf, <span class="number">3</span>));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.write_int128" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#926">source</a><h4 class="code-header">fn <a href="#method.write_int128" class="fn">write_int128</a>(buf: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i128.html">i128</a>, nbytes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>)</h4></section></summary><div class="docblock"><p>Writes a signed integer <code>n</code> to <code>buf</code> using only <code>nbytes</code>.</p>
+<h5 id="panics-41"><a class="doc-anchor" href="#panics-41">§</a>Panics</h5>
+<p>If <code>n</code> is not representable in <code>nbytes</code>, or if <code>nbytes</code> is <code>&gt; 16</code>, then
+this method panics.</p>
+<h5 id="examples-45"><a class="doc-anchor" href="#examples-45">§</a>Examples</h5>
+<p>Write and read n-length signed numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0</span>; <span class="number">3</span>];
+LittleEndian::write_int128(<span class="kw-2">&amp;mut </span>buf, -<span class="number">1_000</span>, <span class="number">3</span>);
+<span class="macro">assert_eq!</span>(-<span class="number">1_000</span>, LittleEndian::read_int128(<span class="kw-2">&amp;</span>buf, <span class="number">3</span>));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.write_f32" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#949">source</a><h4 class="code-header">fn <a href="#method.write_f32" class="fn">write_f32</a>(buf: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.f32.html">f32</a>)</h4></section></summary><div class="docblock"><p>Writes a IEEE754 single-precision (4 bytes) floating point number.</p>
+<h5 id="panics-42"><a class="doc-anchor" href="#panics-42">§</a>Panics</h5>
+<p>Panics when <code>buf.len() &lt; 4</code>.</p>
+<h5 id="examples-46"><a class="doc-anchor" href="#examples-46">§</a>Examples</h5>
+<p>Write and read <code>f32</code> numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span>e = <span class="number">2.71828</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0</span>; <span class="number">4</span>];
+LittleEndian::write_f32(<span class="kw-2">&amp;mut </span>buf, e);
+<span class="macro">assert_eq!</span>(e, LittleEndian::read_f32(<span class="kw-2">&amp;</span>buf));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.write_f64" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#972">source</a><h4 class="code-header">fn <a href="#method.write_f64" class="fn">write_f64</a>(buf: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], n: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.f64.html">f64</a>)</h4></section></summary><div class="docblock"><p>Writes a IEEE754 double-precision (8 bytes) floating point number.</p>
+<h5 id="panics-43"><a class="doc-anchor" href="#panics-43">§</a>Panics</h5>
+<p>Panics when <code>buf.len() &lt; 8</code>.</p>
+<h5 id="examples-47"><a class="doc-anchor" href="#examples-47">§</a>Examples</h5>
+<p>Write and read <code>f64</code> numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span>phi = <span class="number">1.6180339887</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0</span>; <span class="number">8</span>];
+LittleEndian::write_f64(<span class="kw-2">&amp;mut </span>buf, phi);
+<span class="macro">assert_eq!</span>(phi, LittleEndian::read_f64(<span class="kw-2">&amp;</span>buf));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_i16_into" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#1090">source</a><h4 class="code-header">fn <a href="#method.read_i16_into" class="fn">read_i16_into</a>(src: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i16.html">i16</a>])</h4></section></summary><div class="docblock"><p>Reads signed 16 bit integers from <code>src</code> to <code>dst</code>.</p>
+<h5 id="panics-44"><a class="doc-anchor" href="#panics-44">§</a>Panics</h5>
+<p>Panics when <code>buf.len() != 2*dst.len()</code>.</p>
+<h5 id="examples-48"><a class="doc-anchor" href="#examples-48">§</a>Examples</h5>
+<p>Write and read <code>i16</code> numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>bytes = [<span class="number">0</span>; <span class="number">8</span>];
+<span class="kw">let </span>numbers_given = [<span class="number">1</span>, <span class="number">2</span>, <span class="number">0x0f</span>, <span class="number">0xee</span>];
+LittleEndian::write_i16_into(<span class="kw-2">&amp;</span>numbers_given, <span class="kw-2">&amp;mut </span>bytes);
+
+<span class="kw">let </span><span class="kw-2">mut </span>numbers_got = [<span class="number">0</span>; <span class="number">4</span>];
+LittleEndian::read_i16_into(<span class="kw-2">&amp;</span>bytes, <span class="kw-2">&amp;mut </span>numbers_got);
+<span class="macro">assert_eq!</span>(numbers_given, numbers_got);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_i32_into" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#1119">source</a><h4 class="code-header">fn <a href="#method.read_i32_into" class="fn">read_i32_into</a>(src: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i32.html">i32</a>])</h4></section></summary><div class="docblock"><p>Reads signed 32 bit integers from <code>src</code> into <code>dst</code>.</p>
+<h5 id="panics-45"><a class="doc-anchor" href="#panics-45">§</a>Panics</h5>
+<p>Panics when <code>src.len() != 4*dst.len()</code>.</p>
+<h5 id="examples-49"><a class="doc-anchor" href="#examples-49">§</a>Examples</h5>
+<p>Write and read <code>i32</code> numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>bytes = [<span class="number">0</span>; <span class="number">16</span>];
+<span class="kw">let </span>numbers_given = [<span class="number">1</span>, <span class="number">2</span>, <span class="number">0xf00f</span>, <span class="number">0xffee</span>];
+LittleEndian::write_i32_into(<span class="kw-2">&amp;</span>numbers_given, <span class="kw-2">&amp;mut </span>bytes);
+
+<span class="kw">let </span><span class="kw-2">mut </span>numbers_got = [<span class="number">0</span>; <span class="number">4</span>];
+LittleEndian::read_i32_into(<span class="kw-2">&amp;</span>bytes, <span class="kw-2">&amp;mut </span>numbers_got);
+<span class="macro">assert_eq!</span>(numbers_given, numbers_got);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_i64_into" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#1148">source</a><h4 class="code-header">fn <a href="#method.read_i64_into" class="fn">read_i64_into</a>(src: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i64.html">i64</a>])</h4></section></summary><div class="docblock"><p>Reads signed 64 bit integers from <code>src</code> into <code>dst</code>.</p>
+<h5 id="panics-46"><a class="doc-anchor" href="#panics-46">§</a>Panics</h5>
+<p>Panics when <code>src.len() != 8*dst.len()</code>.</p>
+<h5 id="examples-50"><a class="doc-anchor" href="#examples-50">§</a>Examples</h5>
+<p>Write and read <code>i64</code> numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>bytes = [<span class="number">0</span>; <span class="number">32</span>];
+<span class="kw">let </span>numbers_given = [<span class="number">1</span>, <span class="number">2</span>, <span class="number">0xf00f</span>, <span class="number">0xffee</span>];
+LittleEndian::write_i64_into(<span class="kw-2">&amp;</span>numbers_given, <span class="kw-2">&amp;mut </span>bytes);
+
+<span class="kw">let </span><span class="kw-2">mut </span>numbers_got = [<span class="number">0</span>; <span class="number">4</span>];
+LittleEndian::read_i64_into(<span class="kw-2">&amp;</span>bytes, <span class="kw-2">&amp;mut </span>numbers_got);
+<span class="macro">assert_eq!</span>(numbers_given, numbers_got);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_i128_into" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#1177">source</a><h4 class="code-header">fn <a href="#method.read_i128_into" class="fn">read_i128_into</a>(src: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i128.html">i128</a>])</h4></section></summary><div class="docblock"><p>Reads signed 128 bit integers from <code>src</code> into <code>dst</code>.</p>
+<h5 id="panics-47"><a class="doc-anchor" href="#panics-47">§</a>Panics</h5>
+<p>Panics when <code>src.len() != 16*dst.len()</code>.</p>
+<h5 id="examples-51"><a class="doc-anchor" href="#examples-51">§</a>Examples</h5>
+<p>Write and read <code>i128</code> numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>bytes = [<span class="number">0</span>; <span class="number">64</span>];
+<span class="kw">let </span>numbers_given = [<span class="number">1</span>, <span class="number">2</span>, <span class="number">0xf00f</span>, <span class="number">0xffee</span>];
+LittleEndian::write_i128_into(<span class="kw-2">&amp;</span>numbers_given, <span class="kw-2">&amp;mut </span>bytes);
+
+<span class="kw">let </span><span class="kw-2">mut </span>numbers_got = [<span class="number">0</span>; <span class="number">4</span>];
+LittleEndian::read_i128_into(<span class="kw-2">&amp;</span>bytes, <span class="kw-2">&amp;mut </span>numbers_got);
+<span class="macro">assert_eq!</span>(numbers_given, numbers_got);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_f32_into" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#1207">source</a><h4 class="code-header">fn <a href="#method.read_f32_into" class="fn">read_f32_into</a>(src: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.f32.html">f32</a>])</h4></section></summary><div class="docblock"><p>Reads IEEE754 single-precision (4 bytes) floating point numbers from
+<code>src</code> into <code>dst</code>.</p>
+<h5 id="panics-48"><a class="doc-anchor" href="#panics-48">§</a>Panics</h5>
+<p>Panics when <code>src.len() != 4*dst.len()</code>.</p>
+<h5 id="examples-52"><a class="doc-anchor" href="#examples-52">§</a>Examples</h5>
+<p>Write and read <code>f32</code> numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>bytes = [<span class="number">0</span>; <span class="number">16</span>];
+<span class="kw">let </span>numbers_given = [<span class="number">1.0</span>, <span class="number">2.0</span>, <span class="number">31.312e31</span>, -<span class="number">11.32e19</span>];
+LittleEndian::write_f32_into(<span class="kw-2">&amp;</span>numbers_given, <span class="kw-2">&amp;mut </span>bytes);
+
+<span class="kw">let </span><span class="kw-2">mut </span>numbers_got = [<span class="number">0.0</span>; <span class="number">4</span>];
+LittleEndian::read_f32_into(<span class="kw-2">&amp;</span>bytes, <span class="kw-2">&amp;mut </span>numbers_got);
+<span class="macro">assert_eq!</span>(numbers_given, numbers_got);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_f32_into_unchecked" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#1242">source</a><h4 class="code-header">fn <a href="#method.read_f32_into_unchecked" class="fn">read_f32_into_unchecked</a>(src: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.f32.html">f32</a>])</h4></section><span class="item-info"><div class="stab deprecated"><span class="emoji">👎</span><span>Deprecated since 1.3.0: please use <code>read_f32_into</code> instead</span></div></span></summary><div class="docblock"><p><strong>DEPRECATED</strong>.</p>
+<p>This method is deprecated. Use <code>read_f32_into</code> instead.
+Reads IEEE754 single-precision (4 bytes) floating point numbers from
+<code>src</code> into <code>dst</code>.</p>
+<h5 id="panics-49"><a class="doc-anchor" href="#panics-49">§</a>Panics</h5>
+<p>Panics when <code>src.len() != 4*dst.len()</code>.</p>
+<h5 id="examples-53"><a class="doc-anchor" href="#examples-53">§</a>Examples</h5>
+<p>Write and read <code>f32</code> numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>bytes = [<span class="number">0</span>; <span class="number">16</span>];
+<span class="kw">let </span>numbers_given = [<span class="number">1.0</span>, <span class="number">2.0</span>, <span class="number">31.312e31</span>, -<span class="number">11.32e19</span>];
+LittleEndian::write_f32_into(<span class="kw-2">&amp;</span>numbers_given, <span class="kw-2">&amp;mut </span>bytes);
+
+<span class="kw">let </span><span class="kw-2">mut </span>numbers_got = [<span class="number">0.0</span>; <span class="number">4</span>];
+LittleEndian::read_f32_into_unchecked(<span class="kw-2">&amp;</span>bytes, <span class="kw-2">&amp;mut </span>numbers_got);
+<span class="macro">assert_eq!</span>(numbers_given, numbers_got);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_f64_into" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#1269">source</a><h4 class="code-header">fn <a href="#method.read_f64_into" class="fn">read_f64_into</a>(src: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.f64.html">f64</a>])</h4></section></summary><div class="docblock"><p>Reads IEEE754 single-precision (4 bytes) floating point numbers from
+<code>src</code> into <code>dst</code>.</p>
+<h5 id="panics-50"><a class="doc-anchor" href="#panics-50">§</a>Panics</h5>
+<p>Panics when <code>src.len() != 8*dst.len()</code>.</p>
+<h5 id="examples-54"><a class="doc-anchor" href="#examples-54">§</a>Examples</h5>
+<p>Write and read <code>f64</code> numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>bytes = [<span class="number">0</span>; <span class="number">32</span>];
+<span class="kw">let </span>numbers_given = [<span class="number">1.0</span>, <span class="number">2.0</span>, <span class="number">31.312e211</span>, -<span class="number">11.32e91</span>];
+LittleEndian::write_f64_into(<span class="kw-2">&amp;</span>numbers_given, <span class="kw-2">&amp;mut </span>bytes);
+
+<span class="kw">let </span><span class="kw-2">mut </span>numbers_got = [<span class="number">0.0</span>; <span class="number">4</span>];
+LittleEndian::read_f64_into(<span class="kw-2">&amp;</span>bytes, <span class="kw-2">&amp;mut </span>numbers_got);
+<span class="macro">assert_eq!</span>(numbers_given, numbers_got);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_f64_into_unchecked" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#1305">source</a><h4 class="code-header">fn <a href="#method.read_f64_into_unchecked" class="fn">read_f64_into_unchecked</a>(src: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.f64.html">f64</a>])</h4></section><span class="item-info"><div class="stab deprecated"><span class="emoji">👎</span><span>Deprecated since 1.3.0: please use <code>read_f64_into</code> instead</span></div></span></summary><div class="docblock"><p><strong>DEPRECATED</strong>.</p>
+<p>This method is deprecated. Use <code>read_f64_into</code> instead.</p>
+<p>Reads IEEE754 single-precision (4 bytes) floating point numbers from
+<code>src</code> into <code>dst</code>.</p>
+<h5 id="panics-51"><a class="doc-anchor" href="#panics-51">§</a>Panics</h5>
+<p>Panics when <code>src.len() != 8*dst.len()</code>.</p>
+<h5 id="examples-55"><a class="doc-anchor" href="#examples-55">§</a>Examples</h5>
+<p>Write and read <code>f64</code> numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>bytes = [<span class="number">0</span>; <span class="number">32</span>];
+<span class="kw">let </span>numbers_given = [<span class="number">1.0</span>, <span class="number">2.0</span>, <span class="number">31.312e211</span>, -<span class="number">11.32e91</span>];
+LittleEndian::write_f64_into(<span class="kw-2">&amp;</span>numbers_given, <span class="kw-2">&amp;mut </span>bytes);
+
+<span class="kw">let </span><span class="kw-2">mut </span>numbers_got = [<span class="number">0.0</span>; <span class="number">4</span>];
+LittleEndian::read_f64_into_unchecked(<span class="kw-2">&amp;</span>bytes, <span class="kw-2">&amp;mut </span>numbers_got);
+<span class="macro">assert_eq!</span>(numbers_given, numbers_got);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.write_i8_into" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#1428">source</a><h4 class="code-header">fn <a href="#method.write_i8_into" class="fn">write_i8_into</a>(src: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i8.html">i8</a>], dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>])</h4></section></summary><div class="docblock"><p>Writes signed 8 bit integers from <code>src</code> into <code>dst</code>.</p>
+<p>Note that since each <code>i8</code> is a single byte, no byte order conversions
+are used. This method is included because it provides a safe, simple
+way for the caller to write from a <code>&amp;[i8]</code> buffer. (Without this
+method, the caller would have to either use <code>unsafe</code> code or convert
+each byte to <code>u8</code> individually.)</p>
+<h5 id="panics-52"><a class="doc-anchor" href="#panics-52">§</a>Panics</h5>
+<p>Panics when <code>buf.len() != src.len()</code>.</p>
+<h5 id="examples-56"><a class="doc-anchor" href="#examples-56">§</a>Examples</h5>
+<p>Write and read <code>i8</code> numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian, ReadBytesExt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>bytes = [<span class="number">0</span>; <span class="number">4</span>];
+<span class="kw">let </span>numbers_given = [<span class="number">1</span>, <span class="number">2</span>, <span class="number">0xf</span>, <span class="number">0xe</span>];
+LittleEndian::write_i8_into(<span class="kw-2">&amp;</span>numbers_given, <span class="kw-2">&amp;mut </span>bytes);
+
+<span class="kw">let </span><span class="kw-2">mut </span>numbers_got = [<span class="number">0</span>; <span class="number">4</span>];
+bytes.as_ref().read_i8_into(<span class="kw-2">&amp;mut </span>numbers_got);
+<span class="macro">assert_eq!</span>(numbers_given, numbers_got);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.write_i16_into" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#1456">source</a><h4 class="code-header">fn <a href="#method.write_i16_into" class="fn">write_i16_into</a>(src: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i16.html">i16</a>], dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>])</h4></section></summary><div class="docblock"><p>Writes signed 16 bit integers from <code>src</code> into <code>dst</code>.</p>
+<h5 id="panics-53"><a class="doc-anchor" href="#panics-53">§</a>Panics</h5>
+<p>Panics when <code>buf.len() != 2*src.len()</code>.</p>
+<h5 id="examples-57"><a class="doc-anchor" href="#examples-57">§</a>Examples</h5>
+<p>Write and read <code>i16</code> numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>bytes = [<span class="number">0</span>; <span class="number">8</span>];
+<span class="kw">let </span>numbers_given = [<span class="number">1</span>, <span class="number">2</span>, <span class="number">0x0f</span>, <span class="number">0xee</span>];
+LittleEndian::write_i16_into(<span class="kw-2">&amp;</span>numbers_given, <span class="kw-2">&amp;mut </span>bytes);
+
+<span class="kw">let </span><span class="kw-2">mut </span>numbers_got = [<span class="number">0</span>; <span class="number">4</span>];
+LittleEndian::read_i16_into(<span class="kw-2">&amp;</span>bytes, <span class="kw-2">&amp;mut </span>numbers_got);
+<span class="macro">assert_eq!</span>(numbers_given, numbers_got);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.write_i32_into" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#1484">source</a><h4 class="code-header">fn <a href="#method.write_i32_into" class="fn">write_i32_into</a>(src: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i32.html">i32</a>], dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>])</h4></section></summary><div class="docblock"><p>Writes signed 32 bit integers from <code>src</code> into <code>dst</code>.</p>
+<h5 id="panics-54"><a class="doc-anchor" href="#panics-54">§</a>Panics</h5>
+<p>Panics when <code>dst.len() != 4*src.len()</code>.</p>
+<h5 id="examples-58"><a class="doc-anchor" href="#examples-58">§</a>Examples</h5>
+<p>Write and read <code>i32</code> numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>bytes = [<span class="number">0</span>; <span class="number">16</span>];
+<span class="kw">let </span>numbers_given = [<span class="number">1</span>, <span class="number">2</span>, <span class="number">0xf00f</span>, <span class="number">0xffee</span>];
+LittleEndian::write_i32_into(<span class="kw-2">&amp;</span>numbers_given, <span class="kw-2">&amp;mut </span>bytes);
+
+<span class="kw">let </span><span class="kw-2">mut </span>numbers_got = [<span class="number">0</span>; <span class="number">4</span>];
+LittleEndian::read_i32_into(<span class="kw-2">&amp;</span>bytes, <span class="kw-2">&amp;mut </span>numbers_got);
+<span class="macro">assert_eq!</span>(numbers_given, numbers_got);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.write_i64_into" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#1512">source</a><h4 class="code-header">fn <a href="#method.write_i64_into" class="fn">write_i64_into</a>(src: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i64.html">i64</a>], dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>])</h4></section></summary><div class="docblock"><p>Writes signed 64 bit integers from <code>src</code> into <code>dst</code>.</p>
+<h5 id="panics-55"><a class="doc-anchor" href="#panics-55">§</a>Panics</h5>
+<p>Panics when <code>dst.len() != 8*src.len()</code>.</p>
+<h5 id="examples-59"><a class="doc-anchor" href="#examples-59">§</a>Examples</h5>
+<p>Write and read <code>i64</code> numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>bytes = [<span class="number">0</span>; <span class="number">32</span>];
+<span class="kw">let </span>numbers_given = [<span class="number">1</span>, <span class="number">2</span>, <span class="number">0xf00f</span>, <span class="number">0xffee</span>];
+LittleEndian::write_i64_into(<span class="kw-2">&amp;</span>numbers_given, <span class="kw-2">&amp;mut </span>bytes);
+
+<span class="kw">let </span><span class="kw-2">mut </span>numbers_got = [<span class="number">0</span>; <span class="number">4</span>];
+LittleEndian::read_i64_into(<span class="kw-2">&amp;</span>bytes, <span class="kw-2">&amp;mut </span>numbers_got);
+<span class="macro">assert_eq!</span>(numbers_given, numbers_got);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.write_i128_into" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#1540">source</a><h4 class="code-header">fn <a href="#method.write_i128_into" class="fn">write_i128_into</a>(src: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i128.html">i128</a>], dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>])</h4></section></summary><div class="docblock"><p>Writes signed 128 bit integers from <code>src</code> into <code>dst</code>.</p>
+<h5 id="panics-56"><a class="doc-anchor" href="#panics-56">§</a>Panics</h5>
+<p>Panics when <code>dst.len() != 16*src.len()</code>.</p>
+<h5 id="examples-60"><a class="doc-anchor" href="#examples-60">§</a>Examples</h5>
+<p>Write and read <code>i128</code> numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>bytes = [<span class="number">0</span>; <span class="number">64</span>];
+<span class="kw">let </span>numbers_given = [<span class="number">1</span>, <span class="number">2</span>, <span class="number">0xf00f</span>, <span class="number">0xffee</span>];
+LittleEndian::write_i128_into(<span class="kw-2">&amp;</span>numbers_given, <span class="kw-2">&amp;mut </span>bytes);
+
+<span class="kw">let </span><span class="kw-2">mut </span>numbers_got = [<span class="number">0</span>; <span class="number">4</span>];
+LittleEndian::read_i128_into(<span class="kw-2">&amp;</span>bytes, <span class="kw-2">&amp;mut </span>numbers_got);
+<span class="macro">assert_eq!</span>(numbers_given, numbers_got);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.write_f32_into" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#1569">source</a><h4 class="code-header">fn <a href="#method.write_f32_into" class="fn">write_f32_into</a>(src: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.f32.html">f32</a>], dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>])</h4></section></summary><div class="docblock"><p>Writes IEEE754 single-precision (4 bytes) floating point numbers from
+<code>src</code> into <code>dst</code>.</p>
+<h5 id="panics-57"><a class="doc-anchor" href="#panics-57">§</a>Panics</h5>
+<p>Panics when <code>src.len() != 4*dst.len()</code>.</p>
+<h5 id="examples-61"><a class="doc-anchor" href="#examples-61">§</a>Examples</h5>
+<p>Write and read <code>f32</code> numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>bytes = [<span class="number">0</span>; <span class="number">16</span>];
+<span class="kw">let </span>numbers_given = [<span class="number">1.0</span>, <span class="number">2.0</span>, <span class="number">31.312e31</span>, -<span class="number">11.32e19</span>];
+LittleEndian::write_f32_into(<span class="kw-2">&amp;</span>numbers_given, <span class="kw-2">&amp;mut </span>bytes);
+
+<span class="kw">let </span><span class="kw-2">mut </span>numbers_got = [<span class="number">0.0</span>; <span class="number">4</span>];
+LittleEndian::read_f32_into(<span class="kw-2">&amp;</span>bytes, <span class="kw-2">&amp;mut </span>numbers_got);
+<span class="macro">assert_eq!</span>(numbers_given, numbers_got);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.write_f64_into" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#1598">source</a><h4 class="code-header">fn <a href="#method.write_f64_into" class="fn">write_f64_into</a>(src: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.f64.html">f64</a>], dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>])</h4></section></summary><div class="docblock"><p>Writes IEEE754 double-precision (8 bytes) floating point numbers from
+<code>src</code> into <code>dst</code>.</p>
+<h5 id="panics-58"><a class="doc-anchor" href="#panics-58">§</a>Panics</h5>
+<p>Panics when <code>src.len() != 8*dst.len()</code>.</p>
+<h5 id="examples-62"><a class="doc-anchor" href="#examples-62">§</a>Examples</h5>
+<p>Write and read <code>f64</code> numbers in little endian order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, LittleEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>bytes = [<span class="number">0</span>; <span class="number">32</span>];
+<span class="kw">let </span>numbers_given = [<span class="number">1.0</span>, <span class="number">2.0</span>, <span class="number">31.312e211</span>, -<span class="number">11.32e91</span>];
+LittleEndian::write_f64_into(<span class="kw-2">&amp;</span>numbers_given, <span class="kw-2">&amp;mut </span>bytes);
+
+<span class="kw">let </span><span class="kw-2">mut </span>numbers_got = [<span class="number">0.0</span>; <span class="number">4</span>];
+LittleEndian::read_f64_into(<span class="kw-2">&amp;</span>bytes, <span class="kw-2">&amp;mut </span>numbers_got);
+<span class="macro">assert_eq!</span>(numbers_given, numbers_got);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.from_slice_i16" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#1699">source</a><h4 class="code-header">fn <a href="#method.from_slice_i16" class="fn">from_slice_i16</a>(src: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i16.html">i16</a>])</h4></section></summary><div class="docblock"><p>Converts the given slice of signed 16 bit integers to a particular
+endianness.</p>
+<p>If the endianness matches the endianness of the host platform, then
+this is a no-op.</p>
+<h5 id="examples-63"><a class="doc-anchor" href="#examples-63">§</a>Examples</h5>
+<p>Convert the host platform’s endianness to big-endian:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, BigEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>numbers = [<span class="number">5</span>, <span class="number">6500</span>];
+BigEndian::from_slice_i16(<span class="kw-2">&amp;mut </span>numbers);
+<span class="macro">assert_eq!</span>(numbers, [<span class="number">5i16</span>.to_be(), <span class="number">6500i16</span>.to_be()]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.from_slice_i32" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#1724">source</a><h4 class="code-header">fn <a href="#method.from_slice_i32" class="fn">from_slice_i32</a>(src: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i32.html">i32</a>])</h4></section></summary><div class="docblock"><p>Converts the given slice of signed 32 bit integers to a particular
+endianness.</p>
+<p>If the endianness matches the endianness of the host platform, then
+this is a no-op.</p>
+<h5 id="examples-64"><a class="doc-anchor" href="#examples-64">§</a>Examples</h5>
+<p>Convert the host platform’s endianness to big-endian:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, BigEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>numbers = [<span class="number">5</span>, <span class="number">65000</span>];
+BigEndian::from_slice_i32(<span class="kw-2">&amp;mut </span>numbers);
+<span class="macro">assert_eq!</span>(numbers, [<span class="number">5i32</span>.to_be(), <span class="number">65000i32</span>.to_be()]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.from_slice_i64" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#1749">source</a><h4 class="code-header">fn <a href="#method.from_slice_i64" class="fn">from_slice_i64</a>(src: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i64.html">i64</a>])</h4></section></summary><div class="docblock"><p>Converts the given slice of signed 64 bit integers to a particular
+endianness.</p>
+<p>If the endianness matches the endianness of the host platform, then
+this is a no-op.</p>
+<h5 id="examples-65"><a class="doc-anchor" href="#examples-65">§</a>Examples</h5>
+<p>Convert the host platform’s endianness to big-endian:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, BigEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>numbers = [<span class="number">5</span>, <span class="number">65000</span>];
+BigEndian::from_slice_i64(<span class="kw-2">&amp;mut </span>numbers);
+<span class="macro">assert_eq!</span>(numbers, [<span class="number">5i64</span>.to_be(), <span class="number">65000i64</span>.to_be()]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.from_slice_i128" class="method"><a class="src rightside" href="../../src/byteorder/lib.rs.html#1774">source</a><h4 class="code-header">fn <a href="#method.from_slice_i128" class="fn">from_slice_i128</a>(src: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i128.html">i128</a>])</h4></section></summary><div class="docblock"><p>Converts the given slice of signed 128 bit integers to a particular
+endianness.</p>
+<p>If the endianness matches the endianness of the host platform, then
+this is a no-op.</p>
+<h5 id="examples-66"><a class="doc-anchor" href="#examples-66">§</a>Examples</h5>
+<p>Convert the host platform’s endianness to big-endian:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>byteorder::{ByteOrder, BigEndian};
+
+<span class="kw">let </span><span class="kw-2">mut </span>numbers = [<span class="number">5</span>, <span class="number">65000</span>];
+BigEndian::from_slice_i128(<span class="kw-2">&amp;mut </span>numbers);
+<span class="macro">assert_eq!</span>(numbers, [<span class="number">5i128</span>.to_be(), <span class="number">65000i128</span>.to_be()]);</code></pre></div>
+</div></details></div><h2 id="object-safety" class="section-header">Object Safety<a href="#object-safety" class="anchor">§</a></h2><div class="object-safety-info">This trait is <b>not</b> <a href="https://doc.rust-lang.org/1.81.0/reference/items/traits.html#object-safety">object safe</a>.</div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><section id="impl-ByteOrder-for-BigEndian" class="impl"><a class="src rightside" href="../../src/byteorder/lib.rs.html#1938">source</a><a href="#impl-ByteOrder-for-BigEndian" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.ByteOrder.html" title="trait zerocopy::byteorder::ByteOrder">ByteOrder</a> for <a class="enum" href="enum.BigEndian.html" title="enum zerocopy::byteorder::BigEndian">BigEndian</a></h3></section><section id="impl-ByteOrder-for-LittleEndian" class="impl"><a class="src rightside" href="../../src/byteorder/lib.rs.html#2126">source</a><a href="#impl-ByteOrder-for-LittleEndian" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.ByteOrder.html" title="trait zerocopy::byteorder::ByteOrder">ByteOrder</a> for <a class="enum" href="enum.LittleEndian.html" title="enum zerocopy::byteorder::LittleEndian">LittleEndian</a></h3></section></div><script src="../../trait.impl/byteorder/trait.ByteOrder.js" data-ignore-extern-crates="byteorder" async></script></section></div></main></body></html>

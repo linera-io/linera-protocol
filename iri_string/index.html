@@ -1,0 +1,136 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="String types for RFC 3987 Internationalized Resource Identifiers (IRIs) and RFC 3986 Uniform Resource Identifiers (URIs)."><title>iri_string - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="iri_string" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../iri_string/index.html">iri_string</a><span class="version">0.7.7</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#modules">Modules</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">iri_string</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/iri_string/lib.rs.html#1-159">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>String types for <a href="https://tools.ietf.org/html/rfc3987">RFC 3987 Internationalized Resource Identifiers (IRIs)</a> and
+<a href="https://tools.ietf.org/html/rfc3986">RFC 3986 Uniform Resource Identifiers (URIs)</a>.</p>
+<p>Note that this crate does not have any extra knowledge about protocols.
+Comparisons between IRI strings by <code>PartialEq</code> and <code>Eq</code> is implemented as <a href="https://tools.ietf.org/html/rfc3986#section-6.2.1">simple string
+comparison</a>.
+You should implement by yourself or use another crate to use such extra knowledge to compare
+IRIs / URIs.</p>
+<h2 id="capability"><a class="doc-anchor" href="#capability">§</a>Capability</h2>
+<p>This crate provides many features for IRIs / URIs.</p>
+<h3 id="string-types"><a class="doc-anchor" href="#string-types">§</a>String types</h3>
+<p><a href="types/index.html" title="mod iri_string::types"><code>types</code> module</a> module provides various string types for IRIs and URIs.
+The borrowed string types are unsized slice types (such as <code>[u8]</code> and <code>str</code>)
+and not a sized struct, so they are highly interoperable with for example
+<code>Cow</code> and <code>Rc</code>. Conversions between <code>&amp;str</code> and borrwed IRI string types are easy.</p>
+<h3 id="resolvers"><a class="doc-anchor" href="#resolvers">§</a>Resolvers</h3>
+<p><a href="resolve/index.html" title="mod iri_string::resolve"><code>resolve</code> module</a> provides IRI / URI references resolver.
+However, you are recommended to use methods of string types such as
+<a href="types/struct.RiReferenceStr.html#method.resolve_against" title="method iri_string::types::RiReferenceStr::resolve_against"><code>RiReferenceStr::resolve_against()</code></a> or <a href="types/struct.RiRelativeStr.html#method.resolve_against" title="method iri_string::types::RiRelativeStr::resolve_against"><code>RiRelativeStr::resolve_against()</code></a>
+if you don’t intend to resolve multiple IRIs against the same base.</p>
+<h3 id="validators"><a class="doc-anchor" href="#validators">§</a>Validators</h3>
+<p>Validator functions are provided from <a href="validate/index.html" title="mod iri_string::validate"><code>validate</code> module</a>.</p>
+<h3 id="percent-encoding"><a class="doc-anchor" href="#percent-encoding">§</a>Percent encoding</h3>
+<p><a href="percent_encode/index.html" title="mod iri_string::percent_encode"><code>percent_encode</code> module</a> provides a converter to encode
+user-provided string into percent-encoded one (if syntax requires so).</p>
+<h3 id="iri-builder"><a class="doc-anchor" href="#iri-builder">§</a>IRI builder</h3>
+<p><a href="build/index.html" title="mod iri_string::build"><code>build</code> module</a> provides IRI builder.</p>
+<h3 id="uri-template-rfc-6570"><a class="doc-anchor" href="#uri-template-rfc-6570">§</a>URI template (RFC 6570)</h3>
+<p><a href="template/index.html" title="mod iri_string::template"><code>template</code> module</a> provides an RFC 6570 URI Template processor.</p>
+<h2 id="feature-flags"><a class="doc-anchor" href="#feature-flags">§</a>Feature flags</h2><h3 id="std-and-alloc-support"><a class="doc-anchor" href="#std-and-alloc-support">§</a><code>std</code> and <code>alloc</code> support</h3>
+<p>This crate supports <code>no_std</code> usage.</p>
+<ul>
+<li><code>alloc</code> feature:
+<ul>
+<li>Std library or <code>alloc</code> crate is required.</li>
+<li>This feature enables types and functions which require memory allocation,
+e.g. <code>types::IriString</code> and <code>types::IriRelativeStr::resolve_against()</code>.</li>
+</ul>
+</li>
+<li><code>std</code> feature (<strong>enabled by default</strong>):
+<ul>
+<li>Std library is required.</li>
+<li>This automatically enables <code>alloc</code> feature.</li>
+<li>The feature let the crate utilize std-specific stuff, such as <code>std::error::Error</code> trait.</li>
+</ul>
+</li>
+<li>With neither of them:
+<ul>
+<li>The crate can be used in <code>no_std</code> environment.</li>
+</ul>
+</li>
+</ul>
+<h3 id="other-features"><a class="doc-anchor" href="#other-features">§</a>Other features</h3>
+<ul>
+<li><code>serde</code>
+<ul>
+<li>Enables serde support.</li>
+<li>Implement <code>Serailize</code> and <code>Deserialize</code> traits for IRI / URI types.</li>
+</ul>
+</li>
+<li><code>memchr</code>
+<ul>
+<li>Enables faster internal character search.</li>
+</ul>
+</li>
+</ul>
+<h2 id="rationale"><a class="doc-anchor" href="#rationale">§</a>Rationale</h2><h3 id="foo-foo-foo-foo-foo--are-valid-iris"><a class="doc-anchor" href="#foo-foo-foo-foo-foo--are-valid-iris">§</a><code>foo:</code>, <code>foo:/</code>, <code>foo://</code>, <code>foo:///</code>, <code>foo:////</code>, … are valid IRIs</h3>
+<p>All of these are valid IRIs.
+(On the other hand, all of them are invalid as relative IRI reference, because they don’t
+match <code>relative-part</code> rule, especially <code>path-noscheme</code>, as the first path component of the
+relative path contains a colon.)</p>
+<ul>
+<li><code>foo:</code>
+<ul>
+<li>Decomposed to <code>&lt;scheme="foo"&gt;:&lt;path-empty=""&gt;</code>.</li>
+</ul>
+</li>
+<li><code>foo:/</code>
+<ul>
+<li>Decomposed to <code>&lt;scheme="foo"&gt;:&lt;path-absolute="/"&gt;</code>.</li>
+</ul>
+</li>
+<li><code>foo://</code>
+<ul>
+<li>Decomposed to <code>&lt;scheme="foo"&gt;://&lt;authority=""&gt;&lt;path-absolute=""&gt;</code>.</li>
+</ul>
+</li>
+<li><code>foo:///</code>
+<ul>
+<li>Decomposed to <code>&lt;scheme="foo"&gt;://&lt;authority=""&gt;&lt;path-absolute="/"&gt;</code>.</li>
+</ul>
+</li>
+<li><code>foo:////</code>
+<ul>
+<li>Decomposed to <code>&lt;scheme="foo"&gt;://&lt;authority=""&gt;&lt;path-absolute="//"&gt;</code>.</li>
+</ul>
+</li>
+<li><code>foo://///</code>
+<ul>
+<li>Decomposed to <code>&lt;scheme="foo"&gt;://&lt;authority=""&gt;&lt;path-absolute="///"&gt;</code>.</li>
+</ul>
+</li>
+</ul>
+<p>RFC 3986 says that “if authority is absent, path cannot start with <code>//</code>”.</p>
+<blockquote>
+<p>When authority is present, the path must either be empty or begin with a slash (“/”)
+character. When authority is not present, the path cannot begin with two slash characters
+(“//”).</p>
+<p>— <a href="https://tools.ietf.org/html/rfc3986#section-3">RFC 3986, section 3. Syntax Components</a>.</p>
+</blockquote>
+<blockquote>
+<p>If a URI contains an authority component, then the path component must either be empty or
+begin with a slash (“/”) character. If a URI does not contain an authority component, then the
+path cannot begin with two slash characters (“//”).</p>
+<p>— <a href="https://tools.ietf.org/html/rfc3986#section-3.3">RFC 3986, section 3.3. Path</a></p>
+</blockquote>
+<p>We should interpret them as “if <code>authority</code> rule is completely unused (i.e. does not match any
+strings <strong>including empty string</strong>), path cannot start with <code>//</code>”.
+In other words, we should consider this as <strong>explaining the ABNF of <code>hier-part</code> rule</strong>
+(especially why it does not use <code>path</code> rule), but <strong>not adding extra restriction to the rule
+written in ABNF</strong>.</p>
+<p>This restriction is necessary to remove ambiguity in decomposition of some strings.
+For example, it is natural to decompose <code>foo://</code> to <code>&lt;scheme="foo"&gt;:&lt;path="//"&gt;</code> or
+<code>&lt;scheme="foo"&gt;://&lt;authority=""&gt;&lt;path=""&gt;</code>.
+The restriction, <strong>which is already encoded to the ABNF rule</strong>, tells us to always decompose to
+the latter form, rather than the former one.</p>
+<p>Readers of the spec might be confused by “when authority is <strong>present</strong>” and “if a URI
+<strong>contains</strong> an authority component, which is unclear.
+However, based on the interpretation above, we should consider authority part with empty string
+as satisfying the condition “authority is <strong>present</strong>”.</p>
+<h3 id="iri-resolution-can-fail"><a class="doc-anchor" href="#iri-resolution-can-fail">§</a>IRI resolution can fail</h3>
+<p>For some inputs, resulting string of IRI normalization and resolution can be syntactically
+correct but semantically wrong. In such cases, the normalizer and resolver provided by this
+crate do not silently “fix” the IRI by non-standard processing, but just
+fail by returning <code>Err(_)</code>.</p>
+<p>For details, see the documentation of <a href="normalize/index.html" title="mod iri_string::normalize"><code>normalize</code></a> module.</p>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="build/index.html" title="mod iri_string::build">build</a></div><div class="desc docblock-short">URI/IRI builder.</div></li><li><div class="item-name"><a class="mod" href="components/index.html" title="mod iri_string::components">components</a></div><div class="desc docblock-short">Components of IRIs.</div></li><li><div class="item-name"><a class="mod" href="convert/index.html" title="mod iri_string::convert">convert</a></div><div class="desc docblock-short">Conversion between URI/IRI types.</div></li><li><div class="item-name"><a class="mod" href="format/index.html" title="mod iri_string::format">format</a></div><div class="desc docblock-short">Utilities for formatting (especially <code>Display</code> trait).</div></li><li><div class="item-name"><a class="mod" href="mask_password/index.html" title="mod iri_string::mask_password">mask_password</a></div><div class="desc docblock-short">Password masker.</div></li><li><div class="item-name"><a class="mod" href="normalize/index.html" title="mod iri_string::normalize">normalize</a></div><div class="desc docblock-short">Normalization.</div></li><li><div class="item-name"><a class="mod" href="percent_encode/index.html" title="mod iri_string::percent_encode">percent_encode</a></div><div class="desc docblock-short">Percent encoding.</div></li><li><div class="item-name"><a class="mod" href="resolve/index.html" title="mod iri_string::resolve">resolve</a></div><div class="desc docblock-short">URI and IRI resolvers.</div></li><li><div class="item-name"><a class="mod" href="spec/index.html" title="mod iri_string::spec">spec</a></div><div class="desc docblock-short">IRI specs.</div></li><li><div class="item-name"><a class="mod" href="template/index.html" title="mod iri_string::template">template</a></div><div class="desc docblock-short">Processor for <a href="https://www.rfc-editor.org/rfc/rfc6570.html">RFC 6570</a> URI Template.</div></li><li><div class="item-name"><a class="mod" href="types/index.html" title="mod iri_string::types">types</a></div><div class="desc docblock-short">URI and IRI types.</div></li><li><div class="item-name"><a class="mod" href="validate/index.html" title="mod iri_string::validate">validate</a></div><div class="desc docblock-short">Validators.</div></li></ul></section></div></main></body></html>

@@ -1,0 +1,305 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A builder for configuring an Aho-Corasick automaton."><title>AhoCorasickBuilder in aho_corasick - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="aho_corasick" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc struct"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../aho_corasick/index.html">aho_corasick</a><span class="version">1.1.3</span></h2></div><h2 class="location"><a href="#">AhoCorasickBuilder</a></h2><div class="sidebar-elems"><section><h3><a href="#implementations">Methods</a></h3><ul class="block method"><li><a href="#method.ascii_case_insensitive">ascii_case_insensitive</a></li><li><a href="#method.build">build</a></li><li><a href="#method.byte_classes">byte_classes</a></li><li><a href="#method.dense_depth">dense_depth</a></li><li><a href="#method.kind">kind</a></li><li><a href="#method.match_kind">match_kind</a></li><li><a href="#method.new">new</a></li><li><a href="#method.prefilter">prefilter</a></li><li><a href="#method.start_kind">start_kind</a></li></ul><h3><a href="#trait-implementations">Trait Implementations</a></h3><ul class="block trait-implementation"><li><a href="#impl-Clone-for-AhoCorasickBuilder">Clone</a></li><li><a href="#impl-Debug-for-AhoCorasickBuilder">Debug</a></li><li><a href="#impl-Default-for-AhoCorasickBuilder">Default</a></li></ul><h3><a href="#synthetic-implementations">Auto Trait Implementations</a></h3><ul class="block synthetic-implementation"><li><a href="#impl-Freeze-for-AhoCorasickBuilder">Freeze</a></li><li><a href="#impl-RefUnwindSafe-for-AhoCorasickBuilder">RefUnwindSafe</a></li><li><a href="#impl-Send-for-AhoCorasickBuilder">Send</a></li><li><a href="#impl-Sync-for-AhoCorasickBuilder">Sync</a></li><li><a href="#impl-Unpin-for-AhoCorasickBuilder">Unpin</a></li><li><a href="#impl-UnwindSafe-for-AhoCorasickBuilder">UnwindSafe</a></li></ul><h3><a href="#blanket-implementations">Blanket Implementations</a></h3><ul class="block blanket-implementation"><li><a href="#impl-Any-for-T">Any</a></li><li><a href="#impl-Borrow%3CT%3E-for-T">Borrow&lt;T&gt;</a></li><li><a href="#impl-BorrowMut%3CT%3E-for-T">BorrowMut&lt;T&gt;</a></li><li><a href="#impl-CloneToUninit-for-T">CloneToUninit</a></li><li><a href="#impl-From%3CT%3E-for-T">From&lt;T&gt;</a></li><li><a href="#impl-Into%3CU%3E-for-T">Into&lt;U&gt;</a></li><li><a href="#impl-ToOwned-for-T">ToOwned</a></li><li><a href="#impl-TryFrom%3CU%3E-for-T">TryFrom&lt;U&gt;</a></li><li><a href="#impl-TryInto%3CU%3E-for-T">TryInto&lt;U&gt;</a></li></ul></section><h2><a href="index.html">In crate aho_corasick</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Struct <a href="index.html">aho_corasick</a>::<wbr><a class="struct" href="#">AhoCorasickBuilder</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/aho_corasick/ahocorasick.rs.html#2135-2141">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub struct AhoCorasickBuilder { <span class="comment">/* private fields */</span> }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A builder for configuring an Aho-Corasick automaton.</p>
+<h2 id="quick-advice"><a class="doc-anchor" href="#quick-advice">§</a>Quick advice</h2>
+<ul>
+<li>Use <a href="struct.AhoCorasickBuilder.html#method.match_kind" title="method aho_corasick::AhoCorasickBuilder::match_kind"><code>AhoCorasickBuilder::match_kind</code></a> to configure your searcher
+with <a href="enum.MatchKind.html#variant.LeftmostFirst" title="variant aho_corasick::MatchKind::LeftmostFirst"><code>MatchKind::LeftmostFirst</code></a> if you want to match how backtracking
+regex engines execute searches for <code>pat1|pat2|..|patN</code>. Use
+<a href="enum.MatchKind.html#variant.LeftmostLongest" title="variant aho_corasick::MatchKind::LeftmostLongest"><code>MatchKind::LeftmostLongest</code></a> if you want to match how POSIX regex engines
+do it.</li>
+<li>If you need an anchored search, use <a href="struct.AhoCorasickBuilder.html#method.start_kind" title="method aho_corasick::AhoCorasickBuilder::start_kind"><code>AhoCorasickBuilder::start_kind</code></a> to
+set the <a href="enum.StartKind.html#variant.Anchored" title="variant aho_corasick::StartKind::Anchored"><code>StartKind::Anchored</code></a> mode since <a href="enum.StartKind.html#variant.Unanchored" title="variant aho_corasick::StartKind::Unanchored"><code>StartKind::Unanchored</code></a> is the
+default. Or just use <a href="enum.StartKind.html#variant.Both" title="variant aho_corasick::StartKind::Both"><code>StartKind::Both</code></a> to support both types of searches.</li>
+<li>You might want to use <a href="struct.AhoCorasickBuilder.html#method.kind" title="method aho_corasick::AhoCorasickBuilder::kind"><code>AhoCorasickBuilder::kind</code></a> to set your searcher
+to always use a <a href="enum.AhoCorasickKind.html#variant.DFA" title="variant aho_corasick::AhoCorasickKind::DFA"><code>AhoCorasickKind::DFA</code></a> if search speed is critical and
+memory usage isn’t a concern. Otherwise, not setting a kind will probably
+make the right choice for you. Beware that if you use <a href="enum.StartKind.html#variant.Both" title="variant aho_corasick::StartKind::Both"><code>StartKind::Both</code></a>
+to build a searcher that supports both unanchored and anchored searches
+<em>and</em> you set <a href="enum.AhoCorasickKind.html#variant.DFA" title="variant aho_corasick::AhoCorasickKind::DFA"><code>AhoCorasickKind::DFA</code></a>, then the DFA will essentially be
+duplicated to support both simultaneously. This results in very high memory
+usage.</li>
+<li>For all other options, their defaults are almost certainly what you want.</li>
+</ul>
+</div></details><h2 id="implementations" class="section-header">Implementations<a href="#implementations" class="anchor">§</a></h2><div id="implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-AhoCorasickBuilder" class="impl"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#2143-2617">source</a><a href="#impl-AhoCorasickBuilder" class="anchor">§</a><h3 class="code-header">impl <a class="struct" href="struct.AhoCorasickBuilder.html" title="struct aho_corasick::AhoCorasickBuilder">AhoCorasickBuilder</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.new" class="method"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#2148-2150">source</a><h4 class="code-header">pub fn <a href="#method.new" class="fn">new</a>() -&gt; <a class="struct" href="struct.AhoCorasickBuilder.html" title="struct aho_corasick::AhoCorasickBuilder">AhoCorasickBuilder</a></h4></section></summary><div class="docblock"><p>Create a new builder for configuring an Aho-Corasick automaton.</p>
+<p>The builder provides a way to configure a number of things, including
+ASCII case insensitivity and what kind of match semantics are used.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.build" class="method"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#2171-2207">source</a><h4 class="code-header">pub fn <a href="#method.build" class="fn">build</a>&lt;I, P&gt;(&amp;self, patterns: I) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="struct.AhoCorasick.html" title="struct aho_corasick::AhoCorasick">AhoCorasick</a>, <a class="struct" href="struct.BuildError.html" title="struct aho_corasick::BuildError">BuildError</a>&gt;<div class="where">where
+    I: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/iter/traits/collect/trait.IntoIterator.html" title="trait core::iter::traits::collect::IntoIterator">IntoIterator</a>&lt;Item = P&gt;,
+    P: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]&gt;,</div></h4></section></summary><div class="docblock"><p>Build an Aho-Corasick automaton using the configuration set on this
+builder.</p>
+<p>A builder may be reused to create more automatons.</p>
+<h5 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h5>
+<p>Basic usage:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::{AhoCorasickBuilder, PatternID};
+
+<span class="kw">let </span>patterns = <span class="kw-2">&amp;</span>[<span class="string">"foo"</span>, <span class="string">"bar"</span>, <span class="string">"baz"</span>];
+<span class="kw">let </span>ac = AhoCorasickBuilder::new().build(patterns).unwrap();
+<span class="macro">assert_eq!</span>(
+    <span class="prelude-val">Some</span>(PatternID::must(<span class="number">1</span>)),
+    ac.find(<span class="string">"xxx bar xxx"</span>).map(|m| m.pattern()),
+);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.match_kind" class="method"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#2342-2347">source</a><h4 class="code-header">pub fn <a href="#method.match_kind" class="fn">match_kind</a>(&amp;mut self, kind: <a class="enum" href="enum.MatchKind.html" title="enum aho_corasick::MatchKind">MatchKind</a>) -&gt; &amp;mut <a class="struct" href="struct.AhoCorasickBuilder.html" title="struct aho_corasick::AhoCorasickBuilder">AhoCorasickBuilder</a></h4></section></summary><div class="docblock"><p>Set the desired match semantics.</p>
+<p>The default is <a href="enum.MatchKind.html#variant.Standard" title="variant aho_corasick::MatchKind::Standard"><code>MatchKind::Standard</code></a>, which corresponds to the match
+semantics supported by the standard textbook description of the
+Aho-Corasick algorithm. Namely, matches are reported as soon as they
+are found. Moreover, this is the only way to get overlapping matches
+or do stream searching.</p>
+<p>The other kinds of match semantics that are supported are
+<a href="enum.MatchKind.html#variant.LeftmostFirst" title="variant aho_corasick::MatchKind::LeftmostFirst"><code>MatchKind::LeftmostFirst</code></a> and <a href="enum.MatchKind.html#variant.LeftmostLongest" title="variant aho_corasick::MatchKind::LeftmostLongest"><code>MatchKind::LeftmostLongest</code></a>. The
+former corresponds to the match you would get if you were to try to
+match each pattern at each position in the haystack in the same order
+that you give to the automaton. That is, it returns the leftmost match
+corresponding to the earliest pattern given to the automaton. The
+latter corresponds to finding the longest possible match among all
+leftmost matches.</p>
+<p>For more details on match semantics, see the <a href="enum.MatchKind.html" title="enum aho_corasick::MatchKind">documentation for
+<code>MatchKind</code></a>.</p>
+<p>Note that setting this to <a href="enum.MatchKind.html#variant.LeftmostFirst" title="variant aho_corasick::MatchKind::LeftmostFirst"><code>MatchKind::LeftmostFirst</code></a> or
+<a href="enum.MatchKind.html#variant.LeftmostLongest" title="variant aho_corasick::MatchKind::LeftmostLongest"><code>MatchKind::LeftmostLongest</code></a> will cause some search routines on
+<a href="struct.AhoCorasick.html" title="struct aho_corasick::AhoCorasick"><code>AhoCorasick</code></a> to return an error (or panic if you’re using the
+infallible API). Notably, this includes stream and overlapping
+searches.</p>
+<h5 id="examples-1"><a class="doc-anchor" href="#examples-1">§</a>Examples</h5>
+<p>In these examples, we demonstrate the differences between match
+semantics for a particular set of patterns in a specific order:
+<code>b</code>, <code>abc</code>, <code>abcd</code>.</p>
+<p>Standard semantics:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::{AhoCorasick, MatchKind};
+
+<span class="kw">let </span>patterns = <span class="kw-2">&amp;</span>[<span class="string">"b"</span>, <span class="string">"abc"</span>, <span class="string">"abcd"</span>];
+<span class="kw">let </span>haystack = <span class="string">"abcd"</span>;
+
+<span class="kw">let </span>ac = AhoCorasick::builder()
+    .match_kind(MatchKind::Standard) <span class="comment">// default, not necessary
+    </span>.build(patterns)
+    .unwrap();
+<span class="kw">let </span>mat = ac.find(haystack).expect(<span class="string">"should have a match"</span>);
+<span class="macro">assert_eq!</span>(<span class="string">"b"</span>, <span class="kw-2">&amp;</span>haystack[mat.start()..mat.end()]);</code></pre></div>
+<p>Leftmost-first semantics:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::{AhoCorasick, MatchKind};
+
+<span class="kw">let </span>patterns = <span class="kw-2">&amp;</span>[<span class="string">"b"</span>, <span class="string">"abc"</span>, <span class="string">"abcd"</span>];
+<span class="kw">let </span>haystack = <span class="string">"abcd"</span>;
+
+<span class="kw">let </span>ac = AhoCorasick::builder()
+    .match_kind(MatchKind::LeftmostFirst)
+    .build(patterns)
+    .unwrap();
+<span class="kw">let </span>mat = ac.find(haystack).expect(<span class="string">"should have a match"</span>);
+<span class="macro">assert_eq!</span>(<span class="string">"abc"</span>, <span class="kw-2">&amp;</span>haystack[mat.start()..mat.end()]);</code></pre></div>
+<p>Leftmost-longest semantics:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::{AhoCorasick, MatchKind};
+
+<span class="kw">let </span>patterns = <span class="kw-2">&amp;</span>[<span class="string">"b"</span>, <span class="string">"abc"</span>, <span class="string">"abcd"</span>];
+<span class="kw">let </span>haystack = <span class="string">"abcd"</span>;
+
+<span class="kw">let </span>ac = AhoCorasick::builder()
+    .match_kind(MatchKind::LeftmostLongest)
+    .build(patterns)
+    .unwrap();
+<span class="kw">let </span>mat = ac.find(haystack).expect(<span class="string">"should have a match"</span>);
+<span class="macro">assert_eq!</span>(<span class="string">"abcd"</span>, <span class="kw-2">&amp;</span>haystack[mat.start()..mat.end()]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.start_kind" class="method"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#2437-2441">source</a><h4 class="code-header">pub fn <a href="#method.start_kind" class="fn">start_kind</a>(&amp;mut self, kind: <a class="enum" href="enum.StartKind.html" title="enum aho_corasick::StartKind">StartKind</a>) -&gt; &amp;mut <a class="struct" href="struct.AhoCorasickBuilder.html" title="struct aho_corasick::AhoCorasickBuilder">AhoCorasickBuilder</a></h4></section></summary><div class="docblock"><p>Sets the starting state configuration for the automaton.</p>
+<p>Every Aho-Corasick automaton is capable of having two start states: one
+that is used for unanchored searches and one that is used for anchored
+searches. Some automatons, like the NFAs, support this with almost zero
+additional cost. Other automatons, like the DFA, require two copies of
+the underlying transition table to support both simultaneously.</p>
+<p>Because there may be an added non-trivial cost to supporting both, it
+is possible to configure which starting state configuration is needed.</p>
+<p>Indeed, since anchored searches tend to be somewhat more rare,
+<em>only</em> unanchored searches are supported by default. Thus,
+<a href="enum.StartKind.html#variant.Unanchored" title="variant aho_corasick::StartKind::Unanchored"><code>StartKind::Unanchored</code></a> is the default.</p>
+<p>Note that when this is set to <a href="enum.StartKind.html#variant.Unanchored" title="variant aho_corasick::StartKind::Unanchored"><code>StartKind::Unanchored</code></a>, then
+running an anchored search will result in an error (or a panic
+if using the infallible APIs). Similarly, when this is set to
+<a href="enum.StartKind.html#variant.Anchored" title="variant aho_corasick::StartKind::Anchored"><code>StartKind::Anchored</code></a>, then running an unanchored search will
+result in an error (or a panic if using the infallible APIs). When
+<a href="enum.StartKind.html#variant.Both" title="variant aho_corasick::StartKind::Both"><code>StartKind::Both</code></a> is used, then both unanchored and anchored searches
+are always supported.</p>
+<p>Also note that even if an <code>AhoCorasick</code> searcher is using an NFA
+internally (which always supports both unanchored and anchored
+searches), an error will still be reported for a search that isn’t
+supported by the configuration set via this method. This means,
+for example, that an error is never dependent on which internal
+implementation of Aho-Corasick is used.</p>
+<h5 id="example-anchored-search"><a class="doc-anchor" href="#example-anchored-search">§</a>Example: anchored search</h5>
+<p>This shows how to build a searcher that only supports anchored
+searches:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::{
+    AhoCorasick, Anchored, Input, Match, MatchKind, StartKind,
+};
+
+<span class="kw">let </span>ac = AhoCorasick::builder()
+    .match_kind(MatchKind::LeftmostFirst)
+    .start_kind(StartKind::Anchored)
+    .build(<span class="kw-2">&amp;</span>[<span class="string">"b"</span>, <span class="string">"abc"</span>, <span class="string">"abcd"</span>])
+    .unwrap();
+
+<span class="comment">// An unanchored search is not supported! An error here is guaranteed
+// given the configuration above regardless of which kind of
+// Aho-Corasick implementation ends up being used internally.
+</span><span class="kw">let </span>input = Input::new(<span class="string">"foo abcd"</span>).anchored(Anchored::No);
+<span class="macro">assert!</span>(ac.try_find(input).is_err());
+
+<span class="kw">let </span>input = Input::new(<span class="string">"foo abcd"</span>).anchored(Anchored::Yes);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, ac.try_find(input)<span class="question-mark">?</span>);
+
+<span class="kw">let </span>input = Input::new(<span class="string">"abcd"</span>).anchored(Anchored::Yes);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Match::must(<span class="number">1</span>, <span class="number">0</span>..<span class="number">3</span>)), ac.try_find(input)<span class="question-mark">?</span>);
+</code></pre></div>
+<h5 id="example-unanchored-and-anchored-searches"><a class="doc-anchor" href="#example-unanchored-and-anchored-searches">§</a>Example: unanchored and anchored searches</h5>
+<p>This shows how to build a searcher that supports both unanchored and
+anchored searches:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::{
+    AhoCorasick, Anchored, Input, Match, MatchKind, StartKind,
+};
+
+<span class="kw">let </span>ac = AhoCorasick::builder()
+    .match_kind(MatchKind::LeftmostFirst)
+    .start_kind(StartKind::Both)
+    .build(<span class="kw-2">&amp;</span>[<span class="string">"b"</span>, <span class="string">"abc"</span>, <span class="string">"abcd"</span>])
+    .unwrap();
+
+<span class="kw">let </span>input = Input::new(<span class="string">"foo abcd"</span>).anchored(Anchored::No);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Match::must(<span class="number">1</span>, <span class="number">4</span>..<span class="number">7</span>)), ac.try_find(input)<span class="question-mark">?</span>);
+
+<span class="kw">let </span>input = Input::new(<span class="string">"foo abcd"</span>).anchored(Anchored::Yes);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, ac.try_find(input)<span class="question-mark">?</span>);
+
+<span class="kw">let </span>input = Input::new(<span class="string">"abcd"</span>).anchored(Anchored::Yes);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Match::must(<span class="number">1</span>, <span class="number">0</span>..<span class="number">3</span>)), ac.try_find(input)<span class="question-mark">?</span>);
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.ascii_case_insensitive" class="method"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#2474-2482">source</a><h4 class="code-header">pub fn <a href="#method.ascii_case_insensitive" class="fn">ascii_case_insensitive</a>(&amp;mut self, yes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>) -&gt; &amp;mut <a class="struct" href="struct.AhoCorasickBuilder.html" title="struct aho_corasick::AhoCorasickBuilder">AhoCorasickBuilder</a></h4></section></summary><div class="docblock"><p>Enable ASCII-aware case insensitive matching.</p>
+<p>When this option is enabled, searching will be performed without
+respect to case for ASCII letters (<code>a-z</code> and <code>A-Z</code>) only.</p>
+<p>Enabling this option does not change the search algorithm, but it may
+increase the size of the automaton.</p>
+<p><strong>NOTE:</strong> It is unlikely that support for Unicode case folding will
+be added in the future. The ASCII case works via a simple hack to the
+underlying automaton, but full Unicode handling requires a fair bit of
+sophistication. If you do need Unicode handling, you might consider
+using the <a href="https://docs.rs/regex"><code>regex</code> crate</a> or the lower level
+<a href="https://docs.rs/regex-automata"><code>regex-automata</code> crate</a>.</p>
+<h5 id="examples-2"><a class="doc-anchor" href="#examples-2">§</a>Examples</h5>
+<p>Basic usage:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::AhoCorasick;
+
+<span class="kw">let </span>patterns = <span class="kw-2">&amp;</span>[<span class="string">"FOO"</span>, <span class="string">"bAr"</span>, <span class="string">"BaZ"</span>];
+<span class="kw">let </span>haystack = <span class="string">"foo bar baz"</span>;
+
+<span class="kw">let </span>ac = AhoCorasick::builder()
+    .ascii_case_insensitive(<span class="bool-val">true</span>)
+    .build(patterns)
+    .unwrap();
+<span class="macro">assert_eq!</span>(<span class="number">3</span>, ac.find_iter(haystack).count());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.kind" class="method"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#2527-2533">source</a><h4 class="code-header">pub fn <a href="#method.kind" class="fn">kind</a>(&amp;mut self, kind: <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="enum" href="enum.AhoCorasickKind.html" title="enum aho_corasick::AhoCorasickKind">AhoCorasickKind</a>&gt;) -&gt; &amp;mut <a class="struct" href="struct.AhoCorasickBuilder.html" title="struct aho_corasick::AhoCorasickBuilder">AhoCorasickBuilder</a></h4></section></summary><div class="docblock"><p>Choose the type of underlying automaton to use.</p>
+<p>Currently, there are four choices:</p>
+<ul>
+<li><a href="enum.AhoCorasickKind.html#variant.NoncontiguousNFA" title="variant aho_corasick::AhoCorasickKind::NoncontiguousNFA"><code>AhoCorasickKind::NoncontiguousNFA</code></a> instructs the searcher to
+use a <a href="nfa/noncontiguous/struct.NFA.html" title="struct aho_corasick::nfa::noncontiguous::NFA"><code>noncontiguous::NFA</code></a>. A noncontiguous NFA is the fastest to
+be built, has moderate memory usage and is typically the slowest to
+execute a search.</li>
+<li><a href="enum.AhoCorasickKind.html#variant.ContiguousNFA" title="variant aho_corasick::AhoCorasickKind::ContiguousNFA"><code>AhoCorasickKind::ContiguousNFA</code></a> instructs the searcher to use a
+<a href="nfa/contiguous/struct.NFA.html" title="struct aho_corasick::nfa::contiguous::NFA"><code>contiguous::NFA</code></a>. A contiguous NFA is a little slower to build than
+a noncontiguous NFA, has excellent memory usage and is typically a
+little slower than a DFA for a search.</li>
+<li><a href="enum.AhoCorasickKind.html#variant.DFA" title="variant aho_corasick::AhoCorasickKind::DFA"><code>AhoCorasickKind::DFA</code></a> instructs the searcher to use a
+<a href="dfa/struct.DFA.html" title="struct aho_corasick::dfa::DFA"><code>dfa::DFA</code></a>. A DFA is very slow to build, uses exorbitant amounts of
+memory, but will typically execute searches the fastest.</li>
+<li><code>None</code> (the default) instructs the searcher to choose the “best”
+Aho-Corasick implementation. This choice is typically based primarily
+on the number of patterns.</li>
+</ul>
+<p>Setting this configuration does not change the time complexity for
+constructing the Aho-Corasick automaton (which is <code>O(p)</code> where <code>p</code>
+is the total number of patterns being compiled). Setting this to
+<a href="enum.AhoCorasickKind.html#variant.DFA" title="variant aho_corasick::AhoCorasickKind::DFA"><code>AhoCorasickKind::DFA</code></a> does however reduce the time complexity of
+non-overlapping searches from <code>O(n + p)</code> to <code>O(n)</code>, where <code>n</code> is the
+length of the haystack.</p>
+<p>In general, you should probably stick to the default unless you have
+some kind of reason to use a specific Aho-Corasick implementation. For
+example, you might choose <code>AhoCorasickKind::DFA</code> if you don’t care
+about memory usage and want the fastest possible search times.</p>
+<p>Setting this guarantees that the searcher returned uses the chosen
+implementation. If that implementation could not be constructed, then
+an error will be returned. In contrast, when <code>None</code> is used, it is
+possible for it to attempt to construct, for example, a contiguous
+NFA and have it fail. In which case, it will fall back to using a
+noncontiguous NFA.</p>
+<p>If <code>None</code> is given, then one may use <a href="struct.AhoCorasick.html#method.kind" title="method aho_corasick::AhoCorasick::kind"><code>AhoCorasick::kind</code></a> to determine
+which Aho-Corasick implementation was chosen.</p>
+<p>Note that the heuristics used for choosing which <code>AhoCorasickKind</code>
+may be changed in a semver compatible release.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.prefilter" class="method"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#2547-2552">source</a><h4 class="code-header">pub fn <a href="#method.prefilter" class="fn">prefilter</a>(&amp;mut self, yes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>) -&gt; &amp;mut <a class="struct" href="struct.AhoCorasickBuilder.html" title="struct aho_corasick::AhoCorasickBuilder">AhoCorasickBuilder</a></h4></section></summary><div class="docblock"><p>Enable heuristic prefilter optimizations.</p>
+<p>When enabled, searching will attempt to quickly skip to match
+candidates using specialized literal search routines. A prefilter
+cannot always be used, and is generally treated as a heuristic. It
+can be useful to disable this if the prefilter is observed to be
+sub-optimal for a particular workload.</p>
+<p>Currently, prefilters are typically only active when building searchers
+with a small (less than 100) number of patterns.</p>
+<p>This is enabled by default.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.dense_depth" class="method"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#2581-2585">source</a><h4 class="code-header">pub fn <a href="#method.dense_depth" class="fn">dense_depth</a>(&amp;mut self, depth: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; &amp;mut <a class="struct" href="struct.AhoCorasickBuilder.html" title="struct aho_corasick::AhoCorasickBuilder">AhoCorasickBuilder</a></h4></section></summary><div class="docblock"><p>Set the limit on how many states use a dense representation for their
+transitions. Other states will generally use a sparse representation.</p>
+<p>A dense representation uses more memory but is generally faster, since
+the next transition in a dense representation can be computed in a
+constant number of instructions. A sparse representation uses less
+memory but is generally slower, since the next transition in a sparse
+representation requires executing a variable number of instructions.</p>
+<p>This setting is only used when an Aho-Corasick implementation is used
+that supports the dense versus sparse representation trade off. Not all
+do.</p>
+<p>This limit is expressed in terms of the depth of a state, i.e., the
+number of transitions from the starting state of the automaton. The
+idea is that most of the time searching will be spent near the starting
+state of the automaton, so states near the start state should use a
+dense representation. States further away from the start state would
+then use a sparse representation.</p>
+<p>By default, this is set to a low but non-zero number. Setting this to
+<code>0</code> is almost never what you want, since it is likely to make searches
+very slow due to the start state itself being forced to use a sparse
+representation. However, it is unlikely that increasing this number
+will help things much, since the most active states have a small depth.
+More to the point, the memory usage increases superlinearly as this
+number increases.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.byte_classes" class="method"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#2612-2616">source</a><h4 class="code-header">pub fn <a href="#method.byte_classes" class="fn">byte_classes</a>(&amp;mut self, yes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>) -&gt; &amp;mut <a class="struct" href="struct.AhoCorasickBuilder.html" title="struct aho_corasick::AhoCorasickBuilder">AhoCorasickBuilder</a></h4></section></summary><div class="docblock"><p>A debug settting for whether to attempt to shrink the size of the
+automaton’s alphabet or not.</p>
+<p>This option is enabled by default and should never be disabled unless
+one is debugging the underlying automaton.</p>
+<p>When enabled, some (but not all) Aho-Corasick automatons will use a map
+from all possible bytes to their corresponding equivalence class. Each
+equivalence class represents a set of bytes that does not discriminate
+between a match and a non-match in the automaton.</p>
+<p>The advantage of this map is that the size of the transition table can
+be reduced drastically from <code>#states * 256 * sizeof(u32)</code> to
+<code>#states * k * sizeof(u32)</code> where <code>k</code> is the number of equivalence
+classes (rounded up to the nearest power of 2). As a result, total
+space usage can decrease substantially. Moreover, since a smaller
+alphabet is used, automaton compilation becomes faster as well.</p>
+<p><strong>WARNING:</strong> This is only useful for debugging automatons. Disabling
+this does not yield any speed advantages. Namely, even when this is
+disabled, a byte class map is still used while searching. The only
+difference is that every byte will be forced into its own distinct
+equivalence class. This is useful for debugging the actual generated
+transitions because it lets one see the transitions defined on actual
+bytes instead of the equivalence classes.</p>
+</div></details></div></details></div><h2 id="trait-implementations" class="section-header">Trait Implementations<a href="#trait-implementations" class="anchor">§</a></h2><div id="trait-implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-Clone-for-AhoCorasickBuilder" class="impl"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#2134">source</a><a href="#impl-Clone-for-AhoCorasickBuilder" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a> for <a class="struct" href="struct.AhoCorasickBuilder.html" title="struct aho_corasick::AhoCorasickBuilder">AhoCorasickBuilder</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.clone" class="method trait-impl"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#2134">source</a><a href="#method.clone" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#tymethod.clone" class="fn">clone</a>(&amp;self) -&gt; <a class="struct" href="struct.AhoCorasickBuilder.html" title="struct aho_corasick::AhoCorasickBuilder">AhoCorasickBuilder</a></h4></section></summary><div class='docblock'>Returns a copy of the value. <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#tymethod.clone">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.clone_from" class="method trait-impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#172">source</a></span><a href="#method.clone_from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#method.clone_from" class="fn">clone_from</a>(&amp;mut self, source: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;Self</a>)</h4></section></summary><div class='docblock'>Performs copy-assignment from <code>source</code>. <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#method.clone_from">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Debug-for-AhoCorasickBuilder" class="impl"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#2134">source</a><a href="#impl-Debug-for-AhoCorasickBuilder" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html" title="trait core::fmt::Debug">Debug</a> for <a class="struct" href="struct.AhoCorasickBuilder.html" title="struct aho_corasick::AhoCorasickBuilder">AhoCorasickBuilder</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.fmt" class="method trait-impl"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#2134">source</a><a href="#method.fmt" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html#tymethod.fmt" class="fn">fmt</a>(&amp;self, f: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/fmt/struct.Formatter.html" title="struct core::fmt::Formatter">Formatter</a>&lt;'_&gt;) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a></h4></section></summary><div class='docblock'>Formats the value using the given formatter. <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html#tymethod.fmt">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Default-for-AhoCorasickBuilder" class="impl"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#2134">source</a><a href="#impl-Default-for-AhoCorasickBuilder" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/default/trait.Default.html" title="trait core::default::Default">Default</a> for <a class="struct" href="struct.AhoCorasickBuilder.html" title="struct aho_corasick::AhoCorasickBuilder">AhoCorasickBuilder</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.default" class="method trait-impl"><a class="src rightside" href="../src/aho_corasick/ahocorasick.rs.html#2134">source</a><a href="#method.default" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/default/trait.Default.html#tymethod.default" class="fn">default</a>() -&gt; <a class="struct" href="struct.AhoCorasickBuilder.html" title="struct aho_corasick::AhoCorasickBuilder">AhoCorasickBuilder</a></h4></section></summary><div class='docblock'>Returns the “default value” for a type. <a href="https://doc.rust-lang.org/1.81.0/core/default/trait.Default.html#tymethod.default">Read more</a></div></details></div></details></div><h2 id="synthetic-implementations" class="section-header">Auto Trait Implementations<a href="#synthetic-implementations" class="anchor">§</a></h2><div id="synthetic-implementations-list"><section id="impl-Freeze-for-AhoCorasickBuilder" class="impl"><a href="#impl-Freeze-for-AhoCorasickBuilder" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Freeze.html" title="trait core::marker::Freeze">Freeze</a> for <a class="struct" href="struct.AhoCorasickBuilder.html" title="struct aho_corasick::AhoCorasickBuilder">AhoCorasickBuilder</a></h3></section><section id="impl-RefUnwindSafe-for-AhoCorasickBuilder" class="impl"><a href="#impl-RefUnwindSafe-for-AhoCorasickBuilder" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/panic/unwind_safe/trait.RefUnwindSafe.html" title="trait core::panic::unwind_safe::RefUnwindSafe">RefUnwindSafe</a> for <a class="struct" href="struct.AhoCorasickBuilder.html" title="struct aho_corasick::AhoCorasickBuilder">AhoCorasickBuilder</a></h3></section><section id="impl-Send-for-AhoCorasickBuilder" class="impl"><a href="#impl-Send-for-AhoCorasickBuilder" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> for <a class="struct" href="struct.AhoCorasickBuilder.html" title="struct aho_corasick::AhoCorasickBuilder">AhoCorasickBuilder</a></h3></section><section id="impl-Sync-for-AhoCorasickBuilder" class="impl"><a href="#impl-Sync-for-AhoCorasickBuilder" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> for <a class="struct" href="struct.AhoCorasickBuilder.html" title="struct aho_corasick::AhoCorasickBuilder">AhoCorasickBuilder</a></h3></section><section id="impl-Unpin-for-AhoCorasickBuilder" class="impl"><a href="#impl-Unpin-for-AhoCorasickBuilder" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a> for <a class="struct" href="struct.AhoCorasickBuilder.html" title="struct aho_corasick::AhoCorasickBuilder">AhoCorasickBuilder</a></h3></section><section id="impl-UnwindSafe-for-AhoCorasickBuilder" class="impl"><a href="#impl-UnwindSafe-for-AhoCorasickBuilder" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/panic/unwind_safe/trait.UnwindSafe.html" title="trait core::panic::unwind_safe::UnwindSafe">UnwindSafe</a> for <a class="struct" href="struct.AhoCorasickBuilder.html" title="struct aho_corasick::AhoCorasickBuilder">AhoCorasickBuilder</a></h3></section></div><h2 id="blanket-implementations" class="section-header">Blanket Implementations<a href="#blanket-implementations" class="anchor">§</a></h2><div id="blanket-implementations-list"><details class="toggle implementors-toggle"><summary><section id="impl-Any-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#140">source</a><a href="#impl-Any-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html" title="trait core::any::Any">Any</a> for T<div class="where">where
+    T: 'static + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.type_id" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#141">source</a><a href="#method.type_id" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html#tymethod.type_id" class="fn">type_id</a>(&amp;self) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/any/struct.TypeId.html" title="struct core::any::TypeId">TypeId</a></h4></section></summary><div class='docblock'>Gets the <code>TypeId</code> of <code>self</code>. <a href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html#tymethod.type_id">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Borrow%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#209">source</a><a href="#impl-Borrow%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html" title="trait core::borrow::Borrow">Borrow</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#211">source</a><a href="#method.borrow" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html#tymethod.borrow" class="fn">borrow</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a></h4></section></summary><div class='docblock'>Immutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html#tymethod.borrow">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-BorrowMut%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#217">source</a><a href="#impl-BorrowMut%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html" title="trait core::borrow::BorrowMut">BorrowMut</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow_mut" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#218">source</a><a href="#method.borrow_mut" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut" class="fn">borrow_mut</a>(&amp;mut self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a></h4></section></summary><div class='docblock'>Mutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-CloneToUninit-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#271">source</a><a href="#impl-CloneToUninit-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.CloneToUninit.html" title="trait core::clone::CloneToUninit">CloneToUninit</a> for T<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.clone_to_uninit" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#272">source</a><a href="#method.clone_to_uninit" class="anchor">§</a><h4 class="code-header">default unsafe fn <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.CloneToUninit.html#tymethod.clone_to_uninit" class="fn">clone_to_uninit</a>(&amp;self, dst: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.pointer.html">*mut T</a>)</h4></section></summary><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>clone_to_uninit</code>)</span></div></span><div class='docblock'>Performs copy-assignment from <code>self</code> to <code>dst</code>. <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.CloneToUninit.html#tymethod.clone_to_uninit">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-From%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#765">source</a><a href="#impl-From%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for T</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#768">source</a><a href="#method.from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html#tymethod.from" class="fn">from</a>(t: T) -&gt; T</h4></section></summary><div class="docblock"><p>Returns the argument unchanged.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Into%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#748-750">source</a><a href="#impl-Into%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#758">source</a><a href="#method.into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html#tymethod.into" class="fn">into</a>(self) -&gt; U</h4></section></summary><div class="docblock"><p>Calls <code>U::from(self)</code>.</p>
+<p>That is, this conversion is whatever the implementation of
+<code><a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for U</code> chooses to do.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-ToOwned-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#83-85">source</a><a href="#impl-ToOwned-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html" title="trait alloc::borrow::ToOwned">ToOwned</a> for T<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Owned" class="associatedtype trait-impl"><a href="#associatedtype.Owned" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#associatedtype.Owned" class="associatedtype">Owned</a> = T</h4></section></summary><div class='docblock'>The resulting type after obtaining ownership.</div></details><details class="toggle method-toggle" open><summary><section id="method.to_owned" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#88">source</a><a href="#method.to_owned" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#tymethod.to_owned" class="fn">to_owned</a>(&amp;self) -&gt; T</h4></section></summary><div class='docblock'>Creates owned data from borrowed data, usually by cloning. <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#tymethod.to_owned">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.clone_into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#92">source</a><a href="#method.clone_into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#method.clone_into" class="fn">clone_into</a>(&amp;self, target: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a>)</h4></section></summary><div class='docblock'>Uses borrowed data to replace owned data, usually by cloning. <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#method.clone_into">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryFrom%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#805-807">source</a><a href="#impl-TryFrom%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error" class="associatedtype trait-impl"><a href="#associatedtype.Error" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" class="associatedtype">Error</a> = <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/convert/enum.Infallible.html" title="enum core::convert::Infallible">Infallible</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#812">source</a><a href="#method.try_from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#tymethod.try_from" class="fn">try_from</a>(value: U) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, &lt;T as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryInto%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#790-792">source</a><a href="#impl-TryInto%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html" title="trait core::convert::TryInto">TryInto</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error-1" class="associatedtype trait-impl"><a href="#associatedtype.Error-1" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html#associatedtype.Error" class="associatedtype">Error</a> = &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#797">source</a><a href="#method.try_into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html#tymethod.try_into" class="fn">try_into</a>(self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;U, &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details></div></section></div></main></body></html>

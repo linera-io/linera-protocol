@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["Address","Array","Bool","ByteCount","Bytes","FixedArray","FixedBytes","Function","Int","IntBitCount","String","Uint"],"trait":["SupportedFixedBytes","SupportedInt"]};

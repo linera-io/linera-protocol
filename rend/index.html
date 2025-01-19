@@ -1,0 +1,195 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="rend"><title>rend - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="rend" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../rend/index.html">rend</a><span class="version">0.4.2</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#traits">Traits</a></li><li><a href="#types">Type Aliases</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">rend</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/rend/lib.rs.html#1-587">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="rend"><a class="doc-anchor" href="#rend">§</a>rend</h2>
+<p>rend is a library that provides endian-aware primitives for Rust.</p>
+<p>It’s similar in design to <a href="https://crates.io/crates/simple_endian"><code>simple_endian</code></a>, but has
+support for more builtin types such as atomics and nonzero integers. It also has support for
+const functions since it does not rely on traits.</p>
+<p>rend does not provide endian-aware types for types that are inherently endian-agnostic, such as
+<code>bool</code> and <code>u8</code>. It does not provide endian-aware types for types that have an
+architecture-dependent size, such as <code>isize</code> and <code>usize</code>. It’s also not extensible to custom
+types.</p>
+<p>rend is intended to be used to build portable types that can be shared between different
+architectures, especially with zero-copy deserialization.</p>
+<h3 id="features"><a class="doc-anchor" href="#features">§</a>Features</h3>
+<ul>
+<li><code>std</code>: Enables standard library support (enabled by default)</li>
+<li><code>validation</code>: Enables validation support through <code>bytecheck</code></li>
+</ul>
+<h3 id="example"><a class="doc-anchor" href="#example">§</a>Example:</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rend::<span class="kw-2">*</span>;
+
+<span class="kw">let </span>little_int = i32_le::new(<span class="number">0x12345678</span>);
+<span class="comment">// Internal representation is little-endian
+</span><span class="macro">assert_eq!</span>(
+    [<span class="number">0x78</span>, <span class="number">0x56</span>, <span class="number">0x34</span>, <span class="number">0x12</span>],
+    <span class="kw">unsafe </span>{ ::core::mem::transmute::&lt;<span class="kw">_</span>, [u8; <span class="number">4</span>]&gt;(little_int) }
+);
+
+<span class="comment">// Can also be made with `.into()`
+</span><span class="kw">let </span>little_int: i32_le = <span class="number">0x12345678</span>.into();
+<span class="comment">// Still formats correctly
+</span><span class="macro">assert_eq!</span>(<span class="string">"305419896"</span>, <span class="macro">format!</span>(<span class="string">"{}"</span>, little_int));
+<span class="macro">assert_eq!</span>(<span class="string">"0x12345678"</span>, <span class="macro">format!</span>(<span class="string">"0x{:x}"</span>, little_int));
+
+<span class="kw">let </span>big_int = i32_be::new(<span class="number">0x12345678</span>);
+<span class="comment">// Internal representation is big-endian
+</span><span class="macro">assert_eq!</span>(
+    [<span class="number">0x12</span>, <span class="number">0x34</span>, <span class="number">0x56</span>, <span class="number">0x78</span>],
+    <span class="kw">unsafe </span>{ ::core::mem::transmute::&lt;<span class="kw">_</span>, [u8; <span class="number">4</span>]&gt;(big_int) }
+);
+
+<span class="comment">// Can also be made with `.into()`
+</span><span class="kw">let </span>big_int: i32_be = <span class="number">0x12345678</span>.into();
+<span class="comment">// Still formats correctly
+</span><span class="macro">assert_eq!</span>(<span class="string">"305419896"</span>, <span class="macro">format!</span>(<span class="string">"{}"</span>, big_int));
+<span class="macro">assert_eq!</span>(<span class="string">"0x12345678"</span>, <span class="macro">format!</span>(<span class="string">"0x{:x}"</span>, big_int));</code></pre></div>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.BigEndian.html" title="struct rend::BigEndian">BigEndian</a></div><div class="desc docblock-short">A wrapper for little-endian types.</div></li><li><div class="item-name"><a class="struct" href="struct.LittleEndian.html" title="struct rend::LittleEndian">LittleEndian</a></div><div class="desc docblock-short">A wrapper for big-endian types.</div></li><li><div class="item-name"><a class="struct" href="struct.NativeEndian.html" title="struct rend::NativeEndian">NativeEndian</a></div><div class="desc docblock-short">A wrapper for native-endian types.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.Primitive.html" title="trait rend::Primitive">Primitive</a></div><div class="desc docblock-short">A type that has an associated cross-endian storage type.</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.AtomicI16_be.html" title="type rend::AtomicI16_be">AtomicI16_be</a></div><div class="desc docblock-short">Alias for
+<code>BigEndian&lt;AtomicI16&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.AtomicI16_le.html" title="type rend::AtomicI16_le">AtomicI16_le</a></div><div class="desc docblock-short">Alias for
+<code>LittleEndian&lt;AtomicI16&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.AtomicI16_ne.html" title="type rend::AtomicI16_ne">AtomicI16_ne</a></div><div class="desc docblock-short">Alias for
+<code>NativeEndian&lt;AtomicI16&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.AtomicI32_be.html" title="type rend::AtomicI32_be">AtomicI32_be</a></div><div class="desc docblock-short">Alias for
+<code>BigEndian&lt;AtomicI32&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.AtomicI32_le.html" title="type rend::AtomicI32_le">AtomicI32_le</a></div><div class="desc docblock-short">Alias for
+<code>LittleEndian&lt;AtomicI32&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.AtomicI32_ne.html" title="type rend::AtomicI32_ne">AtomicI32_ne</a></div><div class="desc docblock-short">Alias for
+<code>NativeEndian&lt;AtomicI32&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.AtomicI64_be.html" title="type rend::AtomicI64_be">AtomicI64_be</a></div><div class="desc docblock-short">Alias for
+<code>BigEndian&lt;AtomicI64&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.AtomicI64_le.html" title="type rend::AtomicI64_le">AtomicI64_le</a></div><div class="desc docblock-short">Alias for
+<code>LittleEndian&lt;AtomicI64&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.AtomicI64_ne.html" title="type rend::AtomicI64_ne">AtomicI64_ne</a></div><div class="desc docblock-short">Alias for
+<code>NativeEndian&lt;AtomicI64&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.AtomicU16_be.html" title="type rend::AtomicU16_be">AtomicU16_be</a></div><div class="desc docblock-short">Alias for
+<code>BigEndian&lt;AtomicU16&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.AtomicU16_le.html" title="type rend::AtomicU16_le">AtomicU16_le</a></div><div class="desc docblock-short">Alias for
+<code>LittleEndian&lt;AtomicU16&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.AtomicU16_ne.html" title="type rend::AtomicU16_ne">AtomicU16_ne</a></div><div class="desc docblock-short">Alias for
+<code>NativeEndian&lt;AtomicU16&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.AtomicU32_be.html" title="type rend::AtomicU32_be">AtomicU32_be</a></div><div class="desc docblock-short">Alias for
+<code>BigEndian&lt;AtomicU32&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.AtomicU32_le.html" title="type rend::AtomicU32_le">AtomicU32_le</a></div><div class="desc docblock-short">Alias for
+<code>LittleEndian&lt;AtomicU32&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.AtomicU32_ne.html" title="type rend::AtomicU32_ne">AtomicU32_ne</a></div><div class="desc docblock-short">Alias for
+<code>NativeEndian&lt;AtomicU32&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.AtomicU64_be.html" title="type rend::AtomicU64_be">AtomicU64_be</a></div><div class="desc docblock-short">Alias for
+<code>BigEndian&lt;AtomicU64&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.AtomicU64_le.html" title="type rend::AtomicU64_le">AtomicU64_le</a></div><div class="desc docblock-short">Alias for
+<code>LittleEndian&lt;AtomicU64&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.AtomicU64_ne.html" title="type rend::AtomicU64_ne">AtomicU64_ne</a></div><div class="desc docblock-short">Alias for
+<code>NativeEndian&lt;AtomicU64&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.NonZeroI16_be.html" title="type rend::NonZeroI16_be">NonZeroI16_be</a></div><div class="desc docblock-short">Alias for
+<code>BigEndian&lt;NonZeroI16&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.NonZeroI16_le.html" title="type rend::NonZeroI16_le">NonZeroI16_le</a></div><div class="desc docblock-short">Alias for
+<code>LittleEndian&lt;NonZeroI16&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.NonZeroI16_ne.html" title="type rend::NonZeroI16_ne">NonZeroI16_ne</a></div><div class="desc docblock-short">Alias for
+<code>NativeEndian&lt;NonZeroI16&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.NonZeroI32_be.html" title="type rend::NonZeroI32_be">NonZeroI32_be</a></div><div class="desc docblock-short">Alias for
+<code>BigEndian&lt;NonZeroI32&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.NonZeroI32_le.html" title="type rend::NonZeroI32_le">NonZeroI32_le</a></div><div class="desc docblock-short">Alias for
+<code>LittleEndian&lt;NonZeroI32&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.NonZeroI32_ne.html" title="type rend::NonZeroI32_ne">NonZeroI32_ne</a></div><div class="desc docblock-short">Alias for
+<code>NativeEndian&lt;NonZeroI32&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.NonZeroI64_be.html" title="type rend::NonZeroI64_be">NonZeroI64_be</a></div><div class="desc docblock-short">Alias for
+<code>BigEndian&lt;NonZeroI64&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.NonZeroI64_le.html" title="type rend::NonZeroI64_le">NonZeroI64_le</a></div><div class="desc docblock-short">Alias for
+<code>LittleEndian&lt;NonZeroI64&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.NonZeroI64_ne.html" title="type rend::NonZeroI64_ne">NonZeroI64_ne</a></div><div class="desc docblock-short">Alias for
+<code>NativeEndian&lt;NonZeroI64&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.NonZeroI128_be.html" title="type rend::NonZeroI128_be">NonZeroI128_be</a></div><div class="desc docblock-short">Alias for
+<code>BigEndian&lt;NonZeroI128&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.NonZeroI128_le.html" title="type rend::NonZeroI128_le">NonZeroI128_le</a></div><div class="desc docblock-short">Alias for
+<code>LittleEndian&lt;NonZeroI128&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.NonZeroI128_ne.html" title="type rend::NonZeroI128_ne">NonZeroI128_ne</a></div><div class="desc docblock-short">Alias for
+<code>NativeEndian&lt;NonZeroI128&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.NonZeroU16_be.html" title="type rend::NonZeroU16_be">NonZeroU16_be</a></div><div class="desc docblock-short">Alias for
+<code>BigEndian&lt;NonZeroU16&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.NonZeroU16_le.html" title="type rend::NonZeroU16_le">NonZeroU16_le</a></div><div class="desc docblock-short">Alias for
+<code>LittleEndian&lt;NonZeroU16&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.NonZeroU16_ne.html" title="type rend::NonZeroU16_ne">NonZeroU16_ne</a></div><div class="desc docblock-short">Alias for
+<code>NativeEndian&lt;NonZeroU16&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.NonZeroU32_be.html" title="type rend::NonZeroU32_be">NonZeroU32_be</a></div><div class="desc docblock-short">Alias for
+<code>BigEndian&lt;NonZeroU32&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.NonZeroU32_le.html" title="type rend::NonZeroU32_le">NonZeroU32_le</a></div><div class="desc docblock-short">Alias for
+<code>LittleEndian&lt;NonZeroU32&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.NonZeroU32_ne.html" title="type rend::NonZeroU32_ne">NonZeroU32_ne</a></div><div class="desc docblock-short">Alias for
+<code>NativeEndian&lt;NonZeroU32&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.NonZeroU64_be.html" title="type rend::NonZeroU64_be">NonZeroU64_be</a></div><div class="desc docblock-short">Alias for
+<code>BigEndian&lt;NonZeroU64&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.NonZeroU64_le.html" title="type rend::NonZeroU64_le">NonZeroU64_le</a></div><div class="desc docblock-short">Alias for
+<code>LittleEndian&lt;NonZeroU64&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.NonZeroU64_ne.html" title="type rend::NonZeroU64_ne">NonZeroU64_ne</a></div><div class="desc docblock-short">Alias for
+<code>NativeEndian&lt;NonZeroU64&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.NonZeroU128_be.html" title="type rend::NonZeroU128_be">NonZeroU128_be</a></div><div class="desc docblock-short">Alias for
+<code>BigEndian&lt;NonZeroU128&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.NonZeroU128_le.html" title="type rend::NonZeroU128_le">NonZeroU128_le</a></div><div class="desc docblock-short">Alias for
+<code>LittleEndian&lt;NonZeroU128&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.NonZeroU128_ne.html" title="type rend::NonZeroU128_ne">NonZeroU128_ne</a></div><div class="desc docblock-short">Alias for
+<code>NativeEndian&lt;NonZeroU128&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.char_be.html" title="type rend::char_be">char_be</a></div><div class="desc docblock-short">Alias for
+<code>BigEndian&lt;char&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.char_le.html" title="type rend::char_le">char_le</a></div><div class="desc docblock-short">Alias for
+<code>LittleEndian&lt;char&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.char_ne.html" title="type rend::char_ne">char_ne</a></div><div class="desc docblock-short">Alias for
+<code>NativeEndian&lt;char&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.f32_be.html" title="type rend::f32_be">f32_be</a></div><div class="desc docblock-short">Alias for
+<code>BigEndian&lt;f32&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.f32_le.html" title="type rend::f32_le">f32_le</a></div><div class="desc docblock-short">Alias for
+<code>LittleEndian&lt;f32&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.f32_ne.html" title="type rend::f32_ne">f32_ne</a></div><div class="desc docblock-short">Alias for
+<code>NativeEndian&lt;f32&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.f64_be.html" title="type rend::f64_be">f64_be</a></div><div class="desc docblock-short">Alias for
+<code>BigEndian&lt;f64&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.f64_le.html" title="type rend::f64_le">f64_le</a></div><div class="desc docblock-short">Alias for
+<code>LittleEndian&lt;f64&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.f64_ne.html" title="type rend::f64_ne">f64_ne</a></div><div class="desc docblock-short">Alias for
+<code>NativeEndian&lt;f64&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.i16_be.html" title="type rend::i16_be">i16_be</a></div><div class="desc docblock-short">Alias for
+<code>BigEndian&lt;i16&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.i16_le.html" title="type rend::i16_le">i16_le</a></div><div class="desc docblock-short">Alias for
+<code>LittleEndian&lt;i16&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.i16_ne.html" title="type rend::i16_ne">i16_ne</a></div><div class="desc docblock-short">Alias for
+<code>NativeEndian&lt;i16&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.i32_be.html" title="type rend::i32_be">i32_be</a></div><div class="desc docblock-short">Alias for
+<code>BigEndian&lt;i32&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.i32_le.html" title="type rend::i32_le">i32_le</a></div><div class="desc docblock-short">Alias for
+<code>LittleEndian&lt;i32&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.i32_ne.html" title="type rend::i32_ne">i32_ne</a></div><div class="desc docblock-short">Alias for
+<code>NativeEndian&lt;i32&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.i64_be.html" title="type rend::i64_be">i64_be</a></div><div class="desc docblock-short">Alias for
+<code>BigEndian&lt;i64&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.i64_le.html" title="type rend::i64_le">i64_le</a></div><div class="desc docblock-short">Alias for
+<code>LittleEndian&lt;i64&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.i64_ne.html" title="type rend::i64_ne">i64_ne</a></div><div class="desc docblock-short">Alias for
+<code>NativeEndian&lt;i64&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.i128_be.html" title="type rend::i128_be">i128_be</a></div><div class="desc docblock-short">Alias for
+<code>BigEndian&lt;i128&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.i128_le.html" title="type rend::i128_le">i128_le</a></div><div class="desc docblock-short">Alias for
+<code>LittleEndian&lt;i128&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.i128_ne.html" title="type rend::i128_ne">i128_ne</a></div><div class="desc docblock-short">Alias for
+<code>NativeEndian&lt;i128&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.u16_be.html" title="type rend::u16_be">u16_be</a></div><div class="desc docblock-short">Alias for
+<code>BigEndian&lt;u16&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.u16_le.html" title="type rend::u16_le">u16_le</a></div><div class="desc docblock-short">Alias for
+<code>LittleEndian&lt;u16&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.u16_ne.html" title="type rend::u16_ne">u16_ne</a></div><div class="desc docblock-short">Alias for
+<code>NativeEndian&lt;u16&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.u32_be.html" title="type rend::u32_be">u32_be</a></div><div class="desc docblock-short">Alias for
+<code>BigEndian&lt;u32&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.u32_le.html" title="type rend::u32_le">u32_le</a></div><div class="desc docblock-short">Alias for
+<code>LittleEndian&lt;u32&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.u32_ne.html" title="type rend::u32_ne">u32_ne</a></div><div class="desc docblock-short">Alias for
+<code>NativeEndian&lt;u32&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.u64_be.html" title="type rend::u64_be">u64_be</a></div><div class="desc docblock-short">Alias for
+<code>BigEndian&lt;u64&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.u64_le.html" title="type rend::u64_le">u64_le</a></div><div class="desc docblock-short">Alias for
+<code>LittleEndian&lt;u64&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.u64_ne.html" title="type rend::u64_ne">u64_ne</a></div><div class="desc docblock-short">Alias for
+<code>NativeEndian&lt;u64&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.u128_be.html" title="type rend::u128_be">u128_be</a></div><div class="desc docblock-short">Alias for
+<code>BigEndian&lt;u128&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.u128_le.html" title="type rend::u128_le">u128_le</a></div><div class="desc docblock-short">Alias for
+<code>LittleEndian&lt;u128&gt;</code>
+.</div></li><li><div class="item-name"><a class="type" href="type.u128_ne.html" title="type rend::u128_ne">u128_ne</a></div><div class="desc docblock-short">Alias for
+<code>NativeEndian&lt;u128&gt;</code>
+.</div></li></ul></section></div></main></body></html>

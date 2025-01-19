@@ -1,0 +1,34 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Resolve an address to a symbol, passing the symbol to the specified closure."><title>resolve in backtrace - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="backtrace" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../backtrace/index.html">backtrace</a><span class="version">0.3.74</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="index.html">backtrace</a>::<wbr><a class="fn" href="#">resolve</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/backtrace/symbolize/mod.rs.html#61-64">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn resolve&lt;F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(&amp;<a class="struct" href="struct.Symbol.html" title="struct backtrace::Symbol">Symbol</a>)&gt;(addr: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.pointer.html">*mut </a><a class="enum" href="https://doc.rust-lang.org/1.81.0/core/ffi/enum.c_void.html" title="enum core::ffi::c_void">c_void</a>, cb: F)</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Resolve an address to a symbol, passing the symbol to the specified
+closure.</p>
+<p>This function will look up the given address in areas such as the local
+symbol table, dynamic symbol table, or DWARF debug info (depending on the
+activated implementation) to find symbols to yield.</p>
+<p>The closure may not be called if resolution could not be performed, and it
+also may be called more than once in the case of inlined functions.</p>
+<p>Symbols yielded represent the execution at the specified <code>addr</code>, returning
+file/line pairs for that address (if available).</p>
+<p>Note that if you have a <code>Frame</code> then it’s recommended to use the
+<code>resolve_frame</code> function instead of this one.</p>
+<h2 id="required-features"><a class="doc-anchor" href="#required-features">§</a>Required features</h2>
+<p>This function requires the <code>std</code> feature of the <code>backtrace</code> crate to be
+enabled, and the <code>std</code> feature is enabled by default.</p>
+<h2 id="panics"><a class="doc-anchor" href="#panics">§</a>Panics</h2>
+<p>This function strives to never panic, but if the <code>cb</code> provided panics then
+some platforms will force a double panic to abort the process. Some
+platforms use a C library which internally uses callbacks which cannot be
+unwound through, so panicking from <code>cb</code> may trigger a process abort.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">extern crate </span>backtrace;
+
+<span class="kw">fn </span>main() {
+    backtrace::trace(|frame| {
+        <span class="kw">let </span>ip = frame.ip();
+
+        backtrace::resolve(ip, |symbol| {
+            <span class="comment">// ...
+        </span>});
+
+        <span class="bool-val">false </span><span class="comment">// only look at the top frame
+    </span>});
+}</code></pre></div>
+</div></details></section></div></main></body></html>

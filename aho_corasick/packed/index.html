@@ -1,0 +1,80 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Provides packed multiple substring search, principally for a small number of patterns."><title>aho_corasick::packed - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="aho_corasick" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../aho_corasick/index.html">aho_corasick</a><span class="version">1.1.3</span></h2></div><h2 class="location"><a href="#">Module packed</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li></ul></section><h2><a href="../index.html">In crate aho_corasick</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">aho_corasick</a>::<wbr><a class="mod" href="#">packed</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/aho_corasick/packed/mod.rs.html#1-120">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Provides packed multiple substring search, principally for a small number of
+patterns.</p>
+<p>This sub-module provides vectorized routines for quickly finding
+matches of a small number of patterns. In general, users of this crate
+shouldn’t need to interface with this module directly, as the primary
+<a href="../struct.AhoCorasick.html" title="struct aho_corasick::AhoCorasick"><code>AhoCorasick</code></a> searcher will use these routines
+automatically as a prefilter when applicable. However, in some cases, callers
+may want to bypass the Aho-Corasick machinery entirely and use this vectorized
+searcher directly.</p>
+<h2 id="overview"><a class="doc-anchor" href="#overview">§</a>Overview</h2>
+<p>The primary types in this sub-module are:</p>
+<ul>
+<li><a href="struct.Searcher.html" title="struct aho_corasick::packed::Searcher"><code>Searcher</code></a> executes the actual search algorithm to report matches in a
+haystack.</li>
+<li><a href="struct.Builder.html" title="struct aho_corasick::packed::Builder"><code>Builder</code></a> accumulates patterns incrementally and can construct a
+<code>Searcher</code>.</li>
+<li><a href="struct.Config.html" title="struct aho_corasick::packed::Config"><code>Config</code></a> permits tuning the searcher, and itself will produce a <code>Builder</code>
+(which can then be used to build a <code>Searcher</code>). Currently, the only tuneable
+knob are the match semantics, but this may be expanded in the future.</li>
+</ul>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>This example shows how to create a searcher from an iterator of patterns.
+By default, leftmost-first match semantics are used. (See the top-level
+<a href="enum.MatchKind.html" title="enum aho_corasick::packed::MatchKind"><code>MatchKind</code></a> type for more details about match semantics, which apply
+similarly to packed substring search.)</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::{packed::{MatchKind, Searcher}, PatternID};
+
+<span class="kw">let </span>searcher = Searcher::new([<span class="string">"foobar"</span>, <span class="string">"foo"</span>].iter().cloned())<span class="question-mark">?</span>;
+<span class="kw">let </span>matches: Vec&lt;PatternID&gt; = searcher
+    .find_iter(<span class="string">"foobar"</span>)
+    .map(|mat| mat.pattern())
+    .collect();
+<span class="macro">assert_eq!</span>(<span class="macro">vec!</span>[PatternID::ZERO], matches);</code></pre></div>
+<p>This example shows how to use <a href="struct.Config.html" title="struct aho_corasick::packed::Config"><code>Config</code></a> to change the match semantics to
+leftmost-longest:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aho_corasick::{packed::{Config, MatchKind}, PatternID};
+
+<span class="kw">let </span>searcher = Config::new()
+    .match_kind(MatchKind::LeftmostLongest)
+    .builder()
+    .add(<span class="string">"foo"</span>)
+    .add(<span class="string">"foobar"</span>)
+    .build()<span class="question-mark">?</span>;
+<span class="kw">let </span>matches: Vec&lt;PatternID&gt; = searcher
+    .find_iter(<span class="string">"foobar"</span>)
+    .map(|mat| mat.pattern())
+    .collect();
+<span class="macro">assert_eq!</span>(<span class="macro">vec!</span>[PatternID::must(<span class="number">1</span>)], matches);</code></pre></div>
+<h2 id="packed-substring-searching"><a class="doc-anchor" href="#packed-substring-searching">§</a>Packed substring searching</h2>
+<p>Packed substring searching refers to the use of SIMD (Single Instruction,
+Multiple Data) to accelerate the detection of matches in a haystack. Unlike
+conventional algorithms, such as Aho-Corasick, SIMD algorithms for substring
+search tend to do better with a small number of patterns, where as Aho-Corasick
+generally maintains reasonably consistent performance regardless of the number
+of patterns you give it. Because of this, the vectorized searcher in this
+sub-module cannot be used as a general purpose searcher, since building the
+searcher may fail even when given a small number of patterns. However, in
+exchange, when searching for a small number of patterns, searching can be quite
+a bit faster than Aho-Corasick (sometimes by an order of magnitude).</p>
+<p>The key take away here is that constructing a searcher from a list of patterns
+is a fallible operation with no clear rules for when it will fail. While the
+precise conditions under which building a searcher can fail is specifically an
+implementation detail, here are some common reasons:</p>
+<ul>
+<li>Too many patterns were given. Typically, the limit is on the order of 100 or
+so, but this limit may fluctuate based on available CPU features.</li>
+<li>The available packed algorithms require CPU features that aren’t available.
+For example, currently, this crate only provides packed algorithms for
+<code>x86_64</code> and <code>aarch64</code>. Therefore, constructing a packed searcher on any
+other target will always fail.</li>
+<li>Zero patterns were given, or one of the patterns given was empty. Packed
+searchers require at least one pattern and that all patterns are non-empty.</li>
+<li>Something else about the nature of the patterns (typically based on
+heuristics) suggests that a packed searcher would perform very poorly, so
+no searcher is built.</li>
+</ul>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Builder.html" title="struct aho_corasick::packed::Builder">Builder</a></div><div class="desc docblock-short">A builder for constructing a packed searcher from a collection of patterns.</div></li><li><div class="item-name"><a class="struct" href="struct.Config.html" title="struct aho_corasick::packed::Config">Config</a></div><div class="desc docblock-short">The configuration for a packed multiple pattern searcher.</div></li><li><div class="item-name"><a class="struct" href="struct.FindIter.html" title="struct aho_corasick::packed::FindIter">FindIter</a></div><div class="desc docblock-short">An iterator over non-overlapping matches from a packed searcher.</div></li><li><div class="item-name"><a class="struct" href="struct.Searcher.html" title="struct aho_corasick::packed::Searcher">Searcher</a></div><div class="desc docblock-short">A packed searcher for quickly finding occurrences of multiple patterns.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.MatchKind.html" title="enum aho_corasick::packed::MatchKind">MatchKind</a></div><div class="desc docblock-short">A knob for controlling the match semantics of a packed multiple string
+searcher.</div></li></ul></section></div></main></body></html>

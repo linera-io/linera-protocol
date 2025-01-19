@@ -1,0 +1,96 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="What `#[derive(Not)]` generates"><title>Not in derive_more - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="derive_more" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc derive"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../derive_more/index.html">derive_more</a><span class="version">1.0.0</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Derive Macro <a href="index.html">derive_more</a>::<wbr><a class="derive" href="#">Not</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/derive_more_impl/lib.rs.html#103">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>#[derive(Not)]</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="what-derivenot-generates"><a class="doc-anchor" href="#what-derivenot-generates">§</a>What <code>#[derive(Not)]</code> generates</h2>
+<p>The derived <code>Not</code> implementation simply negates all the fields of a
+struct and returns that as a new instance of the struct.
+For enums all fields of the active variant of the enum are negated and a new
+instance of the same variant with these negated fields is returned.</p>
+<h3 id="tuple-structs"><a class="doc-anchor" href="#tuple-structs">§</a>Tuple structs</h3>
+<p>When deriving for a tuple struct with two fields like this:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Not)]
+</span><span class="kw">struct </span>MyInts(i32, i32);</code></pre></div>
+<p>Code like this will be generated:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">impl </span>derive_more::Not <span class="kw">for </span>MyInts {
+    <span class="kw">type </span>Output = MyInts;
+    <span class="kw">fn </span>not(<span class="self">self</span>) -&gt; MyInts {
+        MyInts(<span class="self">self</span>.<span class="number">0</span>.not(), <span class="self">self</span>.<span class="number">1</span>.not())
+    }
+}</code></pre></div>
+<p>The behaviour is similar with more or less fields.</p>
+<h3 id="regular-structs"><a class="doc-anchor" href="#regular-structs">§</a>Regular structs</h3>
+<p>When deriving for a regular struct with two fields like this:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Not)]
+</span><span class="kw">struct </span>Point2D {
+    x: i32,
+    y: i32,
+}</code></pre></div>
+<p>Code like this will be generated:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">impl </span>derive_more::Not <span class="kw">for </span>Point2D {
+    <span class="kw">type </span>Output = Point2D;
+    <span class="kw">fn </span>not(<span class="self">self</span>) -&gt; Point2D {
+        Point2D {
+            x: <span class="self">self</span>.x.not(),
+            y: <span class="self">self</span>.y.not(),
+        }
+    }
+}</code></pre></div>
+<p>The behaviour is similar with more or less fields.</p>
+<h3 id="enums"><a class="doc-anchor" href="#enums">§</a>Enums</h3>
+<p>For each enum variant <code>Not</code> is derived in a similar way as it would be derived
+if it would be its own type.
+For instance when deriving <code>Not</code> for an enum like this:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Not)]
+</span><span class="kw">enum </span>MixedInts {
+    SmallInt(i32),
+    BigInt(i64),
+    TwoSmallInts(i32, i32),
+    NamedSmallInts { x: i32, y: i32 },
+    UnsignedOne(u32),
+    UnsignedTwo(u32),
+}</code></pre></div>
+<p>Code like this will be generated:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">impl </span>derive_more::Not <span class="kw">for </span>MixedInts {
+    <span class="kw">type </span>Output = MixedInts;
+    <span class="kw">fn </span>not(<span class="self">self</span>) -&gt; MixedInts {
+        <span class="kw">match </span><span class="self">self </span>{
+            MixedInts::SmallInt(__0) =&gt; MixedInts::SmallInt(__0.not()),
+            MixedInts::BigInt(__0) =&gt; MixedInts::BigInt(__0.not()),
+            MixedInts::TwoSmallInts(__0, __1) =&gt; MixedInts::TwoSmallInts(__0.not(), __1.not()),
+            MixedInts::NamedSmallInts { x: __0, y: __1 } =&gt; {
+                MixedInts::NamedSmallInts {
+                    x: __0.not(),
+                    y: __1.not(),
+                }
+            }
+            MixedInts::UnsignedOne(__0) =&gt; MixedInts::UnsignedOne(__0.not()),
+            MixedInts::UnsignedTwo(__0) =&gt; MixedInts::UnsignedTwo(__0.not()),
+        }
+    }
+}</code></pre></div>
+<p>There is one important thing to remember though.
+If you add a unit variant to the enum its return type will change from
+<code>EnumType</code> to <code>Result&lt;EnumType&gt;</code>.
+This is because Unit cannot have <code>Not</code> implemented.
+So, when deriving <code>Not</code> for an enum like this:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Not)]
+</span><span class="kw">enum </span>EnumWithUnit {
+    SmallInt(i32),
+    Unit,
+}</code></pre></div>
+<p>Code like this will be generated:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">impl </span>derive_more::Not <span class="kw">for </span>EnumWithUnit {
+    <span class="kw">type </span>Output = <span class="prelude-ty">Result</span>&lt;EnumWithUnit, derive_more::UnitError&gt;;
+    <span class="kw">fn </span>not(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;EnumWithUnit, derive_more::UnitError&gt; {
+        <span class="kw">match </span><span class="self">self </span>{
+            EnumWithUnit::SmallInt(__0) =&gt; <span class="prelude-val">Ok</span>(EnumWithUnit::SmallInt(__0.not())),
+            EnumWithUnit::Unit =&gt; <span class="prelude-val">Err</span>(derive_more::UnitError::new(<span class="string">"not"</span>)),
+        }
+    }
+}</code></pre></div>
+</div></details></section></div></main></body></html>

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["query","query_with"],"struct":["Connection","DefaultConnectionName","DefaultEdgeName","DisableNodesField","Edge","EmptyFields","EnableNodesField","OpaqueCursor","PageInfo"],"trait":["ConnectionNameType","CursorType","EdgeNameType","NodesFieldSwitcherSealed"]};

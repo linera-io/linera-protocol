@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["PathFragment"],"mod":["reqwest"],"struct":["Error","Location","QueryBody","Response"],"trait":["GraphQLQuery"]};

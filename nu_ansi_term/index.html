@@ -1,0 +1,161 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="This is a library for controlling colors and formatting, such as red bold text or blue underlined text, on ANSI terminals."><title>nu_ansi_term - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="nu_ansi_term" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../nu_ansi_term/index.html">nu_ansi_term</a><span class="version">0.46.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#functions">Functions</a></li><li><a href="#types">Type Aliases</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">nu_ansi_term</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/nu_ansi_term/lib.rs.html#1-272">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>This is a library for controlling colors and formatting, such as
+red bold text or blue underlined text, on ANSI terminals.</p>
+<h3 id="basic-usage"><a class="doc-anchor" href="#basic-usage">§</a>Basic usage</h3>
+<p>There are three main types in this crate that you need to be
+concerned with: <a href="type.AnsiString.html"><code>AnsiString</code></a>, <a href="struct.Style.html"><code>Style</code></a>, and <a href="enum.Color.html"><code>Color</code></a>.</p>
+<p>A <code>Style</code> holds stylistic information: foreground and background colors,
+whether the text should be bold, or blinking, or other properties. The
+<a href="enum.Color.html"><code>Color</code></a> enum represents the available colors. And an <a href="type.AnsiString.html"><code>AnsiString</code></a> is a
+string paired with a <a href="struct.Style.html"><code>Style</code></a>.</p>
+<p><a href="enum.Color.html"><code>Color</code></a> is also available as an alias to <code>Color</code>.</p>
+<p>To format a string, call the <code>paint</code> method on a <code>Style</code> or a <code>Color</code>,
+passing in the string you want to format as the argument. For example,
+here’s how to get some red text:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>nu_ansi_term::Color::Red;
+
+<span class="macro">println!</span>(<span class="string">"This is in red: {}"</span>, Red.paint(<span class="string">"a red string"</span>));</code></pre></div>
+<p>It’s important to note that the <code>paint</code> method does <em>not</em> actually return a
+string with the ANSI control characters surrounding it. Instead, it returns
+an <a href="type.AnsiString.html"><code>AnsiString</code></a> value that has a <a href="https://doc.rust-lang.org/std/fmt/trait.Display.html"><code>Display</code></a> implementation that, when
+formatted, returns the characters. This allows strings to be printed with a
+minimum of <a href="https://doc.rust-lang.org/std/string/struct.String.html"><code>String</code></a> allocations being performed behind the scenes.</p>
+<p>If you <em>do</em> want to get at the escape codes, then you can convert the
+<a href="type.AnsiString.html"><code>AnsiString</code></a> to a string as you would any other <code>Display</code> value:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>nu_ansi_term::Color::Red;
+
+<span class="kw">let </span>red_string = Red.paint(<span class="string">"a red string"</span>).to_string();</code></pre></div>
+<h3 id="bold-underline-background-and-other-styles"><a class="doc-anchor" href="#bold-underline-background-and-other-styles">§</a>Bold, underline, background, and other styles</h3>
+<p>For anything more complex than plain foreground color changes, you need to
+construct <code>Style</code> values themselves, rather than beginning with a <code>Color</code>.
+You can do this by chaining methods based on a new <code>Style</code>, created with
+<a href="struct.Style.html#method.new"><code>Style::new()</code></a>. Each method creates a new style that has that specific
+property set. For example:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>nu_ansi_term::Style;
+
+<span class="macro">println!</span>(<span class="string">"How about some {} and {}?"</span>,
+         Style::new().bold().paint(<span class="string">"bold"</span>),
+         Style::new().underline().paint(<span class="string">"underline"</span>));</code></pre></div>
+<p>For brevity, these methods have also been implemented for <code>Color</code> values,
+so you can give your styles a foreground color without having to begin with
+an empty <code>Style</code> value:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>nu_ansi_term::Color::{Blue, Yellow};
+
+<span class="macro">println!</span>(<span class="string">"Demonstrating {} and {}!"</span>,
+         Blue.bold().paint(<span class="string">"blue bold"</span>),
+         Yellow.underline().paint(<span class="string">"yellow underline"</span>));
+
+<span class="macro">println!</span>(<span class="string">"Yellow on blue: {}"</span>, Yellow.on(Blue).paint(<span class="string">"wow!"</span>));</code></pre></div>
+<p>The complete list of styles you can use are: <a href="struct.Style.html#method.bold"><code>bold</code></a>, <a href="struct.Style.html#method.dimmed"><code>dimmed</code></a>, <a href="struct.Style.html#method.italic"><code>italic</code></a>,
+<a href="struct.Style.html#method.underline"><code>underline</code></a>, <a href="struct.Style.html#method.blink"><code>blink</code></a>, <a href="struct.Style.html#method.reverse"><code>reverse</code></a>, <a href="struct.Style.html#method.hidden"><code>hidden</code></a>, <a href="struct.Style.html#method.strikethrough"><code>strikethrough</code></a>, and <a href="struct.Style.html#method.on"><code>on</code></a> for
+background colors.</p>
+<p>In some cases, you may find it easier to change the foreground on an
+existing <code>Style</code> rather than starting from the appropriate <code>Color</code>.
+You can do this using the <a href="struct.Style.html#method.fg"><code>fg</code></a> method:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>nu_ansi_term::Style;
+<span class="kw">use </span>nu_ansi_term::Color::{Blue, Cyan, Yellow};
+
+<span class="macro">println!</span>(<span class="string">"Yellow on blue: {}"</span>, Style::new().on(Blue).fg(Yellow).paint(<span class="string">"yow!"</span>));
+<span class="macro">println!</span>(<span class="string">"Also yellow on blue: {}"</span>, Cyan.on(Blue).fg(Yellow).paint(<span class="string">"zow!"</span>));</code></pre></div>
+<p>You can turn a <code>Color</code> into a <code>Style</code> with the <a href="enum.Color.html#method.normal"><code>normal</code></a> method.
+This will produce the exact same <code>AnsiString</code> as if you just used the
+<code>paint</code> method on the <code>Color</code> directly, but it’s useful in certain cases:
+for example, you may have a method that returns <code>Styles</code>, and need to
+represent both the “red bold” and “red, but not bold” styles with values of
+the same type. The <code>Style</code> struct also has a <a href="https://doc.rust-lang.org/std/default/trait.Default.html"><code>Default</code></a> implementation if you
+want to have a style with <em>nothing</em> set.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>nu_ansi_term::Style;
+<span class="kw">use </span>nu_ansi_term::Color::Red;
+
+Red.normal().paint(<span class="string">"yet another red string"</span>);
+Style::default().paint(<span class="string">"a completely regular string"</span>);</code></pre></div>
+<h3 id="extended-colors"><a class="doc-anchor" href="#extended-colors">§</a>Extended colors</h3>
+<p>You can access the extended range of 256 colors by using the <code>Color::Fixed</code>
+variant, which takes an argument of the color number to use. This can be
+included wherever you would use a <code>Color</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>nu_ansi_term::Color::Fixed;
+
+Fixed(<span class="number">134</span>).paint(<span class="string">"A sort of light purple"</span>);
+Fixed(<span class="number">221</span>).on(Fixed(<span class="number">124</span>)).paint(<span class="string">"Mustard in the ketchup"</span>);</code></pre></div>
+<p>The first sixteen of these values are the same as the normal and bold
+standard color variants. There’s nothing stopping you from using these as
+<code>Fixed</code> colors instead, but there’s nothing to be gained by doing so
+either.</p>
+<p>You can also access full 24-bit color by using the <code>Color::Rgb</code> variant,
+which takes separate <code>u8</code> arguments for red, green, and blue:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>nu_ansi_term::Color::Rgb;
+
+Rgb(<span class="number">70</span>, <span class="number">130</span>, <span class="number">180</span>).paint(<span class="string">"Steel blue"</span>);</code></pre></div>
+<h3 id="combining-successive-colored-strings"><a class="doc-anchor" href="#combining-successive-colored-strings">§</a>Combining successive colored strings</h3>
+<p>The benefit of writing ANSI escape codes to the terminal is that they
+<em>stack</em>: you do not need to end every colored string with a reset code if
+the text that follows it is of a similar style. For example, if you want to
+have some blue text followed by some blue bold text, it’s possible to send
+the ANSI code for blue, followed by the ANSI code for bold, and finishing
+with a reset code without having to have an extra one between the two
+strings.</p>
+<p>This crate can optimise the ANSI codes that get printed in situations like
+this, making life easier for your terminal renderer. The <a href="type.AnsiStrings.html"><code>AnsiStrings</code></a>
+type takes a slice of several <a href="type.AnsiString.html"><code>AnsiString</code></a> values, and will iterate over
+each of them, printing only the codes for the styles that need to be updated
+as part of its formatting routine.</p>
+<p>The following code snippet uses this to enclose a binary number displayed in
+red bold text inside some red, but not bold, brackets:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>nu_ansi_term::Color::Red;
+<span class="kw">use </span>nu_ansi_term::{AnsiString, AnsiStrings};
+
+<span class="kw">let </span>some_value = <span class="macro">format!</span>(<span class="string">"{:b}"</span>, <span class="number">42</span>);
+<span class="kw">let </span>strings: <span class="kw-2">&amp;</span>[AnsiString&lt;<span class="lifetime">'static</span>&gt;] = <span class="kw-2">&amp;</span>[
+    Red.paint(<span class="string">"["</span>),
+    Red.bold().paint(some_value),
+    Red.paint(<span class="string">"]"</span>),
+];
+
+<span class="macro">println!</span>(<span class="string">"Value: {}"</span>, AnsiStrings(strings));</code></pre></div>
+<p>There are several things to note here. Firstly, the <a href="type.AnsiByteString.html#method.write_to"><code>paint</code></a> method can take
+<em>either</em> an owned <a href="https://doc.rust-lang.org/std/string/struct.String.html"><code>String</code></a> or a borrowed <a href="https://doc.rust-lang.org/std/primitive.str.html"><code>&amp;str</code></a>. Internally, an <a href="type.AnsiString.html"><code>AnsiString</code></a>
+holds a copy-on-write (<a href="https://doc.rust-lang.org/std/borrow/enum.Cow.html"><code>Cow</code></a>) string value to deal with both owned and
+borrowed strings at the same time. This is used here to display a <code>String</code>,
+the result of the <code>format!</code> call, using the same mechanism as some
+statically-available <code>&amp;str</code> slices. Secondly, that the <a href="type.AnsiStrings.html"><code>AnsiStrings</code></a> value
+works in the same way as its singular counterpart, with a <a href="https://doc.rust-lang.org/std/fmt/trait.Display.html"><code>Display</code></a>
+implementation that only performs the formatting when required.</p>
+<h3 id="byte-strings"><a class="doc-anchor" href="#byte-strings">§</a>Byte strings</h3>
+<p>This library also supports formatting <code>\[u8]</code> byte strings; this supports
+applications working with text in an unknown encoding.  <a href="struct.Style.html"><code>Style</code></a> and
+<a href="enum.Color.html"><code>Color</code></a> support painting <code>\[u8]</code> values, resulting in an <a href="type.AnsiByteString.html"><code>AnsiByteString</code></a>.
+This type does not implement <a href="https://doc.rust-lang.org/std/fmt/trait.Display.html"><code>Display</code></a>, as it may not contain UTF-8, but
+it does provide a method <a href="type.AnsiByteString.html#method.write_to"><code>write_to</code></a> to write the result to any value that
+implements <a href="https://doc.rust-lang.org/std/io/trait.Write.html"><code>Write</code></a>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>nu_ansi_term::Color::Green;
+
+Green.paint(<span class="string">"user data"</span>.as_bytes()).write_to(<span class="kw-2">&amp;mut </span>std::io::stdout()).unwrap();</code></pre></div>
+<p>Similarly, the type <a href="type.AnsiByteStrings.html"><code>AnsiByteStrings</code></a> supports writing a list of
+<a href="type.AnsiByteString.html"><code>AnsiByteString</code></a> values with minimal escape sequences:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>nu_ansi_term::Color::Green;
+<span class="kw">use </span>nu_ansi_term::AnsiByteStrings;
+
+AnsiByteStrings(<span class="kw-2">&amp;</span>[
+    Green.paint(<span class="string">"user data 1\n"</span>.as_bytes()),
+    Green.bold().paint(<span class="string">"user data 2\n"</span>.as_bytes()),
+]).write_to(<span class="kw-2">&amp;mut </span>std::io::stdout()).unwrap();</code></pre></div>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.Infix"><code>pub use ansi::<a class="struct" href="ansi/struct.Infix.html" title="struct nu_ansi_term::ansi::Infix">Infix</a>;</code></div></li><li><div class="item-name" id="reexport.Prefix"><code>pub use ansi::<a class="struct" href="ansi/struct.Prefix.html" title="struct nu_ansi_term::ansi::Prefix">Prefix</a>;</code></div></li><li><div class="item-name" id="reexport.Suffix"><code>pub use ansi::<a class="struct" href="ansi/struct.Suffix.html" title="struct nu_ansi_term::ansi::Suffix">Suffix</a>;</code></div></li><li><div class="item-name"><code>pub use <a class="mod" href="gradient/index.html" title="mod nu_ansi_term::gradient">gradient</a>::*;</code></div></li></ul><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="ansi/index.html" title="mod nu_ansi_term::ansi">ansi</a></div></li><li><div class="item-name"><a class="mod" href="gradient/index.html" title="mod nu_ansi_term::gradient">gradient</a></div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.AnsiGenericString.html" title="struct nu_ansi_term::AnsiGenericString">AnsiGenericString</a></div><div class="desc docblock-short">An <code>AnsiGenericString</code> includes a generic string type and a <code>Style</code> to
+display that string.  <code>AnsiString</code> and <code>AnsiByteString</code> are aliases for
+this type on <code>str</code> and <code>\[u8]</code>, respectively.</div></li><li><div class="item-name"><a class="struct" href="struct.AnsiGenericStrings.html" title="struct nu_ansi_term::AnsiGenericStrings">AnsiGenericStrings</a></div><div class="desc docblock-short">A set of <code>AnsiGenericStrings</code>s collected together, in order to be
+written with a minimum of control characters.</div></li><li><div class="item-name"><a class="struct" href="struct.Rgb.html" title="struct nu_ansi_term::Rgb">Rgb</a></div></li><li><div class="item-name"><a class="struct" href="struct.Style.html" title="struct nu_ansi_term::Style">Style</a></div><div class="desc docblock-short">A style is a collection of properties that can format a string
+using ANSI escape codes.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.Color.html" title="enum nu_ansi_term::Color">Color</a></div><div class="desc docblock-short">A color is one specific type of ANSI escape code, and can refer
+to either the foreground or background color.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.AnsiByteStrings.html" title="fn nu_ansi_term::AnsiByteStrings">AnsiByteStrings</a></div><div class="desc docblock-short">A function to construct an <code>AnsiByteStrings</code> instance.</div></li><li><div class="item-name"><a class="fn" href="fn.AnsiStrings.html" title="fn nu_ansi_term::AnsiStrings">AnsiStrings</a></div><div class="desc docblock-short">A function to construct an <code>AnsiStrings</code> instance.</div></li><li><div class="item-name"><a class="fn" href="fn.sub_string.html" title="fn nu_ansi_term::sub_string">sub_string</a></div><div class="desc docblock-short">Return a substring of the given AnsiStrings sequence, while keeping the formatting.</div></li><li><div class="item-name"><a class="fn" href="fn.unstyle.html" title="fn nu_ansi_term::unstyle">unstyle</a></div><div class="desc docblock-short">Return a concatenated copy of <code>strs</code> without the formatting, as an allocated <code>String</code>.</div></li><li><div class="item-name"><a class="fn" href="fn.unstyled_len.html" title="fn nu_ansi_term::unstyled_len">unstyled_len</a></div><div class="desc docblock-short">Return the unstyled length of AnsiStrings. This is equaivalent to <code>unstyle(strs).len()</code>.</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.AnsiByteString.html" title="type nu_ansi_term::AnsiByteString">AnsiByteString</a></div><div class="desc docblock-short">An <code>AnsiByteString</code> represents a formatted series of bytes.  Use
+<code>AnsiByteString</code> when styling text with an unknown encoding.</div></li><li><div class="item-name"><a class="type" href="type.AnsiByteStrings.html" title="type nu_ansi_term::AnsiByteStrings">AnsiByteStrings</a></div><div class="desc docblock-short">A set of <code>AnsiByteString</code>s collected together, in order to be
+written with a minimum of control characters.</div></li><li><div class="item-name"><a class="type" href="type.AnsiString.html" title="type nu_ansi_term::AnsiString">AnsiString</a></div><div class="desc docblock-short">An ANSI String is a string coupled with the <code>Style</code> to display it
+in a terminal.</div></li><li><div class="item-name"><a class="type" href="type.AnsiStrings.html" title="type nu_ansi_term::AnsiStrings">AnsiStrings</a></div><div class="desc docblock-short">A set of <code>AnsiString</code>s collected together, in order to be written with a
+minimum of control characters.</div></li></ul></section></div></main></body></html>
