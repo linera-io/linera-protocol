@@ -1,3 +1,4 @@
+{{- if not .Values.writeToGrafanaCloud }}
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
@@ -31,3 +32,4 @@ spec:
           regex: (.*)
           replacement: ${1}
           action: replace
+{{- end }}
