@@ -43,6 +43,7 @@ use super::{
         validator_worker_client::ValidatorWorkerClient,
         validator_worker_server::{ValidatorWorker as ValidatorWorkerRpc, ValidatorWorkerServer},
         BlockProposal, ChainInfoQuery, ChainInfoResult, CrossChainRequest, LiteCertificate,
+        PendingBlobRequest, PendingBlobResult,
     },
     pool::GrpcConnectionPool,
     GrpcError, GRPC_MAX_MESSAGE_SIZE,
@@ -537,7 +538,6 @@ where
         let start = Instant::now();
         let HandleConfirmedCertificateRequest {
             certificate,
-            blobs,
             wait_for_outgoing_messages,
         } = request.into_inner().try_into()?;
         trace!(?certificate, "Handling certificate");
@@ -545,7 +545,7 @@ where
         match self
             .state
             .clone()
-            .handle_confirmed_certificate(certificate, blobs, sender)
+            .handle_confirmed_certificate(certificate, sender)
             .await
         {
             Ok((info, actions)) => {
@@ -695,6 +695,45 @@ where
             chain_id = ?request.get_ref().chain_id()
         )
     )]
+    async fn download_pending_blob(
+        &self,
+        request: Request<PendingBlobRequest>,
+    ) -> Result<Response<PendingBlobResult>, Status> {
+        let start = Instant::now();
+        let (chain_id, blob_id) = request.into_inner().try_into()?;
+        trace!(?chain_id, ?blob_id, "Download pending blob");
+        match self
+            .state
+            .clone()
+            .download_pending_blob(chain_id, blob_id)
+            .await
+        {
+            Ok(blob) => {
+                Self::log_request_success_and_latency(start, "download_pending_blob");
+                Ok(Response::new(blob.into_content().try_into()?))
+            }
+            Err(error) => {
+                #[cfg(with_metrics)]
+                {
+                    SERVER_REQUEST_ERROR
+                        .with_label_values(&["download_pending_blob"])
+                        .inc();
+                }
+                error!(nickname = self.state.nickname(), %error, "Failed to download pending blob");
+                Ok(Response::new(NodeError::from(error).try_into()?))
+            }
+        }
+    }
+
+    #[instrument(
+        target = "grpc_server",
+        skip_all,
+        err,
+        fields(
+            nickname = self.state.nickname(),
+            chain_id = ?request.get_ref().chain_id()
+        )
+    )]
     async fn handle_cross_chain_request(
         &self,
         request: Request<CrossChainRequest>,
@@ -758,6 +797,12 @@ impl GrpcProxyable for api::HandleValidatedCertificateRequest {
 }
 
 impl GrpcProxyable for ChainInfoQuery {
+    fn chain_id(&self) -> Option<ChainId> {
+        self.chain_id.clone()?.try_into().ok()
+    }
+}
+
+impl GrpcProxyable for PendingBlobRequest {
     fn chain_id(&self) -> Option<ChainId> {
         self.chain_id.clone()?.try_into().ok()
     }

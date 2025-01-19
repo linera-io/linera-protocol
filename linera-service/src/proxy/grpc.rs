@@ -34,14 +34,15 @@ use linera_rpc::{
             validator_worker_client::ValidatorWorkerClient,
             BlobContent, BlobId, BlobIds, BlockProposal, Certificate, CertificatesBatchRequest,
             CertificatesBatchResponse, ChainInfoQuery, ChainInfoResult, CryptoHash,
-            LiteCertificate, Notification, SubscriptionRequest, VersionInfo,
+            LiteCertificate, Notification, PendingBlobRequest, PendingBlobResult,
+            SubscriptionRequest, VersionInfo,
         },
         pool::GrpcConnectionPool,
         GrpcProtoConversionError, GrpcProxyable, GRPC_CHUNKED_MESSAGE_FILL_LIMIT,
         GRPC_MAX_MESSAGE_SIZE,
     },
 };
-use linera_sdk::views::ViewError;
+use linera_sdk::{base::Blob, views::ViewError};
 use linera_storage::Storage;
 use prost::Message;
 use tokio::{select, task::JoinSet};
@@ -476,7 +477,19 @@ where
     }
 
     #[instrument(skip_all, err(Display))]
-    async fn download_blob_content(
+    async fn upload_blob(&self, request: Request<BlobContent>) -> Result<Response<BlobId>, Status> {
+        let content: linera_sdk::base::BlobContent = request.into_inner().try_into()?;
+        let blob = Blob::new(content);
+        let id = blob.id();
+        let result = self.0.storage.maybe_write_blobs(&[blob]).await;
+        if !result.map_err(Self::error_to_status)?[0] {
+            return Err(Status::not_found("Blob not found"));
+        }
+        Ok(Response::new(id.try_into()?))
+    }
+
+    #[instrument(skip_all, err(Display))]
+    async fn download_blob(
         &self,
         request: Request<BlobId>,
     ) -> Result<Response<BlobContent>, Status> {
@@ -487,7 +500,32 @@ where
             .read_blob(blob_id)
             .await
             .map_err(Self::error_to_status)?;
-        Ok(Response::new(blob.into_inner_content().try_into()?))
+        Ok(Response::new(blob.into_content().try_into()?))
+    }
+
+    #[instrument(skip_all, err(Display))]
+    async fn download_pending_blob(
+        &self,
+        request: Request<PendingBlobRequest>,
+    ) -> Result<Response<PendingBlobResult>, Status> {
+        let (mut client, inner) = self.worker_client(request).await?;
+        #[cfg_attr(not(with_metrics), expect(clippy::needless_match))]
+        match client.download_pending_blob(inner).await {
+            Ok(blob_result) => {
+                #[cfg(with_metrics)]
+                PROXY_REQUEST_SUCCESS
+                    .with_label_values(&["download_pending_blob"])
+                    .inc();
+                Ok(blob_result)
+            }
+            Err(status) => {
+                #[cfg(with_metrics)]
+                PROXY_REQUEST_ERROR
+                    .with_label_values(&["download_pending_blob"])
+                    .inc();
+                Err(status)
+            }
+        }
     }
 
     #[instrument(skip_all, err(Display))]
@@ -630,10 +668,13 @@ impl<T> GrpcMessageLimiter<T> {
 
 #[cfg(test)]
 mod proto_message_cap {
-    use linera_base::crypto::{KeyPair, Signature};
+    use linera_base::{
+        crypto::{KeyPair, Signature},
+        hashed::Hashed,
+    };
     use linera_chain::{
         data_types::{BlockExecutionOutcome, ExecutedBlock},
-        types::{Certificate, ConfirmedBlock, ConfirmedBlockCertificate, Hashed},
+        types::{Certificate, ConfirmedBlock, ConfirmedBlockCertificate},
     };
     use linera_execution::committee::ValidatorName;
     use linera_sdk::base::{ChainId, TestString};

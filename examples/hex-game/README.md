@@ -1,6 +1,4 @@
-<!-- cargo-rdme start -->
-
-# Hex
+# Hex Game
 
 Hex is a game where player `One` tries to connect the left and right sides of the board and player
 `Two` tries to connect top to bottom. The board is rhombic and has a configurable side length `s`.
@@ -20,9 +18,9 @@ This implementation shows how to write a game that is played on a shared tempora
 Users make turns by submitting operations to the chain, not by sending messages, so a player
 does not have to wait for any other chain owner to accept any message.
 
-# Usage
+## Usage
 
-## Setting up
+### Setting up
 
 Make sure you have the `linera` binary in your `PATH`, and that it is compatible with your
 `linera-sdk` version.
@@ -49,7 +47,7 @@ explanation.
 CHAIN_1=e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65
 ```
 
-## Creating the Game Chain
+### Creating the Game Chain
 
 We open a new chain owned by both `$OWNER_1` and `$OWNER_2`, create the application on it, and
 start the node service.
@@ -130,7 +128,7 @@ linera -w1 service --port 8081 &
 sleep 1
 ```
 
-## Playing the Game
+### Playing the Game
 
 Now the first player can make a move by navigating to the URL you get by running `echo "http://localhost:8080/chains/$HEX_CHAIN/applications/$APP_ID"`:
 
@@ -143,5 +141,3 @@ And the second player player at the URL you get by running `echo "http://localho
 ```gql,uri=http://localhost:8081/chains/$HEX_CHAIN/applications/$APP_ID
 mutation { makeMove(x: 4, y: 5) }
 ```
-
-<!-- cargo-rdme end -->

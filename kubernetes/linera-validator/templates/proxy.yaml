@@ -49,7 +49,6 @@ spec:
       labels:
         app: proxy
     spec:
-      serviceAccountName: linera-admin
       terminationGracePeriodSeconds: 10
       initContainers:
         - name: linera-proxy-initializer
@@ -82,18 +81,6 @@ spec:
           env:
             - name: RUST_LOG
               value: {{ .Values.logLevel }}
-            - name: MY_POD_NAME
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.name
-            - name: MY_POD_NAMESPACE
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.namespace
-            - name: MY_POD_IP
-              valueFrom:
-                fieldRef:
-                  fieldPath: status.podIP
           volumeMounts:
             - name: config
               mountPath: "/config"

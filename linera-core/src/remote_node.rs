@@ -4,7 +4,7 @@
 use std::collections::HashSet;
 
 use custom_debug_derive::Debug;
-use futures::{stream::FuturesUnordered, StreamExt};
+use futures::{future::try_join_all, stream::FuturesUnordered, StreamExt};
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Blob, BlockHeight},
@@ -14,7 +14,7 @@ use linera_base::{
 use linera_chain::{
     data_types::BlockProposal,
     types::{
-        CertificateValueT, ConfirmedBlockCertificate, GenericCertificate, LiteCertificate,
+        CertificateValue, ConfirmedBlockCertificate, GenericCertificate, LiteCertificate,
         TimeoutCertificate, ValidatedBlockCertificate,
     },
 };
@@ -68,13 +68,12 @@ impl<N: ValidatorNode> RemoteNode<N> {
     pub(crate) async fn handle_confirmed_certificate(
         &self,
         certificate: ConfirmedBlockCertificate,
-        blobs: Vec<Blob>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<Box<ChainInfo>, NodeError> {
         let chain_id = certificate.inner().chain_id();
         let response = self
             .node
-            .handle_confirmed_certificate(certificate, blobs, delivery)
+            .handle_confirmed_certificate(certificate, delivery)
             .await?;
         self.check_and_return_info(response, chain_id)
     }
@@ -148,7 +147,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
                 _ => return result,
             }
         }
-        self.handle_confirmed_certificate(certificate.clone(), vec![], delivery)
+        self.handle_confirmed_certificate(certificate.clone(), delivery)
             .await
     }
 
@@ -162,8 +161,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
         let locked = manager.requested_locked.as_ref();
         ensure!(
             proposed.map_or(true, |proposal| proposal.content.block.chain_id == chain_id)
-                && locked.map_or(true, |cert| cert.executed_block().block.chain_id
-                    == chain_id)
+                && locked.map_or(true, |locked| locked.chain_id() == chain_id)
                 && response.check(&self.name).is_ok(),
             NodeError::InvalidChainInfoResponse
         );
@@ -217,6 +215,16 @@ impl<N: ValidatorNode> RemoteNode<N> {
         Ok(certificate)
     }
 
+    /// Uploads the blobs to the validator.
+    #[instrument(level = "trace")]
+    pub(crate) async fn upload_blobs(&self, blobs: Vec<Blob>) -> Result<(), NodeError> {
+        let tasks = blobs
+            .into_iter()
+            .map(|blob| self.node.upload_blob(blob.into()));
+        try_join_all(tasks).await?;
+        Ok(())
+    }
+
     /// Tries to download the given blobs from this node. Returns `None` if not all could be found.
     #[instrument(level = "trace")]
     pub(crate) async fn try_download_blobs(&self, blob_ids: &[BlobId]) -> Option<Vec<Blob>> {
@@ -233,15 +241,15 @@ impl<N: ValidatorNode> RemoteNode<N> {
 
     #[instrument(level = "trace")]
     async fn try_download_blob(&self, blob_id: BlobId) -> Option<Blob> {
-        match self.node.download_blob_content(blob_id).await {
+        match self.node.download_blob(blob_id).await {
             Ok(blob) => {
-                let blob = blob.with_blob_id_checked(blob_id);
-
-                if blob.is_none() {
+                let blob = Blob::new(blob);
+                if blob.id() != blob_id {
                     tracing::info!("Validator {} sent an invalid blob {blob_id}.", self.name);
+                    None
+                } else {
+                    Some(blob)
                 }
-
-                blob
             }
             Err(error) => {
                 tracing::debug!(
@@ -322,7 +330,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
 
     /// Checks that requesting these blobs when trying to handle this certificate is legitimate,
     /// i.e. that there are no duplicates and the blobs are actually required.
-    pub fn check_blobs_not_found<T: CertificateValueT>(
+    pub fn check_blobs_not_found<T: CertificateValue>(
         &self,
         certificate: &GenericCertificate<T>,
         blob_ids: &[BlobId],

@@ -7,20 +7,71 @@ use heck::ToKebabCase;
 use proc_macro2::TokenStream;
 use proc_macro_error::abort;
 use quote::quote;
-use syn::{Ident, LitStr, Variant};
+use syn::{Attribute, Ident, LitStr, MacroDelimiter, Meta, Variant};
 
 use crate::util::FieldsInformation;
 
 #[path = "unit_tests/wit_type.rs"]
 mod tests;
 
+/// Returns a [`LitStr`] with the type name to use in the WIT declaration.
+///
+/// The name is either obtained from a custom `#[wit_name = ""]` attribute, or as the
+/// kebab-case version of the Rust type name.
+pub fn discover_wit_name(attributes: &[Attribute], rust_name: &Ident) -> LitStr {
+    let custom_name = attributes
+        .iter()
+        .filter_map(|attribute| {
+            let Meta::List(meta) = &attribute.meta else {
+                return None;
+            };
+            let MacroDelimiter::Paren(_) = meta.delimiter else {
+                return None;
+            };
+            if !meta.path.is_ident("witty") {
+                return None;
+            }
+
+            let mut wit_name = None;
+            meta.parse_nested_meta(|witty_attribute| {
+                if witty_attribute.path.is_ident("name") {
+                    if wit_name.is_some() {
+                        abort!(
+                            witty_attribute.path,
+                            "Multiple attributes configuring the WIT type name"
+                        );
+                    }
+
+                    let value = witty_attribute.value()?;
+                    let name = value.parse::<LitStr>()?;
+
+                    wit_name = Some(name.clone());
+                }
+
+                Ok(())
+            })
+            .unwrap_or_else(|_| {
+                abort!(
+                    meta,
+                    "Failed to parse WIT type name attribute. \
+                    Expected `#[witrty(name = \"custom-wit-type-name\")]`."
+                );
+            });
+
+            wit_name
+        })
+        .next();
+
+    custom_name
+        .unwrap_or_else(|| LitStr::new(&rust_name.to_string().to_kebab_case(), rust_name.span()))
+}
+
 /// Returns the body of the `WitType` implementation for the Rust `struct` with the specified
 /// `fields`.
 pub fn derive_for_struct<'input>(
-    name: &Ident,
+    wit_name: LitStr,
     fields: impl Into<FieldsInformation<'input>>,
 ) -> TokenStream {
-    let wit_name = LitStr::new(&name.to_string().to_kebab_case(), name.span());
     let fields = fields.into();
     let fields_hlist = fields.hlist_type();
     let field_wit_names = fields.wit_names();
@@ -57,10 +108,9 @@ pub fn derive_for_struct<'input>(
 /// `variants`.
 pub fn derive_for_enum<'variants>(
     name: &Ident,
+    wit_name: LitStr,
     variants: impl DoubleEndedIterator<Item = &'variants Variant> + Clone,
 ) -> TokenStream {
-    let wit_name = LitStr::new(&name.to_string().to_kebab_case(), name.span());
-
     let variant_count = variants.clone().count();
     let variant_fields: Vec<_> = variants
         .clone()

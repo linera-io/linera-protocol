@@ -3,6 +3,8 @@
 
 //! Dummy types used in tests.
 
+use std::{rc::Rc, sync::Arc};
+
 use linera_witty::{WitLoad, WitStore, WitType};
 
 /// A type that wraps a simple type.
@@ -60,7 +62,7 @@ pub struct SpecializedGenericStruct<A, B> {
 }
 
 /// A generic enum with some specialized fields.
-#[derive(Clone, Debug, Eq, PartialEq, WitType, WitLoad, WitStore)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, WitType, WitLoad, WitStore)]
 #[witty_specialize_with(A = Option<bool>)]
 #[witty_specialize_with(B = u32)]
 pub enum SpecializedGenericEnum<A, B> {
@@ -68,3 +70,24 @@ pub enum SpecializedGenericEnum<A, B> {
     First(A),
     MaybeSecond { maybe: Option<B> },
 }
+
+/// A struct that contains fields that are wrapped in smart pointer types.
+#[derive(Clone, Debug, Eq, PartialEq, WitType, WitLoad, WitStore)]
+pub struct StructWithHeapFields {
+    pub boxed: Box<SimpleWrapper>,
+    pub rced: Rc<Leaf>,
+    pub arced: Arc<Enum>,
+}
+
+/// A struct that contains fields that should all be represented as lists.
+#[derive(Clone, Debug, Eq, PartialEq, WitType, WitLoad, WitStore)]
+pub struct StructWithLists {
+    pub vec: Vec<SimpleWrapper>,
+    pub boxed_slice: Box<[TupleWithPadding]>,
+    pub rced_slice: Rc<[Leaf]>,
+    pub arced_slice: Arc<[RecordWithDoublePadding]>,
+}
+
+/// A type that wraps a slice.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, WitType, WitStore)]
+pub struct SliceWrapper<'slice>(pub &'slice [TupleWithoutPadding]);

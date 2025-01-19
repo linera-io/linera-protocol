@@ -5,16 +5,17 @@
 
 #![cfg(test)]
 
-use quote::{format_ident, quote};
-use syn::{parse_quote, Fields, ItemEnum, ItemStruct};
+use proc_macro2::Span;
+use quote::quote;
+use syn::{parse_quote, Fields, ItemEnum, ItemStruct, LitStr};
 
-use super::{derive_for_enum, derive_for_struct};
+use super::{derive_for_enum, derive_for_struct, discover_wit_name};
 
-/// Check the generated code for the body of the implementation of `WitType` for a unit struct.
+/// Checks the generated code for the body of the implementation of `WitType` for a unit struct.
 #[test]
 fn zero_sized_type() {
     let input = Fields::Unit;
-    let output = derive_for_struct(&format_ident!("ZeroSizedType"), &input);
+    let output = derive_for_struct(LitStr::new("zero-sized-type", Span::call_site()), &input);
 
     let expected = quote! {
         const SIZE: u32 = <linera_witty::HList![] as linera_witty::WitType>::SIZE;
@@ -37,7 +38,7 @@ fn zero_sized_type() {
     assert_eq!(output.to_string(), expected.to_string());
 }
 
-/// Check the generated code for the body of the implementation of `WitType` for a named struct.
+/// Checks the generated code for the body of the implementation of `WitType` for a named struct.
 #[test]
 fn named_struct() {
     let input: ItemStruct = parse_quote! {
@@ -46,7 +47,8 @@ fn named_struct() {
             second: CustomType,
         }
     };
-    let output = derive_for_struct(&input.ident, &input.fields);
+    let wit_name = discover_wit_name(&[], &input.ident);
+    let output = derive_for_struct(wit_name, &input.fields);
 
     let expected = quote! {
         const SIZE: u32 = <linera_witty::HList![u8, CustomType] as linera_witty::WitType>::SIZE;
@@ -81,13 +83,14 @@ fn named_struct() {
     assert_eq!(output.to_string(), expected.to_string());
 }
 
-/// Check the generated code for the body of the implementation of `WitType` for a tuple struct.
+/// Checks the generated code for the body of the implementation of `WitType` for a tuple struct.
 #[test]
 fn tuple_struct() {
     let input: ItemStruct = parse_quote! {
         struct Type(String, Vec<CustomType>, i64);
     };
-    let output = derive_for_struct(&input.ident, &input.fields);
+    let wit_name = discover_wit_name(&[], &input.ident);
+    let output = derive_for_struct(wit_name, &input.fields);
 
     let expected = quote! {
         const SIZE: u32 =
@@ -131,7 +134,7 @@ fn tuple_struct() {
     assert_eq!(output.to_string(), expected.to_string());
 }
 
-/// Check the generated code for the body of the implementation of `WitType` for an enum.
+/// Checks the generated code for the body of the implementation of `WitType` for an enum.
 #[test]
 fn enum_type() {
     let input: ItemEnum = parse_quote! {
@@ -144,7 +147,8 @@ fn enum_type() {
             },
         }
     };
-    let output = derive_for_enum(&input.ident, input.variants.iter());
+    let wit_name = discover_wit_name(&[], &input.ident);
+    let output = derive_for_enum(&input.ident, wit_name, input.variants.iter());
 
     let expected = quote! {
         const SIZE: u32 = {
@@ -245,7 +249,7 @@ fn enum_type() {
     assert_eq!(output.to_string(), expected.to_string());
 }
 
-/// Check the generated code for the body of the implementation of `WitType` for a named struct
+/// Checks the generated code for the body of the implementation of `WitType` for a named struct
 /// with some ignored fields.
 #[test]
 fn named_struct_with_skipped_fields() {
@@ -263,7 +267,8 @@ fn named_struct_with_skipped_fields() {
             ignored4: Vec<()>,
         }
     };
-    let output = derive_for_struct(&input.ident, &input.fields);
+    let wit_name = discover_wit_name(&[], &input.ident);
+    let output = derive_for_struct(wit_name, &input.fields);
 
     let expected = quote! {
         const SIZE: u32 = <linera_witty::HList![u8, CustomType] as linera_witty::WitType>::SIZE;
@@ -298,7 +303,7 @@ fn named_struct_with_skipped_fields() {
     assert_eq!(output.to_string(), expected.to_string());
 }
 
-/// Check the generated code for the body of the implementation of `WitType` for a tuple struct
+/// Checks the generated code for the body of the implementation of `WitType` for a tuple struct
 /// with some ignored fields.
 #[test]
 fn tuple_struct_with_skipped_fields() {
@@ -313,7 +318,8 @@ fn tuple_struct_with_skipped_fields() {
             i64,
         );
     };
-    let output = derive_for_struct(&input.ident, &input.fields);
+    let wit_name = discover_wit_name(&[], &input.ident);
+    let output = derive_for_struct(wit_name, &input.fields);
 
     let expected = quote! {
         const SIZE: u32 =
@@ -357,7 +363,7 @@ fn tuple_struct_with_skipped_fields() {
     assert_eq!(output.to_string(), expected.to_string());
 }
 
-/// Check the generated code for the body of the implementation of `WitType` for an enum
+/// Checks the generated code for the body of the implementation of `WitType` for an enum
 /// with some ignored fields.
 #[test]
 fn enum_type_with_skipped_fields() {
@@ -377,7 +383,8 @@ fn enum_type_with_skipped_fields() {
             },
         }
     };
-    let output = derive_for_enum(&input.ident, input.variants.iter());
+    let wit_name = discover_wit_name(&[], &input.ident);
+    let output = derive_for_enum(&input.ident, wit_name, input.variants.iter());
 
     let expected = quote! {
         const SIZE: u32 = {
@@ -468,6 +475,45 @@ fn enum_type_with_skipped_fields() {
                 &<String as linera_witty::WitType>::wit_type_name(),
             );
             wit_declaration.push_str(">)");
+            wit_declaration.push_str(",\n");
+
+            wit_declaration.push_str("    }\n");
+            wit_declaration.into ()
+        }
+    };
+
+    assert_eq!(output.to_string(), expected.to_string());
+}
+
+/// Checks the generated code for the body of the implementation of `WitType` for a struct
+/// with a custom WIT type name.
+#[test]
+fn struct_with_a_custom_wit_name() {
+    let input: ItemStruct = parse_quote! {
+        #[witty(name = "renamed-type")]
+        struct Type(i16);
+    };
+    let wit_name = discover_wit_name(&input.attrs, &input.ident);
+    let output = derive_for_struct(wit_name, &input.fields);
+
+    let expected = quote! {
+        const SIZE: u32 = <linera_witty::HList![i16] as linera_witty::WitType>::SIZE;
+
+        type Layout = <linera_witty::HList![i16] as linera_witty::WitType>::Layout;
+        type Dependencies = linera_witty::HList![i16];
+
+        fn wit_type_name() -> std::borrow::Cow<'static, str> {
+            "renamed-type".into()
+        }
+
+        fn wit_type_declaration() -> std::borrow::Cow<'static, str> {
+            let mut wit_declaration =
+                String::from(concat!("    record " , "renamed-type" , " {\n"));
+
+            wit_declaration.push_str("        ");
+            wit_declaration.push_str("inner0");
+            wit_declaration.push_str(": ");
+            wit_declaration.push_str(&*<i16 as linera_witty::WitType>::wit_type_name());
             wit_declaration.push_str(",\n");
 
             wit_declaration.push_str("    }\n");

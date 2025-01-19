@@ -633,7 +633,7 @@ impl MatchingEngineContract {
     /// * Getting from the best matching price to the least good the price levels
     ///   are cleared.
     /// * That clearing creates a number of transfer orders.
-    /// * If after the level clearing the order is completely filled then it it not
+    /// * If after the level clearing the order is completely filled then it is not
     ///   inserted. Otherwise, it became a liquidity order in the matching engine
     async fn insert_and_uncross_market(
         &mut self,

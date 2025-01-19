@@ -14,12 +14,13 @@ use dashmap::{mapref::entry::Entry, DashMap};
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
     data_types::{Amount, Blob, BlockHeight, TimeDelta, Timestamp, UserApplicationDescription},
+    hashed::Hashed,
     identifiers::{BlobId, ChainDescription, ChainId, GenericApplicationId, UserApplicationId},
     ownership::ChainOwnership,
 };
 use linera_chain::{
     data_types::ChannelFullName,
-    types::{ConfirmedBlock, ConfirmedBlockCertificate, Hashed},
+    types::{ConfirmedBlock, ConfirmedBlockCertificate},
     ChainError, ChainStateView,
 };
 use linera_execution::{
@@ -123,6 +124,10 @@ pub trait Storage: Sized {
         blob_state: &BlobState,
     ) -> Result<(), ViewError>;
 
+    /// Writes the given blobs, but only if they already have a blob state. Returns `true` for the
+    /// blobs that were written.
+    async fn maybe_write_blobs(&self, blobs: &[Blob]) -> Result<Vec<bool>, ViewError>;
+
     /// Attempts to write the given blob state. Returns the latest `Epoch` to have used this blob.
     async fn maybe_write_blob_state(
         &self,
@@ -135,6 +140,7 @@ pub trait Storage: Sized {
         &self,
         blob_ids: &[BlobId],
         blob_state: BlobState,
+        overwrite: bool,
     ) -> Result<Vec<Epoch>, ViewError>;
 
     /// Writes several blobs.
@@ -202,8 +208,8 @@ pub trait Storage: Sized {
         let id = description.into();
         let mut chain = self.load_chain(id).await?;
         assert!(!chain.is_active(), "Attempting to create a chain twice");
-        chain.manager.get_mut().reset(
-            &ChainOwnership::single(public_key),
+        chain.manager.reset(
+            ChainOwnership::single(public_key),
             BlockHeight(0),
             self.clock().current_time(),
             committee.keys_and_weights(),
@@ -265,7 +271,7 @@ pub trait Storage: Sized {
         );
         let contract_blob = self.read_blob(contract_bytecode_blob_id).await?;
         let compressed_contract_bytecode = CompressedBytecode {
-            compressed_bytes: contract_blob.inner_bytes(),
+            compressed_bytes: contract_blob.into_bytes().to_vec(),
         };
         let contract_bytecode =
             linera_base::task::Blocking::<linera_base::task::NoInput, _>::spawn(
@@ -308,7 +314,7 @@ pub trait Storage: Sized {
         );
         let service_blob = self.read_blob(service_bytecode_blob_id).await?;
         let compressed_service_bytecode = CompressedBytecode {
-            compressed_bytes: service_blob.inner_bytes(),
+            compressed_bytes: service_blob.into_bytes().to_vec(),
         };
         let service_bytecode = linera_base::task::Blocking::<linera_base::task::NoInput, _>::spawn(
             move |_| async move { compressed_service_bytecode.decompress() },

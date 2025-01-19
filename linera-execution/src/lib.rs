@@ -618,7 +618,7 @@ pub trait BaseRuntime {
     /// owner, not a super owner.
     fn assert_before(&mut self, timestamp: Timestamp) -> Result<(), ExecutionError>;
 
-    /// Reads a data blob content specified by a given hash.
+    /// Reads a data blob specified by a given hash.
     fn read_data_blob(&mut self, hash: &CryptoHash) -> Result<Vec<u8>, ExecutionError>;
 
     /// Asserts the existence of a data blob with the given hash.
@@ -710,6 +710,15 @@ pub trait ContractRuntime: BaseRuntime {
 
     /// Closes the current chain.
     fn close_chain(&mut self) -> Result<(), ExecutionError>;
+
+    /// Creates a new application on chain.
+    fn create_application(
+        &mut self,
+        bytecode_id: BytecodeId,
+        parameters: Vec<u8>,
+        argument: Vec<u8>,
+        required_application_ids: Vec<UserApplicationId>,
+    ) -> Result<UserApplicationId, ExecutionError>;
 
     /// Writes a batch of changes.
     fn write_batch(&mut self, batch: Batch) -> Result<(), ExecutionError>;

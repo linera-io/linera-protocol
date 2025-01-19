@@ -83,7 +83,8 @@ impl ValidatorNode for SimpleClient {
         &self,
         proposal: BlockProposal,
     ) -> Result<ChainInfoResponse, NodeError> {
-        self.query(proposal.into()).await
+        let request = RpcMessage::BlockProposal(Box::new(proposal));
+        self.query(request).await
     }
 
     /// Processes a hash certificate.
@@ -93,11 +94,11 @@ impl ValidatorNode for SimpleClient {
         delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
         let wait_for_outgoing_messages = delivery.wait_for_outgoing_messages();
-        let request = HandleLiteCertRequest {
+        let request = RpcMessage::LiteCertificate(Box::new(HandleLiteCertRequest {
             certificate: certificate.cloned(),
             wait_for_outgoing_messages,
-        };
-        self.query(request.into()).await
+        }));
+        self.query(request).await
     }
 
     /// Processes a validated certificate.
@@ -107,23 +108,23 @@ impl ValidatorNode for SimpleClient {
         blobs: Vec<Blob>,
     ) -> Result<ChainInfoResponse, NodeError> {
         let request = HandleValidatedCertificateRequest { certificate, blobs };
-        self.query(request.into()).await
+        let request = RpcMessage::ValidatedCertificate(Box::new(request));
+        self.query(request).await
     }
 
     /// Processes a confirmed certificate.
     async fn handle_confirmed_certificate(
         &self,
         certificate: ConfirmedBlockCertificate,
-        blobs: Vec<Blob>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
         let wait_for_outgoing_messages = delivery.wait_for_outgoing_messages();
         let request = HandleConfirmedCertificateRequest {
             certificate,
-            blobs,
             wait_for_outgoing_messages,
         };
-        self.query(request.into()).await
+        let request = RpcMessage::ConfirmedCertificate(Box::new(request));
+        self.query(request).await
     }
 
     /// Processes a timeout certificate.
@@ -132,7 +133,8 @@ impl ValidatorNode for SimpleClient {
         certificate: TimeoutCertificate,
     ) -> Result<ChainInfoResponse, NodeError> {
         let request = HandleTimeoutCertificateRequest { certificate };
-        self.query(request.into()).await
+        let request = RpcMessage::TimeoutCertificate(Box::new(request));
+        self.query(request).await
     }
 
     /// Handles information queries for this chain.
@@ -140,7 +142,8 @@ impl ValidatorNode for SimpleClient {
         &self,
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, NodeError> {
-        self.query(query.into()).await
+        let request = RpcMessage::ChainInfoQuery(Box::new(query));
+        self.query(request).await
     }
 
     fn subscribe(
@@ -159,9 +162,24 @@ impl ValidatorNode for SimpleClient {
         self.query(RpcMessage::GenesisConfigHashQuery).await
     }
 
-    async fn download_blob_content(&self, blob_id: BlobId) -> Result<BlobContent, NodeError> {
-        self.query(RpcMessage::DownloadBlobContent(Box::new(blob_id)))
+    async fn upload_blob(&self, content: BlobContent) -> Result<BlobId, NodeError> {
+        self.query(RpcMessage::UploadBlob(Box::new(content))).await
+    }
+
+    async fn download_blob(&self, blob_id: BlobId) -> Result<BlobContent, NodeError> {
+        self.query(RpcMessage::DownloadBlob(Box::new(blob_id)))
             .await
+    }
+
+    async fn download_pending_blob(
+        &self,
+        chain_id: ChainId,
+        blob_id: BlobId,
+    ) -> Result<BlobContent, NodeError> {
+        self.query(RpcMessage::DownloadPendingBlob(Box::new((
+            chain_id, blob_id,
+        ))))
+        .await
     }
 
     async fn download_certificate(
@@ -203,8 +221,7 @@ impl ValidatorNode for SimpleClient {
     }
 
     async fn missing_blob_ids(&self, blob_ids: Vec<BlobId>) -> Result<Vec<BlobId>, NodeError> {
-        self.query(RpcMessage::MissingBlobIds(Box::new(blob_ids)))
-            .await
+        self.query(RpcMessage::MissingBlobIds(blob_ids)).await
     }
 }
 

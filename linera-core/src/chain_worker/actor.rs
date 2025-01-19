@@ -13,11 +13,12 @@ use custom_debug_derive::Debug;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Blob, BlockHeight, Timestamp, UserApplicationDescription},
-    identifiers::{ChainId, UserApplicationId},
+    hashed::Hashed,
+    identifiers::{BlobId, ChainId, UserApplicationId},
 };
 use linera_chain::{
     data_types::{Block, BlockProposal, ExecutedBlock, MessageBundle, Origin, Target},
-    types::{ConfirmedBlockCertificate, Hashed, TimeoutCertificate, ValidatedBlockCertificate},
+    types::{ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
     ChainStateView,
 };
 use linera_execution::{
@@ -113,7 +114,6 @@ where
     /// Process a confirmed block (a commit).
     ProcessConfirmedBlock {
         certificate: ConfirmedBlockCertificate,
-        blobs: Vec<Blob>,
         #[debug(with = "elide_option")]
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
         #[debug(skip)]
@@ -140,6 +140,13 @@ where
         query: ChainInfoQuery,
         #[debug(skip)]
         callback: oneshot::Sender<Result<(ChainInfoResponse, NetworkActions), WorkerError>>,
+    },
+
+    /// Get a blob if it belongs to the current locked block or pending proposal.
+    DownloadPendingBlob {
+        blob_id: BlobId,
+        #[debug(skip)]
+        callback: oneshot::Sender<Result<Blob, WorkerError>>,
     },
 
     /// Update the received certificate trackers to at least the given values.
@@ -298,7 +305,6 @@ where
                     .is_ok(),
                 ChainWorkerRequest::ProcessConfirmedBlock {
                     certificate,
-                    blobs,
                     notify_when_messages_are_delivered,
                     callback,
                 } => callback
@@ -306,7 +312,6 @@ where
                         self.worker
                             .process_confirmed_block(
                                 certificate,
-                                &blobs,
                                 notify_when_messages_are_delivered,
                             )
                             .await,
@@ -331,6 +336,9 @@ where
                     .is_ok(),
                 ChainWorkerRequest::HandleChainInfoQuery { query, callback } => callback
                     .send(self.worker.handle_chain_info_query(query).await)
+                    .is_ok(),
+                ChainWorkerRequest::DownloadPendingBlob { blob_id, callback } => callback
+                    .send(self.worker.download_pending_blob(blob_id).await)
                     .is_ok(),
                 ChainWorkerRequest::UpdateReceivedCertificateTrackers {
                     new_trackers,

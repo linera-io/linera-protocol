@@ -6,9 +6,10 @@ use std::{borrow::Cow, collections::BTreeSet};
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Blob, BlockHeight},
+    hashed::Hashed,
     identifiers::{BlobId, ChainId},
 };
-use linera_chain::types::{Hashed, Timeout};
+use linera_chain::types::Timeout;
 use linera_execution::committee::Epoch;
 
 use super::{ValueCache, DEFAULT_VALUE_CACHE_SIZE};

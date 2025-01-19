@@ -146,6 +146,9 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
     Don't include any messages in blocks, and don't make any decision whether to accept or reject
 
 * `--restrict-chain-ids-to <RESTRICT_CHAIN_IDS_TO>` — A set of chains to restrict incoming messages from. By default, messages from all chains are accepted. To reject messages from all chains, specify an empty string
+* `--grace-period <GRACE_PERIOD>` — An additional delay, after reaching a quorum, to wait for additional validator signatures, as a fraction of time taken to reach quorum
+
+  Default value: `0.2`
 
 
 
@@ -900,6 +903,13 @@ Start a Local Linera Network
 * `--external-protocol <EXTERNAL_PROTOCOL>` — External protocol used, either grpc or grpcs
 
   Default value: `grpc`
+* `--with-faucet-chain <WITH_FAUCET_CHAIN>` — If present, a faucet is started using the given chain root number (0 for the admin chain, 1 for the first non-admin initial chain, etc)
+* `--faucet-port <FAUCET_PORT>` — The port on which to run the faucet server
+
+  Default value: `8080`
+* `--faucet-amount <FAUCET_AMOUNT>` — The number of tokens to send to each new chain created by the faucet
+
+  Default value: `1000`
 
 
 

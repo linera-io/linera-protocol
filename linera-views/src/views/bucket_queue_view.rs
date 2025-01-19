@@ -47,7 +47,7 @@ enum KeyTag {
 }
 
 /// The `StoredIndices` contains the description of the stored buckets.
-#[derive(Clone, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 struct StoredIndices {
     /// The stored buckets with the first index being the size (at most N) and the
     /// second one is the index in the storage. If the index is 0 then it corresponds
@@ -69,7 +69,7 @@ impl StoredIndices {
 /// and the new_back_values are the ones accessed by the front operation.
 /// If position is not trivial, then the first index is the relevant
 /// bucket for the front and the second index is the position in the index.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct Cursor {
     position: Option<(usize, usize)>,
 }
@@ -90,7 +90,7 @@ impl Cursor {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 enum Bucket<T> {
     Loaded { data: Vec<T> },
     NotLoaded { length: usize },

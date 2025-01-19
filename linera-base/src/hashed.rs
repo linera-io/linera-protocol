@@ -2,14 +2,14 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! A wrapper for hashable types to memoize the hash.
+
 use std::borrow::Cow;
 
 use custom_debug_derive::Debug;
-use linera_base::crypto::{BcsHashable, CryptoHash};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 
-use super::CertificateValueT;
-use crate::data_types::LiteValue;
+use crate::crypto::{BcsHashable, CryptoHash};
 
 /// Wrapper type around hashed instance of `T` type.
 #[derive(Debug)]
@@ -33,35 +33,27 @@ impl<T> Hashed<T> {
     ///
     /// Note: Contrary to its `unchecked_new` counterpart, this method is safe because it
     /// calculates the hash from the value.
-    pub fn new(value: T) -> Self
+    pub fn new<'de>(value: T) -> Self
     where
-        T: BcsHashable,
+        T: BcsHashable<'de>,
     {
         let hash = CryptoHash::new(&value);
         Self { value, hash }
     }
 
+    /// Returns the hash.
     pub fn hash(&self) -> CryptoHash {
         self.hash
     }
 
+    /// Returns a reference to the value, without the hash.
     pub fn inner(&self) -> &T {
         &self.value
     }
 
+    /// Consumes the hashed value and returns the value without the hash.
     pub fn into_inner(self) -> T {
         self.value
-    }
-
-    pub fn lite(&self) -> LiteValue
-    where
-        T: CertificateValueT,
-    {
-        LiteValue {
-            value_hash: self.hash,
-            chain_id: self.value.chain_id(),
-            kind: T::KIND,
-        }
     }
 }
 
@@ -74,7 +66,7 @@ impl<T: Serialize> Serialize for Hashed<T> {
     }
 }
 
-impl<'de, T: DeserializeOwned + BcsHashable> Deserialize<'de> for Hashed<T> {
+impl<'de, T: BcsHashable<'de>> Deserialize<'de> for Hashed<T> {
     fn deserialize<D>(deserializer: D) -> Result<Hashed<T>, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -94,7 +86,20 @@ impl<T: Clone> Clone for Hashed<T> {
 
 impl<T: async_graphql::OutputType> async_graphql::TypeName for Hashed<T> {
     fn type_name() -> Cow<'static, str> {
-        format!("Hashed{}", T::type_name(),).into()
+        format!("Hashed{}", T::type_name()).into()
+    }
+}
+
+#[async_graphql::Object(cache_control(no_cache), name_type)]
+impl<T: async_graphql::OutputType + Clone> Hashed<T> {
+    #[graphql(derived(name = "hash"))]
+    async fn _hash(&self) -> CryptoHash {
+        self.hash()
+    }
+
+    #[graphql(derived(name = "value"))]
+    async fn _value(&self) -> T {
+        self.inner().clone()
     }
 }
 

@@ -8,9 +8,6 @@
 /// How to run docker operations
 pub mod docker;
 
-#[cfg(all(with_testing, feature = "existing-net"))]
-/// How to connect to an existing/running network.
-pub mod existing_net;
 #[cfg(feature = "kubernetes")]
 /// How to run helmfile operations
 mod helmfile;
@@ -25,6 +22,9 @@ mod kubectl;
 pub mod local_kubernetes_net;
 /// How to run Linera validators locally as native processes.
 pub mod local_net;
+#[cfg(all(with_testing, feature = "remote-net"))]
+/// How to connect to running GCP DevNet.
+pub mod remote_net;
 #[cfg(feature = "kubernetes")]
 /// Util functions for the wrappers
 mod util;
@@ -35,7 +35,8 @@ use anyhow::Result;
 use async_trait::async_trait;
 use linera_execution::ResourceControlPolicy;
 pub use wallet::{
-    ApplicationWrapper, ClientWrapper, Faucet, FaucetOption, NodeService, OnClientDrop,
+    ApplicationWrapper, ClientWrapper, Faucet, FaucetOption, FaucetService, NodeService,
+    OnClientDrop,
 };
 
 /// The information needed to start a Linera net of a particular kind.

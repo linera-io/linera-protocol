@@ -99,6 +99,7 @@ where
             self.stored_value = value;
         }
         self.delete_storage_first = false;
+        self.update = None;
         Ok(delete_view)
     }
 

@@ -8,8 +8,10 @@ use std::{
 
 use async_graphql::{OneofObject, SimpleObject};
 use axum::Router;
-use linera_base::{crypto::CryptoHash, data_types::BlockHeight, doc_scalar, identifiers::ChainId};
-use linera_chain::types::{ConfirmedBlock, Hashed};
+use linera_base::{
+    crypto::CryptoHash, data_types::BlockHeight, doc_scalar, hashed::Hashed, identifiers::ChainId,
+};
+use linera_chain::types::ConfirmedBlock;
 use linera_execution::Operation;
 use linera_indexer::{
     common::IndexerError,

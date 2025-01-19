@@ -7,44 +7,42 @@ use std::fmt::Debug;
 use linera_base::{
     crypto::{BcsHashable, CryptoHash},
     data_types::BlockHeight,
+    hashed::Hashed,
     identifiers::ChainId,
 };
 use linera_execution::committee::Epoch;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{data_types::ExecutedBlock, types::Hashed, ChainError};
+use crate::{data_types::ExecutedBlock, ChainError};
 
 /// Wrapper around an `ExecutedBlock` that has been validated.
-#[derive(Debug, PartialEq, Eq, Clone, Deserialize, Serialize)]
-pub struct ValidatedBlock {
-    executed_block: Hashed<ExecutedBlock>,
-}
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct ValidatedBlock(Hashed<ExecutedBlock>);
 
 impl ValidatedBlock {
     /// Creates a new `ValidatedBlock` from an `ExecutedBlock`.
     pub fn new(executed_block: ExecutedBlock) -> Self {
-        Self {
-            executed_block: Hashed::new(executed_block),
-        }
+        Self(Hashed::new(executed_block))
     }
 
     pub fn from_hashed(executed_block: Hashed<ExecutedBlock>) -> Self {
-        Self { executed_block }
+        Self(executed_block)
     }
 
     pub fn inner(&self) -> &Hashed<ExecutedBlock> {
-        &self.executed_block
+        &self.0
     }
 
     /// Returns a reference to the `ExecutedBlock` contained in this `ValidatedBlock`.
     pub fn executed_block(&self) -> &ExecutedBlock {
-        self.executed_block.inner()
+        self.0.inner()
     }
 
     /// Consumes this `ValidatedBlock`, returning the `ExecutedBlock` it contains.
     pub fn into_inner(self) -> ExecutedBlock {
-        self.executed_block.into_inner()
+        self.0.into_inner()
     }
 
     pub fn to_log_str(&self) -> &'static str {
@@ -52,32 +50,30 @@ impl ValidatedBlock {
     }
 
     pub fn chain_id(&self) -> ChainId {
-        self.executed_block().block.chain_id
+        self.0.inner().block.chain_id
     }
 
     pub fn height(&self) -> BlockHeight {
-        self.executed_block().block.height
+        self.0.inner().block.height
     }
 
     pub fn epoch(&self) -> Epoch {
-        self.executed_block().block.epoch
+        self.0.inner().block.epoch
     }
 }
 
-impl BcsHashable for ValidatedBlock {}
+impl<'de> BcsHashable<'de> for ValidatedBlock {}
 
 /// Wrapper around an `ExecutedBlock` that has been confirmed.
-#[derive(Debug, PartialEq, Eq, Clone, Deserialize, Serialize)]
-pub struct ConfirmedBlock {
-    // The executed block contained in this `ConfirmedBlock`.
-    executed_block: Hashed<ExecutedBlock>,
-}
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct ConfirmedBlock(Hashed<ExecutedBlock>);
 
 #[async_graphql::Object(cache_control(no_cache))]
 impl ConfirmedBlock {
     #[graphql(derived(name = "executed_block"))]
     async fn _executed_block(&self) -> ExecutedBlock {
-        self.executed_block.inner().clone()
+        self.0.inner().clone()
     }
 
     async fn status(&self) -> String {
@@ -85,52 +81,37 @@ impl ConfirmedBlock {
     }
 }
 
-#[async_graphql::Object(cache_control(no_cache), name_type)]
-impl Hashed<ConfirmedBlock> {
-    #[graphql(derived(name = "hash"))]
-    async fn _hash(&self) -> CryptoHash {
-        self.hash()
-    }
-
-    #[graphql(derived(name = "value"))]
-    async fn _value(&self) -> ConfirmedBlock {
-        self.inner().clone()
-    }
-}
-
-impl BcsHashable for ConfirmedBlock {}
+impl<'de> BcsHashable<'de> for ConfirmedBlock {}
 
 impl ConfirmedBlock {
     pub fn new(executed_block: ExecutedBlock) -> Self {
-        Self {
-            executed_block: Hashed::new(executed_block),
-        }
+        Self(Hashed::new(executed_block))
     }
 
     pub fn from_hashed(executed_block: Hashed<ExecutedBlock>) -> Self {
-        Self { executed_block }
+        Self(executed_block)
     }
 
     pub fn inner(&self) -> &Hashed<ExecutedBlock> {
-        &self.executed_block
+        &self.0
     }
 
     /// Returns a reference to the `ExecutedBlock` contained in this `ConfirmedBlock`.
     pub fn executed_block(&self) -> &ExecutedBlock {
-        self.executed_block.inner()
+        self.0.inner()
     }
 
     /// Consumes this `ConfirmedBlock`, returning the `ExecutedBlock` it contains.
     pub fn into_inner(self) -> ExecutedBlock {
-        self.executed_block.into_inner()
+        self.0.into_inner()
     }
 
     pub fn chain_id(&self) -> ChainId {
-        self.executed_block.inner().block.chain_id
+        self.0.inner().block.chain_id
     }
 
     pub fn height(&self) -> BlockHeight {
-        self.executed_block.inner().block.height
+        self.0.inner().block.height
     }
 
     pub fn to_log_str(&self) -> &'static str {
@@ -194,7 +175,7 @@ impl Timeout {
     }
 }
 
-impl BcsHashable for Timeout {}
+impl<'de> BcsHashable<'de> for Timeout {}
 
 /// Failure to convert a `Certificate` into one of the expected certificate types.
 #[derive(Clone, Copy, Debug, Error)]

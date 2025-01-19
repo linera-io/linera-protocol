@@ -37,7 +37,7 @@ static MAP_VIEW_HASH_RUNTIME: LazyLock<HistogramVec> = LazyLock::new(|| {
 });
 
 use std::{
-    borrow::Borrow,
+    borrow::{Borrow, Cow},
     collections::{btree_map::Entry, BTreeMap},
     marker::PhantomData,
     mem,
@@ -67,7 +67,7 @@ pub struct ByteMapView<C, V> {
 }
 
 /// Whether we have a value or its serialization.
-pub enum ValueOrBytes<'a, T> {
+enum ValueOrBytes<'a, T> {
     /// The value itself.
     Value(&'a T),
     /// The serialization.
@@ -78,11 +78,11 @@ impl<'a, T> ValueOrBytes<'a, T>
 where
     T: Clone + DeserializeOwned,
 {
-    /// Convert to a value.
-    pub fn to_value(self) -> Result<T, ViewError> {
+    /// Convert to a Cow.
+    fn to_value(&self) -> Result<Cow<'a, T>, ViewError> {
         match self {
-            ValueOrBytes::Value(value) => Ok(value.clone()),
-            ValueOrBytes::Bytes(bytes) => Ok(bcs::from_bytes(&bytes)?),
+            ValueOrBytes::Value(value) => Ok(Cow::Borrowed(value)),
+            ValueOrBytes::Bytes(bytes) => Ok(Cow::Owned(bcs::from_bytes(bytes)?)),
         }
     }
 }
@@ -92,7 +92,7 @@ where
     T: Serialize,
 {
     /// Convert to bytes.
-    pub fn to_bytes(self) -> Result<Vec<u8>, ViewError> {
+    pub fn into_bytes(self) -> Result<Vec<u8>, ViewError> {
         match self {
             ValueOrBytes::Value(value) => Ok(bcs::to_bytes(value)?),
             ValueOrBytes::Bytes(bytes) => Ok(bytes),
@@ -613,7 +613,7 @@ where
     /// shortened one by the prefix. The value is an enum that can be either a value
     /// or its serialization. This is needed in order to avoid a scenario where we
     /// deserialize something that was serialized. The key/value are send to the
-    /// function f. If it returns false the the loop ends prematurely. Keys and values
+    /// function f. If it returns false the loop ends prematurely. Keys and values
     /// are visited in the lexicographic order.
     async fn for_each_key_value_or_bytes_while<'a, F>(
         &'a self,
@@ -706,13 +706,13 @@ where
     /// assert_eq!(part_keys.len(), 2);
     /// # })
     /// ```
-    pub async fn for_each_key_value_while<F>(
-        &self,
+    pub async fn for_each_key_value_while<'a, F>(
+        &'a self,
         mut f: F,
         prefix: Vec<u8>,
     ) -> Result<(), ViewError>
     where
-        F: FnMut(&[u8], V) -> Result<bool, ViewError> + Send,
+        F: FnMut(&[u8], Cow<'a, V>) -> Result<bool, ViewError> + Send,
     {
         self.for_each_key_value_or_bytes_while(
             |key, value| {
@@ -772,9 +772,13 @@ where
     /// assert_eq!(count, 1);
     /// # })
     /// ```
-    pub async fn for_each_key_value<F>(&self, mut f: F, prefix: Vec<u8>) -> Result<(), ViewError>
+    pub async fn for_each_key_value<'a, F>(
+        &'a self,
+        mut f: F,
+        prefix: Vec<u8>,
+    ) -> Result<(), ViewError>
     where
-        F: FnMut(&[u8], V) -> Result<(), ViewError> + Send,
+        F: FnMut(&[u8], Cow<'a, V>) -> Result<(), ViewError> + Send,
     {
         self.for_each_key_value_while(
             |key, value| {
@@ -820,6 +824,7 @@ where
             |key, value| {
                 let mut big_key = prefix.clone();
                 big_key.extend(key);
+                let value = value.into_owned();
                 key_values.push((big_key, value));
                 Ok(())
             },
@@ -917,13 +922,13 @@ where
         #[cfg(with_metrics)]
         let _hash_latency = MAP_VIEW_HASH_RUNTIME.measure_latency();
         let mut hasher = sha3::Sha3_256::default();
-        let mut count = 0;
+        let mut count = 0u32;
         let prefix = Vec::new();
         self.for_each_key_value_or_bytes(
             |index, value| {
                 count += 1;
                 hasher.update_with_bytes(index)?;
-                let bytes = value.to_bytes()?;
+                let bytes = value.into_bytes()?;
                 hasher.update_with_bytes(&bytes)?;
                 Ok(())
             },
@@ -1275,9 +1280,9 @@ where
     /// assert_eq!(values.len(), 2);
     /// # })
     /// ```
-    pub async fn for_each_index_value_while<F>(&self, mut f: F) -> Result<(), ViewError>
+    pub async fn for_each_index_value_while<'a, F>(&'a self, mut f: F) -> Result<(), ViewError>
     where
-        F: FnMut(I, V) -> Result<bool, ViewError> + Send,
+        F: FnMut(I, Cow<'a, V>) -> Result<bool, ViewError> + Send,
     {
         let prefix = Vec::new();
         self.map
@@ -1312,9 +1317,9 @@ where
     /// assert_eq!(count, 1);
     /// # })
     /// ```
-    pub async fn for_each_index_value<F>(&self, mut f: F) -> Result<(), ViewError>
+    pub async fn for_each_index_value<'a, F>(&'a self, mut f: F) -> Result<(), ViewError>
     where
-        F: FnMut(I, V) -> Result<(), ViewError> + Send,
+        F: FnMut(I, Cow<'a, V>) -> Result<(), ViewError> + Send,
     {
         let prefix = Vec::new();
         self.map
@@ -1356,6 +1361,7 @@ where
     pub async fn index_values(&self) -> Result<Vec<(I, V)>, ViewError> {
         let mut key_values = Vec::new();
         self.for_each_index_value(|index, value| {
+            let value = value.into_owned();
             key_values.push((index, value));
             Ok(())
         })
@@ -1771,9 +1777,9 @@ where
     /// assert_eq!(values.len(), 2);
     /// # })
     /// ```
-    pub async fn for_each_index_value_while<F>(&self, mut f: F) -> Result<(), ViewError>
+    pub async fn for_each_index_value_while<'a, F>(&'a self, mut f: F) -> Result<(), ViewError>
     where
-        F: FnMut(I, V) -> Result<bool, ViewError> + Send,
+        F: FnMut(I, Cow<'a, V>) -> Result<bool, ViewError> + Send,
     {
         let prefix = Vec::new();
         self.map
@@ -1809,9 +1815,9 @@ where
     /// assert_eq!(indices, vec![34, 37]);
     /// # })
     /// ```
-    pub async fn for_each_index_value<F>(&self, mut f: F) -> Result<(), ViewError>
+    pub async fn for_each_index_value<'a, F>(&'a self, mut f: F) -> Result<(), ViewError>
     where
-        F: FnMut(I, V) -> Result<(), ViewError> + Send,
+        F: FnMut(I, Cow<'a, V>) -> Result<(), ViewError> + Send,
     {
         let prefix = Vec::new();
         self.map
@@ -1853,6 +1859,7 @@ where
     pub async fn index_values(&self) -> Result<Vec<(I, V)>, ViewError> {
         let mut key_values = Vec::new();
         self.for_each_index_value(|index, value| {
+            let value = value.into_owned();
             key_values.push((index, value));
             Ok(())
         })

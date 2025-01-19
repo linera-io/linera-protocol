@@ -10,11 +10,12 @@ use futures::StreamExt;
 use linera_base::{
     crypto::*,
     data_types::*,
-    identifiers::{Account, AccountOwner, BlobId, BlobType, ChainId, MessageId, Owner},
+    identifiers::{Account, AccountOwner, ChainId, MessageId, Owner},
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_chain::{
     data_types::{IncomingBundle, Medium, MessageBundle, Origin, PostedMessage},
+    manager::LockedBlock,
     types::Timeout,
     ChainError, ChainExecutionContext,
 };
@@ -1292,10 +1293,7 @@ where
         .await?;
 
     let blob0_bytes = b"blob0".to_vec();
-    let blob0_id = BlobId::new(
-        CryptoHash::new(&BlobBytes(blob0_bytes.clone())),
-        BlobType::Data,
-    );
+    let blob0_id = Blob::new(BlobContent::new_data(blob0_bytes.clone())).id();
 
     // Try to read a blob without publishing it first, should fail
     let result = client1_a
@@ -1377,10 +1375,13 @@ where
     // We make validator 3 (who does not have the block proposal) process the validated block.
     let info2_a = client2_a.chain_info_with_manager_values().await?;
     let locked = *info2_a.manager.requested_locked.unwrap();
+    let LockedBlock::Regular(validated) = locked else {
+        panic!("Unexpected locked fast block.");
+    };
     let blobs = vec![blob1];
     let response = builder
         .node(3)
-        .handle_validated_certificate(locked.clone(), blobs)
+        .handle_validated_certificate(validated.clone(), blobs)
         .await?;
     assert_eq!(
         response.info.manager.pending.unwrap().round,
@@ -1390,7 +1391,10 @@ where
     // Client 2B should be able to synchronize the locked block and the blobs from validator 3.
     client2_b.synchronize_from_validators().await.unwrap();
     let info2_b = client2_b.chain_info_with_manager_values().await?;
-    assert_eq!(locked, *info2_b.manager.requested_locked.unwrap());
+    assert_eq!(
+        LockedBlock::Regular(validated),
+        *info2_b.manager.requested_locked.unwrap()
+    );
     let bt_certificate = client2_b
         .burn(None, Amount::from_tokens(1))
         .await
@@ -1467,10 +1471,7 @@ where
     builder.set_fault_type([3], FaultType::Offline).await;
 
     let blob0_bytes = b"blob0".to_vec();
-    let blob0_id = BlobId::new(
-        CryptoHash::new(&BlobBytes(blob0_bytes.clone())),
-        BlobType::Data,
-    );
+    let blob0_id = Blob::new(BlobContent::new_data(blob0_bytes.clone())).id();
 
     // Publish blob on chain 1
     let publish_certificate = client1
@@ -1611,10 +1612,7 @@ where
     builder.set_fault_type([3], FaultType::Offline).await;
 
     let blob0_bytes = b"blob0".to_vec();
-    let blob0_id = BlobId::new(
-        CryptoHash::new(&BlobBytes(blob0_bytes.clone())),
-        BlobType::Data,
-    );
+    let blob0_id = Blob::new(BlobContent::new_data(blob0_bytes.clone())).id();
 
     client1.synchronize_from_validators().await.unwrap();
     // Publish blob0 on chain 1
@@ -1628,10 +1626,7 @@ where
         .requires_blob(&blob0_id));
 
     let blob2_bytes = b"blob2".to_vec();
-    let blob2_id = BlobId::new(
-        CryptoHash::new(&BlobBytes(blob2_bytes.clone())),
-        BlobType::Data,
-    );
+    let blob2_id = Blob::new(BlobContent::new_data(blob2_bytes.clone())).id();
 
     client2.synchronize_from_validators().await.unwrap();
     // Publish blob2 on chain 2
@@ -1677,7 +1672,10 @@ where
     // Validator 2 may or may not have processed the validated block before the update was
     // canceled due to the errors from the faulty validators. Submit it again to make sure
     // it's there, so that client 2 can download and re-propose it later.
-    let validated_block_certificate = *manager.requested_locked.unwrap();
+    let locked = *manager.requested_locked.unwrap();
+    let LockedBlock::Regular(validated_block_certificate) = locked else {
+        panic!("Unexpected locked fast block.");
+    };
     let resubmission_result = builder
         .node(2)
         .handle_validated_certificate(validated_block_certificate, vec![blob1])
@@ -1702,13 +1700,12 @@ where
         );
 
         if i == 2 {
+            let locked = *validator_manager.requested_locked.unwrap();
+            let LockedBlock::Regular(validated) = locked else {
+                panic!("Unexpected locked fast block.");
+            };
             assert_eq!(
-                validator_manager
-                    .requested_locked
-                    .unwrap()
-                    .executed_block()
-                    .block
-                    .operations,
+                validated.executed_block().block.operations,
                 blob_0_1_operations,
             );
         } else {
@@ -1745,7 +1742,10 @@ where
     // Validator 3 may or may not have processed the validated block before the update was
     // canceled due to the errors from the faulty validators. Submit it again to make sure
     // it's there, so that client 2 can download and re-propose it later.
-    let validated_block_certificate = *manager.requested_locked.unwrap();
+    let locked = *manager.requested_locked.unwrap();
+    let LockedBlock::Regular(validated_block_certificate) = locked else {
+        panic!("Unexpected locked fast block.");
+    };
     let resubmission_result = builder
         .node(3)
         .handle_validated_certificate(validated_block_certificate, vec![blob3])
@@ -1767,13 +1767,12 @@ where
             .operations,
         blob_2_3_operations,
     );
+    let locked = *validator_manager.requested_locked.unwrap();
+    let LockedBlock::Regular(validated) = locked else {
+        panic!("Unexpected locked fast block.");
+    };
     assert_eq!(
-        validator_manager
-            .requested_locked
-            .unwrap()
-            .executed_block()
-            .block
-            .operations,
+        validated.executed_block().block.operations,
         blob_2_3_operations,
     );
 
@@ -2008,7 +2007,7 @@ where
         .unwrap()
         .manager;
     assert_eq!(
-        manager.requested_locked.unwrap().round,
+        manager.requested_locked.unwrap().round(),
         Round::MultiLeader(1)
     );
     assert!(client0.pending_block().is_some());
@@ -2124,7 +2123,10 @@ where
     // Validator 0 may or may not have processed the validated block before the update was
     // canceled due to the errors from the faulty validators. Submit it again to make sure
     // it's there, so that client 1 can download and re-propose it later.
-    let validated_block_certificate = *manager.requested_locked.unwrap();
+    let locked = *manager.requested_locked.unwrap();
+    let LockedBlock::Regular(validated_block_certificate) = locked else {
+        panic!("Unexpected locked fast block.");
+    };
     builder
         .node(0)
         .handle_validated_certificate(validated_block_certificate, Vec::new())
@@ -2161,7 +2163,7 @@ where
         .unwrap()
         .manager;
     assert_eq!(
-        manager.requested_locked.unwrap().round,
+        manager.requested_locked.unwrap().round(),
         Round::MultiLeader(0)
     );
     assert_eq!(manager.current_round, Round::MultiLeader(1));
@@ -2266,10 +2268,7 @@ where
     builder.set_fault_type([3], FaultType::Offline).await;
 
     // Publish a blob on chain 1.
-    let blob_id = BlobId::new(
-        CryptoHash::new(&BlobBytes(blob_bytes.clone())),
-        BlobType::Data,
-    );
+    let blob_id = Blob::new(BlobContent::new_data(blob_bytes.clone())).id();
     let certificate = client1
         .publish_data_blob(blob_bytes)
         .await

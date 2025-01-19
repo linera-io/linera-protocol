@@ -92,7 +92,7 @@ impl<T> DirectKeyValueStore for T where
 }
 
 /// The header that contains the current state of the journal.
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Serialize, Deserialize, Debug, Default)]
 struct JournalHeader {
     block_count: u32,
 }

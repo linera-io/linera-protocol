@@ -94,20 +94,19 @@ impl ValidatorNode for Client {
     async fn handle_confirmed_certificate(
         &self,
         certificate: ConfirmedBlockCertificate,
-        blobs: Vec<Blob>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
         match self {
             Client::Grpc(grpc_client) => {
                 grpc_client
-                    .handle_confirmed_certificate(certificate, blobs, delivery)
+                    .handle_confirmed_certificate(certificate, delivery)
                     .await
             }
 
             #[cfg(with_simple_network)]
             Client::Simple(simple_client) => {
                 simple_client
-                    .handle_confirmed_certificate(certificate, blobs, delivery)
+                    .handle_confirmed_certificate(certificate, delivery)
                     .await
             }
         }
@@ -173,12 +172,40 @@ impl ValidatorNode for Client {
         })
     }
 
-    async fn download_blob_content(&self, blob_id: BlobId) -> Result<BlobContent, NodeError> {
+    async fn upload_blob(&self, content: BlobContent) -> Result<BlobId, NodeError> {
         Ok(match self {
-            Client::Grpc(grpc_client) => grpc_client.download_blob_content(blob_id).await?,
+            Client::Grpc(grpc_client) => grpc_client.upload_blob(content).await?,
 
             #[cfg(with_simple_network)]
-            Client::Simple(simple_client) => simple_client.download_blob_content(blob_id).await?,
+            Client::Simple(simple_client) => simple_client.upload_blob(content).await?,
+        })
+    }
+
+    async fn download_blob(&self, blob_id: BlobId) -> Result<BlobContent, NodeError> {
+        Ok(match self {
+            Client::Grpc(grpc_client) => grpc_client.download_blob(blob_id).await?,
+
+            #[cfg(with_simple_network)]
+            Client::Simple(simple_client) => simple_client.download_blob(blob_id).await?,
+        })
+    }
+
+    async fn download_pending_blob(
+        &self,
+        chain_id: ChainId,
+        blob_id: BlobId,
+    ) -> Result<BlobContent, NodeError> {
+        Ok(match self {
+            Client::Grpc(grpc_client) => {
+                grpc_client.download_pending_blob(chain_id, blob_id).await?
+            }
+
+            #[cfg(with_simple_network)]
+            Client::Simple(simple_client) => {
+                simple_client
+                    .download_pending_blob(chain_id, blob_id)
+                    .await?
+            }
         })
     }
 

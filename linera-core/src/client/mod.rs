@@ -32,6 +32,7 @@ use linera_base::{
         Amount, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, Round, Timestamp,
     },
     ensure,
+    hashed::Hashed,
     identifiers::{
         Account, AccountOwner, ApplicationId, BlobId, BlobType, BytecodeId, ChainId, MessageId,
         Owner, UserApplicationId,
@@ -43,9 +44,11 @@ use linera_chain::{
         Block, BlockProposal, ChainAndHeight, ExecutedBlock, IncomingBundle, LiteVote,
         MessageAction,
     },
+    manager::LockedBlock,
     types::{
-        CertificateValueT, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate, Hashed,
-        LiteCertificate, Timeout, TimeoutCertificate, ValidatedBlock, ValidatedBlockCertificate,
+        CertificateKind, CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate,
+        GenericCertificate, LiteCertificate, Timeout, TimeoutCertificate, ValidatedBlock,
+        ValidatedBlockCertificate,
     },
     ChainError, ChainExecutionContext, ChainStateView,
 };
@@ -156,6 +159,9 @@ where
     message_policy: MessagePolicy,
     /// Whether to block on cross-chain message delivery.
     cross_chain_message_delivery: CrossChainMessageDelivery,
+    /// An additional delay, after reaching a quorum, to wait for additional validator signatures,
+    /// as a fraction of time taken to reach quorum.
+    grace_period: f64,
     /// Chains that should be tracked by the client.
     // TODO(#2412): Merge with set of chains the client is receiving notifications from validators
     tracked_chains: Arc<RwLock<HashSet<ChainId>>>,
@@ -183,6 +189,7 @@ impl<P, S: Storage + Clone> Client<P, S> {
         tracked_chains: impl IntoIterator<Item = ChainId>,
         name: impl Into<String>,
         max_loaded_chains: NonZeroUsize,
+        grace_period: f64,
     ) -> Self {
         let tracked_chains = Arc::new(RwLock::new(tracked_chains.into_iter().collect()));
         let state = WorkerState::new_for_client(
@@ -203,6 +210,7 @@ impl<P, S: Storage + Clone> Client<P, S> {
             max_pending_message_bundles,
             message_policy: MessagePolicy::new(BlanketMessagePolicy::Accept, None),
             cross_chain_message_delivery,
+            grace_period,
             tracked_chains,
             notifier: Arc::new(ChannelNotifier::default()),
             storage,
@@ -266,6 +274,7 @@ impl<P, S: Storage + Clone> Client<P, S> {
                 max_pending_message_bundles: self.max_pending_message_bundles,
                 message_policy: self.message_policy.clone(),
                 cross_chain_message_delivery: self.cross_chain_message_delivery,
+                grace_period: self.grace_period,
             },
         }
     }
@@ -388,9 +397,24 @@ where
         certificate: GenericCertificate<T>,
         blobs: Vec<Blob>,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
-        self.local_node
-            .handle_certificate(certificate, blobs, &self.notifier)
-            .await
+        if T::KIND == CertificateKind::Confirmed {
+            let result = self
+                .local_node
+                .handle_certificate(certificate.clone(), vec![], &self.notifier)
+                .await;
+            if let Err(LocalNodeError::BlobsNotFound(_)) = &result {
+                self.local_node.store_blobs(&blobs).await?;
+                return self
+                    .local_node
+                    .handle_certificate(certificate, vec![], &self.notifier)
+                    .await;
+            }
+            result
+        } else {
+            self.local_node
+                .handle_certificate(certificate, blobs, &self.notifier)
+                .await
+        }
     }
 }
 
@@ -464,6 +488,9 @@ pub struct ChainClientOptions {
     pub message_policy: MessagePolicy,
     /// Whether to block on cross-chain message delivery.
     pub cross_chain_message_delivery: CrossChainMessageDelivery,
+    /// An additional delay, after reaching a quorum, to wait for additional validator signatures,
+    /// as a fraction of time taken to reach quorum.
+    pub grace_period: f64,
 }
 
 /// Client to operate a chain by interacting with validators and the given local storage
@@ -1110,6 +1137,7 @@ where
                         .await
                 })
             },
+            self.options.grace_period,
         )
         .await?;
         Ok(())
@@ -1121,7 +1149,7 @@ where
     /// In that case, it verifies that the validator votes are for the provided value,
     /// and returns a certificate.
     #[instrument(level = "trace", skip(committee, action, value))]
-    async fn communicate_chain_action<T: CertificateValueT>(
+    async fn communicate_chain_action<T: CertificateValue>(
         &self,
         committee: &Committee,
         action: CommunicateAction,
@@ -1145,6 +1173,7 @@ where
                 let action = action.clone();
                 Box::pin(async move { updater.send_chain_update(action).await })
             },
+            self.options.grace_period,
         )
         .await?;
         ensure!(
@@ -1515,6 +1544,7 @@ where
                         .await
                 })
             },
+            self.options.grace_period,
         )
         .await;
         let received_certificate_batches = match result {
@@ -1672,6 +1702,7 @@ where
                         .await
                 }
             },
+            self.options.grace_period,
         )
         .await?;
 
@@ -1734,17 +1765,65 @@ where
                 break;
             }
         }
-        if let Some(cert) = info.manager.requested_locked {
-            let hash = cert.hash();
-            let blobs = info.manager.locked_blobs.clone();
-            if let Err(err) = self.client.handle_certificate(*cert.clone(), blobs).await {
-                warn!(
-                    "Skipping certificate {hash} from validator {}: {err}",
-                    remote_node.name
-                );
+        if let Some(locked) = info.manager.requested_locked {
+            match *locked {
+                LockedBlock::Fast(proposal) => {
+                    let owner = proposal.owner;
+                    while let Err(original_err) = self
+                        .client
+                        .local_node
+                        .handle_block_proposal(proposal.clone())
+                        .await
+                    {
+                        if let LocalNodeError::BlobsNotFound(blob_ids) = &original_err {
+                            self.update_local_node_with_blobs_from(blob_ids.clone(), remote_node)
+                                .await?;
+                            continue; // We found the missing blobs: retry.
+                        }
+
+                        warn!(
+                            "Skipping proposal from {} and validator {}: {}",
+                            owner, remote_node.name, original_err
+                        );
+                        break;
+                    }
+                }
+                LockedBlock::Regular(cert) => {
+                    let hash = cert.hash();
+                    if let Err(err) = self.try_process_locked_block_from(remote_node, cert).await {
+                        warn!(
+                            "Skipping certificate {hash} from validator {}: {err}",
+                            remote_node.name
+                        );
+                    }
+                }
             }
         }
         Ok(())
+    }
+
+    async fn try_process_locked_block_from(
+        &self,
+        remote_node: &RemoteNode<P::Node>,
+        certificate: GenericCertificate<ValidatedBlock>,
+    ) -> Result<(), ChainClientError> {
+        let chain_id = certificate.inner().chain_id();
+        match self.process_certificate(certificate.clone(), vec![]).await {
+            Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
+                let mut blobs = Vec::new();
+                for blob_id in blob_ids {
+                    let blob_content = remote_node
+                        .node
+                        .download_pending_blob(chain_id, blob_id)
+                        .await?;
+                    blobs.push(Blob::new(blob_content));
+                }
+                self.process_certificate(certificate, blobs).await?;
+                Ok(())
+            }
+            Err(err) => Err(err.into()),
+            Ok(()) => Ok(()),
+        }
     }
 
     /// Downloads and processes from the specified validator a confirmed block certificates that
@@ -1902,12 +1981,7 @@ where
 
             let maybe_blob = {
                 let chain_state_view = self.chain_state_view().await?;
-                chain_state_view
-                    .manager
-                    .get()
-                    .locked_blobs
-                    .get(&blob_id)
-                    .cloned()
+                chain_state_view.manager.locked_blobs.get(&blob_id).await?
             };
 
             if let Some(blob) = maybe_blob {
@@ -2350,28 +2424,26 @@ where
         let info = self.request_leader_timeout_if_needed().await?;
 
         // If there is a validated block in the current round, finalize it.
-        if info.manager.has_locked_block_in_current_round() {
+        if info.manager.has_locked_block_in_current_round() && !info.manager.current_round.is_fast()
+        {
             return self.finalize_locked_block(info).await;
         }
 
         // Otherwise we have to re-propose the highest validated block, if there is one.
-        let executed_block = if let Some(certificate) = &info.manager.requested_locked {
-            certificate.executed_block().clone()
-        } else {
-            let block = if let Some(proposal) = info
-                .manager
-                .requested_proposed
-                .as_ref()
-                .filter(|proposal| proposal.content.round.is_fast())
-            {
-                // The fast block counts as "locked", too. If there is one, re-propose that.
-                proposal.content.block.clone()
-            } else if let Some(block) = self.state().pending_block() {
-                block.clone() // Otherwise we are free to propose our own pending block.
-            } else {
-                return Ok(ClientOutcome::Committed(None)); // Nothing to do.
-            };
+        let pending: Option<Block> = self.state().pending_block().clone();
+        let executed_block = if let Some(locked) = &info.manager.requested_locked {
+            match &**locked {
+                LockedBlock::Regular(certificate) => certificate.executed_block().clone(),
+                LockedBlock::Fast(proposal) => {
+                    let block = proposal.content.block.clone();
+                    self.stage_block_execution(block).await?.0
+                }
+            }
+        } else if let Some(block) = pending {
+            // Otherwise we are free to propose our own pending block.
             self.stage_block_execution(block).await?.0
+        } else {
+            return Ok(ClientOutcome::Committed(None)); // Nothing to do.
         };
 
         let identity = self.identity().await?;
@@ -2386,8 +2458,15 @@ where
         let already_handled_locally = info.manager.already_handled_proposal(round, block);
         let key_pair = self.key_pair().await?;
         // Create the final block proposal.
-        let proposal = if let Some(cert) = info.manager.requested_locked {
-            Box::new(BlockProposal::new_retry(round, *cert, &key_pair, blobs))
+        let proposal = if let Some(locked) = info.manager.requested_locked {
+            Box::new(match *locked {
+                LockedBlock::Regular(cert) => {
+                    BlockProposal::new_retry(round, cert, &key_pair, blobs)
+                }
+                LockedBlock::Fast(proposal) => {
+                    BlockProposal::new_initial(round, proposal.content.block, &key_pair, blobs)
+                }
+            })
         } else {
             let block = executed_block.block.clone();
             Box::new(BlockProposal::new_initial(round, block, &key_pair, blobs))
@@ -2440,12 +2519,15 @@ where
         &self,
         info: Box<ChainInfo>,
     ) -> Result<ClientOutcome<Option<ConfirmedBlockCertificate>>, ChainClientError> {
-        let certificate = info
+        let locked = info
             .manager
             .requested_locked
             .expect("Should have a locked block");
+        let LockedBlock::Regular(certificate) = *locked else {
+            panic!("Should have a locked validated block");
+        };
         let committee = self.local_committee().await?;
-        match self.finalize_block(&committee, *certificate.clone()).await {
+        match self.finalize_block(&committee, certificate.clone()).await {
             Ok(certificate) => Ok(ClientOutcome::Committed(Some(certificate))),
             Err(ChainClientError::CommunicationError(error)) => {
                 // Communication errors in this case often mean that someone else already

@@ -10,7 +10,7 @@ use crate::simple;
 
 #[derive(Clone, Debug, clap::Parser)]
 pub struct CrossChainConfig {
-    /// Number of cross-chains messages allowed before dropping them.
+    /// Number of cross-chain messages allowed before dropping them.
     #[arg(long = "cross-chain-queue-size", default_value = "1000")]
     pub(crate) queue_size: usize,
 
@@ -112,7 +112,7 @@ pub struct ValidatorInternalNetworkPreConfig<P> {
     pub shards: Vec<ShardConfig>,
     /// The host name of the proxy on the internal network (IP or hostname).
     pub host: String,
-    /// The port the proxy listens on on the internal network.
+    /// The port the proxy listens on the internal network.
     pub port: u16,
     /// The host name of the proxy's metrics endpoint.
     pub metrics_host: String,

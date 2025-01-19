@@ -32,10 +32,7 @@ use {
 };
 
 use super::{
-    api::{
-        self, chain_info_result::Inner, validator_node_client::ValidatorNodeClient,
-        SubscriptionRequest,
-    },
+    api::{self, validator_node_client::ValidatorNodeClient, SubscriptionRequest},
     transport, GRPC_MAX_MESSAGE_SIZE,
 };
 use crate::{
@@ -146,22 +143,40 @@ impl GrpcClient {
     fn try_into_chain_info(
         result: api::ChainInfoResult,
     ) -> Result<linera_core::data_types::ChainInfoResponse, NodeError> {
-        let inner = result.inner.ok_or(NodeError::GrpcError {
+        let inner = result.inner.ok_or_else(|| NodeError::GrpcError {
             error: "missing body from response".to_string(),
         })?;
         match inner {
-            Inner::ChainInfoResponse(response) => {
+            api::chain_info_result::Inner::ChainInfoResponse(response) => {
                 Ok(response.try_into().map_err(|err| NodeError::GrpcError {
                     error: format!("failed to unmarshal response: {}", err),
                 })?)
             }
-            Inner::Error(error) => {
-                Err(
-                    bincode::deserialize(&error).map_err(|err| NodeError::GrpcError {
-                        error: format!("failed to unmarshal error message: {}", err),
-                    })?,
-                )
+            api::chain_info_result::Inner::Error(error) => Err(bincode::deserialize(&error)
+                .map_err(|err| NodeError::GrpcError {
+                    error: format!("failed to unmarshal error message: {}", err),
+                })?),
+        }
+    }
+}
+
+impl TryFrom<api::PendingBlobResult> for BlobContent {
+    type Error = NodeError;
+
+    fn try_from(result: api::PendingBlobResult) -> Result<Self, Self::Error> {
+        let inner = result.inner.ok_or_else(|| NodeError::GrpcError {
+            error: "missing body from response".to_string(),
+        })?;
+        match inner {
+            api::pending_blob_result::Inner::Blob(blob) => {
+                Ok(blob.try_into().map_err(|err| NodeError::GrpcError {
+                    error: format!("failed to unmarshal response: {}", err),
+                })?)
             }
+            api::pending_blob_result::Inner::Error(error) => Err(bincode::deserialize(&error)
+                .map_err(|err| NodeError::GrpcError {
+                    error: format!("failed to unmarshal error message: {}", err),
+                })?),
         }
     }
 }
@@ -207,13 +222,11 @@ impl ValidatorNode for GrpcClient {
     async fn handle_confirmed_certificate(
         &self,
         certificate: GenericCertificate<ConfirmedBlock>,
-        blobs: Vec<Blob>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<linera_core::data_types::ChainInfoResponse, NodeError> {
         let wait_for_outgoing_messages: bool = delivery.wait_for_outgoing_messages();
         let request = HandleConfirmedCertificateRequest {
             certificate,
-            blobs,
             wait_for_outgoing_messages,
         };
         GrpcClient::try_into_chain_info(client_delegate!(
@@ -350,9 +363,25 @@ impl ValidatorNode for GrpcClient {
     }
 
     #[instrument(target = "grpc_client", skip(self), err, fields(address = self.address))]
-    async fn download_blob_content(&self, blob_id: BlobId) -> Result<BlobContent, NodeError> {
+    async fn upload_blob(&self, content: BlobContent) -> Result<BlobId, NodeError> {
+        let req = api::BlobContent::try_from(content)?;
+        Ok(client_delegate!(self, upload_blob, req)?.try_into()?)
+    }
+
+    #[instrument(target = "grpc_client", skip(self), err, fields(address = self.address))]
+    async fn download_blob(&self, blob_id: BlobId) -> Result<BlobContent, NodeError> {
         let req = api::BlobId::try_from(blob_id)?;
-        Ok(client_delegate!(self, download_blob_content, req)?.try_into()?)
+        Ok(client_delegate!(self, download_blob, req)?.try_into()?)
+    }
+
+    #[instrument(target = "grpc_client", skip(self), err, fields(address = self.address))]
+    async fn download_pending_blob(
+        &self,
+        chain_id: ChainId,
+        blob_id: BlobId,
+    ) -> Result<BlobContent, NodeError> {
+        let req = api::PendingBlobRequest::try_from((chain_id, blob_id))?;
+        client_delegate!(self, download_pending_blob, req)?.try_into()
     }
 
     #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
@@ -455,12 +484,12 @@ impl mass_client::MassClient for GrpcClient {
                         .inner
                         .ok_or(GrpcProtoConversionError::MissingField)?
                     {
-                        Inner::ChainInfoResponse(chain_info_response) => {
+                        api::chain_info_result::Inner::ChainInfoResponse(chain_info_response) => {
                             Ok(Some(RpcMessage::ChainInfoResponse(Box::new(
                                 chain_info_response.try_into()?,
                             ))))
                         }
-                        Inner::Error(error) => {
+                        api::chain_info_result::Inner::Error(error) => {
                             let error = bincode::deserialize::<NodeError>(&error)
                                 .map_err(GrpcProtoConversionError::BincodeError)?;
                             tracing::error!(?error, "received error response");

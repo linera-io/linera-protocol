@@ -226,6 +226,7 @@ impl TestView for TestMapView<MemoryContext<()>> {
         let mut state = HashMap::new();
         self.map
             .for_each_index_value(|key, value| {
+                let value = value.into_owned();
                 state.insert(key, value);
                 Ok(())
             })

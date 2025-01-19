@@ -71,7 +71,6 @@ pub trait ValidatorNode {
     async fn handle_confirmed_certificate(
         &self,
         certificate: GenericCertificate<ConfirmedBlock>,
-        blobs: Vec<Blob>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError>;
 
@@ -103,7 +102,19 @@ pub trait ValidatorNode {
     /// Subscribes to receiving notifications for a collection of chains.
     async fn subscribe(&self, chains: Vec<ChainId>) -> Result<Self::NotificationStream, NodeError>;
 
-    async fn download_blob_content(&self, blob_id: BlobId) -> Result<BlobContent, NodeError>;
+    // Uploads a blob. Returns an error if the validator has not seen a
+    // certificate using this blob.
+    async fn upload_blob(&self, content: BlobContent) -> Result<BlobId, NodeError>;
+
+    /// Downloads a blob. Returns an error if the validator does not have the blob.
+    async fn download_blob(&self, blob_id: BlobId) -> Result<BlobContent, NodeError>;
+
+    /// Downloads a blob that belongs to a pending proposal or the locked block on a chain.
+    async fn download_pending_blob(
+        &self,
+        chain_id: ChainId,
+        blob_id: BlobId,
+    ) -> Result<BlobContent, NodeError>;
 
     async fn download_certificate(
         &self,
@@ -202,7 +213,7 @@ pub enum NodeError {
     #[error("We don't have the value for the certificate.")]
     MissingCertificateValue,
 
-    #[error("Reponse doesn't contain requested ceritifcates: {0:?}")]
+    #[error("Response doesn't contain requested ceritifcates: {0:?}")]
     MissingCertificates(Vec<CryptoHash>),
 
     #[error("Validator's response to block proposal failed to include a vote")]

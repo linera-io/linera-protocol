@@ -15,15 +15,14 @@ use axum::{extract::Path, http::StatusCode, response, response::IntoResponse, Ex
 use futures::{lock::Mutex, Future};
 use linera_base::{
     crypto::{CryptoError, CryptoHash, PublicKey},
-    data_types::{
-        Amount, ApplicationPermissions, BlobBytes, Bytecode, TimeDelta, UserApplicationDescription,
-    },
+    data_types::{Amount, ApplicationPermissions, Bytecode, TimeDelta, UserApplicationDescription},
+    hashed::Hashed,
     identifiers::{ApplicationId, BytecodeId, ChainId, Owner, UserApplicationId},
     ownership::{ChainOwnership, TimeoutConfig},
     BcsHexParseError,
 };
 use linera_chain::{
-    types::{ConfirmedBlock, GenericCertificate, Hashed},
+    types::{ConfirmedBlock, GenericCertificate},
     ChainStateView,
 };
 use linera_client::chain_listener::{ChainListener, ChainListenerConfig, ClientContext};
@@ -37,6 +36,7 @@ use linera_execution::{
     system::{AdminOperation, Recipient, SystemChannel},
     Operation, Query, Response, SystemOperation,
 };
+use linera_sdk::base::BlobContent;
 use linera_storage::Storage;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -583,19 +583,15 @@ where
         chain_id: ChainId,
         bytes: Vec<u8>,
     ) -> Result<CryptoHash, Error> {
-        let hash = CryptoHash::new(&BlobBytes(bytes.clone()));
-        self.apply_client_command(&chain_id, move |client| {
+        self.apply_client_command(&chain_id, |client| {
             let bytes = bytes.clone();
             async move {
-                let result = client
-                    .publish_data_blob(bytes)
-                    .await
-                    .map_err(Error::from)
-                    .map(|outcome| outcome.map(|_| hash));
+                let result = client.publish_data_blob(bytes).await.map_err(Error::from);
                 (result, client)
             }
         })
         .await
+        .map(|_| CryptoHash::new(&BlobContent::new_data(bytes)))
     }
 
     /// Creates a new application.

@@ -5,13 +5,14 @@ use linera_base::{
     crypto::{CryptoError, CryptoHash, PublicKey, Signature},
     data_types::{BlobContent, BlockHeight},
     ensure,
+    hashed::Hashed,
     identifiers::{AccountOwner, BlobId, ChainId, Owner},
 };
 use linera_chain::{
     data_types::{BlockProposal, LiteValue, ProposalContent},
     types::{
-        Certificate, CertificateKind, ConfirmedBlock, ConfirmedBlockCertificate, Hashed,
-        LiteCertificate, Timeout, TimeoutCertificate, ValidatedBlock, ValidatedBlockCertificate,
+        Certificate, CertificateKind, ConfirmedBlock, ConfirmedBlockCertificate, LiteCertificate,
+        Timeout, TimeoutCertificate, ValidatedBlock, ValidatedBlockCertificate,
     },
 };
 use linera_core::{
@@ -23,7 +24,7 @@ use linera_execution::committee::ValidatorName;
 use thiserror::Error;
 use tonic::{Code, Status};
 
-use super::api;
+use super::api::{self, PendingBlobRequest};
 use crate::{
     HandleConfirmedCertificateRequest, HandleLiteCertRequest, HandleTimeoutCertificateRequest,
     HandleValidatedCertificateRequest,
@@ -397,11 +398,9 @@ impl TryFrom<api::HandleConfirmedCertificateRequest> for HandleConfirmedCertific
             certificate.inner().chain_id() == req_chain_id,
             GrpcProtoConversionError::InconsistentChainId
         );
-        let blobs = bincode::deserialize(&cert_request.blobs)?;
         Ok(HandleConfirmedCertificateRequest {
             certificate,
             wait_for_outgoing_messages: cert_request.wait_for_outgoing_messages,
-            blobs,
         })
     }
 }
@@ -413,7 +412,6 @@ impl TryFrom<HandleConfirmedCertificateRequest> for api::HandleConfirmedCertific
         Ok(Self {
             chain_id: Some(request.certificate.inner().chain_id().into()),
             certificate: Some(request.certificate.try_into()?),
-            blobs: bincode::serialize(&request.blobs)?,
             wait_for_outgoing_messages: request.wait_for_outgoing_messages,
         })
     }
@@ -692,6 +690,49 @@ impl TryFrom<api::ChainInfoResponse> for ChainInfoResponse {
     }
 }
 
+impl TryFrom<(ChainId, BlobId)> for api::PendingBlobRequest {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from((chain_id, blob_id): (ChainId, BlobId)) -> Result<Self, Self::Error> {
+        Ok(Self {
+            chain_id: Some(chain_id.into()),
+            blob_id: Some(blob_id.try_into()?),
+        })
+    }
+}
+
+impl TryFrom<api::PendingBlobRequest> for (ChainId, BlobId) {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(request: PendingBlobRequest) -> Result<Self, Self::Error> {
+        Ok((
+            try_proto_convert(request.chain_id)?,
+            try_proto_convert(request.blob_id)?,
+        ))
+    }
+}
+
+impl TryFrom<BlobContent> for api::PendingBlobResult {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(blob: BlobContent) -> Result<Self, Self::Error> {
+        Ok(Self {
+            inner: Some(api::pending_blob_result::Inner::Blob(blob.try_into()?)),
+        })
+    }
+}
+
+impl TryFrom<NodeError> for api::PendingBlobResult {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(node_error: NodeError) -> Result<Self, Self::Error> {
+        let error = bincode::serialize(&node_error)?;
+        Ok(api::PendingBlobResult {
+            inner: Some(api::pending_blob_result::Inner::Error(error)),
+        })
+    }
+}
+
 impl From<BlockHeight> for api::BlockHeight {
     fn from(block_height: BlockHeight) -> Self {
         Self {
@@ -910,7 +951,7 @@ pub mod tests {
 
     use linera_base::{
         crypto::{BcsSignable, CryptoHash, KeyPair},
-        data_types::{Amount, Round, Timestamp},
+        data_types::{Amount, Blob, Round, Timestamp},
     };
     use linera_chain::{
         data_types::{Block, BlockExecutionOutcome},
@@ -925,7 +966,7 @@ pub mod tests {
     #[derive(Debug, Serialize, Deserialize)]
     struct Foo(String);
 
-    impl BcsSignable for Foo {}
+    impl<'de> BcsSignable<'de> for Foo {}
 
     fn get_block() -> Block {
         make_first_block(ChainId::root(0))
@@ -1042,6 +1083,20 @@ pub mod tests {
             request_fallback: true,
         };
         round_trip_check::<_, api::ChainInfoQuery>(chain_info_query_some);
+    }
+
+    #[test]
+    pub fn test_pending_blob_request() {
+        let chain_id = ChainId::root(2);
+        let blob_id = Blob::new(BlobContent::new_data(*b"foo")).id();
+        let pending_blob_request = (chain_id, blob_id);
+        round_trip_check::<_, api::PendingBlobRequest>(pending_blob_request);
+    }
+
+    #[test]
+    pub fn test_pending_blob_result() {
+        let blob = BlobContent::new_data(*b"foo");
+        round_trip_check::<_, api::PendingBlobResult>(blob);
     }
 
     #[test]

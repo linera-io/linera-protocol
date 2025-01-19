@@ -54,18 +54,10 @@ ApplicationPermissions:
         SEQ:
           TYPENAME: ApplicationId
 BlobContent:
-  ENUM:
-    0:
-      Data:
-        NEWTYPE: BYTES
-    1:
-      ContractBytecode:
-        NEWTYPE:
-          TYPENAME: CompressedBytecode
-    2:
-      ServiceBytecode:
-        NEWTYPE:
-          TYPENAME: CompressedBytecode
+  STRUCT:
+    - blob_type:
+        TYPENAME: BlobType
+    - bytes: BYTES
 BlobId:
   STRUCT:
     - hash:
@@ -266,7 +258,7 @@ ChainManagerInfo:
           TYPENAME: BlockProposal
     - requested_locked:
         OPTION:
-          TYPENAME: ValidatedBlockCertificate
+          TYPENAME: LockedBlock
     - timeout:
         OPTION:
           TYPENAME: TimeoutCertificate
@@ -281,10 +273,10 @@ ChainManagerInfo:
           TYPENAME: LiteVote
     - requested_confirmed:
         OPTION:
-          TYPENAME: ConfirmedBlock
+          TYPENAME: ExecutedBlock
     - requested_validated:
         OPTION:
-          TYPENAME: ValidatedBlock
+          TYPENAME: ExecutedBlock
     - current_round:
         TYPENAME: Round
     - leader:
@@ -293,9 +285,6 @@ ChainManagerInfo:
     - round_timeout:
         OPTION:
           TYPENAME: Timestamp
-    - locked_blobs:
-        SEQ:
-          TYPENAME: BlobContent
 ChainOwnership:
   STRUCT:
     - super_owners:
@@ -339,17 +328,10 @@ Committee:
             TYPENAME: ValidatorState
     - policy:
         TYPENAME: ResourceControlPolicy
-CompressedBytecode:
-  STRUCT:
-    - compressed_bytes: BYTES
-ConfirmedBlock:
-  STRUCT:
-    - executed_block:
-        TYPENAME: ExecutedBlock
 ConfirmedBlockCertificate:
   STRUCT:
     - value:
-        TYPENAME: ConfirmedBlock
+        TYPENAME: ExecutedBlock
     - round:
         TYPENAME: Round
     - signatures:
@@ -433,9 +415,6 @@ HandleConfirmedCertificateRequest:
     - certificate:
         TYPENAME: ConfirmedBlockCertificate
     - wait_for_outgoing_messages: BOOL
-    - blobs:
-        SEQ:
-          TYPENAME: BlobContent
 HandleLiteCertRequest:
   STRUCT:
     - certificate:
@@ -489,6 +468,16 @@ LiteVote:
         TYPENAME: ValidatorName
     - signature:
         TYPENAME: Signature
+LockedBlock:
+  ENUM:
+    0:
+      Fast:
+        NEWTYPE:
+          TYPENAME: BlockProposal
+    1:
+      Regular:
+        NEWTYPE:
+          TYPENAME: ValidatedBlockCertificate
 Medium:
   ENUM:
     0:
@@ -816,74 +805,92 @@ RpcMessage:
         NEWTYPE:
           TYPENAME: ChainInfoQuery
     6:
-      DownloadBlobContent:
+      UploadBlob:
+        NEWTYPE:
+          TYPENAME: BlobContent
+    7:
+      DownloadBlob:
         NEWTYPE:
           TYPENAME: BlobId
-    7:
+    8:
+      DownloadPendingBlob:
+        NEWTYPE:
+          TUPLE:
+            - TYPENAME: ChainId
+            - TYPENAME: BlobId
+    9:
       DownloadConfirmedBlock:
         NEWTYPE:
           TYPENAME: CryptoHash
-    8:
+    10:
       DownloadCertificates:
         NEWTYPE:
           SEQ:
             TYPENAME: CryptoHash
-    9:
+    11:
       BlobLastUsedBy:
         NEWTYPE:
           TYPENAME: BlobId
-    10:
+    12:
       MissingBlobIds:
         NEWTYPE:
           SEQ:
             TYPENAME: BlobId
-    11:
-      VersionInfoQuery: UNIT
-    12:
-      GenesisConfigHashQuery: UNIT
     13:
+      VersionInfoQuery: UNIT
+    14:
+      GenesisConfigHashQuery: UNIT
+    15:
       Vote:
         NEWTYPE:
           TYPENAME: LiteVote
-    14:
+    16:
       ChainInfoResponse:
         NEWTYPE:
           TYPENAME: ChainInfoResponse
-    15:
+    17:
       Error:
         NEWTYPE:
           TYPENAME: NodeError
-    16:
+    18:
       VersionInfoResponse:
         NEWTYPE:
           TYPENAME: VersionInfo
-    17:
+    19:
       GenesisConfigHashResponse:
         NEWTYPE:
           TYPENAME: CryptoHash
-    18:
-      DownloadBlobContentResponse:
+    20:
+      UploadBlobResponse:
+        NEWTYPE:
+          TYPENAME: BlobId
+    21:
+      DownloadBlobResponse:
         NEWTYPE:
           TYPENAME: BlobContent
-    19:
+    22:
+      DownloadPendingBlobResponse:
+        NEWTYPE:
+          TYPENAME: BlobContent
+    23:
       DownloadConfirmedBlockResponse:
         NEWTYPE:
-          TYPENAME: ConfirmedBlock
-    20:
+          TYPENAME: ExecutedBlock
+    24:
       DownloadCertificatesResponse:
         NEWTYPE:
           SEQ:
             TYPENAME: ConfirmedBlockCertificate
-    21:
+    25:
       BlobLastUsedByResponse:
         NEWTYPE:
           TYPENAME: CryptoHash
-    22:
+    26:
       MissingBlobIdsResponse:
         NEWTYPE:
           SEQ:
             TYPENAME: BlobId
-    23:
+    27:
       CrossChainRequest:
         NEWTYPE:
           TYPENAME: CrossChainRequest
@@ -1109,14 +1116,10 @@ UserApplicationDescription:
     - required_application_ids:
         SEQ:
           TYPENAME: ApplicationId
-ValidatedBlock:
-  STRUCT:
-    - executed_block:
-        TYPENAME: ExecutedBlock
 ValidatedBlockCertificate:
   STRUCT:
     - value:
-        TYPENAME: ValidatedBlock
+        TYPENAME: ExecutedBlock
     - round:
         TYPENAME: Round
     - signatures:

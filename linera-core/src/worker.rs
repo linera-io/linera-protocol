@@ -18,6 +18,7 @@ use linera_base::{
         ArithmeticError, Blob, BlockHeight, DecompressionError, Round, UserApplicationDescription,
     },
     doc_scalar,
+    hashed::Hashed,
     identifiers::{BlobId, ChainId, Owner, UserApplicationId},
     time::timer::{sleep, timeout},
 };
@@ -26,7 +27,7 @@ use linera_chain::{
         Block, BlockExecutionOutcome, BlockProposal, ExecutedBlock, MessageBundle, Origin, Target,
     },
     types::{
-        CertificateValueT, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate, Hashed,
+        CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate,
         LiteCertificate, Timeout, TimeoutCertificate, ValidatedBlock, ValidatedBlockCertificate,
     },
     ChainError, ChainStateView,
@@ -96,7 +97,7 @@ static NUM_BLOCKS: LazyLock<IntCounterVec> = LazyLock::new(|| {
 static CERTIFICATES_SIGNED: LazyLock<IntCounterVec> = LazyLock::new(|| {
     register_int_counter_vec(
         "certificates_signed",
-        "Number of certificates signed by each validator",
+        "Number of confirmed block certificates signed by each validator",
         &["validator_name"],
     )
 });
@@ -432,7 +433,7 @@ where
 
 #[allow(async_fn_in_trait)]
 #[cfg_attr(not(web), trait_variant::make(Send))]
-pub trait ProcessableCertificate: CertificateValueT + Sized + 'static {
+pub trait ProcessableCertificate: CertificateValue + Sized + 'static {
     async fn process_certificate<S: Storage + Clone + Send + Sync + 'static>(
         worker: &WorkerState<S>,
         certificate: GenericCertificate<Self>,
@@ -444,11 +445,9 @@ impl ProcessableCertificate for ConfirmedBlock {
     async fn process_certificate<S: Storage + Clone + Send + Sync + 'static>(
         worker: &WorkerState<S>,
         certificate: ConfirmedBlockCertificate,
-        blobs: Vec<Blob>,
+        _blobs: Vec<Blob>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        worker
-            .handle_confirmed_certificate(certificate, blobs, None)
-            .await
+        worker.handle_confirmed_certificate(certificate, None).await
     }
 }
 
@@ -550,12 +549,11 @@ where
     /// Processes a confirmed block (aka a commit).
     #[instrument(
         level = "trace",
-        skip(self, certificate, blobs, notify_when_messages_are_delivered)
+        skip(self, certificate, notify_when_messages_are_delivered)
     )]
     async fn process_confirmed_block(
         &self,
         certificate: ConfirmedBlockCertificate,
-        blobs: &[Blob],
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         let chain_id = certificate.executed_block().block.chain_id;
@@ -564,7 +562,6 @@ where
             .query_chain_worker(chain_id, move |callback| {
                 ChainWorkerRequest::ProcessConfirmedBlock {
                     certificate,
-                    blobs: blobs.to_owned(),
                     notify_when_messages_are_delivered,
                     callback,
                 }
@@ -815,12 +812,8 @@ where
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         match self.full_certificate(certificate).await? {
             Either::Left(confirmed) => {
-                self.handle_confirmed_certificate(
-                    confirmed,
-                    vec![],
-                    notify_when_messages_are_delivered,
-                )
-                .await
+                self.handle_confirmed_certificate(confirmed, notify_when_messages_are_delivered)
+                    .await
             }
             Either::Right(validated) => self.handle_validated_certificate(validated, vec![]).await,
         }
@@ -835,7 +828,6 @@ where
     pub async fn handle_confirmed_certificate(
         &self,
         certificate: ConfirmedBlockCertificate,
-        blobs: Vec<Blob>,
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         trace!("{} <-- {:?}", self.nickname, certificate);
@@ -864,7 +856,7 @@ where
             }
         }
 
-        self.process_confirmed_block(certificate, &blobs, notify_when_messages_are_delivered)
+        self.process_confirmed_block(certificate, notify_when_messages_are_delivered)
             .await
     }
 
@@ -928,6 +920,32 @@ where
             })
             .await;
         trace!("{} --> {:?}", self.nickname, result);
+        result
+    }
+
+    #[instrument(skip_all, fields(
+        nick = self.nickname,
+        chain_id = format!("{:.8}", chain_id)
+    ))]
+    pub async fn download_pending_blob(
+        &self,
+        chain_id: ChainId,
+        blob_id: BlobId,
+    ) -> Result<Blob, WorkerError> {
+        trace!(
+            "{} <-- download_pending_blob({chain_id:8}, {blob_id:8})",
+            self.nickname
+        );
+        let result = self
+            .query_chain_worker(chain_id, move |callback| {
+                ChainWorkerRequest::DownloadPendingBlob { blob_id, callback }
+            })
+            .await;
+        trace!(
+            "{} --> {:?}",
+            self.nickname,
+            result.as_ref().map(|_| blob_id)
+        );
         result
     }
 

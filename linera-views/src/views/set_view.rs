@@ -369,7 +369,7 @@ where
         #[cfg(with_metrics)]
         let _hash_latency = SET_VIEW_HASH_RUNTIME.measure_latency();
         let mut hasher = sha3::Sha3_256::default();
-        let mut count = 0;
+        let mut count = 0u32;
         self.for_each_key(|key| {
             count += 1;
             hasher.update_with_bytes(key)?;

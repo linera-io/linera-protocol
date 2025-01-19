@@ -206,7 +206,7 @@ where
                         // Cross-shard requests
                         self.handle_network_actions(actions);
                         // Response
-                        Ok(Some(info.into()))
+                        Ok(Some(RpcMessage::ChainInfoResponse(Box::new(info))))
                     }
                     Err(error) => {
                         warn!(nickname = self.server.state.nickname(), %error, "Failed to handle block proposal");
@@ -234,7 +234,7 @@ where
                             }
                         }
                         // Response
-                        Ok(Some(info.into()))
+                        Ok(Some(RpcMessage::ChainInfoResponse(Box::new(info))))
                     }
                     Err(error) => {
                         if let WorkerError::MissingCertificateValue = &error {
@@ -257,7 +257,7 @@ where
                         // Cross-shard requests
                         self.handle_network_actions(actions);
                         // Response
-                        Ok(Some(info.into()))
+                        Ok(Some(RpcMessage::ChainInfoResponse(Box::new(info))))
                     }
                     Err(error) => {
                         error!(nickname = self.server.state.nickname(), %error, "Failed to handle timeout certificate");
@@ -276,7 +276,7 @@ where
                         // Cross-shard requests
                         self.handle_network_actions(actions);
                         // Response
-                        Ok(Some(info.into()))
+                        Ok(Some(RpcMessage::ChainInfoResponse(Box::new(info))))
                     }
                     Err(error) => {
                         error!(nickname = self.server.state.nickname(), %error, "Failed to handle validated certificate");
@@ -292,7 +292,7 @@ where
                 match self
                     .server
                     .state
-                    .handle_confirmed_certificate(request.certificate, request.blobs, sender)
+                    .handle_confirmed_certificate(request.certificate, sender)
                     .await
                 {
                     Ok((info, actions)) => {
@@ -304,7 +304,7 @@ where
                             }
                         }
                         // Response
-                        Ok(Some(info.into()))
+                        Ok(Some(RpcMessage::ChainInfoResponse(Box::new(info))))
                     }
                     Err(error) => {
                         error!(nickname = self.server.state.nickname(), %error, "Failed to handle confirmed certificate");
@@ -318,7 +318,7 @@ where
                         // Cross-shard requests
                         self.handle_network_actions(actions);
                         // Response
-                        Ok(Some(info.into()))
+                        Ok(Some(RpcMessage::ChainInfoResponse(Box::new(info))))
                     }
                     Err(error) => {
                         error!(nickname = self.server.state.nickname(), %error, "Failed to handle chain info query");
@@ -332,14 +332,35 @@ where
                         self.handle_network_actions(actions);
                     }
                     Err(error) => {
-                        error!(nickname = self.server.state.nickname(), %error, "Failed to handle cross-chain request");
+                        let nickname = self.server.state.nickname();
+                        error!(nickname, %error, "Failed to handle cross-chain request");
                     }
                 }
                 // No user to respond to.
                 Ok(None)
             }
+            RpcMessage::DownloadPendingBlob(request) => {
+                let (chain_id, blob_id) = *request;
+                match self
+                    .server
+                    .state
+                    .download_pending_blob(chain_id, blob_id)
+                    .await
+                {
+                    Ok(blob) => Ok(Some(RpcMessage::DownloadPendingBlobResponse(Box::new(
+                        blob.into(),
+                    )))),
+                    Err(error) => {
+                        let nickname = self.server.state.nickname();
+                        error!(nickname, %error, "Failed to handle pending blob request");
+                        Err(error.into())
+                    }
+                }
+            }
 
-            RpcMessage::VersionInfoQuery => Ok(Some(linera_version::VersionInfo::default().into())),
+            RpcMessage::VersionInfoQuery => {
+                Ok(Some(RpcMessage::VersionInfoResponse(Box::default())))
+            }
 
             RpcMessage::Vote(_)
             | RpcMessage::Error(_)
@@ -347,8 +368,9 @@ where
             | RpcMessage::VersionInfoResponse(_)
             | RpcMessage::GenesisConfigHashQuery
             | RpcMessage::GenesisConfigHashResponse(_)
-            | RpcMessage::DownloadBlobContent(_)
-            | RpcMessage::DownloadBlobContentResponse(_)
+            | RpcMessage::DownloadBlob(_)
+            | RpcMessage::DownloadBlobResponse(_)
+            | RpcMessage::DownloadPendingBlobResponse(_)
             | RpcMessage::DownloadConfirmedBlock(_)
             | RpcMessage::DownloadConfirmedBlockResponse(_)
             | RpcMessage::BlobLastUsedBy(_)
@@ -356,7 +378,9 @@ where
             | RpcMessage::MissingBlobIds(_)
             | RpcMessage::MissingBlobIdsResponse(_)
             | RpcMessage::DownloadCertificates(_)
-            | RpcMessage::DownloadCertificatesResponse(_) => Err(NodeError::UnexpectedMessage),
+            | RpcMessage::DownloadCertificatesResponse(_)
+            | RpcMessage::UploadBlob(_)
+            | RpcMessage::UploadBlobResponse(_) => Err(NodeError::UnexpectedMessage),
         };
 
         self.server.packets_processed += 1;
@@ -400,7 +424,8 @@ where
                 self.server.shard_id,
                 shard_id
             );
-            if let Err(error) = self.cross_chain_sender.try_send((request.into(), shard_id)) {
+            let request = RpcMessage::CrossChainRequest(Box::new(request));
+            if let Err(error) = self.cross_chain_sender.try_send((request, shard_id)) {
                 error!(%error, "dropping cross-chain request");
                 break;
             }

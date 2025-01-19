@@ -4,9 +4,13 @@
 //! Operations that don't persist any changes to the chain state.
 
 use linera_base::{
-    data_types::{ArithmeticError, Blob, BlobContent, Timestamp, UserApplicationDescription},
+    data_types::{
+        ArithmeticError, Blob, BlobContent, CompressedBytecode, Timestamp,
+        UserApplicationDescription,
+    },
     ensure,
-    identifiers::{AccountOwner, GenericApplicationId, UserApplicationId},
+    hashed::Hashed,
+    identifiers::{AccountOwner, BlobType, GenericApplicationId, UserApplicationId},
 };
 use linera_chain::{
     data_types::{
@@ -14,7 +18,7 @@ use linera_chain::{
         IncomingBundle, Medium, MessageAction, ProposalContent,
     },
     manager,
-    types::{Hashed, ValidatedBlock},
+    types::ValidatedBlock,
 };
 use linera_execution::{ChannelSubscription, Query, ResourceControlPolicy, Response};
 use linera_storage::{Clock as _, Storage};
@@ -187,7 +191,6 @@ where
             .0
             .chain
             .manager
-            .get()
             .verify_owner(proposal)
             .ok_or(WorkerError::InvalidOwner)?;
         proposal.check_signature(public_key)?;
@@ -201,7 +204,7 @@ where
         // Check if the chain is ready for this new block proposal.
         // This should always pass for nodes without voting key.
         self.0.chain.tip_state.get().verify_block_chaining(block)?;
-        if self.0.chain.manager.get().check_proposed_block(proposal)? == manager::Outcome::Skip {
+        if self.0.chain.manager.check_proposed_block(proposal)? == manager::Outcome::Skip {
             return Ok(None);
         }
         // Update the inboxes so that we can verify the provided hashed certificate values are
@@ -336,7 +339,7 @@ where
             info.requested_received_log = chain.received_log.read(start..).await?;
         }
         if query.request_manager_values {
-            info.manager.add_values(chain.manager.get());
+            info.manager.add_values(&chain.manager);
         }
         Ok(ChainInfoResponse::new(info, self.0.config.key_pair()))
     }
@@ -346,20 +349,22 @@ where
         policy: &ResourceControlPolicy,
     ) -> Result<(), WorkerError> {
         ensure!(
-            u64::try_from(content.size())
+            u64::try_from(content.bytes().len())
                 .ok()
                 .is_some_and(|size| size <= policy.maximum_blob_size),
             WorkerError::BlobTooLarge
         );
-        match content {
-            BlobContent::ContractBytecode(compressed_bytecode)
-            | BlobContent::ServiceBytecode(compressed_bytecode) => {
+        match content.blob_type() {
+            BlobType::ContractBytecode | BlobType::ServiceBytecode => {
                 ensure!(
-                    compressed_bytecode.decompressed_size_at_most(policy.maximum_bytecode_size)?,
+                    CompressedBytecode::decompressed_size_at_most(
+                        content.bytes(),
+                        policy.maximum_bytecode_size
+                    )?,
                     WorkerError::BytecodeTooLarge
                 );
             }
-            BlobContent::Data(_) => {}
+            BlobType::Data => {}
         }
         Ok(())
     }

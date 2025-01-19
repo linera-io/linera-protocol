@@ -15,11 +15,12 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{Blob, BlockHeight, UserApplicationDescription},
     ensure,
+    hashed::Hashed,
     identifiers::{BlobId, ChainId, UserApplicationId},
 };
 use linera_chain::{
     data_types::{Block, BlockProposal, ExecutedBlock, Medium, MessageBundle, Origin, Target},
-    types::{ConfirmedBlockCertificate, Hashed, TimeoutCertificate, ValidatedBlockCertificate},
+    types::{ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
     ChainError, ChainStateView,
 };
 use linera_execution::{
@@ -236,12 +237,11 @@ where
     pub(super) async fn process_confirmed_block(
         &mut self,
         certificate: ConfirmedBlockCertificate,
-        blobs: &[Blob],
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         ChainWorkerStateWithAttemptedChanges::new(self)
             .await
-            .process_confirmed_block(certificate, blobs, notify_when_messages_are_delivered)
+            .process_confirmed_block(certificate, notify_when_messages_are_delivered)
             .await
     }
 
@@ -294,6 +294,12 @@ where
         Ok((response, actions))
     }
 
+    /// Returns the requested blob, if it belongs to the current locked block or pending proposal.
+    pub(super) async fn download_pending_blob(&self, blob_id: BlobId) -> Result<Blob, WorkerError> {
+        let maybe_blob = self.chain.manager.pending_blob(&blob_id).await?;
+        maybe_blob.ok_or_else(|| WorkerError::BlobsNotFound(vec![blob_id]))
+    }
+
     /// Ensures that the current chain is active, returning an error otherwise.
     fn ensure_is_active(&mut self) -> Result<(), WorkerError> {
         if !self.knows_chain_is_active {
@@ -329,29 +335,21 @@ where
         blobs: &[Blob],
     ) -> Result<BTreeMap<BlobId, Blob>, WorkerError> {
         let mut blob_ids = executed_block.required_blob_ids();
-        let manager = self.chain.manager.get();
-
         let mut found_blobs = BTreeMap::new();
 
-        for blob in manager
-            .proposed
-            .iter()
-            .flat_map(|proposal| &proposal.blobs)
-            .chain(blobs)
-        {
+        for blob in blobs {
             if blob_ids.remove(&blob.id()) {
                 found_blobs.insert(blob.id(), blob.clone());
             }
         }
-        blob_ids.retain(|blob_id| {
-            if let Some(blob) = manager.locked_blobs.get(blob_id) {
-                found_blobs.insert(*blob_id, blob.clone());
-                false
+        let mut missing_blob_ids = Vec::new();
+        for blob_id in blob_ids {
+            if let Some(blob) = self.chain.manager.pending_blob(&blob_id).await? {
+                found_blobs.insert(blob_id, blob);
             } else {
-                true
+                missing_blob_ids.push(blob_id);
             }
-        });
-        let missing_blob_ids = blob_ids.into_iter().collect::<Vec<_>>();
+        }
         let blobs_from_storage = self.storage.read_blobs(&missing_blob_ids).await?;
         let mut not_found_blob_ids = Vec::new();
         for (blob_id, maybe_blob) in missing_blob_ids.into_iter().zip(blobs_from_storage) {
@@ -495,7 +493,7 @@ where
     /// Returns true if there are no more outgoing messages in flight up to the given
     /// block height.
     pub async fn all_messages_to_tracked_chains_delivered_up_to(
-        &mut self,
+        &self,
         height: BlockHeight,
     ) -> Result<bool, WorkerError> {
         if self.chain.all_messages_delivered_up_to(height) {

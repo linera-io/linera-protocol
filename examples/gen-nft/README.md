@@ -1,5 +1,3 @@
-<!-- cargo-rdme start -->
-
 # Generative NFT Example Application
 
 This example application implements generative non-fungible tokens (NFTs). It is based on the
@@ -24,9 +22,9 @@ the Linera blockchain ecosystem.
 For more details on the application's contract and how it manages multiple different NFTs, see the
 [NFT example](../non-fungible/README.md#how-it-works).
 
-# Usage
+## Usage
 
-## Setting Up
+### Setting Up
 
 Most of this can be referred to the [fungible app README](https://github.com/linera-io/linera-protocol/blob/main/examples/fungible/README.md#setting-up), except for at the end when compiling and publishing the bytecode, what you'll need to do will be slightly different.
 
@@ -48,7 +46,7 @@ BYTECODE_ID=$(linera publish-bytecode \
 
 Here, we stored the new bytecode ID in a variable `BYTECODE_ID` to be reused later.
 
-## Creating an NFT
+### Creating an NFT
 
 Unlike fungible tokens, each NFT is unique and identified by a unique token ID. Also unlike fungible tokens, when creating the NFT application you don't need to specify an initial state or parameters. NFTs will be minted later.
 
@@ -71,7 +69,7 @@ APP_ID=$(linera create-application $BYTECODE_ID)
 
 This will store the application ID in a new variable `APP_ID`.
 
-## Using the NFT Application
+### Using the NFT Application
 
 Operations such as minting NFTs, transferring NFTs, and claiming NFTs from other chains follow a similar approach to fungible tokens, with adjustments for the unique nature of NFTs.
 
@@ -82,7 +80,7 @@ PORT=8080
 linera service --port $PORT &
 ```
 
-### Using GraphiQL
+#### Using GraphiQL
 
 Type each of these in the GraphiQL interface and substitute the env variables with their actual values that we've defined above.
 
@@ -149,7 +147,7 @@ mutation {
 }
 ```
 
-### Using Web Frontend
+#### Using Web Frontend
 
 Installing and starting the web server:
 
@@ -167,5 +165,3 @@ echo "http://localhost:3000/$CHAIN_1?app=$APP_ID&owner=$OWNER_2&port=$PORT"
 ```
 
 For the final part, refer to [Fungible Token Example Application - Using web frontend](https://github.com/linera-io/linera-protocol/blob/main/examples/fungible/README.md#using-web-frontend).
-
-<!-- cargo-rdme end -->

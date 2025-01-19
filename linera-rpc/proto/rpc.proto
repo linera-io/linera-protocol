@@ -31,6 +31,9 @@ service ValidatorWorker {
   // Handle information queries for this chain.
   rpc HandleChainInfoQuery(ChainInfoQuery) returns (ChainInfoResult);
 
+  // Download a blob that belongs to a pending block on the given chain.
+  rpc DownloadPendingBlob(PendingBlobRequest) returns (PendingBlobResult);
+
   // Handle a (trusted!) cross-chain request.
   rpc HandleCrossChainRequest(CrossChainRequest) returns (google.protobuf.Empty);
 }
@@ -61,19 +64,26 @@ service ValidatorNode {
   // Request the genesis configuration hash of the network this node is part of.
   rpc GetGenesisConfigHash(google.protobuf.Empty) returns (CryptoHash);
 
-  // Downloads a blob content.
-  rpc DownloadBlobContent(BlobId) returns (BlobContent);
+  // Download a blob.
+  rpc DownloadBlob(BlobId) returns (BlobContent);
 
-  // Downloads a certificate.
+  // Download a blob that belongs to a pending block on the given chain.
+  rpc DownloadPendingBlob(PendingBlobRequest) returns (PendingBlobResult);
+
+  // Upload a blob. Returns an error if the validator has not seen a
+  // certificate using this blob.
+  rpc UploadBlob(BlobContent) returns (BlobId);
+
+  // Download a certificate.
   rpc DownloadCertificate(CryptoHash) returns (Certificate);
 
-  // Downloads a batch of certificates.
+  // Download a batch of certificates.
   rpc DownloadCertificates(CertificatesBatchRequest) returns (CertificatesBatchResponse);
 
-  // Returns the hash of the `Certificate` that last used a blob.
+  // Return the hash of the `Certificate` that last used a blob.
   rpc BlobLastUsedBy(BlobId) returns (CryptoHash);
 
-  // Returns the `BlobId`s that are not contained as `Blob`.
+  // Return the `BlobId`s that are not contained as `Blob`.
   rpc MissingBlobIds(BlobIds) returns (BlobIds);
 }
 
@@ -257,9 +267,21 @@ message HandleConfirmedCertificateRequest {
   // Wait until all outgoing cross-chain messages from this certificate have
   // been received by the target chains.
   bool wait_for_outgoing_messages = 3;
+}
 
-  // Blobs required by this certificate
-  bytes blobs = 4;
+// A request for a pending blob.
+message PendingBlobRequest {
+  ChainId chain_id = 1;
+  BlobId blob_id = 2;
+}
+
+// A requested pending blob, or an error.
+message PendingBlobResult {
+  oneof inner {
+    BlobContent blob = 1;
+    // a bincode wrapper around `NodeError`
+    bytes error = 2;
+  }
 }
 
 // A certified statement from the committee.

@@ -36,7 +36,6 @@ pub struct HandleLiteCertRequest<'a> {
 pub struct HandleConfirmedCertificateRequest {
     pub certificate: linera_chain::types::ConfirmedBlockCertificate,
     pub wait_for_outgoing_messages: bool,
-    pub blobs: Vec<linera_base::data_types::Blob>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

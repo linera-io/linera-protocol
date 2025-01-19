@@ -14,6 +14,10 @@ pub enum RuntimeError {
     #[error("Requested allocation size is too large")]
     AllocationTooLarge,
 
+    /// Attempt to allocate a buffer that's aligned to an invalid boundary.
+    #[error("Requested allocation alignment is invalid")]
+    InvalidAlignment,
+
     /// Call to `cabi_realloc` returned a negative value instead of a valid address.
     #[error("Memory allocation failed")]
     AllocationFailed,

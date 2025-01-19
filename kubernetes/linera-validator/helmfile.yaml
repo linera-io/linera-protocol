@@ -49,6 +49,8 @@ releases:
     timeout: 900
     needs:
       - scylla-operator/scylla-operator
+    values:
+      - {{ env "LINERA_HELMFILE_VALUES_SCYLLA_MANAGER" | default "scylla-manager.values.yaml" }}
   - name: scylla-operator
     version: v1.13.0
     namespace: scylla-operator

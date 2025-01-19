@@ -97,6 +97,7 @@ linera-rpc = { workspace = true, features = ["server", "simple-network"] }
 cfg_aliases.workspace = true
 
 [dev-dependencies]
+alloy = { workspace = true, default-features = false, features = [ "rpc-types-eth" ] }
 amm.workspace = true
 anyhow.workspace = true
 base64.workspace = true
@@ -104,7 +105,6 @@ counter.workspace = true
 crowd-funding.workspace = true
 ethereum-tracker.workspace = true
 fungible.workspace = true
-linera-alloy = { workspace = true, default-features = false, features = [ "rpc-types-eth" ] }
 linera-base = { workspace = true, features = ["test"] }
 linera-chain = { workspace = true, features = ["test"] }
 linera-client = { path = ".", default-features = false, features = ["test"] }

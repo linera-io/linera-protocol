@@ -4,13 +4,14 @@
 
 use linera_base::{
     data_types::{BlobContent, OracleResponse, Round},
+    hashed::Hashed,
     identifiers::{AccountOwner, BlobType, ChainDescription, Destination, GenericApplicationId},
     ownership::ChainOwnership,
 };
 use linera_chain::{
     data_types::{Medium, MessageAction},
-    manager::ChainManagerInfo,
-    types::{Certificate, CertificateKind, ConfirmedBlock, Hashed, Timeout, ValidatedBlock},
+    manager::{ChainManagerInfo, LockedBlock},
+    types::{Certificate, CertificateKind, ConfirmedBlock, Timeout, ValidatedBlock},
 };
 use linera_core::{data_types::CrossChainRequest, node::NodeError};
 use linera_execution::{
@@ -51,6 +52,7 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<ChainDescription>(&samples)?;
     tracer.trace_type::<ChainOwnership>(&samples)?;
     tracer.trace_type::<GenericApplicationId>(&samples)?;
+    tracer.trace_type::<LockedBlock>(&samples)?;
     tracer.trace_type::<ChainManagerInfo>(&samples)?;
     tracer.trace_type::<CrossChainRequest>(&samples)?;
     tracer.trace_type::<NodeError>(&samples)?;

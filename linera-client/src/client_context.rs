@@ -37,7 +37,7 @@ use {
         identifiers::{AccountOwner, ApplicationId, Owner},
     },
     linera_chain::data_types::{Block, BlockProposal, ExecutedBlock, SignatureAggregator, Vote},
-    linera_chain::types::{CertificateValueT, GenericCertificate},
+    linera_chain::types::{CertificateValue, GenericCertificate},
     linera_core::data_types::ChainInfoQuery,
     linera_execution::{
         committee::Epoch,
@@ -56,7 +56,7 @@ use {
 use {
     linera_base::{
         crypto::CryptoHash,
-        data_types::{BlobBytes, Bytecode},
+        data_types::{BlobContent, Bytecode},
         identifiers::BytecodeId,
     },
     linera_core::client::create_bytecode_blobs,
@@ -174,6 +174,7 @@ where
             chain_ids,
             name,
             options.max_loaded_chains,
+            options.grace_period,
         );
 
         ClientContext {
@@ -191,6 +192,8 @@ where
 
     #[cfg(with_testing)]
     pub fn new_test_client_context(storage: S, wallet: W) -> Self {
+        use linera_core::DEFAULT_GRACE_PERIOD;
+
         let send_recv_timeout = Duration::from_millis(4000);
         let retry_delay = Duration::from_millis(1000);
         let max_retries = 10;
@@ -218,6 +221,7 @@ where
             chain_ids,
             name,
             NonZeroUsize::new(20).expect("Chain worker limit should not be zero"),
+            DEFAULT_GRACE_PERIOD,
         );
 
         ClientContext {
@@ -431,6 +435,7 @@ where
 
         loop {
             // Try applying f. Return if committed.
+            client.prepare_chain().await?;
             let result = f(client).await;
             self.update_and_save_wallet(client).await?;
             let timeout = match result? {
@@ -542,7 +547,7 @@ where
         .await?;
 
         info!("{}", "Data blob published successfully!");
-        Ok(CryptoHash::new(&BlobBytes(blob_bytes)))
+        Ok(CryptoHash::new(&BlobContent::new_data(blob_bytes)))
     }
 
     // TODO(#2490): Consider removing or renaming this.
@@ -796,7 +801,7 @@ where
                 key_pair,
                 vec![],
             );
-            proposals.push(proposal.into());
+            proposals.push(RpcMessage::BlockProposal(Box::new(proposal)));
             next_recipient = chain.chain_id;
         }
         proposals
@@ -808,7 +813,7 @@ where
         votes: Vec<Vote<T>>,
     ) -> Vec<GenericCertificate<T>>
     where
-        T: std::fmt::Debug + CertificateValueT,
+        T: std::fmt::Debug + CertificateValue,
     {
         let committee = self.wallet.genesis_config().create_committee();
         let mut aggregators = HashMap::new();

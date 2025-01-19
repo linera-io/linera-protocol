@@ -9,7 +9,7 @@ on port 8000. Also make sure you have performed the operations mentoined in this
 
 The app is an example of a social app, and will be improved with future updates. Users can see their post by `ownPost` query in GraphiQL IDE.
 
-#### Operations avaiable:
+#### Operations available:
 
 Post, Likes, and Comments (only by the creation chain).
 

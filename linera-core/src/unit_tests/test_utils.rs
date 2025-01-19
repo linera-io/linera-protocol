@@ -57,6 +57,7 @@ use crate::{
         ValidatorNodeProvider,
     },
     notifier::ChannelNotifier,
+    updater::DEFAULT_GRACE_PERIOD,
     worker::{NetworkActions, Notification, ProcessableCertificate, WorkerState},
 };
 
@@ -147,11 +148,10 @@ where
     async fn handle_confirmed_certificate(
         &self,
         certificate: GenericCertificate<ConfirmedBlock>,
-        blobs: Vec<Blob>,
         _delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
         self.spawn_and_receive(move |validator, sender| {
-            validator.do_handle_certificate(certificate, blobs, sender)
+            validator.do_handle_certificate(certificate, vec![], sender)
         })
         .await
     }
@@ -179,9 +179,23 @@ where
         Ok(CryptoHash::test_hash("genesis config"))
     }
 
-    async fn download_blob_content(&self, blob_id: BlobId) -> Result<BlobContent, NodeError> {
+    async fn upload_blob(&self, content: BlobContent) -> Result<BlobId, NodeError> {
+        self.spawn_and_receive(move |validator, sender| validator.do_upload_blob(content, sender))
+            .await
+    }
+
+    async fn download_blob(&self, blob_id: BlobId) -> Result<BlobContent, NodeError> {
+        self.spawn_and_receive(move |validator, sender| validator.do_download_blob(blob_id, sender))
+            .await
+    }
+
+    async fn download_pending_blob(
+        &self,
+        chain_id: ChainId,
+        blob_id: BlobId,
+    ) -> Result<BlobContent, NodeError> {
         self.spawn_and_receive(move |validator, sender| {
-            validator.do_download_blob_content(blob_id, sender)
+            validator.do_download_pending_blob(chain_id, blob_id, sender)
         })
         .await
     }
@@ -455,7 +469,24 @@ where
         sender.send(Ok(stream))
     }
 
-    async fn do_download_blob_content(
+    async fn do_upload_blob(
+        self,
+        content: BlobContent,
+        sender: oneshot::Sender<Result<BlobId, NodeError>>,
+    ) -> Result<(), Result<BlobId, NodeError>> {
+        let validator = self.client.lock().await;
+        let blob = Blob::new(content);
+        let id = blob.id();
+        let storage = validator.state.storage_client();
+        let result = match storage.maybe_write_blobs(&[blob]).await {
+            Ok(has_state) if has_state.first() == Some(&true) => Ok(id),
+            Ok(_) => Err(NodeError::BlobsNotFound(vec![id])),
+            Err(error) => Err(error.into()),
+        };
+        sender.send(result)
+    }
+
+    async fn do_download_blob(
         self,
         blob_id: BlobId,
         sender: oneshot::Sender<Result<BlobContent, NodeError>>,
@@ -467,7 +498,22 @@ where
             .read_blob(blob_id)
             .await
             .map_err(Into::into);
-        sender.send(blob.map(|blob| blob.into_inner_content()))
+        sender.send(blob.map(|blob| blob.into_content()))
+    }
+
+    async fn do_download_pending_blob(
+        self,
+        chain_id: ChainId,
+        blob_id: BlobId,
+        sender: oneshot::Sender<Result<BlobContent, NodeError>>,
+    ) -> Result<(), Result<BlobContent, NodeError>> {
+        let validator = self.client.lock().await;
+        let result = validator
+            .state
+            .download_pending_blob(chain_id, blob_id)
+            .await
+            .map_err(Into::into);
+        sender.send(result.map(|blob| blob.into_content()))
     }
 
     async fn do_download_certificate(
@@ -840,6 +886,7 @@ where
             [chain_id],
             format!("Client node for {:.8}", chain_id),
             NonZeroUsize::new(20).expect("Chain worker limit should not be zero"),
+            DEFAULT_GRACE_PERIOD,
         ));
         Ok(builder.create_chain_client(
             chain_id,

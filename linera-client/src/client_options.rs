@@ -18,7 +18,7 @@ use linera_base::{
     },
     ownership::{ChainOwnership, TimeoutConfig},
 };
-use linera_core::client::BlanketMessagePolicy;
+use linera_core::{client::BlanketMessagePolicy, DEFAULT_GRACE_PERIOD};
 use linera_execution::{
     committee::ValidatorName, ResourceControlPolicy, WasmRuntime, WithWasmDefault as _,
 };
@@ -156,6 +156,11 @@ pub struct ClientOptions {
     /// an empty string.
     #[arg(long, value_parser = util::parse_chain_set)]
     pub restrict_chain_ids_to: Option<HashSet<ChainId>>,
+
+    /// An additional delay, after reaching a quorum, to wait for additional validator signatures,
+    /// as a fraction of time taken to reach quorum.
+    #[arg(long, default_value_t = DEFAULT_GRACE_PERIOD)]
+    pub grace_period: f64,
 }
 
 impl ClientOptions {
@@ -298,10 +303,6 @@ impl ClientOptions {
 
 #[derive(Clone, clap::Subcommand)]
 pub enum ClientCommand {
-    /// Print CLI help in Markdown format, and exit.
-    #[command(hide = true)]
-    HelpMarkdown,
-
     /// Transfer funds
     Transfer {
         /// Sending chain ID (must be one of our chains)
@@ -711,7 +712,7 @@ pub enum ClientCommand {
         config: ChainListenerConfig,
 
         /// The port on which to run the server
-        #[arg(long = "port", default_value = "8080")]
+        #[arg(long, default_value = "8080")]
         port: NonZeroU16,
     },
 
@@ -722,11 +723,11 @@ pub enum ClientCommand {
         chain_id: Option<ChainId>,
 
         /// The port on which to run the server
-        #[arg(long = "port", default_value = "8080")]
+        #[arg(long, default_value = "8080")]
         port: NonZeroU16,
 
         /// The number of tokens to send to each new chain.
-        #[arg(long = "amount")]
+        #[arg(long)]
         amount: Amount,
 
         /// The end timestamp: The faucet will rate-limit the token supply so it runs out of money
@@ -888,7 +889,31 @@ pub enum ClientCommand {
     /// Operation on the storage.
     #[command(subcommand)]
     Storage(DatabaseToolCommand),
+
+    /// Print CLI help in Markdown format, and exit.
+    #[command(hide = true)]
+    HelpMarkdown,
+
+    /// Extract a Bash and GraphQL script embedded in a markdown file and print it on
+    /// stdout.
+    #[command(hide = true)]
+    ExtractScriptFromMarkdown {
+        /// The source file
+        path: PathBuf,
+
+        /// Insert a pause of N seconds after calls to `linera service`.
+        #[arg(long, default_value = DEFAULT_PAUSE_AFTER_LINERA_SERVICE_SECS, value_parser = util::parse_secs)]
+        pause_after_linera_service: Duration,
+
+        /// Insert a pause of N seconds after GraphQL queries.
+        #[arg(long, default_value = DEFAULT_PAUSE_AFTER_GQL_MUTATIONS_SECS, value_parser = util::parse_secs)]
+        pause_after_gql_mutations: Duration,
+    },
 }
+
+// Exported for readme e2e tests.
+pub static DEFAULT_PAUSE_AFTER_LINERA_SERVICE_SECS: &str = "3";
+pub static DEFAULT_PAUSE_AFTER_GQL_MUTATIONS_SECS: &str = "3";
 
 #[derive(Clone, clap::Parser)]
 pub enum DatabaseToolCommand {
@@ -955,6 +980,7 @@ impl DatabaseToolCommand {
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, clap::Parser)]
 pub enum NetCommand {
     /// Start a Local Linera Network
@@ -1027,6 +1053,19 @@ pub enum NetCommand {
         /// External protocol used, either grpc or grpcs.
         #[arg(long, default_value = "grpc")]
         external_protocol: String,
+
+        /// If present, a faucet is started using the given chain root number (0 for the
+        /// admin chain, 1 for the first non-admin initial chain, etc).
+        #[arg(long)]
+        with_faucet_chain: Option<u32>,
+
+        /// The port on which to run the faucet server
+        #[arg(long, default_value = "8080")]
+        faucet_port: NonZeroU16,
+
+        /// The number of tokens to send to each new chain created by the faucet.
+        #[arg(long, default_value = "1000")]
+        faucet_amount: Amount,
     },
 
     /// Print a bash helper script to make `linera net up` easier to use. The script is

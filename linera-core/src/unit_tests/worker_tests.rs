@@ -19,6 +19,7 @@ use assert_matches::assert_matches;
 use linera_base::{
     crypto::{CryptoHash, *},
     data_types::*,
+    hashed::Hashed,
     identifiers::{
         Account, AccountOwner, ChainDescription, ChainId, ChannelName, Destination,
         GenericApplicationId, MessageId, Owner,
@@ -28,13 +29,14 @@ use linera_base::{
 use linera_chain::{
     data_types::{
         Block, BlockExecutionOutcome, BlockProposal, ChainAndHeight, ChannelFullName,
-        IncomingBundle, LiteVote, Medium, MessageAction, MessageBundle, Origin, OutgoingMessage,
-        PostedMessage, SignatureAggregator,
+        IncomingBundle, LiteValue, LiteVote, Medium, MessageAction, MessageBundle, Origin,
+        OutgoingMessage, PostedMessage, SignatureAggregator,
     },
+    manager::LockedBlock,
     test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt, VoteTestExt},
     types::{
-        CertificateValueT, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate, Hashed,
-        Timeout, ValidatedBlock,
+        CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate, Timeout,
+        ValidatedBlock,
     },
     ChainError, ChainExecutionContext,
 };
@@ -148,7 +150,7 @@ fn make_certificate<S, T>(
 ) -> GenericCertificate<T>
 where
     S: Storage,
-    T: CertificateValueT,
+    T: CertificateValue,
 {
     make_certificate_with_round(committee, worker, value, Round::MultiLeader(0))
 }
@@ -161,10 +163,10 @@ fn make_certificate_with_round<S, T>(
 ) -> GenericCertificate<T>
 where
     S: Storage,
-    T: CertificateValueT,
+    T: CertificateValue,
 {
     let vote = LiteVote::new(
-        value.lite(),
+        LiteValue::new(&value),
         round,
         worker.chain_worker_config.key_pair().unwrap(),
     );
@@ -453,8 +455,8 @@ where
     );
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
-    assert!(chain.manager.get().confirmed_vote().is_none());
-    assert!(chain.manager.get().validated_vote().is_none());
+    assert!(chain.manager.confirmed_vote().is_none());
+    assert!(chain.manager.validated_vote().is_none());
     Ok(())
 }
 
@@ -503,8 +505,8 @@ where
     );
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
-    assert!(chain.manager.get().confirmed_vote().is_none());
-    assert!(chain.manager.get().validated_vote().is_none());
+    assert!(chain.manager.confirmed_vote().is_none());
+    assert!(chain.manager.validated_vote().is_none());
     Ok(())
 }
 
@@ -616,8 +618,8 @@ where
     );
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
-    assert!(chain.manager.get().confirmed_vote().is_none());
-    assert!(chain.manager.get().validated_vote().is_none());
+    assert!(chain.manager.confirmed_vote().is_none());
+    assert!(chain.manager.validated_vote().is_none());
     Ok(())
 }
 
@@ -671,8 +673,8 @@ where
     );
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
-    assert!(chain.manager.get().confirmed_vote().is_none());
-    assert!(chain.manager.get().validated_vote().is_none());
+    assert!(chain.manager.confirmed_vote().is_none());
+    assert!(chain.manager.validated_vote().is_none());
 
     drop(chain);
     worker
@@ -683,7 +685,6 @@ where
     assert_eq!(
         &chain
             .manager
-            .get()
             .validated_vote()
             .unwrap()
             .value()
@@ -692,17 +693,11 @@ where
             .block,
         &block_proposal0.content.block
     ); // Multi-leader round - it's not confirmed yet.
-    assert!(chain.manager.get().confirmed_vote().is_none());
+    assert!(chain.manager.confirmed_vote().is_none());
     let block_certificate0 = make_certificate(
         &committee,
         &worker,
-        chain
-            .manager
-            .get()
-            .validated_vote()
-            .unwrap()
-            .value()
-            .clone(),
+        chain.manager.validated_vote().unwrap().value().clone(),
     );
     drop(chain);
 
@@ -714,7 +709,6 @@ where
     assert_eq!(
         &chain
             .manager
-            .get()
             .confirmed_vote()
             .unwrap()
             .value()
@@ -723,11 +717,11 @@ where
             .block,
         &block_proposal0.content.block
     ); // Should be confirmed after handling the certificate.
-    assert!(chain.manager.get().validated_vote().is_none());
+    assert!(chain.manager.validated_vote().is_none());
     drop(chain);
 
     worker
-        .handle_confirmed_certificate(certificate0, vec![], None)
+        .handle_confirmed_certificate(certificate0, None)
         .await?;
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     drop(chain);
@@ -741,7 +735,6 @@ where
     assert_eq!(
         &chain
             .manager
-            .get()
             .validated_vote()
             .unwrap()
             .value()
@@ -750,7 +743,7 @@ where
             .block,
         &block_proposal1.content.block
     );
-    assert!(chain.manager.get().confirmed_vote().is_none());
+    assert!(chain.manager.confirmed_vote().is_none());
     drop(chain);
     assert_matches!(
         worker.handle_block_proposal(block_proposal0).await,
@@ -857,7 +850,7 @@ where
     // Missing earlier blocks
     assert_matches!(
         worker
-            .handle_confirmed_certificate(certificate1.clone(), vec![], None)
+            .handle_confirmed_certificate(certificate1.clone(), None)
             .await,
         Err(WorkerError::MissingEarlierBlocks { .. })
     );
@@ -1087,7 +1080,7 @@ where
             )),
         );
         worker
-            .handle_confirmed_certificate(certificate.clone(), vec![], None)
+            .handle_confirmed_certificate(certificate.clone(), None)
             .await?;
 
         // Then receive the next two messages.
@@ -1165,8 +1158,8 @@ where
     );
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
-    assert!(chain.manager.get().confirmed_vote().is_none());
-    assert!(chain.manager.get().validated_vote().is_none());
+    assert!(chain.manager.confirmed_vote().is_none());
+    assert!(chain.manager.validated_vote().is_none());
     Ok(())
 }
 
@@ -1198,18 +1191,12 @@ where
     chain_info_response.check(&ValidatorName(worker.public_key()))?;
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
-    assert!(chain.manager.get().confirmed_vote().is_none()); // It was a multi-leader
-                                                             // round.
+    assert!(chain.manager.confirmed_vote().is_none()); // It was a multi-leader
+                                                       // round.
     let validated_certificate = make_certificate(
         &committee,
         &worker,
-        chain
-            .manager
-            .get()
-            .validated_vote()
-            .unwrap()
-            .value()
-            .clone(),
+        chain.manager.validated_vote().unwrap().value().clone(),
     );
     drop(chain);
 
@@ -1219,8 +1206,8 @@ where
     chain_info_response.check(&ValidatorName(worker.public_key()))?;
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
-    assert!(chain.manager.get().validated_vote().is_none()); // Should be confirmed by now.
-    let pending_vote = chain.manager.get().confirmed_vote().unwrap().lite();
+    assert!(chain.manager.validated_vote().is_none()); // Should be confirmed by now.
+    let pending_vote = chain.manager.confirmed_vote().unwrap().lite();
     assert_eq!(
         chain_info_response.info.manager.pending.unwrap(),
         pending_vote
@@ -2016,7 +2003,7 @@ where
             *recipient_chain.execution_state.system.balance.get(),
             Amount::from_tokens(4)
         );
-        let ownership = &recipient_chain.manager.get().ownership;
+        let ownership = &recipient_chain.manager.ownership.get();
         assert!(
             ownership
                 .owners
@@ -3331,7 +3318,7 @@ where
         .await?;
     let vote = response.info.manager.pending.as_ref().unwrap();
     let value = Hashed::new(ConfirmedBlock::new(executed_block1.clone()));
-    assert_eq!(vote.value, value.lite());
+    assert_eq!(vote.value, LiteValue::new(&value));
 
     // Instead of submitting the confirmed block certificate, let rounds 2 to 4 time out, too.
     let certificate_timeout = make_certificate_with_round(
@@ -3363,7 +3350,7 @@ where
     let (response, _) = worker.handle_chain_info_query(query_values.clone()).await?;
     assert_eq!(
         response.info.manager.requested_locked,
-        Some(Box::new(certificate1))
+        Some(Box::new(LockedBlock::Regular(certificate1)))
     );
 
     // Proposing block2 now would fail.
@@ -3385,12 +3372,12 @@ where
         &key_pairs[1],
         Vec::new(),
     );
-    let lite_value2 = value2.lite();
+    let lite_value2 = LiteValue::new(&value2);
     let (_, _) = worker.handle_block_proposal(proposal).await?;
     let (response, _) = worker.handle_chain_info_query(query_values.clone()).await?;
     assert_eq!(
         response.info.manager.requested_locked,
-        Some(Box::new(certificate2))
+        Some(Box::new(LockedBlock::Regular(certificate2)))
     );
     let vote = response.info.manager.pending.as_ref().unwrap();
     assert_eq!(vote.value, lite_value2);
@@ -3435,7 +3422,7 @@ where
     let (response, _) = worker.handle_chain_info_query(query_values).await?;
     assert_eq!(
         response.info.manager.requested_locked,
-        Some(Box::new(certificate))
+        Some(Box::new(LockedBlock::Regular(certificate)))
     );
     Ok(())
 }
@@ -3575,6 +3562,7 @@ where
     let value1 = Hashed::new(ConfirmedBlock::new(executed_block1));
     let (response, _) = worker.handle_block_proposal(proposal1).await?;
     let vote = response.info.manager.pending.as_ref().unwrap();
+    assert_eq!(vote.round, Round::Fast);
     assert_eq!(vote.value.value_hash, value1.hash());
 
     // Set the clock to the end of the round.
@@ -3590,20 +3578,29 @@ where
     assert_eq!(response.info.manager.current_round, Round::MultiLeader(0));
     assert_eq!(response.info.manager.leader, None);
 
-    // Now any owner can propose a block. But block1 is locked.
+    // Now any owner can propose a block. But block1 is locked. Re-proposing it is allowed.
+    let proposal1b = block1
+        .clone()
+        .into_proposal_with_round(&key_pairs[1], Round::MultiLeader(0));
+    let (response, _) = worker.handle_block_proposal(proposal1b).await?;
+    let vote = response.info.manager.pending.as_ref().unwrap();
+    assert_eq!(vote.round, Round::MultiLeader(0));
+    assert_eq!(vote.value.value_hash, value1.hash());
+
+    // Proposing a different block is not.
     let block2 = make_child_block(&value0)
         .with_simple_transfer(ChainId::root(1), Amount::ONE)
         .with_authenticated_signer(Some(pub_key1.into()));
     let proposal2 = block2
         .clone()
-        .into_proposal_with_round(&key_pairs[1], Round::MultiLeader(0));
+        .into_proposal_with_round(&key_pairs[1], Round::MultiLeader(1));
     let result = worker.handle_block_proposal(proposal2).await;
     assert_matches!(result, Err(WorkerError::ChainError(err))
         if matches!(*err, ChainError::HasLockedBlock(_, Round::Fast))
     );
     let proposal3 = block1
         .clone()
-        .into_proposal_with_round(&key_pairs[1], Round::MultiLeader(0));
+        .into_proposal_with_round(&key_pairs[1], Round::MultiLeader(2));
     worker.handle_block_proposal(proposal3).await?;
 
     // A validated block certificate from a later round can override the locked fast block.
@@ -3612,22 +3609,22 @@ where
     let certificate2 =
         make_certificate_with_round(&committee, &worker, value2.clone(), Round::MultiLeader(0));
     let proposal = BlockProposal::new_retry(
-        Round::MultiLeader(1),
+        Round::MultiLeader(3),
         certificate2.clone(),
         &key_pairs[1],
         Vec::new(),
     );
-    let lite_value2 = value2.lite();
+    let lite_value2 = LiteValue::new(&value2);
     let (_, _) = worker.handle_block_proposal(proposal).await?;
     let query_values = ChainInfoQuery::new(chain_id).with_manager_values();
     let (response, _) = worker.handle_chain_info_query(query_values).await?;
     assert_eq!(
         response.info.manager.requested_locked,
-        Some(Box::new(certificate2))
+        Some(Box::new(LockedBlock::Regular(certificate2)))
     );
     let vote = response.info.manager.pending.as_ref().unwrap();
     assert_eq!(vote.value, lite_value2);
-    assert_eq!(vote.round, Round::MultiLeader(1));
+    assert_eq!(vote.round, Round::MultiLeader(3));
     Ok(())
 }
 
@@ -3921,7 +3918,7 @@ where
     ));
     let certificate = make_certificate(&committee, &worker, value);
     worker
-        .handle_confirmed_certificate(certificate, vec![], None)
+        .handle_confirmed_certificate(certificate, None)
         .await?;
 
     for query_context in query_contexts_after_new_block.clone() {

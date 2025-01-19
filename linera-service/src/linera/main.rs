@@ -39,7 +39,7 @@ use linera_core::{
     node::{CrossChainMessageDelivery, ValidatorNodeProvider},
     remote_node::RemoteNode,
     worker::Reason,
-    JoinSetExt as _,
+    JoinSetExt as _, DEFAULT_GRACE_PERIOD,
 };
 use linera_execution::{
     committee::{Committee, ValidatorName, ValidatorState},
@@ -62,7 +62,8 @@ mod net_up_utils;
 
 #[cfg(feature = "benchmark")]
 use {
-    linera_chain::types::{ConfirmedBlock, Hashed},
+    linera_base::hashed::Hashed,
+    linera_chain::types::ConfirmedBlock,
     linera_core::data_types::ChainInfoResponse,
     linera_rpc::{HandleConfirmedCertificateRequest, RpcMessage},
     std::collections::HashSet,
@@ -463,6 +464,8 @@ impl Runnable for Job {
                     committee.validators()
                 );
                 let node_provider = context.make_node_provider();
+                let mut num_ok_validators = 0;
+                let mut faulty_validators = vec![];
                 for (name, state) in committee.validators() {
                     let address = &state.network_address;
                     let node = node_provider.make_node(address)?;
@@ -475,6 +478,11 @@ impl Runnable for Job {
                         }
                         Err(e) => {
                             error!("Failed to get version information for validator {name:?} at {address}:\n{e}");
+                            faulty_validators.push((
+                                name,
+                                address,
+                                "Failed to get version information.".to_string(),
+                            ));
                             continue;
                         }
                     }
@@ -488,16 +496,27 @@ impl Runnable for Job {
                             );
                             if response.check(name).is_ok() {
                                 info!("Signature for public key {name} is OK.");
+                                num_ok_validators += 1;
                             } else {
                                 error!("Signature for public key {name} is NOT OK.");
+                                faulty_validators.push((name, address, format!("{:?}", response)));
                             }
                         }
                         Err(e) => {
                             error!("Failed to get chain info for validator {name:?} at {address} and chain {chain_id}:\n{e}");
+                            faulty_validators.push((
+                                name,
+                                address,
+                                "Failed to get chain info.".to_string(),
+                            ));
                             continue;
                         }
                     }
                 }
+                if !faulty_validators.is_empty() {
+                    println!("{:#?}", faulty_validators);
+                }
+                println!("{}/{} OK.", num_ok_validators, committee.validators().len());
             }
 
             command @ (SetValidator { .. }
@@ -787,12 +806,12 @@ impl Runnable for Job {
                 let messages = certificates
                     .iter()
                     .map(|certificate| {
-                        HandleConfirmedCertificateRequest {
-                            certificate: certificate.clone(),
-                            blobs: vec![],
-                            wait_for_outgoing_messages: true,
-                        }
-                        .into()
+                        RpcMessage::ConfirmedCertificate(Box::new(
+                            HandleConfirmedCertificateRequest {
+                                certificate: certificate.clone(),
+                                wait_for_outgoing_messages: true,
+                            },
+                        ))
                     })
                     .collect();
                 let responses = context
@@ -1198,6 +1217,7 @@ impl Runnable for Job {
             | Net(_)
             | Storage { .. }
             | Wallet(_)
+            | ExtractScriptFromMarkdown { .. }
             | HelpMarkdown => {
                 unreachable!()
             }
@@ -1228,6 +1248,7 @@ impl Job {
             vec![message_id.chain_id, chain_id],
             "Temporary client for fetching the parent chain",
             NonZeroUsize::new(20).expect("Chain worker limit should not be zero"),
+            DEFAULT_GRACE_PERIOD,
         );
 
         // Take the latest committee we know of.
@@ -1388,8 +1409,7 @@ fn main() -> anyhow::Result<()> {
 /// Returns the log file name to use based on the [`ClientCommand`] that will run.
 fn log_file_name_for(command: &ClientCommand) -> Cow<'static, str> {
     match command {
-        ClientCommand::HelpMarkdown
-        | ClientCommand::Transfer { .. }
+        ClientCommand::Transfer { .. }
         | ClientCommand::OpenChain { .. }
         | ClientCommand::OpenMultiOwnerChain { .. }
         | ClientCommand::ChangeOwnership { .. }
@@ -1425,6 +1445,9 @@ fn log_file_name_for(command: &ClientCommand) -> Cow<'static, str> {
         ClientCommand::Storage { .. } => "storage".into(),
         ClientCommand::Service { port, .. } => format!("service-{port}").into(),
         ClientCommand::Faucet { .. } => "faucet".into(),
+        ClientCommand::HelpMarkdown | ClientCommand::ExtractScriptFromMarkdown { .. } => {
+            "tool".into()
+        }
     }
 }
 
@@ -1432,6 +1455,24 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
     match &options.command {
         ClientCommand::HelpMarkdown => {
             clap_markdown::print_help_markdown::<ClientOptions>();
+            Ok(0)
+        }
+
+        ClientCommand::ExtractScriptFromMarkdown {
+            path,
+            pause_after_linera_service,
+            pause_after_gql_mutations,
+        } => {
+            let file = crate::util::Markdown::new(path)?;
+            let pause_after_linera_service =
+                Some(*pause_after_linera_service).filter(|p| !p.is_zero());
+            let pause_after_gql_mutations =
+                Some(*pause_after_gql_mutations).filter(|p| !p.is_zero());
+            file.extract_bash_script_to(
+                std::io::stdout(),
+                pause_after_linera_service,
+                pause_after_gql_mutations,
+            )?;
             Ok(0)
         }
 
@@ -1597,6 +1638,9 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
                 path: _,
                 storage: _,
                 external_protocol: _,
+                with_faucet_chain,
+                faucet_port,
+                faucet_amount,
             } => {
                 net_up_utils::handle_net_up_kubernetes(
                     *extra_wallets,
@@ -1609,6 +1653,9 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
                     *no_build,
                     docker_image_name.clone(),
                     policy_config.into_policy(),
+                    *with_faucet_chain,
+                    *faucet_port,
+                    *faucet_amount,
                 )
                 .boxed()
                 .await?;
@@ -1626,6 +1673,9 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
                 path,
                 storage,
                 external_protocol,
+                with_faucet_chain,
+                faucet_port,
+                faucet_amount,
                 ..
             } => {
                 net_up_utils::handle_net_up_service(
@@ -1639,6 +1689,9 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
                     path,
                     storage,
                     external_protocol.clone(),
+                    *with_faucet_chain,
+                    *faucet_port,
+                    *faucet_amount,
                 )
                 .boxed()
                 .await?;

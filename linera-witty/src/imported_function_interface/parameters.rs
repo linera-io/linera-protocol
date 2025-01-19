@@ -114,7 +114,8 @@ where
         Instance: InstanceWithMemory,
         <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
     {
-        let location = memory.allocate(Parameters::SIZE)?;
+        let location =
+            memory.allocate(Parameters::SIZE, <Parameters::Layout as Layout>::ALIGNMENT)?;
 
         parameters.store(memory, location)?;
         location.lower(memory)

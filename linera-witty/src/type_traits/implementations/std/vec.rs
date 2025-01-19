@@ -3,9 +3,7 @@
 
 //! Implementations of the custom traits for the [`Vec`] type.
 
-use std::borrow::Cow;
-
-use frunk::{hlist, hlist_pat, HList};
+use std::{borrow::Cow, ops::Deref};
 
 use crate::{
     GuestPointer, InstanceWithMemory, Layout, Memory, Runtime, RuntimeError, RuntimeMemory,
@@ -16,18 +14,17 @@ impl<T> WitType for Vec<T>
 where
     T: WitType,
 {
-    const SIZE: u32 = 8;
+    const SIZE: u32 = <[T] as WitType>::SIZE;
 
-    type Layout = HList![i32, i32];
-    type Dependencies = HList![T];
+    type Layout = <[T] as WitType>::Layout;
+    type Dependencies = <[T] as WitType>::Dependencies;
 
     fn wit_type_name() -> Cow<'static, str> {
-        format!("list<{}>", T::wit_type_name()).into()
+        <[T] as WitType>::wit_type_name()
     }
 
     fn wit_type_declaration() -> Cow<'static, str> {
-        // The native `list` type doesn't need to be declared
-        "".into()
+        <[T] as WitType>::wit_type_declaration()
     }
 }
 
@@ -43,28 +40,18 @@ where
         Instance: InstanceWithMemory,
         <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
     {
-        let address = GuestPointer::load(memory, location)?;
-        let length = u32::load(memory, location.after::<GuestPointer>())?;
-
-        (0..length)
-            .map(|index| T::load(memory, address.index::<T>(index)))
-            .collect()
+        Box::load(memory, location).map(Vec::from)
     }
 
     fn lift_from<Instance>(
-        hlist_pat![address, length]: <Self::Layout as Layout>::Flat,
+        flat_layout: <Self::Layout as Layout>::Flat,
         memory: &Memory<'_, Instance>,
     ) -> Result<Self, RuntimeError>
     where
         Instance: InstanceWithMemory,
         <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
     {
-        let address = GuestPointer(address.try_into()?);
-        let length = length as u32;
-
-        (0..length)
-            .map(|index| T::load(memory, address.index::<T>(index)))
-            .collect()
+        Box::lift_from(flat_layout, memory).map(Vec::from)
     }
 }
 
@@ -81,17 +68,7 @@ where
         Instance: InstanceWithMemory,
         <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
     {
-        let length = u32::try_from(self.len())?;
-        let size = length * T::SIZE;
-
-        let destination = memory.allocate(size)?;
-
-        destination.store(memory, location)?;
-        length.store(memory, location.after::<GuestPointer>())?;
-
-        self.iter()
-            .zip(0..)
-            .try_for_each(|(element, index)| element.store(memory, destination.index::<T>(index)))
+        self.deref().store(memory, location)
     }
 
     fn lower<Instance>(
@@ -102,15 +79,6 @@ where
         Instance: InstanceWithMemory,
         <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
     {
-        let length = u32::try_from(self.len())?;
-        let size = length * T::SIZE;
-
-        let destination = memory.allocate(size)?;
-
-        self.iter().zip(0..).try_for_each(|(element, index)| {
-            element.store(memory, destination.index::<T>(index))
-        })?;
-
-        Ok(destination.lower(memory)? + hlist![length as i32])
+        self.deref().lower(memory)
     }
 }

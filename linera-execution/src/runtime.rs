@@ -29,8 +29,9 @@ use crate::{
     execution::UserAction,
     execution_state_actor::{ExecutionRequest, ExecutionStateSender},
     resources::ResourceController,
+    system::CreateApplicationResult,
     util::{ReceiverExt, UnboundedSenderExt},
-    BaseRuntime, ContractRuntime, ExecutionError, FinalizeContext, MessageContext,
+    BaseRuntime, BytecodeId, ContractRuntime, ExecutionError, FinalizeContext, MessageContext,
     OperationContext, QueryContext, RawExecutionOutcome, ServiceRuntime, TransactionTracker,
     UserApplicationDescription, UserApplicationId, UserContractCode, UserContractInstance,
     UserServiceCode, UserServiceInstance, MAX_EVENT_KEY_LEN, MAX_STREAM_NAME_LEN,
@@ -1032,7 +1033,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
             self.transaction_tracker
                 .replay_oracle_response(OracleResponse::Blob(blob_id))?;
         }
-        Ok(blob_content.inner_bytes())
+        Ok(blob_content.into_bytes().into_vec())
     }
 
     fn assert_data_blob_exists(&mut self, hash: &CryptoHash) -> Result<(), ExecutionError> {
@@ -1115,6 +1116,22 @@ impl ContractSyncRuntime {
         chain_id: ChainId,
         action: UserAction,
     ) -> Result<(ResourceController, TransactionTracker), ExecutionError> {
+        self.deref_mut()
+            .run_action(application_id, chain_id, action)?;
+        let runtime = self
+            .into_inner()
+            .expect("Runtime clones should have been freed by now");
+        Ok((runtime.resource_controller, runtime.transaction_tracker))
+    }
+}
+
+impl ContractSyncRuntimeHandle {
+    fn run_action(
+        &mut self,
+        application_id: UserApplicationId,
+        chain_id: ChainId,
+        action: UserAction,
+    ) -> Result<(), ExecutionError> {
         let finalize_context = FinalizeContext {
             authenticated_signer: action.signer(),
             chain_id,
@@ -1135,10 +1152,7 @@ impl ContractSyncRuntime {
             UserAction::Message(context, message) => code.execute_message(context, message),
         })?;
         self.finalize(finalize_context)?;
-        let runtime = self
-            .into_inner()
-            .expect("Runtime clones should have been freed by now");
-        Ok((runtime.resource_controller, runtime.transaction_tracker))
+        Ok(())
     }
 
     /// Notifies all loaded applications that execution is finalizing.
@@ -1399,6 +1413,57 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
                 callback,
             })?
             .recv_response()?
+    }
+
+    fn create_application(
+        &mut self,
+        bytecode_id: BytecodeId,
+        parameters: Vec<u8>,
+        argument: Vec<u8>,
+        required_application_ids: Vec<UserApplicationId>,
+    ) -> Result<UserApplicationId, ExecutionError> {
+        let chain_id = self.inner().chain_id;
+        let context = OperationContext {
+            chain_id,
+            authenticated_signer: self.authenticated_signer()?,
+            authenticated_caller_id: self.authenticated_caller_id()?,
+            height: self.block_height()?,
+            index: None,
+        };
+
+        let mut this = self.inner();
+        let message_id = MessageId {
+            chain_id: context.chain_id,
+            height: context.height,
+            index: this.transaction_tracker.next_message_index(),
+        };
+        let CreateApplicationResult {
+            app_id,
+            message,
+            blobs_to_register,
+        } = this
+            .execution_state_sender
+            .send_request(|callback| ExecutionRequest::CreateApplication {
+                next_message_id: message_id,
+                bytecode_id,
+                parameters,
+                required_application_ids,
+                callback,
+            })?
+            .recv_response()??;
+        for blob_id in blobs_to_register {
+            this.transaction_tracker
+                .replay_oracle_response(OracleResponse::Blob(blob_id))?;
+        }
+        let outcome = RawExecutionOutcome::default().with_message(message);
+        this.transaction_tracker.add_system_outcome(outcome)?;
+
+        drop(this);
+
+        let user_action = UserAction::Instantiate(context, argument);
+        self.run_action(app_id, chain_id, user_action)?;
+
+        Ok(app_id)
     }
 
     fn write_batch(&mut self, batch: Batch) -> Result<(), ExecutionError> {
