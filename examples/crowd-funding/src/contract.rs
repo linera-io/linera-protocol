@@ -85,9 +85,13 @@ impl Contract for CrowdFundingContract {
 
 impl CrowdFundingContract {
     fn fungible_id(&mut self) -> ApplicationId<FungibleTokenAbi> {
-        // TODO(#723): We should be able to pull the fungible ID from the
-        // `required_application_ids` of the application description.
-        self.runtime.application_parameters()
+        // Get the fungible token ID from the required applications
+        self.runtime
+            .required_application_ids()
+            .into_iter()
+            .find(|id| id.is::<FungibleTokenAbi>())
+            .expect("Fungible token application ID not found in required applications")
+            .cast()
     }
 
     /// Adds a pledge from a local account to the remote campaign chain.
