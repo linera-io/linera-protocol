@@ -631,17 +631,20 @@ where
     }
 
     /// Adds a new expected call to `create_application`.
-    pub fn add_expected_create_application_call<A: Contract>(
+    pub fn add_expected_create_application_call<Parameters, InstantiationArgument>(
         &mut self,
         bytecode_id: BytecodeId,
-        parameters: &A::Parameters,
-        argument: &A::InstantiationArgument,
+        parameters: &Parameters,
+        argument: &InstantiationArgument,
         required_application_ids: Vec<ApplicationId>,
         application_id: ApplicationId,
-    ) {
-        let parameters = bcs::to_bytes(parameters)
+    ) where
+        Parameters: Serialize,
+        InstantiationArgument: Serialize,
+    {
+        let parameters = serde_json::to_vec(parameters)
             .expect("Failed to serialize `Parameters` type for a cross-application call");
-        let argument = bcs::to_bytes(argument).expect(
+        let argument = serde_json::to_vec(argument).expect(
             "Failed to serialize `InstantiationArgument` type for a cross-application call",
         );
         self.expected_create_application_calls
@@ -655,13 +658,18 @@ where
     }
 
     /// Creates a new on-chain application, based on the supplied bytecode and parameters.
-    pub fn create_application<A: Contract>(
+    pub fn create_application<Abi, Parameters, InstantiationArgument>(
         &mut self,
         bytecode_id: BytecodeId,
-        parameters: &A::Parameters,
-        argument: &A::InstantiationArgument,
+        parameters: &Parameters,
+        argument: &InstantiationArgument,
         required_application_ids: Vec<ApplicationId>,
-    ) -> ApplicationId<A::Abi> {
+    ) -> ApplicationId<Abi>
+    where
+        Abi: ContractAbi,
+        Parameters: Serialize,
+        InstantiationArgument: Serialize,
+    {
         let ExpectedCreateApplicationCall {
             bytecode_id: expected_bytecode_id,
             parameters: expected_parameters,
@@ -672,16 +680,16 @@ where
             .expected_create_application_calls
             .pop_front()
             .expect("Unexpected create_application call");
-        let parameters = bcs::to_bytes(parameters)
+        let parameters = serde_json::to_vec(parameters)
             .expect("Failed to serialize `Parameters` type for a cross-application call");
-        let argument = bcs::to_bytes(argument).expect(
+        let argument = serde_json::to_vec(argument).expect(
             "Failed to serialize `InstantiationArgument` type for a cross-application call",
         );
         assert_eq!(bytecode_id, expected_bytecode_id);
         assert_eq!(parameters, expected_parameters);
         assert_eq!(argument, expected_argument);
         assert_eq!(required_application_ids, expected_required_app_ids);
-        application_id.with_abi::<A::Abi>()
+        application_id.with_abi::<Abi>()
     }
 
     /// Configures the handler for cross-application calls made during the test.
