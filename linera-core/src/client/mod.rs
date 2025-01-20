@@ -3226,7 +3226,7 @@ where
         // deadlock, because of the issue described in
         // https://github.com/linera-io/linera-protocol/pull/1173.
 
-        // TODO(#2013): replace this lock with an asychronous communication channel
+        // TODO(#2013): replace this lock with an asynchronous communication channel
 
         let mut process_notifications = FuturesUnordered::new();
 
