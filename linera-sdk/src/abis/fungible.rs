@@ -130,7 +130,7 @@ impl InitialStateBuilder {
     }
 
     /// Returns the serialized initial state of the application, ready to used as the
-    /// initilization argument.
+    /// initialization argument.
     pub fn build(&self) -> InitialState {
         InitialState {
             accounts: self.account_balances.clone(),
