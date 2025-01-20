@@ -3,12 +3,7 @@
 
 //! Implements [`crate::store::KeyValueStore`] for the RocksDB database.
 
-use std::{
-    ffi::OsString,
-    ops::{Bound, Bound::Excluded},
-    path::PathBuf,
-    sync::Arc,
-};
+use std::{ffi::OsString, path::PathBuf, sync::Arc};
 
 use linera_base::ensure;
 use tempfile::TempDir;
@@ -20,7 +15,7 @@ use crate::metering::MeteredStore;
 use crate::store::TestKeyValueStore;
 use crate::{
     batch::{Batch, WriteOperation},
-    common::get_upper_bound,
+    common::get_upper_bound_option,
     lru_caching::{LruCachingConfig, LruCachingStore},
     store::{
         AdminKeyValueStore, CommonStoreInternalConfig, KeyValueStoreError, ReadableKeyValueStore,
@@ -193,28 +188,7 @@ impl RocksDbStoreExecutor {
         Ok(key_values)
     }
 
-    fn write_batch_internal(&self, mut batch: Batch) -> Result<(), RocksDbStoreInternalError> {
-        // NOTE: The delete_range functionality of RocksDB needs to have an upper bound in order to work.
-        // Thus in order to have the system working, we need to handle the unlikely case of having to
-        // delete a key starting with [255, ...., 255]
-        let len = batch.operations.len();
-        let mut keys = Vec::new();
-        for i in 0..len {
-            let op = batch.operations.get(i).unwrap();
-            if let WriteOperation::DeletePrefix { key_prefix } = op {
-                if get_upper_bound(key_prefix) == Bound::Unbounded {
-                    for short_key in self.find_keys_by_prefix_internal(key_prefix.to_vec())? {
-                        let mut full_key = self.start_key.clone();
-                        full_key.extend(key_prefix);
-                        full_key.extend(short_key);
-                        keys.push(full_key);
-                    }
-                }
-            }
-        }
-        for key in keys {
-            batch.operations.push(WriteOperation::Delete { key });
-        }
+    fn write_batch_internal(&self, batch: Batch) -> Result<(), RocksDbStoreInternalError> {
         let mut inner_batch = rocksdb::WriteBatchWithTransaction::default();
         for operation in batch.operations {
             match operation {
@@ -232,13 +206,19 @@ impl RocksDbStoreExecutor {
                 }
                 WriteOperation::DeletePrefix { key_prefix } => {
                     check_key_size(&key_prefix)?;
-                    if let Excluded(upper_bound) = get_upper_bound(&key_prefix) {
-                        let mut full_key1 = self.start_key.to_vec();
-                        full_key1.extend(key_prefix);
-                        let mut full_key2 = self.start_key.to_vec();
-                        full_key2.extend(upper_bound);
-                        inner_batch.delete_range(&full_key1, &full_key2);
-                    }
+                    let mut full_key1 = self.start_key.to_vec();
+                    full_key1.extend(&key_prefix);
+                    let full_key2 = match get_upper_bound_option(&key_prefix) {
+                        Some(upper_bound) => {
+                            let mut full_key2 = self.start_key.to_vec();
+                            full_key2.extend(upper_bound);
+                            full_key2
+                        }
+                        None => {
+                            vec![1]
+                        }
+                    };
+                    inner_batch.delete_range(&full_key1, &full_key2);
                 }
             }
         }
@@ -429,17 +409,16 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
         namespace: &str,
         root_key: &[u8],
     ) -> Result<Self, RocksDbStoreInternalError> {
-        {
-            let start_key = vec![1];
-            let store = RocksDbStoreInternal::build(config, namespace, start_key)?;
-            let mut batch = Batch::new();
-            batch.put_key_value_bytes(root_key.to_vec(), vec![]);
-            store.write_batch(batch).await?;
-        }
+        let start_key = vec![1];
+        let mut store = RocksDbStoreInternal::build(config, namespace, start_key)?;
+        let mut batch = Batch::new();
+        batch.put_key_value_bytes(root_key.to_vec(), vec![]);
+        store.write_batch(batch).await?;
 
         let mut start_key = vec![0];
         start_key.extend(root_key);
-        RocksDbStoreInternal::build(config, namespace, start_key)
+        store.executor.start_key = start_key;
+        Ok(store)
     }
 
     async fn clone_with_root_key(

@@ -530,6 +530,9 @@ async fn run_test_batch_from_state<C: LocalRestrictedKeyValueStore>(
         batch_insert.put_key_value_bytes(key, value);
     }
     key_value_store.write_batch(batch_insert).await.unwrap();
+    let key_values = read_key_values_prefix(key_value_store, &key_prefix).await;
+    assert_eq!(key_values, kv_state);
+
     update_state_from_batch(&mut kv_state, &batch);
     key_value_store.write_batch(batch).await.unwrap();
     let key_values = read_key_values_prefix(key_value_store, &key_prefix).await;
