@@ -3426,6 +3426,53 @@ where
             },
         )
     }
+
+    /// Attempts to update a validator with the local information.
+    #[instrument(level = "trace", skip(remote_node))]
+    pub async fn sync_validator(&self, remote_node: P::Node) -> Result<(), ChainClientError> {
+        let validator_chain_state = remote_node
+            .handle_chain_info_query(ChainInfoQuery::new(self.chain_id))
+            .await?;
+        let local_chain_state = self.client.local_node.chain_info(self.chain_id).await?;
+
+        let Some(missing_certificate_count) = local_chain_state
+            .next_block_height
+            .0
+            .checked_sub(validator_chain_state.info.next_block_height.0)
+            .filter(|count| *count > 0)
+        else {
+            debug!("Validator is up-to-date with local state");
+            return Ok(());
+        };
+
+        let missing_certificates_end = usize::try_from(local_chain_state.next_block_height.0)
+            .expect("`usize` should be at least `u64`");
+        let missing_certificates_start = missing_certificates_end
+            - usize::try_from(missing_certificate_count).expect("`usize` should be at least `u64`");
+
+        let missing_certificate_hashes = self
+            .client
+            .local_node
+            .chain_state_view(self.chain_id)
+            .await?
+            .confirmed_log
+            .read(missing_certificates_start..missing_certificates_end)
+            .await?;
+
+        let certificates = self
+            .client
+            .storage
+            .read_certificates(missing_certificate_hashes)
+            .await?;
+
+        for certificate in certificates {
+            remote_node
+                .handle_confirmed_certificate(certificate, CrossChainMessageDelivery::NonBlocking)
+                .await?;
+        }
+
+        Ok(())
+    }
 }
 
 /// The outcome of trying to commit a list of incoming messages and operations to the chain.
