@@ -463,6 +463,16 @@ pub enum ClientCommand {
         chain_id: Option<ChainId>,
     },
 
+    /// Synchronizes a validator with the local state of chains.
+    SyncValidator {
+        /// The public address of the validator to synchronize.
+        address: String,
+
+        /// The chains to synchronize, or the default chain if empty.
+        #[arg(long, num_args = 0..)]
+        chains: Vec<ChainId>,
+    },
+
     /// Add or modify a validator (admin only)
     SetValidator {
         /// The public key of the validator.
