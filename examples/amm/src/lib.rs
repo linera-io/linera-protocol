@@ -26,7 +26,6 @@ impl ServiceAbi for AmmAbi {
 /// Operations that can be sent to the application.
 #[derive(Debug, Serialize, Deserialize, GraphQLMutationRoot)]
 pub enum Operation {
-    // TODO(#969): Need to also implement Swap Bids here
     /// Swap operation
     /// Given an input token idx (can be 0 or 1), and an input amount,
     /// Swap that token amount for an amount of the other token,
@@ -70,6 +69,15 @@ pub enum Operation {
     /// Close this chain, and remove all added liquidity
     /// Requires that this application is authorized to close the chain.
     CloseChain,
+    /// Swap Bid operation
+    /// Place a bid to swap tokens at a specific minimum output amount
+    /// If the calculated output amount is less than the minimum, the swap will fail
+    SwapBid {
+        owner: AccountOwner,
+        input_token_idx: u32,
+        input_amount: Amount,
+        minimum_output_amount: Amount,
+    },
 }
 
 scalar!(Operation);
@@ -93,5 +101,11 @@ pub enum Message {
     },
     RemoveAllAddedLiquidity {
         owner: AccountOwner,
+    },
+    SwapBid {
+        owner: AccountOwner,
+        input_token_idx: u32,
+        input_amount: Amount,
+        minimum_output_amount: Amount,
     },
 }
