@@ -13,19 +13,19 @@ use serde::{ser::SerializeStruct, Deserialize, Deserializer, Serialize};
 
 use super::{generic::GenericCertificate, Certificate};
 use crate::{
-    block::{ConfirmedBlock, ConversionError},
-    data_types::{ExecutedBlock, Medium, MessageBundle},
+    block::{Block, ConfirmedBlock, ConversionError},
+    data_types::{Medium, MessageBundle},
 };
 
 impl GenericCertificate<ConfirmedBlock> {
     /// Returns reference to the `ExecutedBlock` contained in this certificate.
-    pub fn executed_block(&self) -> &ExecutedBlock {
-        self.inner().executed_block()
+    pub fn block(&self) -> &Block {
+        self.inner().block()
     }
 
     /// Returns whether this value contains the message with the specified ID.
     pub fn has_message(&self, message_id: &MessageId) -> bool {
-        self.executed_block().message_by_id(message_id).is_some()
+        self.block().message_by_id(message_id).is_some()
     }
 
     /// Returns the bundles of messages sent via the given medium to the specified
@@ -38,17 +38,17 @@ impl GenericCertificate<ConfirmedBlock> {
         recipient: ChainId,
     ) -> impl Iterator<Item = (Epoch, MessageBundle)> + 'a {
         let certificate_hash = self.hash();
-        self.executed_block()
+        self.block()
             .message_bundles_for(medium, recipient, certificate_hash)
     }
 
     pub fn requires_blob(&self, blob_id: &BlobId) -> bool {
-        self.executed_block().requires_blob(blob_id)
+        self.block().requires_blob(blob_id)
     }
 
     #[cfg(with_testing)]
     pub fn outgoing_message_count(&self) -> usize {
-        self.executed_block().messages().iter().map(Vec::len).sum()
+        self.block().messages().iter().map(Vec::len).sum()
     }
 }
 

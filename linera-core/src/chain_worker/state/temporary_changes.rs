@@ -14,8 +14,8 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, BlockExecutionOutcome, BlockProposal, ChannelFullName, ExecutedBlock,
-        IncomingBundle, Medium, MessageAction, ProposalContent,
+        BlockExecutionOutcome, BlockProposal, ChannelFullName, ExecutedBlock, IncomingBundle,
+        Medium, MessageAction, Proposal, ProposalContent,
     },
     manager,
     types::ValidatedBlock,
@@ -126,14 +126,14 @@ where
     /// Executes a block without persisting any changes to the state.
     pub(super) async fn stage_block_execution(
         &mut self,
-        block: Block,
+        proposal: Proposal,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), WorkerError> {
         let local_time = self.0.storage.clock().current_time();
-        let signer = block.authenticated_signer;
+        let signer = proposal.authenticated_signer;
 
-        let executed_block = Box::pin(self.0.chain.execute_block(&block, local_time, None))
+        let executed_block = Box::pin(self.0.chain.execute_block(&proposal, local_time, None))
             .await?
-            .with(block);
+            .with(proposal);
 
         let mut response = ChainInfoResponse::new(&self.0.chain, None);
         if let Some(signer) = signer {
@@ -158,7 +158,7 @@ where
         let BlockProposal {
             content:
                 ProposalContent {
-                    block,
+                    proposal: block,
                     round,
                     outcome,
                 },
@@ -184,7 +184,7 @@ where
             .system
             .current_committee()
             .expect("chain is active");
-        check_block_epoch(epoch, block)?;
+        check_block_epoch(epoch, block.chain_id, block.epoch)?;
         let policy = committee.policy().clone();
         // Check the authentication of the block.
         let public_key = self
@@ -210,7 +210,10 @@ where
         // Update the inboxes so that we can verify the provided hashed certificate values are
         // legitimately required.
         // Actual execution happens below, after other validity checks.
-        self.0.chain.remove_bundles_from_inboxes(block).await?;
+        self.0
+            .chain
+            .remove_bundles_from_inboxes(block.timestamp, &block.incoming_bundles)
+            .await?;
         // Verify that no unrelated blobs were provided.
         let published_blob_ids = block.published_blob_ids();
         let provided_blob_ids = blobs.iter().map(Blob::id);
@@ -238,7 +241,7 @@ where
         let executed_block = outcome.with(block.clone());
         let required_blobs = self
             .0
-            .get_required_blobs(&executed_block, blobs)
+            .get_required_blobs(executed_block.required_blob_ids(), blobs)
             .await?
             .into_values()
             .collect::<Vec<_>>();

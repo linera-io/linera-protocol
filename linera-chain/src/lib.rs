@@ -5,7 +5,7 @@
 
 #![deny(clippy::large_futures)]
 
-mod block;
+pub mod block;
 mod certificate;
 
 pub mod types {

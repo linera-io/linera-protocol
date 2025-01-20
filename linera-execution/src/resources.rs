@@ -35,7 +35,7 @@ pub struct ResourceTracker {
     /// The number of blocks created.
     pub blocks: u32,
     /// The total size of the executed block so far.
-    pub executed_block_size: u64,
+    pub block_size: u64,
     /// The fuel used so far.
     pub fuel: u64,
     /// The number of read operations.
@@ -286,28 +286,25 @@ where
         let old_size = ((usize::BITS - old_len.leading_zeros()) / 7).max(1);
         let new_size = ((usize::BITS - new_len.leading_zeros()) / 7).max(1);
         if new_size > old_size {
-            self.track_executed_block_size((new_size - old_size) as usize)?;
+            self.track_block_size((new_size - old_size) as usize)?;
         }
         Ok(())
     }
 
     /// Tracks the serialized size of an executed block, or parts of it.
-    pub fn track_executed_block_size_of(
-        &mut self,
-        data: &impl Serialize,
-    ) -> Result<(), ExecutionError> {
-        self.track_executed_block_size(bcs::serialized_size(data)?)
+    pub fn track_block_size_of(&mut self, data: &impl Serialize) -> Result<(), ExecutionError> {
+        self.track_block_size(bcs::serialized_size(data)?)
     }
 
     /// Tracks the serialized size of an executed block, or parts of it.
-    pub fn track_executed_block_size(&mut self, size: usize) -> Result<(), ExecutionError> {
+    pub fn track_block_size(&mut self, size: usize) -> Result<(), ExecutionError> {
         let tracker = self.tracker.as_mut();
-        tracker.executed_block_size = u64::try_from(size)
+        tracker.block_size = u64::try_from(size)
             .ok()
-            .and_then(|size| tracker.executed_block_size.checked_add(size))
+            .and_then(|size| tracker.block_size.checked_add(size))
             .ok_or(ExecutionError::ExecutedBlockTooLarge)?;
         ensure!(
-            tracker.executed_block_size <= self.policy.maximum_executed_block_size,
+            tracker.block_size <= self.policy.maximum_executed_block_size,
             ExecutionError::ExecutedBlockTooLarge
         );
         Ok(())

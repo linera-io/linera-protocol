@@ -41,6 +41,14 @@ type HasherOutput = generic_array::GenericArray<u8, HasherOutputSize>;
 #[cfg_attr(with_testing, derive(Default))]
 pub struct CryptoHash(HasherOutput);
 
+/// A vector of cryptographic hashes.
+/// This is used to represent a hash of a list of hashes.
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Serialize, Deserialize)]
+#[cfg_attr(with_testing, derive(Default))]
+pub struct CryptoHashVec(pub Vec<CryptoHash>);
+
+impl<'de> BcsHashable<'de> for CryptoHashVec {}
+
 /// A signature value.
 #[derive(Eq, PartialEq, Copy, Clone)]
 pub struct Signature(pub dalek::Signature);

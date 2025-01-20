@@ -222,7 +222,7 @@ impl ActiveChain {
             )
             .await;
 
-        let executed_block = certificate.inner().executed_block();
+        let executed_block = certificate.inner().block();
         assert_eq!(executed_block.messages().len(), 1);
         assert_eq!(executed_block.messages()[0].len(), 0);
 
@@ -331,8 +331,8 @@ impl ActiveChain {
             .as_ref()
             .expect("Block was not successfully added")
             .inner()
-            .executed_block()
-            .block
+            .block()
+            .header
             .height
     }
 
@@ -376,11 +376,11 @@ impl ActiveChain {
             })
             .await;
 
-        let executed_block = creation_certificate.inner().executed_block();
-        assert_eq!(executed_block.messages().len(), 1);
+        let block = creation_certificate.inner().block();
+        assert_eq!(block.messages().len(), 1);
         let creation = MessageId {
-            chain_id: executed_block.block.chain_id,
-            height: executed_block.block.height,
+            chain_id: block.header.chain_id,
+            height: block.header.height,
             index: CREATE_APPLICATION_MESSAGE_INDEX,
         };
 

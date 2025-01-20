@@ -19,8 +19,8 @@ use linera_base::{
     identifiers::{BlobId, ChainId, UserApplicationId},
 };
 use linera_chain::{
-    data_types::{Block, BlockProposal, ExecutedBlock, Medium, MessageBundle, Origin, Target},
-    types::{ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
+    data_types::{BlockProposal, ExecutedBlock, Medium, MessageBundle, Origin, Proposal, Target},
+    types::{Block, ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
     ChainError, ChainStateView,
 };
 use linera_execution::{
@@ -54,7 +54,7 @@ where
     chain: ChainStateView<StorageClient::Context>,
     shared_chain_view: Option<Arc<RwLock<ChainStateView<StorageClient::Context>>>>,
     service_runtime_endpoint: Option<ServiceRuntimeEndpoint>,
-    executed_block_values: Arc<ValueCache<CryptoHash, Hashed<ExecutedBlock>>>,
+    block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
     tracked_chains: Option<Arc<sync::RwLock<HashSet<ChainId>>>>,
     delivery_notifier: DeliveryNotifier,
     knows_chain_is_active: bool,
@@ -69,7 +69,7 @@ where
     pub async fn load(
         config: ChainWorkerConfig,
         storage: StorageClient,
-        executed_block_values: Arc<ValueCache<CryptoHash, Hashed<ExecutedBlock>>>,
+        block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
         tracked_chains: Option<Arc<sync::RwLock<HashSet<ChainId>>>>,
         delivery_notifier: DeliveryNotifier,
         chain_id: ChainId,
@@ -83,7 +83,7 @@ where
             chain,
             shared_chain_view: None,
             service_runtime_endpoint,
-            executed_block_values,
+            block_values,
             tracked_chains,
             delivery_notifier,
             knows_chain_is_active: false,
@@ -176,7 +176,7 @@ where
     /// Executes a block without persisting any changes to the state.
     pub(super) async fn stage_block_execution(
         &mut self,
-        block: Block,
+        block: Proposal,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), WorkerError> {
         ChainWorkerStateWithTemporaryChanges::new(self)
             .await
@@ -331,10 +331,9 @@ where
     /// are read from the chain manager or from storage.
     async fn get_required_blobs(
         &self,
-        executed_block: &ExecutedBlock,
+        mut blob_ids: HashSet<BlobId>,
         blobs: &[Blob],
     ) -> Result<BTreeMap<BlobId, Blob>, WorkerError> {
-        let mut blob_ids = executed_block.required_blob_ids();
         let mut found_blobs = BTreeMap::new();
 
         for blob in blobs {
@@ -376,7 +375,7 @@ where
             if !tracked_chains
                 .read()
                 .expect("Panics should not happen while holding a lock to `tracked_chains`")
-                .contains(&executed_block.block.chain_id)
+                .contains(&executed_block.proposal.chain_id)
             {
                 return; // The parent chain is not tracked; don't track the child.
             }
@@ -543,12 +542,16 @@ where
 }
 
 /// Returns an error if the block is not at the expected epoch.
-fn check_block_epoch(chain_epoch: Epoch, block: &Block) -> Result<(), WorkerError> {
+fn check_block_epoch(
+    chain_epoch: Epoch,
+    block_chain: ChainId,
+    block_epoch: Epoch,
+) -> Result<(), WorkerError> {
     ensure!(
-        block.epoch == chain_epoch,
+        block_epoch == chain_epoch,
         WorkerError::InvalidEpoch {
-            chain_id: block.chain_id,
-            epoch: block.epoch,
+            chain_id: block_chain,
+            epoch: block_epoch,
             chain_epoch
         }
     );

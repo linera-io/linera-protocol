@@ -72,7 +72,7 @@ fn test_hashes() {
         oracle_responses: vec![Vec::new()],
         events: vec![Vec::new()],
     }
-    .with(block.clone());
+    .with(block);
     let confirmed_hashed = Hashed::new(ConfirmedBlock::new(executed_block.clone()));
     let validated_hashed = Hashed::new(ValidatedBlock::new(executed_block));
 

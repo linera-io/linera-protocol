@@ -41,8 +41,8 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, BlockProposal, ChainAndHeight, ExecutedBlock, IncomingBundle, LiteVote,
-        MessageAction,
+        BlockProposal, ChainAndHeight, ExecutedBlock, IncomingBundle, LiteVote, MessageAction,
+        Proposal,
     },
     manager::LockedBlock,
     types::{
@@ -250,7 +250,7 @@ impl<P, S: Storage + Clone> Client<P, S> {
         block_hash: Option<CryptoHash>,
         timestamp: Timestamp,
         next_block_height: BlockHeight,
-        pending_block: Option<Block>,
+        pending_block: Option<Proposal>,
         pending_blobs: BTreeMap<BlobId, Blob>,
     ) -> ChainClient<P, S> {
         // If the entry already exists we assume that the entry is more up to date than
@@ -366,7 +366,7 @@ where
         let mut info = None;
         for certificate in certificates {
             let hash = certificate.hash();
-            if certificate.executed_block().block.chain_id != chain_id {
+            if certificate.block().header.chain_id != chain_id {
                 // The certificate is not as expected. Give up.
                 warn!("Failed to process network certificate {}", hash);
                 return info;
@@ -690,8 +690,8 @@ impl<P: 'static, S: Storage> ChainClient<P, S> {
 
     /// Gets a guarded reference to the next pending block.
     #[instrument(level = "trace", skip(self))]
-    pub fn pending_block(&self) -> ChainGuardMapped<Option<Block>> {
-        Unsend::new(self.state().inner.map(|state| state.pending_block()))
+    pub fn pending_proposal(&self) -> ChainGuardMapped<Option<Proposal>> {
+        Unsend::new(self.state().inner.map(|state| state.pending_proposal()))
     }
 
     /// Gets a guarded reference to the set of pending blobs.
@@ -1031,7 +1031,7 @@ where
         certificate: ValidatedBlockCertificate,
     ) -> Result<ConfirmedBlockCertificate, ChainClientError> {
         let hashed_value = Hashed::new(ConfirmedBlock::new(
-            certificate.inner().executed_block().clone(),
+            certificate.inner().block().clone().into(),
         ));
         let finalize_action = CommunicateAction::FinalizeBlock {
             certificate,
@@ -1058,7 +1058,7 @@ where
     ) -> Result<GenericCertificate<T>, ChainClientError> {
         // Remember what we are trying to do before sending the proposal to the validators.
         self.state_mut()
-            .set_pending_block(proposal.content.block.clone());
+            .set_pending_proposal(proposal.content.proposal.clone());
         let required_blob_ids = value.inner().required_blob_ids();
         let proposed_blobs = proposal.blobs.clone();
         let submit_action = CommunicateAction::SubmitBlock {
@@ -1203,8 +1203,8 @@ where
         certificate: ConfirmedBlockCertificate,
         mode: ReceiveCertificateMode,
     ) -> Result<(), ChainClientError> {
-        let block_chain_id = certificate.executed_block().block.chain_id;
-        let block_height = certificate.executed_block().block.height;
+        let block_chain_id = certificate.block().header.chain_id;
+        let block_height = certificate.block().header.height;
 
         self.receive_certificate_internal(certificate, mode, None)
             .await?;
@@ -1231,16 +1231,16 @@ where
         mode: ReceiveCertificateMode,
         nodes: Option<Vec<RemoteNode<P::Node>>>,
     ) -> Result<(), ChainClientError> {
-        let block = &certificate.executed_block().block;
+        let block = certificate.block();
 
         // Verify the certificate before doing any expensive networking.
         let (committees, max_epoch) = self.known_committees().await?;
         ensure!(
-            block.epoch <= max_epoch,
+            block.header.epoch <= max_epoch,
             ChainClientError::CommitteeSynchronizationError
         );
         let remote_committee = committees
-            .get(&block.epoch)
+            .get(&block.header.epoch)
             .ok_or_else(|| ChainClientError::CommitteeDeprecationError)?;
         if let ReceiveCertificateMode::NeedsCheck = mode {
             certificate.check(remote_committee)?;
@@ -1253,7 +1253,7 @@ where
             self.make_nodes(remote_committee)?
         };
         self.client
-            .download_certificates(&nodes, block.chain_id, block.height)
+            .download_certificates(&nodes, block.header.chain_id, block.header.height)
             .await?;
         // Process the received operations. Download required hashed certificate values if
         // necessary.
@@ -1347,10 +1347,10 @@ where
         // Check the signatures and keep only the ones that are valid.
         let mut certificates = Vec::new();
         for confirmed_block_certificate in remote_certificates {
-            let block = &confirmed_block_certificate.inner().executed_block().block;
-            let sender_chain_id = block.chain_id;
-            let height = block.height;
-            let epoch = block.epoch;
+            let block_header = &confirmed_block_certificate.inner().block().header;
+            let sender_chain_id = block_header.chain_id;
+            let height = block_header.height;
+            let epoch = block_header.epoch;
             match self.check_certificate(max_epoch, &committees, &confirmed_block_certificate)? {
                 CheckCertificateResult::FutureEpoch => {
                     warn!(
@@ -1407,12 +1407,12 @@ where
         committees: &BTreeMap<Epoch, Committee>,
         incoming_certificate: &ConfirmedBlockCertificate,
     ) -> Result<CheckCertificateResult, NodeError> {
-        let block = &incoming_certificate.executed_block().block;
+        let block = incoming_certificate.block();
         // Check that certificates are valid w.r.t one of our trusted committees.
-        if block.epoch > highest_known_epoch {
+        if block.header.epoch > highest_known_epoch {
             return Ok(CheckCertificateResult::FutureEpoch);
         }
-        if let Some(known_committee) = committees.get(&block.epoch) {
+        if let Some(known_committee) = committees.get(&block.header.epoch) {
             // This epoch is recognized by our chain. Let's verify the
             // certificate.
             incoming_certificate.check(known_committee)?;
@@ -1440,9 +1440,9 @@ where
             new_trackers.insert(response.name, response.tracker);
             for certificate in response.certificates {
                 certificates
-                    .entry(certificate.executed_block().block.chain_id)
+                    .entry(certificate.block().header.chain_id)
                     .or_default()
-                    .insert(certificate.executed_block().block.height, certificate);
+                    .insert(certificate.block().header.height, certificate);
             }
         }
         let certificate_count = certificates.values().map(BTreeMap::len).sum::<usize>();
@@ -1906,7 +1906,7 @@ where
     #[tracing::instrument(level = "trace", skip(block))]
     async fn stage_block_execution_and_discard_failing_messages(
         &self,
-        mut block: Block,
+        mut block: Proposal,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), ChainClientError> {
         loop {
             let result = self.stage_block_execution(block.clone()).await;
@@ -1947,7 +1947,7 @@ where
     #[instrument(level = "trace", skip(block))]
     async fn stage_block_execution(
         &self,
-        block: Block,
+        block: Proposal,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), ChainClientError> {
         loop {
             let result = self
@@ -2024,7 +2024,7 @@ where
                 }
                 ExecuteBlockOutcome::Conflict(certificate) => {
                     info!(
-                        height = %certificate.executed_block().block.height,
+                        height = %certificate.block().header.height,
                         "Another block was committed; retrying."
                     );
                 }
@@ -2072,8 +2072,7 @@ where
 
         match self.process_pending_block_without_prepare().await? {
             ClientOutcome::Committed(Some(certificate))
-                if certificate.executed_block().block
-                    == confirmed_value.inner().executed_block().block =>
+                if certificate.block() == confirmed_value.inner().block() =>
             {
                 Ok(ExecuteBlockOutcome::Executed(certificate))
             }
@@ -2103,7 +2102,7 @@ where
         let (previous_block_hash, height, timestamp) = {
             let state = self.state();
             ensure!(
-                state.pending_block().is_none(),
+                state.pending_proposal().is_none(),
                 ChainClientError::BlockProposalError(
                     "Client state already has a pending block; \
                     use the `linera retry-pending-block` command to commit that first"
@@ -2115,7 +2114,7 @@ where
                 self.next_timestamp(&incoming_bundles, state.timestamp()),
             )
         };
-        let block = Block {
+        let block = Proposal {
             epoch: self.epoch().await?,
             chain_id: self.chain_id,
             incoming_bundles,
@@ -2133,11 +2132,11 @@ where
         let blobs = self
             .read_local_blobs(executed_block.required_blob_ids())
             .await?;
-        let block = &executed_block.block;
+        let block = &executed_block.proposal;
         let committee = self.local_committee().await?;
         let max_size = committee.policy().maximum_block_proposal_size;
         block.check_proposal_size(max_size, &blobs)?;
-        self.state_mut().set_pending_block(block.clone());
+        self.state_mut().set_pending_proposal(block.clone());
         Ok(Hashed::new(ConfirmedBlock::new(executed_block)))
     }
 
@@ -2261,7 +2260,7 @@ where
                 self.next_timestamp(&incoming_bundles, state.timestamp()),
             )
         };
-        let block = Block {
+        let block = Proposal {
             epoch: self.epoch().await?,
             chain_id: self.chain_id,
             incoming_bundles,
@@ -2430,12 +2429,12 @@ where
         }
 
         // Otherwise we have to re-propose the highest validated block, if there is one.
-        let pending: Option<Block> = self.state().pending_block().clone();
+        let pending: Option<Proposal> = self.state().pending_proposal().clone();
         let executed_block = if let Some(locked) = &info.manager.requested_locked {
             match &**locked {
-                LockedBlock::Regular(certificate) => certificate.executed_block().clone(),
+                LockedBlock::Regular(certificate) => certificate.block().clone().into(),
                 LockedBlock::Fast(proposal) => {
-                    let block = proposal.content.block.clone();
+                    let block = proposal.content.proposal.clone();
                     self.stage_block_execution(block).await?.0
                 }
             }
@@ -2453,9 +2452,12 @@ where
         };
 
         // Collect the blobs required for execution.
-        let block = &executed_block.block;
-        let blobs = self.read_local_blobs(block.published_blob_ids()).await?;
-        let already_handled_locally = info.manager.already_handled_proposal(round, block);
+        let blobs = self
+            .read_local_blobs(executed_block.proposal.published_blob_ids())
+            .await?;
+        let already_handled_locally = info
+            .manager
+            .already_handled_proposal(round, &executed_block.proposal);
         let key_pair = self.key_pair().await?;
         // Create the final block proposal.
         let proposal = if let Some(locked) = info.manager.requested_locked {
@@ -2464,11 +2466,11 @@ where
                     BlockProposal::new_retry(round, cert, &key_pair, blobs)
                 }
                 LockedBlock::Fast(proposal) => {
-                    BlockProposal::new_initial(round, proposal.content.block, &key_pair, blobs)
+                    BlockProposal::new_initial(round, proposal.content.proposal, &key_pair, blobs)
                 }
             })
         } else {
-            let block = executed_block.block.clone();
+            let block = executed_block.proposal.clone();
             Box::new(BlockProposal::new_initial(round, block, &key_pair, blobs))
         };
         if !already_handled_locally {
@@ -2550,12 +2552,12 @@ where
         executed_block: &ExecutedBlock,
     ) -> Result<Either<Round, RoundTimeout>, ChainClientError> {
         let manager = &info.manager;
-        let block = &executed_block.block;
+        let block = &executed_block.proposal;
         // If there is a conflicting proposal in the current round, we can only propose if the
         // next round can be started without a timeout, i.e. if we are in a multi-leader round.
         // Similarly, we cannot propose a block that uses oracles in the fast round.
         let conflict = manager.requested_proposed.as_ref().is_some_and(|proposal| {
-            proposal.content.round == manager.current_round && proposal.content.block != *block
+            proposal.content.round == manager.current_round && proposal.content.proposal != *block
         }) || (manager.current_round.is_fast()
             && executed_block.outcome.has_oracle_responses());
         let round = if !conflict {
@@ -2680,7 +2682,7 @@ where
                 }
                 ExecuteBlockOutcome::Conflict(certificate) => {
                     info!(
-                        height = %certificate.executed_block().block.height,
+                        height = %certificate.block().header.height,
                         "Another block was committed; retrying."
                     );
                 }
@@ -2746,7 +2748,7 @@ where
             };
             // The first message of the only operation created the new chain.
             let message_id = certificate
-                .executed_block()
+                .block()
                 .message_id_for_operation(0, OPEN_CHAIN_MESSAGE_INDEX)
                 .ok_or_else(|| ChainClientError::InternalError("Failed to create new chain"))?;
             // Add the new chain to the list of tracked chains
@@ -2902,7 +2904,7 @@ where
         .try_map(|certificate| {
             // The first message of the only operation created the application.
             let creation = certificate
-                .executed_block()
+                .block()
                 .message_id_for_operation(0, CREATE_APPLICATION_MESSAGE_INDEX)
                 .ok_or_else(|| ChainClientError::InternalError("Failed to create application"))?;
             let id = ApplicationId {

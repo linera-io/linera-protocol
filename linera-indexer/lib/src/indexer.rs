@@ -127,15 +127,15 @@ where
         let mut values = Vec::new();
         let mut value = value.clone();
         loop {
-            let block = &value.inner().executed_block().block;
+            let header = &value.inner().block().header;
             values.push(value.clone());
-            if let Some(hash) = block.previous_block_hash {
+            if let Some(hash) = header.previous_block_hash {
                 match latest_block {
                     LatestBlock::LatestHash(latest_hash) if latest_hash != hash => {
                         value = listener.service.get_value(chain_id, Some(hash)).await?;
                         continue;
                     }
-                    LatestBlock::StartHeight(start) if block.height > start => {
+                    LatestBlock::StartHeight(start) if header.height > start => {
                         value = listener.service.get_value(chain_id, Some(hash)).await?;
                         continue;
                     }

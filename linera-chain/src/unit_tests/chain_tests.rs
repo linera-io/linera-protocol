@@ -31,7 +31,7 @@ use linera_views::{
 };
 
 use crate::{
-    block::ConfirmedBlock,
+    block::{Block, ConfirmedBlock},
     data_types::{IncomingBundle, MessageAction, MessageBundle, Origin},
     test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt},
     ChainError, ChainExecutionContext, ChainStateView,
@@ -171,11 +171,11 @@ async fn test_block_size_limit() {
 
     // The valid block is accepted...
     let outcome = chain.execute_block(&valid_block, time, None).await.unwrap();
-    let executed_block = outcome.with(valid_block);
+    let block = Block::new(valid_block, outcome);
 
     // ...because its size is exactly at the allowed limit.
     assert_eq!(
-        bcs::serialized_size(&executed_block).unwrap(),
+        bcs::serialized_size(&block).unwrap(),
         maximum_executed_block_size as usize
     );
 }
@@ -246,8 +246,11 @@ async fn test_application_permissions() -> anyhow::Result<()> {
     let valid_block = make_first_block(chain_id)
         .with_incoming_bundle(bundle)
         .with_operation(app_operation.clone());
-    let outcome = chain.execute_block(&valid_block, time, None).await?;
-    let value = Hashed::new(ConfirmedBlock::new(outcome.with(valid_block)));
+    let executed_block = chain
+        .execute_block(&valid_block, time, None)
+        .await?
+        .with(valid_block);
+    let value = Hashed::new(ConfirmedBlock::new(executed_block));
 
     // In the second block, other operations are still not allowed.
     let invalid_block = make_child_block(&value.clone())
