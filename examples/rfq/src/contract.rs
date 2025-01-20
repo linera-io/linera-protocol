@@ -205,14 +205,15 @@ impl Contract for RfqContract {
                     &MEOperation::ExecuteOrder { order },
                 );
                 // inform the other side that the temporary chain is ready
-                self.runtime.send_message(
-                    request_id.chain_id(),
-                    Message::QuoteAccepted {
-                        request_id: RequestId::new(initiator, request_id.seq_number()),
-                        matching_engine_message_id,
-                        matching_engine_app_id: me_application_id.forget_abi(),
-                    },
-                );
+                let message = Message::QuoteAccepted {
+                    request_id: RequestId::new(initiator, request_id.seq_number()),
+                    matching_engine_message_id,
+                    matching_engine_app_id: me_application_id.forget_abi(),
+                };
+                self.runtime
+                    .prepare_message(message)
+                    .with_authentication()
+                    .send_to(request_id.chain_id());
             }
         }
     }
@@ -252,16 +253,17 @@ impl RfqContract {
         // create an application and submit the order!
         let initiator = self.runtime.chain_id();
         let token_pair = self.state.token_pair(request_id).await;
-        self.runtime.send_message(
-            matching_engine_chain_id,
-            Message::StartMatchingEngine {
-                initiator,
-                request_id: request_id.clone(),
-                order,
-                token_pair,
-                matching_engine_message_id,
-            },
-        );
+        let message = Message::StartMatchingEngine {
+            initiator,
+            request_id: request_id.clone(),
+            order,
+            token_pair,
+            matching_engine_message_id,
+        };
+        self.runtime
+            .prepare_message(message)
+            .with_authentication()
+            .send_to(matching_engine_chain_id);
 
         matching_engine_chain_id
     }
