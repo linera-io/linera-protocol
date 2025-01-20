@@ -97,7 +97,7 @@ impl SharedLocalKubernetesNetTestingConfig {
             testing_prng_seed: Some(37),
             num_other_initial_chains: 2,
             initial_amount: Amount::from_tokens(2000),
-            num_initial_validators: 4,
+            num_initial_validators: 1,
             num_shards: 4,
             binaries,
             no_build: false,
