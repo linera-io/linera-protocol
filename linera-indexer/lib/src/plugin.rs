@@ -75,6 +75,7 @@ where
     let root_key = name.as_bytes().to_vec();
     let store = store
         .clone_with_root_key(&root_key)
+        .await
         .map_err(|_e| IndexerError::CloneWithRootKeyError)?;
     let context = ViewContext::create_root_context(store, ())
         .await

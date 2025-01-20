@@ -86,6 +86,13 @@ impl MemoryStores {
         self.stores.keys().cloned().collect::<Vec<_>>()
     }
 
+    fn sync_get_root_keys(&self, namespace: &str) -> Vec<Vec<u8>> {
+        match self.stores.get(namespace) {
+            None => Vec::new(),
+            Some(map) => map.keys().cloned().collect::<Vec<_>>(),
+        }
+    }
+
     fn sync_exists(&self, namespace: &str) -> bool {
         self.stores.contains_key(namespace)
     }
@@ -320,7 +327,7 @@ impl AdminKeyValueStore for MemoryStore {
         memory_stores.sync_connect(config, namespace, root_key, kill_on_drop)
     }
 
-    fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, MemoryStoreError> {
+    async fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, MemoryStoreError> {
         let max_stream_queries = self.max_stream_queries;
         let common_config = CommonStoreInternalConfig {
             max_concurrent_queries: None,
@@ -340,6 +347,16 @@ impl AdminKeyValueStore for MemoryStore {
             .lock()
             .expect("MEMORY_STORES lock should not be poisoned");
         Ok(memory_stores.sync_list_all())
+    }
+
+    async fn get_root_keys(
+        _config: &Self::Config,
+        namespace: &str,
+    ) -> Result<Vec<Vec<u8>>, MemoryStoreError> {
+        let memory_stores = MEMORY_STORES
+            .lock()
+            .expect("MEMORY_STORES lock should not be poisoned");
+        Ok(memory_stores.sync_get_root_keys(namespace))
     }
 
     async fn exists(_config: &Self::Config, namespace: &str) -> Result<bool, MemoryStoreError> {

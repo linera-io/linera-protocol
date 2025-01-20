@@ -263,14 +263,16 @@ where
         })
     }
 
-    fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, Self::Error> {
+    async fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, Self::Error> {
         let first_store = self
             .first_store
             .clone_with_root_key(root_key)
+            .await
             .map_err(DualStoreError::First)?;
         let second_store = self
             .second_store
             .clone_with_root_key(root_key)
+            .await
             .map_err(DualStoreError::Second)?;
         let store_in_use = A::assigned_store(root_key)?;
         Ok(Self {
@@ -297,6 +299,21 @@ where
             }
         }
         Ok(namespaces)
+    }
+
+    async fn get_root_keys(
+        config: &Self::Config,
+        namespace: &str,
+    ) -> Result<Vec<Vec<u8>>, Self::Error> {
+        let mut root_keys = S1::get_root_keys(&config.first_config, namespace)
+            .await
+            .map_err(DualStoreError::First)?;
+        root_keys.extend(
+            S2::get_root_keys(&config.second_config, namespace)
+                .await
+                .map_err(DualStoreError::Second)?,
+        );
+        Ok(root_keys)
     }
 
     async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, Self::Error> {
