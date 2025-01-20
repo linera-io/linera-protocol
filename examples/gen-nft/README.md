@@ -9,7 +9,7 @@ The main purpose of this application is to show how to run an artificial intelli
 application service, allowing it to generate strings used as the contents of non-fungible tokens.
 The application service runs on the client (usually inside the wallet), which means it executes
 off-chain. In this example, it is used to prepare the mint operation by running the AI model to
-generate the token contents from a user provided prompt. The resulting operation can then be placed
+generate the token contents from a user-provided prompt. The resulting operation can then be placed
 by the wallet in a block proposal, minting the token on-chain.
 
 This application's contract is mostly identical to the one from the [NFT Example
