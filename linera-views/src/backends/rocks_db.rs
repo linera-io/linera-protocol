@@ -208,16 +208,7 @@ impl RocksDbStoreExecutor {
                     check_key_size(&key_prefix)?;
                     let mut full_key1 = self.start_key.to_vec();
                     full_key1.extend(&key_prefix);
-                    let full_key2 = match get_upper_bound_option(&key_prefix) {
-                        Some(upper_bound) => {
-                            let mut full_key2 = self.start_key.to_vec();
-                            full_key2.extend(upper_bound);
-                            full_key2
-                        }
-                        None => {
-                            vec![1]
-                        }
-                    };
+                    let full_key2 = get_upper_bound_option(&full_key1).unwrap();
                     inner_batch.delete_range(&full_key1, &full_key2);
                 }
             }
