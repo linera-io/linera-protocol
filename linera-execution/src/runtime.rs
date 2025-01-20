@@ -1201,6 +1201,7 @@ impl ContractSyncRuntimeHandle {
             &mut contract
                 .instance
                 .try_lock()
+                .map_err(|_| println!("{:?}", self.inner().call_stack))
                 .expect("Application should not be already executing"),
         )?;
 
@@ -1423,25 +1424,21 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         required_application_ids: Vec<UserApplicationId>,
     ) -> Result<UserApplicationId, ExecutionError> {
         let chain_id = self.inner().chain_id;
-        let context = OperationContext {
+        let height = self.block_height()?;
+        let index = self.inner().transaction_tracker.next_message_index();
+
+        let message_id = MessageId {
             chain_id,
-            authenticated_signer: self.authenticated_signer()?,
-            authenticated_caller_id: self.authenticated_caller_id()?,
-            height: self.block_height()?,
-            index: None,
+            height,
+            index,
         };
 
-        let mut this = self.inner();
-        let message_id = MessageId {
-            chain_id: context.chain_id,
-            height: context.height,
-            index: this.transaction_tracker.next_message_index(),
-        };
         let CreateApplicationResult {
             app_id,
             message,
             blobs_to_register,
-        } = this
+        } = self
+            .inner()
             .execution_state_sender
             .send_request(|callback| ExecutionRequest::CreateApplication {
                 next_message_id: message_id,
@@ -1452,16 +1449,23 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
             })?
             .recv_response()??;
         for blob_id in blobs_to_register {
-            this.transaction_tracker
+            self.inner()
+                .transaction_tracker
                 .replay_oracle_response(OracleResponse::Blob(blob_id))?;
         }
         let outcome = RawExecutionOutcome::default().with_message(message);
-        this.transaction_tracker.add_system_outcome(outcome)?;
+        self.inner()
+            .transaction_tracker
+            .add_system_outcome(outcome)?;
 
-        drop(this);
+        let (contract, context) = self.inner().prepare_for_call(self.clone(), true, app_id)?;
 
-        let user_action = UserAction::Instantiate(context, argument);
-        self.run_action(app_id, chain_id, user_action)?;
+        contract
+            .try_lock()
+            .expect("Applications should not have reentrant calls")
+            .instantiate(context, argument)?;
+
+        self.inner().finish_call()?;
 
         Ok(app_id)
     }
