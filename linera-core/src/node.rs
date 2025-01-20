@@ -120,7 +120,7 @@ pub trait ValidatorNode {
     async fn handle_pending_blob(
         &self,
         chain_id: ChainId,
-        blob: Blob,
+        blob: BlobContent,
     ) -> Result<ChainInfoResponse, NodeError>;
 
     async fn download_certificate(

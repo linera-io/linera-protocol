@@ -389,9 +389,9 @@ impl ValidatorNode for GrpcClient {
     async fn handle_pending_blob(
         &self,
         chain_id: ChainId,
-        blob: Blob,
+        blob: BlobContent,
     ) -> Result<ChainInfoResponse, NodeError> {
-        let req = api::HandlePendingBlobRequest::try_from((chain_id, blob.into_content()))?;
+        let req = api::HandlePendingBlobRequest::try_from((chain_id, blob))?;
         GrpcClient::try_into_chain_info(client_delegate!(self, handle_pending_blob, req)?)
     }
 

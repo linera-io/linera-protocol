@@ -203,7 +203,7 @@ where
     async fn handle_pending_blob(
         &self,
         chain_id: ChainId,
-        blob: Blob,
+        blob: BlobContent,
     ) -> Result<ChainInfoResponse, NodeError> {
         self.spawn_and_receive(move |validator, sender| {
             validator.do_handle_pending_blob(chain_id, blob, sender)
@@ -530,13 +530,13 @@ where
     async fn do_handle_pending_blob(
         self,
         chain_id: ChainId,
-        blob: Blob,
+        blob: BlobContent,
         sender: oneshot::Sender<Result<ChainInfoResponse, NodeError>>,
     ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
         let validator = self.client.lock().await;
         let result = validator
             .state
-            .handle_pending_blob(chain_id, blob)
+            .handle_pending_blob(chain_id, Blob::new(blob))
             .await
             .map_err(Into::into);
         sender.send(result)

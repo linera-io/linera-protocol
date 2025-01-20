@@ -91,7 +91,7 @@ impl ValidatorNode for DummyValidatorNode {
     async fn handle_pending_blob(
         &self,
         _: ChainId,
-        _: Blob,
+        _: BlobContent,
     ) -> Result<ChainInfoResponse, NodeError> {
         Err(NodeError::UnexpectedMessage)
     }

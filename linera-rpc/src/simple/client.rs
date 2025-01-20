@@ -185,13 +185,10 @@ impl ValidatorNode for SimpleClient {
     async fn handle_pending_blob(
         &self,
         chain_id: ChainId,
-        blob: Blob,
+        blob: BlobContent,
     ) -> Result<ChainInfoResponse, NodeError> {
-        self.query(RpcMessage::HandlePendingBlob(Box::new((
-            chain_id,
-            blob.into_content(),
-        ))))
-        .await
+        self.query(RpcMessage::HandlePendingBlob(Box::new((chain_id, blob))))
+            .await
     }
 
     async fn download_certificate(

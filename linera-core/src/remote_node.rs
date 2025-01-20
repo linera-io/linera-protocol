@@ -232,7 +232,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
     ) -> Result<(), NodeError> {
         let tasks = blobs
             .into_iter()
-            .map(|blob| self.node.handle_pending_blob(chain_id, blob));
+            .map(|blob| self.node.handle_pending_blob(chain_id, blob.into_content()));
         try_join_all(tasks).await?;
         Ok(())
     }

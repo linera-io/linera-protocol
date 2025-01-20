@@ -212,7 +212,7 @@ impl ValidatorNode for Client {
     async fn handle_pending_blob(
         &self,
         chain_id: ChainId,
-        blob: Blob,
+        blob: BlobContent,
     ) -> Result<ChainInfoResponse, NodeError> {
         Ok(match self {
             Client::Grpc(grpc_client) => grpc_client.handle_pending_blob(chain_id, blob).await?,
