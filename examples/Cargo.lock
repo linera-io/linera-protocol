@@ -4979,6 +4979,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "rfq"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "fungible",
+ "linera-sdk",
+ "matching-engine",
+ "num-bigint",
+ "num-traits",
+ "serde",
+ "tokio",
+]
+
+[[package]]
 name = "ring"
 version = "0.17.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"

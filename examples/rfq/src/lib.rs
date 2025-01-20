@@ -1,0 +1,131 @@
+// Copyright (c) Zefchain Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+#![allow(rustdoc::invalid_codeblock_attributes)] // Using '=' in the documentation.
+
+use async_graphql::{scalar, InputObject, Request, Response, SimpleObject};
+use linera_sdk::{
+    base::{
+        AccountOwner, Amount, ApplicationId, BytecodeId, ChainId, ContractAbi, MessageId,
+        PublicKey, ServiceAbi,
+    },
+    graphql::GraphQLMutationRoot,
+};
+use matching_engine::{Order, Price};
+use serde::{Deserialize, Serialize};
+
+pub struct RfqAbi;
+
+impl ContractAbi for RfqAbi {
+    type Operation = Operation;
+    type Response = ();
+}
+
+impl ServiceAbi for RfqAbi {
+    type Query = Request;
+    type QueryResponse = Response;
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+pub struct Parameters {
+    pub me_bytecode_id: BytecodeId,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, SimpleObject, InputObject)]
+#[graphql(input_name = "TokenPairInput")]
+pub struct TokenPair {
+    pub token_offered: ApplicationId,
+    pub token_asked: ApplicationId,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, SimpleObject, InputObject)]
+#[graphql(input_name = "RequestIdInput")]
+pub struct RequestId {
+    other_chain_id: ChainId,
+    seq_num: u64,
+}
+
+impl RequestId {
+    pub fn new(other_chain_id: ChainId, seq_num: u64) -> Self {
+        Self {
+            other_chain_id,
+            seq_num,
+        }
+    }
+
+    pub fn chain_id(&self) -> ChainId {
+        self.other_chain_id.clone()
+    }
+
+    pub fn seq_number(&self) -> u64 {
+        self.seq_num
+    }
+}
+
+/// Operations that can be sent to the application.
+#[derive(Debug, Serialize, Deserialize, GraphQLMutationRoot)]
+pub enum Operation {
+    RequestQuote {
+        target: ChainId,
+        token_pair: TokenPair,
+        amount: Amount,
+    },
+    ProvideQuote {
+        request_id: RequestId,
+        quote: Price,
+        quoter_pub_key: PublicKey,
+        quoter_account: AccountOwner,
+    },
+    AcceptQuote {
+        request_id: RequestId,
+        pub_key: PublicKey,
+        account_owner: AccountOwner,
+        fee_budget: Amount,
+    },
+    CancelRequest {
+        request_id: RequestId,
+    },
+}
+
+scalar!(Operation);
+
+#[derive(Debug, Deserialize, Serialize)]
+pub enum Message {
+    RequestQuote {
+        seq_number: u64,
+        token_pair: TokenPair,
+        amount: Amount,
+    },
+    ProvideQuote {
+        seq_number: u64,
+        quote: Price,
+        quoter_pub_key: PublicKey,
+    },
+    QuoteAccepted {
+        request_id: RequestId,
+        matching_engine_message_id: MessageId,
+        matching_engine_app_id: ApplicationId,
+    },
+    CancelRequest {
+        seq_number: u64,
+    },
+    StartMatchingEngine {
+        initiator: ChainId,
+        request_id: RequestId,
+        order: Order,
+        token_pair: TokenPair,
+        matching_engine_message_id: MessageId,
+    },
+}
+
+impl Message {
+    pub fn seq_number(&self) -> u64 {
+        match self {
+            Message::RequestQuote { seq_number, .. }
+            | Message::ProvideQuote { seq_number, .. }
+            | Message::CancelRequest { seq_number, .. } => *seq_number,
+            Message::StartMatchingEngine { request_id, .. }
+            | Message::QuoteAccepted { request_id, .. } => request_id.seq_num,
+        }
+    }
+}
