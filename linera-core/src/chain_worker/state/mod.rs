@@ -28,7 +28,7 @@ use linera_execution::{
     Message, Query, QueryContext, Response, ServiceRuntimeEndpoint, SystemMessage,
 };
 use linera_storage::{Clock as _, Storage};
-use linera_views::views::{ClonableView, ViewError};
+use linera_views::views::{CloneableView, ViewError};
 use tokio::sync::{oneshot, OwnedRwLockReadGuard, RwLock};
 
 #[cfg(test)]
