@@ -164,7 +164,6 @@ where
     pub(super) async fn process_validated_block(
         &mut self,
         certificate: ValidatedBlockCertificate,
-        blobs: &[Blob],
     ) -> Result<(ChainInfoResponse, NetworkActions, bool), WorkerError> {
         let executed_block = certificate.executed_block();
 
@@ -209,13 +208,9 @@ where
             .executed_block_values
             .insert(Cow::Borrowed(certificate.inner().inner()))
             .await;
-        let required_blob_ids = executed_block.required_blob_ids();
-        // Verify that no unrelated blobs were provided.
-        self.state
-            .check_for_unneeded_blobs(&required_blob_ids, blobs)?;
         let maybe_blobs = self
             .state
-            .maybe_get_required_blobs(executed_block, blobs)
+            .maybe_get_required_blobs(executed_block, &[])
             .await?;
         let missing_blob_ids = super::missing_blob_ids(&maybe_blobs);
         if !missing_blob_ids.is_empty() {

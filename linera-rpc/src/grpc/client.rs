@@ -6,7 +6,7 @@ use std::{fmt, future::Future, iter};
 use futures::{future, stream, StreamExt};
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Blob, BlobContent},
+    data_types::BlobContent,
     ensure,
     identifiers::{BlobId, ChainId},
     time::Duration,
@@ -241,9 +241,8 @@ impl ValidatorNode for GrpcClient {
     async fn handle_validated_certificate(
         &self,
         certificate: GenericCertificate<ValidatedBlock>,
-        blobs: Vec<Blob>,
     ) -> Result<linera_core::data_types::ChainInfoResponse, NodeError> {
-        let request = HandleValidatedCertificateRequest { certificate, blobs };
+        let request = HandleValidatedCertificateRequest { certificate };
         GrpcClient::try_into_chain_info(client_delegate!(
             self,
             handle_validated_certificate,

@@ -256,9 +256,6 @@ message HandleValidatedCertificateRequest {
 
   // A certified statement from the committee.
   Certificate certificate = 2;
-
-  // Blobs required by this certificate
-  bytes blobs = 3;
 }
 
 // A certified statement from the committee, together with other certificates

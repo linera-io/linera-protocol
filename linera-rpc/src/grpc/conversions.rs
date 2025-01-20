@@ -375,8 +375,7 @@ impl TryFrom<api::HandleValidatedCertificateRequest> for HandleValidatedCertific
             certificate.inner().chain_id() == req_chain_id,
             GrpcProtoConversionError::InconsistentChainId
         );
-        let blobs = bincode::deserialize(&cert_request.blobs)?;
-        Ok(HandleValidatedCertificateRequest { certificate, blobs })
+        Ok(HandleValidatedCertificateRequest { certificate })
     }
 }
 
@@ -424,7 +423,6 @@ impl TryFrom<HandleValidatedCertificateRequest> for api::HandleValidatedCertific
         Ok(Self {
             chain_id: Some(request.certificate.inner().chain_id().into()),
             certificate: Some(request.certificate.try_into()?),
-            blobs: bincode::serialize(&request.blobs)?,
         })
     }
 }
@@ -1169,10 +1167,7 @@ pub mod tests {
                 Signature::new(&Foo("test".into()), &key_pair),
             )],
         );
-        let request = HandleValidatedCertificateRequest {
-            certificate,
-            blobs: vec![],
-        };
+        let request = HandleValidatedCertificateRequest { certificate };
 
         round_trip_check::<_, api::HandleValidatedCertificateRequest>(request);
     }

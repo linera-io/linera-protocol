@@ -3,7 +3,7 @@
 
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Blob, BlobContent},
+    data_types::BlobContent,
     identifiers::{BlobId, ChainId},
 };
 use linera_chain::{
@@ -115,19 +115,16 @@ impl ValidatorNode for Client {
     async fn handle_validated_certificate(
         &self,
         certificate: ValidatedBlockCertificate,
-        blobs: Vec<Blob>,
     ) -> Result<ChainInfoResponse, NodeError> {
         match self {
             Client::Grpc(grpc_client) => {
-                grpc_client
-                    .handle_validated_certificate(certificate, blobs)
-                    .await
+                grpc_client.handle_validated_certificate(certificate).await
             }
 
             #[cfg(with_simple_network)]
             Client::Simple(simple_client) => {
                 simple_client
-                    .handle_validated_certificate(certificate, blobs)
+                    .handle_validated_certificate(certificate)
                     .await
             }
         }

@@ -42,7 +42,6 @@ pub struct HandleConfirmedCertificateRequest {
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct HandleValidatedCertificateRequest {
     pub certificate: linera_chain::types::ValidatedBlockCertificate,
-    pub blobs: Vec<linera_base::data_types::Blob>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

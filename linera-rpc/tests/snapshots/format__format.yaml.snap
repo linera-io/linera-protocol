@@ -428,9 +428,6 @@ HandleValidatedCertificateRequest:
   STRUCT:
     - certificate:
         TYPENAME: ValidatedBlockCertificate
-    - blobs:
-        SEQ:
-          TYPENAME: BlobContent
 IncomingBundle:
   STRUCT:
     - origin:

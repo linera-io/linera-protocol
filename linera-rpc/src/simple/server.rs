@@ -269,7 +269,7 @@ where
                 match self
                     .server
                     .state
-                    .handle_validated_certificate(request.certificate, request.blobs)
+                    .handle_validated_certificate(request.certificate)
                     .await
                 {
                     Ok((info, actions)) => {
@@ -279,7 +279,10 @@ where
                         Ok(Some(RpcMessage::ChainInfoResponse(Box::new(info))))
                     }
                     Err(error) => {
-                        error!(nickname = self.server.state.nickname(), %error, "Failed to handle validated certificate");
+                        error!(
+                            nickname = self.server.state.nickname(), %error,
+                            "Failed to handle validated certificate"
+                        );
                         Err(error.into())
                     }
                 }

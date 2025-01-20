@@ -397,24 +397,27 @@ where
         certificate: GenericCertificate<T>,
         blobs: Vec<Blob>,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
-        if T::KIND == CertificateKind::Confirmed {
-            let result = self
-                .local_node
-                .handle_certificate(certificate.clone(), vec![], &self.notifier)
-                .await;
-            if let Err(LocalNodeError::BlobsNotFound(_)) = &result {
-                self.local_node.store_blobs(&blobs).await?;
-                return self
-                    .local_node
-                    .handle_certificate(certificate, vec![], &self.notifier)
-                    .await;
+        let chain_id = certificate.inner().chain_id();
+        let result = self
+            .local_node
+            .handle_certificate(certificate.clone(), &self.notifier)
+            .await;
+        if let Err(LocalNodeError::BlobsNotFound(_)) = &result {
+            match T::KIND {
+                CertificateKind::Confirmed => self.local_node.store_blobs(&blobs).await?,
+                CertificateKind::Validated => {
+                    self.local_node
+                        .handle_pending_blobs(chain_id, blobs)
+                        .await?
+                }
+                CertificateKind::Timeout => return result,
             }
-            result
-        } else {
-            self.local_node
-                .handle_certificate(certificate, blobs, &self.notifier)
-                .await
+            return self
+                .local_node
+                .handle_certificate(certificate, &self.notifier)
+                .await;
         }
+        result
     }
 }
 

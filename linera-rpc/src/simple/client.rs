@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use futures::{sink::SinkExt, stream::StreamExt};
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Blob, BlobContent},
+    data_types::BlobContent,
     identifiers::{BlobId, ChainId},
     time::{timer, Duration},
 };
@@ -105,9 +105,8 @@ impl ValidatorNode for SimpleClient {
     async fn handle_validated_certificate(
         &self,
         certificate: ValidatedBlockCertificate,
-        blobs: Vec<Blob>,
     ) -> Result<ChainInfoResponse, NodeError> {
-        let request = HandleValidatedCertificateRequest { certificate, blobs };
+        let request = HandleValidatedCertificateRequest { certificate };
         let request = RpcMessage::ValidatedCertificate(Box::new(request));
         self.query(request).await
     }

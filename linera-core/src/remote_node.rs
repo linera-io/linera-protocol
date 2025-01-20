@@ -83,10 +83,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
         certificate: ValidatedBlockCertificate,
     ) -> Result<Box<ChainInfo>, NodeError> {
         let chain_id = certificate.inner().chain_id();
-        let response = self
-            .node
-            .handle_validated_certificate(certificate, vec![])
-            .await?;
+        let response = self.node.handle_validated_certificate(certificate).await?;
         self.check_and_return_info(response, chain_id)
     }
 

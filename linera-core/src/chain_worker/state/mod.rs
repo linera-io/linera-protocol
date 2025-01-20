@@ -225,11 +225,10 @@ where
     pub(super) async fn process_validated_block(
         &mut self,
         certificate: ValidatedBlockCertificate,
-        blobs: &[Blob],
     ) -> Result<(ChainInfoResponse, NetworkActions, bool), WorkerError> {
         ChainWorkerStateWithAttemptedChanges::new(self)
             .await
-            .process_validated_block(certificate, blobs)
+            .process_validated_block(certificate)
             .await
     }
 
@@ -317,24 +316,6 @@ where
             self.chain.ensure_is_active()?;
             self.knows_chain_is_active = true;
         }
-        Ok(())
-    }
-
-    /// Returns an error if unrelated blobs were provided.
-    fn check_for_unneeded_blobs(
-        &self,
-        required_blob_ids: &HashSet<BlobId>,
-        blobs: &[Blob],
-    ) -> Result<(), WorkerError> {
-        // Find all certificates containing blobs used when executing this block.
-        for blob in blobs {
-            let blob_id = blob.id();
-            ensure!(
-                required_blob_ids.contains(&blob_id),
-                WorkerError::UnneededBlob { blob_id }
-            );
-        }
-
         Ok(())
     }
 

@@ -106,7 +106,6 @@ where
     /// Process a validated block issued for this multi-owner chain.
     ProcessValidatedBlock {
         certificate: ValidatedBlockCertificate,
-        blobs: Vec<Blob>,
         #[debug(skip)]
         callback: oneshot::Sender<Result<(ChainInfoResponse, NetworkActions, bool), WorkerError>>,
     },
@@ -301,14 +300,9 @@ where
                     .is_ok(),
                 ChainWorkerRequest::ProcessValidatedBlock {
                     certificate,
-                    blobs,
                     callback,
                 } => callback
-                    .send(
-                        self.worker
-                            .process_validated_block(certificate, &blobs)
-                            .await,
-                    )
+                    .send(self.worker.process_validated_block(certificate).await)
                     .is_ok(),
                 ChainWorkerRequest::ProcessConfirmedBlock {
                     certificate,

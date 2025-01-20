@@ -157,7 +157,7 @@ where
 
     assert_matches!(
         worker
-            .fully_handle_certificate_with_notifications(publish_certificate.clone(), vec![], &())
+            .fully_handle_certificate_with_notifications(publish_certificate.clone(), &())
             .await,
         Err(WorkerError::BlobsNotFound(_))
     );
@@ -165,7 +165,7 @@ where
         .write_blobs(&[contract_blob.clone(), service_blob.clone()])
         .await?;
     let info = worker
-        .fully_handle_certificate_with_notifications(publish_certificate.clone(), vec![], &())
+        .fully_handle_certificate_with_notifications(publish_certificate.clone(), &())
         .await
         .unwrap()
         .info;
@@ -248,7 +248,7 @@ where
     let create_certificate = make_certificate(&committee, &worker, create_block_proposal);
 
     let info = worker
-        .fully_handle_certificate_with_notifications(create_certificate.clone(), vec![], &())
+        .fully_handle_certificate_with_notifications(create_certificate.clone(), &())
         .await
         .unwrap()
         .info;
@@ -301,7 +301,7 @@ where
     let run_certificate = make_certificate(&committee, &worker, run_block_proposal);
 
     let info = worker
-        .fully_handle_certificate_with_notifications(run_certificate.clone(), vec![], &())
+        .fully_handle_certificate_with_notifications(run_certificate.clone(), &())
         .await
         .unwrap()
         .info;

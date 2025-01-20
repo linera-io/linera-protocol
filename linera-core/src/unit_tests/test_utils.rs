@@ -129,7 +129,7 @@ where
         certificate: GenericCertificate<Timeout>,
     ) -> Result<ChainInfoResponse, NodeError> {
         self.spawn_and_receive(move |validator, sender| {
-            validator.do_handle_certificate(certificate, vec![], sender)
+            validator.do_handle_certificate(certificate, sender)
         })
         .await
     }
@@ -137,10 +137,9 @@ where
     async fn handle_validated_certificate(
         &self,
         certificate: GenericCertificate<ValidatedBlock>,
-        blobs: Vec<Blob>,
     ) -> Result<ChainInfoResponse, NodeError> {
         self.spawn_and_receive(move |validator, sender| {
-            validator.do_handle_certificate(certificate, blobs, sender)
+            validator.do_handle_certificate(certificate, sender)
         })
         .await
     }
@@ -151,7 +150,7 @@ where
         _delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
         self.spawn_and_receive(move |validator, sender| {
-            validator.do_handle_certificate(certificate, vec![], sender)
+            validator.do_handle_certificate(certificate, sender)
         })
         .await
     }
@@ -355,7 +354,6 @@ where
     async fn handle_certificate<T: ProcessableCertificate>(
         certificate: GenericCertificate<T>,
         validator: &mut MutexGuard<'_, LocalValidator<S>>,
-        blobs: Vec<Blob>,
     ) -> Option<Result<ChainInfoResponse, NodeError>> {
         match validator.fault_type {
             FaultType::DontProcessValidated if T::KIND == CertificateKind::Validated => None,
@@ -366,11 +364,7 @@ where
             | FaultType::DontSendValidateVote => Some(
                 validator
                     .state
-                    .fully_handle_certificate_with_notifications(
-                        certificate,
-                        blobs,
-                        &validator.notifier,
-                    )
+                    .fully_handle_certificate_with_notifications(certificate, &validator.notifier)
                     .await
                     .map_err(Into::into),
             ),
@@ -388,11 +382,11 @@ where
         let result = async move {
             match validator.state.full_certificate(certificate).await? {
                 Either::Left(confirmed) => {
-                    self.do_handle_certificate_internal(confirmed, &mut validator, vec![])
+                    self.do_handle_certificate_internal(confirmed, &mut validator)
                         .await
                 }
                 Either::Right(validated) => {
-                    self.do_handle_certificate_internal(validated, &mut validator, vec![])
+                    self.do_handle_certificate_internal(validated, &mut validator)
                         .await
                 }
             }
@@ -405,10 +399,8 @@ where
         &self,
         certificate: GenericCertificate<T>,
         validator: &mut MutexGuard<'_, LocalValidator<S>>,
-        blobs: Vec<Blob>,
     ) -> Result<ChainInfoResponse, NodeError> {
-        let handle_certificate_result =
-            Self::handle_certificate(certificate, validator, blobs).await;
+        let handle_certificate_result = Self::handle_certificate(certificate, validator).await;
         match handle_certificate_result {
             Some(Err(NodeError::BlobsNotFound(_))) => {
                 handle_certificate_result.expect("handle_certificate_result should be Some")
@@ -438,12 +430,11 @@ where
     async fn do_handle_certificate<T: ProcessableCertificate>(
         self,
         certificate: GenericCertificate<T>,
-        blobs: Vec<Blob>,
         sender: oneshot::Sender<Result<ChainInfoResponse, NodeError>>,
     ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
         let mut validator = self.client.lock().await;
         let result = self
-            .do_handle_certificate_internal(certificate, &mut validator, blobs)
+            .do_handle_certificate_internal(certificate, &mut validator)
             .await;
         sender.send(result)
     }

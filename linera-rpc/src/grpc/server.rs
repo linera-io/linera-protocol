@@ -585,13 +585,12 @@ where
         request: Request<api::HandleValidatedCertificateRequest>,
     ) -> Result<Response<ChainInfoResult>, Status> {
         let start = Instant::now();
-        let HandleValidatedCertificateRequest { certificate, blobs } =
-            request.into_inner().try_into()?;
+        let HandleValidatedCertificateRequest { certificate } = request.into_inner().try_into()?;
         trace!(?certificate, "Handling certificate");
         match self
             .state
             .clone()
-            .handle_validated_certificate(certificate, blobs)
+            .handle_validated_certificate(certificate)
             .await
         {
             Ok((info, actions)) => {
