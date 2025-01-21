@@ -1294,7 +1294,7 @@ impl Job {
             );
         };
         anyhow::ensure!(
-            config.ownership.verify_owner(&Owner::from(public_key)) == Some(public_key),
+            config.ownership.verify_owner(&Owner::from(public_key)),
             "The chain with the ID returned by the faucet is not owned by you. \
             Please make sure you are connecting to a genuine faucet."
         );

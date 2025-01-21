@@ -707,7 +707,7 @@ where
                 SystemExecutionError::UnauthenticatedTransferOwner
             ),
             (None, Some(signer), _) => ensure!(
-                self.ownership.get().verify_owner(&signer).is_some(),
+                self.ownership.get().verify_owner(&signer),
                 SystemExecutionError::UnauthenticatedTransferOwner
             ),
             (_, _, _) => return Err(SystemExecutionError::UnauthenticatedTransferOwner),

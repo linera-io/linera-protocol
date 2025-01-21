@@ -113,13 +113,9 @@ impl ChainOwnership {
             || self.timeout_config.fallback_duration == TimeDelta::ZERO
     }
 
-    /// Returns the given owner's public key, if they are an owner or super owner.
-    pub fn verify_owner(&self, owner: &Owner) -> Option<PublicKey> {
-        if let Some(public_key) = self.super_owners.get(owner) {
-            Some(*public_key)
-        } else {
-            self.owners.get(owner).map(|(public_key, _)| *public_key)
-        }
+    /// Returns `true` if this is an owner or super owner.
+    pub fn verify_owner(&self, owner: &Owner) -> bool {
+        self.super_owners.contains_key(owner) || self.owners.contains_key(owner)
     }
 
     /// Returns the duration of the given round.

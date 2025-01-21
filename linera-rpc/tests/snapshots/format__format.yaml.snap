@@ -124,6 +124,8 @@ BlockProposal:
         TYPENAME: ProposalContent
     - owner:
         TYPENAME: Owner
+    - public_key:
+        TYPENAME: PublicKey
     - signature:
         TYPENAME: Signature
     - blobs:

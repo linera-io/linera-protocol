@@ -576,31 +576,30 @@ where
 
     /// Returns the public key of the block proposal's signer, if they are a valid owner and allowed
     /// to propose a block in the proposal's round.
-    pub fn verify_owner(&self, proposal: &BlockProposal) -> Option<PublicKey> {
-        if let Some(public_key) = self.ownership.get().super_owners.get(&proposal.owner) {
-            return Some(*public_key);
+    pub fn verify_owner(&self, proposal: &BlockProposal) -> bool {
+        let owner = &proposal.owner;
+        if self.ownership.get().super_owners.contains_key(owner) {
+            return true;
         }
         match proposal.content.round {
             Round::Fast => {
-                None // Only super owners can propose in the first round.
+                false // Only super owners can propose in the first round.
             }
             Round::MultiLeader(_) => {
                 // Not in leader rotation mode; any owner is allowed to propose.
-                self.ownership
-                    .get()
-                    .owners
-                    .get(&proposal.owner)
-                    .map(|(public_key, _)| *public_key)
+                self.ownership.get().owners.contains_key(owner)
             }
             Round::SingleLeader(r) => {
-                let index = self.round_leader_index(r)?;
-                let (leader, (public_key, _)) = self.ownership.get().owners.iter().nth(index)?;
-                (*leader == proposal.owner).then_some(*public_key)
+                let Some(index) = self.round_leader_index(r) else {
+                    return false;
+                };
+                self.ownership.get().owners.keys().nth(index) == Some(owner)
             }
             Round::Validator(r) => {
-                let index = self.fallback_round_leader_index(r)?;
-                let (leader, (public_key, _)) = self.fallback_owners.get().iter().nth(index)?;
-                (*leader == proposal.owner).then_some(*public_key)
+                let Some(index) = self.fallback_round_leader_index(r) else {
+                    return false;
+                };
+                self.fallback_owners.get().keys().nth(index) == Some(owner)
             }
         }
     }
