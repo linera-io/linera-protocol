@@ -966,7 +966,7 @@ pub enum DatabaseToolCommand {
     },
 
     /// List the blobs of the database
-    #[command(name = "list_blobs")]
+    #[command(name = "list_blob_ids")]
     ListBlobIds {
         /// Storage configuration for the blockchain history.
         #[arg(long = "storage")]
