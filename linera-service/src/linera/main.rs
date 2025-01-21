@@ -1293,15 +1293,16 @@ impl Job {
                 Please make sure you are connecting to a genuine faucet."
             );
         };
+        let owner = Owner::from(public_key);
         anyhow::ensure!(
-            config.ownership.verify_owner(&Owner::from(public_key)),
+            config.ownership.verify_owner(&owner),
             "The chain with the ID returned by the faucet is not owned by you. \
             Please make sure you are connecting to a genuine faucet."
         );
         context
             .wallet_mut()
             .mutate(|w| {
-                w.assign_new_chain_to_key(public_key, chain_id, executed_block.block.timestamp)
+                w.assign_new_chain_to_owner(owner, chain_id, executed_block.block.timestamp)
             })
             .await?
             .context("could not assign the new chain")?;
