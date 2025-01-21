@@ -12,7 +12,7 @@ releases:
   - name: linera-core
     namespace: default
     chart: .
-    timeout: 900
+    timeout: 1200
     needs:
       - scylla/scylla
     values:
