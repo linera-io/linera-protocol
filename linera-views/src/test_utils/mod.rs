@@ -719,9 +719,9 @@ where
         let size = 3;
         let mut rng = make_deterministic_rng();
         let store = S::connect(&config, &namespace, &[]).await.expect("store");
-        let size_select = rng.gen_range(0..size);
+        root_keys.push(vec![]);
         let mut batch = Batch::new();
-        for _ in 0..size_select {
+        for _ in 0..2 {
             let key = get_random_byte_vector(&mut rng, &prefix, 4);
             batch.put_key_value_bytes(key.clone(), vec![]);
             keys.insert((vec![], key));
@@ -746,8 +746,16 @@ where
         }
     }
 
+    let read_root_keys = S::list_root_keys(&config, &namespace)
+        .await
+        .expect("read_root_keys");
+    let set_root_keys = root_keys.iter().cloned().collect::<HashSet<_>>();
+    for read_root_key in &read_root_keys {
+        assert!(set_root_keys.contains(read_root_key));
+    }
+
     let mut read_keys = BTreeSet::new();
-    for root_key in root_keys {
+    for root_key in read_root_keys {
         let store = S::connect(&config, &namespace, &root_key)
             .await
             .expect("store");
