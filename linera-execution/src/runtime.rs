@@ -1691,6 +1691,18 @@ impl ServiceRuntime for ServiceSyncRuntimeHandle {
             .send_request(|callback| ExecutionRequest::FetchUrl { url, callback })?
             .recv_response()
     }
+
+    fn schedule_operation(&mut self, operation: Vec<u8>) -> Result<(), ExecutionError> {
+        let mut this = self.inner();
+        let application_id = this.application_id()?;
+
+        this.scheduled_operations.push(Operation::User {
+            application_id,
+            bytes: operation,
+        });
+
+        Ok(())
+    }
 }
 
 /// A request to the service runtime actor.
