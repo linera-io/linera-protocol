@@ -18,9 +18,7 @@ use std::{
     str::FromStr,
 };
 
-use anyhow::Context as _;
 use async_graphql::InputObject;
-use base64::engine::{general_purpose::STANDARD_NO_PAD, Engine as _};
 use custom_debug_derive::Debug;
 use linera_witty::{WitLoad, WitStore, WitType};
 #[cfg(with_metrics)]
@@ -32,7 +30,7 @@ use thiserror::Error;
 use crate::prometheus_util::{bucket_latencies, register_histogram_vec, MeasureLatency};
 use crate::{
     crypto::{BcsHashable, CryptoHash},
-    doc_scalar, hex_debug,
+    doc_scalar, hex_debug, http,
     identifiers::{
         ApplicationId, BlobId, BlobType, BytecodeId, Destination, GenericApplicationId, MessageId,
         UserApplicationId,
@@ -753,54 +751,12 @@ pub enum OracleResponse {
         #[serde(with = "serde_bytes")]
         Vec<u8>,
     ),
-    /// The response from an HTTP POST request.
-    Post(
-        #[debug(with = "hex_debug")]
-        #[serde(with = "serde_bytes")]
-        Vec<u8>,
-    ),
+    /// The response from an HTTP request.
+    Http(http::Response),
     /// A successful read or write of a blob.
     Blob(BlobId),
     /// An assertion oracle that passed.
     Assert,
-}
-
-impl Display for OracleResponse {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            OracleResponse::Service(bytes) => {
-                write!(f, "Service:{}", STANDARD_NO_PAD.encode(bytes))?
-            }
-            OracleResponse::Post(bytes) => write!(f, "Post:{}", STANDARD_NO_PAD.encode(bytes))?,
-            OracleResponse::Blob(blob_id) => write!(f, "Blob:{}", blob_id)?,
-            OracleResponse::Assert => write!(f, "Assert")?,
-        };
-
-        Ok(())
-    }
-}
-
-impl FromStr for OracleResponse {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if let Some(string) = s.strip_prefix("Service:") {
-            return Ok(OracleResponse::Service(
-                STANDARD_NO_PAD.decode(string).context("Invalid base64")?,
-            ));
-        }
-        if let Some(string) = s.strip_prefix("Post:") {
-            return Ok(OracleResponse::Post(
-                STANDARD_NO_PAD.decode(string).context("Invalid base64")?,
-            ));
-        }
-        if let Some(string) = s.strip_prefix("Blob:") {
-            return Ok(OracleResponse::Blob(
-                BlobId::from_str(string).context("Invalid BlobId")?,
-            ));
-        }
-        Err(anyhow::anyhow!("Invalid enum! Enum: {}", s))
-    }
 }
 
 /// Description of the necessary information to run a user application.

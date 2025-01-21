@@ -12,8 +12,9 @@ repository.workspace = true
 version.workspace = true
 
 [features]
-test = ["test-strategy", "proptest"]
 metrics = ["prometheus"]
+reqwest = ["dep:reqwest"]
+test = ["test-strategy", "proptest"]
 web = [
     "getrandom/js",
     "rand/getrandom",
@@ -33,7 +34,6 @@ anyhow.workspace = true
 async-graphql.workspace = true
 async-graphql-derive.workspace = true
 async-trait.workspace = true
-base64.workspace = true
 bcs.workspace = true
 cfg-if.workspace = true
 chrono.workspace = true
@@ -48,6 +48,7 @@ linera-witty = { workspace = true, features = ["macros"] }
 prometheus = { workspace = true, optional = true }
 proptest = { workspace = true, optional = true, features = ["alloc"] }
 rand.workspace = true
+reqwest = { workspace = true, optional = true }
 serde.workspace = true
 serde-name.workspace = true
 serde_bytes.workspace = true

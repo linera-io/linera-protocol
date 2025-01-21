@@ -9,6 +9,7 @@ use linera_base::{
         Amount, ApplicationPermissions, BlockHeight, Resources, SendMessageRequest, TimeDelta,
         Timestamp,
     },
+    http,
     identifiers::{
         Account, AccountOwner, ApplicationId, BytecodeId, ChainId, ChannelName, Destination,
         MessageId, Owner, StreamName,
@@ -177,6 +178,46 @@ impl From<Resources> for wit_system_api::Resources {
             messages: resources.messages,
             message_size: resources.message_size,
             storage_size_delta: resources.storage_size_delta,
+        }
+    }
+}
+
+impl From<http::Request> for wit_system_api::HttpRequest {
+    fn from(request: http::Request) -> Self {
+        wit_system_api::HttpRequest {
+            method: request.method.into(),
+            url: request.url,
+            headers: request
+                .headers
+                .into_iter()
+                .map(http::Header::into)
+                .collect(),
+            body: request.body,
+        }
+    }
+}
+
+impl From<http::Method> for wit_system_api::HttpMethod {
+    fn from(method: http::Method) -> Self {
+        match method {
+            http::Method::Get => wit_system_api::HttpMethod::Get,
+            http::Method::Post => wit_system_api::HttpMethod::Post,
+            http::Method::Put => wit_system_api::HttpMethod::Put,
+            http::Method::Delete => wit_system_api::HttpMethod::Delete,
+            http::Method::Head => wit_system_api::HttpMethod::Head,
+            http::Method::Options => wit_system_api::HttpMethod::Options,
+            http::Method::Connect => wit_system_api::HttpMethod::Connect,
+            http::Method::Patch => wit_system_api::HttpMethod::Patch,
+            http::Method::Trace => wit_system_api::HttpMethod::Trace,
+        }
+    }
+}
+
+impl From<http::Header> for wit_system_api::HttpHeader {
+    fn from(header: http::Header) -> Self {
+        wit_system_api::HttpHeader {
+            name: header.name,
+            value: header.value,
         }
     }
 }

@@ -6,6 +6,7 @@
 use linera_base::{
     crypto::CryptoHash,
     data_types::BlockHeight,
+    http,
     identifiers::{AccountOwner, ApplicationId, BytecodeId, ChainId, MessageId, Owner},
 };
 
@@ -95,6 +96,46 @@ impl From<MessageId> for wit_system_api::MessageId {
             chain_id: message_id.chain_id.into(),
             height: message_id.height.into(),
             index: message_id.index,
+        }
+    }
+}
+
+impl From<http::Request> for wit_system_api::HttpRequest {
+    fn from(request: http::Request) -> Self {
+        wit_system_api::HttpRequest {
+            method: request.method.into(),
+            url: request.url,
+            headers: request
+                .headers
+                .into_iter()
+                .map(http::Header::into)
+                .collect(),
+            body: request.body,
+        }
+    }
+}
+
+impl From<http::Header> for wit_system_api::HttpHeader {
+    fn from(header: http::Header) -> Self {
+        wit_system_api::HttpHeader {
+            name: header.name,
+            value: header.value,
+        }
+    }
+}
+
+impl From<http::Method> for wit_system_api::HttpMethod {
+    fn from(method: http::Method) -> Self {
+        match method {
+            http::Method::Get => wit_system_api::HttpMethod::Get,
+            http::Method::Post => wit_system_api::HttpMethod::Post,
+            http::Method::Put => wit_system_api::HttpMethod::Put,
+            http::Method::Delete => wit_system_api::HttpMethod::Delete,
+            http::Method::Head => wit_system_api::HttpMethod::Head,
+            http::Method::Options => wit_system_api::HttpMethod::Options,
+            http::Method::Connect => wit_system_api::HttpMethod::Connect,
+            http::Method::Patch => wit_system_api::HttpMethod::Patch,
+            http::Method::Trace => wit_system_api::HttpMethod::Trace,
         }
     }
 }
