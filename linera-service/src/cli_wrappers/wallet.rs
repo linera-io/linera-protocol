@@ -521,6 +521,24 @@ impl ClientWrapper {
         Ok(())
     }
 
+    /// Runs `linera sync-validator`.
+    pub async fn sync_validator(
+        &self,
+        chain_ids: impl IntoIterator<Item = &ChainId>,
+        validator_address: impl Into<String>,
+    ) -> Result<()> {
+        let mut command = self.command().await?;
+        command.arg("sync-validator").arg(validator_address.into());
+        let mut chain_ids = chain_ids.into_iter().peekable();
+        if chain_ids.peek().is_some() {
+            command
+                .arg("--chains")
+                .args(chain_ids.map(ChainId::to_string));
+        }
+        command.spawn_and_wait_for_stdout().await?;
+        Ok(())
+    }
+
     /// Runs `linera faucet`.
     pub async fn run_faucet(
         &self,
