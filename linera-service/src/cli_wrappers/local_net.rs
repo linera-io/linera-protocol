@@ -31,7 +31,7 @@ use tonic::transport::{channel::ClientTlsConfig, Endpoint};
 use tonic_health::pb::{
     health_check_response::ServingStatus, health_client::HealthClient, HealthCheckRequest,
 };
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 
 use crate::{
     cli_wrappers::{
@@ -625,6 +625,17 @@ impl LocalNet {
             validator_proxy.add_server(server);
         }
         self.running_validators.insert(validator, validator_proxy);
+        Ok(())
+    }
+
+    /// Terminates all the processes of a given validator.
+    pub async fn stop_validator(&mut self, validator_index: usize) -> Result<()> {
+        if let Some(mut validator) = self.running_validators.remove(&validator_index) {
+            if let Err(error) = validator.terminate().await {
+                error!("Failed to stop validator {validator_index}: {error}");
+                return Err(error);
+            }
+        }
         Ok(())
     }
 }
