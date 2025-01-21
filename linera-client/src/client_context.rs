@@ -624,13 +624,12 @@ where
         let chain_client = self.make_chain_client(default_chain_id)?;
         while key_pairs.len() < num_chains {
             let key_pair = self.wallet.generate_key_pair();
-            let public_key = key_pair.public();
             let (epoch, committees) = chain_client.epoch_and_committees(default_chain_id).await?;
             let epoch = epoch.expect("default chain should be active");
             // Put at most 1000 OpenChain operations in each block.
             let num_new_chains = (num_chains - key_pairs.len()).min(1000);
             let config = OpenChainConfig {
-                ownership: ChainOwnership::single_super(public_key),
+                ownership: ChainOwnership::single_super(key_pair.public().into()),
                 committees,
                 admin_id: self.wallet.genesis_admin_chain(),
                 epoch,

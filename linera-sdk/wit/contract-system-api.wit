@@ -71,8 +71,8 @@ interface contract-system-api {
     }
 
     record chain-ownership {
-        super-owners: list<tuple<owner, public-key>>,
-        owners: list<tuple<owner, tuple<public-key, u64>>>,
+        super-owners: list<owner>,
+        owners: list<tuple<owner, u64>>,
         multi-leader-rounds: u32,
         timeout-config: timeout-config,
     }
@@ -113,13 +113,6 @@ interface contract-system-api {
 
     record owner {
         inner0: crypto-hash,
-    }
-
-    record public-key {
-        part1: u64,
-        part2: u64,
-        part3: u64,
-        part4: u64,
     }
 
     record resources {

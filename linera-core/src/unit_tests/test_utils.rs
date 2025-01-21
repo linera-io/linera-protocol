@@ -704,7 +704,7 @@ impl GenesisStorageBuilder {
                     initial_committee.clone(),
                     admin_id,
                     account.description,
-                    account.public_key,
+                    account.public_key.into(),
                     account.balance,
                     Timestamp::from(0),
                 )
@@ -810,7 +810,7 @@ where
                         self.initial_committee.clone(),
                         self.admin_id,
                         description,
-                        public_key,
+                        public_key.into(),
                         Amount::ZERO,
                         Timestamp::from(0),
                     )
@@ -822,7 +822,7 @@ where
                         self.initial_committee.clone(),
                         self.admin_id,
                         description,
-                        public_key,
+                        public_key.into(),
                         balance,
                         Timestamp::from(0),
                     )
@@ -836,7 +836,7 @@ where
                     self.initial_committee.clone(),
                     self.admin_id,
                     description,
-                    public_key,
+                    public_key.into(),
                     balance,
                     Timestamp::from(0),
                 )

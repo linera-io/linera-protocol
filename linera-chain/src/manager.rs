@@ -190,7 +190,7 @@ where
     #[graphql(skip)]
     pub current_round: RegisterView<C, Round>,
     /// The owners that take over in fallback mode.
-    pub fallback_owners: RegisterView<C, BTreeMap<Owner, (PublicKey, u64)>>,
+    pub fallback_owners: RegisterView<C, BTreeMap<Owner, u64>>,
 }
 
 #[ComplexObject]
@@ -223,23 +223,16 @@ where
         fallback_owners: impl Iterator<Item = (PublicKey, u64)> + 'a,
     ) -> Result<(), ChainError> {
         let distribution = if !ownership.owners.is_empty() {
-            let weights = ownership
-                .owners
-                .values()
-                .map(|(_, weight)| *weight)
-                .collect();
+            let weights = ownership.owners.values().copied().collect();
             Some(WeightedAliasIndex::new(weights)?)
         } else {
             None
         };
         let fallback_owners = fallback_owners
-            .map(|(pub_key, weight)| (Owner::from(pub_key), (pub_key, weight)))
+            .map(|(pub_key, weight)| (Owner::from(pub_key), weight))
             .collect::<BTreeMap<_, _>>();
         let fallback_distribution = if !fallback_owners.is_empty() {
-            let weights = fallback_owners
-                .values()
-                .map(|(_, weight)| *weight)
-                .collect();
+            let weights = fallback_owners.values().copied().collect();
             Some(WeightedAliasIndex::new(weights)?)
         } else {
             None
@@ -578,7 +571,7 @@ where
     /// to propose a block in the proposal's round.
     pub fn verify_owner(&self, proposal: &BlockProposal) -> bool {
         let owner = &proposal.owner;
-        if self.ownership.get().super_owners.contains_key(owner) {
+        if self.ownership.get().super_owners.contains(owner) {
             return true;
         }
         match proposal.content.round {
@@ -641,7 +634,7 @@ where
 
     /// Returns whether the owner is a super owner.
     fn is_super(&self, owner: &Owner) -> bool {
-        self.ownership.get().super_owners.contains_key(owner)
+        self.ownership.get().super_owners.contains(owner)
     }
 
     fn set_proposed(&mut self, proposal: BlockProposal) {
@@ -811,7 +804,7 @@ impl ChainManagerInfo {
     /// This is dependant on the type of round and whether `identity` is a validator or (super)owner.
     pub fn can_propose(&self, identity: &Owner, round: Round) -> bool {
         match round {
-            Round::Fast => self.ownership.super_owners.contains_key(identity),
+            Round::Fast => self.ownership.super_owners.contains(identity),
             Round::MultiLeader(_) => true,
             Round::SingleLeader(_) | Round::Validator(_) => self.leader.as_ref() == Some(identity),
         }

@@ -221,7 +221,7 @@ impl GenesisConfig {
                     committee.clone(),
                     self.admin_id,
                     description,
-                    *public_key,
+                    public_key.into(),
                     *balance,
                     self.timestamp,
                 )

@@ -11,7 +11,7 @@ use std::{
 
 use chrono::{DateTime, Utc};
 use linera_base::{
-    crypto::{CryptoHash, PublicKey},
+    crypto::CryptoHash,
     data_types::{Amount, ApplicationPermissions, TimeDelta},
     identifiers::{
         Account, ApplicationId, BytecodeId, ChainId, MessageId, Owner, UserApplicationId,
@@ -323,9 +323,9 @@ pub enum ClientCommand {
         #[arg(long = "from")]
         chain_id: Option<ChainId>,
 
-        /// Public key of the new owner (otherwise create a key pair and remember it)
-        #[arg(long = "to-public-key")]
-        public_key: Option<PublicKey>,
+        /// The new owner (otherwise create a key pair and remember it)
+        #[arg(long = "owner")]
+        owner: Option<Owner>,
 
         /// The initial balance of the new chain. This is subtracted from the parent chain's
         /// balance.
@@ -853,11 +853,11 @@ pub enum ClientCommand {
     /// Create an unassigned key-pair.
     Keygen,
 
-    /// Link a key owned by the wallet to a chain that was just created for that key.
+    /// Link an owner with a key pair in the wallet to a chain that was created for that owner.
     Assign {
-        /// The public key to assign.
+        /// The owner to assign.
         #[arg(long)]
-        key: PublicKey,
+        owner: Owner,
 
         /// The ID of the message that created the chain. (This uniquely describes the
         /// chain and where it was created.)
@@ -1216,13 +1216,13 @@ pub enum ProjectCommand {
 
 #[derive(Debug, Clone, clap::Args)]
 pub struct ChainOwnershipConfig {
-    /// Public keys of the new super owners.
+    /// The new super owners.
     #[arg(long, num_args(0..))]
-    super_owner_public_keys: Vec<PublicKey>,
+    super_owners: Vec<Owner>,
 
-    /// Public keys of the new regular owners.
+    /// The new regular owners.
     #[arg(long, num_args(0..))]
-    owner_public_keys: Vec<PublicKey>,
+    owners: Vec<Owner>,
 
     /// Weights for the new owners.
     ///
@@ -1272,8 +1272,8 @@ impl TryFrom<ChainOwnershipConfig> for ChainOwnership {
 
     fn try_from(config: ChainOwnershipConfig) -> Result<ChainOwnership, Error> {
         let ChainOwnershipConfig {
-            super_owner_public_keys,
-            owner_public_keys,
+            super_owners,
+            owners,
             owner_weights,
             multi_leader_rounds,
             fast_round_duration,
@@ -1281,20 +1281,16 @@ impl TryFrom<ChainOwnershipConfig> for ChainOwnership {
             timeout_increment,
             fallback_duration,
         } = config;
-        if !owner_weights.is_empty() && owner_weights.len() != owner_public_keys.len() {
+        if !owner_weights.is_empty() && owner_weights.len() != owners.len() {
             return Err(Error::MisalignedWeights {
-                public_keys: owner_public_keys.len(),
+                public_keys: owners.len(),
                 weights: owner_weights.len(),
             });
         }
-        let super_owners = super_owner_public_keys
-            .into_iter()
-            .map(|pub_key| (Owner::from(pub_key), pub_key))
-            .collect();
-        let owners = owner_public_keys
+        let super_owners = super_owners.into_iter().map(Into::into).collect();
+        let owners = owners
             .into_iter()
             .zip(owner_weights.into_iter().chain(iter::repeat(100)))
-            .map(|(pub_key, weight)| (Owner::from(pub_key), (pub_key, weight)))
             .collect();
         let multi_leader_rounds = multi_leader_rounds.unwrap_or(u32::MAX);
         let timeout_config = TimeoutConfig {

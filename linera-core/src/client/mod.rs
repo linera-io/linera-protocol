@@ -2631,17 +2631,17 @@ where
         key_pair: KeyPair,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         let new_public_key = self.state_mut().insert_known_key_pair(key_pair);
-        self.transfer_ownership(new_public_key).await
+        self.transfer_ownership(new_public_key.into()).await
     }
 
     /// Transfers ownership of the chain to a single super owner.
     #[instrument(level = "trace")]
     pub async fn transfer_ownership(
         &self,
-        new_public_key: PublicKey,
+        new_owner: Owner,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         self.execute_operation(Operation::System(SystemOperation::ChangeOwnership {
-            super_owners: vec![new_public_key],
+            super_owners: vec![new_owner],
             owners: Vec::new(),
             multi_leader_rounds: 2,
             timeout_config: TimeoutConfig::default(),
@@ -2653,7 +2653,7 @@ where
     #[instrument(level = "trace")]
     pub async fn share_ownership(
         &self,
-        new_public_key: PublicKey,
+        new_owner: Owner,
         new_weight: u64,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         loop {
@@ -2662,15 +2662,9 @@ where
                 ownership.is_active(),
                 ChainError::InactiveChain(self.chain_id)
             );
-            let mut owners = ownership.owners.values().copied().collect::<Vec<_>>();
-            owners.extend(
-                ownership
-                    .super_owners
-                    .values()
-                    .copied()
-                    .zip(iter::repeat(100)),
-            );
-            owners.push((new_public_key, new_weight));
+            let mut owners = ownership.owners.into_iter().collect::<Vec<_>>();
+            owners.extend(ownership.super_owners.into_iter().zip(iter::repeat(100)));
+            owners.push((new_owner, new_weight));
             let operations = vec![Operation::System(SystemOperation::ChangeOwnership {
                 super_owners: Vec::new(),
                 owners,
@@ -2702,8 +2696,8 @@ where
         ownership: ChainOwnership,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         self.execute_operation(Operation::System(SystemOperation::ChangeOwnership {
-            super_owners: ownership.super_owners.values().cloned().collect(),
-            owners: ownership.owners.values().cloned().collect(),
+            super_owners: ownership.super_owners.into_iter().collect(),
+            owners: ownership.owners.into_iter().collect(),
             multi_leader_rounds: ownership.multi_leader_rounds,
             timeout_config: ownership.timeout_config.clone(),
         }))

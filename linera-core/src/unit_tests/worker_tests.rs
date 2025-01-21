@@ -107,20 +107,20 @@ where
 /// Same as `init_worker` but also instantiates some initial chains.
 async fn init_worker_with_chains<S, I>(storage: S, balances: I) -> (Committee, WorkerState<S>)
 where
-    I: IntoIterator<Item = (ChainDescription, PublicKey, Amount)>,
+    I: IntoIterator<Item = (ChainDescription, Owner, Amount)>,
     S: Storage + Clone + Send + Sync + 'static,
 {
     let (committee, worker) = init_worker(
         storage, /* is_client */ false, /* has_long_lived_services */ false,
     );
-    for (description, pubk, balance) in balances {
+    for (description, owner, balance) in balances {
         worker
             .storage
             .create_chain(
                 committee.clone(),
                 ChainId::root(0),
                 description,
-                pubk,
+                owner,
                 balance,
                 Timestamp::from(0),
             )
@@ -134,7 +134,7 @@ where
 async fn init_worker_with_chain<S>(
     storage: S,
     description: ChainDescription,
-    owner: PublicKey,
+    owner: Owner,
     balance: Amount,
 ) -> (Committee, WorkerState<S>)
 where
@@ -267,7 +267,7 @@ where
     let chain_id = chain_description.into();
     let system_state = SystemExecutionState {
         committees: [(epoch, committee.clone())].into_iter().collect(),
-        ownership: ChainOwnership::single(key_pair.public()),
+        ownership: ChainOwnership::single(key_pair.public().into()),
         balance,
         balances,
         ..SystemExecutionState::new(epoch, chain_description, ChainId::root(0))
@@ -429,12 +429,12 @@ where
         vec![
             (
                 ChainDescription::Root(1),
-                sender_key_pair.public(),
+                sender_key_pair.public().into(),
                 Amount::from_tokens(5),
             ),
             (
                 ChainDescription::Root(2),
-                PublicKey::test_key(2),
+                PublicKey::test_key(2).into(),
                 Amount::ZERO,
             ),
         ],
@@ -475,12 +475,12 @@ where
         vec![
             (
                 ChainDescription::Root(1),
-                sender_key_pair.public(),
+                sender_key_pair.public().into(),
                 Amount::from_tokens(5),
             ),
             (
                 ChainDescription::Root(2),
-                PublicKey::test_key(2),
+                PublicKey::test_key(2).into(),
                 Amount::ZERO,
             ),
         ],
@@ -523,7 +523,7 @@ where
     let clock = storage_builder.clock();
     let key_pair = KeyPair::generate();
     let balance = Amount::from_tokens(5);
-    let balances = vec![(ChainDescription::Root(1), key_pair.public(), balance)];
+    let balances = vec![(ChainDescription::Root(1), key_pair.public().into(), balance)];
     let epoch = Epoch::ZERO;
     let (committee, worker) = init_worker_with_chains(storage, balances).await;
 
@@ -548,7 +548,7 @@ where
 
         let system_state = SystemExecutionState {
             committees: [(epoch, committee.clone())].into_iter().collect(),
-            ownership: ChainOwnership::single(key_pair.public()),
+            ownership: ChainOwnership::single(key_pair.public().into()),
             balance,
             timestamp: block_0_time,
             ..SystemExecutionState::new(epoch, ChainDescription::Root(1), ChainId::root(0))
@@ -595,12 +595,12 @@ where
         vec![
             (
                 ChainDescription::Root(1),
-                sender_key_pair.public(),
+                sender_key_pair.public().into(),
                 Amount::from_tokens(5),
             ),
             (
                 ChainDescription::Root(2),
-                PublicKey::test_key(2),
+                PublicKey::test_key(2).into(),
                 Amount::ZERO,
             ),
         ],
@@ -633,13 +633,11 @@ where
     B: StorageBuilder,
 {
     let sender_key_pair = KeyPair::generate();
-    let (committee, worker) = init_worker_with_chains(
+    let (committee, worker) = init_worker_with_chain(
         storage_builder.build().await?,
-        vec![(
-            ChainDescription::Root(1),
-            sender_key_pair.public(),
-            Amount::from_tokens(5),
-        )],
+        ChainDescription::Root(1),
+        sender_key_pair.public().into(),
+        Amount::from_tokens(5),
     )
     .await;
     let block_proposal0 = make_first_block(ChainId::root(1))
@@ -775,12 +773,12 @@ where
         vec![
             (
                 ChainDescription::Root(1),
-                sender_key_pair.public(),
+                sender_key_pair.public().into(),
                 Amount::from_tokens(6),
             ),
             (
                 ChainDescription::Root(2),
-                recipient_key_pair.public(),
+                recipient_key_pair.public().into(),
                 Amount::ZERO,
             ),
         ],
@@ -804,7 +802,7 @@ where
                 events: vec![Vec::new(); 2],
                 state_hash: SystemExecutionState {
                     committees: [(epoch, committee.clone())].into_iter().collect(),
-                    ownership: ChainOwnership::single(sender_key_pair.public()),
+                    ownership: ChainOwnership::single(sender_key_pair.public().into()),
                     balance: Amount::from_tokens(3),
                     ..SystemExecutionState::new(epoch, ChainDescription::Root(1), admin_id)
                 }
@@ -833,7 +831,7 @@ where
                 events: vec![Vec::new()],
                 state_hash: SystemExecutionState {
                     committees: [(epoch, committee.clone())].into_iter().collect(),
-                    ownership: ChainOwnership::single(sender_key_pair.public()),
+                    ownership: ChainOwnership::single(sender_key_pair.public().into()),
                     ..SystemExecutionState::new(epoch, ChainDescription::Root(1), admin_id)
                 }
                 .into_hash()
@@ -1069,7 +1067,7 @@ where
                     events: vec![Vec::new(); 2],
                     state_hash: SystemExecutionState {
                         committees: [(epoch, committee.clone())].into_iter().collect(),
-                        ownership: ChainOwnership::single(recipient_key_pair.public()),
+                        ownership: ChainOwnership::single(recipient_key_pair.public().into()),
                         ..SystemExecutionState::new(epoch, ChainDescription::Root(2), admin_id)
                     }
                     .into_hash()
@@ -1131,12 +1129,12 @@ where
         vec![
             (
                 ChainDescription::Root(1),
-                sender_key_pair.public(),
+                sender_key_pair.public().into(),
                 Amount::from_tokens(5),
             ),
             (
                 ChainDescription::Root(2),
-                PublicKey::test_key(2),
+                PublicKey::test_key(2).into(),
                 Amount::ZERO,
             ),
         ],
@@ -1177,7 +1175,7 @@ where
         storage_builder.build().await?,
         vec![(
             ChainDescription::Root(1),
-            sender_key_pair.public(),
+            sender_key_pair.public().into(),
             Amount::from_tokens(5),
         )],
     )
@@ -1230,12 +1228,12 @@ where
         vec![
             (
                 ChainDescription::Root(1),
-                sender_key_pair.public(),
+                sender_key_pair.public().into(),
                 Amount::from_tokens(5),
             ),
             (
                 ChainDescription::Root(2),
-                PublicKey::test_key(2),
+                PublicKey::test_key(2).into(),
                 Amount::ZERO,
             ),
         ],
@@ -1271,7 +1269,7 @@ where
         storage_builder.build().await?,
         vec![(
             ChainDescription::Root(2),
-            PublicKey::test_key(2),
+            PublicKey::test_key(2).into(),
             Amount::ZERO,
         )],
     )
@@ -1311,7 +1309,7 @@ where
         storage_builder.build().await?,
         vec![(
             ChainDescription::Root(2),
-            PublicKey::test_key(2),
+            PublicKey::test_key(2).into(),
             Amount::ZERO,
         )],
     )
@@ -1324,7 +1322,7 @@ where
         index: 0,
     });
     let chain_id = ChainId::from(description);
-    let ownership = ChainOwnership::single(sender_key_pair.public());
+    let ownership = ChainOwnership::single(sender_key_pair.public().into());
     let committees = BTreeMap::from_iter([(epoch, committee.clone())]);
     let subscriptions = BTreeSet::from_iter([ChannelSubscription {
         chain_id: admin_id,
@@ -1390,7 +1388,7 @@ where
         storage_builder.build().await?,
         vec![(
             ChainDescription::Root(2),
-            chain_key_pair.public(),
+            chain_key_pair.public().into(),
             Amount::from_tokens(5),
         )],
     )
@@ -1437,12 +1435,12 @@ where
         vec![
             (
                 ChainDescription::Root(1),
-                sender_key_pair.public(),
+                sender_key_pair.public().into(),
                 Amount::from_tokens(5),
             ),
             (
                 ChainDescription::Root(2),
-                PublicKey::test_key(2),
+                PublicKey::test_key(2).into(),
                 Amount::ZERO,
             ),
         ],
@@ -1487,12 +1485,12 @@ where
         vec![
             (
                 ChainDescription::Root(1),
-                key_pair.public(),
+                key_pair.public().into(),
                 Amount::from_tokens(5),
             ),
             (
                 ChainDescription::Root(2),
-                PublicKey::test_key(2),
+                PublicKey::test_key(2).into(),
                 Amount::ZERO,
             ),
         ],
@@ -1588,12 +1586,12 @@ where
         vec![
             (
                 ChainDescription::Root(1),
-                sender_key_pair.public(),
+                sender_key_pair.public().into(),
                 Amount::ONE,
             ),
             (
                 ChainDescription::Root(2),
-                PublicKey::test_key(2),
+                PublicKey::test_key(2).into(),
                 Amount::MAX,
             ),
         ],
@@ -1652,9 +1650,9 @@ where
 {
     let storage = storage_builder.build().await?;
     let key_pair = KeyPair::generate();
-    let name = key_pair.public();
+    let owner = key_pair.public().into();
     let (committee, worker) =
-        init_worker_with_chain(storage, ChainDescription::Root(1), name, Amount::ONE).await;
+        init_worker_with_chain(storage, ChainDescription::Root(1), owner, Amount::ONE).await;
 
     let certificate = make_simple_transfer_certificate(
         ChainDescription::Root(1),
@@ -1720,13 +1718,11 @@ where
     B: StorageBuilder,
 {
     let sender_key_pair = KeyPair::generate();
-    let (committee, worker) = init_worker_with_chains(
+    let (committee, worker) = init_worker_with_chain(
         storage_builder.build().await?,
-        vec![(
-            ChainDescription::Root(2),
-            PublicKey::test_key(2),
-            Amount::ONE,
-        )],
+        ChainDescription::Root(2),
+        PublicKey::test_key(2).into(),
+        Amount::ONE,
     )
     .await;
     let certificate = make_simple_transfer_certificate(
@@ -1896,12 +1892,12 @@ where
         vec![
             (
                 ChainDescription::Root(1),
-                sender_key_pair.public(),
+                sender_key_pair.public().into(),
                 Amount::from_tokens(5),
             ),
             (
                 ChainDescription::Root(2),
-                recipient_key_pair.public(),
+                recipient_key_pair.public().into(),
                 Amount::ZERO,
             ),
         ],
@@ -2043,13 +2039,11 @@ where
     B: StorageBuilder,
 {
     let sender_key_pair = KeyPair::generate();
-    let (committee, worker) = init_worker_with_chains(
+    let (committee, worker) = init_worker_with_chain(
         storage_builder.build().await?,
-        vec![(
-            ChainDescription::Root(1),
-            sender_key_pair.public(),
-            Amount::from_tokens(5),
-        )],
+        ChainDescription::Root(1),
+        sender_key_pair.public().into(),
+        Amount::from_tokens(5),
     )
     .await;
     let certificate = make_simple_transfer_certificate(
@@ -2107,12 +2101,12 @@ where
         vec![
             (
                 ChainDescription::Root(1),
-                sender_key_pair.public(),
+                sender_key_pair.public().into(),
                 Amount::from_tokens(6),
             ),
             (
                 ChainDescription::Root(2),
-                recipient_key_pair.public(),
+                recipient_key_pair.public().into(),
                 Amount::ZERO,
             ),
         ],
@@ -2333,13 +2327,11 @@ where
     B: StorageBuilder,
 {
     let key_pair = KeyPair::generate();
-    let (committee, worker) = init_worker_with_chains(
+    let (committee, worker) = init_worker_with_chain(
         storage_builder.build().await?,
-        vec![(
-            ChainDescription::Root(0),
-            key_pair.public(),
-            Amount::from_tokens(2),
-        )],
+        ChainDescription::Root(0),
+        key_pair.public().into(),
+        Amount::from_tokens(2),
     )
     .await;
     let mut committees = BTreeMap::new();
@@ -2371,7 +2363,7 @@ where
                         user_id,
                         MessageKind::Protected,
                         SystemMessage::OpenChain(OpenChainConfig {
-                            ownership: ChainOwnership::single(key_pair.public()),
+                            ownership: ChainOwnership::single(key_pair.public().into()),
                             epoch: Epoch::ZERO,
                             committees: committees.clone(),
                             admin_id,
@@ -2391,7 +2383,7 @@ where
                 events: vec![Vec::new()],
                 state_hash: SystemExecutionState {
                     committees: committees.clone(),
-                    ownership: ChainOwnership::single(key_pair.public()),
+                    ownership: ChainOwnership::single(key_pair.public().into()),
                     balance: Amount::from_tokens(2),
                     ..SystemExecutionState::new(Epoch::ZERO, ChainDescription::Root(0), admin_id)
                 }
@@ -2402,7 +2394,7 @@ where
             .with(
                 make_first_block(admin_id)
                     .with_operation(SystemOperation::OpenChain(OpenChainConfig {
-                        ownership: ChainOwnership::single(key_pair.public()),
+                        ownership: ChainOwnership::single(key_pair.public().into()),
                         epoch: Epoch::ZERO,
                         committees: committees.clone(),
                         admin_id,
@@ -2458,7 +2450,7 @@ where
                 state_hash: SystemExecutionState {
                     // The root chain knows both committees at the end.
                     committees: committees2.clone(),
-                    ownership: ChainOwnership::single(key_pair.public()),
+                    ownership: ChainOwnership::single(key_pair.public().into()),
                     ..SystemExecutionState::new(Epoch::from(1), ChainDescription::Root(0), admin_id)
                 }
                 .into_hash()
@@ -2566,7 +2558,7 @@ where
                     .collect(),
                     // Finally the child knows about both committees and has the money.
                     committees: committees2.clone(),
-                    ownership: ChainOwnership::single(key_pair.public()),
+                    ownership: ChainOwnership::single(key_pair.public().into()),
                     balance: Amount::from_tokens(2),
                     ..SystemExecutionState::new(Epoch::from(1), user_description, admin_id)
                 }
@@ -2585,7 +2577,7 @@ where
                             transaction_index: 0,
                             messages: vec![Message::System(SystemMessage::OpenChain(
                                 OpenChainConfig {
-                                    ownership: ChainOwnership::single(key_pair.public()),
+                                    ownership: ChainOwnership::single(key_pair.public().into()),
                                     epoch: Epoch::from(0),
                                     committees: committees.clone(),
                                     admin_id,
@@ -2686,17 +2678,13 @@ async fn test_transfers_and_committee_creation<B>(mut storage_builder: B) -> any
 where
     B: StorageBuilder,
 {
-    let key_pair0 = KeyPair::generate();
-    let key_pair1 = KeyPair::generate();
+    let owner0 = KeyPair::generate().public().into();
+    let owner1 = KeyPair::generate().public().into();
     let (committee, worker) = init_worker_with_chains(
         storage_builder.build().await?,
         vec![
-            (ChainDescription::Root(0), key_pair0.public(), Amount::ZERO),
-            (
-                ChainDescription::Root(1),
-                key_pair1.public(),
-                Amount::from_tokens(3),
-            ),
+            (ChainDescription::Root(0), owner0, Amount::ZERO),
+            (ChainDescription::Root(1), owner1, Amount::from_tokens(3)),
         ],
     )
     .await;
@@ -2715,7 +2703,7 @@ where
                 events: vec![Vec::new()],
                 state_hash: SystemExecutionState {
                     committees: committees.clone(),
-                    ownership: ChainOwnership::single(key_pair1.public()),
+                    ownership: ChainOwnership::single(owner1),
                     balance: Amount::from_tokens(2),
                     ..SystemExecutionState::new(Epoch::ZERO, ChainDescription::Root(1), admin_id)
                 }
@@ -2726,7 +2714,7 @@ where
             .with(
                 make_first_block(user_id)
                     .with_simple_transfer(admin_id, Amount::ONE)
-                    .with_authenticated_signer(Some(key_pair1.public().into())),
+                    .with_authenticated_signer(Some(owner1)),
             ),
         )),
     );
@@ -2749,7 +2737,7 @@ where
                 events: vec![Vec::new()],
                 state_hash: SystemExecutionState {
                     committees: committees2.clone(),
-                    ownership: ChainOwnership::single(key_pair0.public()),
+                    ownership: ChainOwnership::single(owner0),
                     ..SystemExecutionState::new(Epoch::from(1), ChainDescription::Root(0), admin_id)
                 }
                 .into_hash()
@@ -2821,17 +2809,13 @@ async fn test_transfers_and_committee_removal<B>(mut storage_builder: B) -> anyh
 where
     B: StorageBuilder,
 {
-    let key_pair0 = KeyPair::generate();
-    let key_pair1 = KeyPair::generate();
+    let owner0 = KeyPair::generate().public().into();
+    let owner1 = KeyPair::generate().public().into();
     let (committee, worker) = init_worker_with_chains(
         storage_builder.build().await?,
         vec![
-            (ChainDescription::Root(0), key_pair0.public(), Amount::ZERO),
-            (
-                ChainDescription::Root(1),
-                key_pair1.public(),
-                Amount::from_tokens(3),
-            ),
+            (ChainDescription::Root(0), owner0, Amount::ZERO),
+            (ChainDescription::Root(1), owner1, Amount::from_tokens(3)),
         ],
     )
     .await;
@@ -2850,7 +2834,7 @@ where
                 events: vec![Vec::new()],
                 state_hash: SystemExecutionState {
                     committees: committees.clone(),
-                    ownership: ChainOwnership::single(key_pair1.public()),
+                    ownership: ChainOwnership::single(owner1),
                     balance: Amount::from_tokens(2),
                     ..SystemExecutionState::new(Epoch::ZERO, ChainDescription::Root(1), admin_id)
                 }
@@ -2861,7 +2845,7 @@ where
             .with(
                 make_first_block(user_id)
                     .with_simple_transfer(admin_id, Amount::ONE)
-                    .with_authenticated_signer(Some(key_pair1.public().into())),
+                    .with_authenticated_signer(Some(owner1)),
             ),
         )),
     );
@@ -2884,7 +2868,7 @@ where
                 events: vec![Vec::new(); 2],
                 state_hash: SystemExecutionState {
                     committees: committees3.clone(),
-                    ownership: ChainOwnership::single(key_pair0.public()),
+                    ownership: ChainOwnership::single(owner0),
                     ..SystemExecutionState::new(Epoch::from(1), ChainDescription::Root(0), admin_id)
                 }
                 .into_hash()
@@ -2945,7 +2929,7 @@ where
                 events: vec![Vec::new()],
                 state_hash: SystemExecutionState {
                     committees: committees3.clone(),
-                    ownership: ChainOwnership::single(key_pair0.public()),
+                    ownership: ChainOwnership::single(owner0),
                     balance: Amount::ONE,
                     ..SystemExecutionState::new(Epoch::from(1), ChainDescription::Root(0), admin_id)
                 }
@@ -3235,19 +3219,20 @@ where
     let clock = storage_builder.clock();
     let chain_id = ChainId::root(0);
     let key_pairs = generate_key_pairs(2);
-    let (pub_key0, pub_key1) = (key_pairs[0].public(), key_pairs[1].public());
-    let balances = vec![(ChainDescription::Root(0), pub_key0, Amount::from_tokens(2))];
+    let owner0 = Owner::from(key_pairs[0].public());
+    let owner1 = Owner::from(key_pairs[1].public());
+    let balances = vec![(ChainDescription::Root(0), owner0, Amount::from_tokens(2))];
     let (committee, worker) = init_worker_with_chains(storage, balances).await;
 
     // Add another owner and use the leader-based protocol in all rounds.
     let block0 = make_first_block(chain_id)
         .with_operation(SystemOperation::ChangeOwnership {
             super_owners: Vec::new(),
-            owners: vec![(pub_key0, 100), (pub_key1, 100)],
+            owners: vec![(owner0, 100), (owner1, 100)],
             multi_leader_rounds: 0,
             timeout_config: TimeoutConfig::default(),
         })
-        .with_authenticated_signer(Some(pub_key0.into()));
+        .with_authenticated_signer(Some(owner0));
     let (executed_block0, _) = worker.stage_block_execution(block0).await?;
     let value0 = Hashed::new(ConfirmedBlock::new(executed_block0));
     let certificate0 = make_certificate(&committee, &worker, value0.clone());
@@ -3256,7 +3241,7 @@ where
         .await?;
 
     // The leader sequence is pseudorandom but deterministic. The first leader is owner 1.
-    assert_eq!(response.info.manager.leader, Some(Owner::from(pub_key1)));
+    assert_eq!(response.info.manager.leader, Some(owner1));
 
     // So owner 0 cannot propose a block in this round. And the next round hasn't started yet.
     let proposal = make_child_block(&value0.clone())
@@ -3293,14 +3278,14 @@ where
     let (response, _) = worker
         .handle_timeout_certificate(certificate_timeout)
         .await?;
-    assert_eq!(response.info.manager.leader, Some(Owner::from(pub_key0)));
+    assert_eq!(response.info.manager.leader, Some(owner0));
 
     // Now owner 0 can propose a block, but owner 1 can't.
     let block1 = make_child_block(&value0.clone());
     let (executed_block1, _) = worker.stage_block_execution(block1.clone()).await?;
     let proposal1_wrong_owner = block1
         .clone()
-        .with_authenticated_signer(Some(pub_key1.into()))
+        .with_authenticated_signer(Some(owner1))
         .into_proposal_with_round(&key_pairs[1], Round::SingleLeader(1));
     let result = worker.handle_block_proposal(proposal1_wrong_owner).await;
     assert_matches!(result, Err(WorkerError::InvalidOwner));
@@ -3330,7 +3315,7 @@ where
     let (response, _) = worker
         .handle_timeout_certificate(certificate_timeout)
         .await?;
-    assert_eq!(response.info.manager.leader, Some(Owner::from(pub_key1)));
+    assert_eq!(response.info.manager.leader, Some(owner1));
     assert_eq!(response.info.manager.current_round, Round::SingleLeader(5));
 
     // Create block2, also at height 1, but different from block 1.
@@ -3354,7 +3339,7 @@ where
     // Proposing block2 now would fail.
     let proposal = block2
         .clone()
-        .with_authenticated_signer(Some(pub_key1.into()))
+        .with_authenticated_signer(Some(owner1))
         .into_proposal_with_round(&key_pairs[1], Round::SingleLeader(5));
     let result = worker.handle_block_proposal(proposal.clone()).await;
     assert_matches!(result, Err(WorkerError::ChainError(error))
@@ -3391,7 +3376,7 @@ where
     let (response, _) = worker
         .handle_timeout_certificate(certificate_timeout)
         .await?;
-    assert_eq!(response.info.manager.leader, Some(Owner::from(pub_key0)));
+    assert_eq!(response.info.manager.leader, Some(owner0));
     assert_eq!(response.info.manager.current_round, Round::SingleLeader(6));
 
     // Since the validator now voted for block2, it can't vote for block1 anymore.
@@ -3438,14 +3423,15 @@ where
     let clock = storage_builder.clock();
     let chain_id = ChainId::root(0);
     let key_pairs = generate_key_pairs(2);
-    let (pub_key0, pub_key1) = (key_pairs[0].public(), key_pairs[1].public());
-    let balances = vec![(ChainDescription::Root(0), pub_key0, Amount::from_tokens(2))];
+    let owner0 = Owner::from(key_pairs[0].public());
+    let owner1 = Owner::from(key_pairs[1].public());
+    let balances = vec![(ChainDescription::Root(0), owner0, Amount::from_tokens(2))];
     let (committee, worker) = init_worker_with_chains(storage, balances).await;
 
     // Add another owner and configure two multi-leader rounds.
     let block0 = make_first_block(chain_id).with_operation(SystemOperation::ChangeOwnership {
-        super_owners: vec![pub_key0],
-        owners: vec![(pub_key0, 100), (pub_key1, 100)],
+        super_owners: vec![owner0],
+        owners: vec![(owner0, 100), (owner1, 100)],
         multi_leader_rounds: 2,
         timeout_config: TimeoutConfig {
             fast_round_duration: Some(TimeDelta::from_secs(5)),
@@ -3504,7 +3490,7 @@ where
     let block1 = make_child_block(&value0);
     let proposal1 = block1
         .clone()
-        .with_authenticated_signer(Some(pub_key1.into()))
+        .with_authenticated_signer(Some(owner1))
         .into_proposal_with_round(&key_pairs[1], Round::MultiLeader(1));
     let _ = worker.handle_block_proposal(proposal1).await?;
     let query_values = ChainInfoQuery::new(chain_id).with_manager_values();
@@ -3526,14 +3512,15 @@ where
     let clock = storage_builder.clock();
     let chain_id = ChainId::root(0);
     let key_pairs = generate_key_pairs(2);
-    let (pub_key0, pub_key1) = (key_pairs[0].public(), key_pairs[1].public());
-    let balances = vec![(ChainDescription::Root(0), pub_key0, Amount::from_tokens(2))];
+    let owner0 = Owner::from(key_pairs[0].public());
+    let owner1 = Owner::from(key_pairs[1].public());
+    let balances = vec![(ChainDescription::Root(0), owner0, Amount::from_tokens(2))];
     let (committee, worker) = init_worker_with_chains(storage, balances).await;
 
     // Add another owner and configure two multi-leader rounds.
     let block0 = make_first_block(chain_id).with_operation(SystemOperation::ChangeOwnership {
-        super_owners: vec![pub_key0],
-        owners: vec![(pub_key0, 100), (pub_key1, 100)],
+        super_owners: vec![owner0],
+        owners: vec![(owner0, 100), (owner1, 100)],
         multi_leader_rounds: 3,
         timeout_config: TimeoutConfig {
             fast_round_duration: Some(TimeDelta::from_millis(5)),
@@ -3588,7 +3575,7 @@ where
     // Proposing a different block is not.
     let block2 = make_child_block(&value0)
         .with_simple_transfer(ChainId::root(1), Amount::ONE)
-        .with_authenticated_signer(Some(pub_key1.into()));
+        .with_authenticated_signer(Some(owner1));
     let proposal2 = block2
         .clone()
         .into_proposal_with_round(&key_pairs[1], Round::MultiLeader(1));
@@ -3640,7 +3627,7 @@ where
     let chain_id = ChainId::root(1);
     let key_pair = KeyPair::generate();
     let balance = Amount::from_tokens(5);
-    let balances = vec![(ChainDescription::Root(1), key_pair.public(), balance)];
+    let balances = vec![(ChainDescription::Root(1), key_pair.public().into(), balance)];
     let (committee, worker) = init_worker_with_chains(storage, balances).await;
 
     // At time 0 we don't vote for fallback mode.
@@ -3726,7 +3713,7 @@ where
             committee,
             ChainId::root(0),
             chain_description,
-            key_pair.public(),
+            key_pair.public().into(),
             balance,
             Timestamp::from(0),
         )
@@ -3812,7 +3799,7 @@ where
             committee.clone(),
             ChainId::root(0),
             chain_description,
-            key_pair.public(),
+            key_pair.public().into(),
             balance,
             Timestamp::from(0),
         )
@@ -3896,7 +3883,7 @@ where
     let admin_id = ChainId::root(0);
     let mut state = SystemExecutionState {
         committees: BTreeMap::from_iter([(epoch, committee.clone())]),
-        ownership: ChainOwnership::single(key_pair.public()),
+        ownership: ChainOwnership::single(key_pair.public().into()),
         balance,
         timestamp: Timestamp::from(BLOCK_TIMESTAMP),
         ..SystemExecutionState::new(epoch, chain_description, admin_id)

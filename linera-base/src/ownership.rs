@@ -4,7 +4,10 @@
 //! Structures defining the set of owners and super owners, as well as the consensus
 //! round types and timeouts for chains.
 
-use std::{collections::BTreeMap, iter};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    iter,
+};
 
 use custom_debug_derive::Debug;
 use linera_witty::{WitLoad, WitStore, WitType};
@@ -12,7 +15,6 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
-    crypto::PublicKey,
     data_types::{Round, TimeDelta},
     doc_scalar,
     identifiers::Owner,
@@ -50,11 +52,11 @@ impl Default for TimeoutConfig {
 )]
 pub struct ChainOwnership {
     /// Super owners can propose fast blocks in the first round, and regular blocks in any round.
-    #[debug(skip_if = BTreeMap::is_empty)]
-    pub super_owners: BTreeMap<Owner, PublicKey>,
+    #[debug(skip_if = BTreeSet::is_empty)]
+    pub super_owners: BTreeSet<Owner>,
     /// The regular owners, with their weights that determine how often they are round leader.
     #[debug(skip_if = BTreeMap::is_empty)]
-    pub owners: BTreeMap<Owner, (PublicKey, u64)>,
+    pub owners: BTreeMap<Owner, u64>,
     /// The number of initial rounds after 0 in which all owners are allowed to propose blocks.
     pub multi_leader_rounds: u32,
     /// The timeout configuration: how long fast, multi-leader and single-leader rounds last.
@@ -63,9 +65,9 @@ pub struct ChainOwnership {
 
 impl ChainOwnership {
     /// Creates a `ChainOwnership` with a single super owner.
-    pub fn single_super(public_key: PublicKey) -> Self {
+    pub fn single_super(owner: Owner) -> Self {
         ChainOwnership {
-            super_owners: iter::once((Owner::from(public_key), public_key)).collect(),
+            super_owners: iter::once(owner).collect(),
             owners: BTreeMap::new(),
             multi_leader_rounds: 2,
             timeout_config: TimeoutConfig::default(),
@@ -73,10 +75,10 @@ impl ChainOwnership {
     }
 
     /// Creates a `ChainOwnership` with a single regular owner.
-    pub fn single(public_key: PublicKey) -> Self {
+    pub fn single(owner: Owner) -> Self {
         ChainOwnership {
-            super_owners: BTreeMap::new(),
-            owners: iter::once((Owner::from(public_key), (public_key, 100))).collect(),
+            super_owners: BTreeSet::new(),
+            owners: iter::once((owner, 100)).collect(),
             multi_leader_rounds: 2,
             timeout_config: TimeoutConfig::default(),
         }
@@ -84,25 +86,21 @@ impl ChainOwnership {
 
     /// Creates a `ChainOwnership` with the specified regular owners.
     pub fn multiple(
-        keys_and_weights: impl IntoIterator<Item = (PublicKey, u64)>,
+        owners_and_weights: impl IntoIterator<Item = (Owner, u64)>,
         multi_leader_rounds: u32,
         timeout_config: TimeoutConfig,
     ) -> Self {
         ChainOwnership {
-            super_owners: BTreeMap::new(),
-            owners: keys_and_weights
-                .into_iter()
-                .map(|(public_key, weight)| (Owner::from(public_key), (public_key, weight)))
-                .collect(),
+            super_owners: BTreeSet::new(),
+            owners: owners_and_weights.into_iter().collect(),
             multi_leader_rounds,
             timeout_config,
         }
     }
 
     /// Adds a regular owner.
-    pub fn with_regular_owner(mut self, public_key: PublicKey, weight: u64) -> Self {
-        self.owners
-            .insert(Owner::from(public_key), (public_key, weight));
+    pub fn with_regular_owner(mut self, owner: Owner, weight: u64) -> Self {
+        self.owners.insert(owner, weight);
         self
     }
 
@@ -115,7 +113,7 @@ impl ChainOwnership {
 
     /// Returns `true` if this is an owner or super owner.
     pub fn verify_owner(&self, owner: &Owner) -> bool {
-        self.super_owners.contains_key(owner) || self.owners.contains_key(owner)
+        self.super_owners.contains(owner) || self.owners.contains_key(owner)
     }
 
     /// Returns the duration of the given round.
@@ -153,14 +151,7 @@ impl ChainOwnership {
 
     /// Returns an iterator over all super owners, followed by all owners.
     pub fn all_owners(&self) -> impl Iterator<Item = &Owner> {
-        self.super_owners.keys().chain(self.owners.keys())
-    }
-
-    /// Returns an iterator over all super owners' keys, followed by all owners'.
-    pub fn all_public_keys(&self) -> impl Iterator<Item = &PublicKey> {
-        self.super_owners
-            .values()
-            .chain(self.owners.values().map(|(public_key, _)| public_key))
+        self.super_owners.iter().chain(self.owners.keys())
     }
 
     /// Returns the round following the specified one, if any.
@@ -203,8 +194,8 @@ mod tests {
         let owner = Owner::from(pub_key);
 
         let ownership = ChainOwnership {
-            super_owners: BTreeMap::from_iter([(super_owner, super_pub_key)]),
-            owners: BTreeMap::from_iter([(owner, (pub_key, 100))]),
+            super_owners: BTreeSet::from_iter([super_owner]),
+            owners: BTreeMap::from_iter([(owner, 100)]),
             multi_leader_rounds: 10,
             timeout_config: TimeoutConfig {
                 fast_round_duration: Some(TimeDelta::from_secs(5)),

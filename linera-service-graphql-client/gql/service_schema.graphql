@@ -686,15 +686,15 @@ type MutationRoot {
 	"""
 	readDataBlob(chainId: ChainId!, hash: CryptoHash!): CryptoHash!
 	"""
-	Creates (or activates) a new chain by installing the given authentication key.
+	Creates (or activates) a new chain with the given owner.
 	This will automatically subscribe to the future committees created by `admin_id`.
 	"""
-	openChain(chainId: ChainId!, publicKey: PublicKey!, balance: Amount): ChainId!
+	openChain(chainId: ChainId!, owner: Owner!, balance: Amount): ChainId!
 	"""
 	Creates (or activates) a new chain by installing the given authentication keys.
 	This will automatically subscribe to the future committees created by `admin_id`.
 	"""
-	openMultiOwnerChain(		chainId: ChainId!,		applicationPermissions: ApplicationPermissions,		publicKeys: [PublicKey!]!,		weights: [Int!],		multiLeaderRounds: Int,		balance: Amount,
+	openMultiOwnerChain(		chainId: ChainId!,		applicationPermissions: ApplicationPermissions,		owners: [Owner!]!,		weights: [Int!],		multiLeaderRounds: Int,		balance: Amount,
 		"""
 		The duration of the fast round, in milliseconds; default: no timeout
 		"""
@@ -719,11 +719,11 @@ type MutationRoot {
 	"""
 	Changes the authentication key of the chain.
 	"""
-	changeOwner(chainId: ChainId!, newPublicKey: PublicKey!): CryptoHash!
+	changeOwner(chainId: ChainId!, newOwner: Owner!): CryptoHash!
 	"""
 	Changes the authentication key of the chain.
 	"""
-	changeMultipleOwners(		chainId: ChainId!,		newPublicKeys: [PublicKey!]!,		newWeights: [Int!]!,		multiLeaderRounds: Int!,
+	changeMultipleOwners(		chainId: ChainId!,		newOwners: [Owner!]!,		newWeights: [Int!]!,		multiLeaderRounds: Int!,
 		"""
 		The duration of the fast round, in milliseconds; default: no timeout
 		"""
@@ -889,11 +889,6 @@ type PostedMessage {
 	"""
 	message: Message!
 }
-
-"""
-A signature public key
-"""
-scalar PublicKey
 
 type QueryRoot {
 	chain(chainId: ChainId!): ChainStateExtendedView!

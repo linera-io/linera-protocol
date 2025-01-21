@@ -23,7 +23,7 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
         description: Some(ChainDescription::Root(0)),
         balance: Amount::from_tokens(4),
         ownership: ChainOwnership {
-            super_owners: [(owner, owner_key_pair.public())].into_iter().collect(),
+            super_owners: [owner].into_iter().collect(),
             ..ChainOwnership::default()
         },
         ..SystemExecutionState::default()

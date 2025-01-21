@@ -9,7 +9,7 @@ use async_graphql::ComplexObject;
 use hex_game::{Board, Clock, HexAbi, HexOutcome, Operation, Timeouts};
 use linera_sdk::{
     base::{
-        Amount, ApplicationPermissions, ChainId, ChainOwnership, Owner, PublicKey, TimeoutConfig,
+        Amount, ApplicationPermissions, ChainId, ChainOwnership, Owner, TimeoutConfig,
         WithContractAbi,
     },
     views::{RootView, View},
@@ -75,9 +75,7 @@ impl Contract for HexContract {
             } => {
                 let clock = Clock::new(self.runtime.system_time(), &timeouts);
                 self.state.clock.set(clock);
-                let owners = [Owner::from(&players[0]), Owner::from(&players[1])];
-                self.state.public_keys.set(Some(players));
-                self.state.owners.set(Some(owners));
+                self.state.owners.set(Some(players));
                 self.state.board.set(Board::new(board_size));
             }
             Message::End { winner, loser } => {
@@ -143,7 +141,7 @@ impl HexContract {
 
     async fn execute_start(
         &mut self,
-        players: [PublicKey; 2],
+        players: [Owner; 2],
         board_size: u16,
         fee_budget: Amount,
         timeouts: Option<Timeouts>,
@@ -157,10 +155,10 @@ impl HexContract {
         let app_id = self.runtime.application_id();
         let permissions = ApplicationPermissions::new_single(app_id.forget_abi());
         let (message_id, chain_id) = self.runtime.open_chain(ownership, permissions, fee_budget);
-        for public_key in &players {
+        for owner in &players {
             self.state
                 .game_chains
-                .get_mut_or_default(public_key)
+                .get_mut_or_default(owner)
                 .await
                 .unwrap()
                 .insert(GameChain {
@@ -183,8 +181,8 @@ impl HexContract {
         let HexOutcome::Winner(player) = outcome else {
             return outcome;
         };
-        let winner = self.state.public_keys.get().unwrap()[player.index()];
-        let loser = self.state.public_keys.get().unwrap()[player.other().index()];
+        let winner = self.state.owners.get().unwrap()[player.index()];
+        let loser = self.state.owners.get().unwrap()[player.other().index()];
         let chain_id = self.main_chain_id();
         let message = Message::End { winner, loser };
         self.runtime.send_message(chain_id, message);
@@ -202,14 +200,14 @@ pub enum Message {
     /// Initializes a game. Sent from the main chain to a temporary chain.
     Start {
         /// The players.
-        players: [PublicKey; 2],
+        players: [Owner; 2],
         /// The side length of the board. A typical size is 11.
         board_size: u16,
         /// Settings that determine how much time the players have to think about their turns.
         timeouts: Timeouts,
     },
     /// Reports the outcome of a game. Sent from a closed chain to the main chain.
-    End { winner: PublicKey, loser: PublicKey },
+    End { winner: Owner, loser: Owner },
 }
 
 /// This implementation is only nonempty in the service.

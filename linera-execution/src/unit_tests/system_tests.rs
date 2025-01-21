@@ -86,7 +86,8 @@ async fn open_chain_message_index() {
     let epoch = view.system.epoch.get().unwrap();
     let admin_id = view.system.admin_id.get().unwrap();
     let committees = view.system.committees.get().clone();
-    let ownership = ChainOwnership::single(PublicKey::test_key(0));
+    let owner = linera_base::crypto::PublicKey::test_key(0).into();
+    let ownership = ChainOwnership::single(owner);
     let config = OpenChainConfig {
         ownership,
         committees,
