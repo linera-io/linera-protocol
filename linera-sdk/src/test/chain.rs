@@ -21,7 +21,7 @@ use linera_chain::{types::ConfirmedBlockCertificate, ChainError, ChainExecutionC
 use linera_core::{data_types::ChainInfoQuery, worker::WorkerError};
 use linera_execution::{
     system::{SystemExecutionError, SystemOperation, CREATE_APPLICATION_MESSAGE_INDEX},
-    ExecutionError, Query, Response,
+    ExecutionError, Query, QueryResponse,
 };
 use linera_storage::Storage as _;
 use serde::Serialize;
@@ -482,10 +482,12 @@ impl ActiveChain {
             .expect("Failed to query application");
 
         match response {
-            Response::User(bytes) => {
+            QueryResponse::User(bytes) => {
                 serde_json::from_slice(&bytes).expect("Failed to deserialize query response")
             }
-            Response::System(_) => unreachable!("User query returned a system response"),
+            QueryResponse::System(_) => {
+                unreachable!("User query returned a system response")
+            }
         }
     }
 

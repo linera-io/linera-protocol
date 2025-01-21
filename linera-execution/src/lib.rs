@@ -785,7 +785,7 @@ pub enum Query {
 
 /// The response to a query.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub enum Response {
+pub enum QueryResponse {
     /// A system response.
     System(SystemResponse),
     /// A user response (in serialized form).
@@ -1247,15 +1247,15 @@ impl Query {
     }
 }
 
-impl From<SystemResponse> for Response {
+impl From<SystemResponse> for QueryResponse {
     fn from(response: SystemResponse) -> Self {
-        Response::System(response)
+        QueryResponse::System(response)
     }
 }
 
-impl From<Vec<u8>> for Response {
+impl From<Vec<u8>> for QueryResponse {
     fn from(response: Vec<u8>) -> Self {
-        Response::User(response)
+        QueryResponse::User(response)
     }
 }
 

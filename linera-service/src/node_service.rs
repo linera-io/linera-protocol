@@ -34,7 +34,7 @@ use linera_core::{
 use linera_execution::{
     committee::{Committee, Epoch},
     system::{AdminOperation, Recipient, SystemChannel},
-    Operation, Query, Response, SystemOperation,
+    Operation, Query, QueryResponse, SystemOperation,
 };
 use linera_sdk::base::BlobContent;
 use linera_storage::Storage;
@@ -1009,8 +1009,10 @@ where
             })?;
         let response = client.query_application(query).await?;
         let user_response_bytes = match response {
-            Response::System(_) => unreachable!("cannot get a system response for a user query"),
-            Response::User(user) => user,
+            QueryResponse::System(_) => {
+                unreachable!("cannot get a system response for a user query")
+            }
+            QueryResponse::User(user) => user,
         };
         Ok(serde_json::from_slice(&user_response_bytes)?)
     }

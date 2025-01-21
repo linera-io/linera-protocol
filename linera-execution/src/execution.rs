@@ -32,9 +32,9 @@ use super::{runtime::ServiceRuntimeRequest, ExecutionRequest};
 use crate::{
     resources::ResourceController, system::SystemExecutionStateView, ContractSyncRuntime,
     ExecutionError, ExecutionOutcome, ExecutionRuntimeConfig, ExecutionRuntimeContext, Message,
-    MessageContext, MessageKind, Operation, OperationContext, Query, QueryContext,
-    RawExecutionOutcome, RawOutgoingMessage, Response, ServiceSyncRuntime, SystemMessage,
-    TransactionTracker, UserApplicationDescription, UserApplicationId,
+    MessageContext, MessageKind, Operation, OperationContext, Query, QueryContext, QueryResponse,
+    RawExecutionOutcome, RawOutgoingMessage, ServiceSyncRuntime, SystemMessage, TransactionTracker,
+    UserApplicationDescription, UserApplicationId,
 };
 
 /// A view accessing the execution state of a chain.
@@ -485,12 +485,12 @@ where
         context: QueryContext,
         query: Query,
         endpoint: Option<&mut ServiceRuntimeEndpoint>,
-    ) -> Result<Response, ExecutionError> {
+    ) -> Result<QueryResponse, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         match query {
             Query::System(query) => {
                 let response = self.system.handle_query(context, query).await?;
-                Ok(Response::System(response))
+                Ok(QueryResponse::System(response))
             }
             Query::User {
                 application_id,
@@ -513,7 +513,7 @@ where
                             .await?
                     }
                 };
-                Ok(Response::User(response))
+                Ok(QueryResponse::User(response))
             }
         }
     }

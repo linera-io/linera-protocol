@@ -46,7 +46,7 @@ use linera_execution::{
         AdminOperation, OpenChainConfig, Recipient, SystemChannel, SystemMessage, SystemOperation,
     },
     test_utils::{ExpectedCall, RegisterMockApplication, SystemExecutionState},
-    ChannelSubscription, ExecutionError, Message, MessageKind, Query, QueryContext, Response,
+    ChannelSubscription, ExecutionError, Message, MessageKind, Query, QueryContext, QueryResponse,
     SystemExecutionError, SystemQuery, SystemResponse,
 };
 use linera_storage::{DbStorage, Storage, TestClock};
@@ -1907,7 +1907,7 @@ where
         worker
             .query_application(ChainId::root(1), Query::System(SystemQuery))
             .await?,
-        Response::System(SystemResponse {
+        QueryResponse::System(SystemResponse {
             chain_id: ChainId::root(1),
             balance: Amount::from_tokens(5),
         })
@@ -1916,7 +1916,7 @@ where
         worker
             .query_application(ChainId::root(2), Query::System(SystemQuery))
             .await?,
-        Response::System(SystemResponse {
+        QueryResponse::System(SystemResponse {
             chain_id: ChainId::root(2),
             balance: Amount::ZERO,
         })
@@ -1948,7 +1948,7 @@ where
         worker
             .query_application(ChainId::root(1), Query::System(SystemQuery))
             .await?,
-        Response::System(SystemResponse {
+        QueryResponse::System(SystemResponse {
             chain_id: ChainId::root(1),
             balance: Amount::ZERO,
         })
@@ -1986,7 +1986,7 @@ where
         worker
             .query_application(ChainId::root(2), Query::System(SystemQuery))
             .await?,
-        Response::System(SystemResponse {
+        QueryResponse::System(SystemResponse {
             chain_id: ChainId::root(2),
             balance: Amount::from_tokens(4),
         })
@@ -3818,7 +3818,7 @@ where
 
         assert_eq!(
             worker.query_application(chain_id, query.clone()).await?,
-            Response::User(vec![])
+            QueryResponse::User(vec![])
         );
     }
 
@@ -3925,7 +3925,7 @@ where
 
         assert_eq!(
             worker.query_application(chain_id, query.clone()).await?,
-            Response::User(vec![])
+            QueryResponse::User(vec![])
         );
     }
 
@@ -3940,7 +3940,7 @@ where
 
         assert_eq!(
             worker.query_application(chain_id, query.clone()).await?,
-            Response::User(vec![])
+            QueryResponse::User(vec![])
         );
     }
 
@@ -3986,7 +3986,7 @@ where
 
         assert_eq!(
             worker.query_application(chain_id, query.clone()).await?,
-            Response::User(vec![])
+            QueryResponse::User(vec![])
         );
     }
 

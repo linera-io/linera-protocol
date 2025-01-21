@@ -58,7 +58,8 @@ use linera_execution::{
         AdminOperation, OpenChainConfig, Recipient, SystemChannel, SystemOperation,
         CREATE_APPLICATION_MESSAGE_INDEX, OPEN_CHAIN_MESSAGE_INDEX,
     },
-    ExecutionError, Operation, Query, Response, SystemExecutionError, SystemQuery, SystemResponse,
+    ExecutionError, Operation, Query, QueryResponse, SystemExecutionError, SystemQuery,
+    SystemResponse,
 };
 use linera_storage::{Clock as _, Storage};
 use linera_views::views::ViewError;
@@ -2169,7 +2170,7 @@ where
 
     /// Queries an application.
     #[instrument(level = "trace", skip(query))]
-    pub async fn query_application(&self, query: Query) -> Result<Response, ChainClientError> {
+    pub async fn query_application(&self, query: Query) -> Result<QueryResponse, ChainClientError> {
         let response = self
             .client
             .local_node
@@ -2190,7 +2191,7 @@ where
             .query_application(self.chain_id, Query::System(query))
             .await?;
         match response {
-            Response::System(response) => Ok(response),
+            QueryResponse::System(response) => Ok(response),
             _ => Err(ChainClientError::InternalError(
                 "Unexpected response for system query",
             )),
@@ -2211,7 +2212,7 @@ where
             .query_application(self.chain_id, query)
             .await?;
         match response {
-            Response::User(response) => Ok(serde_json::from_slice(&response)?),
+            QueryResponse::User(response) => Ok(serde_json::from_slice(&response)?),
             _ => Err(ChainClientError::InternalError(
                 "Unexpected response for user query",
             )),

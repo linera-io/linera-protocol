@@ -17,7 +17,7 @@ use linera_chain::{
     types::{ConfirmedBlockCertificate, GenericCertificate, LiteCertificate},
     ChainStateView,
 };
-use linera_execution::{committee::ValidatorName, Query, Response};
+use linera_execution::{committee::ValidatorName, Query, QueryResponse};
 use linera_storage::Storage;
 use linera_views::views::ViewError;
 use thiserror::Error;
@@ -251,7 +251,7 @@ where
         &self,
         chain_id: ChainId,
         query: Query,
-    ) -> Result<Response, LocalNodeError> {
+    ) -> Result<QueryResponse, LocalNodeError> {
         let response = self.node.state.query_application(chain_id, query).await?;
         Ok(response)
     }
