@@ -27,12 +27,12 @@ use crate::key_value_store::{
     store_processor_server::{StoreProcessor, StoreProcessorServer},
     KeyValue, OptValue, ReplyContainsKey, ReplyContainsKeys, ReplyCreateNamespace, ReplyDeleteAll,
     ReplyDeleteNamespace, ReplyExistsNamespace, ReplyFindKeyValuesByPrefix, ReplyFindKeysByPrefix,
-    ReplyGetRootKeys, ReplyInsertRootKey, ReplyListAll, ReplyReadMultiValues, ReplyReadValue,
+    ReplyInsertRootKey, ReplyListAll, ReplyListRootKeys, ReplyReadMultiValues, ReplyReadValue,
     ReplySpecificChunk, ReplyWriteBatchExtended, RequestContainsKey, RequestContainsKeys,
     RequestCreateNamespace, RequestDeleteAll, RequestDeleteNamespace, RequestExistsNamespace,
-    RequestFindKeyValuesByPrefix, RequestFindKeysByPrefix, RequestGetRootKeys,
-    RequestInsertRootKey, RequestListAll, RequestReadMultiValues, RequestReadValue,
-    RequestSpecificChunk, RequestWriteBatchExtended,
+    RequestFindKeyValuesByPrefix, RequestFindKeysByPrefix, RequestInsertRootKey, RequestListAll,
+    RequestListRootKeys, RequestReadMultiValues, RequestReadValue, RequestSpecificChunk,
+    RequestWriteBatchExtended,
 };
 
 pub mod key_value_store {
@@ -178,7 +178,7 @@ impl ServiceStoreServer {
         self.find_keys_by_prefix(&[KeyTag::Namespace as u8]).await
     }
 
-    pub async fn get_root_keys(&self, namespace: &[u8]) -> Result<Vec<Vec<u8>>, Status> {
+    pub async fn list_root_keys(&self, namespace: &[u8]) -> Result<Vec<Vec<u8>>, Status> {
         let mut full_key = vec![KeyTag::RootKey as u8];
         full_key.extend(namespace);
         self.find_keys_by_prefix(&full_key).await
@@ -539,16 +539,16 @@ impl StoreProcessor for ServiceStoreServer {
         target = "store_server",
         skip_all,
         err,
-        fields(list_all = "get_root_keys")
+        fields(list_all = "list_root_keys")
     )]
-    async fn process_get_root_keys(
+    async fn process_list_root_keys(
         &self,
-        request: Request<RequestGetRootKeys>,
-    ) -> Result<Response<ReplyGetRootKeys>, Status> {
+        request: Request<RequestListRootKeys>,
+    ) -> Result<Response<ReplyListRootKeys>, Status> {
         let request = request.into_inner();
-        let RequestGetRootKeys { namespace } = request;
-        let root_keys = self.get_root_keys(&namespace).await?;
-        let response = ReplyGetRootKeys { root_keys };
+        let RequestListRootKeys { namespace } = request;
+        let root_keys = self.list_root_keys(&namespace).await?;
+        let response = ReplyListRootKeys { root_keys };
         Ok(Response::new(response))
     }
 

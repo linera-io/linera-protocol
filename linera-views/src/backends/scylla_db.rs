@@ -718,7 +718,7 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
         Ok(namespaces)
     }
 
-    async fn get_root_keys(
+    async fn list_root_keys(
         config: &Self::Config,
         namespace: &str,
     ) -> Result<Vec<Vec<u8>>, ScyllaDbStoreInternalError> {

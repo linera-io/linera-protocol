@@ -27,11 +27,11 @@ use crate::{
     key_value_store::{
         statement::Operation, store_processor_client::StoreProcessorClient, KeyValue,
         KeyValueAppend, ReplyContainsKey, ReplyContainsKeys, ReplyExistsNamespace,
-        ReplyFindKeyValuesByPrefix, ReplyFindKeysByPrefix, ReplyGetRootKeys, ReplyListAll,
+        ReplyFindKeyValuesByPrefix, ReplyFindKeysByPrefix, ReplyListAll, ReplyListRootKeys,
         ReplyReadMultiValues, ReplyReadValue, ReplySpecificChunk, RequestContainsKey,
         RequestContainsKeys, RequestCreateNamespace, RequestDeleteAll, RequestDeleteNamespace,
         RequestExistsNamespace, RequestFindKeyValuesByPrefix, RequestFindKeysByPrefix,
-        RequestGetRootKeys, RequestInsertRootKey, RequestListAll, RequestReadMultiValues,
+        RequestInsertRootKey, RequestListAll, RequestListRootKeys, RequestReadMultiValues,
         RequestReadValue, RequestSpecificChunk, RequestWriteBatchExtended, Statement,
     },
 };
@@ -455,19 +455,19 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
         Ok(namespaces)
     }
 
-    async fn get_root_keys(
+    async fn list_root_keys(
         config: &Self::Config,
         namespace: &str,
     ) -> Result<Vec<Vec<u8>>, ServiceStoreError> {
         let namespace = Self::namespace_as_vec(namespace)?;
-        let query = RequestGetRootKeys { namespace };
+        let query = RequestListRootKeys { namespace };
         let request = tonic::Request::new(query);
         let endpoint = config.http_address();
         let endpoint = Endpoint::from_shared(endpoint)?;
         let mut client = StoreProcessorClient::connect(endpoint).await?;
-        let response = client.process_get_root_keys(request).await?;
+        let response = client.process_list_root_keys(request).await?;
         let response = response.into_inner();
-        let ReplyGetRootKeys { root_keys } = response;
+        let ReplyListRootKeys { root_keys } = response;
         Ok(root_keys)
     }
 

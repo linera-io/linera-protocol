@@ -301,15 +301,15 @@ where
         Ok(namespaces)
     }
 
-    async fn get_root_keys(
+    async fn list_root_keys(
         config: &Self::Config,
         namespace: &str,
     ) -> Result<Vec<Vec<u8>>, Self::Error> {
-        let mut root_keys = S1::get_root_keys(&config.first_config, namespace)
+        let mut root_keys = S1::list_root_keys(&config.first_config, namespace)
             .await
             .map_err(DualStoreError::First)?;
         root_keys.extend(
-            S2::get_root_keys(&config.second_config, namespace)
+            S2::list_root_keys(&config.second_config, namespace)
                 .await
                 .map_err(DualStoreError::Second)?,
         );

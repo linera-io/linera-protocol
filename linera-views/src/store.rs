@@ -181,7 +181,7 @@ pub trait LocalAdminKeyValueStore: WithError + Sized {
 
     /// Lists the root keys of the namespace.
     /// It is possible that some root_keys have no keys.
-    async fn get_root_keys(
+    async fn list_root_keys(
         config: &Self::Config,
         namespace: &str,
     ) -> Result<Vec<Vec<u8>>, Self::Error>;

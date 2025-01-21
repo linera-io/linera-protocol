@@ -139,11 +139,11 @@ message ReplyListAll {
 }
 
 
-message RequestGetRootKeys {
+message RequestListRootKeys {
   bytes namespace = 1;
 }
 
-message ReplyGetRootKeys {
+message ReplyListRootKeys {
   repeated bytes root_keys = 1;
 }
 
@@ -176,7 +176,7 @@ service StoreProcessor {
   rpc ProcessExistsNamespace (RequestExistsNamespace) returns (ReplyExistsNamespace) {}
   rpc ProcessDeleteNamespace (RequestDeleteNamespace) returns (ReplyDeleteNamespace) {}
   rpc ProcessListAll (RequestListAll) returns (ReplyListAll) {}
-  rpc ProcessGetRootKeys (RequestGetRootKeys) returns (ReplyGetRootKeys) {}
+  rpc ProcessListRootKeys (RequestListRootKeys) returns (ReplyListRootKeys) {}
   rpc ProcessInsertRootKey (RequestInsertRootKey) returns (ReplyInsertRootKey) {}
   rpc ProcessDeleteAll (RequestDeleteAll) returns (ReplyDeleteAll) {}
 }

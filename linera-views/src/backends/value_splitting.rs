@@ -307,11 +307,11 @@ where
         Ok(K::list_all(config).await?)
     }
 
-    async fn get_root_keys(
+    async fn list_root_keys(
         config: &Self::Config,
         namespace: &str,
     ) -> Result<Vec<Vec<u8>>, Self::Error> {
-        Ok(K::get_root_keys(config, namespace).await?)
+        Ok(K::list_root_keys(config, namespace).await?)
     }
 
     async fn delete_all(config: &Self::Config) -> Result<(), Self::Error> {
