@@ -558,7 +558,6 @@ impl StoreConfig {
 
     /// Lists all the namespaces of the storage
     pub async fn list_blob_ids(self) -> Result<Vec<BlobId>, ViewError> {
-        let root_key = &[];
         match self {
             StoreConfig::Memory(_, _) => Err(ViewError::StoreError {
                 backend: "memory".to_string(),
@@ -567,26 +566,26 @@ impl StoreConfig {
             #[cfg(feature = "storage-service")]
             StoreConfig::Service(config, namespace) => {
                 let store =
-                    ServiceStoreClient::maybe_create_and_connect(&config, &namespace, root_key)
+                    ServiceStoreClient::maybe_create_and_connect(&config, &namespace, ROOT_KEY)
                         .await?;
                 list_all_blob_ids(&store).await
             }
             #[cfg(feature = "rocksdb")]
             StoreConfig::RocksDb(config, namespace) => {
                 let store =
-                    RocksDbStore::maybe_create_and_connect(&config, &namespace, root_key).await?;
+                    RocksDbStore::maybe_create_and_connect(&config, &namespace, ROOT_KEY).await?;
                 list_all_blob_ids(&store).await
             }
             #[cfg(feature = "dynamodb")]
             StoreConfig::DynamoDb(config, namespace) => {
                 let store =
-                    DynamoDbStore::maybe_create_and_connect(&config, &namespace, root_key).await?;
+                    DynamoDbStore::maybe_create_and_connect(&config, &namespace, ROOT_KEY).await?;
                 list_all_blob_ids(&store).await
             }
             #[cfg(feature = "scylladb")]
             StoreConfig::ScyllaDb(config, namespace) => {
                 let store =
-                    ScyllaDbStore::maybe_create_and_connect(&config, &namespace, root_key).await?;
+                    ScyllaDbStore::maybe_create_and_connect(&config, &namespace, ROOT_KEY).await?;
                 list_all_blob_ids(&store).await
             }
         }
