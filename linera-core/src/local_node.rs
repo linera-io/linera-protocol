@@ -111,12 +111,8 @@ where
         notifier: &impl Notifier,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
         match self.node.state.full_certificate(certificate).await? {
-            Either::Left(confirmed) => {
-                Ok(self.handle_certificate(confirmed, vec![], notifier).await?)
-            }
-            Either::Right(validated) => {
-                Ok(self.handle_certificate(validated, vec![], notifier).await?)
-            }
+            Either::Left(confirmed) => Ok(self.handle_certificate(confirmed, notifier).await?),
+            Either::Right(validated) => Ok(self.handle_certificate(validated, notifier).await?),
         }
     }
 
@@ -124,20 +120,17 @@ where
     pub async fn handle_certificate<T>(
         &self,
         certificate: GenericCertificate<T>,
-        blobs: Vec<Blob>,
         notifier: &impl Notifier,
     ) -> Result<ChainInfoResponse, LocalNodeError>
     where
         T: ProcessableCertificate,
     {
-        Ok(
-            Box::pin(self.node.state.fully_handle_certificate_with_notifications(
-                certificate,
-                blobs,
-                notifier,
-            ))
-            .await?,
+        Ok(Box::pin(
+            self.node
+                .state
+                .fully_handle_certificate_with_notifications(certificate, notifier),
         )
+        .await?)
     }
 
     #[instrument(level = "trace", skip_all)]
@@ -217,6 +210,17 @@ where
     pub async fn store_blobs(&self, blobs: &[Blob]) -> Result<(), LocalNodeError> {
         let storage = self.storage_client();
         storage.maybe_write_blobs(blobs).await?;
+        Ok(())
+    }
+
+    pub async fn handle_pending_blobs(
+        &self,
+        chain_id: ChainId,
+        blobs: Vec<Blob>,
+    ) -> Result<(), LocalNodeError> {
+        for blob in blobs {
+            self.node.state.handle_pending_blob(chain_id, blob).await?;
+        }
         Ok(())
     }
 

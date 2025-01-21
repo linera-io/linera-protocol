@@ -34,6 +34,9 @@ service ValidatorWorker {
   // Download a blob that belongs to a pending block on the given chain.
   rpc DownloadPendingBlob(PendingBlobRequest) returns (PendingBlobResult);
 
+  // Handle a blob that belongs to a pending block on the given chain.
+  rpc HandlePendingBlob(HandlePendingBlobRequest) returns (ChainInfoResult);
+
   // Handle a (trusted!) cross-chain request.
   rpc HandleCrossChainRequest(CrossChainRequest) returns (google.protobuf.Empty);
 }
@@ -69,6 +72,9 @@ service ValidatorNode {
 
   // Download a blob that belongs to a pending block on the given chain.
   rpc DownloadPendingBlob(PendingBlobRequest) returns (PendingBlobResult);
+
+  // Handle a blob that belongs to a pending block on the given chain.
+  rpc HandlePendingBlob(HandlePendingBlobRequest) returns (ChainInfoResult);
 
   // Upload a blob. Returns an error if the validator has not seen a
   // certificate using this blob.
@@ -250,9 +256,6 @@ message HandleValidatedCertificateRequest {
 
   // A certified statement from the committee.
   Certificate certificate = 2;
-
-  // Blobs required by this certificate
-  bytes blobs = 3;
 }
 
 // A certified statement from the committee, together with other certificates
@@ -282,6 +285,12 @@ message PendingBlobResult {
     // a bincode wrapper around `NodeError`
     bytes error = 2;
   }
+}
+
+// A request to handle a pending blob.
+message HandlePendingBlobRequest {
+  ChainId chain_id = 1;
+  BlobContent blob = 2;
 }
 
 // A certified statement from the committee.

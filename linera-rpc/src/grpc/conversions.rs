@@ -375,8 +375,7 @@ impl TryFrom<api::HandleValidatedCertificateRequest> for HandleValidatedCertific
             certificate.inner().chain_id() == req_chain_id,
             GrpcProtoConversionError::InconsistentChainId
         );
-        let blobs = bincode::deserialize(&cert_request.blobs)?;
-        Ok(HandleValidatedCertificateRequest { certificate, blobs })
+        Ok(HandleValidatedCertificateRequest { certificate })
     }
 }
 
@@ -424,7 +423,6 @@ impl TryFrom<HandleValidatedCertificateRequest> for api::HandleValidatedCertific
         Ok(Self {
             chain_id: Some(request.certificate.inner().chain_id().into()),
             certificate: Some(request.certificate.try_into()?),
-            blobs: bincode::serialize(&request.blobs)?,
         })
     }
 }
@@ -708,6 +706,28 @@ impl TryFrom<api::PendingBlobRequest> for (ChainId, BlobId) {
         Ok((
             try_proto_convert(request.chain_id)?,
             try_proto_convert(request.blob_id)?,
+        ))
+    }
+}
+
+impl TryFrom<(ChainId, BlobContent)> for api::HandlePendingBlobRequest {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from((chain_id, blob_content): (ChainId, BlobContent)) -> Result<Self, Self::Error> {
+        Ok(Self {
+            chain_id: Some(chain_id.into()),
+            blob: Some(blob_content.try_into()?),
+        })
+    }
+}
+
+impl TryFrom<api::HandlePendingBlobRequest> for (ChainId, BlobContent) {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(request: api::HandlePendingBlobRequest) -> Result<Self, Self::Error> {
+        Ok((
+            try_proto_convert(request.chain_id)?,
+            try_proto_convert(request.blob)?,
         ))
     }
 }
@@ -1100,6 +1120,14 @@ pub mod tests {
     }
 
     #[test]
+    pub fn test_handle_pending_blob_request() {
+        let chain_id = ChainId::root(2);
+        let blob_content = BlobContent::new_data(*b"foo");
+        let pending_blob_request = (chain_id, blob_content);
+        round_trip_check::<_, api::HandlePendingBlobRequest>(pending_blob_request);
+    }
+
+    #[test]
     pub fn test_lite_certificate() {
         let key_pair = KeyPair::generate();
         let certificate = LiteCertificate {
@@ -1139,10 +1167,7 @@ pub mod tests {
                 Signature::new(&Foo("test".into()), &key_pair),
             )],
         );
-        let request = HandleValidatedCertificateRequest {
-            certificate,
-            blobs: vec![],
-        };
+        let request = HandleValidatedCertificateRequest { certificate };
 
         round_trip_check::<_, api::HandleValidatedCertificateRequest>(request);
     }

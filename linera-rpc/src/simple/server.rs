@@ -3,7 +3,7 @@
 
 use async_trait::async_trait;
 use futures::{channel::mpsc, stream::StreamExt};
-use linera_base::time::Duration;
+use linera_base::{data_types::Blob, time::Duration};
 use linera_core::{
     node::NodeError,
     worker::{NetworkActions, WorkerError, WorkerState},
@@ -269,7 +269,7 @@ where
                 match self
                     .server
                     .state
-                    .handle_validated_certificate(request.certificate, request.blobs)
+                    .handle_validated_certificate(request.certificate)
                     .await
                 {
                     Ok((info, actions)) => {
@@ -279,7 +279,10 @@ where
                         Ok(Some(RpcMessage::ChainInfoResponse(Box::new(info))))
                     }
                     Err(error) => {
-                        error!(nickname = self.server.state.nickname(), %error, "Failed to handle validated certificate");
+                        error!(
+                            nickname = self.server.state.nickname(), %error,
+                            "Failed to handle validated certificate"
+                        );
                         Err(error.into())
                     }
                 }
@@ -353,6 +356,22 @@ where
                     Err(error) => {
                         let nickname = self.server.state.nickname();
                         error!(nickname, %error, "Failed to handle pending blob request");
+                        Err(error.into())
+                    }
+                }
+            }
+            RpcMessage::HandlePendingBlob(request) => {
+                let (chain_id, blob_content) = *request;
+                match self
+                    .server
+                    .state
+                    .handle_pending_blob(chain_id, Blob::new(blob_content))
+                    .await
+                {
+                    Ok(info) => Ok(Some(RpcMessage::ChainInfoResponse(Box::new(info)))),
+                    Err(error) => {
+                        let nickname = self.server.state.nickname();
+                        error!(nickname, %error, "Failed to handle pending blob");
                         Err(error.into())
                     }
                 }

@@ -13,12 +13,13 @@ use futures::stream::{self, StreamExt, TryStreamExt};
 use linera_base::{
     crypto::CryptoHash,
     data_types::{
-        Amount, ArithmeticError, BlockHeight, OracleResponse, Timestamp, UserApplicationDescription,
+        Amount, ArithmeticError, Blob, BlockHeight, OracleResponse, Timestamp,
+        UserApplicationDescription,
     },
     ensure,
     identifiers::{
-        ChainId, ChannelName, Destination, GenericApplicationId, MessageId, Owner, StreamId,
-        UserApplicationId,
+        BlobId, ChainId, ChannelName, Destination, GenericApplicationId, MessageId, Owner,
+        StreamId, UserApplicationId,
     },
 };
 use linera_execution::{
@@ -30,6 +31,7 @@ use linera_execution::{
 use linera_views::{
     context::Context,
     log_view::LogView,
+    map_view::MapView,
     queue_view::QueueView,
     reentrant_collection_view::ReentrantCollectionView,
     register_view::RegisterView,
@@ -46,6 +48,7 @@ use crate::{
     inbox::{Cursor, InboxError, InboxStateView},
     manager::ChainManager,
     outbox::OutboxStateView,
+    types::ValidatedBlockCertificate,
     ChainError, ChainExecutionContext, ExecutionResultExt,
 };
 
@@ -196,6 +199,11 @@ where
 
     /// Consensus state.
     pub manager: ChainManager<C>,
+    /// Pending validated block that is still missing blobs.
+    #[graphql(skip)]
+    pub pending_validated_block: RegisterView<C, Option<ValidatedBlockCertificate>>,
+    /// The incomplete set of blobs for the pending validated block.
+    pub pending_validated_blobs: MapView<C, BlobId, Option<Blob>>,
 
     /// Hashes of all certified blocks for this sender.
     /// This ends with `block_hash` and has length `usize::from(next_block_height)`.
@@ -873,6 +881,9 @@ where
         self.execution_state_hash.set(Some(state_hash));
         // Last, reset the consensus state based on the current ownership.
         let maybe_committee = self.execution_state.system.current_committee().into_iter();
+
+        self.pending_validated_blobs.clear();
+        self.pending_validated_block.set(None);
         self.manager.reset(
             self.execution_state.system.ownership.get().clone(),
             block.height.try_add_one()?,

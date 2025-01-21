@@ -143,13 +143,13 @@ impl ActiveChain {
         let result = self
             .validator
             .worker()
-            .fully_handle_certificate_with_notifications(certificate.clone(), blobs.clone(), &())
+            .fully_handle_certificate_with_notifications(certificate.clone(), &())
             .await;
         if let Err(WorkerError::BlobsNotFound(_)) = &result {
             self.validator.storage().maybe_write_blobs(&blobs).await?;
             self.validator
                 .worker()
-                .fully_handle_certificate_with_notifications(certificate.clone(), vec![], &())
+                .fully_handle_certificate_with_notifications(certificate.clone(), &())
                 .await
                 .expect("Rejected certificate");
         } else {

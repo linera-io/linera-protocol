@@ -15,7 +15,7 @@ use futures::{
     future::BoxFuture,
     FutureExt as _, StreamExt,
 };
-use linera_base::identifiers::ChainId;
+use linera_base::{data_types::Blob, identifiers::ChainId};
 use linera_core::{
     node::NodeError,
     worker::{NetworkActions, Notification, WorkerError, WorkerState},
@@ -42,8 +42,8 @@ use super::{
         notifier_service_client::NotifierServiceClient,
         validator_worker_client::ValidatorWorkerClient,
         validator_worker_server::{ValidatorWorker as ValidatorWorkerRpc, ValidatorWorkerServer},
-        BlockProposal, ChainInfoQuery, ChainInfoResult, CrossChainRequest, LiteCertificate,
-        PendingBlobRequest, PendingBlobResult,
+        BlockProposal, ChainInfoQuery, ChainInfoResult, CrossChainRequest,
+        HandlePendingBlobRequest, LiteCertificate, PendingBlobRequest, PendingBlobResult,
     },
     pool::GrpcConnectionPool,
     GrpcError, GRPC_MAX_MESSAGE_SIZE,
@@ -585,13 +585,12 @@ where
         request: Request<api::HandleValidatedCertificateRequest>,
     ) -> Result<Response<ChainInfoResult>, Status> {
         let start = Instant::now();
-        let HandleValidatedCertificateRequest { certificate, blobs } =
-            request.into_inner().try_into()?;
+        let HandleValidatedCertificateRequest { certificate } = request.into_inner().try_into()?;
         trace!(?certificate, "Handling certificate");
         match self
             .state
             .clone()
-            .handle_validated_certificate(certificate, blobs)
+            .handle_validated_certificate(certificate)
             .await
         {
             Ok((info, actions)) => {
@@ -731,6 +730,42 @@ where
         err,
         fields(
             nickname = self.state.nickname(),
+            chain_id = ?request.get_ref().chain_id
+        )
+    )]
+    async fn handle_pending_blob(
+        &self,
+        request: Request<HandlePendingBlobRequest>,
+    ) -> Result<Response<ChainInfoResult>, Status> {
+        let start = Instant::now();
+        let (chain_id, blob_content) = request.into_inner().try_into()?;
+        let blob = Blob::new(blob_content);
+        let blob_id = blob.id();
+        trace!(?chain_id, ?blob_id, "Handle pending blob");
+        match self.state.clone().handle_pending_blob(chain_id, blob).await {
+            Ok(info) => {
+                Self::log_request_success_and_latency(start, "handle_pending_blob");
+                Ok(Response::new(info.try_into()?))
+            }
+            Err(error) => {
+                #[cfg(with_metrics)]
+                {
+                    SERVER_REQUEST_ERROR
+                        .with_label_values(&["handle_pending_blob"])
+                        .inc();
+                }
+                error!(nickname = self.state.nickname(), %error, "Failed to handle pending blob");
+                Ok(Response::new(NodeError::from(error).try_into()?))
+            }
+        }
+    }
+
+    #[instrument(
+        target = "grpc_server",
+        skip_all,
+        err,
+        fields(
+            nickname = self.state.nickname(),
             chain_id = ?request.get_ref().chain_id()
         )
     )]
@@ -803,6 +838,12 @@ impl GrpcProxyable for ChainInfoQuery {
 }
 
 impl GrpcProxyable for PendingBlobRequest {
+    fn chain_id(&self) -> Option<ChainId> {
+        self.chain_id.clone()?.try_into().ok()
+    }
+}
+
+impl GrpcProxyable for HandlePendingBlobRequest {
     fn chain_id(&self) -> Option<ChainId> {
         self.chain_id.clone()?.try_into().ok()
     }
