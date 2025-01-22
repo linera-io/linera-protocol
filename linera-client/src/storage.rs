@@ -6,7 +6,9 @@ use std::{fmt, str::FromStr};
 use async_trait::async_trait;
 use linera_base::identifiers::BlobId;
 use linera_execution::WasmRuntime;
-use linera_storage::{list_all_blob_ids, DbStorage, Storage};
+#[cfg(with_storage)]
+use linera_storage::list_all_blob_ids;
+use linera_storage::{DbStorage, Storage};
 #[cfg(feature = "storage-service")]
 use linera_storage_service::{
     client::ServiceStoreClient,
