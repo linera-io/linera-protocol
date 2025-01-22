@@ -1236,6 +1236,12 @@ pub struct ChainOwnershipConfig {
     #[arg(long)]
     multi_leader_rounds: Option<u32>,
 
+    /// Whether the multi-leader rounds are unrestricted, i.e. not limited to chain owners.
+    /// This should only be `true` on chains with restrictive application permissions and an
+    /// application-based mechanism to select block proposers.
+    #[arg(long)]
+    open_multi_leader_rounds: bool,
+
     /// The duration of the fast round, in milliseconds.
     #[arg(long = "fast-round-ms", value_parser = util::parse_millis_delta)]
     fast_round_duration: Option<TimeDelta>,
@@ -1277,6 +1283,7 @@ impl TryFrom<ChainOwnershipConfig> for ChainOwnership {
             owner_weights,
             multi_leader_rounds,
             fast_round_duration,
+            open_multi_leader_rounds,
             base_timeout,
             timeout_increment,
             fallback_duration,
@@ -1303,6 +1310,7 @@ impl TryFrom<ChainOwnershipConfig> for ChainOwnership {
             super_owners,
             owners,
             multi_leader_rounds,
+            open_multi_leader_rounds,
             timeout_config,
         })
     }

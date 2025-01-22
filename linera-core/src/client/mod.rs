@@ -2646,6 +2646,7 @@ where
             super_owners: vec![new_owner],
             owners: Vec::new(),
             multi_leader_rounds: 2,
+            open_multi_leader_rounds: false,
             timeout_config: TimeoutConfig::default(),
         }))
         .await
@@ -2671,6 +2672,7 @@ where
                 super_owners: Vec::new(),
                 owners,
                 multi_leader_rounds: ownership.multi_leader_rounds,
+                open_multi_leader_rounds: ownership.open_multi_leader_rounds,
                 timeout_config: ownership.timeout_config,
             })];
             match self.execute_block(operations).await? {
@@ -2701,6 +2703,7 @@ where
             super_owners: ownership.super_owners.into_iter().collect(),
             owners: ownership.owners.into_iter().collect(),
             multi_leader_rounds: ownership.multi_leader_rounds,
+            open_multi_leader_rounds: ownership.open_multi_leader_rounds,
             timeout_config: ownership.timeout_config.clone(),
         }))
         .await

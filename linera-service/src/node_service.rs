@@ -436,6 +436,7 @@ where
             super_owners: vec![new_owner],
             owners: Vec::new(),
             multi_leader_rounds: 2,
+            open_multi_leader_rounds: false,
             timeout_config: TimeoutConfig::default(),
         };
         self.execute_system_operation(operation, chain_id).await
@@ -449,6 +450,7 @@ where
         new_owners: Vec<Owner>,
         new_weights: Vec<u64>,
         multi_leader_rounds: u32,
+        open_multi_leader_rounds: bool,
         #[graphql(desc = "The duration of the fast round, in milliseconds; default: no timeout")]
         fast_round_ms: Option<u64>,
         #[graphql(
@@ -473,6 +475,7 @@ where
             super_owners: Vec::new(),
             owners: new_owners.into_iter().zip(new_weights).collect(),
             multi_leader_rounds,
+            open_multi_leader_rounds,
             timeout_config: TimeoutConfig {
                 fast_round_duration: fast_round_ms.map(TimeDelta::from_millis),
                 base_timeout: TimeDelta::from_millis(base_timeout_ms),

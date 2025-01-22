@@ -1448,6 +1448,7 @@ where
         super_owners: Vec::new(),
         owners: vec![(owner2_a, 50), (owner2_b, 50)],
         multi_leader_rounds: 10,
+        open_multi_leader_rounds: false,
         timeout_config: TimeoutConfig::default(),
     });
     client2_a
@@ -1579,6 +1580,7 @@ where
         super_owners: Vec::new(),
         owners: vec![(owner3_a, 50), (owner3_b, 50), (owner3_c, 50)],
         multi_leader_rounds: 10,
+        open_multi_leader_rounds: false,
         timeout_config: TimeoutConfig::default(),
     });
     client3_a

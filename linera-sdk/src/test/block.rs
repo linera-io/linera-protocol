@@ -120,12 +120,14 @@ impl BlockBuilder {
         super_owners: Vec<Owner>,
         owners: Vec<(Owner, u64)>,
         multi_leader_rounds: u32,
+        open_multi_leader_rounds: bool,
         timeout_config: TimeoutConfig,
     ) -> &mut Self {
         self.with_system_operation(SystemOperation::ChangeOwnership {
             super_owners,
             owners,
             multi_leader_rounds,
+            open_multi_leader_rounds,
             timeout_config,
         })
     }

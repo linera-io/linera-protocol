@@ -240,6 +240,7 @@ impl From<ChainOwnership> for wit_system_api::ChainOwnership {
             super_owners,
             owners,
             multi_leader_rounds,
+            open_multi_leader_rounds,
             timeout_config,
         } = ownership;
         Self {
@@ -249,6 +250,7 @@ impl From<ChainOwnership> for wit_system_api::ChainOwnership {
                 .map(|(owner, weight)| (owner.into(), weight))
                 .collect(),
             multi_leader_rounds,
+            open_multi_leader_rounds,
             timeout_config: timeout_config.into(),
         }
     }

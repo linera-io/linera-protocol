@@ -112,6 +112,7 @@ impl From<wit_system_api::ChainOwnership> for ChainOwnership {
             super_owners,
             owners,
             multi_leader_rounds,
+            open_multi_leader_rounds,
             timeout_config,
         } = guest;
         ChainOwnership {
@@ -121,6 +122,7 @@ impl From<wit_system_api::ChainOwnership> for ChainOwnership {
                 .map(|(owner, weight)| (owner.into(), weight))
                 .collect(),
             multi_leader_rounds,
+            open_multi_leader_rounds,
             timeout_config: timeout_config.into(),
         }
     }

@@ -200,6 +200,7 @@ Open (i.e. activate) a new multi-owner chain deriving the UID from an existing o
 
    If they are specified there must be exactly one weight for each owner. If no weights are given, every owner will have weight 100.
 * `--multi-leader-rounds <MULTI_LEADER_ROUNDS>` — The number of rounds in which every owner can propose blocks, i.e. the first round number in which only a single designated leader is allowed to propose blocks
+* `--open-multi-leader-rounds` — Whether the multi-leader rounds are unrestricted, i.e. not limited to chain owners. This should only be `true` on chains with restrictive application permissions and an application-based mechanism to select block proposers
 * `--fast-round-ms <FAST_ROUND_DURATION>` — The duration of the fast round, in milliseconds
 * `--base-timeout-ms <BASE_TIMEOUT>` — The duration of the first single-leader and all multi-leader rounds
 
@@ -236,6 +237,7 @@ Specify the complete set of new owners, by public key. Existing owners that are 
 
    If they are specified there must be exactly one weight for each owner. If no weights are given, every owner will have weight 100.
 * `--multi-leader-rounds <MULTI_LEADER_ROUNDS>` — The number of rounds in which every owner can propose blocks, i.e. the first round number in which only a single designated leader is allowed to propose blocks
+* `--open-multi-leader-rounds` — Whether the multi-leader rounds are unrestricted, i.e. not limited to chain owners. This should only be `true` on chains with restrictive application permissions and an application-based mechanism to select block proposers
 * `--fast-round-ms <FAST_ROUND_DURATION>` — The duration of the fast round, in milliseconds
 * `--base-timeout-ms <BASE_TIMEOUT>` — The duration of the first single-leader and all multi-leader rounds
 
