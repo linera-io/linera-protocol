@@ -567,8 +567,8 @@ where
         self.update_current_round(local_time);
     }
 
-    /// Returns the public key of the block proposal's signer, if they are a valid owner and allowed
-    /// to propose a block in the proposal's round.
+    /// Returns whether the signer is a valid owner and allowed to propose a block in the
+    /// proposal's round.
     pub fn verify_owner(&self, proposal: &BlockProposal) -> bool {
         let owner = &proposal.owner;
         if self.ownership.get().super_owners.contains(owner) {
