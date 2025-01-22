@@ -560,7 +560,7 @@ impl StoreConfig {
         match self {
             StoreConfig::Memory(_, _) => Err(ViewError::StoreError {
                 backend: "memory".to_string(),
-                error: "list_all is not supported for the memory storage".to_string(),
+                error: "list_root_keys is not supported for the memory storage".to_string(),
             }),
             #[cfg(feature = "storage-service")]
             StoreConfig::Service(config, namespace) => {

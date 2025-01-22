@@ -29,10 +29,10 @@ use crate::{
         KeyValueAppend, ReplyContainsKey, ReplyContainsKeys, ReplyExistsNamespace,
         ReplyFindKeyValuesByPrefix, ReplyFindKeysByPrefix, ReplyListAll, ReplyListRootKeys,
         ReplyReadMultiValues, ReplyReadValue, ReplySpecificChunk, RequestContainsKey,
-        RequestContainsKeys, RequestCreateNamespace, RequestDeleteAll, RequestDeleteNamespace,
+        RequestContainsKeys, RequestCreateNamespace, RequestDeleteNamespace,
         RequestExistsNamespace, RequestFindKeyValuesByPrefix, RequestFindKeysByPrefix,
-        RequestInsertRootKey, RequestListAll, RequestListRootKeys, RequestReadMultiValues,
-        RequestReadValue, RequestSpecificChunk, RequestWriteBatchExtended, Statement,
+        RequestInsertRootKey, RequestListRootKeys, RequestReadMultiValues, RequestReadValue,
+        RequestSpecificChunk, RequestWriteBatchExtended, Statement,
     },
 };
 
@@ -440,12 +440,10 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
     }
 
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, ServiceStoreError> {
-        let query = RequestListAll {};
-        let request = tonic::Request::new(query);
         let endpoint = config.http_address();
         let endpoint = Endpoint::from_shared(endpoint)?;
         let mut client = StoreProcessorClient::connect(endpoint).await?;
-        let response = client.process_list_all(request).await?;
+        let response = client.process_list_all(()).await?;
         let response = response.into_inner();
         let ReplyListAll { namespaces } = response;
         let namespaces = namespaces
@@ -472,12 +470,10 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
     }
 
     async fn delete_all(config: &Self::Config) -> Result<(), ServiceStoreError> {
-        let query = RequestDeleteAll {};
-        let request = tonic::Request::new(query);
         let endpoint = config.http_address();
         let endpoint = Endpoint::from_shared(endpoint)?;
         let mut client = StoreProcessorClient::connect(endpoint).await?;
-        let _response = client.process_delete_all(request).await?;
+        let _response = client.process_delete_all(()).await?;
         Ok(())
     }
 

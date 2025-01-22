@@ -208,6 +208,7 @@ impl RocksDbStoreExecutor {
                     check_key_size(&key_prefix)?;
                     let mut full_key1 = self.start_key.to_vec();
                     full_key1.extend(&key_prefix);
+                    // Since the first entry cannot be 255, the unwrap() will never file.
                     let full_key2 = get_upper_bound_option(&full_key1).unwrap();
                     inner_batch.delete_range(&full_key1, &full_key2);
                 }

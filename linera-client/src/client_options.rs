@@ -965,7 +965,7 @@ pub enum DatabaseToolCommand {
         storage_config: String,
     },
 
-    /// List the rot keys of the database
+    /// List the root keys of the database
     #[command(name = "list_root_keys")]
     ListRootKeys {
         /// Storage configuration for the blockchain history.
