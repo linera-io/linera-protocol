@@ -54,6 +54,7 @@ jobs:
             -t ${{ env.DOCKER_IMAGE }}:${{ env.BRANCH_NAME }} \
             -t ${{ env.DOCKER_IMAGE }}:${{ env.GIT_COMMIT_SHORT }} \
             -t ${{ env.DOCKER_IMAGE }}:${{ env.GIT_COMMIT_LONG }}
+          docker run --rm linera ./linera --version
   
       - name: Push Docker image to Google Artifact Registry
         run: |
