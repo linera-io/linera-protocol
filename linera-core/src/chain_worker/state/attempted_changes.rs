@@ -166,7 +166,6 @@ where
     pub(super) async fn process_validated_block(
         &mut self,
         certificate: ValidatedBlockCertificate,
-        blobs: &[Blob],
     ) -> Result<(ChainInfoResponse, NetworkActions, bool), WorkerError> {
         let block = certificate.block();
 
@@ -212,13 +211,30 @@ where
             .insert(Cow::Borrowed(certificate.inner().inner()))
             .await;
         let required_blob_ids = block.required_blob_ids();
-        // Verify that no unrelated blobs were provided.
-        self.state
-            .check_for_unneeded_blobs(&required_blob_ids, blobs)?;
-        let blobs = self
+        let maybe_blobs = self
             .state
-            .get_required_blobs(required_blob_ids, blobs)
+            .maybe_get_required_blobs(required_blob_ids, &[])
             .await?;
+        let missing_blob_ids = super::missing_blob_ids(&maybe_blobs);
+        if !missing_blob_ids.is_empty() {
+            let chain = &mut self.state.chain;
+            let pending_validated_block = chain.pending_validated_block.get_mut();
+            if !pending_validated_block
+                .as_ref()
+                .is_some_and(|existing_cert| existing_cert.round > certificate.round)
+            {
+                for (blob_id, maybe_blob) in maybe_blobs {
+                    chain.pending_validated_blobs.insert(&blob_id, maybe_blob)?;
+                }
+                *pending_validated_block = Some(certificate);
+                self.save().await?;
+            }
+            return Err(WorkerError::BlobsNotFound(missing_blob_ids));
+        }
+        let blobs = maybe_blobs
+            .into_iter()
+            .filter_map(|(blob_id, maybe_blob)| Some((blob_id, maybe_blob?)))
+            .collect();
         let old_round = self.state.chain.manager.current_round();
         self.state.chain.manager.create_final_vote(
             certificate,
@@ -572,6 +588,24 @@ where
             }
         }
         Ok(())
+    }
+
+    pub(super) async fn handle_pending_blob(
+        &mut self,
+        blob: Blob,
+    ) -> Result<ChainInfoResponse, WorkerError> {
+        let chain = &mut self.state.chain;
+        let blob_id = blob.id();
+        if let Some(maybe_blob) = chain.pending_validated_blobs.get_mut(&blob_id).await? {
+            if maybe_blob.is_none() {
+                *maybe_blob = Some(blob);
+            }
+        }
+        self.save().await?;
+        Ok(ChainInfoResponse::new(
+            &self.state.chain,
+            self.state.config.key_pair(),
+        ))
     }
 
     /// Stores the chain state in persistent storage.

@@ -6,7 +6,7 @@ use std::{fmt, future::Future, iter};
 use futures::{future, stream, StreamExt};
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Blob, BlobContent},
+    data_types::BlobContent,
     ensure,
     identifiers::{BlobId, ChainId},
     time::Duration,
@@ -19,6 +19,7 @@ use linera_chain::{
     },
 };
 use linera_core::{
+    data_types::ChainInfoResponse,
     node::{CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
     worker::Notification,
 };
@@ -240,9 +241,8 @@ impl ValidatorNode for GrpcClient {
     async fn handle_validated_certificate(
         &self,
         certificate: GenericCertificate<ValidatedBlock>,
-        blobs: Vec<Blob>,
     ) -> Result<linera_core::data_types::ChainInfoResponse, NodeError> {
-        let request = HandleValidatedCertificateRequest { certificate, blobs };
+        let request = HandleValidatedCertificateRequest { certificate };
         GrpcClient::try_into_chain_info(client_delegate!(
             self,
             handle_validated_certificate,
@@ -382,6 +382,16 @@ impl ValidatorNode for GrpcClient {
     ) -> Result<BlobContent, NodeError> {
         let req = api::PendingBlobRequest::try_from((chain_id, blob_id))?;
         client_delegate!(self, download_pending_blob, req)?.try_into()
+    }
+
+    #[instrument(target = "grpc_client", skip(self), err, fields(address = self.address))]
+    async fn handle_pending_blob(
+        &self,
+        chain_id: ChainId,
+        blob: BlobContent,
+    ) -> Result<ChainInfoResponse, NodeError> {
+        let req = api::HandlePendingBlobRequest::try_from((chain_id, blob))?;
+        GrpcClient::try_into_chain_info(client_delegate!(self, handle_pending_blob, req)?)
     }
 
     #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]

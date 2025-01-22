@@ -225,11 +225,10 @@ where
     pub(super) async fn process_validated_block(
         &mut self,
         certificate: ValidatedBlockCertificate,
-        blobs: &[Blob],
     ) -> Result<(ChainInfoResponse, NetworkActions, bool), WorkerError> {
         ChainWorkerStateWithAttemptedChanges::new(self)
             .await
-            .process_validated_block(certificate, blobs)
+            .process_validated_block(certificate)
             .await
     }
 
@@ -300,6 +299,17 @@ where
         maybe_blob.ok_or_else(|| WorkerError::BlobsNotFound(vec![blob_id]))
     }
 
+    /// Adds the blob to pending blocks or validated block certificates that are missing it.
+    pub(super) async fn handle_pending_blob(
+        &mut self,
+        blob: Blob,
+    ) -> Result<ChainInfoResponse, WorkerError> {
+        ChainWorkerStateWithAttemptedChanges::new(&mut *self)
+            .await
+            .handle_pending_blob(blob)
+            .await
+    }
+
     /// Ensures that the current chain is active, returning an error otherwise.
     fn ensure_is_active(&mut self) -> Result<(), WorkerError> {
         if !self.knows_chain_is_active {
@@ -309,60 +319,59 @@ where
         Ok(())
     }
 
-    /// Returns an error if unrelated blobs were provided.
-    fn check_for_unneeded_blobs(
-        &self,
-        required_blob_ids: &HashSet<BlobId>,
-        blobs: &[Blob],
-    ) -> Result<(), WorkerError> {
-        // Find all certificates containing blobs used when executing this block.
-        for blob in blobs {
-            let blob_id = blob.id();
-            ensure!(
-                required_blob_ids.contains(&blob_id),
-                WorkerError::UnneededBlob { blob_id }
-            );
-        }
-
-        Ok(())
-    }
-
     /// Returns the blobs required by the given executed block. The ones that are not passed in
     /// are read from the chain manager or from storage.
     async fn get_required_blobs(
         &self,
-        mut blob_ids: HashSet<BlobId>,
+        required_blob_ids: HashSet<BlobId>,
         blobs: &[Blob],
     ) -> Result<BTreeMap<BlobId, Blob>, WorkerError> {
-        let mut found_blobs = BTreeMap::new();
-
-        for blob in blobs {
-            if blob_ids.remove(&blob.id()) {
-                found_blobs.insert(blob.id(), blob.clone());
-            }
-        }
-        let mut missing_blob_ids = Vec::new();
-        for blob_id in blob_ids {
-            if let Some(blob) = self.chain.manager.pending_blob(&blob_id).await? {
-                found_blobs.insert(blob_id, blob);
-            } else {
-                missing_blob_ids.push(blob_id);
-            }
-        }
-        let blobs_from_storage = self.storage.read_blobs(&missing_blob_ids).await?;
-        let mut not_found_blob_ids = Vec::new();
-        for (blob_id, maybe_blob) in missing_blob_ids.into_iter().zip(blobs_from_storage) {
-            if let Some(blob) = maybe_blob {
-                found_blobs.insert(blob_id, blob);
-            } else {
-                not_found_blob_ids.push(blob_id);
-            }
-        }
+        let maybe_blobs = self
+            .maybe_get_required_blobs(required_blob_ids, blobs)
+            .await?;
+        let not_found_blob_ids = missing_blob_ids(&maybe_blobs);
         ensure!(
             not_found_blob_ids.is_empty(),
             WorkerError::BlobsNotFound(not_found_blob_ids)
         );
-        Ok(found_blobs)
+        Ok(maybe_blobs
+            .into_iter()
+            .filter_map(|(blob_id, maybe_blob)| Some((blob_id, maybe_blob?)))
+            .collect())
+    }
+
+    /// Returns the blobs required by the given executed block. The ones that are not passed in
+    /// are read from the chain manager or from storage.
+    async fn maybe_get_required_blobs(
+        &self,
+        required_blob_ids: HashSet<BlobId>,
+        provided_blobs: &[Blob],
+    ) -> Result<BTreeMap<BlobId, Option<Blob>>, WorkerError> {
+        let required_blob_ids = required_blob_ids.into_iter();
+        let mut maybe_blobs = BTreeMap::from_iter(required_blob_ids.map(|blob_id| (blob_id, None)));
+
+        for blob in provided_blobs {
+            if let Some(maybe_blob) = maybe_blobs.get_mut(&blob.id()) {
+                *maybe_blob = Some(blob.clone());
+            }
+        }
+        for (blob_id, maybe_blob) in &mut maybe_blobs {
+            if maybe_blob.is_some() {
+                continue;
+            }
+            if let Some(blob) = self.chain.manager.pending_blob(blob_id).await? {
+                *maybe_blob = Some(blob);
+            } else if let Some(Some(blob)) = self.chain.pending_validated_blobs.get(blob_id).await?
+            {
+                *maybe_blob = Some(blob);
+            }
+        }
+        let missing_blob_ids = missing_blob_ids(&maybe_blobs);
+        let blobs_from_storage = self.storage.read_blobs(&missing_blob_ids).await?;
+        for (blob_id, maybe_blob) in missing_blob_ids.into_iter().zip(blobs_from_storage) {
+            maybe_blobs.insert(blob_id, maybe_blob);
+        }
+        Ok(maybe_blobs)
     }
 
     /// Adds any newly created chains to the set of `tracked_chains`, if the parent chain is
@@ -539,6 +548,15 @@ where
             .update_received_certificate_trackers(new_trackers)
             .await
     }
+}
+
+/// Returns the keys whose value is `None`.
+fn missing_blob_ids(maybe_blobs: &BTreeMap<BlobId, Option<Blob>>) -> Vec<BlobId> {
+    maybe_blobs
+        .iter()
+        .filter(|(_, maybe_blob)| maybe_blob.is_none())
+        .map(|(chain_id, _)| *chain_id)
+        .collect()
 }
 
 /// Returns an error if the block is not at the expected epoch.

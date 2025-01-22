@@ -438,7 +438,6 @@ pub trait ProcessableCertificate: CertificateValue + Sized + 'static {
     async fn process_certificate<S: Storage + Clone + Send + Sync + 'static>(
         worker: &WorkerState<S>,
         certificate: GenericCertificate<Self>,
-        blobs: Vec<Blob>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError>;
 }
 
@@ -446,7 +445,6 @@ impl ProcessableCertificate for ConfirmedBlock {
     async fn process_certificate<S: Storage + Clone + Send + Sync + 'static>(
         worker: &WorkerState<S>,
         certificate: ConfirmedBlockCertificate,
-        _blobs: Vec<Blob>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         worker.handle_confirmed_certificate(certificate, None).await
     }
@@ -456,11 +454,8 @@ impl ProcessableCertificate for ValidatedBlock {
     async fn process_certificate<S: Storage + Clone + Send + Sync + 'static>(
         worker: &WorkerState<S>,
         certificate: ValidatedBlockCertificate,
-        blobs: Vec<Blob>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        worker
-            .handle_validated_certificate(certificate, blobs)
-            .await
+        worker.handle_validated_certificate(certificate).await
     }
 }
 
@@ -468,7 +463,6 @@ impl ProcessableCertificate for Timeout {
     async fn process_certificate<S: Storage + Clone + Send + Sync + 'static>(
         worker: &WorkerState<S>,
         certificate: TimeoutCertificate,
-        _blobs: Vec<Blob>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         worker.handle_timeout_certificate(certificate).await
     }
@@ -483,7 +477,6 @@ where
     pub async fn fully_handle_certificate_with_notifications<T>(
         &self,
         certificate: GenericCertificate<T>,
-        blobs: Vec<Blob>,
         notifier: &impl Notifier,
     ) -> Result<ChainInfoResponse, WorkerError>
     where
@@ -493,7 +486,7 @@ where
         let this = self.clone();
         linera_base::task::spawn(async move {
             let (response, actions) =
-                ProcessableCertificate::process_certificate(&this, certificate, blobs).await?;
+                ProcessableCertificate::process_certificate(&this, certificate).await?;
             notifications.notify(&actions.notifications);
             let mut requests = VecDeque::from(actions.cross_chain_requests);
             while let Some(request) = requests.pop_front() {
@@ -580,14 +573,12 @@ where
     async fn process_validated_block(
         &self,
         certificate: ValidatedBlockCertificate,
-        blobs: &[Blob],
     ) -> Result<(ChainInfoResponse, NetworkActions, bool), WorkerError> {
         let chain_id = certificate.block().header.chain_id;
 
         self.query_chain_worker(chain_id, move |callback| {
             ChainWorkerRequest::ProcessValidatedBlock {
                 certificate,
-                blobs: blobs.to_owned(),
                 callback,
             }
         })
@@ -816,7 +807,7 @@ where
                 self.handle_confirmed_certificate(confirmed, notify_when_messages_are_delivered)
                     .await
             }
-            Either::Right(validated) => self.handle_validated_certificate(validated, vec![]).await,
+            Either::Right(validated) => self.handle_validated_certificate(validated).await,
         }
     }
 
@@ -870,7 +861,6 @@ where
     pub async fn handle_validated_certificate(
         &self,
         certificate: ValidatedBlockCertificate,
-        blobs: Vec<Blob>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         trace!("{} <-- {:?}", self.nickname, certificate);
 
@@ -879,8 +869,7 @@ where
         #[cfg(with_metrics)]
         let cert_str = certificate.inner().to_log_str();
 
-        let (info, actions, _duplicated) =
-            self.process_validated_block(certificate, &blobs).await?;
+        let (info, actions, _duplicated) = self.process_validated_block(certificate).await?;
         #[cfg(with_metrics)]
         {
             if !_duplicated {
@@ -940,6 +929,33 @@ where
         let result = self
             .query_chain_worker(chain_id, move |callback| {
                 ChainWorkerRequest::DownloadPendingBlob { blob_id, callback }
+            })
+            .await;
+        trace!(
+            "{} --> {:?}",
+            self.nickname,
+            result.as_ref().map(|_| blob_id)
+        );
+        result
+    }
+
+    #[instrument(skip_all, fields(
+        nick = self.nickname,
+        chain_id = format!("{:.8}", chain_id)
+    ))]
+    pub async fn handle_pending_blob(
+        &self,
+        chain_id: ChainId,
+        blob: Blob,
+    ) -> Result<ChainInfoResponse, WorkerError> {
+        let blob_id = blob.id();
+        trace!(
+            "{} <-- handle_pending_blob({chain_id:8}, {blob_id:8})",
+            self.nickname
+        );
+        let result = self
+            .query_chain_worker(chain_id, move |callback| {
+                ChainWorkerRequest::HandlePendingBlob { blob, callback }
             })
             .await;
         trace!(

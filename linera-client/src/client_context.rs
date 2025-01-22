@@ -930,9 +930,7 @@ where
         // Replay the certificates locally.
         for certificate in certificates {
             // No required certificates from other chains: This is only used with benchmark.
-            node.handle_certificate(certificate, vec![], &())
-                .await
-                .unwrap();
+            node.handle_certificate(certificate, &()).await.unwrap();
         }
         // Last update the wallet.
         for chain in self.wallet.as_mut().chains_mut() {

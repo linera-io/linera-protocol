@@ -34,8 +34,8 @@ use linera_rpc::{
             validator_worker_client::ValidatorWorkerClient,
             BlobContent, BlobId, BlobIds, BlockProposal, Certificate, CertificatesBatchRequest,
             CertificatesBatchResponse, ChainInfoQuery, ChainInfoResult, CryptoHash,
-            LiteCertificate, Notification, PendingBlobRequest, PendingBlobResult,
-            SubscriptionRequest, VersionInfo,
+            HandlePendingBlobRequest, LiteCertificate, Notification, PendingBlobRequest,
+            PendingBlobResult, SubscriptionRequest, VersionInfo,
         },
         pool::GrpcConnectionPool,
         GrpcProtoConversionError, GrpcProxyable, GRPC_CHUNKED_MESSAGE_FILL_LIMIT,
@@ -522,6 +522,31 @@ where
                 #[cfg(with_metrics)]
                 PROXY_REQUEST_ERROR
                     .with_label_values(&["download_pending_blob"])
+                    .inc();
+                Err(status)
+            }
+        }
+    }
+
+    #[instrument(skip_all, err(Display))]
+    async fn handle_pending_blob(
+        &self,
+        request: Request<HandlePendingBlobRequest>,
+    ) -> Result<Response<ChainInfoResult>, Status> {
+        let (mut client, inner) = self.worker_client(request).await?;
+        #[cfg_attr(not(with_metrics), expect(clippy::needless_match))]
+        match client.handle_pending_blob(inner).await {
+            Ok(blob_result) => {
+                #[cfg(with_metrics)]
+                PROXY_REQUEST_SUCCESS
+                    .with_label_values(&["handle_pending_blob"])
+                    .inc();
+                Ok(blob_result)
+            }
+            Err(status) => {
+                #[cfg(with_metrics)]
+                PROXY_REQUEST_ERROR
+                    .with_label_values(&["handle_pending_blob"])
                     .inc();
                 Err(status)
             }

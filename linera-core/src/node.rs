@@ -9,7 +9,7 @@ use futures::stream::LocalBoxStream as BoxStream;
 use futures::stream::Stream;
 use linera_base::{
     crypto::{CryptoError, CryptoHash},
-    data_types::{ArithmeticError, Blob, BlobContent, BlockHeight},
+    data_types::{ArithmeticError, BlobContent, BlockHeight},
     identifiers::{BlobId, ChainId},
 };
 use linera_chain::{
@@ -78,7 +78,6 @@ pub trait ValidatorNode {
     async fn handle_validated_certificate(
         &self,
         certificate: GenericCertificate<ValidatedBlock>,
-        blobs: Vec<Blob>,
     ) -> Result<ChainInfoResponse, NodeError>;
 
     /// Processes a timeout certificate.
@@ -115,6 +114,13 @@ pub trait ValidatorNode {
         chain_id: ChainId,
         blob_id: BlobId,
     ) -> Result<BlobContent, NodeError>;
+
+    /// Handles a blob that belongs to a pending proposal or validated block certificate.
+    async fn handle_pending_blob(
+        &self,
+        chain_id: ChainId,
+        blob: BlobContent,
+    ) -> Result<ChainInfoResponse, NodeError>;
 
     async fn download_certificate(
         &self,

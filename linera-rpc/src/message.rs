@@ -36,6 +36,7 @@ pub enum RpcMessage {
     UploadBlob(Box<BlobContent>),
     DownloadBlob(Box<BlobId>),
     DownloadPendingBlob(Box<(ChainId, BlobId)>),
+    HandlePendingBlob(Box<(ChainId, BlobContent)>),
     DownloadConfirmedBlock(Box<CryptoHash>),
     DownloadCertificates(Vec<CryptoHash>),
     BlobLastUsedBy(Box<BlobId>),
@@ -77,6 +78,7 @@ impl RpcMessage {
             ChainInfoQuery(query) => query.chain_id,
             CrossChainRequest(request) => request.target_chain_id(),
             DownloadPendingBlob(request) => request.0,
+            HandlePendingBlob(request) => request.0,
             Vote(_)
             | Error(_)
             | ChainInfoResponse(_)
@@ -133,6 +135,7 @@ impl RpcMessage {
             | UploadBlobResponse(_)
             | DownloadPendingBlob(_)
             | DownloadPendingBlobResponse(_)
+            | HandlePendingBlob(_)
             | DownloadBlobResponse(_)
             | DownloadConfirmedBlockResponse(_)
             | BlobLastUsedByResponse(_)

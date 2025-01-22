@@ -1376,15 +1376,20 @@ where
     let LockedBlock::Regular(validated) = locked else {
         panic!("Unexpected locked fast block.");
     };
-    let blobs = vec![blob1];
-    let response = builder
-        .node(3)
-        .handle_validated_certificate(validated.clone(), blobs)
-        .await?;
-    assert_eq!(
-        response.info.manager.pending.unwrap().round,
-        Round::MultiLeader(0)
-    );
+    {
+        let node3 = builder.node(3);
+        let result = node3.handle_validated_certificate(validated.clone()).await;
+        assert_matches!(result, Err(NodeError::BlobsNotFound(_)));
+        let content1 = blob1.into_content();
+        node3.handle_pending_blob(chain_id2, content1).await?;
+        let response = node3
+            .handle_validated_certificate(validated.clone())
+            .await?;
+        assert_eq!(
+            response.info.manager.pending.unwrap().round,
+            Round::MultiLeader(0)
+        );
+    }
 
     // Client 2B should be able to synchronize the locked block and the blobs from validator 3.
     client2_b.synchronize_from_validators().await.unwrap();
@@ -1666,9 +1671,9 @@ where
     };
     let resubmission_result = builder
         .node(2)
-        .handle_validated_certificate(validated_block_certificate, vec![blob1])
+        .handle_validated_certificate(validated_block_certificate)
         .await;
-    assert!(resubmission_result.is_err());
+    assert_matches!(resubmission_result, Err(NodeError::ClientIoError { .. }));
 
     for i in 0..=2 {
         let validator_manager = builder
@@ -1733,9 +1738,9 @@ where
     };
     let resubmission_result = builder
         .node(3)
-        .handle_validated_certificate(validated_block_certificate, vec![blob3])
+        .handle_validated_certificate(validated_block_certificate)
         .await;
-    assert!(resubmission_result.is_err());
+    assert_matches!(resubmission_result, Err(NodeError::ClientIoError { .. }));
 
     let validator_manager = builder
         .node(3)
@@ -2107,7 +2112,7 @@ where
     };
     builder
         .node(0)
-        .handle_validated_certificate(validated_block_certificate, Vec::new())
+        .handle_validated_certificate(validated_block_certificate)
         .await
         .unwrap();
 

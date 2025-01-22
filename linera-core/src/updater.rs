@@ -252,7 +252,7 @@ where
             Err(original_err @ NodeError::BlobsNotFound(blob_ids)) => {
                 self.remote_node
                     .check_blobs_not_found(&certificate, blob_ids)?;
-                let chain_id = certificate.inner().block().header.chain_id;
+                let chain_id = certificate.inner().chain_id();
                 // The certificate is for a validated block, i.e. for our locked block.
                 // Take the missing blobs from our local chain manager.
                 let blobs = self
@@ -260,8 +260,9 @@ where
                     .get_locked_blobs(blob_ids, chain_id)
                     .await?
                     .ok_or_else(|| original_err.clone())?;
+                self.remote_node.send_pending_blobs(chain_id, blobs).await?;
                 self.remote_node
-                    .handle_validated_certificate(certificate, blobs)
+                    .handle_validated_certificate(certificate)
                     .await
             }
             _ => result,

@@ -267,6 +267,10 @@ type ChainStateExtendedView {
 	"""
 	manager: ChainManager!
 	"""
+	The incomplete set of blobs for the pending validated block.
+	"""
+	pendingValidatedBlobs: MapView_BlobId_Blob_9f0b41f3!
+	"""
 	Hashes of all certified blocks for this sender.
 	This ends with `block_hash` and has length `usize::from(next_block_height)`.
 	"""
@@ -432,6 +436,14 @@ A GraphQL-visible map item, complete with key.
 type Entry_AccountOwner_Amount_aaf96548 {
 	key: AccountOwner!
 	value: Amount
+}
+
+"""
+A GraphQL-visible map item, complete with key.
+"""
+type Entry_BlobId_Blob_50b95aa1 {
+	key: BlobId!
+	value: Blob
 }
 
 """
@@ -625,6 +637,12 @@ type MapView_BlobId_Blob_3711e760 {
 	keys(count: Int): [BlobId!]!
 	entry(key: BlobId!): Entry_BlobId_Blob_9f0b41f3!
 	entries(input: MapInput_BlobId_4d2a0555): [Entry_BlobId_Blob_9f0b41f3!]!
+}
+
+type MapView_BlobId_Blob_9f0b41f3 {
+	keys(count: Int): [BlobId!]!
+	entry(key: BlobId!): Entry_BlobId_Blob_50b95aa1!
+	entries(input: MapInput_BlobId_4d2a0555): [Entry_BlobId_Blob_50b95aa1!]!
 }
 
 """
