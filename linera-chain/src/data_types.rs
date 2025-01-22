@@ -48,7 +48,7 @@ mod data_types_tests;
 ///   received ahead of time in the inbox of the chain.
 /// * This constraint does not apply to the execution of confirmed blocks.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
-pub struct Block {
+pub struct Proposal {
     /// The chain to which this block belongs.
     pub chain_id: ChainId,
     /// The number identifying the current configuration.
@@ -76,7 +76,7 @@ pub struct Block {
     pub previous_block_hash: Option<CryptoHash>,
 }
 
-impl Block {
+impl Proposal {
     /// Returns all the published blob IDs in this block's operations.
     pub fn published_blob_ids(&self) -> BTreeSet<BlobId> {
         let mut blob_ids = BTreeSet::new();
@@ -230,6 +230,8 @@ impl IncomingBundle {
     }
 }
 
+impl<'de> BcsHashable<'de> for IncomingBundle {}
+
 /// What to do with a message picked from the inbox.
 #[derive(Copy, Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum MessageAction {
@@ -336,6 +338,8 @@ pub struct OutgoingMessage {
     pub message: Message,
 }
 
+impl<'de> BcsHashable<'de> for OutgoingMessage {}
+
 /// A message together with kind, authentication and grant information.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
 pub struct PostedMessage {
@@ -396,16 +400,14 @@ impl OutgoingMessage {
     }
 }
 
-/// A [`Block`], together with the outcome from its execution.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
+/// A [`Proposal`], together with the outcome from its execution.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, SimpleObject)]
 pub struct ExecutedBlock {
-    pub block: Block,
+    pub proposal: Proposal,
     pub outcome: BlockExecutionOutcome,
 }
 
-impl<'de> BcsHashable<'de> for ExecutedBlock {}
-
-/// The messages and the state hash resulting from a [`Block`]'s execution.
+/// The messages and the state hash resulting from a [`Proposal`]'s execution.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
 #[cfg_attr(with_testing, derive(Default))]
 pub struct BlockExecutionOutcome {
@@ -433,6 +435,8 @@ pub struct EventRecord {
     #[serde(with = "serde_bytes")]
     pub value: Vec<u8>,
 }
+
+impl<'de> BcsHashable<'de> for EventRecord {}
 
 /// The hash and chain ID of a `CertificateValue`.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -639,9 +643,9 @@ impl ExecutedBlock {
         certificate_hash: CryptoHash,
     ) -> impl Iterator<Item = (Epoch, MessageBundle)> + 'a {
         let mut index = 0u32;
-        let block_height = self.block.height;
-        let block_timestamp = self.block.timestamp;
-        let block_epoch = self.block.epoch;
+        let block_height = self.proposal.height;
+        let block_timestamp = self.proposal.timestamp;
+        let block_epoch = self.proposal.epoch;
 
         (0u32..)
             .zip(self.messages())
@@ -672,7 +676,7 @@ impl ExecutedBlock {
         operation_index: usize,
         message_index: u32,
     ) -> Option<MessageId> {
-        let block = &self.block;
+        let block = &self.proposal;
         let transaction_index = block.incoming_bundles.len().checked_add(operation_index)?;
         if message_index
             >= u32::try_from(self.outcome.messages.get(transaction_index)?.len()).ok()?
@@ -698,7 +702,7 @@ impl ExecutedBlock {
             height,
             index,
         } = message_id;
-        if self.block.chain_id != *chain_id || self.block.height != *height {
+        if self.proposal.chain_id != *chain_id || self.proposal.height != *height {
             return None;
         }
         let mut index = usize::try_from(*index).ok()?;
@@ -714,33 +718,33 @@ impl ExecutedBlock {
     /// Returns the message ID belonging to the `index`th outgoing message in this block.
     pub fn message_id(&self, index: u32) -> MessageId {
         MessageId {
-            chain_id: self.block.chain_id,
-            height: self.block.height,
+            chain_id: self.proposal.chain_id,
+            height: self.proposal.height,
             index,
         }
     }
 
     pub fn required_blob_ids(&self) -> HashSet<BlobId> {
         let mut blob_ids = self.outcome.oracle_blob_ids();
-        blob_ids.extend(self.block.published_blob_ids());
+        blob_ids.extend(self.proposal.published_blob_ids());
         blob_ids
     }
 
     pub fn requires_blob(&self, blob_id: &BlobId) -> bool {
         self.outcome.oracle_blob_ids().contains(blob_id)
-            || self.block.published_blob_ids().contains(blob_id)
+            || self.proposal.published_blob_ids().contains(blob_id)
     }
 }
 
 impl BlockExecutionOutcome {
-    pub fn with(self, block: Block) -> ExecutedBlock {
+    pub fn with(self, block: Proposal) -> ExecutedBlock {
         ExecutedBlock {
-            block,
+            proposal: block,
             outcome: self,
         }
     }
 
-    pub fn oracle_blob_ids(&self) -> HashSet<BlobId> {
+    fn oracle_blob_ids(&self) -> HashSet<BlobId> {
         let mut required_blob_ids = HashSet::new();
         for responses in &self.oracle_responses {
             for response in responses {
@@ -764,7 +768,7 @@ impl BlockExecutionOutcome {
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ProposalContent {
     /// The proposed block.
-    pub block: Block,
+    pub proposal: Proposal,
     /// The consensus round in which this proposal is made.
     pub round: Round,
     /// If this is a retry from an earlier round, the execution outcome.
@@ -773,10 +777,15 @@ pub struct ProposalContent {
 }
 
 impl BlockProposal {
-    pub fn new_initial(round: Round, block: Block, secret: &KeyPair, blobs: Vec<Blob>) -> Self {
+    pub fn new_initial(
+        round: Round,
+        proposal: Proposal,
+        secret: &KeyPair,
+        blobs: Vec<Blob>,
+    ) -> Self {
         let content = ProposalContent {
             round,
-            block,
+            proposal,
             outcome: None,
         };
         let signature = Signature::new(&content, secret);
@@ -797,9 +806,10 @@ impl BlockProposal {
         blobs: Vec<Blob>,
     ) -> Self {
         let lite_cert = validated_block_certificate.lite_certificate().cloned();
-        let executed_block = validated_block_certificate.into_inner().into_inner();
+        let block = validated_block_certificate.into_inner().into_inner();
+        let executed_block: ExecutedBlock = block.into();
         let content = ProposalContent {
-            block: executed_block.block,
+            proposal: executed_block.proposal,
             round,
             outcome: Some(executed_block.outcome),
         };

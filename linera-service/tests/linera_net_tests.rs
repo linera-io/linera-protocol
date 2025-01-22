@@ -3191,14 +3191,13 @@ async fn test_end_to_end_repeated_transfers(config: impl LineraNetConfig) -> Res
         let mut block2 = node_service2
             .query_node(&format!(
                 "query {{ block(hash: \"{hash2}\", chainId: \"{chain_id2}\") {{ \
-                    value {{ executedBlock {{ block {{ incomingBundles {{ \
+                    value {{ block {{ body {{ incomingBundles {{ \
                         origin bundle {{ height }} \
                     }} }} }} }} \
                 }} }}"
             ))
             .await?;
-        let mut bundle =
-            block2["block"]["value"]["executedBlock"]["block"]["incomingBundles"][0].take();
+        let mut bundle = block2["block"]["value"]["block"]["body"]["incomingBundles"][0].take();
         let origin = serde_json::from_value::<Origin>(bundle["origin"].take())?;
         assert_eq!(origin.sender, chain_id1);
         assert_eq!(origin.medium, Medium::Direct);

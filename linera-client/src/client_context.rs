@@ -36,7 +36,7 @@ use {
         data_types::Amount,
         identifiers::{AccountOwner, ApplicationId, Owner},
     },
-    linera_chain::data_types::{Block, BlockProposal, ExecutedBlock, SignatureAggregator, Vote},
+    linera_chain::data_types::{BlockProposal, ExecutedBlock, Proposal, SignatureAggregator, Vote},
     linera_chain::types::{CertificateValue, GenericCertificate},
     linera_core::data_types::ChainInfoQuery,
     linera_execution::{
@@ -643,10 +643,10 @@ where
                 .execute_operations(operations)
                 .await?
                 .expect("should execute block with OpenChain operations");
-            let executed_block = certificate.executed_block();
-            let timestamp = executed_block.block.timestamp;
+            let block = certificate.block();
+            let timestamp = block.header.timestamp;
             for i in 0..num_new_chains {
-                let message_id = executed_block
+                let message_id = block
                     .message_id_for_operation(i, OPEN_CHAIN_MESSAGE_INDEX)
                     .expect("failed to create new chain");
                 let chain_id = ChainId::child(message_id);
@@ -783,7 +783,7 @@ where
                 .take(transactions_per_block)
                 .collect();
             let chain = self.wallet.get(chain_id).expect("should have chain");
-            let block = Block {
+            let block = Proposal {
                 epoch: Epoch::ZERO,
                 chain_id,
                 incoming_bundles: Vec::new(),
@@ -967,7 +967,7 @@ where
     }
 
     /// Stages the execution of a block proposal.
-    pub async fn stage_block_execution(&self, block: Block) -> Result<ExecutedBlock, Error> {
+    pub async fn stage_block_execution(&self, block: Proposal) -> Result<ExecutedBlock, Error> {
         Ok(self
             .client
             .local_node()

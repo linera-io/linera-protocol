@@ -94,7 +94,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     block::{ConfirmedBlock, Timeout, ValidatedBlock},
-    data_types::{Block, BlockProposal, ExecutedBlock, LiteVote, Vote},
+    data_types::{BlockProposal, ExecutedBlock, LiteVote, Proposal, Vote},
     types::{TimeoutCertificate, ValidatedBlockCertificate},
     ChainError,
 };
@@ -131,7 +131,7 @@ impl LockedBlock {
 
     pub fn chain_id(&self) -> ChainId {
         match self {
-            Self::Fast(proposal) => proposal.content.block.chain_id,
+            Self::Fast(proposal) => proposal.content.proposal.chain_id,
             Self::Regular(certificate) => certificate.value().inner().chain_id(),
         }
     }
@@ -285,7 +285,7 @@ where
 
     /// Verifies the safety of a proposed block with respect to voting rules.
     pub fn check_proposed_block(&self, proposal: &BlockProposal) -> Result<Outcome, ChainError> {
-        let new_block = &proposal.content.block;
+        let new_block = &proposal.content.proposal;
         if let Some(old_proposal) = self.proposed.get() {
             if old_proposal.content == proposal.content {
                 return Ok(Outcome::Skip); // We already voted for this proposal; nothing to do.
@@ -304,7 +304,7 @@ where
                 // validated block certificate, or it must propose the same block.
                 ensure!(
                     proposal.validated_block_certificate.is_some()
-                        || proposal.content.block == old_proposal.content.block,
+                        || new_block == &old_proposal.content.proposal,
                     ChainError::HasLockedBlock(new_block.height, Round::Fast)
                 );
             }
@@ -382,10 +382,10 @@ where
         &self,
         certificate: &ValidatedBlockCertificate,
     ) -> Result<Outcome, ChainError> {
-        let new_block = &certificate.executed_block().block;
+        let new_block = certificate.block();
         let new_round = certificate.round;
         if let Some(Vote { value, round, .. }) = self.confirmed_vote.get() {
-            if value.inner().executed_block().block == *new_block && *round == new_round {
+            if value.inner().block() == new_block && *round == new_round {
                 return Ok(Outcome::Skip); // We already voted to confirm this block.
             }
         }
@@ -494,7 +494,7 @@ where
         if key_pair.is_some() && round < self.current_round() {
             return Ok(());
         }
-        let confirmed_block = ConfirmedBlock::new(validated.inner().executed_block().clone());
+        let confirmed_block = ConfirmedBlock::new(validated.inner().block().clone().into());
         self.set_locked(LockedBlock::Regular(validated), blobs)?;
         self.update_current_round(local_time);
         if let Some(key_pair) = key_pair {
@@ -811,9 +811,9 @@ impl ChainManagerInfo {
     }
 
     /// Returns whether a proposal with this content was already handled.
-    pub fn already_handled_proposal(&self, round: Round, block: &Block) -> bool {
+    pub fn already_handled_proposal(&self, round: Round, block: &Proposal) -> bool {
         self.requested_proposed.as_ref().is_some_and(|proposal| {
-            proposal.content.round == round && proposal.content.block == *block
+            proposal.content.round == round && proposal.content.proposal == *block
         })
     }
 

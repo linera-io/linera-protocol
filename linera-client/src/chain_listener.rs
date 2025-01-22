@@ -218,8 +218,8 @@ impl ChainListener {
                 context.lock().await.update_wallet(&client).await?;
             }
             let value = storage.read_hashed_confirmed_block(hash).await?;
-            let executed_block = value.inner().executed_block();
-            let new_chains = executed_block
+            let block = value.inner().block();
+            let new_chains = block
                 .messages()
                 .iter()
                 .flatten()
@@ -235,7 +235,7 @@ impl ChainListener {
                             .all_owners()
                             .cloned()
                             .collect::<Vec<_>>();
-                        let timestamp = executed_block.block.timestamp;
+                        let timestamp = block.header.timestamp;
                         Some((new_id, owners, timestamp))
                     } else {
                         None

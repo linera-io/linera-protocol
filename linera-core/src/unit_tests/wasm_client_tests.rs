@@ -315,7 +315,7 @@ where
         .unwrap()
         .unwrap();
     assert_eq!(
-        certificate.executed_block().outcome.events,
+        certificate.block().body.events,
         vec![
             Vec::new(),
             vec![EventRecord {
@@ -337,8 +337,8 @@ where
         .await
         .unwrap()
         .unwrap();
-    let executed_block = cert.executed_block();
-    let responses = &executed_block.outcome.oracle_responses;
+    let executed_block = cert.block();
+    let responses = &executed_block.body.oracle_responses;
     let [_, responses] = &responses[..] else {
         panic!("Unexpected oracle responses: {:?}", responses);
     };
@@ -386,14 +386,14 @@ where
     let mut certs = receiver.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
     let cert = certs.pop().unwrap();
-    let incoming_bundles = &cert.executed_block().block.incoming_bundles;
+    let incoming_bundles = &cert.block().body.incoming_bundles;
     assert_eq!(incoming_bundles.len(), 1);
     assert_eq!(incoming_bundles[0].action, MessageAction::Reject);
     assert_eq!(
         incoming_bundles[0].bundle.messages[0].kind,
         MessageKind::Simple
     );
-    let messages = cert.executed_block().messages();
+    let messages = cert.block().messages();
     assert_eq!(messages.len(), 1);
     assert_eq!(messages[0].len(), 0);
 
@@ -413,7 +413,7 @@ where
     let mut certs = receiver.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
     let cert = certs.pop().unwrap();
-    let incoming_bundles = &cert.executed_block().block.incoming_bundles;
+    let incoming_bundles = &cert.block().body.incoming_bundles;
     assert_eq!(incoming_bundles.len(), 1);
     assert_eq!(incoming_bundles[0].action, MessageAction::Reject);
     assert_eq!(
@@ -424,7 +424,7 @@ where
         incoming_bundles[0].bundle.messages[1].kind,
         MessageKind::Tracked
     );
-    let messages = cert.executed_block().messages();
+    let messages = cert.block().messages();
     assert_eq!(messages.len(), 1);
 
     // The bounced message is marked as "bouncing" in the Wasm context and succeeds.
@@ -435,7 +435,7 @@ where
     let mut certs = creator.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
     let cert = certs.pop().unwrap();
-    let incoming_bundles = &cert.executed_block().block.incoming_bundles;
+    let incoming_bundles = &cert.block().body.incoming_bundles;
     assert_eq!(incoming_bundles.len(), 2);
     // First message is the grant refund for the successful message sent before.
     assert_eq!(incoming_bundles[0].action, MessageAction::Accept);
@@ -560,7 +560,7 @@ where
         .unwrap()
         .unwrap();
 
-    let messages = cert.executed_block().messages();
+    let messages = cert.block().messages();
     {
         let OutgoingMessage {
             destination,
@@ -584,7 +584,7 @@ where
         .unwrap();
     let certs = receiver.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
-    let messages = &certs[0].executed_block().block.incoming_bundles;
+    let messages = &certs[0].block().body.incoming_bundles;
     assert!(messages.iter().any(|msg| matches!(
         &msg.bundle.messages[0].message,
         Message::System(SystemMessage::RegisterApplications { applications })
@@ -616,7 +616,7 @@ where
         .unwrap();
     let certs = receiver.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
-    let messages = &certs[0].executed_block().block.incoming_bundles;
+    let messages = &certs[0].block().body.incoming_bundles;
     assert!(messages
         .iter()
         .flat_map(|msg| &msg.bundle.messages)
@@ -773,7 +773,7 @@ where
     assert_eq!(certs.len(), 1);
 
     // There should be a message receiving the new post.
-    let messages = &certs[0].executed_block().block.incoming_bundles;
+    let messages = &certs[0].block().body.incoming_bundles;
     assert!(messages
         .iter()
         .any(|msg| matches!(&msg.bundle.messages[0].message, Message::User { .. })));
