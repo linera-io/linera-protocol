@@ -26,15 +26,45 @@ pub struct QuoteProvided {
     maybe_quoter_account: Option<AccountOwner>,
 }
 
+impl QuoteProvided {
+    pub fn get_ask_order(&self, owner: AccountOwner) -> Order {
+        Order::Insert {
+            owner,
+            amount: self.amount,
+            price: self.price,
+            nature: OrderNature::Ask,
+        }
+    }
+
+    pub fn get_quoter_pub_key(&self) -> PublicKey {
+        self.quoter_pub_key
+    }
+
+    pub fn get_amount(&self) -> Amount {
+        self.amount
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, SimpleObject, InputObject)]
 pub struct ExchangeInProgress {
-    exchange_chain_id: ChainId,
+    matching_engine_chain_id: ChainId,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, SimpleObject, InputObject)]
+pub struct AwaitingTokens {
+    pub token_pair: TokenPair,
+    pub amount: Amount,
+    pub price: Price,
+    pub quoter_account: AccountOwner,
+    pub matching_engine_chain_id: ChainId,
+    pub matching_engine_app_id: ApplicationId,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Union)]
 pub enum RequestState {
     QuoteRequested(QuoteRequested),
     QuoteProvided(QuoteProvided),
+    AwaitingTokens(AwaitingTokens),
     ExchangeInProgress(ExchangeInProgress),
 }
 
@@ -135,11 +165,46 @@ impl RfqState {
         }
     }
 
-    pub async fn get_bid_order(
+    pub async fn quote_provided(&self, request_id: &RequestId) -> QuoteProvided {
+        let req_data = self
+            .requests
+            .get(request_id)
+            .await
+            .expect("ViewError")
+            .expect("Request not found");
+        match &req_data.state {
+            RequestState::QuoteProvided(quote_provided) => quote_provided.clone(),
+            _ => panic!("Request not in the QuoteProvided state!"),
+        }
+    }
+
+    pub async fn start_exchange(
         &mut self,
         request_id: &RequestId,
-        owner: AccountOwner,
-    ) -> (Order, PublicKey) {
+        matching_engine_chain_id: ChainId,
+    ) {
+        let req_data = self
+            .requests
+            .get_mut(request_id)
+            .await
+            .expect("ViewError")
+            .expect("Request not found");
+        match &req_data.state {
+            RequestState::QuoteProvided(_) | RequestState::AwaitingTokens(_) => {
+                req_data.state = RequestState::ExchangeInProgress(ExchangeInProgress {
+                    matching_engine_chain_id,
+                });
+            }
+            _ => panic!("Request not in the QuoteProvided or AwaitingTokens state!"),
+        }
+    }
+
+    pub async fn quote_accepted(
+        &mut self,
+        request_id: &RequestId,
+        matching_engine_chain_id: ChainId,
+        matching_engine_app_id: ApplicationId,
+    ) {
         let req_data = self
             .requests
             .get_mut(request_id)
@@ -148,40 +213,26 @@ impl RfqState {
             .expect("Request not found");
         match &req_data.state {
             RequestState::QuoteProvided(QuoteProvided {
+                token_pair,
                 amount,
                 price,
-                quoter_pub_key,
-                ..
-            }) => (
-                Order::Insert {
-                    owner,
-                    amount: *amount,
-                    nature: OrderNature::Bid,
-                    price: *price,
-                },
-                *quoter_pub_key,
-            ),
-            _ => panic!("Request not in the QuoteProvided state!"),
-        }
-    }
-
-    pub async fn get_quoter_account(&self, request_id: &RequestId) -> AccountOwner {
-        let req_data = self
-            .requests
-            .get(request_id)
-            .await
-            .expect("ViewError")
-            .expect("Request not found");
-        match &req_data.state {
-            RequestState::QuoteProvided(QuoteProvided {
                 maybe_quoter_account: Some(quoter_account),
                 ..
-            }) => quoter_account.clone(),
-            _ => panic!("Request not in the QuoteProvided state, or quoter account doesn't exist!"),
+            }) => {
+                req_data.state = RequestState::AwaitingTokens(AwaitingTokens {
+                    token_pair: token_pair.clone(),
+                    amount: *amount,
+                    price: *price,
+                    quoter_account: *quoter_account,
+                    matching_engine_chain_id,
+                    matching_engine_app_id,
+                });
+            }
+            _ => panic!("Request not in the QuoteProvided state or no quoter account present!"),
         }
     }
 
-    pub async fn get_ask_order(&self, request_id: &RequestId, owner: AccountOwner) -> Order {
+    pub async fn get_awaiting_tokens(&self, request_id: &RequestId) -> AwaitingTokens {
         let req_data = self
             .requests
             .get(request_id)
@@ -189,29 +240,8 @@ impl RfqState {
             .expect("ViewError")
             .expect("Request not found");
         match &req_data.state {
-            RequestState::QuoteProvided(QuoteProvided { amount, price, .. }) => Order::Insert {
-                owner,
-                amount: *amount,
-                price: *price,
-                nature: OrderNature::Ask,
-            },
-            _ => panic!("Request not in the QuoteProvided state!"),
-        }
-    }
-
-    pub async fn start_exchange(&mut self, request_id: &RequestId, exchange_chain_id: ChainId) {
-        let req_data = self
-            .requests
-            .get_mut(request_id)
-            .await
-            .expect("ViewError")
-            .expect("Request not found");
-        match &req_data.state {
-            RequestState::QuoteProvided { .. } => {
-                req_data.state =
-                    RequestState::ExchangeInProgress(ExchangeInProgress { exchange_chain_id });
-            }
-            _ => panic!("Request not in the QuoteProvided state!"),
+            RequestState::AwaitingTokens(awaiting_tokens) => awaiting_tokens.clone(),
+            _ => panic!("Request not in the AwaitingTokens state!"),
         }
     }
 
@@ -224,12 +254,26 @@ impl RfqState {
             .expect("Request not found");
         self.requests.remove(request_id).expect("Request not found");
         match req_data.state {
-            RequestState::ExchangeInProgress(ExchangeInProgress { exchange_chain_id })
-                if req_data.we_requested =>
-            {
-                Some(exchange_chain_id)
-            }
+            RequestState::ExchangeInProgress(ExchangeInProgress {
+                matching_engine_chain_id,
+            }) if req_data.we_requested => Some(matching_engine_chain_id),
             _ => None,
+        }
+    }
+
+    pub async fn close_request(&mut self, request_id: &RequestId) -> ChainId {
+        let req_data = self
+            .requests
+            .get(request_id)
+            .await
+            .expect("ViewError")
+            .expect("Request not found");
+        self.requests.remove(request_id).expect("Request not found");
+        match req_data.state {
+            RequestState::ExchangeInProgress(ExchangeInProgress {
+                matching_engine_chain_id: exchange_chain_id,
+            }) => exchange_chain_id,
+            _ => panic!("Request not in the ExchangeInProgress state!"),
         }
     }
 
@@ -254,5 +298,12 @@ impl RfqState {
             initiator,
             me_application_id,
         }));
+    }
+
+    pub fn me_application_id(&mut self) -> Option<ApplicationId> {
+        self.temp_chain_state
+            .get()
+            .clone()
+            .map(|temp_chain_state| temp_chain_state.me_application_id)
     }
 }

@@ -82,6 +82,12 @@ pub enum Operation {
         account_owner: AccountOwner,
         fee_budget: Amount,
     },
+    FinalizeDeal {
+        request_id: RequestId,
+    },
+    CloseRequest {
+        request_id: RequestId,
+    },
     CancelRequest {
         request_id: RequestId,
     },
@@ -116,6 +122,14 @@ pub enum Message {
         token_pair: TokenPair,
         matching_engine_message_id: MessageId,
     },
+    TokensSent {
+        matching_engine_app_id: ApplicationId,
+        order: Order,
+    },
+    RequestClosed {
+        seq_number: u64,
+        matching_engine_chain_id: ChainId,
+    },
 }
 
 impl Message {
@@ -123,9 +137,14 @@ impl Message {
         match self {
             Message::RequestQuote { seq_number, .. }
             | Message::ProvideQuote { seq_number, .. }
-            | Message::CancelRequest { seq_number, .. } => *seq_number,
+            | Message::CancelRequest { seq_number, .. }
+            | Message::RequestClosed { seq_number, .. } => *seq_number,
             Message::StartMatchingEngine { request_id, .. }
             | Message::QuoteAccepted { request_id, .. } => request_id.seq_num,
+            Message::TokensSent { .. } => {
+                // not important, we can just return 0
+                0
+            }
         }
     }
 }
