@@ -10,7 +10,7 @@ The unique identifier (UID) of a chain. This is currently computed as the hash v
 scalar ChainId
 
 """
-A Sha3-256 value
+A Keccak256 value
 """
 scalar CryptoHash
 
