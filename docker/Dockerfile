@@ -21,7 +21,7 @@ ARG target=x86_64-unknown-linux-gnu
 ARG binaries=
 ARG copy=${binaries:+_copy}
 
-FROM rust:1.74-slim-bookworm AS builder
+FROM rust:1.81-slim-bookworm AS builder
 ARG git_commit
 ARG target
 
