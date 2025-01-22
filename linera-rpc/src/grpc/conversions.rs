@@ -196,6 +196,7 @@ impl TryFrom<BlockProposal> for api::BlockProposal {
         Ok(Self {
             chain_id: Some(block_proposal.content.proposal.chain_id.into()),
             content: bincode::serialize(&block_proposal.content)?,
+            public_key: Some(block_proposal.public_key.into()),
             owner: Some(block_proposal.owner.into()),
             signature: Some(block_proposal.signature.into()),
             blobs: bincode::serialize(&block_proposal.blobs)?,
@@ -218,6 +219,7 @@ impl TryFrom<api::BlockProposal> for BlockProposal {
         );
         Ok(Self {
             content,
+            public_key: try_proto_convert(block_proposal.public_key)?,
             owner: try_proto_convert(block_proposal.owner)?,
             signature: try_proto_convert(block_proposal.signature)?,
             blobs: bincode::deserialize(&block_proposal.blobs)?,
@@ -1212,13 +1214,15 @@ pub mod tests {
         )
         .lite_certificate()
         .cloned();
+        let public_key = KeyPair::generate().public();
         let block_proposal = BlockProposal {
             content: ProposalContent {
                 proposal: get_block(),
                 round: Round::SingleLeader(4),
                 outcome: Some(outcome),
             },
-            owner: Owner::from(KeyPair::generate().public()),
+            owner: Owner::from(public_key),
+            public_key,
             signature: Signature::new(&Foo("test".into()), &KeyPair::generate()),
             blobs: vec![],
             validated_block_certificate: Some(cert),

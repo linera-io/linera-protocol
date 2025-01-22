@@ -146,6 +146,8 @@ BlockProposal:
         TYPENAME: ProposalContent
     - owner:
         TYPENAME: Owner
+    - public_key:
+        TYPENAME: PublicKey
     - signature:
         TYPENAME: Signature
     - blobs:
@@ -310,19 +312,13 @@ ChainManagerInfo:
 ChainOwnership:
   STRUCT:
     - super_owners:
-        MAP:
-          KEY:
-            TYPENAME: Owner
-          VALUE:
-            TYPENAME: PublicKey
+        SEQ:
+          TYPENAME: Owner
     - owners:
         MAP:
           KEY:
             TYPENAME: Owner
-          VALUE:
-            TUPLE:
-              - TYPENAME: PublicKey
-              - U64
+          VALUE: U64
     - multi_leader_rounds: U32
     - timeout_config:
         TYPENAME: TimeoutConfig
@@ -1050,11 +1046,11 @@ SystemOperation:
         STRUCT:
           - super_owners:
               SEQ:
-                TYPENAME: PublicKey
+                TYPENAME: Owner
           - owners:
               SEQ:
                 TUPLE:
-                  - TYPENAME: PublicKey
+                  - TYPENAME: Owner
                   - U64
           - multi_leader_rounds: U32
           - timeout_config:

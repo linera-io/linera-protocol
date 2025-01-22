@@ -14,7 +14,7 @@ use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
 use axum::{extract::Path, http::StatusCode, response, response::IntoResponse, Extension, Router};
 use futures::{lock::Mutex, Future};
 use linera_base::{
-    crypto::{CryptoError, CryptoHash, PublicKey},
+    crypto::{CryptoError, CryptoHash},
     data_types::{Amount, ApplicationPermissions, Bytecode, TimeDelta, UserApplicationDescription},
     hashed::Hashed,
     identifiers::{ApplicationId, BytecodeId, ChainId, Owner, UserApplicationId},
@@ -321,15 +321,15 @@ where
         .await
     }
 
-    /// Creates (or activates) a new chain by installing the given authentication key.
+    /// Creates (or activates) a new chain with the given owner.
     /// This will automatically subscribe to the future committees created by `admin_id`.
     async fn open_chain(
         &self,
         chain_id: ChainId,
-        public_key: PublicKey,
+        owner: Owner,
         balance: Option<Amount>,
     ) -> Result<ChainId, Error> {
-        let ownership = ChainOwnership::single(public_key);
+        let ownership = ChainOwnership::single(owner);
         let balance = balance.unwrap_or(Amount::ZERO);
         let message_id = self
             .apply_client_command(&chain_id, move |client| {
@@ -354,7 +354,7 @@ where
         &self,
         chain_id: ChainId,
         application_permissions: Option<ApplicationPermissions>,
-        public_keys: Vec<PublicKey>,
+        owners: Vec<Owner>,
         weights: Option<Vec<u64>>,
         multi_leader_rounds: Option<u32>,
         balance: Option<Amount>,
@@ -379,16 +379,16 @@ where
         fallback_duration_ms: u64,
     ) -> Result<ChainId, Error> {
         let owners = if let Some(weights) = weights {
-            if weights.len() != public_keys.len() {
+            if weights.len() != owners.len() {
                 return Err(Error::new(format!(
-                    "There are {} public keys but {} weights.",
-                    public_keys.len(),
+                    "There are {} owners but {} weights.",
+                    owners.len(),
                     weights.len()
                 )));
             }
-            public_keys.into_iter().zip(weights).collect::<Vec<_>>()
+            owners.into_iter().zip(weights).collect::<Vec<_>>()
         } else {
-            public_keys
+            owners
                 .into_iter()
                 .zip(iter::repeat(100))
                 .collect::<Vec<_>>()
@@ -431,13 +431,9 @@ where
     }
 
     /// Changes the authentication key of the chain.
-    async fn change_owner(
-        &self,
-        chain_id: ChainId,
-        new_public_key: PublicKey,
-    ) -> Result<CryptoHash, Error> {
+    async fn change_owner(&self, chain_id: ChainId, new_owner: Owner) -> Result<CryptoHash, Error> {
         let operation = SystemOperation::ChangeOwnership {
-            super_owners: vec![new_public_key],
+            super_owners: vec![new_owner],
             owners: Vec::new(),
             multi_leader_rounds: 2,
             timeout_config: TimeoutConfig::default(),
@@ -450,7 +446,7 @@ where
     async fn change_multiple_owners(
         &self,
         chain_id: ChainId,
-        new_public_keys: Vec<PublicKey>,
+        new_owners: Vec<Owner>,
         new_weights: Vec<u64>,
         multi_leader_rounds: u32,
         #[graphql(desc = "The duration of the fast round, in milliseconds; default: no timeout")]
@@ -475,7 +471,7 @@ where
     ) -> Result<CryptoHash, Error> {
         let operation = SystemOperation::ChangeOwnership {
             super_owners: Vec::new(),
-            owners: new_public_keys.into_iter().zip(new_weights).collect(),
+            owners: new_owners.into_iter().zip(new_weights).collect(),
             multi_leader_rounds,
             timeout_config: TimeoutConfig {
                 fast_round_duration: fast_round_ms.map(TimeDelta::from_millis),

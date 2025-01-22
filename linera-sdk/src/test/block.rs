@@ -6,7 +6,6 @@
 //! Helps with the construction of blocks, adding operations and
 
 use linera_base::{
-    crypto::PublicKey,
     data_types::{Amount, ApplicationPermissions, Round, Timestamp},
     hashed::Hashed,
     identifiers::{ApplicationId, ChainId, GenericApplicationId, Owner},
@@ -118,8 +117,8 @@ impl BlockBuilder {
     /// Adds an operation to change this chain's ownership.
     pub fn with_owner_change(
         &mut self,
-        super_owners: Vec<PublicKey>,
-        owners: Vec<(PublicKey, u64)>,
+        super_owners: Vec<Owner>,
+        owners: Vec<(Owner, u64)>,
         multi_leader_rounds: u32,
         timeout_config: TimeoutConfig,
     ) -> &mut Self {

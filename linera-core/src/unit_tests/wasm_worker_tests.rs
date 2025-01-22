@@ -100,15 +100,15 @@ where
     S: Storage + Clone + Send + Sync + 'static,
 {
     let admin_id = ChainDescription::Root(0);
-    let publisher_key_pair = KeyPair::generate();
+    let publisher_owner = KeyPair::generate().public().into();
     let publisher_chain = ChainDescription::Root(1);
-    let creator_key_pair = KeyPair::generate();
+    let creator_owner = KeyPair::generate().public().into();
     let creator_chain = ChainDescription::Root(2);
     let (committee, worker) = init_worker_with_chains(
         storage.clone(),
         vec![
-            (publisher_chain, publisher_key_pair.public(), Amount::ZERO),
-            (creator_chain, creator_key_pair.public(), Amount::ZERO),
+            (publisher_chain, publisher_owner, Amount::ZERO),
+            (creator_chain, creator_owner, Amount::ZERO),
         ],
     )
     .await;
@@ -138,7 +138,7 @@ where
         .with_operation(publish_operation);
     let publisher_system_state = SystemExecutionState {
         committees: [(Epoch::ZERO, committee.clone())].into_iter().collect(),
-        ownership: ChainOwnership::single(publisher_key_pair.public()),
+        ownership: ChainOwnership::single(publisher_owner),
         timestamp: Timestamp::from(1),
         used_blobs: BTreeSet::from([contract_blob_id, service_blob_id]),
         ..SystemExecutionState::new(Epoch::ZERO, publisher_chain, admin_id)
@@ -178,7 +178,7 @@ where
 
     let mut creator_system_state = SystemExecutionState {
         committees: [(Epoch::ZERO, committee.clone())].into_iter().collect(),
-        ownership: ChainOwnership::single(creator_key_pair.public()),
+        ownership: ChainOwnership::single(creator_owner),
         timestamp: Timestamp::from(1),
         ..SystemExecutionState::new(Epoch::ZERO, creator_chain, admin_id)
     };

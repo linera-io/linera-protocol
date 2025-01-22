@@ -1408,8 +1408,8 @@ async fn test_open_chain() -> anyhow::Result<()> {
     let committee = Committee::make_simple(vec![PublicKey::test_key(0).into()]);
     let committees = BTreeMap::from([(Epoch::ZERO, committee)]);
     let chain_key = PublicKey::test_key(1);
-    let ownership = ChainOwnership::single(chain_key);
-    let child_ownership = ChainOwnership::single(PublicKey::test_key(2));
+    let ownership = ChainOwnership::single(chain_key.into());
+    let child_ownership = ChainOwnership::single(PublicKey::test_key(2).into());
     let state = SystemExecutionState {
         committees: committees.clone(),
         ownership: ownership.clone(),
@@ -1511,7 +1511,7 @@ async fn test_open_chain() -> anyhow::Result<()> {
 async fn test_close_chain() -> anyhow::Result<()> {
     let committee = Committee::make_simple(vec![PublicKey::test_key(0).into()]);
     let committees = BTreeMap::from([(Epoch::ZERO, committee)]);
-    let ownership = ChainOwnership::single(PublicKey::test_key(1));
+    let ownership = ChainOwnership::single(PublicKey::test_key(1).into());
     let state = SystemExecutionState {
         committees: committees.clone(),
         ownership: ownership.clone(),
@@ -1589,19 +1589,19 @@ async fn test_close_chain() -> anyhow::Result<()> {
 /// Tests an application attempting to transfer the tokens in the chain's balance while executing
 /// messages.
 #[test_case(
-    Some(PublicKey::test_key(1)), Some(PublicKey::test_key(1).into())
+    Some(PublicKey::test_key(1).into()), Some(PublicKey::test_key(1).into())
     => matches Ok(Ok(()));
     "works if sender is a receiving chain owner"
 )]
 #[test_case(
-    Some(PublicKey::test_key(1)), Some(PublicKey::test_key(2).into())
+    Some(PublicKey::test_key(1).into()), Some(PublicKey::test_key(2).into())
     => matches Ok(Err(
         ExecutionError::SystemError(SystemExecutionError::UnauthenticatedTransferOwner)
     ));
     "fails if sender is not a receiving chain owner"
 )]
 #[test_case(
-    Some(PublicKey::test_key(1)), None
+    Some(PublicKey::test_key(1).into()), None
     => matches Ok(Err(
         ExecutionError::SystemError(SystemExecutionError::UnauthenticatedTransferOwner)
     ));
@@ -1623,14 +1623,11 @@ async fn test_close_chain() -> anyhow::Result<()> {
 )]
 #[tokio::test]
 async fn test_message_receipt_spending_chain_balance(
-    receiving_chain_owner_key: Option<PublicKey>,
+    receiving_chain_owner: Option<Owner>,
     authenticated_signer: Option<Owner>,
 ) -> anyhow::Result<Result<(), ExecutionError>> {
     let amount = Amount::ONE;
-    let super_owners = receiving_chain_owner_key
-        .into_iter()
-        .map(|key| (Owner::from(key), key))
-        .collect();
+    let super_owners = receiving_chain_owner.into_iter().collect();
 
     let mut view = SystemExecutionState {
         description: Some(ChainDescription::Root(0)),

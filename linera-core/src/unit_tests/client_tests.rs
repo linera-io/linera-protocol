@@ -311,12 +311,8 @@ where
         .with_policy(ResourceControlPolicy::fuel_and_block());
     let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
 
-    let new_key_pair = KeyPair::generate();
-    let certificate = sender
-        .transfer_ownership(new_key_pair.public())
-        .await
-        .unwrap()
-        .unwrap();
+    let new_owner = KeyPair::generate().public().into();
+    let certificate = sender.transfer_ownership(new_owner).await.unwrap().unwrap();
     assert_eq!(sender.next_block_height(), BlockHeight::from(1));
     assert!(sender.pending_proposal().is_none());
     assert_matches!(
@@ -356,8 +352,9 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 0).await?;
     let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     let new_key_pair = KeyPair::generate();
+    let new_owner = new_key_pair.public().into();
     let certificate = sender
-        .share_ownership(new_key_pair.public(), 100)
+        .share_ownership(new_owner, 100)
         .await
         .unwrap()
         .unwrap();
@@ -465,7 +462,7 @@ where
     // Open the new chain.
     let (message_id, certificate) = sender
         .open_chain(
-            ChainOwnership::single(new_key_pair.public()),
+            ChainOwnership::single(new_key_pair.public().into()),
             ApplicationPermissions::default(),
             Amount::ZERO,
         )
@@ -538,7 +535,7 @@ where
     // Open the new chain.
     let (open_chain_message_id, certificate) = parent
         .open_chain(
-            ChainOwnership::single(new_key_pair.public()),
+            ChainOwnership::single(new_key_pair.public().into()),
             ApplicationPermissions::default(),
             Amount::ZERO,
         )
@@ -618,7 +615,7 @@ where
     // Open the new chain.
     let (open_chain_message_id, certificate) = sender
         .open_chain(
-            ChainOwnership::single(new_key_pair.public()),
+            ChainOwnership::single(new_key_pair.public().into()),
             ApplicationPermissions::default(),
             Amount::ZERO,
         )
@@ -680,8 +677,8 @@ where
     let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     let new_key_pair = KeyPair::generate();
     // Open the new chain. We are both regular and super owner.
-    let ownership = ChainOwnership::single(new_key_pair.public())
-        .with_regular_owner(new_key_pair.public(), 100);
+    let ownership = ChainOwnership::single(new_key_pair.public().into())
+        .with_regular_owner(new_key_pair.public().into(), 100);
     let (message_id, creation_certificate) = sender
         .open_chain(ownership, ApplicationPermissions::default(), Amount::ZERO)
         .await
@@ -1256,11 +1253,11 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 0).await?;
     let client1_a = builder.add_root_chain(1, Amount::ZERO).await?;
     let chain_id1 = client1_a.chain_id();
-    let pub_key1_a = client1_a.public_key().await.unwrap();
+    let owner1_a = client1_a.public_key().await.unwrap().into();
     let key_pair1_b = KeyPair::generate();
-    let pub_key1_b = key_pair1_b.public();
+    let owner1_b = key_pair1_b.public().into();
 
-    let owners = [(pub_key1_a, 50), (pub_key1_b, 50)];
+    let owners = [(owner1_a, 50), (owner1_b, 50)];
     let ownership = ChainOwnership::multiple(owners, 10, TimeoutConfig::default());
     client1_a.change_ownership(ownership).await?;
 
@@ -1275,11 +1272,11 @@ where
 
     let client2_a = builder.add_root_chain(2, Amount::from_tokens(10)).await?;
     let chain_id2 = client2_a.chain_id();
-    let pub_key2_a = client2_a.public_key().await.unwrap();
+    let owner2_a = client2_a.public_key().await.unwrap().into();
     let key_pair2_b = KeyPair::generate();
-    let pub_key2_b = key_pair2_b.public();
+    let owner2_b = key_pair2_b.public().into();
 
-    let owners = [(pub_key2_a, 50), (pub_key2_b, 50)];
+    let owners = [(owner2_a, 50), (owner2_b, 50)];
     let ownership = ChainOwnership::multiple(owners, 10, TimeoutConfig::default());
     client2_a.change_ownership(ownership).await.unwrap();
 
@@ -1444,12 +1441,12 @@ where
     let client1 = builder.add_root_chain(1, Amount::ZERO).await?;
     let client2_a = builder.add_root_chain(2, Amount::from_tokens(10)).await?;
     let chain_id2 = client2_a.chain_id();
-    let pub_key2_a = client2_a.public_key().await.unwrap();
+    let owner2_a = Owner::from(client2_a.public_key().await.unwrap());
     let key_pair2_b = KeyPair::generate();
-    let pub_key2_b = key_pair2_b.public();
+    let owner2_b = Owner::from(key_pair2_b.public());
     let owner_change_op = Operation::System(SystemOperation::ChangeOwnership {
         super_owners: Vec::new(),
-        owners: vec![(pub_key2_a, 50), (pub_key2_b, 50)],
+        owners: vec![(owner2_a, 50), (owner2_b, 50)],
         multi_leader_rounds: 10,
         timeout_config: TimeoutConfig::default(),
     });
@@ -1573,14 +1570,14 @@ where
     let client2 = builder.add_root_chain(2, Amount::ZERO).await?;
     let client3_a = builder.add_root_chain(3, Amount::from_tokens(10)).await?;
     let chain_id3 = client3_a.chain_id();
-    let pub_key3_a = client3_a.public_key().await.unwrap();
+    let owner3_a = Owner::from(client3_a.public_key().await.unwrap());
     let key_pair3_b = KeyPair::generate();
-    let pub_key3_b = key_pair3_b.public();
+    let owner3_b = Owner::from(key_pair3_b.public());
     let key_pair3_c = KeyPair::generate();
-    let pub_key3_c = key_pair3_c.public();
+    let owner3_c = Owner::from(key_pair3_c.public());
     let owner_change_op = Operation::System(SystemOperation::ChangeOwnership {
         super_owners: Vec::new(),
-        owners: vec![(pub_key3_a, 50), (pub_key3_b, 50), (pub_key3_c, 50)],
+        owners: vec![(owner3_a, 50), (owner3_b, 50), (owner3_c, 50)],
         multi_leader_rounds: 10,
         timeout_config: TimeoutConfig::default(),
     });
@@ -1820,10 +1817,10 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
     let client = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
     let chain_id = client.chain_id();
-    let pub_key0 = client.public_key().await.unwrap();
-    let pub_key1 = KeyPair::generate().public();
+    let owner0 = client.public_key().await.unwrap().into();
+    let owner1 = KeyPair::generate().public().into();
 
-    let owners = [(pub_key0, 100), (pub_key1, 100)];
+    let owners = [(owner0, 100), (owner1, 100)];
     let ownership = ChainOwnership::multiple(owners, 0, TimeoutConfig::default());
     client.change_ownership(ownership).await.unwrap();
 
@@ -1863,7 +1860,7 @@ where
 
     let round = loop {
         let manager = client.chain_info().await.unwrap().manager;
-        if manager.leader == Some(Owner::from(pub_key1)) {
+        if manager.leader == Some(owner1) {
             break manager.current_round;
         }
         clock.set(manager.round_timeout.unwrap());
@@ -1894,7 +1891,7 @@ where
 
     loop {
         let manager = client.chain_info().await.unwrap().manager;
-        if manager.leader == Some(Owner::from(pub_key0)) {
+        if manager.leader == Some(owner0) {
             break;
         }
         clock.set(manager.round_timeout.unwrap());
@@ -1934,11 +1931,11 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
     let client0 = builder.add_root_chain(1, Amount::from_tokens(10)).await?;
     let chain_id = client0.chain_id();
-    let pub_key0 = client0.public_key().await.unwrap();
+    let owner0 = client0.public_key().await.unwrap().into();
     let key_pair1 = KeyPair::generate();
-    let pub_key1 = key_pair1.public();
+    let owner1 = key_pair1.public().into();
 
-    let owners = [(pub_key0, 100), (pub_key1, 100)];
+    let owners = [(owner0, 100), (owner1, 100)];
     let timeout_config = TimeoutConfig {
         fast_round_duration: Some(TimeDelta::from_secs(5)),
         ..TimeoutConfig::default()
@@ -2070,11 +2067,11 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 0).await?;
     let client0 = builder.add_root_chain(1, Amount::from_tokens(10)).await?;
     let chain_id = client0.chain_id();
-    let pub_key0 = client0.public_key().await.unwrap();
+    let owner0 = client0.public_key().await.unwrap().into();
     let key_pair1 = KeyPair::generate();
-    let pub_key1 = key_pair1.public();
+    let owner1 = key_pair1.public().into();
 
-    let owners = [(pub_key0, 100), (pub_key1, 100)];
+    let owners = [(owner0, 100), (owner1, 100)];
     let timeout_config = TimeoutConfig {
         fast_round_duration: Some(TimeDelta::from_secs(5)),
         ..TimeoutConfig::default()
@@ -2242,8 +2239,8 @@ where
 
     // Configure the clients as super owners, so they make fast blocks by default.
     for client in [&client1, &client2, &client3] {
-        let pub_key = client.public_key().await?;
-        let ownership = ChainOwnership::single_super(pub_key);
+        let owner = client.public_key().await?.into();
+        let ownership = ChainOwnership::single_super(owner);
         client.change_ownership(ownership).await.unwrap();
     }
 

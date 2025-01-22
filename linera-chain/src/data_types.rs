@@ -310,6 +310,7 @@ pub enum Medium {
 pub struct BlockProposal {
     pub content: ProposalContent,
     pub owner: Owner,
+    pub public_key: PublicKey,
     pub signature: Signature,
     #[debug(skip_if = Vec::is_empty)]
     pub blobs: Vec<Blob>,
@@ -790,6 +791,7 @@ impl BlockProposal {
         let signature = Signature::new(&content, secret);
         Self {
             content,
+            public_key: secret.public(),
             owner: secret.public().into(),
             signature,
             blobs,
@@ -814,6 +816,7 @@ impl BlockProposal {
         let signature = Signature::new(&content, secret);
         Self {
             content,
+            public_key: secret.public(),
             owner: secret.public().into(),
             signature,
             blobs,

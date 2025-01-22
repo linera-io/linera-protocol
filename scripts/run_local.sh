@@ -79,13 +79,13 @@ done
 sleep 3;
 
 # Create second wallet with unassigned key.
-KEY=$(./linera --wallet wallet_2.json --storage rocksdb:linera_2.db keygen)
+OWNER=$(./linera --wallet wallet_2.json --storage rocksdb:linera_2.db keygen)
 
 # Open chain on behalf of wallet 2.
-EFFECT_AND_CHAIN=$(./linera --wallet wallet.json --storage rocksdb:linera.db open-chain --to-public-key "$KEY")
+EFFECT_AND_CHAIN=$(./linera --wallet wallet.json --storage rocksdb:linera.db open-chain --owner "$OWNER")
 EFFECT=$(echo "$EFFECT_AND_CHAIN" | sed -n '1 p')
 
 # Assign newly created chain to unassigned key.
-./linera --wallet wallet_2.json --storage rocksdb:linera_2.db assign --key "$KEY" --message-id "$EFFECT"
+./linera --wallet wallet_2.json --storage rocksdb:linera_2.db assign --owner "$OWNER" --message-id "$EFFECT"
 
 read

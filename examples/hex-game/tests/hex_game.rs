@@ -23,7 +23,7 @@ async fn hex_game() {
         .add_block(|block| {
             let operation = Operation::Start {
                 board_size: 2,
-                players: [key_pair1.public(), key_pair2.public()],
+                players: [key_pair1.public().into(), key_pair2.public().into()],
                 fee_budget: Amount::ZERO,
                 timeouts: None,
             };
@@ -97,7 +97,7 @@ async fn hex_game_clock() {
         .add_block(|block| {
             let operation = Operation::Start {
                 board_size: 2,
-                players: [key_pair1.public(), key_pair2.public()],
+                players: [key_pair1.public().into(), key_pair2.public().into()],
                 fee_budget: Amount::ZERO,
                 timeouts: None,
             };

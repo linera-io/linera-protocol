@@ -10,7 +10,7 @@ use linera_base::{
     },
     ensure,
     hashed::Hashed,
-    identifiers::{AccountOwner, BlobType, GenericApplicationId, UserApplicationId},
+    identifiers::{AccountOwner, BlobType, GenericApplicationId, Owner, UserApplicationId},
 };
 use linera_chain::{
     data_types::{
@@ -162,6 +162,7 @@ where
                     round,
                     outcome,
                 },
+            public_key,
             owner,
             blobs,
             validated_block_certificate,
@@ -175,6 +176,10 @@ where
                     .to_string()
             )
         );
+        ensure!(
+            *owner == Owner::from(public_key),
+            WorkerError::InvalidBlockProposal("Public key does not match owner".into())
+        );
         self.0.ensure_is_active()?;
         // Check the epoch.
         let (epoch, committee) = self
@@ -187,13 +192,11 @@ where
         check_block_epoch(epoch, block.chain_id, block.epoch)?;
         let policy = committee.policy().clone();
         // Check the authentication of the block.
-        let public_key = self
-            .0
-            .chain
-            .manager
-            .verify_owner(proposal)
-            .ok_or(WorkerError::InvalidOwner)?;
-        proposal.check_signature(public_key)?;
+        ensure!(
+            self.0.chain.manager.verify_owner(proposal),
+            WorkerError::InvalidOwner
+        );
+        proposal.check_signature(*public_key)?;
         if let Some(lite_certificate) = validated_block_certificate {
             // Verify that this block has been validated by a quorum before.
             lite_certificate.check(committee)?;

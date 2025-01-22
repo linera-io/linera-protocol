@@ -92,7 +92,7 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 * `publish-and-create` — Create an application, and publish the required bytecode
 * `request-application` — Request an application from another chain, so it can be used on this one
 * `keygen` — Create an unassigned key-pair
-* `assign` — Link a key owned by the wallet to a chain that was just created for that key
+* `assign` — Link an owner with a key pair in the wallet to a chain that was created for that owner
 * `retry-pending-block` — Retry a block we unsuccessfully tried to propose earlier
 * `wallet` — Show the contents of the wallet
 * `project` — Manage Linera projects
@@ -178,7 +178,7 @@ Open (i.e. activate) a new chain deriving the UID from an existing one
 ###### **Options:**
 
 * `--from <CHAIN_ID>` — Chain ID (must be one of our chains)
-* `--to-public-key <PUBLIC_KEY>` — Public key of the new owner (otherwise create a key pair and remember it)
+* `--owner <OWNER>` — The new owner (otherwise create a key pair and remember it)
 * `--initial-balance <BALANCE>` — The initial balance of the new chain. This is subtracted from the parent chain's balance
 
   Default value: `0`
@@ -194,8 +194,8 @@ Open (i.e. activate) a new multi-owner chain deriving the UID from an existing o
 ###### **Options:**
 
 * `--from <CHAIN_ID>` — Chain ID (must be one of our chains)
-* `--super-owner-public-keys <SUPER_OWNER_PUBLIC_KEYS>` — Public keys of the new super owners
-* `--owner-public-keys <OWNER_PUBLIC_KEYS>` — Public keys of the new regular owners
+* `--super-owners <SUPER_OWNERS>` — The new super owners
+* `--owners <OWNERS>` — The new regular owners
 * `--owner-weights <OWNER_WEIGHTS>` — Weights for the new owners.
 
    If they are specified there must be exactly one weight for each owner. If no weights are given, every owner will have weight 100.
@@ -230,8 +230,8 @@ Specify the complete set of new owners, by public key. Existing owners that are 
 ###### **Options:**
 
 * `--chain-id <CHAIN_ID>` — The ID of the chain whose owners will be changed
-* `--super-owner-public-keys <SUPER_OWNER_PUBLIC_KEYS>` — Public keys of the new super owners
-* `--owner-public-keys <OWNER_PUBLIC_KEYS>` — Public keys of the new regular owners
+* `--super-owners <SUPER_OWNERS>` — The new super owners
+* `--owners <OWNERS>` — The new regular owners
 * `--owner-weights <OWNER_WEIGHTS>` — Weights for the new owners.
 
    If they are specified there must be exactly one weight for each owner. If no weights are given, every owner will have weight 100.
@@ -679,13 +679,13 @@ Create an unassigned key-pair
 
 ## `linera assign`
 
-Link a key owned by the wallet to a chain that was just created for that key
+Link an owner with a key pair in the wallet to a chain that was created for that owner
 
-**Usage:** `linera assign --key <KEY> --message-id <MESSAGE_ID>`
+**Usage:** `linera assign --owner <OWNER> --message-id <MESSAGE_ID>`
 
 ###### **Options:**
 
-* `--key <KEY>` — The public key to assign
+* `--owner <OWNER>` — The owner to assign
 * `--message-id <MESSAGE_ID>` — The ID of the message that created the chain. (This uniquely describes the chain and where it was created.)
 
 

@@ -252,7 +252,7 @@ where
     let receiver_key = receiver.public_key().await.unwrap();
     receiver
         .change_ownership(ChainOwnership::multiple(
-            [(receiver_key, 100)],
+            [(receiver_key.into(), 100)],
             100,
             TimeoutConfig::default(),
         ))
@@ -261,7 +261,7 @@ where
     let creator_key = creator.public_key().await.unwrap();
     creator
         .change_ownership(ChainOwnership::multiple(
-            [(creator_key, 100)],
+            [(creator_key.into(), 100)],
             100,
             TimeoutConfig::default(),
         ))

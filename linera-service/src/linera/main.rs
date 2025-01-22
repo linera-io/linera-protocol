@@ -16,7 +16,7 @@ use chrono::Utc;
 use colored::Colorize;
 use futures::{lock::Mutex, FutureExt as _, StreamExt};
 use linera_base::{
-    crypto::{CryptoHash, CryptoRng, PublicKey},
+    crypto::{CryptoHash, CryptoRng},
     data_types::{ApplicationPermissions, Timestamp},
     identifiers::{AccountOwner, ChainDescription, ChainId, MessageId, Owner},
     ownership::ChainOwnership,
@@ -152,23 +152,23 @@ impl Runnable for Job {
 
             OpenChain {
                 chain_id,
-                public_key,
+                owner,
                 balance,
             } => {
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let chain_client = context.make_chain_client(chain_id)?;
-                let (new_public_key, key_pair) = match public_key {
-                    Some(key) => (key, None),
+                let (new_owner, key_pair) = match owner {
+                    Some(owner) => (owner, None),
                     None => {
                         let key_pair = context.wallet.generate_key_pair();
-                        (key_pair.public(), Some(key_pair))
+                        (key_pair.public().into(), Some(key_pair))
                     }
                 };
                 info!("Opening a new chain from existing chain {}", chain_id);
                 let time_start = Instant::now();
                 let (message_id, certificate) = context
                     .apply_client_command(&chain_client, |chain_client| {
-                        let ownership = ChainOwnership::single(new_public_key);
+                        let ownership = ChainOwnership::single(new_owner);
                         let chain_client = chain_client.clone();
                         async move {
                             chain_client
@@ -1061,19 +1061,18 @@ impl Runnable for Job {
                 debug!("{:?}", certificate);
             }
 
-            Assign { key, message_id } => {
+            Assign { owner, message_id } => {
                 let start_time = Instant::now();
                 let chain_id = ChainId::child(message_id);
                 info!(
-                    "Linking chain {} to its corresponding key in the wallet, owned by {}",
-                    chain_id,
-                    Owner::from(&key)
+                    "Linking chain {chain_id} to its corresponding key in the wallet, owned by \
+                    {owner}",
                 );
                 Self::assign_new_chain_to_key(
                     chain_id,
                     message_id,
                     storage,
-                    key,
+                    owner,
                     None,
                     &mut context,
                 )
@@ -1081,7 +1080,7 @@ impl Runnable for Job {
                 println!("{}", chain_id);
                 context.save_wallet().await?;
                 info!(
-                    "Chain linked to key in {} ms",
+                    "Chain linked to owner in {} ms",
                     start_time.elapsed().as_millis()
                 );
             }
@@ -1172,18 +1171,17 @@ impl Runnable for Job {
             }) => {
                 let start_time = Instant::now();
                 let key_pair = context.wallet.generate_key_pair();
-                let public_key = key_pair.public();
+                let owner = key_pair.public().into();
                 info!(
-                    "Requesting a new chain for owner {} using the faucet at address {}",
-                    Owner::from(&public_key),
-                    faucet_url,
+                    "Requesting a new chain for owner {owner} using the faucet at address \
+                    {faucet_url}",
                 );
                 context
                     .wallet_mut()
                     .mutate(|w| w.add_unassigned_key_pair(key_pair))
                     .await?;
                 let faucet = cli_wrappers::Faucet::new(faucet_url);
-                let outcome = faucet.claim(&public_key).await?;
+                let outcome = faucet.claim(&owner).await?;
                 let validators = faucet.current_validators().await?;
                 println!("{}", outcome.chain_id);
                 println!("{}", outcome.message_id);
@@ -1192,7 +1190,7 @@ impl Runnable for Job {
                     outcome.chain_id,
                     outcome.message_id,
                     storage.clone(),
-                    public_key,
+                    owner,
                     Some(validators),
                     &mut context,
                 )
@@ -1231,7 +1229,7 @@ impl Job {
         chain_id: ChainId,
         message_id: MessageId,
         storage: S,
-        public_key: PublicKey,
+        owner: Owner,
         validators: Option<Vec<(ValidatorName, String)>>,
         context: &mut ClientContext<S, impl Persist<Target = Wallet>>,
     ) -> anyhow::Result<()>
@@ -1294,14 +1292,14 @@ impl Job {
             );
         };
         anyhow::ensure!(
-            config.ownership.verify_owner(&Owner::from(public_key)) == Some(public_key),
+            config.ownership.verify_owner(&owner),
             "The chain with the ID returned by the faucet is not owned by you. \
             Please make sure you are connecting to a genuine faucet."
         );
         context
             .wallet_mut()
             .mutate(|w| {
-                w.assign_new_chain_to_key(public_key, chain_id, executed_block.header.timestamp)
+                w.assign_new_chain_to_owner(owner, chain_id, executed_block.header.timestamp)
             })
             .await?
             .context("could not assign the new chain")?;
@@ -1612,11 +1610,11 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
             let start_time = Instant::now();
             let mut wallet = options.wallet().await?;
             let key_pair = wallet.generate_key_pair();
-            let public = key_pair.public();
+            let owner = Owner::from(key_pair.public());
             wallet
                 .mutate(|w| w.add_unassigned_key_pair(key_pair))
                 .await?;
-            println!("{}", public);
+            println!("{}", owner);
             info!("Key generated in {} ms", start_time.elapsed().as_millis());
             Ok(0)
         }

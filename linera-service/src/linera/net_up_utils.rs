@@ -291,13 +291,13 @@ async fn create_wallets_and_faucets(
         for wallet in 1..=extra_wallets {
             let extra_wallet = net.make_client().await;
             extra_wallet.wallet_init(&[], FaucetOption::None).await?;
-            let unassigned_key = extra_wallet.keygen().await?;
+            let unassigned_owner = extra_wallet.keygen().await?;
             let new_chain_msg_id = client
-                .open_chain(default_chain, Some(unassigned_key), Amount::ZERO)
+                .open_chain(default_chain, Some(unassigned_owner), Amount::ZERO)
                 .await?
                 .0;
             extra_wallet
-                .assign(unassigned_key, new_chain_msg_id)
+                .assign(unassigned_owner, new_chain_msg_id)
                 .await?;
             println!(
                 "{}",

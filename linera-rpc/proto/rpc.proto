@@ -205,10 +205,13 @@ message BlockProposal {
   bytes content = 2;
 
   // Byte-encoded public key
-  Owner owner = 3;
+  PublicKey public_key = 3;
+
+  // Byte-encoded owner
+  Owner owner = 4;
 
   // Signature value
-  Signature signature = 4;
+  Signature signature = 5;
 
   // A lite certificate for a validated block that justifies the proposal in this round.
   optional bytes validated_block_certificate = 6;

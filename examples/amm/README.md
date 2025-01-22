@@ -257,13 +257,10 @@ In addition, we make an AMM operation per block mandatory, so owners cannot spam
 with empty blocks.
 
 ```bash
-PUB_KEY_AMM=fcf518d56455283ace2bbc11c71e684eb58af81bc98b96a18129e825ce24ea84
-PUB_KEY_2=ca909dcf60df014c166be17eb4a9f6e2f9383314a57510206a54cd841ade455e
-
 kill %% && sleep 1    # Kill the service so we can use CLI commands for chain 1.
 
 linera --wait-for-outgoing-messages change-ownership \
-    --owner-public-keys $PUB_KEY_AMM $PUB_KEY_2
+    --owners $OWNER_AMM $OWNER_2
 
 linera --wait-for-outgoing-messages change-application-permissions \
     --execute-operations $AMM_APPLICATION_ID \

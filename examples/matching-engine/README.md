@@ -64,8 +64,6 @@ OWNER_2=a477cb966190661c0dfbe50602616a78a48d2bef6cb5288d49deb3e05585d579
 OWNER_3=d2115775b5b3c5c1ed3c1516319a7e850c75d0786a74b39f5250cf9decc88124
 CHAIN_1=e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65
 CHAIN_2=69705f85ac4c9fef6c02b4d83426aaaf05154c645ec1c61665f8e450f0468bc0
-PUB_KEY_1=fcf518d56455283ace2bbc11c71e684eb58af81bc98b96a18129e825ce24ea84
-PUB_KEY_2=ca909dcf60df014c166be17eb4a9f6e2f9383314a57510206a54cd841ade455e
 ```
 
 Publish and create two `fungible` applications whose IDs will be used as a
@@ -170,7 +168,7 @@ Engine to close the chain.
 kill %% && sleep 1    # Kill the service so we can use CLI commands for chain 1.
 
 linera --wait-for-outgoing-messages change-ownership \
-    --owner-public-keys $PUB_KEY_1 $PUB_KEY_2
+    --owners $OWNER_1 $OWNER_2
 
 linera --wait-for-outgoing-messages change-application-permissions \
     --execute-operations $MATCHING_ENGINE \

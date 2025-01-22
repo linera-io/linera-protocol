@@ -3,12 +3,15 @@
 
 #![allow(clippy::field_reassign_with_default)]
 
-use std::{collections::BTreeMap, vec};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    vec,
+};
 
 use anyhow::bail;
 use assert_matches::assert_matches;
 use linera_base::{
-    crypto::{CryptoHash, PublicKey},
+    crypto::CryptoHash,
     data_types::{
         Amount, Blob, BlockHeight, CompressedBytecode, Timestamp, UserApplicationDescription,
     },
@@ -695,18 +698,14 @@ impl TransferTestEndpoint {
     /// The state is also configured so that authentication will succeed when this endpoint is used
     /// as a sender.
     pub fn create_system_state(&self, transfer_amount: Amount) -> SystemExecutionState {
-        let (balance, balances, owner_pair) = match self {
-            TransferTestEndpoint::Chain => (
-                transfer_amount,
-                vec![],
-                Some((Self::sender_owner(), PublicKey::test_key(1))),
-            ),
+        let (balance, balances, owner) = match self {
+            TransferTestEndpoint::Chain => (transfer_amount, vec![], Some(Self::sender_owner())),
             TransferTestEndpoint::User => {
                 let owner = Self::sender_owner();
                 (
                     Amount::ZERO,
                     vec![(AccountOwner::User(owner), transfer_amount)],
-                    Some((owner, PublicKey::test_key(1))),
+                    Some(owner),
                 )
             }
             TransferTestEndpoint::Application => (
@@ -720,7 +719,7 @@ impl TransferTestEndpoint {
         };
 
         let ownership = ChainOwnership {
-            super_owners: BTreeMap::from_iter(owner_pair),
+            super_owners: BTreeSet::from_iter(owner),
             ..ChainOwnership::default()
         };
 
