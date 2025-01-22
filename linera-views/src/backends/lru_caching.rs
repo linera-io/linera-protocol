@@ -12,8 +12,6 @@ use std::{
 };
 
 use linked_hash_map::LinkedHashMap;
-#[cfg(with_metrics)]
-use {linera_base::prometheus_util::register_int_counter_vec, prometheus::IntCounterVec};
 
 use crate::{
     batch::{Batch, WriteOperation},
@@ -26,6 +24,7 @@ use crate::{
 #[cfg(with_testing)]
 use crate::{memory::MemoryStore, store::TestKeyValueStore};
 
+#[cfg(with_metrics)]
 mod metrics {
     use std::sync::LazyLock;
 

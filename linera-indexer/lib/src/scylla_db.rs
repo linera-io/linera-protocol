@@ -36,13 +36,13 @@ pub type ScyllaDbRunner = Runner<ScyllaDbStore, ScyllaDbConfig>;
 impl ScyllaDbRunner {
     pub async fn load() -> Result<Self, IndexerError> {
         let config = <IndexerConfig<ScyllaDbConfig> as clap::Parser>::parse();
+        let storage_cache_policy =
+            read_storage_cache_policy(config.client.storage_cache_policy.clone());
         let common_config = CommonStoreConfig {
             max_concurrent_queries: config.client.max_concurrent_queries,
             max_stream_queries: config.client.max_stream_queries,
-            cache_size: config.client.cache_size,
+            storage_cache_policy,
         };
-        let storage_cache_policy =
-            read_storage_cache_policy(config.client.storage_cache_policy.clone());
         let namespace = config.client.table.clone();
         let root_key = &[];
         let store_config = ScyllaDbStoreConfig::new(config.client.uri.clone(), common_config);

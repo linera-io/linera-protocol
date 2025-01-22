@@ -872,8 +872,13 @@ impl TestKeyValueStore for JournalingKeyValueStore<ScyllaDbStoreInternal> {
 
 /// The `ScyllaDbStore` composed type with metrics
 #[cfg(with_metrics)]
-pub type ScyllaDbStore =
-    MeteredStore<CachingStore<MeteredStore<ValueSplittingStore<MeteredStore<JournalingKeyValueStore<ScyllaDbStoreInternal>>>>>>;
+pub type ScyllaDbStore = MeteredStore<
+    CachingStore<
+        MeteredStore<
+            ValueSplittingStore<MeteredStore<JournalingKeyValueStore<ScyllaDbStoreInternal>>>,
+        >,
+    >,
+>;
 
 /// The `ScyllaDbStore` composed type
 #[cfg(not(with_metrics))]
@@ -892,7 +897,7 @@ impl ScyllaDbStoreConfig {
         };
         ScyllaDbStoreConfig {
             inner_config,
-            cache_size: common_config.cache_size,
+            storage_cache_policy: common_config.storage_cache_policy,
         }
     }
 }
