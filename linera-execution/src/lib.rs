@@ -783,6 +783,32 @@ pub enum Query {
     },
 }
 
+/// The outcome of the execution of a query.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct QueryOutcome<Response = QueryResponse> {
+    pub response: Response,
+}
+
+impl From<QueryOutcome<SystemResponse>> for QueryOutcome {
+    fn from(system_outcome: QueryOutcome<SystemResponse>) -> Self {
+        let QueryOutcome { response } = system_outcome;
+
+        QueryOutcome {
+            response: QueryResponse::System(response),
+        }
+    }
+}
+
+impl From<QueryOutcome<Vec<u8>>> for QueryOutcome {
+    fn from(user_service_outcome: QueryOutcome<Vec<u8>>) -> Self {
+        let QueryOutcome { response } = user_service_outcome;
+
+        QueryOutcome {
+            response: QueryResponse::User(response),
+        }
+    }
+}
+
 /// The response to a query.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum QueryResponse {
