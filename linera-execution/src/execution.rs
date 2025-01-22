@@ -545,7 +545,10 @@ where
             self.handle_request(request).await?;
         }
 
-        service_runtime_task.join().await
+        service_runtime_task
+            .join()
+            .await
+            .map(|QueryOutcome { response }| response)
     }
 
     async fn query_user_application_with_long_lived_service(
@@ -558,15 +561,15 @@ where
         >,
         runtime_request_sender: &mut std::sync::mpsc::Sender<ServiceRuntimeRequest>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        let (response_sender, response_receiver) = oneshot::channel();
-        let mut response_receiver = response_receiver.fuse();
+        let (outcome_sender, outcome_receiver) = oneshot::channel();
+        let mut outcome_receiver = outcome_receiver.fuse();
 
         runtime_request_sender
             .send(ServiceRuntimeRequest::Query {
                 application_id,
                 context,
                 query,
-                callback: response_sender,
+                callback: outcome_sender,
             })
             .expect("Service runtime thread should only stop when `request_sender` is dropped");
 
@@ -577,8 +580,10 @@ where
                         self.handle_request(request).await?;
                     }
                 }
-                response = &mut response_receiver => {
-                    return response.map_err(|_| ExecutionError::MissingRuntimeResponse)?;
+                outcome = &mut outcome_receiver => {
+                    return outcome
+                        .map_err(|_| ExecutionError::MissingRuntimeResponse)?
+                        .map(|QueryOutcome { response }| response);
                 }
             }
         }

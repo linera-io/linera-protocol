@@ -32,9 +32,10 @@ use crate::{
     system::CreateApplicationResult,
     util::{ReceiverExt, UnboundedSenderExt},
     BaseRuntime, BytecodeId, ContractRuntime, ExecutionError, FinalizeContext, MessageContext,
-    OperationContext, QueryContext, RawExecutionOutcome, ServiceRuntime, TransactionTracker,
-    UserApplicationDescription, UserApplicationId, UserContractCode, UserContractInstance,
-    UserServiceCode, UserServiceInstance, MAX_EVENT_KEY_LEN, MAX_STREAM_NAME_LEN,
+    OperationContext, QueryContext, QueryOutcome, RawExecutionOutcome, ServiceRuntime,
+    TransactionTracker, UserApplicationDescription, UserApplicationId, UserContractCode,
+    UserContractInstance, UserServiceCode, UserServiceInstance, MAX_EVENT_KEY_LEN,
+    MAX_STREAM_NAME_LEN,
 };
 
 #[cfg(test)]
@@ -972,7 +973,10 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
                     local_time: self.local_time,
                 };
                 let sender = self.execution_state_sender.clone();
-                ServiceSyncRuntime::new(sender, context).run_query(application_id, query)?
+                let outcome =
+                    ServiceSyncRuntime::new(sender, context).run_query(application_id, query)?;
+                let QueryOutcome { response } = outcome;
+                response
             };
         self.transaction_tracker
             .add_oracle_response(OracleResponse::Service(response.clone()));
@@ -1618,9 +1622,12 @@ impl ServiceSyncRuntime {
         &mut self,
         application_id: UserApplicationId,
         query: Vec<u8>,
-    ) -> Result<Vec<u8>, ExecutionError> {
-        self.handle_mut()
-            .try_query_application(application_id, query)
+    ) -> Result<QueryOutcome<Vec<u8>>, ExecutionError> {
+        let response = self
+            .handle_mut()
+            .try_query_application(application_id, query)?;
+
+        Ok(QueryOutcome { response })
     }
 
     /// Obtains the [`SyncRuntimeHandle`] stored in this [`ServiceSyncRuntime`].
@@ -1682,7 +1689,7 @@ pub enum ServiceRuntimeRequest {
         application_id: UserApplicationId,
         context: QueryContext,
         query: Vec<u8>,
-        callback: oneshot::Sender<Result<Vec<u8>, ExecutionError>>,
+        callback: oneshot::Sender<Result<QueryOutcome<Vec<u8>>, ExecutionError>>,
     },
 }
 
