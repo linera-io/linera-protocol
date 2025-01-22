@@ -208,11 +208,11 @@ impl TestValidator {
                 block.with_system_operation(SystemOperation::OpenChain(new_chain_config));
             })
             .await;
-        let executed_block = certificate.inner().executed_block();
+        let block = certificate.inner().block();
 
         ChainDescription::Child(MessageId {
-            chain_id: executed_block.block.chain_id,
-            height: executed_block.block.height,
+            chain_id: block.header.chain_id,
+            height: block.header.height,
             index: OPEN_CHAIN_MESSAGE_INDEX,
         })
     }

@@ -131,14 +131,7 @@ where
     async fn register(&self, value: &Hashed<ConfirmedBlock>) -> Result<(), IndexerError> {
         let mut plugin = self.0.lock().await;
         let chain_id = value.inner().chain_id();
-        for (index, content) in value
-            .inner()
-            .executed_block()
-            .block
-            .operations
-            .iter()
-            .enumerate()
-        {
+        for (index, content) in value.inner().block().body.operations.iter().enumerate() {
             let key = OperationKey {
                 chain_id,
                 height: value.inner().height(),

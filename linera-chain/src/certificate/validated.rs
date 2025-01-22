@@ -10,24 +10,21 @@ use serde::{
 };
 
 use super::{generic::GenericCertificate, Certificate};
-use crate::{
-    block::{ConversionError, ValidatedBlock},
-    data_types::ExecutedBlock,
-};
+use crate::block::{Block, ConversionError, ValidatedBlock};
 
 impl GenericCertificate<ValidatedBlock> {
     pub fn requires_blob(&self, blob_id: &BlobId) -> bool {
-        self.executed_block().requires_blob(blob_id)
+        self.block().requires_blob(blob_id)
     }
 
     #[cfg(with_testing)]
     pub fn outgoing_message_count(&self) -> usize {
-        self.executed_block().messages().iter().map(Vec::len).sum()
+        self.block().messages().iter().map(Vec::len).sum()
     }
 
-    /// Returns reference to the `ExecutedBlock` contained in this certificate.
-    pub fn executed_block(&self) -> &ExecutedBlock {
-        self.inner().executed_block()
+    /// Returns reference to the [`Block`] contained in this certificate.
+    pub fn block(&self) -> &Block {
+        self.inner().block()
     }
 }
 

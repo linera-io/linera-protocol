@@ -13,7 +13,7 @@ use linera_base::{
     identifiers::{BlobId, ChainId, MessageId, UserApplicationId},
 };
 use linera_chain::{
-    data_types::{Block, BlockProposal, ExecutedBlock},
+    data_types::{BlockProposal, ExecutedBlock, Proposal},
     types::{ConfirmedBlockCertificate, GenericCertificate, LiteCertificate},
     ChainStateView,
 };
@@ -173,10 +173,9 @@ where
     #[instrument(level = "trace", skip_all)]
     pub async fn stage_block_execution(
         &self,
-        block: Block,
+        block: Proposal,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), LocalNodeError> {
-        let (executed_block, info) = self.node.state.stage_block_execution(block).await?;
-        Ok((executed_block, info))
+        Ok(self.node.state.stage_block_execution(block).await?)
     }
 
     /// Reads blobs from storage.

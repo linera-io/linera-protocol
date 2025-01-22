@@ -24,10 +24,11 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, BlockExecutionOutcome, BlockProposal, ExecutedBlock, MessageBundle, Origin, Target,
+        BlockExecutionOutcome, BlockProposal, ExecutedBlock, MessageBundle, Origin, Proposal,
+        Target,
     },
     types::{
-        CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate,
+        Block, CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate,
         LiteCertificate, Timeout, TimeoutCertificate, ValidatedBlock, ValidatedBlockCertificate,
     },
     ChainError, ChainStateView,
@@ -271,7 +272,7 @@ where
     storage: StorageClient,
     /// Configuration options for the [`ChainWorker`]s.
     chain_worker_config: ChainWorkerConfig,
-    executed_block_cache: Arc<ValueCache<CryptoHash, Hashed<ExecutedBlock>>>,
+    executed_block_cache: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
     /// Chain IDs that should be tracked by a worker.
     tracked_chains: Option<Arc<RwLock<HashSet<ChainId>>>>,
     /// One-shot channels to notify callers when messages of a particular chain have been
@@ -503,7 +504,7 @@ where
     #[instrument(level = "trace", skip(self, block))]
     pub async fn stage_block_execution(
         &self,
-        block: Block,
+        block: Proposal,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), WorkerError> {
         self.query_chain_worker(block.chain_id, move |callback| {
             ChainWorkerRequest::StageBlockExecution { block, callback }
@@ -549,7 +550,7 @@ where
         certificate: ConfirmedBlockCertificate,
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        let chain_id = certificate.executed_block().block.chain_id;
+        let chain_id = certificate.block().header.chain_id;
 
         let (response, actions) = self
             .query_chain_worker(chain_id, move |callback| {
@@ -573,7 +574,7 @@ where
         &self,
         certificate: ValidatedBlockCertificate,
     ) -> Result<(ChainInfoResponse, NetworkActions, bool), WorkerError> {
-        let chain_id = certificate.executed_block().block.chain_id;
+        let chain_id = certificate.block().header.chain_id;
 
         self.query_chain_worker(chain_id, move |callback| {
             ChainWorkerRequest::ProcessValidatedBlock {
@@ -771,8 +772,8 @@ where
 
     #[instrument(skip_all, fields(
         nick = self.nickname,
-        chain_id = format!("{:.8}", proposal.content.block.chain_id),
-        height = %proposal.content.block.height,
+        chain_id = format!("{:.8}", proposal.content.proposal.chain_id),
+        height = %proposal.content.proposal.height,
     ))]
     pub async fn handle_block_proposal(
         &self,
@@ -782,7 +783,7 @@ where
         #[cfg(with_metrics)]
         let round = proposal.content.round;
         let response = self
-            .query_chain_worker(proposal.content.block.chain_id, move |callback| {
+            .query_chain_worker(proposal.content.proposal.chain_id, move |callback| {
                 ChainWorkerRequest::HandleBlockProposal { proposal, callback }
             })
             .await?;
@@ -813,8 +814,8 @@ where
     /// Processes a confirmed block certificate.
     #[instrument(skip_all, fields(
         nick = self.nickname,
-        chain_id = format!("{:.8}", certificate.executed_block().block.chain_id),
-        height = %certificate.executed_block().block.height,
+        chain_id = format!("{:.8}", certificate.block().header.chain_id),
+        height = %certificate.block().header.height,
     ))]
     pub async fn handle_confirmed_certificate(
         &self,
@@ -824,8 +825,8 @@ where
         trace!("{} <-- {:?}", self.nickname, certificate);
         #[cfg(with_metrics)]
         {
-            let confirmed_transactions = (certificate.executed_block().block.incoming_bundles.len()
-                + certificate.executed_block().block.operations.len())
+            let confirmed_transactions = (certificate.block().body.incoming_bundles.len()
+                + certificate.block().body.operations.len())
                 as u64;
 
             NUM_ROUNDS_IN_CERTIFICATE
@@ -854,8 +855,8 @@ where
     /// Processes a validated block certificate.
     #[instrument(skip_all, fields(
         nick = self.nickname,
-        chain_id = format!("{:.8}", certificate.executed_block().block.chain_id),
-        height = %certificate.executed_block().block.height,
+        chain_id = format!("{:.8}", certificate.block().header.chain_id),
+        height = %certificate.block().header.height,
     ))]
     pub async fn handle_validated_certificate(
         &self,
