@@ -497,7 +497,7 @@ where
                 bytes,
             } => {
                 let ExecutionRuntimeConfig {} = self.context().extra().execution_runtime_config();
-                let response = match endpoint {
+                let QueryOutcome { response } = match endpoint {
                     Some(endpoint) => {
                         self.query_user_application_with_long_lived_service(
                             application_id,
@@ -523,7 +523,7 @@ where
         application_id: UserApplicationId,
         context: QueryContext,
         query: Vec<u8>,
-    ) -> Result<Vec<u8>, ExecutionError> {
+    ) -> Result<QueryOutcome<Vec<u8>>, ExecutionError> {
         let (execution_state_sender, mut execution_state_receiver) =
             futures::channel::mpsc::unbounded();
         let (code, description) = self.load_service(application_id).await?;
@@ -545,10 +545,7 @@ where
             self.handle_request(request).await?;
         }
 
-        service_runtime_task
-            .join()
-            .await
-            .map(|QueryOutcome { response }| response)
+        service_runtime_task.join().await
     }
 
     async fn query_user_application_with_long_lived_service(
@@ -560,7 +557,7 @@ where
             ExecutionRequest,
         >,
         runtime_request_sender: &mut std::sync::mpsc::Sender<ServiceRuntimeRequest>,
-    ) -> Result<Vec<u8>, ExecutionError> {
+    ) -> Result<QueryOutcome<Vec<u8>>, ExecutionError> {
         let (outcome_sender, outcome_receiver) = oneshot::channel();
         let mut outcome_receiver = outcome_receiver.fuse();
 
@@ -581,9 +578,7 @@ where
                     }
                 }
                 outcome = &mut outcome_receiver => {
-                    return outcome
-                        .map_err(|_| ExecutionError::MissingRuntimeResponse)?
-                        .map(|QueryOutcome { response }| response);
+                    return outcome.map_err(|_| ExecutionError::MissingRuntimeResponse)?;
                 }
             }
         }
