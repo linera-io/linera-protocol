@@ -92,19 +92,17 @@ async fn get_config_internal(
     }
 }
 
-/// The DynamoDb forbids the iteration over the partition keys.
+/// DynamoDb forbids the iteration over the partition keys.
 /// Therefore we use a special partition_key named [1] for storing
 /// the root keys. For normal root_keys, we simply put a 0 in front
 /// therefore no intersection is possible.
+const PARTITION_KEY_ROOT_KEY: &[u8] = &[1];
 
 /// The attribute name of the partition key.
 const PARTITION_ATTRIBUTE: &str = "item_partition";
 
 /// A root key being used for testing existence of tables
 const EMPTY_ROOT_KEY: &[u8] = &[0];
-
-/// The partition key used to write the root keys
-const PARTITION_KEY_ROOT_KEY: &[u8] = &[1];
 
 /// A key being used for testing existence of tables
 const DB_KEY: &[u8] = &[0];
@@ -167,7 +165,7 @@ const MAX_TRANSACT_WRITE_ITEM_SIZE: usize = 100;
 
 /// Keys of length 0 are not allowed, so we extend by having a prefix on start
 fn extend_root_key(root_key: &[u8]) -> Vec<u8> {
-    let mut start_key = vec![0];
+    let mut start_key = EMPTY_ROOT_KEY.to_vec();
     start_key.extend(root_key);
     start_key
 }
@@ -285,16 +283,14 @@ fn extract_key_value_owned(
 
 struct TransactionBuilder {
     start_key: Vec<u8>,
-    transacts: Vec<TransactWriteItem>,
+    transactions: Vec<TransactWriteItem>,
 }
 
 impl TransactionBuilder {
     fn new(start_key: &[u8]) -> Self {
-        let start_key = start_key.to_vec();
-        let transacts = Vec::new();
         Self {
-            start_key,
-            transacts,
+            start_key: start_key.to_vec(),
+            transactions: Vec::new(),
         }
     }
 
@@ -303,8 +299,8 @@ impl TransactionBuilder {
         key: Vec<u8>,
         store: &DynamoDbStoreInternal,
     ) -> Result<(), DynamoDbStoreInternalError> {
-        let transact = store.build_delete_transact(&self.start_key, key)?;
-        self.transacts.push(transact);
+        let transaction = store.build_delete_transaction(&self.start_key, key)?;
+        self.transactions.push(transaction);
         Ok(())
     }
 
@@ -314,8 +310,8 @@ impl TransactionBuilder {
         value: Vec<u8>,
         store: &DynamoDbStoreInternal,
     ) -> Result<(), DynamoDbStoreInternalError> {
-        let transact = store.build_put_transact(&self.start_key, key, value)?;
-        self.transacts.push(transact);
+        let transaction = store.build_put_transaction(&self.start_key, key, value)?;
+        self.transactions.push(transaction);
         Ok(())
     }
 }
@@ -346,7 +342,7 @@ impl DynamoDbStoreInternal {
         builder.insert_put_request(big_root, vec![], self)?;
         self.client
             .transact_write_items()
-            .set_transact_items(Some(builder.transacts))
+            .set_transact_items(Some(builder.transactions))
             .send()
             .boxed()
             .await?;
@@ -577,7 +573,7 @@ impl DynamoDbStoreInternal {
         Ok(())
     }
 
-    fn build_delete_transact(
+    fn build_delete_transaction(
         &self,
         start_key: &[u8],
         key: Vec<u8>,
@@ -590,7 +586,7 @@ impl DynamoDbStoreInternal {
         Ok(TransactWriteItem::builder().delete(request).build())
     }
 
-    fn build_put_transact(
+    fn build_put_transaction(
         &self,
         start_key: &[u8],
         key: Vec<u8>,
@@ -983,11 +979,11 @@ impl DirectWritableKeyValueStore for DynamoDbStoreInternal {
         for (key, value) in batch.insertions {
             builder.insert_put_request(key, value, self)?;
         }
-        if !builder.transacts.is_empty() {
+        if !builder.transactions.is_empty() {
             let _guard = self.acquire().await;
             self.client
                 .transact_write_items()
-                .set_transact_items(Some(builder.transacts))
+                .set_transact_items(Some(builder.transactions))
                 .send()
                 .boxed()
                 .await?;
