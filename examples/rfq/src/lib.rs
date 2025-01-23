@@ -5,10 +5,7 @@
 
 use async_graphql::{scalar, InputObject, Request, Response, SimpleObject};
 use linera_sdk::{
-    base::{
-        AccountOwner, Amount, ApplicationId, BytecodeId, ChainId, ContractAbi, MessageId,
-        PublicKey, ServiceAbi,
-    },
+    base::{Amount, ApplicationId, BytecodeId, ChainId, ContractAbi, MessageId, Owner, ServiceAbi},
     graphql::GraphQLMutationRoot,
 };
 use matching_engine::{Order, Price};
@@ -73,13 +70,11 @@ pub enum Operation {
     ProvideQuote {
         request_id: RequestId,
         quote: Price,
-        quoter_pub_key: PublicKey,
-        quoter_account: AccountOwner,
+        quoter_owner: Owner,
     },
     AcceptQuote {
         request_id: RequestId,
-        pub_key: PublicKey,
-        account_owner: AccountOwner,
+        owner: Owner,
         fee_budget: Amount,
     },
     FinalizeDeal {
@@ -105,7 +100,7 @@ pub enum Message {
     ProvideQuote {
         seq_number: u64,
         quote: Price,
-        quoter_pub_key: PublicKey,
+        quoter_owner: Owner,
     },
     QuoteAccepted {
         request_id: RequestId,

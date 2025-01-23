@@ -8,8 +8,8 @@ mod state;
 use fungible::{Account, FungibleTokenAbi};
 use linera_sdk::{
     base::{
-        AccountOwner, Amount, ApplicationPermissions, ChainId, ChainOwnership, PublicKey,
-        TimeoutConfig, WithContractAbi,
+        Amount, ApplicationPermissions, ChainId, ChainOwnership, Owner, TimeoutConfig,
+        WithContractAbi,
     },
     views::{RootView, View},
     Contract, ContractRuntime,
@@ -72,21 +72,15 @@ impl Contract for RfqContract {
             Operation::ProvideQuote {
                 request_id,
                 quote,
-                quoter_pub_key,
-                quoter_account,
+                quoter_owner,
             } => {
                 self.state
-                    .update_state_with_quote(
-                        &request_id,
-                        quote,
-                        quoter_pub_key,
-                        Some(quoter_account),
-                    )
+                    .update_state_with_quote(&request_id, quote, quoter_owner)
                     .await;
                 let message = Message::ProvideQuote {
                     seq_number: request_id.seq_number(),
                     quote,
-                    quoter_pub_key,
+                    quoter_owner,
                 };
                 self.runtime
                     .prepare_message(message)
@@ -95,13 +89,11 @@ impl Contract for RfqContract {
             }
             Operation::AcceptQuote {
                 request_id,
-                account_owner,
-                pub_key,
+                owner,
                 fee_budget,
             } => {
-                let matching_engine_chain_id = self
-                    .start_exchange(&request_id, pub_key, fee_budget, account_owner)
-                    .await;
+                let matching_engine_chain_id =
+                    self.start_exchange(&request_id, fee_budget, owner).await;
                 self.state
                     .start_exchange(&request_id, matching_engine_chain_id.clone())
                     .await;
@@ -208,11 +200,11 @@ impl Contract for RfqContract {
             }
             Message::ProvideQuote {
                 quote,
-                quoter_pub_key,
+                quoter_owner,
                 ..
             } => {
                 self.state
-                    .update_state_with_quote(&request_id, quote, quoter_pub_key, None)
+                    .update_state_with_quote(&request_id, quote, quoter_owner)
                     .await;
             }
             Message::QuoteAccepted {
@@ -341,16 +333,12 @@ impl RfqContract {
     async fn start_exchange(
         &mut self,
         request_id: &RequestId,
-        our_pub_key: PublicKey,
         fee_budget: Amount,
-        account_owner: AccountOwner,
+        owner: Owner,
     ) -> ChainId {
         let quote_provided = self.state.quote_provided(request_id).await;
         let ownership = ChainOwnership::multiple(
-            [
-                (our_pub_key, 100),
-                (quote_provided.get_quoter_pub_key(), 100),
-            ],
+            [(owner, 100), (quote_provided.get_quoter_owner(), 100)],
             100,
             TimeoutConfig::default(),
         );
@@ -363,11 +351,11 @@ impl RfqContract {
 
         // transfer tokens to the new chain
         let transfer = fungible::Operation::Transfer {
-            owner: account_owner,
+            owner: owner.into(),
             amount: quote_provided.get_amount(),
             target_account: Account {
                 chain_id: matching_engine_chain_id,
-                owner: account_owner,
+                owner: owner.into(),
             },
         };
         let token = token_pair.token_offered.with_abi::<FungibleTokenAbi>();
@@ -375,7 +363,7 @@ impl RfqContract {
 
         // signal to the temporary chain that it should start the exchange!
         let initiator = self.runtime.chain_id();
-        let order = quote_provided.get_ask_order(account_owner);
+        let order = quote_provided.get_ask_order(owner.into());
         let message = Message::StartMatchingEngine {
             initiator,
             request_id: request_id.clone(),

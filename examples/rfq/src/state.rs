@@ -3,7 +3,7 @@
 
 use async_graphql::{InputObject, SimpleObject, Union};
 use linera_sdk::{
-    base::{AccountOwner, Amount, ApplicationId, ChainId, PublicKey},
+    base::{AccountOwner, Amount, ApplicationId, ChainId, Owner},
     views::{linera_views, MapView, RegisterView, RootView, ViewStorageContext},
 };
 use matching_engine::{Order, OrderNature, Price};
@@ -22,8 +22,7 @@ pub struct QuoteProvided {
     token_pair: TokenPair,
     amount: Amount,
     price: Price,
-    quoter_pub_key: PublicKey,
-    maybe_quoter_account: Option<AccountOwner>,
+    quoter_owner: Owner,
 }
 
 impl QuoteProvided {
@@ -36,8 +35,8 @@ impl QuoteProvided {
         }
     }
 
-    pub fn get_quoter_pub_key(&self) -> PublicKey {
-        self.quoter_pub_key
+    pub fn get_quoter_owner(&self) -> Owner {
+        self.quoter_owner
     }
 
     pub fn get_amount(&self) -> Amount {
@@ -142,8 +141,7 @@ impl RfqState {
         &mut self,
         request_id: &RequestId,
         quote: Price,
-        quoter_pub_key: PublicKey,
-        maybe_quoter_account: Option<AccountOwner>,
+        quoter_owner: Owner,
     ) {
         let req_data = self
             .requests
@@ -157,8 +155,7 @@ impl RfqState {
                     token_pair: token_pair.clone(),
                     amount: *amount,
                     price: quote,
-                    quoter_pub_key,
-                    maybe_quoter_account,
+                    quoter_owner,
                 });
             }
             _ => panic!("Request not in the QuoteRequested state!"),
@@ -216,19 +213,19 @@ impl RfqState {
                 token_pair,
                 amount,
                 price,
-                maybe_quoter_account: Some(quoter_account),
+                quoter_owner,
                 ..
             }) => {
                 req_data.state = RequestState::AwaitingTokens(AwaitingTokens {
                     token_pair: token_pair.clone(),
                     amount: *amount,
                     price: *price,
-                    quoter_account: *quoter_account,
+                    quoter_account: (*quoter_owner).into(),
                     matching_engine_chain_id,
                     matching_engine_app_id,
                 });
             }
-            _ => panic!("Request not in the QuoteProvided state or no quoter account present!"),
+            _ => panic!("Request not in the QuoteProvided state!"),
         }
     }
 
