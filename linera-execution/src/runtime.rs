@@ -13,7 +13,7 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{
         Amount, ApplicationPermissions, ArithmeticError, BlockHeight, OracleResponse, Resources,
-        SendMessageRequest, Timestamp,
+        Round, SendMessageRequest, Timestamp,
     },
     ensure,
     identifiers::{
@@ -65,6 +65,8 @@ pub struct SyncRuntimeInternal<UserInstance> {
     /// The height of the next block that will be added to this chain. During operations
     /// and messages, this is the current block height.
     height: BlockHeight,
+    /// The current consensus round. Only available during block validation.
+    round: Option<Round>,
     /// The current local time.
     local_time: Timestamp,
     /// The authenticated signer of the operation or message, if any.
@@ -283,6 +285,7 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
     fn new(
         chain_id: ChainId,
         height: BlockHeight,
+        round: Option<Round>,
         local_time: Timestamp,
         authenticated_signer: Option<Owner>,
         executing_message: Option<ExecutingMessage>,
@@ -294,6 +297,7 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
         Self {
             chain_id,
             height,
+            round,
             local_time,
             authenticated_signer,
             executing_message,
@@ -443,6 +447,7 @@ impl SyncRuntimeInternal<UserContractInstance> {
             authenticated_signer,
             authenticated_caller_id,
             height: self.height,
+            round: self.round,
             index: None,
         };
         self.push_application(ApplicationStatus {
@@ -1070,6 +1075,7 @@ impl ContractSyncRuntime {
             SyncRuntimeInternal::new(
                 chain_id,
                 action.height(),
+                action.round(),
                 local_time,
                 action.signer(),
                 if let UserAction::Message(context, _) = action {
@@ -1136,6 +1142,7 @@ impl ContractSyncRuntimeHandle {
             authenticated_signer: action.signer(),
             chain_id,
             height: action.height(),
+            round: action.round(),
         };
 
         {
@@ -1422,12 +1429,16 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         argument: Vec<u8>,
         required_application_ids: Vec<UserApplicationId>,
     ) -> Result<UserApplicationId, ExecutionError> {
-        let chain_id = self.inner().chain_id;
+        let (chain_id, round) = {
+            let this = self.inner();
+            (this.chain_id, this.round)
+        };
         let context = OperationContext {
             chain_id,
             authenticated_signer: self.authenticated_signer()?,
             authenticated_caller_id: self.authenticated_caller_id()?,
             height: self.block_height()?,
+            round,
             index: None,
         };
 
@@ -1488,6 +1499,22 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
             .recv_response()?;
         Ok(())
     }
+
+    fn validation_round(&mut self) -> Result<Round, ExecutionError> {
+        let mut this = self.inner();
+        let round =
+            if let Some(response) = this.transaction_tracker.next_replayed_oracle_response()? {
+                match response {
+                    OracleResponse::Round(round) => round,
+                    _ => return Err(ExecutionError::OracleResponseMismatch),
+                }
+            } else {
+                this.round.ok_or_else(|| ExecutionError::MissingRound)?
+            };
+        this.transaction_tracker
+            .add_oracle_response(OracleResponse::Round(round));
+        Ok(round)
+    }
 }
 
 impl ServiceSyncRuntime {
@@ -1497,6 +1524,7 @@ impl ServiceSyncRuntime {
             SyncRuntimeInternal::new(
                 context.chain_id,
                 context.next_block_height,
+                None,
                 context.local_time,
                 None,
                 None,

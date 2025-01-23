@@ -105,7 +105,20 @@ pub struct BlockHeight(pub u64);
 
 /// An identifier for successive attempts to decide a value in a consensus protocol.
 #[derive(
-    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Copy,
+    Clone,
+    Hash,
+    Default,
+    Debug,
+    Serialize,
+    Deserialize,
+    WitType,
+    WitLoad,
+    WitStore,
 )]
 pub enum Round {
     /// The initial fast round.
@@ -763,6 +776,8 @@ pub enum OracleResponse {
     Blob(BlobId),
     /// An assertion oracle that passed.
     Assert,
+    /// The block's validation round.
+    Round(Round),
 }
 
 impl Display for OracleResponse {
@@ -774,6 +789,7 @@ impl Display for OracleResponse {
             OracleResponse::Post(bytes) => write!(f, "Post:{}", STANDARD_NO_PAD.encode(bytes))?,
             OracleResponse::Blob(blob_id) => write!(f, "Blob:{}", blob_id)?,
             OracleResponse::Assert => write!(f, "Assert")?,
+            OracleResponse::Round(round) => write!(f, "Round:{round}")?,
         };
 
         Ok(())

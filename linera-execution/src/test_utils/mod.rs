@@ -12,7 +12,7 @@ use std::{collections::BTreeMap, sync::Arc, thread, vec};
 
 use linera_base::{
     crypto::{BcsSignable, CryptoHash},
-    data_types::{Amount, Blob, BlockHeight, CompressedBytecode, OracleResponse, Timestamp},
+    data_types::{Amount, Blob, BlockHeight, CompressedBytecode, OracleResponse, Round, Timestamp},
     identifiers::{
         AccountOwner, ApplicationId, BlobId, BlobType, BytecodeId, ChainId, MessageId, Owner,
     },
@@ -68,6 +68,7 @@ pub fn create_dummy_operation_context() -> OperationContext {
     OperationContext {
         chain_id: ChainId::root(0),
         height: BlockHeight(0),
+        round: Some(Round::MultiLeader(0)),
         index: Some(0),
         authenticated_signer: None,
         authenticated_caller_id: None,
@@ -82,6 +83,7 @@ pub fn create_dummy_message_context(authenticated_signer: Option<Owner>) -> Mess
         authenticated_signer,
         refund_grant_to: None,
         height: BlockHeight(0),
+        round: Some(Round::MultiLeader(0)),
         certificate_hash: CryptoHash::test_hash("block receiving a message"),
         message_id: MessageId {
             chain_id: ChainId::root(0),

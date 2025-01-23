@@ -16,7 +16,8 @@ use assert_matches::assert_matches;
 use linera_base::{
     crypto::KeyPair,
     data_types::{
-        Amount, Blob, BlockHeight, Bytecode, OracleResponse, Timestamp, UserApplicationDescription,
+        Amount, Blob, BlockHeight, Bytecode, OracleResponse, Round, Timestamp,
+        UserApplicationDescription,
     },
     hashed::Hashed,
     identifiers::{
@@ -273,6 +274,7 @@ where
         authenticated_signer: None,
         authenticated_caller_id: None,
         height: run_block.height,
+        round: Some(Round::MultiLeader(0)),
         index: Some(0),
     };
     let mut controller = ResourceController::default();

@@ -505,9 +505,14 @@ where
     pub async fn stage_block_execution(
         &self,
         block: ProposedBlock,
+        round: Option<Round>,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), WorkerError> {
         self.query_chain_worker(block.chain_id, move |callback| {
-            ChainWorkerRequest::StageBlockExecution { block, callback }
+            ChainWorkerRequest::StageBlockExecution {
+                block,
+                round,
+                callback,
+            }
         })
         .await
     }

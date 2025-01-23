@@ -13,7 +13,7 @@ use std::{
 use futures::{channel::mpsc, StreamExt};
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{BlockHeight, Timestamp},
+    data_types::{BlockHeight, Round, Timestamp},
     identifiers::{ApplicationId, BytecodeId, ChainDescription, MessageId},
 };
 use linera_views::batch::Batch;
@@ -178,6 +178,7 @@ fn create_runtime<Application>() -> (
     let runtime = SyncRuntimeInternal::new(
         chain_id,
         BlockHeight(0),
+        Some(Round::MultiLeader(0)),
         Timestamp::from(0),
         None,
         None,

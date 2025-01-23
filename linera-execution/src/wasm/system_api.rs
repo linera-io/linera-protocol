@@ -5,7 +5,9 @@ use std::{any::Any, collections::HashMap, marker::PhantomData};
 
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Amount, ApplicationPermissions, BlockHeight, SendMessageRequest, Timestamp},
+    data_types::{
+        Amount, ApplicationPermissions, BlockHeight, Round, SendMessageRequest, Timestamp,
+    },
     identifiers::{
         Account, AccountOwner, ApplicationId, ChainId, ChannelName, MessageId, Owner, StreamName,
     },
@@ -423,6 +425,15 @@ where
             .runtime_mut()
             .consume_fuel(fuel)
             .map_err(|e| RuntimeError::Custom(e.into()))
+    }
+
+    /// Returns the round in which this block was validated.
+    fn validation_round(caller: &mut Caller) -> Result<Round, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime_mut()
+            .validation_round()
+            .map_err(|error| RuntimeError::Custom(error.into()))
     }
 }
 

@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use linera_base::{
-    data_types::{Amount, BlockHeight, Timestamp},
+    data_types::{Amount, BlockHeight, Round, Timestamp},
     identifiers::{Account, ChainDescription, ChainId},
 };
 use linera_execution::{
@@ -69,6 +69,7 @@ async fn test_fuel_for_counter_wasm_application(
     let context = OperationContext {
         chain_id: ChainId::root(0),
         height: BlockHeight(0),
+        round: Some(Round::MultiLeader(0)),
         index: Some(0),
         authenticated_signer: None,
         authenticated_caller_id: None,

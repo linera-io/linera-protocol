@@ -6,7 +6,8 @@
 use linera_base::{
     abi::{ContractAbi, ServiceAbi},
     data_types::{
-        Amount, ApplicationPermissions, BlockHeight, Resources, SendMessageRequest, Timestamp,
+        Amount, ApplicationPermissions, BlockHeight, Resources, Round, SendMessageRequest,
+        Timestamp,
     },
     identifiers::{
         Account, AccountOwner, ApplicationId, BytecodeId, ChainId, ChannelName, Destination,
@@ -318,6 +319,11 @@ where
     /// Asserts that a data blob with the given hash exists in storage.
     pub fn assert_data_blob_exists(&mut self, hash: DataBlobHash) {
         wit::assert_data_blob_exists(hash.0.into())
+    }
+
+    /// Returns the round in which this block was validated.
+    pub fn validation_round(&mut self) -> Round {
+        wit::validation_round().into()
     }
 }
 

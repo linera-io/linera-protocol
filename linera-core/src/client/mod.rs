@@ -1903,9 +1903,10 @@ where
     async fn stage_block_execution_and_discard_failing_messages(
         &self,
         mut block: ProposedBlock,
+        round: Option<Round>,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), ChainClientError> {
         loop {
-            let result = self.stage_block_execution(block.clone()).await;
+            let result = self.stage_block_execution(block.clone(), round).await;
             if let Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(
                 WorkerError::ChainError(chain_error),
             ))) = &result
@@ -1944,12 +1945,13 @@ where
     async fn stage_block_execution(
         &self,
         block: ProposedBlock,
+        round: Option<Round>,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), ChainClientError> {
         loop {
             let result = self
                 .client
                 .local_node
-                .stage_block_execution(block.clone())
+                .stage_block_execution(block.clone(), round)
                 .await;
             if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
                 self.receive_certificates_for_blobs(blob_ids.clone())
@@ -2122,8 +2124,18 @@ where
         };
         // Make sure every incoming message succeeds and otherwise remove them.
         // Also, compute the final certified hash while we're at it.
+
+        let info = self.chain_info().await?;
+        // Use the round number assuming there are oracle responses.
+        // Using the round number during execution counts as an oracle.
+        // Accessing the round number in single-leader rounds where we are not the leader
+        // is not currently supported.
+        let round = match Self::round_for_new_proposal(&info, &identity, &block, true)? {
+            Either::Left(round) => Some(round),
+            Either::Right(_) => None,
+        };
         let (executed_block, _) = self
-            .stage_block_execution_and_discard_failing_messages(block)
+            .stage_block_execution_and_discard_failing_messages(block, round)
             .await?;
         let blobs = self
             .read_local_blobs(executed_block.required_blob_ids())
@@ -2270,7 +2282,7 @@ where
             timestamp,
         };
         match self
-            .stage_block_execution_and_discard_failing_messages(block)
+            .stage_block_execution_and_discard_failing_messages(block, None)
             .await
         {
             Ok((_, response)) => Ok((
@@ -2424,6 +2436,7 @@ where
         {
             return self.finalize_locking_block(info).await;
         }
+        let identity = self.identity().await?;
 
         // Otherwise we have to re-propose the highest validated block, if there is one.
         let pending: Option<ProposedBlock> = self.state().pending_proposal().clone();
@@ -2432,18 +2445,45 @@ where
                 LockingBlock::Regular(certificate) => certificate.block().clone().into(),
                 LockingBlock::Fast(proposal) => {
                     let block = proposal.content.block.clone();
-                    self.stage_block_execution(block).await?.0
+                    self.stage_block_execution(block, None).await?.0
                 }
             }
         } else if let Some(block) = pending {
             // Otherwise we are free to propose our own pending block.
-            self.stage_block_execution(block).await?.0
+            // Use the round number assuming there are oracle responses.
+            // Using the round number during execution counts as an oracle.
+            let (round, timeout) =
+                match Self::round_for_new_proposal(&info, &identity, &block, true)? {
+                    Either::Left(round) => (Some(round), None),
+                    Either::Right(timeout) => (None, Some(timeout)),
+                };
+            match self.stage_block_execution(block, round).await {
+                Ok((executed_block, _)) => executed_block,
+                Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(
+                    WorkerError::ChainError(error),
+                ))) if matches!(
+                    &*error, ChainError::ExecutionError(error, _)
+                    if matches!(&**error, ExecutionError::MissingRound)
+                ) =>
+                {
+                    // During execution the round number was accessed, so the timeout applies.
+                    let timeout = timeout.ok_or_else(|| {
+                        ChainClientError::InternalError("Should have either timeout or round")
+                    })?;
+                    return Ok(ClientOutcome::WaitForTimeout(timeout));
+                }
+                Err(error) => return Err(error),
+            }
         } else {
             return Ok(ClientOutcome::Committed(None)); // Nothing to do.
         };
 
-        let identity = self.identity().await?;
-        let round = match Self::round_for_new_proposal(&info, &identity, &executed_block)? {
+        let round = match Self::round_for_new_proposal(
+            &info,
+            &identity,
+            &executed_block.block,
+            executed_block.outcome.has_oracle_responses(),
+        )? {
             Either::Left(round) => round,
             Either::Right(timeout) => return Ok(ClientOutcome::WaitForTimeout(timeout)),
         };
@@ -2546,17 +2586,16 @@ where
     fn round_for_new_proposal(
         info: &ChainInfo,
         identity: &Owner,
-        executed_block: &ExecutedBlock,
+        block: &ProposedBlock,
+        has_oracle_responses: bool,
     ) -> Result<Either<Round, RoundTimeout>, ChainClientError> {
         let manager = &info.manager;
-        let block = &executed_block.block;
         // If there is a conflicting proposal in the current round, we can only propose if the
         // next round can be started without a timeout, i.e. if we are in a multi-leader round.
         // Similarly, we cannot propose a block that uses oracles in the fast round.
         let conflict = manager.requested_proposed.as_ref().is_some_and(|proposal| {
             proposal.content.round == manager.current_round && proposal.content.block != *block
-        }) || (manager.current_round.is_fast()
-            && executed_block.outcome.has_oracle_responses());
+        }) || (manager.current_round.is_fast() && has_oracle_responses);
         let round = if !conflict {
             manager.current_round
         } else if let Some(round) = manager

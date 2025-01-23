@@ -12,7 +12,7 @@ use std::{
 use custom_debug_derive::Debug;
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Blob, BlockHeight, Timestamp, UserApplicationDescription},
+    data_types::{Blob, BlockHeight, Round, Timestamp, UserApplicationDescription},
     hashed::Hashed,
     identifiers::{BlobId, ChainId, UserApplicationId},
 };
@@ -85,6 +85,7 @@ where
     /// Execute a block but discard any changes to the chain state.
     StageBlockExecution {
         block: ProposedBlock,
+        round: Option<Round>,
         #[debug(skip)]
         callback: oneshot::Sender<Result<(ExecutedBlock, ChainInfoResponse), WorkerError>>,
     },
@@ -286,8 +287,12 @@ where
                 } => callback
                     .send(self.worker.describe_application(application_id).await)
                     .is_ok(),
-                ChainWorkerRequest::StageBlockExecution { block, callback } => callback
-                    .send(self.worker.stage_block_execution(block).await)
+                ChainWorkerRequest::StageBlockExecution {
+                    block,
+                    round,
+                    callback,
+                } => callback
+                    .send(self.worker.stage_block_execution(block, round).await)
                     .is_ok(),
                 ChainWorkerRequest::ProcessTimeout {
                     certificate,

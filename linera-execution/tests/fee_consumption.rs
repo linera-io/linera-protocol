@@ -9,7 +9,7 @@ use std::{sync::Arc, vec};
 
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
-    data_types::{Amount, BlockHeight, Timestamp},
+    data_types::{Amount, BlockHeight, Round, Timestamp},
     identifiers::{Account, AccountOwner, ChainDescription, ChainId, MessageId, Owner},
 };
 use linera_execution::{
@@ -190,6 +190,7 @@ async fn test_fee_consumption(
         authenticated_signer,
         refund_grant_to,
         height: BlockHeight(0),
+        round: Some(Round::MultiLeader(0)),
         certificate_hash: CryptoHash::default(),
         message_id: MessageId::default(),
     };

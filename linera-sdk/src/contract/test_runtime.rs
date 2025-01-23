@@ -11,7 +11,8 @@ use std::{
 use linera_base::{
     abi::{ContractAbi, ServiceAbi},
     data_types::{
-        Amount, ApplicationPermissions, BlockHeight, Resources, SendMessageRequest, Timestamp,
+        Amount, ApplicationPermissions, BlockHeight, Resources, Round, SendMessageRequest,
+        Timestamp,
     },
     identifiers::{
         Account, AccountOwner, ApplicationId, BytecodeId, ChainId, ChannelName, Destination,
@@ -42,6 +43,7 @@ where
     chain_id: Option<ChainId>,
     authenticated_signer: Option<Option<Owner>>,
     block_height: Option<BlockHeight>,
+    round: Option<Round>,
     message_id: Option<Option<MessageId>>,
     message_is_bouncing: Option<Option<bool>>,
     authenticated_caller_id: Option<Option<ApplicationId>>,
@@ -89,6 +91,7 @@ where
             chain_id: None,
             authenticated_signer: None,
             block_height: None,
+            round: None,
             message_id: None,
             message_is_bouncing: None,
             authenticated_caller_id: None,
@@ -248,6 +251,18 @@ where
     /// Configures the block height to return during the test.
     pub fn set_block_height(&mut self, block_height: BlockHeight) -> &mut Self {
         self.block_height = Some(block_height);
+        self
+    }
+
+    /// Configures the round number to return during the test.
+    pub fn with_round(mut self, round: Round) -> Self {
+        self.round = Some(round);
+        self
+    }
+
+    /// Configures the round number to return during the test.
+    pub fn set_round(&mut self, round: Round) -> &mut Self {
+        self.round = Some(round);
         self
     }
 
@@ -823,6 +838,11 @@ where
             maybe_request.expect("Unexpected assert_data_blob_exists request");
         assert_eq!(hash, expected_blob_hash);
         response.expect("Blob does not exist!");
+    }
+
+    /// Returns the round in which this block was validated.
+    pub fn validation_round(&mut self) -> Round {
+        self.round.expect("Missing round number")
     }
 }
 

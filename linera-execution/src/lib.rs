@@ -37,7 +37,7 @@ use linera_base::{
     crypto::{BcsHashable, CryptoHash},
     data_types::{
         Amount, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, DecompressionError,
-        Resources, SendMessageRequest, Timestamp, UserApplicationDescription,
+        Resources, Round, SendMessageRequest, Timestamp, UserApplicationDescription,
     },
     doc_scalar, hex_debug,
     identifiers::{
@@ -271,6 +271,8 @@ pub enum ExecutionError {
     ServiceModuleSend(#[from] linera_base::task::SendError<UserServiceCode>),
     #[error("Blobs not found: {0:?}")]
     BlobsNotFound(Vec<BlobId>),
+    #[error("Missing round; rounds are only available in blocks, not service queries")]
+    MissingRound,
 }
 
 impl From<ViewError> for ExecutionError {
@@ -398,6 +400,8 @@ pub struct OperationContext {
     pub authenticated_caller_id: Option<UserApplicationId>,
     /// The current block height.
     pub height: BlockHeight,
+    /// The consensus round.
+    pub round: Option<Round>,
     /// The current index of the operation.
     #[debug(skip_if = Option::is_none)]
     pub index: Option<u32>,
@@ -417,6 +421,8 @@ pub struct MessageContext {
     pub refund_grant_to: Option<Account>,
     /// The current block height.
     pub height: BlockHeight,
+    /// The consensus round.
+    pub round: Option<Round>,
     /// The hash of the remote certificate that created the message.
     pub certificate_hash: CryptoHash,
     /// The ID of the message (based on the operation height and index in the remote
@@ -433,6 +439,8 @@ pub struct FinalizeContext {
     pub authenticated_signer: Option<Owner>,
     /// The current block height.
     pub height: BlockHeight,
+    /// The consensus round.
+    pub round: Option<Round>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -722,6 +730,9 @@ pub trait ContractRuntime: BaseRuntime {
 
     /// Writes a batch of changes.
     fn write_batch(&mut self, batch: Batch) -> Result<(), ExecutionError>;
+
+    /// Returns the round in which this block was validated.
+    fn validation_round(&mut self) -> Result<Round, ExecutionError>;
 }
 
 /// An operation to be executed in a block.
