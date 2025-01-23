@@ -33,7 +33,6 @@ use linera_views::{
     context::Context,
     log_view::LogView,
     map_view::MapView,
-    bucket_queue_view::BucketQueueView,
     reentrant_collection_view::ReentrantCollectionView,
     register_view::RegisterView,
     set_view::SetView,
