@@ -400,14 +400,14 @@ impl OutgoingMessage {
     }
 }
 
-/// A [`Proposal`], together with the outcome from its execution.
+/// A [`ProposedBlock`], together with the outcome from its execution.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, SimpleObject)]
 pub struct ExecutedBlock {
     pub block: ProposedBlock,
     pub outcome: BlockExecutionOutcome,
 }
 
-/// The messages and the state hash resulting from a [`Proposal`]'s execution.
+/// The messages and the state hash resulting from a [`ProposedBlock`]'s execution.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
 #[cfg_attr(with_testing, derive(Default))]
 pub struct BlockExecutionOutcome {
