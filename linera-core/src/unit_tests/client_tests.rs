@@ -1511,7 +1511,7 @@ where
                 .requested_proposed
                 .unwrap()
                 .content
-                .proposal
+                .block
                 .operations,
             blob_0_1_operations,
         );
@@ -1684,7 +1684,7 @@ where
                 .requested_proposed
                 .unwrap()
                 .content
-                .proposal
+                .block
                 .operations,
             blob_0_1_operations,
         );
@@ -1750,7 +1750,7 @@ where
             .requested_proposed
             .unwrap()
             .content
-            .proposal
+            .block
             .operations,
         blob_2_3_operations,
     );

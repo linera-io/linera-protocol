@@ -70,7 +70,7 @@ impl RpcMessage {
         use RpcMessage::*;
 
         let chain_id = match self {
-            BlockProposal(proposal) => proposal.content.proposal.chain_id,
+            BlockProposal(proposal) => proposal.content.block.chain_id,
             LiteCertificate(request) => request.certificate.value.chain_id,
             TimeoutCertificate(request) => request.certificate.inner().chain_id(),
             ValidatedCertificate(request) => request.certificate.inner().chain_id(),

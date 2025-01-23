@@ -94,7 +94,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     block::{ConfirmedBlock, Timeout, ValidatedBlock},
-    data_types::{BlockProposal, ExecutedBlock, LiteVote, Proposal, Vote},
+    data_types::{BlockProposal, ExecutedBlock, LiteVote, ProposedBlock, Vote},
     types::{TimeoutCertificate, ValidatedBlockCertificate},
     ChainError,
 };
@@ -131,7 +131,7 @@ impl LockedBlock {
 
     pub fn chain_id(&self) -> ChainId {
         match self {
-            Self::Fast(proposal) => proposal.content.proposal.chain_id,
+            Self::Fast(proposal) => proposal.content.block.chain_id,
             Self::Regular(certificate) => certificate.value().inner().chain_id(),
         }
     }
@@ -285,7 +285,7 @@ where
 
     /// Verifies the safety of a proposed block with respect to voting rules.
     pub fn check_proposed_block(&self, proposal: &BlockProposal) -> Result<Outcome, ChainError> {
-        let new_block = &proposal.content.proposal;
+        let new_block = &proposal.content.block;
         if let Some(old_proposal) = self.proposed.get() {
             if old_proposal.content == proposal.content {
                 return Ok(Outcome::Skip); // We already voted for this proposal; nothing to do.
@@ -304,7 +304,7 @@ where
                 // validated block certificate, or it must propose the same block.
                 ensure!(
                     proposal.validated_block_certificate.is_some()
-                        || new_block == &old_proposal.content.proposal,
+                        || new_block == &old_proposal.content.block,
                     ChainError::HasLockedBlock(new_block.height, Round::Fast)
                 );
             }
@@ -811,9 +811,9 @@ impl ChainManagerInfo {
     }
 
     /// Returns whether a proposal with this content was already handled.
-    pub fn already_handled_proposal(&self, round: Round, block: &Proposal) -> bool {
+    pub fn already_handled_proposal(&self, round: Round, block: &ProposedBlock) -> bool {
         self.requested_proposed.as_ref().is_some_and(|proposal| {
-            proposal.content.round == round && proposal.content.proposal == *block
+            proposal.content.round == round && proposal.content.block == *block
         })
     }
 

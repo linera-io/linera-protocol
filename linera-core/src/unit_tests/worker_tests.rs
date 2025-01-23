@@ -30,7 +30,7 @@ use linera_chain::{
     data_types::{
         BlockExecutionOutcome, BlockProposal, ChainAndHeight, ChannelFullName, ExecutedBlock,
         IncomingBundle, LiteValue, LiteVote, Medium, MessageAction, MessageBundle, Origin,
-        OutgoingMessage, PostedMessage, Proposal, SignatureAggregator,
+        OutgoingMessage, PostedMessage, ProposedBlock, SignatureAggregator,
     },
     manager::LockedBlock,
     test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt, VoteTestExt},
@@ -303,7 +303,7 @@ where
         })
         .collect::<Vec<_>>();
 
-    let block = Proposal {
+    let block = ProposedBlock {
         epoch,
         incoming_bundles,
         authenticated_signer,
@@ -690,7 +690,7 @@ where
         .clone()
         .into();
     // Multi-leader round - it's not confirmed yet.
-    assert_eq!(&executed_block.proposal, &block_proposal0.content.proposal);
+    assert_eq!(&executed_block.block, &block_proposal0.content.block);
     assert!(chain.manager.confirmed_vote().is_none());
     let block_certificate0 = make_certificate(
         &committee,
@@ -715,7 +715,7 @@ where
         .into();
 
     // Should be confirmed after handling the certificate.
-    assert_eq!(&executed_block.proposal, &block_proposal0.content.proposal);
+    assert_eq!(&executed_block.block, &block_proposal0.content.block);
     assert!(chain.manager.validated_vote().is_none());
     drop(chain);
 
@@ -740,7 +740,7 @@ where
         .block()
         .clone()
         .into();
-    assert_eq!(&executed_block.proposal, &block_proposal1.content.proposal);
+    assert_eq!(&executed_block.block, &block_proposal1.content.block);
     assert!(chain.manager.confirmed_vote().is_none());
     drop(chain);
     assert_matches!(
@@ -1074,7 +1074,7 @@ where
                     .await,
                     oracle_responses: vec![Vec::new(); 2],
                 }
-                .with(block_proposal.content.proposal),
+                .with(block_proposal.content.block),
             )),
         );
         worker

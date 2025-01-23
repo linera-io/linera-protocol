@@ -19,7 +19,9 @@ use linera_base::{
     identifiers::{BlobId, ChainId, UserApplicationId},
 };
 use linera_chain::{
-    data_types::{BlockProposal, ExecutedBlock, Medium, MessageBundle, Origin, Proposal, Target},
+    data_types::{
+        BlockProposal, ExecutedBlock, Medium, MessageBundle, Origin, ProposedBlock, Target,
+    },
     types::{Block, ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
     ChainError, ChainStateView,
 };
@@ -176,7 +178,7 @@ where
     /// Executes a block without persisting any changes to the state.
     pub(super) async fn stage_block_execution(
         &mut self,
-        block: Proposal,
+        block: ProposedBlock,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), WorkerError> {
         ChainWorkerStateWithTemporaryChanges::new(self)
             .await
@@ -384,7 +386,7 @@ where
             if !tracked_chains
                 .read()
                 .expect("Panics should not happen while holding a lock to `tracked_chains`")
-                .contains(&executed_block.proposal.chain_id)
+                .contains(&executed_block.block.chain_id)
             {
                 return; // The parent chain is not tracked; don't track the child.
             }

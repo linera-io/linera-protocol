@@ -13,7 +13,7 @@ use linera_base::{
     identifiers::{BlobId, ChainId, MessageId, UserApplicationId},
 };
 use linera_chain::{
-    data_types::{BlockProposal, ExecutedBlock, Proposal},
+    data_types::{BlockProposal, ExecutedBlock, ProposedBlock},
     types::{ConfirmedBlockCertificate, GenericCertificate, LiteCertificate},
     ChainStateView,
 };
@@ -173,7 +173,7 @@ where
     #[instrument(level = "trace", skip_all)]
     pub async fn stage_block_execution(
         &self,
-        block: Proposal,
+        block: ProposedBlock,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), LocalNodeError> {
         Ok(self.node.state.stage_block_execution(block).await?)
     }

@@ -11,7 +11,7 @@ use linera_base::{
     identifiers::{BlobId, Owner},
     ownership::ChainOwnership,
 };
-use linera_chain::data_types::Proposal;
+use linera_chain::data_types::ProposedBlock;
 use tokio::sync::Mutex;
 
 use super::ChainClientError;
@@ -30,7 +30,7 @@ pub struct ChainClientState {
     /// The block we are currently trying to propose for the next height, if any.
     ///
     /// This is always at the same height as `next_block_height`.
-    pending_proposal: Option<Proposal>,
+    pending_proposal: Option<ProposedBlock>,
     /// Known key pairs from present and past identities.
     known_key_pairs: BTreeMap<Owner, KeyPair>,
 
@@ -49,7 +49,7 @@ impl ChainClientState {
         block_hash: Option<CryptoHash>,
         timestamp: Timestamp,
         next_block_height: BlockHeight,
-        pending_block: Option<Proposal>,
+        pending_block: Option<ProposedBlock>,
         pending_blobs: BTreeMap<BlobId, Blob>,
     ) -> ChainClientState {
         let known_key_pairs = known_key_pairs
@@ -83,11 +83,11 @@ impl ChainClientState {
         self.next_block_height
     }
 
-    pub fn pending_proposal(&self) -> &Option<Proposal> {
+    pub fn pending_proposal(&self) -> &Option<ProposedBlock> {
         &self.pending_proposal
     }
 
-    pub(super) fn set_pending_proposal(&mut self, block: Proposal) {
+    pub(super) fn set_pending_proposal(&mut self, block: ProposedBlock) {
         if block.height == self.next_block_height {
             self.pending_proposal = Some(block);
         } else {

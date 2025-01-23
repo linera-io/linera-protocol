@@ -15,7 +15,7 @@ use linera_base::{
 use linera_chain::{
     data_types::{
         BlockExecutionOutcome, BlockProposal, ChannelFullName, ExecutedBlock, IncomingBundle,
-        Medium, MessageAction, Proposal, ProposalContent,
+        Medium, MessageAction, ProposalContent, ProposedBlock,
     },
     manager,
     types::ValidatedBlock,
@@ -126,7 +126,7 @@ where
     /// Executes a block without persisting any changes to the state.
     pub(super) async fn stage_block_execution(
         &mut self,
-        proposal: Proposal,
+        proposal: ProposedBlock,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), WorkerError> {
         let local_time = self.0.storage.clock().current_time();
         let signer = proposal.authenticated_signer;
@@ -158,7 +158,7 @@ where
         let BlockProposal {
             content:
                 ProposalContent {
-                    proposal: block,
+                    block,
                     round,
                     outcome,
                 },

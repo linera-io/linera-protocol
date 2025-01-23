@@ -21,7 +21,7 @@ use thiserror::Error;
 use crate::{
     data_types::{
         BlockExecutionOutcome, EventRecord, ExecutedBlock, IncomingBundle, Medium, MessageBundle,
-        OutgoingMessage, Proposal,
+        OutgoingMessage, ProposedBlock,
     },
     ChainError,
 };
@@ -34,7 +34,7 @@ pub struct ValidatedBlock(Hashed<Block>);
 impl ValidatedBlock {
     /// Creates a new `ValidatedBlock` from an `ExecutedBlock`.
     pub fn new(block: ExecutedBlock) -> Self {
-        Self(Hashed::new(Block::new(block.proposal, block.outcome)))
+        Self(Hashed::new(Block::new(block.block, block.outcome)))
     }
 
     pub fn from_hashed(block: Hashed<Block>) -> Self {
@@ -95,7 +95,7 @@ impl<'de> BcsHashable<'de> for ConfirmedBlock {}
 
 impl ConfirmedBlock {
     pub fn new(block: ExecutedBlock) -> Self {
-        Self(Hashed::new(Block::new(block.proposal, block.outcome)))
+        Self(Hashed::new(Block::new(block.block, block.outcome)))
     }
 
     pub fn from_hashed(block: Hashed<Block>) -> Self {
@@ -333,21 +333,21 @@ pub struct BlockBody {
 }
 
 impl Block {
-    pub fn new(proposal: Proposal, outcome: BlockExecutionOutcome) -> Self {
-        let bundles_hash = hashing::hash_vec(&proposal.incoming_bundles);
+    pub fn new(block: ProposedBlock, outcome: BlockExecutionOutcome) -> Self {
+        let bundles_hash = hashing::hash_vec(&block.incoming_bundles);
         let messages_hash = hashing::hash_vec_vec(&outcome.messages);
-        let operations_hash = hashing::hash_vec(&proposal.operations);
+        let operations_hash = hashing::hash_vec(&block.operations);
         let oracle_responses_hash = hashing::hash_vec_vec(&outcome.oracle_responses);
         let events_hash = hashing::hash_vec_vec(&outcome.events);
 
         let header = BlockHeader {
-            chain_id: proposal.chain_id,
-            epoch: proposal.epoch,
-            height: proposal.height,
-            timestamp: proposal.timestamp,
+            chain_id: block.chain_id,
+            epoch: block.epoch,
+            height: block.height,
+            timestamp: block.timestamp,
             state_hash: outcome.state_hash,
-            previous_block_hash: proposal.previous_block_hash,
-            authenticated_signer: proposal.authenticated_signer,
+            previous_block_hash: block.previous_block_hash,
+            authenticated_signer: block.authenticated_signer,
             bundles_hash,
             operations_hash,
             messages_hash,
@@ -356,8 +356,8 @@ impl Block {
         };
 
         let body = BlockBody {
-            incoming_bundles: proposal.incoming_bundles,
-            operations: proposal.operations,
+            incoming_bundles: block.incoming_bundles,
+            operations: block.operations,
             messages: outcome.messages,
             oracle_responses: outcome.oracle_responses,
             events: outcome.events,
@@ -510,25 +510,51 @@ impl Block {
 
 impl From<Block> for ExecutedBlock {
     fn from(block: Block) -> Self {
-        let proposal = Proposal {
-            chain_id: block.header.chain_id,
-            epoch: block.header.epoch,
-            height: block.header.height,
-            timestamp: block.header.timestamp,
-            incoming_bundles: block.body.incoming_bundles,
-            operations: block.body.operations,
-            authenticated_signer: block.header.authenticated_signer,
-            previous_block_hash: block.header.previous_block_hash,
+        let Block {
+            header:
+                BlockHeader {
+                    chain_id,
+                    epoch,
+                    height,
+                    timestamp,
+                    state_hash,
+                    previous_block_hash,
+                    authenticated_signer,
+                    bundles_hash: _,
+                    operations_hash: _,
+                    messages_hash: _,
+                    oracle_responses_hash: _,
+                    events_hash: _,
+                },
+            body:
+                BlockBody {
+                    incoming_bundles,
+                    operations,
+                    messages,
+                    oracle_responses,
+                    events,
+                },
+        } = block;
+
+        let block = ProposedBlock {
+            chain_id,
+            epoch,
+            height,
+            timestamp,
+            incoming_bundles,
+            operations,
+            authenticated_signer,
+            previous_block_hash,
         };
 
         let outcome = BlockExecutionOutcome {
-            state_hash: block.header.state_hash,
-            messages: block.body.messages,
-            oracle_responses: block.body.oracle_responses,
-            events: block.body.events,
+            state_hash,
+            messages,
+            oracle_responses,
+            events,
         };
 
-        ExecutedBlock { proposal, outcome }
+        ExecutedBlock { block, outcome }
     }
 }
 
