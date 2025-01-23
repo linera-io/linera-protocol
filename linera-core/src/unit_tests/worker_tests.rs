@@ -3553,7 +3553,7 @@ where
     let proposal = make_child_block(&change_ownership_value)
         .into_proposal_with_round(&KeyPair::generate(), Round::MultiLeader(0));
     let (executed_block, _) = worker
-        .stage_block_execution(proposal.content.proposal.clone())
+        .stage_block_execution(proposal.content.block.clone())
         .await?;
     let value = Hashed::new(ConfirmedBlock::new(executed_block));
     let (response, _) = worker.handle_block_proposal(proposal).await?;
