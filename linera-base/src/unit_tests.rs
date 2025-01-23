@@ -147,6 +147,7 @@ fn chain_ownership_test_case() -> ChainOwnership {
         super_owners,
         owners,
         multi_leader_rounds: 5,
+        open_multi_leader_rounds: false,
         timeout_config: TimeoutConfig {
             fast_round_duration: None,
             base_timeout: TimeDelta::ZERO,

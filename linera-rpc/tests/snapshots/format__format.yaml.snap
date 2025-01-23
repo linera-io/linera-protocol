@@ -320,6 +320,7 @@ ChainOwnership:
             TYPENAME: Owner
           VALUE: U64
     - multi_leader_rounds: U32
+    - open_multi_leader_rounds: BOOL
     - timeout_config:
         TYPENAME: TimeoutConfig
 ChannelFullName:
@@ -1053,6 +1054,7 @@ SystemOperation:
                   - TYPENAME: Owner
                   - U64
           - multi_leader_rounds: U32
+          - open_multi_leader_rounds: BOOL
           - timeout_config:
               TYPENAME: TimeoutConfig
     5:

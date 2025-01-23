@@ -748,7 +748,7 @@ type MutationRoot {
 	"""
 	Changes the authentication key of the chain.
 	"""
-	changeMultipleOwners(		chainId: ChainId!,		newOwners: [Owner!]!,		newWeights: [Int!]!,		multiLeaderRounds: Int!,
+	changeMultipleOwners(		chainId: ChainId!,		newOwners: [Owner!]!,		newWeights: [Int!]!,		multiLeaderRounds: Int!,		openMultiLeaderRounds: Boolean!,
 		"""
 		The duration of the fast round, in milliseconds; default: no timeout
 		"""

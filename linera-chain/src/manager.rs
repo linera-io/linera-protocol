@@ -579,8 +579,9 @@ where
                 false // Only super owners can propose in the first round.
             }
             Round::MultiLeader(_) => {
+                let ownership = self.ownership.get();
                 // Not in leader rotation mode; any owner is allowed to propose.
-                self.ownership.get().owners.contains_key(owner)
+                ownership.open_multi_leader_rounds || ownership.owners.contains_key(owner)
             }
             Round::SingleLeader(r) => {
                 let Some(index) = self.round_leader_index(r) else {

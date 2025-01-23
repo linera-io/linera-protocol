@@ -3230,6 +3230,7 @@ where
             super_owners: Vec::new(),
             owners: vec![(owner0, 100), (owner1, 100)],
             multi_leader_rounds: 0,
+            open_multi_leader_rounds: false,
             timeout_config: TimeoutConfig::default(),
         })
         .with_authenticated_signer(Some(owner0));
@@ -3433,6 +3434,7 @@ where
         super_owners: vec![owner0],
         owners: vec![(owner0, 100), (owner1, 100)],
         multi_leader_rounds: 2,
+        open_multi_leader_rounds: false,
         timeout_config: TimeoutConfig {
             fast_round_duration: Some(TimeDelta::from_secs(5)),
             ..TimeoutConfig::default()
@@ -3450,12 +3452,11 @@ where
     assert_eq!(response.info.manager.leader, None);
 
     // So owner 1 cannot propose a block in this round. And the next round hasn't started yet.
-    let proposal =
-        make_child_block(&value0.clone()).into_proposal_with_round(&key_pairs[1], Round::Fast);
+    let proposal = make_child_block(&value0).into_proposal_with_round(&key_pairs[1], Round::Fast);
     let result = worker.handle_block_proposal(proposal).await;
     assert_matches!(result, Err(WorkerError::InvalidOwner));
-    let proposal = make_child_block(&value0.clone())
-        .into_proposal_with_round(&key_pairs[1], Round::MultiLeader(0));
+    let proposal =
+        make_child_block(&value0).into_proposal_with_round(&key_pairs[1], Round::MultiLeader(0));
     let result = worker.handle_block_proposal(proposal).await;
     assert_matches!(result, Err(WorkerError::ChainError(ref error))
         if matches!(**error, ChainError::WrongRound(Round::Fast))
@@ -3504,6 +3505,69 @@ where
 #[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
+async fn test_open_multi_leader_rounds<B>(mut storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let storage = storage_builder.build().await?;
+    let chain_id = ChainId::root(0);
+    let key_pair = KeyPair::generate();
+    let owner = key_pair.public().into();
+    let description = ChainDescription::Root(0);
+    let (committee, worker) =
+        init_worker_with_chain(storage, description, owner, Amount::from_tokens(2)).await;
+
+    // Configure open multi-leader rounds.
+    let change_ownership_block =
+        make_first_block(chain_id).with_operation(SystemOperation::ChangeOwnership {
+            super_owners: vec![],
+            owners: vec![(owner, 100)],
+            multi_leader_rounds: 2,
+            open_multi_leader_rounds: true,
+            timeout_config: TimeoutConfig {
+                fast_round_duration: Some(TimeDelta::from_secs(5)),
+                ..TimeoutConfig::default()
+            },
+        });
+    let (change_ownership_executed_block, _) =
+        worker.stage_block_execution(change_ownership_block).await?;
+    let change_ownership_value = Hashed::new(ConfirmedBlock::new(change_ownership_executed_block));
+    let change_ownership_certificate =
+        make_certificate(&committee, &worker, change_ownership_value.clone());
+    worker
+        .fully_handle_certificate_with_notifications(change_ownership_certificate, &())
+        .await?;
+
+    // The first round is the multi-leader round 0. Anyone is allowed to propose.
+    // But non-owners are not allowed to transfer the chain's funds.
+    let proposal = make_child_block(&change_ownership_value)
+        .with_transfer(None, Recipient::Burn, Amount::from_tokens(1))
+        .into_proposal_with_round(&KeyPair::generate(), Round::MultiLeader(0));
+    let result = worker.handle_block_proposal(proposal).await;
+    assert_matches!(result, Err(WorkerError::ChainError(error)) if matches!(&*error,
+        ChainError::ExecutionError(error, _) if matches!(&**error,
+        ExecutionError::SystemError(SystemExecutionError::UnauthenticatedTransferOwner
+    ))));
+
+    // Without the transfer, a random key pair can propose a block.
+    let proposal = make_child_block(&change_ownership_value)
+        .into_proposal_with_round(&KeyPair::generate(), Round::MultiLeader(0));
+    let (executed_block, _) = worker
+        .stage_block_execution(proposal.content.proposal.clone())
+        .await?;
+    let value = Hashed::new(ConfirmedBlock::new(executed_block));
+    let (response, _) = worker.handle_block_proposal(proposal).await?;
+    let vote = response.info.manager.pending.unwrap();
+    assert_eq!(vote.round, Round::MultiLeader(0));
+    assert_eq!(vote.value.value_hash, value.hash());
+    Ok(())
+}
+
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
 async fn test_fast_proposal_is_locked<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
@@ -3522,6 +3586,7 @@ where
         super_owners: vec![owner0],
         owners: vec![(owner0, 100), (owner1, 100)],
         multi_leader_rounds: 3,
+        open_multi_leader_rounds: false,
         timeout_config: TimeoutConfig {
             fast_round_duration: Some(TimeDelta::from_millis(5)),
             ..TimeoutConfig::default()

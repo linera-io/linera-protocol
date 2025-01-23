@@ -146,6 +146,10 @@ pub enum SystemOperation {
         owners: Vec<(Owner, u64)>,
         /// The number of initial rounds after 0 in which all owners are allowed to propose blocks.
         multi_leader_rounds: u32,
+        /// Whether the multi-leader rounds are unrestricted, i.e. not limited to chain owners.
+        /// This should only be `true` on chains with restrictive application permissions and an
+        /// application-based mechanism to select block proposers.
+        open_multi_leader_rounds: bool,
         /// The timeout configuration: how long fast, multi-leader and single-leader rounds last.
         timeout_config: TimeoutConfig,
     },
@@ -472,12 +476,14 @@ where
                 super_owners,
                 owners,
                 multi_leader_rounds,
+                open_multi_leader_rounds,
                 timeout_config,
             } => {
                 self.ownership.set(ChainOwnership {
                     super_owners: super_owners.into_iter().collect(),
                     owners: owners.into_iter().collect(),
                     multi_leader_rounds,
+                    open_multi_leader_rounds,
                     timeout_config,
                 });
             }

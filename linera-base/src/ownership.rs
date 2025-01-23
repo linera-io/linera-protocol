@@ -57,8 +57,12 @@ pub struct ChainOwnership {
     /// The regular owners, with their weights that determine how often they are round leader.
     #[debug(skip_if = BTreeMap::is_empty)]
     pub owners: BTreeMap<Owner, u64>,
-    /// The number of initial rounds after 0 in which all owners are allowed to propose blocks.
+    /// The number of rounds in which all owners are allowed to propose blocks.
     pub multi_leader_rounds: u32,
+    /// Whether the multi-leader rounds are unrestricted, i.e. not limited to chain owners.
+    /// This should only be `true` on chains with restrictive application permissions and an
+    /// application-based mechanism to select block proposers.
+    pub open_multi_leader_rounds: bool,
     /// The timeout configuration: how long fast, multi-leader and single-leader rounds last.
     pub timeout_config: TimeoutConfig,
 }
@@ -70,6 +74,7 @@ impl ChainOwnership {
             super_owners: iter::once(owner).collect(),
             owners: BTreeMap::new(),
             multi_leader_rounds: 2,
+            open_multi_leader_rounds: false,
             timeout_config: TimeoutConfig::default(),
         }
     }
@@ -80,6 +85,7 @@ impl ChainOwnership {
             super_owners: BTreeSet::new(),
             owners: iter::once((owner, 100)).collect(),
             multi_leader_rounds: 2,
+            open_multi_leader_rounds: false,
             timeout_config: TimeoutConfig::default(),
         }
     }
@@ -94,6 +100,7 @@ impl ChainOwnership {
             super_owners: BTreeSet::new(),
             owners: owners_and_weights.into_iter().collect(),
             multi_leader_rounds,
+            open_multi_leader_rounds: false,
             timeout_config,
         }
     }
@@ -197,6 +204,7 @@ mod tests {
             super_owners: BTreeSet::from_iter([super_owner]),
             owners: BTreeMap::from_iter([(owner, 100)]),
             multi_leader_rounds: 10,
+            open_multi_leader_rounds: false,
             timeout_config: TimeoutConfig {
                 fast_round_duration: Some(TimeDelta::from_secs(5)),
                 base_timeout: TimeDelta::from_secs(10),

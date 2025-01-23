@@ -74,6 +74,7 @@ interface contract-system-api {
         super-owners: list<owner>,
         owners: list<tuple<owner, u64>>,
         multi-leader-rounds: u32,
+        open-multi-leader-rounds: bool,
         timeout-config: timeout-config,
     }
 
