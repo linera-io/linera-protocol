@@ -461,22 +461,17 @@ where
         // If this is a fast block, vote to confirm. Otherwise vote to validate.
         if round.is_fast() {
             self.validated_vote.set(None);
-            Ok(Some(Either::Right(self.confirmed_vote.get_mut().insert(
-                Vote::new(
-                    Hashed::new(ConfirmedBlock::new(executed_block)),
-                    round,
-                    key_pair,
-                ),
-            ))))
+            let value = Hashed::new(ConfirmedBlock::new(executed_block));
+            let vote = Vote::new(value, round, key_pair);
+            Ok(Some(Either::Right(
+                self.confirmed_vote.get_mut().insert(vote),
+            )))
         } else {
-            self.confirmed_vote.set(None);
-            Ok(Some(Either::Left(&*self.validated_vote.get_mut().insert(
-                Vote::new(
-                    Hashed::new(ValidatedBlock::new(executed_block)),
-                    round,
-                    key_pair,
-                ),
-            ))))
+            let value = Hashed::new(ValidatedBlock::new(executed_block));
+            let vote = Vote::new(value, round, key_pair);
+            Ok(Some(Either::Left(
+                self.validated_vote.get_mut().insert(vote),
+            )))
         }
     }
 
@@ -751,18 +746,12 @@ where
 {
     fn from(manager: &ChainManager<C>) -> Self {
         let current_round = manager.current_round();
-        let pending = manager
-            .confirmed_vote
-            .get()
-            .as_ref()
-            .map(|vote| vote.lite())
-            .or_else(move || {
-                manager
-                    .validated_vote
-                    .get()
-                    .as_ref()
-                    .map(|vote| vote.lite())
-            });
+        let pending = match (manager.confirmed_vote.get(), manager.validated_vote.get()) {
+            (None, None) => None,
+            (Some(cvote), Some(vvote)) if vvote.round > cvote.round => Some(vvote.lite()),
+            (Some(vote), _) => Some(vote.lite()),
+            (None, Some(vote)) => Some(vote.lite()),
+        };
         ChainManagerInfo {
             ownership: manager.ownership.get().clone(),
             requested_proposed: None,
