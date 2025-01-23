@@ -43,8 +43,8 @@ use serde::{Deserialize, Serialize};
 use crate::{
     data_types::{
         BlockExecutionOutcome, ChainAndHeight, ChannelFullName, EventRecord, IncomingBundle,
-        MessageAction, MessageBundle, Origin, OutgoingMessage, PostedMessage, Proposal, Target,
-        Transaction,
+        MessageAction, MessageBundle, Origin, OutgoingMessage, PostedMessage, ProposedBlock,
+        Target, Transaction,
     },
     inbox::{Cursor, InboxError, InboxStateView},
     manager::ChainManager,
@@ -247,7 +247,7 @@ pub struct ChainTipState {
 impl ChainTipState {
     /// Checks that the proposed block is suitable, i.e. at the expected height and with the
     /// expected parent.
-    pub fn verify_block_chaining(&self, new_block: &Proposal) -> Result<(), ChainError> {
+    pub fn verify_block_chaining(&self, new_block: &ProposedBlock) -> Result<(), ChainError> {
         ensure!(
             new_block.height == self.next_block_height,
             ChainError::UnexpectedBlockHeight {
@@ -282,7 +282,7 @@ impl ChainTipState {
     /// Checks if the measurement counters would be valid.
     pub fn verify_counters(
         &self,
-        new_block: &Proposal,
+        new_block: &ProposedBlock,
         outcome: &BlockExecutionOutcome,
     ) -> Result<(), ChainError> {
         let num_incoming_bundles = u32::try_from(new_block.incoming_bundles.len())
@@ -664,7 +664,7 @@ where
     /// * Returns the outcome of the execution.
     pub async fn execute_block(
         &mut self,
-        block: &Proposal,
+        block: &ProposedBlock,
         local_time: Timestamp,
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
     ) -> Result<BlockExecutionOutcome, ChainError> {
@@ -934,7 +934,7 @@ where
         message_id: MessageId,
         posted_message: &PostedMessage,
         incoming_bundle: &IncomingBundle,
-        block: &Proposal,
+        block: &ProposedBlock,
         txn_index: u32,
         local_time: Timestamp,
         txn_tracker: &mut TransactionTracker,
@@ -1247,11 +1247,11 @@ where
 #[test]
 fn empty_block_size() {
     let executed_block = crate::data_types::ExecutedBlock {
-        proposal: crate::test::make_first_block(ChainId::root(0)),
+        block: crate::test::make_first_block(ChainId::root(0)),
         outcome: crate::data_types::BlockExecutionOutcome::default(),
     };
     let size = bcs::serialized_size(&crate::block::Block::new(
-        executed_block.proposal,
+        executed_block.block,
         executed_block.outcome,
     ))
     .unwrap();

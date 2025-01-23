@@ -132,7 +132,7 @@ where
         local_time: Timestamp,
     ) -> Result<(), WorkerError> {
         // Create the vote and store it in the chain state.
-        let executed_block = outcome.with(proposal.content.proposal.clone());
+        let executed_block = outcome.with(proposal.content.block.clone());
         let blobs = if proposal.validated_block_certificate.is_some() {
             self.state
                 .get_required_blobs(executed_block.required_blob_ids(), &proposal.blobs)
@@ -261,7 +261,7 @@ where
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         let executed_block: ExecutedBlock = certificate.block().clone().into();
-        let block_height = executed_block.proposal.height;
+        let block_height = executed_block.block.height;
         // Check that the chain is active and ready for this confirmation.
         let tip = self.state.chain.tip_state.get().clone();
         if tip.next_block_height < block_height {
@@ -278,7 +278,7 @@ where
         // TODO(#2351): This sets the committee and then checks that committee's signatures.
         if tip.is_first_block() && !self.state.chain.is_active() {
             if let Some((incoming_bundle, posted_message, config)) =
-                executed_block.proposal.starts_with_open_chain_message()
+                executed_block.block.starts_with_open_chain_message()
             {
                 let message_id = MessageId {
                     chain_id: incoming_bundle.origin.sender,
@@ -308,13 +308,13 @@ where
             .expect("chain is active");
         check_block_epoch(
             epoch,
-            executed_block.proposal.chain_id,
-            executed_block.proposal.epoch,
+            executed_block.block.chain_id,
+            executed_block.block.epoch,
         )?;
         certificate.check(committee)?;
         // This should always be true for valid certificates.
         ensure!(
-            tip.block_hash == executed_block.proposal.previous_block_hash,
+            tip.block_hash == executed_block.block.previous_block_hash,
             WorkerError::InvalidBlockChaining
         );
 
@@ -335,9 +335,9 @@ where
         // Update the blob state with last used certificate hash.
         let blob_state = BlobState {
             last_used_by: certificate.hash(),
-            chain_id: executed_block.proposal.chain_id,
+            chain_id: executed_block.block.chain_id,
             block_height,
-            epoch: executed_block.proposal.epoch,
+            epoch: executed_block.block.epoch,
         };
         let overwrite = blobs_result.is_ok(); // Overwrite only if we wrote the certificate.
         let blob_ids = required_blob_ids.into_iter().collect::<Vec<_>>();
@@ -351,13 +351,13 @@ where
         self.state
             .chain
             .remove_bundles_from_inboxes(
-                executed_block.proposal.timestamp,
-                &executed_block.proposal.incoming_bundles,
+                executed_block.block.timestamp,
+                &executed_block.block.incoming_bundles,
             )
             .await?;
         let local_time = self.state.storage.clock().current_time();
         let verified_outcome = Box::pin(self.state.chain.execute_block(
-            &executed_block.proposal,
+            &executed_block.block,
             local_time,
             Some(executed_block.outcome.oracle_responses.clone()),
         ))
@@ -374,8 +374,8 @@ where
         let tip = self.state.chain.tip_state.get_mut();
         tip.block_hash = Some(certificate.hash());
         tip.next_block_height.try_add_assign_one()?;
-        tip.num_incoming_bundles += executed_block.proposal.incoming_bundles.len() as u32;
-        tip.num_operations += executed_block.proposal.operations.len() as u32;
+        tip.num_incoming_bundles += executed_block.block.incoming_bundles.len() as u32;
+        tip.num_operations += executed_block.block.operations.len() as u32;
         tip.num_outgoing_messages += executed_block.outcome.messages.len() as u32;
         self.state.chain.confirmed_log.push(certificate.hash());
         let info = ChainInfoResponse::new(&self.state.chain, self.state.config.key_pair());
@@ -384,10 +384,10 @@ where
         trace!(
             "Processed confirmed block {} on chain {:.8}",
             block_height,
-            executed_block.proposal.chain_id
+            executed_block.block.chain_id
         );
         actions.notifications.push(Notification {
-            chain_id: executed_block.proposal.chain_id,
+            chain_id: executed_block.block.chain_id,
             reason: Reason::NewBlock {
                 height: block_height,
                 hash: certificate.hash(),

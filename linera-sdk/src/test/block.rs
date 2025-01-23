@@ -14,7 +14,7 @@ use linera_base::{
 use linera_chain::{
     data_types::{
         ChannelFullName, IncomingBundle, LiteValue, LiteVote, Medium, MessageAction, Origin,
-        Proposal, SignatureAggregator,
+        ProposedBlock, SignatureAggregator,
     },
     types::{ConfirmedBlock, ConfirmedBlockCertificate},
 };
@@ -29,7 +29,7 @@ use crate::ToBcsBytes;
 /// A helper type to build a block proposal using the builder pattern, and then signing them into
 /// [`ConfirmedBlockCertificate`]s using a [`TestValidator`].
 pub struct BlockBuilder {
-    block: Proposal,
+    block: ProposedBlock,
     validator: TestValidator,
 }
 
@@ -63,7 +63,7 @@ impl BlockBuilder {
             .unwrap_or_default();
 
         BlockBuilder {
-            block: Proposal {
+            block: ProposedBlock {
                 epoch: 0.into(),
                 chain_id,
                 incoming_bundles: vec![],

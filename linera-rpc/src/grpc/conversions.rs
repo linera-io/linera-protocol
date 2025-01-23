@@ -194,7 +194,7 @@ impl TryFrom<BlockProposal> for api::BlockProposal {
 
     fn try_from(block_proposal: BlockProposal) -> Result<Self, Self::Error> {
         Ok(Self {
-            chain_id: Some(block_proposal.content.proposal.chain_id.into()),
+            chain_id: Some(block_proposal.content.block.chain_id.into()),
             content: bincode::serialize(&block_proposal.content)?,
             public_key: Some(block_proposal.public_key.into()),
             owner: Some(block_proposal.owner.into()),
@@ -214,7 +214,7 @@ impl TryFrom<api::BlockProposal> for BlockProposal {
     fn try_from(block_proposal: api::BlockProposal) -> Result<Self, Self::Error> {
         let content: ProposalContent = bincode::deserialize(&block_proposal.content)?;
         ensure!(
-            Some(content.proposal.chain_id.into()) == block_proposal.chain_id,
+            Some(content.block.chain_id.into()) == block_proposal.chain_id,
             GrpcProtoConversionError::InconsistentChainId
         );
         Ok(Self {
@@ -976,7 +976,7 @@ pub mod tests {
         data_types::{Amount, Blob, Round, Timestamp},
     };
     use linera_chain::{
-        data_types::{BlockExecutionOutcome, Proposal},
+        data_types::{BlockExecutionOutcome, ProposedBlock},
         test::make_first_block,
         types::CertificateKind,
     };
@@ -990,7 +990,7 @@ pub mod tests {
 
     impl<'de> BcsSignable<'de> for Foo {}
 
-    fn get_block() -> Proposal {
+    fn get_block() -> ProposedBlock {
         make_first_block(ChainId::root(0))
     }
 
@@ -1217,7 +1217,7 @@ pub mod tests {
         let public_key = KeyPair::generate().public();
         let block_proposal = BlockProposal {
             content: ProposalContent {
-                proposal: get_block(),
+                block: get_block(),
                 round: Round::SingleLeader(4),
                 outcome: Some(outcome),
             },

@@ -721,7 +721,16 @@ PostedMessage:
     - index: U32
     - message:
         TYPENAME: Message
-Proposal:
+ProposalContent:
+  STRUCT:
+    - block:
+        TYPENAME: ProposedBlock
+    - round:
+        TYPENAME: Round
+    - outcome:
+        OPTION:
+          TYPENAME: BlockExecutionOutcome
+ProposedBlock:
   STRUCT:
     - chain_id:
         TYPENAME: ChainId
@@ -743,15 +752,6 @@ Proposal:
     - previous_block_hash:
         OPTION:
           TYPENAME: CryptoHash
-ProposalContent:
-  STRUCT:
-    - proposal:
-        TYPENAME: Proposal
-    - round:
-        TYPENAME: Round
-    - outcome:
-        OPTION:
-          TYPENAME: BlockExecutionOutcome
 PublicKey:
   NEWTYPESTRUCT:
     TUPLEARRAY:

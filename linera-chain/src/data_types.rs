@@ -48,7 +48,7 @@ mod data_types_tests;
 ///   received ahead of time in the inbox of the chain.
 /// * This constraint does not apply to the execution of confirmed blocks.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
-pub struct Proposal {
+pub struct ProposedBlock {
     /// The chain to which this block belongs.
     pub chain_id: ChainId,
     /// The number identifying the current configuration.
@@ -76,7 +76,7 @@ pub struct Proposal {
     pub previous_block_hash: Option<CryptoHash>,
 }
 
-impl Proposal {
+impl ProposedBlock {
     /// Returns all the published blob IDs in this block's operations.
     pub fn published_blob_ids(&self) -> BTreeSet<BlobId> {
         let mut blob_ids = BTreeSet::new();
@@ -400,14 +400,14 @@ impl OutgoingMessage {
     }
 }
 
-/// A [`Proposal`], together with the outcome from its execution.
+/// A [`ProposedBlock`], together with the outcome from its execution.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, SimpleObject)]
 pub struct ExecutedBlock {
-    pub proposal: Proposal,
+    pub block: ProposedBlock,
     pub outcome: BlockExecutionOutcome,
 }
 
-/// The messages and the state hash resulting from a [`Proposal`]'s execution.
+/// The messages and the state hash resulting from a [`ProposedBlock`]'s execution.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
 #[cfg_attr(with_testing, derive(Default))]
 pub struct BlockExecutionOutcome {
@@ -643,9 +643,9 @@ impl ExecutedBlock {
         certificate_hash: CryptoHash,
     ) -> impl Iterator<Item = (Epoch, MessageBundle)> + 'a {
         let mut index = 0u32;
-        let block_height = self.proposal.height;
-        let block_timestamp = self.proposal.timestamp;
-        let block_epoch = self.proposal.epoch;
+        let block_height = self.block.height;
+        let block_timestamp = self.block.timestamp;
+        let block_epoch = self.block.epoch;
 
         (0u32..)
             .zip(self.messages())
@@ -676,7 +676,7 @@ impl ExecutedBlock {
         operation_index: usize,
         message_index: u32,
     ) -> Option<MessageId> {
-        let block = &self.proposal;
+        let block = &self.block;
         let transaction_index = block.incoming_bundles.len().checked_add(operation_index)?;
         if message_index
             >= u32::try_from(self.outcome.messages.get(transaction_index)?.len()).ok()?
@@ -702,7 +702,7 @@ impl ExecutedBlock {
             height,
             index,
         } = message_id;
-        if self.proposal.chain_id != *chain_id || self.proposal.height != *height {
+        if self.block.chain_id != *chain_id || self.block.height != *height {
             return None;
         }
         let mut index = usize::try_from(*index).ok()?;
@@ -718,28 +718,28 @@ impl ExecutedBlock {
     /// Returns the message ID belonging to the `index`th outgoing message in this block.
     pub fn message_id(&self, index: u32) -> MessageId {
         MessageId {
-            chain_id: self.proposal.chain_id,
-            height: self.proposal.height,
+            chain_id: self.block.chain_id,
+            height: self.block.height,
             index,
         }
     }
 
     pub fn required_blob_ids(&self) -> HashSet<BlobId> {
         let mut blob_ids = self.outcome.oracle_blob_ids();
-        blob_ids.extend(self.proposal.published_blob_ids());
+        blob_ids.extend(self.block.published_blob_ids());
         blob_ids
     }
 
     pub fn requires_blob(&self, blob_id: &BlobId) -> bool {
         self.outcome.oracle_blob_ids().contains(blob_id)
-            || self.proposal.published_blob_ids().contains(blob_id)
+            || self.block.published_blob_ids().contains(blob_id)
     }
 }
 
 impl BlockExecutionOutcome {
-    pub fn with(self, block: Proposal) -> ExecutedBlock {
+    pub fn with(self, block: ProposedBlock) -> ExecutedBlock {
         ExecutedBlock {
-            proposal: block,
+            block,
             outcome: self,
         }
     }
@@ -768,7 +768,7 @@ impl BlockExecutionOutcome {
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ProposalContent {
     /// The proposed block.
-    pub proposal: Proposal,
+    pub block: ProposedBlock,
     /// The consensus round in which this proposal is made.
     pub round: Round,
     /// If this is a retry from an earlier round, the execution outcome.
@@ -779,13 +779,13 @@ pub struct ProposalContent {
 impl BlockProposal {
     pub fn new_initial(
         round: Round,
-        proposal: Proposal,
+        block: ProposedBlock,
         secret: &KeyPair,
         blobs: Vec<Blob>,
     ) -> Self {
         let content = ProposalContent {
             round,
-            proposal,
+            block,
             outcome: None,
         };
         let signature = Signature::new(&content, secret);
@@ -809,7 +809,7 @@ impl BlockProposal {
         let block = validated_block_certificate.into_inner().into_inner();
         let executed_block: ExecutedBlock = block.into();
         let content = ProposalContent {
-            proposal: executed_block.proposal,
+            block: executed_block.block,
             round,
             outcome: Some(executed_block.outcome),
         };

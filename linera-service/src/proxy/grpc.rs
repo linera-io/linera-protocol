@@ -711,7 +711,7 @@ mod proto_message_cap {
         let validator = ValidatorName(keypair.public());
         let signature = Signature::new(&TestString::new("Test"), &keypair);
         let executed_block = ExecutedBlock {
-            proposal: linera_chain::test::make_first_block(ChainId::root(0)),
+            block: linera_chain::test::make_first_block(ChainId::root(0)),
             outcome: BlockExecutionOutcome::default(),
         };
         let signatures = vec![(validator, signature)];

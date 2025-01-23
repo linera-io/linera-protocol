@@ -24,7 +24,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        BlockExecutionOutcome, BlockProposal, ExecutedBlock, MessageBundle, Origin, Proposal,
+        BlockExecutionOutcome, BlockProposal, ExecutedBlock, MessageBundle, Origin, ProposedBlock,
         Target,
     },
     types::{
@@ -504,7 +504,7 @@ where
     #[instrument(level = "trace", skip(self, block))]
     pub async fn stage_block_execution(
         &self,
-        block: Proposal,
+        block: ProposedBlock,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), WorkerError> {
         self.query_chain_worker(block.chain_id, move |callback| {
             ChainWorkerRequest::StageBlockExecution { block, callback }
@@ -772,8 +772,8 @@ where
 
     #[instrument(skip_all, fields(
         nick = self.nickname,
-        chain_id = format!("{:.8}", proposal.content.proposal.chain_id),
-        height = %proposal.content.proposal.height,
+        chain_id = format!("{:.8}", proposal.content.block.chain_id),
+        height = %proposal.content.block.height,
     ))]
     pub async fn handle_block_proposal(
         &self,
@@ -783,7 +783,7 @@ where
         #[cfg(with_metrics)]
         let round = proposal.content.round;
         let response = self
-            .query_chain_worker(proposal.content.proposal.chain_id, move |callback| {
+            .query_chain_worker(proposal.content.block.chain_id, move |callback| {
                 ChainWorkerRequest::HandleBlockProposal { proposal, callback }
             })
             .await?;

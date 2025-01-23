@@ -12,7 +12,7 @@ use linera_base::{
     ensure,
     identifiers::{BlobId, ChainDescription, ChainId, Owner},
 };
-use linera_chain::data_types::Proposal;
+use linera_chain::data_types::ProposedBlock;
 use linera_core::{client::ChainClient, node::ValidatorNodeProvider};
 use linera_storage::Storage;
 use rand::Rng as _;
@@ -210,7 +210,7 @@ pub struct UserChain {
     pub block_hash: Option<CryptoHash>,
     pub timestamp: Timestamp,
     pub next_block_height: BlockHeight,
-    pub pending_block: Option<Proposal>,
+    pub pending_block: Option<ProposedBlock>,
     pub pending_blobs: BTreeMap<BlobId, Blob>,
 }
 

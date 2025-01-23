@@ -274,7 +274,7 @@ where
         proposal: Box<BlockProposal>,
         mut blob_ids: HashSet<BlobId>,
     ) -> Result<Box<ChainInfo>, ChainClientError> {
-        let chain_id = proposal.content.proposal.chain_id;
+        let chain_id = proposal.content.block.chain_id;
         let mut sent_cross_chain_updates = false;
         for blob in &proposal.blobs {
             blob_ids.remove(&blob.id()); // Keep only blobs we may need to resend.
@@ -411,7 +411,7 @@ where
     ) -> Result<LiteVote, ChainClientError> {
         let (target_block_height, chain_id) = match &action {
             CommunicateAction::SubmitBlock { proposal, .. } => {
-                let block = &proposal.content.proposal;
+                let block = &proposal.content.block;
                 (block.height, block.chain_id)
             }
             CommunicateAction::FinalizeBlock { certificate, .. } => (

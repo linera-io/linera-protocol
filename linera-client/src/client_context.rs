@@ -36,7 +36,9 @@ use {
         data_types::Amount,
         identifiers::{AccountOwner, ApplicationId, Owner},
     },
-    linera_chain::data_types::{BlockProposal, ExecutedBlock, Proposal, SignatureAggregator, Vote},
+    linera_chain::data_types::{
+        BlockProposal, ExecutedBlock, ProposedBlock, SignatureAggregator, Vote,
+    },
     linera_chain::types::{CertificateValue, GenericCertificate},
     linera_core::data_types::ChainInfoQuery,
     linera_execution::{
@@ -783,7 +785,7 @@ where
                 .take(transactions_per_block)
                 .collect();
             let chain = self.wallet.get(chain_id).expect("should have chain");
-            let block = Proposal {
+            let block = ProposedBlock {
                 epoch: Epoch::ZERO,
                 chain_id,
                 incoming_bundles: Vec::new(),
@@ -967,7 +969,10 @@ where
     }
 
     /// Stages the execution of a block proposal.
-    pub async fn stage_block_execution(&self, block: Proposal) -> Result<ExecutedBlock, Error> {
+    pub async fn stage_block_execution(
+        &self,
+        block: ProposedBlock,
+    ) -> Result<ExecutedBlock, Error> {
         Ok(self
             .client
             .local_node()

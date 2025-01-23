@@ -775,7 +775,7 @@ impl Runnable for Job {
                 for rpc_msg in &proposals {
                     if let RpcMessage::BlockProposal(proposal) = rpc_msg {
                         let executed_block = context
-                            .stage_block_execution(proposal.content.proposal.clone())
+                            .stage_block_execution(proposal.content.block.clone())
                             .await?;
                         let value = Hashed::new(ConfirmedBlock::new(executed_block));
                         values.insert(value.hash(), value);
