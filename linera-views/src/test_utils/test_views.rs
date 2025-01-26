@@ -12,6 +12,7 @@ use async_trait::async_trait;
 
 use crate::{
     self as linera_views,
+    bucket_queue_view::BucketQueueView,
     collection_view::CollectionView,
     context::MemoryContext,
     log_view::LogView,
@@ -464,6 +465,61 @@ impl TestView for TestQueueView<MemoryContext<()>> {
             initial_state.push(value);
         }
         self.queue.delete_front();
+        initial_state.remove(0);
+
+        Ok(initial_state)
+    }
+
+    async fn read(&self) -> Result<Self::State, ViewError> {
+        self.queue.elements().await
+    }
+}
+
+/// Wrapper to test with a [`CollectionView`].
+#[derive(RootView, ClonableView)]
+pub struct TestBucketQueueView<C> {
+    queue: BucketQueueView<C, i32, 2>,
+}
+
+#[async_trait]
+impl TestView for TestBucketQueueView<MemoryContext<()>> {
+    type State = Vec<i32>;
+
+    async fn stage_initial_changes(&mut self) -> Result<Self::State, ViewError> {
+        let dummy_values = [-11, 2, -3, 4, 5];
+
+        for value in dummy_values {
+            self.queue.push_back(value);
+        }
+
+        Ok(dummy_values.to_vec())
+    }
+
+    async fn stage_changes_to_be_discarded(&mut self) -> Result<Self::State, ViewError> {
+        let mut initial_state = vec![1, 2, 3, 4, 5];
+        let new_values = [10_000, 20_000, 30_000];
+
+        for value in new_values {
+            self.queue.push_back(value);
+            initial_state.push(value);
+        }
+        self.queue.delete_front().await?;
+        initial_state.remove(0);
+        self.queue.delete_front().await?;
+        initial_state.remove(0);
+
+        Ok(initial_state)
+    }
+
+    async fn stage_changes_to_be_persisted(&mut self) -> Result<Self::State, ViewError> {
+        let mut initial_state = vec![1, 2, 3, 4, 5];
+        let new_values = [201, 1, 50_050, 203];
+
+        for value in new_values {
+            self.queue.push_back(value);
+            initial_state.push(value);
+        }
+        self.queue.delete_front().await?;
         initial_state.remove(0);
 
         Ok(initial_state)
