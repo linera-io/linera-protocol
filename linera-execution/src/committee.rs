@@ -6,8 +6,7 @@ use std::{borrow::Cow, collections::BTreeMap, str::FromStr};
 
 use async_graphql::InputObject;
 use linera_base::{
-    crypto::{CryptoError, PublicKey},
-    data_types::ArithmeticError,
+    codec::{self, read_next, write_next, Codec}, crypto::{CryptoError, PublicKey}, data_types::ArithmeticError
 };
 use serde::{Deserialize, Serialize};
 
@@ -16,6 +15,16 @@ use crate::policy::ResourceControlPolicy;
 /// A number identifying the configuration of the chain (aka the committee).
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug)]
 pub struct Epoch(pub u32);
+
+impl Codec for Epoch {
+    fn consensus_serialize<W: std::io::Write>(&self, fd: &mut W) -> Result<(), codec::Error> {
+        write_next(fd, &self.0)
+    }
+
+    fn consensus_deserialize<R: std::io::Read>(fd: &mut R) -> Result<Self, codec::Error> {
+        Ok(Self(read_next(fd)?))
+    }
+}
 
 impl Epoch {
     pub const ZERO: Epoch = Epoch(0);

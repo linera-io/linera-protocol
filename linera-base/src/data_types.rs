@@ -31,14 +31,10 @@ use thiserror::Error;
 #[cfg(with_metrics)]
 use crate::prometheus_util::{bucket_latencies, register_histogram_vec, MeasureLatency};
 use crate::{
-    crypto::{BcsHashable, CryptoHash},
-    doc_scalar, hex_debug,
-    identifiers::{
+    codec::{self, read_next, write_next, Codec}, crypto::{BcsHashable, CryptoHash}, doc_scalar, hex_debug, identifiers::{
         ApplicationId, BlobId, BlobType, BytecodeId, Destination, GenericApplicationId, MessageId,
         UserApplicationId,
-    },
-    limited_writer::{LimitedWriter, LimitedWriterError},
-    time::{Duration, SystemTime},
+    }, limited_writer::{LimitedWriter, LimitedWriterError}, time::{Duration, SystemTime}
 };
 
 /// A non-negative amount of tokens.
@@ -189,6 +185,17 @@ impl TimeDelta {
     WitStore,
 )]
 pub struct Timestamp(u64);
+
+impl Codec for Timestamp {
+    fn consensus_serialize<W: std::io::Write>(&self, fd: &mut W) -> Result<(), codec::Error> {
+        write_next(fd, &self.micros())?;
+        Ok(())
+    }
+
+    fn consensus_deserialize<R: std::io::Read>(fd: &mut R) -> Result<Self, codec::Error> {
+        Ok(read_next::<u64, R>(fd)?.into())
+    }
+}
 
 impl Timestamp {
     /// Returns the current time according to the system clock.

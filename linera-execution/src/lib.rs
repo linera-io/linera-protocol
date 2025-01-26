@@ -34,13 +34,12 @@ use derive_more::Display;
 use js_sys::wasm_bindgen::JsValue;
 use linera_base::{
     abi::Abi,
-    crypto::CryptoHash,
+    codec::Codec,
+    crypto::{BcsHashable, CryptoHash},
     data_types::{
         Amount, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, DecompressionError,
         Resources, SendMessageRequest, Timestamp, UserApplicationDescription,
-    },
-    doc_scalar, hex_debug,
-    identifiers::{
+    }, doc_scalar, hex_debug, identifiers::{
         Account, AccountOwner, ApplicationId, BlobId, BytecodeId, ChainId, ChannelName,
         Destination, GenericApplicationId, MessageId, Owner, StreamName, UserApplicationId,
     },
@@ -736,6 +735,28 @@ pub enum Operation {
         #[debug(with = "hex_debug")]
         bytes: Vec<u8>,
     },
+}
+
+impl<'de> BcsHashable<'de> for Operation {}
+
+impl Codec for Operation {
+    fn consensus_serialize<W: std::io::Write>(&self, fd: &mut W) -> Result<(), linera_base::codec::Error>
+    where
+        Self: Sized
+    {
+        bcs::serialize_into(fd, self)
+            .map_err(|e| e.to_string())
+            .map_err(linera_base::codec::Error::GenericError)
+    }
+
+    fn consensus_deserialize<R: std::io::Read>(fd: &mut R) -> Result<Self, linera_base::codec::Error>
+    where
+        Self: Sized
+    {
+        bcs::from_reader(fd)
+            .map_err(|e| e.to_string())
+            .map_err(linera_base::codec::Error::GenericError)
+    }
 }
 
 /// A message to be sent and possibly executed in the receiver's block.

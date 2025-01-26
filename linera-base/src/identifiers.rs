@@ -978,6 +978,11 @@ impl ChainId {
     pub fn child(id: MessageId) -> Self {
         Self(CryptoHash::new(&ChainDescription::Child(id)))
     }
+
+    /// Internal hash bytes of this [`ChainId`].
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.0.as_bytes()[..]
+    }
 }
 
 impl<'de> BcsHashable<'de> for ChainDescription {}

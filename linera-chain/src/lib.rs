@@ -7,6 +7,9 @@
 
 mod block;
 mod certificate;
+pub mod block_header;
+pub mod index;
+pub mod transaction;
 
 pub mod types {
     pub use super::{block::*, certificate::*};

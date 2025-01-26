@@ -30,6 +30,10 @@ pub mod port;
 pub mod prometheus_util;
 #[cfg(not(chain))]
 pub mod task;
+pub mod tree;
+pub mod codec;
+pub mod version;
+pub mod trie;
 #[cfg(not(chain))]
 pub use task::Blocking;
 pub mod time;
