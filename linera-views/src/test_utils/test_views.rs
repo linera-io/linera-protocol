@@ -3,17 +3,23 @@
 
 //! Some [`View`][`crate::views::View`]s that are easy to use with test cases.
 
-use std::{collections::HashMap, fmt::Debug};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::Debug,
+};
 
 use async_trait::async_trait;
 
 use crate::{
     self as linera_views,
+    bucket_queue_view::BucketQueueView,
     collection_view::CollectionView,
     context::MemoryContext,
     log_view::LogView,
     map_view::MapView,
+    queue_view::QueueView,
     register_view::RegisterView,
+    set_view::SetView,
     views::{ClonableView, RootView, ViewError},
 };
 
@@ -78,6 +84,8 @@ impl TestView for TestRegisterView<MemoryContext<()>> {
     }
 }
 
+const INITIAL_LOG_QUEUE_VIEW_CHANGES: &[u16] = &[1, 2, 3, 4, 5];
+
 /// Wrapper to test with a [`LogView`].
 #[derive(RootView, ClonableView)]
 pub struct TestLogView<C> {
@@ -89,41 +97,54 @@ impl TestView for TestLogView<MemoryContext<()>> {
     type State = Vec<u16>;
 
     async fn stage_initial_changes(&mut self) -> Result<Self::State, ViewError> {
-        let dummy_values = [1, 2, 3, 4, 5];
-
-        for value in dummy_values {
-            self.log.push(value);
+        for value in INITIAL_LOG_QUEUE_VIEW_CHANGES {
+            self.log.push(*value);
         }
 
-        Ok(dummy_values.to_vec())
+        Ok(INITIAL_LOG_QUEUE_VIEW_CHANGES.to_vec())
     }
 
     async fn stage_changes_to_be_discarded(&mut self) -> Result<Self::State, ViewError> {
-        let initial_state = [1, 2, 3, 4, 5];
         let new_values = [10_000, 20_000, 30_000];
 
         for value in new_values {
             self.log.push(value);
         }
 
-        Ok(initial_state.into_iter().chain(new_values).collect())
+        Ok(INITIAL_LOG_QUEUE_VIEW_CHANGES
+            .iter()
+            .cloned()
+            .chain(new_values)
+            .collect())
     }
 
     async fn stage_changes_to_be_persisted(&mut self) -> Result<Self::State, ViewError> {
-        let initial_state = [1, 2, 3, 4, 5];
         let new_values = [201, 1, 50_050];
 
         for value in new_values {
             self.log.push(value);
         }
 
-        Ok(initial_state.into_iter().chain(new_values).collect())
+        Ok(INITIAL_LOG_QUEUE_VIEW_CHANGES
+            .iter()
+            .cloned()
+            .chain(new_values)
+            .collect())
     }
 
     async fn read(&self) -> Result<Self::State, ViewError> {
         self.log.read(..).await
     }
 }
+
+const INITIAL_MAP_COLLECTION_VIEW_CHANGES: &[(i32, &str)] = &[
+    (0, "zero"),
+    (-1, "minus one"),
+    (2, "two"),
+    (-3, "minus three"),
+    (4, "four"),
+    (-5, "minus five"),
+];
 
 /// Wrapper to test with a [`MapView`].
 #[derive(RootView, ClonableView)]
@@ -136,22 +157,14 @@ impl TestView for TestMapView<MemoryContext<()>> {
     type State = HashMap<i32, String>;
 
     async fn stage_initial_changes(&mut self) -> Result<Self::State, ViewError> {
-        let dummy_values = [
-            (0, "zero"),
-            (-1, "minus one"),
-            (2, "two"),
-            (-3, "minus three"),
-            (4, "four"),
-            (-5, "minus five"),
-        ]
-        .into_iter()
-        .map(|(key, value)| (key, value.to_owned()));
-
-        for (key, value) in dummy_values.clone() {
-            self.map.insert(&key, value)?;
+        for (key, value) in INITIAL_MAP_COLLECTION_VIEW_CHANGES {
+            self.map.insert(key, value.to_string())?;
         }
 
-        Ok(dummy_values.collect())
+        Ok(INITIAL_MAP_COLLECTION_VIEW_CHANGES
+            .iter()
+            .map(|(key, value)| (*key, value.to_string()))
+            .collect::<HashMap<_, _>>())
     }
 
     async fn stage_changes_to_be_discarded(&mut self) -> Result<Self::State, ViewError> {
@@ -169,19 +182,10 @@ impl TestView for TestMapView<MemoryContext<()>> {
             self.map.remove(&key)?;
         }
 
-        let initial_state = [
-            (0, "zero"),
-            (-1, "minus one"),
-            (2, "two"),
-            (-3, "minus three"),
-            (4, "four"),
-            (-5, "minus five"),
-        ];
-
-        let new_state = initial_state
-            .into_iter()
+        let new_state = INITIAL_MAP_COLLECTION_VIEW_CHANGES
+            .iter()
             .filter(|(key, _)| !entries_to_remove.contains(key))
-            .map(|(key, value)| (key, value.to_owned()))
+            .map(|(key, value)| (*key, value.to_string()))
             .chain(new_entries)
             .collect();
 
@@ -203,19 +207,10 @@ impl TestView for TestMapView<MemoryContext<()>> {
             self.map.remove(&key)?;
         }
 
-        let initial_state = [
-            (0, "zero"),
-            (-1, "minus one"),
-            (2, "two"),
-            (-3, "minus three"),
-            (4, "four"),
-            (-5, "minus five"),
-        ];
-
-        let new_state = initial_state
-            .into_iter()
+        let new_state = INITIAL_MAP_COLLECTION_VIEW_CHANGES
+            .iter()
             .filter(|(key, _)| !entries_to_remove.contains(key))
-            .map(|(key, value)| (key, value.to_owned()))
+            .map(|(key, value)| (*key, value.to_string()))
             .chain(new_entries)
             .collect();
 
@@ -235,6 +230,76 @@ impl TestView for TestMapView<MemoryContext<()>> {
     }
 }
 
+/// Wrapper to test with a [`SetView`].
+#[derive(RootView, ClonableView)]
+pub struct TestSetView<C> {
+    set: SetView<C, i32>,
+}
+
+const INITIAL_SET_VIEW_CHANGES: &[i32] = &[0, -1, 2, -3, 4, -5];
+
+#[async_trait]
+impl TestView for TestSetView<MemoryContext<()>> {
+    type State = HashSet<i32>;
+
+    async fn stage_initial_changes(&mut self) -> Result<Self::State, ViewError> {
+        for key in INITIAL_SET_VIEW_CHANGES {
+            self.set.insert(key)?;
+        }
+
+        Ok(INITIAL_SET_VIEW_CHANGES.iter().cloned().collect())
+    }
+
+    async fn stage_changes_to_be_discarded(&mut self) -> Result<Self::State, ViewError> {
+        let mut state = INITIAL_SET_VIEW_CHANGES
+            .iter()
+            .cloned()
+            .collect::<HashSet<_>>();
+        let new_entries = [-1_000_000, 2_000_000];
+
+        let entries_to_remove = [0, -3];
+
+        for key in new_entries {
+            self.set.insert(&key)?;
+            state.insert(key);
+        }
+
+        for key in entries_to_remove {
+            self.set.remove(&key)?;
+            state.remove(&key);
+        }
+
+        Ok(state)
+    }
+
+    async fn stage_changes_to_be_persisted(&mut self) -> Result<Self::State, ViewError> {
+        let mut state = INITIAL_SET_VIEW_CHANGES
+            .iter()
+            .cloned()
+            .collect::<HashSet<_>>();
+        let new_entries = [1_234, -2_101_010];
+
+        let entries_to_remove = [-1, 2, 4];
+
+        for key in new_entries {
+            self.set.insert(&key)?;
+            state.insert(key);
+        }
+
+        for key in entries_to_remove {
+            self.set.remove(&key)?;
+            state.remove(&key);
+        }
+
+        Ok(state)
+    }
+
+    async fn read(&self) -> Result<Self::State, ViewError> {
+        let indices = self.set.indices().await?;
+        Ok(indices.into_iter().collect())
+    }
+}
+
 /// Wrapper to test with a [`CollectionView`].
 #[derive(RootView, ClonableView)]
 pub struct TestCollectionView<C> {
@@ -246,22 +311,17 @@ impl TestView for TestCollectionView<MemoryContext<()>> {
     type State = HashMap<i32, String>;
 
     async fn stage_initial_changes(&mut self) -> Result<Self::State, ViewError> {
-        let dummy_values = [
-            (0, "zero"),
-            (-1, "minus one"),
-            (2, "two"),
-            (-3, "minus three"),
-            (4, "four"),
-            (-5, "minus five"),
-        ]
-        .into_iter()
-        .map(|(key, value)| (key, value.to_owned()));
-
-        for (key, value) in dummy_values.clone() {
-            self.collection.load_entry_mut(&key).await?.set(value);
+        for (key, value) in INITIAL_MAP_COLLECTION_VIEW_CHANGES {
+            self.collection
+                .load_entry_mut(key)
+                .await?
+                .set(value.to_string());
         }
 
-        Ok(dummy_values.collect())
+        Ok(INITIAL_MAP_COLLECTION_VIEW_CHANGES
+            .iter()
+            .map(|(key, value)| (*key, value.to_string()))
+            .collect::<HashMap<_, _>>())
     }
 
     async fn stage_changes_to_be_discarded(&mut self) -> Result<Self::State, ViewError> {
@@ -279,19 +339,10 @@ impl TestView for TestCollectionView<MemoryContext<()>> {
             self.collection.remove_entry(&key)?;
         }
 
-        let initial_state = [
-            (0, "zero"),
-            (-1, "minus one"),
-            (2, "two"),
-            (-3, "minus three"),
-            (4, "four"),
-            (-5, "minus five"),
-        ];
-
-        let new_state = initial_state
-            .into_iter()
+        let new_state = INITIAL_MAP_COLLECTION_VIEW_CHANGES
+            .iter()
             .filter(|(key, _)| !entries_to_remove.contains(key))
-            .map(|(key, value)| (key, value.to_owned()))
+            .map(|(key, value)| (*key, value.to_string()))
             .chain(new_entries)
             .collect();
 
@@ -313,19 +364,10 @@ impl TestView for TestCollectionView<MemoryContext<()>> {
             self.collection.remove_entry(&key)?;
         }
 
-        let initial_state = [
-            (0, "zero"),
-            (-1, "minus one"),
-            (2, "two"),
-            (-3, "minus three"),
-            (4, "four"),
-            (-5, "minus five"),
-        ];
-
-        let new_state = initial_state
-            .into_iter()
+        let new_state = INITIAL_MAP_COLLECTION_VIEW_CHANGES
+            .iter()
             .filter(|(key, _)| !entries_to_remove.contains(key))
-            .map(|(key, value)| (key, value.to_owned()))
+            .map(|(key, value)| (*key, value.to_string()))
             .chain(new_entries)
             .collect();
 
@@ -343,5 +385,111 @@ impl TestView for TestCollectionView<MemoryContext<()>> {
         }
 
         Ok(state)
+    }
+}
+
+/// Wrapper to test with a [`CollectionView`].
+#[derive(RootView, ClonableView)]
+pub struct TestQueueView<C> {
+    queue: QueueView<C, u16>,
+}
+
+#[async_trait]
+impl TestView for TestQueueView<MemoryContext<()>> {
+    type State = Vec<u16>;
+
+    async fn stage_initial_changes(&mut self) -> Result<Self::State, ViewError> {
+        for value in INITIAL_LOG_QUEUE_VIEW_CHANGES {
+            self.queue.push_back(*value);
+        }
+
+        Ok(INITIAL_LOG_QUEUE_VIEW_CHANGES.to_vec())
+    }
+
+    async fn stage_changes_to_be_discarded(&mut self) -> Result<Self::State, ViewError> {
+        let mut initial_state = INITIAL_LOG_QUEUE_VIEW_CHANGES.to_vec();
+        let new_values = [10_000, 20_000, 30_000];
+
+        for value in new_values {
+            self.queue.push_back(value);
+            initial_state.push(value);
+        }
+        self.queue.delete_front();
+        initial_state.remove(0);
+        self.queue.delete_front();
+        initial_state.remove(0);
+
+        Ok(initial_state)
+    }
+
+    async fn stage_changes_to_be_persisted(&mut self) -> Result<Self::State, ViewError> {
+        let mut initial_state = INITIAL_LOG_QUEUE_VIEW_CHANGES.to_vec();
+        let new_values = [201, 1, 50_050, 203];
+
+        for value in new_values {
+            self.queue.push_back(value);
+            initial_state.push(value);
+        }
+        self.queue.delete_front();
+        initial_state.remove(0);
+
+        Ok(initial_state)
+    }
+
+    async fn read(&self) -> Result<Self::State, ViewError> {
+        self.queue.elements().await
+    }
+}
+
+/// Wrapper to test with a [`CollectionView`].
+#[derive(RootView, ClonableView)]
+pub struct TestBucketQueueView<C> {
+    queue: BucketQueueView<C, u16, 2>,
+}
+
+#[async_trait]
+impl TestView for TestBucketQueueView<MemoryContext<()>> {
+    type State = Vec<u16>;
+
+    async fn stage_initial_changes(&mut self) -> Result<Self::State, ViewError> {
+        for value in INITIAL_LOG_QUEUE_VIEW_CHANGES {
+            self.queue.push_back(*value);
+        }
+
+        Ok(INITIAL_LOG_QUEUE_VIEW_CHANGES.to_vec())
+    }
+
+    async fn stage_changes_to_be_discarded(&mut self) -> Result<Self::State, ViewError> {
+        let mut initial_state = INITIAL_LOG_QUEUE_VIEW_CHANGES.to_vec();
+        let new_values = [10_000, 20_000, 30_000];
+
+        for value in new_values {
+            self.queue.push_back(value);
+            initial_state.push(value);
+        }
+        self.queue.delete_front().await?;
+        initial_state.remove(0);
+        self.queue.delete_front().await?;
+        initial_state.remove(0);
+
+        Ok(initial_state)
+    }
+
+    async fn stage_changes_to_be_persisted(&mut self) -> Result<Self::State, ViewError> {
+        let mut initial_state = INITIAL_LOG_QUEUE_VIEW_CHANGES.to_vec();
+        let new_values = [201, 1, 50_050, 203];
+
+        for value in new_values {
+            self.queue.push_back(value);
+            initial_state.push(value);
+        }
+        self.queue.delete_front().await?;
+        initial_state.remove(0);
+
+        Ok(initial_state)
+    }
+
+    async fn read(&self) -> Result<Self::State, ViewError> {
+        self.queue.elements().await
     }
 }
