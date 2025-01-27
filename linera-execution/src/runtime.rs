@@ -1201,7 +1201,6 @@ impl ContractSyncRuntimeHandle {
             &mut contract
                 .instance
                 .try_lock()
-                .map_err(|_| println!("{:?}", self.inner().call_stack))
                 .expect("Application should not be already executing"),
         )?;
 

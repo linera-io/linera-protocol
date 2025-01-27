@@ -14,7 +14,7 @@ application IDs, as well as the amount to be exchanged.
 Once user B receives the request, they can respond with a quote using the `ProvideQuote` operation.
 In it, they specify the price they are willing to offer, as well as their owner ID (which will be
 required for setting up the temporary chain for the atomic swap). It is possible that multiple
-requests could have been received: the user specify which one they are responding to using a request
+requests could have been received: the user specifies which one they are responding to using a request
 ID, consisting of the other party's chain ID and a sequence number.
 
 User A, after receiving the quote, has the option to either cancel the whole request using the
@@ -27,7 +27,7 @@ Matching Engine application is created on the chain, tokens are transferred to t
 initially assumed to exist on user A's chain - if they don't, the operation will fail), a Matching
 Engine order is submitted and user B is notified.
 
-The temporary chain is owned by both users, which mean both users can withdraw from the exchange at
+The temporary chain is owned by both users, which means both users can withdraw from the exchange at
 any time, and they don't depend on the other user for chain liveness.
 
 User B can then either cancel the request, or send their tokens to the temporary chain using the
@@ -50,7 +50,7 @@ Before getting started, make sure that the binary tools `linera*` corresponding 
 your version of `linera-sdk` are in your PATH. For scripting purposes, we also assume
 that the BASH function `linera_spawn_and_read_wallet_variables` is defined.
 
-From the root of Linera repository, this can be achieved as follows:
+From the root of the Linera repository, this can be achieved as follows:
 
 ```bash
 export PATH="$PWD/target/debug:$PATH"
@@ -120,7 +120,7 @@ linera -w 1 request-application $APP_RFQ
 
 ## Using the RFQ Application
 
-First, node services for the both users' wallets have to be started:
+First, node services for both users' wallets have to be started:
 
 ```bash
 linera -w 0 service --port 8080 &
@@ -134,9 +134,9 @@ values that we've defined above.
 
 First, user B has to claim their tokens on their chain, since they were created on user A's chain.
 
-- Claim 500 FUN1 from `$OWNER_1` in `$CHAIN_0` to `$OWNER_1` in `$CHAIN_1`, so they're in the proper chain.
-  Run `echo "http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_0"` to print the URL
-  of the GraphiQL interface for the FUN1 app. Navigate to that URL and enter:
+Claim 500 FUN1 from `$OWNER_1` in `$CHAIN_0` to `$OWNER_1` in `$CHAIN_1`, so they're in the proper chain.
+Run `echo "http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_0"` to print the URL
+of the GraphiQL interface for the FUN1 app. Navigate to that URL and enter:
 
 ```gql,uri=http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_0
 mutation {
@@ -154,9 +154,9 @@ mutation {
 }
 ```
 
-- Claim 500 FUN2 from `$OWNER_1` in `$CHAIN_0` to `$OWNER_1` in `$CHAIN_1`, so they're in the proper chain.
-  Run `echo "http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_1"` to print the URL
-  of the GraphiQL interface for the FUN1 app. Navigate to that URL and enter the same request as above.
+Claim 500 FUN2 from `$OWNER_1` in `$CHAIN_0` to `$OWNER_1` in `$CHAIN_1`, so they're in the proper chain.
+Run `echo "http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_1"` to print the URL
+of the GraphiQL interface for the FUN1 app. Navigate to that URL and enter the same request as above.
 
 Now we are ready to submit a request for quote. In this scenario, user B wants a quote from user A
 for 50 FUN2 tokens.
@@ -169,7 +169,7 @@ the URL for the interface and navigate to that URL.
 For user B's tab, run `echo "http://localhost:8081/chains/$CHAIN_1/applications/$APP_RFQ"` to print
 the URL for the interface and navigate to that URL.
 
-- In user B's tab, perform the following mutation:
+In user B's tab, perform the following mutation:
 
 ```gql,uri=http://localhost:8081/chains/$CHAIN_1/applications/$APP_RFQ
 mutation {
@@ -184,7 +184,7 @@ mutation {
 }
 ```
 
-- User A will now provide a quote to user B - they are willing to exchange the tokens for a price of 2.
+User A will now provide a quote to user B - they are willing to exchange the tokens for a price of 2.
 In user A's tab, perform the following mutation:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_0/applications/$APP_RFQ
@@ -200,7 +200,7 @@ mutation {
 }
 ```
 
-- User B can now accept the quote. In user B's tab, perform the following mutation. This will create
+User B can now accept the quote. In user B's tab, perform the following mutation. This will create
 the temporary chain, send tokens to it, create a Matching Engine instance and submit an order.
 
 ```gql,uri=http://localhost:8081/chains/$CHAIN_1/applications/$APP_RFQ
@@ -216,7 +216,7 @@ mutation {
 }
 ```
 
-- In order to finalize the exchange, user A has to run the following mutation:
+In order to finalize the exchange, user A has to run the following mutation:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_0/applications/$APP_RFQ
 mutation {
@@ -232,7 +232,7 @@ mutation {
 At this point, the Matching Engine should have matched the orders and performed the swap. The tokens,
 however, remain on the temporary chain. In order to claim them, the users have to close the request.
 
-- In user B's tab, perform the following mutation:
+In user B's tab, perform the following mutation:
 
 ```gql,uri=http://localhost:8081/chains/$CHAIN_1/applications/$APP_RFQ
 mutation {
@@ -245,7 +245,7 @@ mutation {
 }
 ```
 
-- In user A's tab, perform the following mutation:
+In user A's tab, perform the following mutation:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_0/applications/$APP_RFQ
 mutation {
@@ -268,9 +268,9 @@ performing the following query:
 
 ```gql
 query {
-    accounts {
-        entries { key value }
-    }
+  accounts {
+    entries { key value }
+  }
 }
 ```
 
