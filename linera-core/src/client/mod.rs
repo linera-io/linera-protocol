@@ -1747,49 +1747,14 @@ where
         {
             return Ok(());
         };
+        let mut proposals = Vec::new();
         if let Some(proposal) = info.manager.requested_proposed {
-            let owner = proposal.owner;
-            while let Err(original_err) = self
-                .client
-                .local_node
-                .handle_block_proposal(*proposal.clone())
-                .await
-            {
-                if let LocalNodeError::BlobsNotFound(blob_ids) = &original_err {
-                    self.update_local_node_with_blobs_from(blob_ids.clone(), remote_node)
-                        .await?;
-                    continue; // We found the missing blobs: retry.
-                }
-
-                warn!(
-                    "Skipping proposal from {} and validator {}: {}",
-                    owner, remote_node.name, original_err
-                );
-                break;
-            }
+            proposals.push(*proposal);
         }
         if let Some(locked) = info.manager.requested_locked {
             match *locked {
                 LockedBlock::Fast(proposal) => {
-                    let owner = proposal.owner;
-                    while let Err(original_err) = self
-                        .client
-                        .local_node
-                        .handle_block_proposal(proposal.clone())
-                        .await
-                    {
-                        if let LocalNodeError::BlobsNotFound(blob_ids) = &original_err {
-                            self.update_local_node_with_blobs_from(blob_ids.clone(), remote_node)
-                                .await?;
-                            continue; // We found the missing blobs: retry.
-                        }
-
-                        warn!(
-                            "Skipping proposal from {} and validator {}: {}",
-                            owner, remote_node.name, original_err
-                        );
-                        break;
-                    }
+                    proposals.push(proposal);
                 }
                 LockedBlock::Regular(cert) => {
                     let hash = cert.hash();
@@ -1800,6 +1765,34 @@ where
                         );
                     }
                 }
+            }
+        }
+        for proposal in proposals {
+            let owner = proposal.owner;
+            if let Err(mut err) = self
+                .client
+                .local_node
+                .handle_block_proposal(proposal.clone())
+                .await
+            {
+                if let LocalNodeError::BlobsNotFound(blob_ids) = &err {
+                    self.update_local_node_with_blobs_from(blob_ids.clone(), remote_node)
+                        .await?;
+                    // We found the missing blobs: retry.
+                    if let Err(new_err) = self
+                        .client
+                        .local_node
+                        .handle_block_proposal(proposal.clone())
+                        .await
+                    {
+                        err = new_err;
+                    } else {
+                        continue;
+                    }
+                }
+
+                let name = &remote_node.name;
+                warn!("Skipping proposal from {owner} and validator {name}: {err}",);
             }
         }
         Ok(())
