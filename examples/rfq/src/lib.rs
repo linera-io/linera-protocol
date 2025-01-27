@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![allow(rustdoc::invalid_codeblock_attributes)] // Using '=' in the documentation.
+/*! ABI of the Requests For Quotes Example Application */
 
 use async_graphql::{scalar, InputObject, Request, Response, SimpleObject};
 use linera_sdk::{

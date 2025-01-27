@@ -1,5 +1,3 @@
-<!-- cargo-rdme start -->
-
 # Request For Quotes (RFQ) Example Application
 
 This example implements a Request For Quotes (RFQ) application, which demonstrates atomic swaps on
