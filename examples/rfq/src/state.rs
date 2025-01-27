@@ -62,7 +62,7 @@ pub struct AwaitingTokens {
 pub enum RequestState {
     QuoteRequested(QuoteRequested),
     QuoteProvided(QuoteProvided),
-    AwaitingTokens(AwaitingTokens),
+    AwaitingTokens(Box<AwaitingTokens>),
     ExchangeInProgress(ExchangeInProgress),
 }
 
@@ -223,14 +223,14 @@ impl RfqState {
                 quoter_owner,
                 ..
             }) => {
-                req_data.state = RequestState::AwaitingTokens(AwaitingTokens {
+                req_data.state = RequestState::AwaitingTokens(Box::new(AwaitingTokens {
                     token_pair: token_pair.clone(),
                     amount: *amount,
                     price: *price,
                     quoter_account: (*quoter_owner).into(),
                     matching_engine_chain_id,
                     matching_engine_app_id,
-                });
+                }));
             }
             _ => panic!("Request not in the QuoteProvided state!"),
         }
@@ -244,7 +244,7 @@ impl RfqState {
             .expect("ViewError")
             .expect("Request not found");
         match &req_data.state {
-            RequestState::AwaitingTokens(awaiting_tokens) => awaiting_tokens.clone(),
+            RequestState::AwaitingTokens(awaiting_tokens) => (**awaiting_tokens).clone(),
             _ => panic!("Request not in the AwaitingTokens state!"),
         }
     }

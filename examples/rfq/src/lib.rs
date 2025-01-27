@@ -51,7 +51,7 @@ impl RequestId {
     }
 
     pub fn chain_id(&self) -> ChainId {
-        self.other_chain_id.clone()
+        self.other_chain_id
     }
 
     pub fn seq_number(&self) -> u64 {
@@ -114,7 +114,7 @@ pub enum Message {
         initiator: ChainId,
         request_id: RequestId,
         order: Order,
-        token_pair: TokenPair,
+        token_pair: Box<TokenPair>,
         matching_engine_message_id: MessageId,
     },
     TokensSent {

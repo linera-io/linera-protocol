@@ -56,9 +56,9 @@ impl Contract for RfqContract {
                 token_pair,
                 amount,
             } => {
-                let seq_number =
-                    self.state
-                        .create_new_request(target.clone(), token_pair.clone(), amount);
+                let seq_number = self
+                    .state
+                    .create_new_request(target, token_pair.clone(), amount);
                 let message = Message::RequestQuote {
                     seq_number,
                     token_pair,
@@ -95,7 +95,7 @@ impl Contract for RfqContract {
                 let matching_engine_chain_id =
                     self.start_exchange(&request_id, fee_budget, owner).await;
                 self.state
-                    .start_exchange(&request_id, matching_engine_chain_id.clone())
+                    .start_exchange(&request_id, matching_engine_chain_id)
                     .await;
             }
             Operation::FinalizeDeal { request_id } => {
@@ -255,7 +255,7 @@ impl Contract for RfqContract {
                     request_id.clone(),
                     initiator,
                     me_application_id.forget_abi(),
-                    token_pair,
+                    *token_pair,
                 );
                 // save the account owner for chain closing protection
                 if let Order::Insert { owner, .. } = &order {
@@ -422,7 +422,7 @@ impl RfqContract {
             initiator,
             request_id: request_id.clone(),
             order,
-            token_pair,
+            token_pair: Box::new(token_pair),
             matching_engine_message_id,
         };
         self.runtime
