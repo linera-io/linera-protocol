@@ -716,6 +716,10 @@ pub struct ApplicationPermissions {
     #[graphql(default)]
     #[debug(skip_if = Vec::is_empty)]
     pub close_chain: Vec<ApplicationId>,
+    /// These applications are allowed to change the application permissions using the system API.
+    #[graphql(default)]
+    #[debug(skip_if = Vec::is_empty)]
+    pub change_application_permissions: Vec<ApplicationId>,
 }
 
 impl ApplicationPermissions {
@@ -726,6 +730,7 @@ impl ApplicationPermissions {
             execute_operations: Some(vec![app_id]),
             mandatory_applications: vec![app_id],
             close_chain: vec![app_id],
+            change_application_permissions: vec![app_id],
         }
     }
 
@@ -741,6 +746,12 @@ impl ApplicationPermissions {
     /// Returns whether the given application is allowed to close this chain.
     pub fn can_close_chain(&self, app_id: &ApplicationId) -> bool {
         self.close_chain.contains(app_id)
+    }
+
+    /// Returns whether the given application is allowed to change the application
+    /// permissions for this chain.
+    pub fn can_change_application_permissions(&self, app_id: &ApplicationId) -> bool {
+        self.change_application_permissions.contains(app_id)
     }
 }
 

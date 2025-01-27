@@ -1416,6 +1416,21 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
             .recv_response()?
     }
 
+    fn change_application_permissions(
+        &mut self,
+        application_permissions: ApplicationPermissions,
+    ) -> Result<(), ExecutionError> {
+        let mut this = self.inner();
+        let application_id = this.current_application().id;
+        this.execution_state_sender
+            .send_request(|callback| ExecutionRequest::ChangeApplicationPermissions {
+                application_id,
+                application_permissions,
+                callback,
+            })?
+            .recv_response()?
+    }
+
     fn create_application(
         &mut self,
         bytecode_id: BytecodeId,

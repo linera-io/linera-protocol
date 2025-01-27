@@ -711,6 +711,12 @@ pub trait ContractRuntime: BaseRuntime {
     /// Closes the current chain.
     fn close_chain(&mut self) -> Result<(), ExecutionError>;
 
+    /// Changes the application permissions on the current chain.
+    fn change_application_permissions(
+        &mut self,
+        application_permissions: ApplicationPermissions,
+    ) -> Result<(), ExecutionError>;
+
     /// Creates a new application on chain.
     fn create_application(
         &mut self,

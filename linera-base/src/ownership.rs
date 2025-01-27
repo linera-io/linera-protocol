@@ -187,6 +187,14 @@ pub enum CloseChainError {
     NotPermitted,
 }
 
+/// Errors that can happen when attempting to change the application permissions.
+#[derive(Clone, Copy, Debug, Error, WitStore, WitType)]
+pub enum ChangeApplicationPermissionsError {
+    /// Authenticated signer wasn't allowed to change the application permissions.
+    #[error("Unauthorized attempt to change the application permissions")]
+    NotPermitted,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

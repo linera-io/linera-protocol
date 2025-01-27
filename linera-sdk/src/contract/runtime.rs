@@ -12,7 +12,7 @@ use linera_base::{
         Account, AccountOwner, ApplicationId, BytecodeId, ChainId, ChannelName, Destination,
         MessageId, Owner, StreamName,
     },
-    ownership::{ChainOwnership, CloseChainError},
+    ownership::{ChainOwnership, ChangeApplicationPermissionsError, CloseChainError},
 };
 use serde::Serialize;
 
@@ -223,6 +223,15 @@ where
             balance.into(),
         );
         (message_id.into(), chain_id.into())
+    }
+
+    /// Changes the application permissions for the current chain.
+    pub fn change_application_permissions(
+        &mut self,
+        application_permissions: ApplicationPermissions,
+    ) -> Result<(), ChangeApplicationPermissionsError> {
+        wit::change_application_permissions(&application_permissions.into())
+            .map_err(|error| error.into())
     }
 
     /// Creates a new on-chain application, based on the supplied bytecode and parameters.
