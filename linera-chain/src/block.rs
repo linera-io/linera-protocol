@@ -23,6 +23,7 @@ use crate::{
         BlockExecutionOutcome, EventRecord, ExecutedBlock, IncomingBundle, Medium, MessageBundle,
         OutgoingMessage, ProposedBlock,
     },
+    types::CertificateValue,
     ChainError,
 };
 
@@ -153,6 +154,28 @@ impl ConfirmedBlock {
                 actual: hashed_certificate_value.hash(),
             })
         }
+    }
+
+    /// Returns whether this block matches the proposal.
+    pub fn matches_proposal(&self, block: &ProposedBlock) -> bool {
+        let ProposedBlock {
+            chain_id,
+            epoch,
+            incoming_bundles,
+            operations,
+            height,
+            timestamp,
+            authenticated_signer,
+            previous_block_hash,
+        } = block;
+        *chain_id == self.chain_id()
+            && *epoch == self.epoch()
+            && *incoming_bundles == self.block().body.incoming_bundles
+            && *operations == self.block().body.operations
+            && *height == self.block().header.height
+            && *timestamp == self.block().header.timestamp
+            && *authenticated_signer == self.block().header.authenticated_signer
+            && *previous_block_hash == self.block().header.previous_block_hash
     }
 }
 

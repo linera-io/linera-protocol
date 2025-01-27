@@ -75,7 +75,7 @@ use custom_debug_derive::Debug;
 use futures::future::Either;
 use linera_base::{
     crypto::{KeyPair, PublicKey},
-    data_types::{ArithmeticError, Blob, BlockHeight, Round, Timestamp},
+    data_types::{Blob, BlockHeight, Round, Timestamp},
     ensure,
     hashed::Hashed,
     identifiers::{BlobId, ChainId, Owner},
@@ -158,8 +158,8 @@ where
     /// proposals in the same round, this contains only the first one.
     #[graphql(skip)]
     pub proposed: RegisterView<C, Option<BlockProposal>>,
-    /// Latest validated proposal that we have voted to confirm (or would have, if we are not a
-    /// validator).
+    /// Latest validated proposal that a validator may have voted to confirm. This is either the
+    /// latest `ValidatedBlock` we have seen, or the proposal from the `Fast` round.
     #[graphql(skip)]
     pub locked: RegisterView<C, Option<LockedBlock>>,
     /// These are blobs published or read by the locked block.
@@ -283,12 +283,13 @@ where
         *self.current_round.get()
     }
 
-    /// Verifies the safety of a proposed block with respect to voting rules.
+    /// Verifies that a proposed block is relevant and should be handled.
     pub fn check_proposed_block(&self, proposal: &BlockProposal) -> Result<Outcome, ChainError> {
         let new_block = &proposal.content.block;
+        let new_round = proposal.content.round;
         if let Some(old_proposal) = self.proposed.get() {
             if old_proposal.content == proposal.content {
-                return Ok(Outcome::Skip); // We already voted for this proposal; nothing to do.
+                return Ok(Outcome::Skip); // We have already seen this proposal; nothing to do.
             }
         }
         // When a block is certified, incrementing its height must succeed.
@@ -296,29 +297,53 @@ where
             new_block.height < BlockHeight::MAX,
             ChainError::InvalidBlockHeight
         );
-        // TODO(#2971): The client still needs to make a note of proposals that fail here:
-        match self.locked.get().as_ref() {
-            None => {} // No locked block; any proposal is allowed.
-            Some(LockedBlock::Fast(old_proposal)) => {
-                // We have a locked block in the `Fast` round. Either the proposal contains a
-                // validated block certificate, or it must propose the same block.
+        let current_round = self.current_round();
+        match new_round {
+            Round::Fast => {}
+            Round::MultiLeader(_) | Round::SingleLeader(0) => {
                 ensure!(
-                    proposal.validated_block_certificate.is_some()
-                        || new_block == &old_proposal.content.block,
-                    ChainError::HasLockedBlock(new_block.height, Round::Fast)
+                    self.is_super(&proposal.owner) || !current_round.is_fast(),
+                    ChainError::WrongRound(current_round)
+                );
+                // After the fast round, proposals older than the current round are obsolete.
+                ensure!(
+                    new_round >= current_round,
+                    ChainError::InsufficientRound(new_round)
                 );
             }
-            Some(LockedBlock::Regular(validated)) => {
-                // We have a locked block in a round other than `Fast`. The proposal must contain
-                // a certificate that is no older than the locked block.
+            Round::SingleLeader(_) | Round::Validator(_) => {
+                // After the first single-leader round, only proposals from the current round are relevant.
                 ensure!(
-                    proposal
-                        .validated_block_certificate
-                        .as_ref()
-                        .is_some_and(|cert| validated.round <= cert.round),
-                    ChainError::HasLockedBlock(new_block.height, validated.round)
+                    new_round == current_round,
+                    ChainError::WrongRound(current_round)
                 );
             }
+        }
+        // The round of our validation votes is only allowed to increase.
+        if let Some(vote) = self.validated_vote() {
+            ensure!(
+                new_round > vote.round,
+                ChainError::InsufficientRoundStrict(vote.round)
+            );
+        }
+        // A proposal that isn't newer than the locked block is not relevant anymore.
+        if let Some(locked) = self.locked.get() {
+            ensure!(
+                locked.round() < new_round,
+                ChainError::HasLockedBlock(new_block.height, locked.round())
+            );
+        }
+        // If we have voted to confirm we cannot vote to validate a different block anymore, except
+        // if there is a validated block certificate from a later round.
+        if let Some(vote) = self.confirmed_vote() {
+            ensure!(
+                if let Some(validated_cert) = proposal.validated_block_certificate.as_ref() {
+                    vote.round <= validated_cert.round
+                } else {
+                    vote.round.is_fast() && vote.value().inner().matches_proposal(new_block)
+                },
+                ChainError::HasLockedBlock(new_block.height, vote.round)
+            );
         }
         Ok(Outcome::Accept)
     }
@@ -377,7 +402,7 @@ where
         true
     }
 
-    /// Verifies that we can vote to confirm a validated block.
+    /// Verifies that a validated block is still relevant and should be handled.
     pub fn check_validated_block(
         &self,
         certificate: &ValidatedBlockCertificate,
@@ -390,13 +415,11 @@ where
             }
         }
 
+        // Check if we already voted to validate in a later round.
         if let Some(Vote { round, .. }) = self.validated_vote.get() {
             ensure!(new_round >= *round, ChainError::InsufficientRound(*round))
         }
 
-        // We don't compare to `current_round` here: Non-validators must update their locked block
-        // even if it is older than the current round. Validators will only sign in the current
-        // round, though. (See `create_final_vote` below.)
         if let Some(locked) = self.locked.get() {
             if let LockedBlock::Regular(locked_cert) = locked {
                 if locked_cert.hash() == certificate.hash() && locked.round() == certificate.round {
@@ -421,9 +444,6 @@ where
         blobs: BTreeMap<BlobId, Blob>,
     ) -> Result<Option<ValidatedOrConfirmedVote>, ChainError> {
         let round = proposal.content.round;
-        if key_pair.is_some() && round < self.current_round() {
-            return Ok(None);
-        }
 
         // If the validated block certificate is more recent, update our locked block.
         if let Some(lite_cert) = &proposal.validated_block_certificate {
@@ -438,26 +458,19 @@ where
                     self.set_locked(LockedBlock::Regular(certificate), blobs)?;
                 }
             }
-        } else if round.is_fast() {
+        } else if round.is_fast() && self.locked.get().is_none() {
             // The fast block also counts as locked.
             self.set_locked(LockedBlock::Fast(proposal.clone()), blobs)?;
         }
 
-        // If we are a client, we record the proposed block, in case it affects the current
-        // round number. That way, we don't make another proposal in the same round.
+        // We record the proposed block, in case it affects the current round number.
+        self.set_proposed(proposal.clone());
+        self.update_current_round(local_time);
+
         let Some(key_pair) = key_pair else {
-            if proposal.content.round < Round::SingleLeader(0) {
-                self.set_proposed(proposal);
-                self.update_current_round(local_time);
-            }
-            return Ok(None);
+            return Ok(None); // Not a validator.
         };
 
-        // Otherwise we are a validator:
-        self.check_proposal_round(&proposal)?;
-        // Record the proposed block, so it can be supplied to clients that request it.
-        self.set_proposed(proposal);
-        self.update_current_round(local_time);
         // If this is a fast block, vote to confirm. Otherwise vote to validate.
         if round.is_fast() {
             self.validated_vote.set(None);
@@ -484,15 +497,13 @@ where
         blobs: BTreeMap<BlobId, Blob>,
     ) -> Result<(), ViewError> {
         let round = validated.round;
-        // Validators only change their locked block if the new one is included in a proposal in the
-        // current round, or it is itself in the current round.
-        if key_pair.is_some() && round < self.current_round() {
-            return Ok(());
-        }
         let confirmed_block = ConfirmedBlock::new(validated.inner().block().clone().into());
         self.set_locked(LockedBlock::Regular(validated), blobs)?;
         self.update_current_round(local_time);
         if let Some(key_pair) = key_pair {
+            if self.current_round() != round {
+                return Ok(()); // We never vote in a past round.
+            }
             // Vote to confirm.
             let vote = Vote::new(Hashed::new(confirmed_block), round, key_pair);
             // Ok to overwrite validation votes with confirmation votes at equal or higher round.
@@ -633,66 +644,31 @@ where
         self.ownership.get().super_owners.contains(owner)
     }
 
+    /// Sets the proposed block, if it is newer than our known latest proposal.
     fn set_proposed(&mut self, proposal: BlockProposal) {
-        if self
-            .proposed
-            .get()
-            .as_ref()
-            .is_some_and(|old_proposal| old_proposal.content.round >= proposal.content.round)
-        {
-            return;
+        if let Some(old_proposal) = self.proposed.get() {
+            if old_proposal.content.round >= proposal.content.round {
+                return;
+            }
         }
         self.proposed.set(Some(proposal));
     }
 
-    /// Sets the locked block and the associated blobs.
+    /// Sets the locked block and the associated blobs, if it is newer than the known one.
     fn set_locked(
         &mut self,
         locked: LockedBlock,
         blobs: BTreeMap<BlobId, Blob>,
     ) -> Result<(), ViewError> {
+        if let Some(old_locked) = self.locked.get() {
+            if old_locked.round() >= locked.round() {
+                return Ok(());
+            }
+        }
         self.locked.set(Some(locked));
         self.locked_blobs.clear();
         for (blob_id, blob) in blobs {
             self.locked_blobs.insert(&blob_id, blob)?;
-        }
-        Ok(())
-    }
-
-    /// Checks that the block proposal is in a round where we can sign it.
-    fn check_proposal_round(&self, proposal: &BlockProposal) -> Result<(), ChainError> {
-        let new_round = proposal.content.round;
-        let owner = &proposal.owner;
-        let expected_round = match &proposal.validated_block_certificate {
-            None => self.current_round(),
-            Some(cert) => self
-                .ownership
-                .get()
-                .next_round(cert.round)
-                .ok_or_else(|| ChainError::ArithmeticError(ArithmeticError::Overflow))?
-                .max(self.current_round()),
-        };
-        // In leader rotation mode, the round must equal the expected one exactly.
-        // Only the first single-leader round can be entered at any time.
-        if self.is_super(owner)
-            || (new_round <= Round::SingleLeader(0) && !expected_round.is_fast())
-        {
-            ensure!(
-                expected_round <= new_round,
-                ChainError::InsufficientRound(expected_round)
-            );
-        } else {
-            ensure!(
-                expected_round == new_round,
-                ChainError::WrongRound(expected_round)
-            );
-        }
-        if let Some(old_proposal) = self.proposed.get() {
-            ensure!(
-                new_round > old_proposal.content.round,
-                // We already accepted a proposal in this round or in a higher round.
-                ChainError::InsufficientRoundStrict(old_proposal.content.round)
-            );
         }
         Ok(())
     }
