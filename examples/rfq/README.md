@@ -1,29 +1,48 @@
 <!-- cargo-rdme start -->
 
-# Automated Market Maker (AMM) Example Application
+# Request For Quotes (RFQ) Example Application
 
-This example implements an Automated Market Maker (AMM) which demonstrates DeFi capabilities of the
-Linera protocol. Prerequisite for the AMM application is the `fungible` application, as we will
-be adding/removing liquidity and also performing a swap.
+This example implements a Request For Quotes (RFQ) application, which demonstrates atomic swaps on
+the Linera protocol. Prerequisites for the RFQ application are the `fungible` application, as well
+as the Matching Engine application, as we will be using the Matching Engine to execute the swap.
 
 # How it works
 
-It supports the following operations. All operations need to be executed remotely.
+Each user is supposed to run the application on their own chain. Once user A wants to exchange
+tokens with another user B, they need to look up user B's chain ID and submit a `RequestQuote`
+operation. Such an operation defines the pair of tokens that are intended to be exchanged by their
+application IDs, as well as the amount to be exchanged.
 
-- Swap: For a given input token and an input amount, it swaps that token amount for an
-  amount of the other token calculated based on the current AMM ratio.
+Once user B receives the request, they can respond with a quote using the `ProvideQuote` operation.
+In it, they specify the price they are willing to offer, as well as their owner ID (which will be
+required for setting up the temporary chain for the atomic swap). It is possible that multiple
+requests could have been received: the user specify which one they are responding to using a request
+ID, consisting of the other party's chain ID and a sequence number.
 
-- Add Liquidity: This operation allows adding liquidity to the AMM. Given a maximum
-  `token0` and `token1` amount that you're willing to add, it adds liquidity such that you'll be
-  adding at most `max_token0_amount` of `token0` and `max_token1_amount` of `token1`. The amounts
-  will be calculated based on the current AMM ratio. The owner, in this case, refers to the user
-  adding liquidity, which currently can only be a chain owner.
+User A, after receiving the quote, has the option to either cancel the whole request using the
+`CancelRequest` operation, or accept it using the `AcceptQuote` operation. Cancelling the request
+removes it from the application state and notifies the other party. Accepting the request launches
+the exchange process.
 
-- Remove Liquidity: This withdraws tokens from the AMM. Given the index of the token you'd
-  like to remove (can be 0 or 1), and an amount of that token that you'd like to remove, it calculates
-  how much of the other token will also be removed based on the current AMM ratio. Then it removes
-  the amounts from both tokens as a removal of liquidity. The owner, in this context, is the user
-  removing liquidity, which currently can only be a chain owner.
+Initially, a temporary chain for the atomic swap is automatically created. An instance of the
+Matching Engine application is created on the chain, tokens are transferred to the chain (they are
+initially assumed to exist on user A's chain - if they don't, the operation will fail), a Matching
+Engine order is submitted and user B is notified.
+
+The temporary chain is owned by both users, which mean both users can withdraw from the exchange at
+any time, and they don't depend on the other user for chain liveness.
+
+User B can then either cancel the request, or send their tokens to the temporary chain using the
+`FinalizeDeal` operation. If they choose to finalize the deal, the tokens are sent (like before, they
+are assumed to exist on user B's chain) and a Matching Engine order is submitted.
+
+If there were no issues, at this point Matching Engine will match the orders submitted by the two
+users and perform the swap.
+
+After the swap, the tokens remain on the temporary chain. In order to claim them, both users have
+to submit the `CloseRequest` operation. If all tokens have been claimed, `CloseRequest` will also
+automatically trigger the closing of the temporary chain and removal of the requests from the users'
+application states. The claimed tokens are returned to the respective users' chains.
 
 # Usage
 
@@ -43,56 +62,71 @@ source /dev/stdin <<<"$(linera net helper 2>/dev/null)"
 To start the local Linera network:
 
 ```bash
-linera_spawn_and_read_wallet_variables linera net up --testing-prng-seed 37
+linera_spawn_and_read_wallet_variables linera net up --extra-wallets 1 --testing-prng-seed 37
 ```
 
 We use the test-only CLI option `--testing-prng-seed` to make keys deterministic and simplify our
 explanation.
 
 ```bash
-OWNER_1=d2115775b5b3c5c1ed3c1516319a7e850c75d0786a74b39f5250cf9decc88124
-OWNER_2=a477cb966190661c0dfbe50602616a78a48d2bef6cb5288d49deb3e05585d579
-CHAIN_1=673ce04da4b8ed773ee7cd5828a2083775bea4130498b847c5b34b2ed913b07f
-CHAIN_2=69705f85ac4c9fef6c02b4d83426aaaf05154c645ec1c61665f8e450f0468bc0
-CHAIN_AMM=e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65
-OWNER_AMM=7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f
+export CHAIN_0=e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65
+export CHAIN_1=1db1936dad0717597a7743a8353c9c0191c14c3a129b258e9743aec2b4f05d03
+export OWNER_0=7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f
+export OWNER_1=b4f8586041a07323bd4f4ed2d758bf1b9a977eabfd4c00e2f12d08a0899485fd
 ```
 
-Now we have to publish and create the fungible applications. The flag `--wait-for-outgoing-messages` waits until a quorum of validators has confirmed that all sent cross-chain messages have been delivered.
+The `--extra-wallets 1` option creates an additional user chain and wallet - we will use it for the
+user requesting a quote.
+
+Now we have to publish and create the fungible applications.
 
 ```bash
 (cd examples/fungible && cargo build --release --target wasm32-unknown-unknown)
 
-FUN1_APP_ID=$(linera --wait-for-outgoing-messages \
-  publish-and-create examples/target/wasm32-unknown-unknown/release/fungible_{contract,service}.wasm \
-    --json-argument "{ \"accounts\": {
-        \"User:$OWNER_AMM\": \"100.\"
-    } }" \
-    --json-parameters "{ \"ticker_symbol\": \"FUN1\" }" \
-)
+APP_ID_0=$(linera --with-wallet 0 project publish-and-create \
+           examples/fungible \
+           --json-argument '{ "accounts": { "User:'$OWNER_0'": "500", "User:'$OWNER_1'": "500" } }' \
+           --json-parameters "{ \"ticker_symbol\": \"FUN1\" }")
 
-FUN2_APP_ID=$(linera --wait-for-outgoing-messages \
-  publish-and-create examples/target/wasm32-unknown-unknown/release/fungible_{contract,service}.wasm \
-    --json-argument "{ \"accounts\": {
-        \"User:$OWNER_AMM\": \"100.\"
-    } }" \
-    --json-parameters "{ \"ticker_symbol\": \"FUN2\" }" \
-)
-
-(cd examples/amm && cargo build --release --target wasm32-unknown-unknown)
-AMM_APPLICATION_ID=$(linera --wait-for-outgoing-messages \
-  publish-and-create examples/target/wasm32-unknown-unknown/release/amm_{contract,service}.wasm \
-  --json-parameters "{\"tokens\":["\"$FUN1_APP_ID\"","\"$FUN2_APP_ID\""]}" \
-  --required-application-ids $FUN1_APP_ID $FUN2_APP_ID)
+APP_ID_1=$(linera --with-wallet 0 project publish-and-create \
+           examples/fungible \
+           --json-argument '{ "accounts": { "User:'$OWNER_0'": "500", "User:'$OWNER_1'": "500" } }' \
+           --json-parameters "{ \"ticker_symbol\": \"FUN2\" }")
 ```
 
-## Using the AMM Application
+Each user is granted 500 tokens of each type.
 
-First, a node service for the current wallet has to be started:
+We also need to publish the bytecode for the Matching Engine application (without instantiating it).
 
 ```bash
-PORT=8080
-linera service --port $PORT &
+ME_BCID=$(linera -w 0 publish-bytecode \
+    examples/target/wasm32-unknown-unknown/release/matching_engine_{contract,service}.wasm)
+```
+
+Lastly, we have to create the RFQ application. We pass in the bytecode ID of the Matching Engine
+bytecode, so that the application can instantiate the Matching Engine on the temporary chains for us.
+
+```bash
+APP_RFQ=$(linera -w 0 --wait-for-outgoing-messages \
+    project publish-and-create examples/rfq \
+    --json-parameters "{\"me_bytecode_id\":\"$ME_BCID\"}" \
+    --required-application-ids $APP_ID_0 $APP_ID_1)
+```
+
+We also need to make sure that both users can access the RFQ application, so we have to request it
+on the second user's chain.
+
+```bash
+linera -w 1 request-application $APP_RFQ
+```
+
+## Using the RFQ Application
+
+First, node services for the both users' wallets have to be started:
+
+```bash
+linera -w 0 service --port 8080 &
+linera -w 1 service --port 8081 &
 ```
 
 ### Using GraphiQL
@@ -100,228 +134,147 @@ linera service --port $PORT &
 Type each of these in the GraphiQL interface and substitute the env variables with their actual
 values that we've defined above.
 
-To properly setup the tokens in the proper chains, we need to do some transfer operations:
+First, user B has to claim their tokens on their chain, since they were created on user A's chain.
 
-- Transfer 50 FUN1 from `$OWNER_AMM` in `$CHAIN_AMM` to `$OWNER_1` in `$CHAIN_1`, so they're in the proper chain.
-  Run `echo "http://localhost:8080/chains/$CHAIN_AMM/applications/$FUN1_APP_ID"` to print the URL
+- Claim 500 FUN1 from `$OWNER_1` in `$CHAIN_0` to `$OWNER_1` in `$CHAIN_1`, so they're in the proper chain.
+  Run `echo "http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_0"` to print the URL
   of the GraphiQL interface for the FUN1 app. Navigate to that URL and enter:
 
-```gql,uri=http://localhost:8080/chains/$CHAIN_AMM/applications/$FUN1_APP_ID
-    mutation {
-        transfer(
-            owner: "User:$OWNER_AMM",
-            amount: "50.",
-            targetAccount: {
-                chainId: "$CHAIN_1",
-                owner: "User:$OWNER_1",
-            }
-        )
+```gql,uri=http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_0
+mutation {
+  claim(
+    sourceAccount: {
+      chainId: "$CHAIN_0",
+      owner: "User:$OWNER_1",
     }
-```
-
-- Transfer 50 FUN1 from `$OWNER_AMM` in `$CHAIN_AMM` to `$OWNER_2` in `$CHAIN_2`, so they're in the proper chain:
-
-```gql,uri=http://localhost:8080/chains/$CHAIN_AMM/applications/$FUN1_APP_ID
-    mutation {
-        transfer(
-            owner: "User:$OWNER_AMM",
-            amount: "50.",
-            targetAccount: {
-                chainId: "$CHAIN_2",
-                owner: "User:$OWNER_2",
-            }
-        )
+    amount: "500.",
+    targetAccount: {
+      chainId: "$CHAIN_1",
+      owner: "User:$OWNER_1"
     }
-```
-
-- Transfer 50 FUN2 from `$OWNER_AMM` in `$CHAIN_AMM` to `$OWNER_1` in `$CHAIN_1`, so they're in the proper chain.
-  Since this is the other token, FUN2, we need to go to its own GraphiQL interface:
-  `echo "http://localhost:8080/chains/$CHAIN_AMM/applications/$FUN2_APP_ID"`.
-
-```gql,uri=http://localhost:8080/chains/$CHAIN_AMM/applications/$FUN2_APP_ID
-    mutation {
-        transfer(
-            owner: "User:$OWNER_AMM",
-            amount: "50.",
-            targetAccount: {
-                chainId: "$CHAIN_1",
-                owner: "User:$OWNER_1",
-            }
-        )
-    }
-```
-
-- Transfer 50 FUN2 from `$OWNER_AMM` in `$CHAIN_AMM` to `$OWNER_2` in `$CHAIN_2`, so they're in the proper chain:
-
-```gql,uri=http://localhost:8080/chains/$CHAIN_AMM/applications/$FUN2_APP_ID
-    mutation {
-        transfer(
-            owner: "User:$OWNER_AMM",
-            amount: "50.",
-            targetAccount: {
-                chainId: "$CHAIN_2",
-                owner: "User:$OWNER_2",
-            }
-        )
-    }
-```
-
-All operations can only be from a remote chain i.e. other than the chain on which `AMM` is deployed to.
-We can do it from GraphiQL by performing the `requestApplication` mutation so that we can perform the
-operation from the chain.
-
-```gql,uri=http://localhost:8080
-mutation {
-  requestApplication (
-    chainId:"$CHAIN_1",
-    applicationId: "$AMM_APPLICATION_ID",
-    targetChainId: "$CHAIN_AMM"
   )
 }
 ```
 
-Note: The above mutation has to be performed from `http://localhost:8080`.
+- Claim 500 FUN2 from `$OWNER_1` in `$CHAIN_0` to `$OWNER_1` in `$CHAIN_1`, so they're in the proper chain.
+  Run `echo "http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_1"` to print the URL
+  of the GraphiQL interface for the FUN1 app. Navigate to that URL and enter the same request as above.
 
-Before performing any operation we need to provide liquidity to it, so we will use the `AddLiquidity` operation,
-navigate to the URL you get by running `echo "http://localhost:8080/chains/$CHAIN_1/applications/$AMM_APPLICATION_ID"`.
+Now we are ready to submit a request for quote. In this scenario, user B wants a quote from user A
+for 50 FUN2 tokens.
 
-To perform the `AddLiquidity` operation:
+First, it will be convenient to open GraphiQL interfaces for both users in two browser tabs.
 
-```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$AMM_APPLICATION_ID
+For user A's tab, run `echo "http://localhost:8080/chains/$CHAIN_0/applications/$APP_RFQ"` to print
+the URL for the interface and navigate to that URL.
+
+For user B's tab, run `echo "http://localhost:8081/chains/$CHAIN_1/applications/$APP_RFQ"` to print
+the URL for the interface and navigate to that URL.
+
+- In user B's tab, perform the following mutation:
+
+```gql,uri=http://localhost:8081/chains/$CHAIN_1/applications/$APP_RFQ
 mutation {
-  addLiquidity(
-    owner: "User:$OWNER_1",
-    maxToken0Amount: "50",
-    maxToken1Amount: "50",
+  requestQuote(
+    target: "$CHAIN_0",
+    tokenPair: {
+      tokenAsked: "$APP_ID_0",
+      tokenOffered: "$APP_ID_1",
+    },
+    amount: "50"
   )
 }
 ```
 
-```gql,uri=http://localhost:8080
+- User A will now provide a quote to user B - they are willing to exchange the tokens for a price of 2.
+In user A's tab, perform the following mutation:
+
+```gql,uri=http://localhost:8080/chains/$CHAIN_0/applications/$APP_RFQ
 mutation {
-  requestApplication (
-    chainId:"$CHAIN_2",
-    applicationId: "$AMM_APPLICATION_ID",
-    targetChainId: "$CHAIN_AMM"
+  provideQuote(
+    requestId: {
+      otherChainId:"$CHAIN_1",
+      seqNum:0
+    },
+    quote: { price: 2 },
+    quoterOwner: "$OWNER_0",
   )
 }
 ```
 
-Note: The above mutation has to be performed from `http://localhost:8080`.
+- User B can now accept the quote. In user B's tab, perform the following mutation. This will create
+the temporary chain, send tokens to it, create a Matching Engine instance and submit an order.
 
-To perform the `Swap` operation, navigate to the URL you get by running `echo "http://localhost:8080/chains/$CHAIN_2/applications/$AMM_APPLICATION_ID"` and
-perform the following mutation:
-
-```gql,uri=http://localhost:8080/chains/$CHAIN_2/applications/$AMM_APPLICATION_ID
+```gql,uri=http://localhost:8081/chains/$CHAIN_1/applications/$APP_RFQ
 mutation {
-  swap(
-    owner: "User:$OWNER_2",
-    inputTokenIdx: 1,
-    inputAmount: "1",
+  acceptQuote(
+    requestId:{
+      otherChainId:"$CHAIN_0",
+      seqNum:0,
+    },
+    owner:"$OWNER_1",
+    feeBudget:"0",
   )
 }
 ```
 
-To perform the `RemoveLiquidity` operation, navigate to the URL you get by running `echo "http://localhost:8080/chains/$CHAIN_1/applications/$AMM_APPLICATION_ID"` and
-perform the following mutation:
+- In order to finalize the exchange, user A has to run the following mutation:
 
-```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$AMM_APPLICATION_ID
+```gql,uri=http://localhost:8080/chains/$CHAIN_0/applications/$APP_RFQ
 mutation {
-  removeLiquidity(
-    owner: "User:$OWNER_1",
-    tokenToRemoveIdx: 1,
-    tokenToRemoveAmount: "1",
+  finalizeDeal(
+    requestId: {
+      otherChainId:"$CHAIN_1",
+      seqNum:0
+    },
   )
 }
 ```
 
-To perform the `RemoveAllAddedLiquidity` operation, navigate to the URL you get by running `echo "http://localhost:8080/chains/$CHAIN_1/applications/$AMM_APPLICATION_ID"` and
-perform the following mutation:
+At this point, the Matching Engine should have matched the orders and performed the swap. The tokens,
+however, remain on the temporary chain. In order to claim them, the users have to close the request.
 
-```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$AMM_APPLICATION_ID
+- In user B's tab, perform the following mutation:
+
+```gql,uri=http://localhost:8081/chains/$CHAIN_1/applications/$APP_RFQ
 mutation {
-  removeAllAddedLiquidity(
-    owner: "User:$OWNER_1",
+  closeRequest(
+    requestId: {
+      otherChainId:"$CHAIN_0",
+      seqNum:0
+    },
   )
 }
 ```
 
-### Atomic Swaps
+- In user A's tab, perform the following mutation:
 
-In general, if you send tokens to a chain owned by someone else, you rely on them
-for asset availability: If they don't handle your messages, you don't have access to
-your tokens.
-
-Fortunately, Linera provides a solution based on temporary chains:
-If the number of parties who want to swap tokens is limited, we can make them all chain
-owners, allow only AMM operations on the chain, and allow only the AMM to close the chain.
-In addition, we make an AMM operation per block mandatory, so owners cannot spam the chain
-with empty blocks.
-
-```bash
-PUB_KEY_AMM=fcf518d56455283ace2bbc11c71e684eb58af81bc98b96a18129e825ce24ea84
-PUB_KEY_2=ca909dcf60df014c166be17eb4a9f6e2f9383314a57510206a54cd841ade455e
-
-kill %% && sleep 1    # Kill the service so we can use CLI commands for chain 1.
-
-linera --wait-for-outgoing-messages change-ownership \
-    --owner-public-keys $PUB_KEY_AMM $PUB_KEY_2
-
-linera --wait-for-outgoing-messages change-application-permissions \
-    --execute-operations $AMM_APPLICATION_ID \
-    --mandatory-applications $AMM_APPLICATION_ID \
-    --close-chain $AMM_APPLICATION_ID
-
-linera service --port $PORT &
-```
-
-First, let's add some liquidity again to the AMM. Navigate to the URL you get by running
-`echo "http://localhost:8080/chains/$CHAIN_1/applications/$AMM_APPLICATION_ID"` and perform the following mutation:
-
-```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$AMM_APPLICATION_ID
+```gql,uri=http://localhost:8080/chains/$CHAIN_0/applications/$APP_RFQ
 mutation {
-  addLiquidity(
-    owner: "User:$OWNER_1",
-    maxToken0Amount: "40",
-    maxToken1Amount: "40",
+  closeRequest(
+    requestId: {
+      otherChainId:"$CHAIN_1",
+      seqNum:0
+    },
   )
 }
 ```
 
-The only way to close the chain is via the application. Navigate to the URL you get by running
-`echo "http://localhost:8080/chains/$CHAIN_AMM/applications/$AMM_APPLICATION_ID"` and perform the following mutation:
+After these mutations are run, the tokens will be returned to the user chains and the temporary chain
+will be closed. You can check whether the amounts of tokens are correct by navigating to
+`http://localhost:8080/chains/$CHAIN_0/applications/$APP_ID_0` (user A's FUN1 account),
+`http://localhost:8080/chains/$CHAIN_0/applications/$APP_ID_1` (user A's FUN2 account),
+`http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_0` (user B's FUN1 account) and
+`http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_1` (user B's FUN2 account) and
+performing the following query:
 
-```gql,uri=http://localhost:8080/chains/$CHAIN_AMM/applications/$AMM_APPLICATION_ID
-mutation { closeChain }
-```
-
-Owner 1 should now get back their tokens, and have around 49 FUN1 left and 51 FUN2 left. To check that, navigate
-to the URL you get by running `echo "http://localhost:8080/chains/$CHAIN_1/applications/$FUN1_APP_ID"`, and perform the following mutation:
-
-```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$FUN1_APP_ID
+```gql
 query {
     accounts {
-        entry(
-            key: "User:$OWNER_1"
-        ) {
-            value
-        }
+        entries { key value }
     }
 }
 ```
 
-Then navigate to the URL you get by running `echo "http://localhost:8080/chains/$CHAIN_1/applications/$FUN2_APP_ID"`, and perform the following mutation:
-
-```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$FUN2_APP_ID
-query {
-    accounts {
-        entry(
-            key: "User:$OWNER_1"
-        ) {
-            value
-        }
-    }
-}
-```
-
-<!-- cargo-rdme end -->
+You should see 400 FUN1 and 550 FUN2 in user A's accounts and 600 FUN1 and 450 FUN2 in user B's
+accounts.
