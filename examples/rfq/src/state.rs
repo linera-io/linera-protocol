@@ -84,10 +84,18 @@ pub struct RequestData {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, SimpleObject)]
+pub struct TempChainTokenHolder {
+    pub account_owner: AccountOwner,
+    pub chain_id: ChainId,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, SimpleObject)]
 pub struct TempChainState {
     request_id: RequestId,
     initiator: ChainId,
     me_application_id: ApplicationId,
+    token_pair: TokenPair,
+    account_owners: Vec<TempChainTokenHolder>,
 }
 
 #[derive(RootView, SimpleObject)]
@@ -249,29 +257,34 @@ impl RfqState {
             .await
             .expect("ViewError")
             .expect("Request not found");
-        self.requests.remove(request_id).expect("Request not found");
         match req_data.state {
             RequestState::ExchangeInProgress(ExchangeInProgress {
                 matching_engine_chain_id,
             }) if req_data.we_requested => Some(matching_engine_chain_id),
-            _ => None,
+            _ => {
+                self.requests.remove(request_id).expect("Request not found");
+                None
+            }
         }
     }
 
-    pub async fn close_request(&mut self, request_id: &RequestId) -> ChainId {
+    pub async fn get_matching_engine_chain_id(&self, request_id: &RequestId) -> ChainId {
         let req_data = self
             .requests
             .get(request_id)
             .await
             .expect("ViewError")
             .expect("Request not found");
-        self.requests.remove(request_id).expect("Request not found");
         match req_data.state {
             RequestState::ExchangeInProgress(ExchangeInProgress {
-                matching_engine_chain_id: exchange_chain_id,
-            }) => exchange_chain_id,
+                matching_engine_chain_id,
+            }) => matching_engine_chain_id,
             _ => panic!("Request not in the ExchangeInProgress state!"),
         }
+    }
+
+    pub async fn close_request(&mut self, request_id: &RequestId) {
+        self.requests.remove(request_id).expect("Request not found");
     }
 
     pub async fn token_pair(&self, request_id: &RequestId) -> TokenPair {
@@ -289,12 +302,60 @@ impl RfqState {
         request_id: RequestId,
         initiator: ChainId,
         me_application_id: ApplicationId,
+        token_pair: TokenPair,
     ) {
         self.temp_chain_state.set(Some(TempChainState {
             request_id,
             initiator,
             me_application_id,
+            token_pair,
+            account_owners: vec![],
         }));
+    }
+
+    pub fn add_owner_to_temp_chain_state(
+        &mut self,
+        account_owner: AccountOwner,
+        chain_id: ChainId,
+    ) {
+        let temp_chain_state = self
+            .temp_chain_state
+            .get_mut()
+            .as_mut()
+            .expect("No TempChainState found!");
+        temp_chain_state.account_owners.push(TempChainTokenHolder {
+            account_owner,
+            chain_id,
+        });
+    }
+
+    pub fn temp_chain_account_owners(&self) -> Vec<TempChainTokenHolder> {
+        self.temp_chain_state
+            .get()
+            .as_ref()
+            .map(|temp_state| temp_state.account_owners.clone())
+            .unwrap_or_default()
+    }
+
+    pub fn temp_chain_token_pair(&self) -> TokenPair {
+        self.temp_chain_state
+            .get()
+            .as_ref()
+            .expect("No TempChainState found!")
+            .token_pair
+            .clone()
+    }
+
+    pub fn temp_chain_initiator_and_request_id(&self) -> (ChainId, RequestId) {
+        let temp_chain_state = self
+            .temp_chain_state
+            .get()
+            .as_ref()
+            .expect("No TempChainState found!");
+        (
+            temp_chain_state.initiator,
+            temp_chain_state.request_id.clone(),
+        )
     }
 
     pub fn me_application_id(&mut self) -> Option<ApplicationId> {

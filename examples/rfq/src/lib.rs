@@ -121,9 +121,9 @@ pub enum Message {
         matching_engine_app_id: ApplicationId,
         order: Order,
     },
-    RequestClosed {
-        seq_number: u64,
-        matching_engine_chain_id: ChainId,
+    CloseChain,
+    ChainClosed {
+        request_id: RequestId,
     },
 }
 
@@ -132,11 +132,11 @@ impl Message {
         match self {
             Message::RequestQuote { seq_number, .. }
             | Message::ProvideQuote { seq_number, .. }
-            | Message::CancelRequest { seq_number, .. }
-            | Message::RequestClosed { seq_number, .. } => *seq_number,
+            | Message::CancelRequest { seq_number, .. } => *seq_number,
             Message::StartMatchingEngine { request_id, .. }
-            | Message::QuoteAccepted { request_id, .. } => request_id.seq_num,
-            Message::TokensSent { .. } => {
+            | Message::QuoteAccepted { request_id, .. }
+            | Message::ChainClosed { request_id } => request_id.seq_num,
+            Message::TokensSent { .. } | Message::CloseChain => {
                 // not important, we can just return 0
                 0
             }
