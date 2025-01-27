@@ -7,9 +7,8 @@ use linera_sdk::{
     views::{linera_views, MapView, RegisterView, RootView, ViewStorageContext},
 };
 use matching_engine::{Order, OrderNature, Price};
-use serde::{Deserialize, Serialize};
-
 use rfq::{RequestId, TokenPair};
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize, SimpleObject, InputObject)]
 pub struct QuoteRequested {
