@@ -1,5 +1,6 @@
 ---
 source: linera-rpc/tests/format.rs
+assertion_line: 68
 expression: get_registry().unwrap()
 ---
 Account:
@@ -51,6 +52,9 @@ ApplicationPermissions:
         SEQ:
           TYPENAME: ApplicationId
     - close_chain:
+        SEQ:
+          TYPENAME: ApplicationId
+    - change_application_permissions:
         SEQ:
           TYPENAME: ApplicationId
 BlobContent:
