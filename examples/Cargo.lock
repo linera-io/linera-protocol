@@ -4986,8 +4986,6 @@ dependencies = [
  "fungible",
  "linera-sdk",
  "matching-engine",
- "num-bigint",
- "num-traits",
  "serde",
  "tokio",
 ]
