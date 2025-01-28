@@ -58,8 +58,8 @@ use linera_execution::{
         AdminOperation, OpenChainConfig, Recipient, SystemChannel, SystemOperation,
         CREATE_APPLICATION_MESSAGE_INDEX, OPEN_CHAIN_MESSAGE_INDEX,
     },
-    ExecutionError, Operation, Query, QueryResponse, SystemExecutionError, SystemQuery,
-    SystemResponse,
+    ExecutionError, Operation, Query, QueryOutcome, QueryResponse, SystemExecutionError,
+    SystemQuery, SystemResponse,
 };
 use linera_storage::{Clock as _, Storage};
 use linera_views::views::ViewError;
@@ -2171,7 +2171,7 @@ where
     /// Queries an application.
     #[instrument(level = "trace", skip(query))]
     pub async fn query_application(&self, query: Query) -> Result<QueryResponse, ChainClientError> {
-        let response = self
+        let QueryOutcome { response } = self
             .client
             .local_node
             .query_application(self.chain_id, query)
@@ -2185,7 +2185,7 @@ where
         &self,
         query: SystemQuery,
     ) -> Result<SystemResponse, ChainClientError> {
-        let response = self
+        let QueryOutcome { response } = self
             .client
             .local_node
             .query_application(self.chain_id, Query::System(query))
@@ -2206,7 +2206,7 @@ where
         query: &A::Query,
     ) -> Result<A::QueryResponse, ChainClientError> {
         let query = Query::user(application_id, query)?;
-        let response = self
+        let QueryOutcome { response } = self
             .client
             .local_node
             .query_application(self.chain_id, query)
