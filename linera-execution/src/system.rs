@@ -947,7 +947,10 @@ where
             chain_id: context.chain_id,
             balance: *self.balance.get(),
         };
-        Ok(QueryOutcome { response })
+        Ok(QueryOutcome {
+            response,
+            operations: vec![],
+        })
     }
 
     /// Returns the messages to open a new chain, and subtracts the new chain's balance

@@ -975,7 +975,10 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
                 let sender = self.execution_state_sender.clone();
                 let outcome =
                     ServiceSyncRuntime::new(sender, context).run_query(application_id, query)?;
-                let QueryOutcome { response } = outcome;
+                let QueryOutcome {
+                    response,
+                    operations: _,
+                } = outcome;
                 response
             };
         self.transaction_tracker
@@ -1627,7 +1630,10 @@ impl ServiceSyncRuntime {
             .handle_mut()
             .try_query_application(application_id, query)?;
 
-        Ok(QueryOutcome { response })
+        Ok(QueryOutcome {
+            response,
+            operations: vec![],
+        })
     }
 
     /// Obtains the [`SyncRuntimeHandle`] stored in this [`ServiceSyncRuntime`].

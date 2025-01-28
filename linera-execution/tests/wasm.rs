@@ -144,6 +144,7 @@ async fn test_fuel_for_counter_wasm_application(
         .await?;
     let QueryOutcome {
         response: QueryResponse::User(serialized_value),
+        operations,
     } = outcome
     else {
         panic!("unexpected response")
@@ -152,5 +153,6 @@ async fn test_fuel_for_counter_wasm_application(
         serde_json::from_slice::<async_graphql::Response>(&serialized_value).unwrap(),
         expected_value
     );
+    assert!(operations.is_empty());
     Ok(())
 }

@@ -127,7 +127,10 @@ async fn test_simple_system_query() -> anyhow::Result<()> {
         next_block_height: BlockHeight(0),
         local_time: Timestamp::from(0),
     };
-    let QueryOutcome { response } = view
+    let QueryOutcome {
+        response,
+        operations,
+    } = view
         .query_application(context, Query::System(SystemQuery), None)
         .await
         .unwrap();
@@ -138,5 +141,6 @@ async fn test_simple_system_query() -> anyhow::Result<()> {
             balance: Amount::from_tokens(4)
         })
     );
+    assert!(operations.is_empty());
     Ok(())
 }

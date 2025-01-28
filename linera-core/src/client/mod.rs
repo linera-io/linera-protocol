@@ -2185,13 +2185,19 @@ where
         &self,
         query: SystemQuery,
     ) -> Result<QueryOutcome<SystemResponse>, ChainClientError> {
-        let QueryOutcome { response } = self
+        let QueryOutcome {
+            response,
+            operations,
+        } = self
             .client
             .local_node
             .query_application(self.chain_id, Query::System(query))
             .await?;
         match response {
-            QueryResponse::System(response) => Ok(QueryOutcome { response }),
+            QueryResponse::System(response) => Ok(QueryOutcome {
+                response,
+                operations,
+            }),
             _ => Err(ChainClientError::InternalError(
                 "Unexpected response for system query",
             )),
@@ -2206,7 +2212,10 @@ where
         query: &A::Query,
     ) -> Result<QueryOutcome<A::QueryResponse>, ChainClientError> {
         let query = Query::user(application_id, query)?;
-        let QueryOutcome { response } = self
+        let QueryOutcome {
+            response,
+            operations,
+        } = self
             .client
             .local_node
             .query_application(self.chain_id, query)
@@ -2214,7 +2223,10 @@ where
         match response {
             QueryResponse::User(response_bytes) => {
                 let response = serde_json::from_slice(&response_bytes)?;
-                Ok(QueryOutcome { response })
+                Ok(QueryOutcome {
+                    response,
+                    operations,
+                })
             }
             _ => Err(ChainClientError::InternalError(
                 "Unexpected response for user query",

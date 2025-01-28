@@ -468,7 +468,10 @@ impl ActiveChain {
     {
         let query_bytes = serde_json::to_vec(&query).expect("Failed to serialize query");
 
-        let QueryOutcome { response } = self
+        let QueryOutcome {
+            response,
+            operations,
+        } = self
             .validator
             .worker()
             .query_application(
@@ -492,6 +495,7 @@ impl ActiveChain {
 
         QueryOutcome {
             response: deserialized_response,
+            operations,
         }
     }
 
@@ -508,7 +512,10 @@ impl ActiveChain {
     {
         let query = query.into();
         let query_str = query.query.clone();
-        let QueryOutcome { response } = self.query(application_id, query).await;
+        let QueryOutcome {
+            response,
+            operations,
+        } = self.query(application_id, query).await;
         if !response.errors.is_empty() {
             panic!(
                 "GraphQL query:\n{}\nyielded errors:\n{:#?}",
@@ -522,6 +529,7 @@ impl ActiveChain {
 
         QueryOutcome {
             response: json_response,
+            operations,
         }
     }
 }

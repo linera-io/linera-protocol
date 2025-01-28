@@ -16,6 +16,7 @@ use futures::{lock::Mutex, Future};
 use linera_base::{
     crypto::{CryptoError, CryptoHash},
     data_types::{Amount, ApplicationPermissions, Bytecode, TimeDelta, UserApplicationDescription},
+    ensure,
     hashed::Hashed,
     identifiers::{ApplicationId, BytecodeId, ChainId, Owner, UserApplicationId},
     ownership::{ChainOwnership, TimeoutConfig},
@@ -98,6 +99,8 @@ enum NodeServiceError {
     UnknownChainId { chain_id: String },
     #[error("malformed chain ID: {0}")]
     InvalidChainId(CryptoError),
+    #[error("unexpected application operations added during non-mutation query")]
+    UnexpectedOperationsFromQuery,
 }
 
 impl From<ServerError> for NodeServiceError {
@@ -122,7 +125,8 @@ impl IntoResponse for NodeServiceError {
             NodeServiceError::JsonError(e) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, vec![e.to_string()])
             }
-            NodeServiceError::MalformedApplicationResponse => {
+            NodeServiceError::MalformedApplicationResponse
+            | NodeServiceError::UnexpectedOperationsFromQuery => {
                 (StatusCode::INTERNAL_SERVER_ERROR, vec![self.to_string()])
             }
             NodeServiceError::MissingOperation
@@ -1007,13 +1011,20 @@ where
             .map_err(|_| NodeServiceError::UnknownChainId {
                 chain_id: chain_id.to_string(),
             })?;
-        let QueryOutcome { response } = client.query_application(query).await?;
+        let QueryOutcome {
+            response,
+            operations,
+        } = client.query_application(query).await?;
         let user_response_bytes = match response {
             QueryResponse::System(_) => {
                 unreachable!("cannot get a system response for a user query")
             }
             QueryResponse::User(user) => user,
         };
+        ensure!(
+            operations.is_empty(),
+            NodeServiceError::UnexpectedOperationsFromQuery
+        );
         Ok(serde_json::from_slice(&user_response_bytes)?)
     }
 

@@ -223,7 +223,8 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
         .await
         .unwrap(),
         QueryOutcome {
-            response: QueryResponse::User(dummy_operation.clone())
+            response: QueryResponse::User(dummy_operation.clone()),
+            operations: vec![],
         }
     );
 
@@ -239,7 +240,8 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
         .await
         .unwrap(),
         QueryOutcome {
-            response: QueryResponse::User(dummy_operation)
+            response: QueryResponse::User(dummy_operation),
+            operations: vec![],
         }
     );
     Ok(())

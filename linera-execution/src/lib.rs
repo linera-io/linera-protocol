@@ -787,24 +787,33 @@ pub enum Query {
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct QueryOutcome<Response = QueryResponse> {
     pub response: Response,
+    pub operations: Vec<Operation>,
 }
 
 impl From<QueryOutcome<SystemResponse>> for QueryOutcome {
     fn from(system_outcome: QueryOutcome<SystemResponse>) -> Self {
-        let QueryOutcome { response } = system_outcome;
+        let QueryOutcome {
+            response,
+            operations,
+        } = system_outcome;
 
         QueryOutcome {
             response: QueryResponse::System(response),
+            operations,
         }
     }
 }
 
 impl From<QueryOutcome<Vec<u8>>> for QueryOutcome {
     fn from(user_service_outcome: QueryOutcome<Vec<u8>>) -> Self {
-        let QueryOutcome { response } = user_service_outcome;
+        let QueryOutcome {
+            response,
+            operations,
+        } = user_service_outcome;
 
         QueryOutcome {
             response: QueryResponse::User(response),
+            operations,
         }
     }
 }

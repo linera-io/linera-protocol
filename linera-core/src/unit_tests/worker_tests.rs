@@ -1911,7 +1911,8 @@ where
             response: QueryResponse::System(SystemResponse {
                 chain_id: ChainId::root(1),
                 balance: Amount::from_tokens(5),
-            })
+            }),
+            operations: vec![],
         }
     );
     assert_eq!(
@@ -1922,7 +1923,8 @@ where
             response: QueryResponse::System(SystemResponse {
                 chain_id: ChainId::root(2),
                 balance: Amount::ZERO,
-            })
+            }),
+            operations: vec![],
         }
     );
 
@@ -1956,7 +1958,8 @@ where
             response: QueryResponse::System(SystemResponse {
                 chain_id: ChainId::root(1),
                 balance: Amount::ZERO,
-            })
+            }),
+            operations: vec![],
         }
     );
 
@@ -1996,7 +1999,8 @@ where
             response: QueryResponse::System(SystemResponse {
                 chain_id: ChainId::root(2),
                 balance: Amount::from_tokens(4),
-            })
+            }),
+            operations: vec![],
         }
     );
 
@@ -3827,7 +3831,8 @@ where
         assert_eq!(
             worker.query_application(chain_id, query.clone()).await?,
             QueryOutcome {
-                response: QueryResponse::User(vec![])
+                response: QueryResponse::User(vec![]),
+                operations: vec![],
             }
         );
     }
@@ -3936,7 +3941,8 @@ where
         assert_eq!(
             worker.query_application(chain_id, query.clone()).await?,
             QueryOutcome {
-                response: QueryResponse::User(vec![])
+                response: QueryResponse::User(vec![]),
+                operations: vec![],
             }
         );
     }
@@ -3953,7 +3959,8 @@ where
         assert_eq!(
             worker.query_application(chain_id, query.clone()).await?,
             QueryOutcome {
-                response: QueryResponse::User(vec![])
+                response: QueryResponse::User(vec![]),
+                operations: vec![],
             }
         );
     }
@@ -4001,7 +4008,8 @@ where
         assert_eq!(
             worker.query_application(chain_id, query.clone()).await?,
             QueryOutcome {
-                response: QueryResponse::User(vec![])
+                response: QueryResponse::User(vec![]),
+                operations: vec![],
             }
         );
     }

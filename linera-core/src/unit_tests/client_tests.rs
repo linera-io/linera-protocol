@@ -867,7 +867,8 @@ where
             response: SystemResponse {
                 chain_id: client1.chain_id(),
                 balance: Amount::from_tokens(3),
-            }
+            },
+            operations: vec![],
         }
     );
     let certificate = client1
@@ -889,8 +890,9 @@ where
             response: SystemResponse {
                 chain_id: client1.chain_id(),
                 balance: Amount::ZERO,
-            }
-        }
+            },
+            operations: vec![],
+        },
     );
 
     assert_eq!(
@@ -911,8 +913,9 @@ where
             response: SystemResponse {
                 chain_id: client2.chain_id(),
                 balance: Amount::from_tokens(0),
-            }
-        }
+            },
+            operations: vec![],
+        },
     );
 
     // Process the inbox and send back some money.
@@ -937,8 +940,9 @@ where
             response: SystemResponse {
                 chain_id: client2.chain_id(),
                 balance: Amount::from_tokens(2),
-            }
-        }
+            },
+            operations: vec![],
+        },
     );
     Ok(())
 }
