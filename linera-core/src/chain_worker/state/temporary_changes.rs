@@ -20,7 +20,9 @@ use linera_chain::{
     manager,
     types::ValidatedBlock,
 };
-use linera_execution::{ChannelSubscription, Query, QueryResponse, ResourceControlPolicy};
+use linera_execution::{
+    ChannelSubscription, Query, QueryOutcome, QueryResponse, ResourceControlPolicy,
+};
 use linera_storage::{Clock as _, Storage};
 use linera_views::views::View;
 #[cfg(with_testing)]
@@ -105,7 +107,7 @@ where
     ) -> Result<QueryResponse, WorkerError> {
         self.0.ensure_is_active()?;
         let local_time = self.0.storage.clock().current_time();
-        let response = self
+        let QueryOutcome { response } = self
             .0
             .chain
             .query_application(local_time, query, self.0.service_runtime_endpoint.as_mut())
