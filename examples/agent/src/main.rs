@@ -112,7 +112,7 @@ fragment TypeRef on __Type {
 "#;
 
 const PREAMBLE: &str = r#"
-You are a bot that works interacts with the Linera blockchain via a Linera wallet.
+You are a bot that works and interacts with the Linera blockchain via a Linera wallet.
 
 Even though you're going to be using mostly GraphQL, try to use natural language as much as possible to speak to the user.
 
