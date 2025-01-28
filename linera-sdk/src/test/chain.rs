@@ -462,7 +462,7 @@ impl ActiveChain {
         &self,
         application_id: ApplicationId<Abi>,
         query: Abi::Query,
-    ) -> Abi::QueryResponse
+    ) -> QueryOutcome<Abi::QueryResponse>
     where
         Abi: ServiceAbi,
     {
@@ -481,13 +481,17 @@ impl ActiveChain {
             .await
             .expect("Failed to query application");
 
-        match response {
+        let deserialized_response = match response {
             QueryResponse::User(bytes) => {
                 serde_json::from_slice(&bytes).expect("Failed to deserialize query response")
             }
             QueryResponse::System(_) => {
                 unreachable!("User query returned a system response")
             }
+        };
+
+        QueryOutcome {
+            response: deserialized_response,
         }
     }
 
@@ -504,7 +508,7 @@ impl ActiveChain {
     {
         let query = query.into();
         let query_str = query.query.clone();
-        let response = self.query(application_id, query).await;
+        let QueryOutcome { response } = self.query(application_id, query).await;
         if !response.errors.is_empty() {
             panic!(
                 "GraphQL query:\n{}\nyielded errors:\n{:#?}",
