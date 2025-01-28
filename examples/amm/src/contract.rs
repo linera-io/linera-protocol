@@ -32,6 +32,8 @@ impl Contract for AmmContract {
     type Message = Message;
     type InstantiationArgument = ();
     type Parameters = Parameters;
+    type Operation = Operation;
+    type Response = ();
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = AmmState::load(runtime.root_view_storage_context())
@@ -70,7 +72,7 @@ impl Contract for AmmContract {
                 // It's assumed that the tokens have already been transferred here at this point
                 assert!(
                     input_amount > Amount::ZERO,
-                    "You can't add liquidity with zero tokens"
+                    "You can't swap with zero tokens"
                 );
 
                 assert!(input_token_idx < 2, "Invalid token index");
