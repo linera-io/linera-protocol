@@ -25,7 +25,8 @@ use linera_base::{
 };
 use linera_chain::data_types::{EventRecord, MessageAction, OutgoingMessage};
 use linera_execution::{
-    Message, MessageKind, Operation, ResourceControlPolicy, SystemMessage, WasmRuntime,
+    Message, MessageKind, Operation, QueryOutcome, ResourceControlPolicy, SystemMessage,
+    WasmRuntime,
 };
 use serde_json::json;
 use test_case::test_case;
@@ -137,7 +138,7 @@ where
         .unwrap();
 
     let query = Request::new("{ value }");
-    let response = creator
+    let QueryOutcome { response } = creator
         .query_user_application(application_id, &query)
         .await
         .unwrap();
@@ -361,7 +362,7 @@ where
     receiver.process_inbox().await.unwrap();
 
     let query = Request::new("{ value }");
-    let response = receiver
+    let QueryOutcome { response } = receiver
         .query_user_application(application_id2, &query)
         .await
         .unwrap();
@@ -779,7 +780,7 @@ where
         .any(|msg| matches!(&msg.bundle.messages[0].message, Message::User { .. })));
 
     let query = async_graphql::Request::new("{ receivedPosts { keys { author, index } } }");
-    let posts = receiver
+    let QueryOutcome { response: posts } = receiver
         .query_user_application(application_id, &query)
         .await?;
     let expected = async_graphql::Response::new(
@@ -833,7 +834,7 @@ where
 
     // There is still only one post it can see.
     let query = async_graphql::Request::new("{ receivedPosts { keys { author, index } } }");
-    let posts = receiver
+    let QueryOutcome { response: posts } = receiver
         .query_user_application(application_id, &query)
         .await
         .unwrap();
