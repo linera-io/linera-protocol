@@ -174,8 +174,9 @@ where
     pub async fn stage_block_execution(
         &self,
         block: ProposedBlock,
+        round: Option<u32>,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), LocalNodeError> {
-        Ok(self.node.state.stage_block_execution(block).await?)
+        Ok(self.node.state.stage_block_execution(block, round).await?)
     }
 
     /// Reads blobs from storage.

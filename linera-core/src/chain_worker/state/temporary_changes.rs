@@ -126,14 +126,15 @@ where
     /// Executes a block without persisting any changes to the state.
     pub(super) async fn stage_block_execution(
         &mut self,
-        proposal: ProposedBlock,
+        block: ProposedBlock,
+        round: Option<u32>,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), WorkerError> {
         let local_time = self.0.storage.clock().current_time();
-        let signer = proposal.authenticated_signer;
+        let signer = block.authenticated_signer;
 
-        let executed_block = Box::pin(self.0.chain.execute_block(&proposal, local_time, None))
+        let executed_block = Box::pin(self.0.chain.execute_block(&block, local_time, round, None))
             .await?
-            .with(proposal);
+            .with(block);
 
         let mut response = ChainInfoResponse::new(&self.0.chain, None);
         if let Some(signer) = signer {
@@ -238,7 +239,12 @@ where
         let outcome = if let Some(outcome) = outcome {
             outcome.clone()
         } else {
-            Box::pin(self.0.chain.execute_block(block, local_time, None)).await?
+            Box::pin(
+                self.0
+                    .chain
+                    .execute_block(block, local_time, round.multi_leader(), None),
+            )
+            .await?
         };
 
         let executed_block = outcome.with(block.clone());

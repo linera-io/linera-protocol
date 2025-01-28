@@ -215,7 +215,7 @@ impl BlockBuilder {
         let (executed_block, _) = self
             .validator
             .worker()
-            .stage_block_execution(self.block)
+            .stage_block_execution(self.block, None)
             .await?;
 
         let value = Hashed::new(ConfirmedBlock::new(executed_block));

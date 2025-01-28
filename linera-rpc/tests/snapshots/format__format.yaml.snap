@@ -682,6 +682,10 @@ OracleResponse:
           TYPENAME: BlobId
     3:
       Assert: UNIT
+    4:
+      Round:
+        NEWTYPE:
+          OPTION: U32
 Origin:
   STRUCT:
     - sender:

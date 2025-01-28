@@ -179,10 +179,11 @@ where
     pub(super) async fn stage_block_execution(
         &mut self,
         block: ProposedBlock,
+        round: Option<u32>,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), WorkerError> {
         ChainWorkerStateWithTemporaryChanges::new(self)
             .await
-            .stage_block_execution(block)
+            .stage_block_execution(block, round)
             .await
     }
 

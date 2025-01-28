@@ -359,6 +359,7 @@ where
         let verified_outcome = Box::pin(self.state.chain.execute_block(
             &executed_block.block,
             local_time,
+            None,
             Some(executed_block.outcome.oracle_responses.clone()),
         ))
         .await?;

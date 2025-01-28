@@ -603,6 +603,14 @@ impl Round {
         matches!(self, Round::MultiLeader(_))
     }
 
+    /// Returns the round number if this is a multi-leader round, `None` otherwise.
+    pub fn multi_leader(&self) -> Option<u32> {
+        match self {
+            Round::MultiLeader(number) => Some(*number),
+            _ => None,
+        }
+    }
+
     /// Whether the round is the fast round.
     pub fn is_fast(&self) -> bool {
         matches!(self, Round::Fast)
@@ -763,6 +771,8 @@ pub enum OracleResponse {
     Blob(BlobId),
     /// An assertion oracle that passed.
     Assert,
+    /// The block's validation round.
+    Round(Option<u32>),
 }
 
 impl Display for OracleResponse {
@@ -774,6 +784,8 @@ impl Display for OracleResponse {
             OracleResponse::Post(bytes) => write!(f, "Post:{}", STANDARD_NO_PAD.encode(bytes))?,
             OracleResponse::Blob(blob_id) => write!(f, "Blob:{}", blob_id)?,
             OracleResponse::Assert => write!(f, "Assert")?,
+            OracleResponse::Round(Some(round)) => write!(f, "Round:{round}")?,
+            OracleResponse::Round(None) => write!(f, "Round:None")?,
         };
 
         Ok(())

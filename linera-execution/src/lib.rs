@@ -398,6 +398,8 @@ pub struct OperationContext {
     pub authenticated_caller_id: Option<UserApplicationId>,
     /// The current block height.
     pub height: BlockHeight,
+    /// The consensus round number, if this is a block that gets validated in a multi-leader round.
+    pub round: Option<u32>,
     /// The current index of the operation.
     #[debug(skip_if = Option::is_none)]
     pub index: Option<u32>,
@@ -417,6 +419,8 @@ pub struct MessageContext {
     pub refund_grant_to: Option<Account>,
     /// The current block height.
     pub height: BlockHeight,
+    /// The consensus round number, if this is a block that gets validated in a multi-leader round.
+    pub round: Option<u32>,
     /// The hash of the remote certificate that created the message.
     pub certificate_hash: CryptoHash,
     /// The ID of the message (based on the operation height and index in the remote
@@ -433,6 +437,8 @@ pub struct FinalizeContext {
     pub authenticated_signer: Option<Owner>,
     /// The current block height.
     pub height: BlockHeight,
+    /// The consensus round number, if this is a block that gets validated in a multi-leader round.
+    pub round: Option<u32>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -722,6 +728,9 @@ pub trait ContractRuntime: BaseRuntime {
 
     /// Writes a batch of changes.
     fn write_batch(&mut self, batch: Batch) -> Result<(), ExecutionError>;
+
+    /// Returns the round in which this block was validated.
+    fn validation_round(&mut self) -> Result<Option<u32>, ExecutionError>;
 }
 
 /// An operation to be executed in a block.

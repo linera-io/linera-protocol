@@ -22,6 +22,7 @@ async fn new_view_and_context() -> (
         authenticated_signer: None,
         authenticated_caller_id: None,
         height: BlockHeight::from(7),
+        round: Some(0),
         index: Some(2),
     };
     let state = SystemExecutionState {
