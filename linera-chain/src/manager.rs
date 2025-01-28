@@ -299,8 +299,12 @@ where
         );
         let current_round = self.current_round();
         match new_round {
+            // The proposal from the fast round may still be relevant as a locked block, so
+            // we don't compare against the current round here.
             Round::Fast => {}
             Round::MultiLeader(_) | Round::SingleLeader(0) => {
+                // If the fast round has not timed out yet, only a super owner is allowed to open
+                // a later round by making a proposal.
                 ensure!(
                     self.is_super(&proposal.owner) || !current_round.is_fast(),
                     ChainError::WrongRound(current_round)
@@ -330,7 +334,7 @@ where
         if let Some(locked) = self.locked.get() {
             ensure!(
                 locked.round() < new_round,
-                ChainError::HasLockedBlock(new_block.height, locked.round())
+                ChainError::HasIncompatibleConfirmedVote(new_block.height, locked.round())
             );
         }
         // If we have voted to confirm we cannot vote to validate a different block anymore, except
@@ -340,9 +344,9 @@ where
                 if let Some(validated_cert) = proposal.validated_block_certificate.as_ref() {
                     vote.round <= validated_cert.round
                 } else {
-                    vote.round.is_fast() && vote.value().inner().matches_proposal(new_block)
+                    vote.round.is_fast() && vote.value().inner().matches_proposed_block(new_block)
                 },
-                ChainError::HasLockedBlock(new_block.height, vote.round)
+                ChainError::HasIncompatibleConfirmedVote(new_block.height, vote.round)
             );
         }
         Ok(Outcome::Accept)
@@ -455,20 +459,21 @@ where
             {
                 let value = Hashed::new(ValidatedBlock::new(executed_block.clone()));
                 if let Some(certificate) = lite_cert.clone().with_value(value) {
-                    self.set_locked(LockedBlock::Regular(certificate), blobs)?;
+                    self.update_locked(LockedBlock::Regular(certificate), blobs)?;
                 }
             }
         } else if round.is_fast() && self.locked.get().is_none() {
             // The fast block also counts as locked.
-            self.set_locked(LockedBlock::Fast(proposal.clone()), blobs)?;
+            self.update_locked(LockedBlock::Fast(proposal.clone()), blobs)?;
         }
 
         // We record the proposed block, in case it affects the current round number.
-        self.set_proposed(proposal.clone());
+        self.update_proposed(proposal.clone());
         self.update_current_round(local_time);
 
         let Some(key_pair) = key_pair else {
-            return Ok(None); // Not a validator.
+            // Not a validator.
+            return Ok(None);
         };
 
         // If this is a fast block, vote to confirm. Otherwise vote to validate.
@@ -498,7 +503,7 @@ where
     ) -> Result<(), ViewError> {
         let round = validated.round;
         let confirmed_block = ConfirmedBlock::new(validated.inner().block().clone().into());
-        self.set_locked(LockedBlock::Regular(validated), blobs)?;
+        self.update_locked(LockedBlock::Regular(validated), blobs)?;
         self.update_current_round(local_time);
         if let Some(key_pair) = key_pair {
             if self.current_round() != round {
@@ -645,7 +650,7 @@ where
     }
 
     /// Sets the proposed block, if it is newer than our known latest proposal.
-    fn set_proposed(&mut self, proposal: BlockProposal) {
+    fn update_proposed(&mut self, proposal: BlockProposal) {
         if let Some(old_proposal) = self.proposed.get() {
             if old_proposal.content.round >= proposal.content.round {
                 return;
@@ -655,7 +660,7 @@ where
     }
 
     /// Sets the locked block and the associated blobs, if it is newer than the known one.
-    fn set_locked(
+    fn update_locked(
         &mut self,
         locked: LockedBlock,
         blobs: BTreeMap<BlobId, Blob>,
@@ -724,7 +729,11 @@ where
         let current_round = manager.current_round();
         let pending = match (manager.confirmed_vote.get(), manager.validated_vote.get()) {
             (None, None) => None,
-            (Some(cvote), Some(vvote)) if vvote.round > cvote.round => Some(vvote.lite()),
+            (Some(confirmed_vote), Some(validated_vote))
+                if validated_vote.round > confirmed_vote.round =>
+            {
+                Some(validated_vote.lite())
+            }
             (Some(vote), _) => Some(vote.lite()),
             (None, Some(vote)) => Some(vote.lite()),
         };

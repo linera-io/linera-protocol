@@ -157,7 +157,7 @@ impl ConfirmedBlock {
     }
 
     /// Returns whether this block matches the proposal.
-    pub fn matches_proposal(&self, block: &ProposedBlock) -> bool {
+    pub fn matches_proposed_block(&self, block: &ProposedBlock) -> bool {
         let ProposedBlock {
             chain_id,
             epoch,

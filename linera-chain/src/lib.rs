@@ -128,7 +128,7 @@ pub enum ChainError {
     #[error("Round number should be {0:?}")]
     WrongRound(Round),
     #[error("A different block for height {0:?} was already locked at round number {1:?}")]
-    HasLockedBlock(BlockHeight, Round),
+    HasIncompatibleConfirmedVote(BlockHeight, Round),
     #[error("Cannot confirm a block before its predecessors: {current_block_height:?}")]
     MissingEarlierBlocks { current_block_height: BlockHeight },
     #[error("Signatures in a certificate must be from different validators")]

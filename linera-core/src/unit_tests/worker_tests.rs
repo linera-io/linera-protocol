@@ -3344,7 +3344,7 @@ where
         .into_proposal_with_round(&key_pairs[1], Round::SingleLeader(5));
     let result = worker.handle_block_proposal(proposal.clone()).await;
     assert_matches!(result, Err(WorkerError::ChainError(error))
-         if matches!(*error, ChainError::HasLockedBlock(_, _))
+         if matches!(*error, ChainError::HasIncompatibleConfirmedVote(_, _))
     );
 
     // But with the validated block certificate for block2, it is allowed.
@@ -3384,7 +3384,7 @@ where
     let proposal = block1.into_proposal_with_round(&key_pairs[0], Round::SingleLeader(6));
     let result = worker.handle_block_proposal(proposal.clone()).await;
     assert_matches!(result, Err(WorkerError::ChainError(error))
-         if matches!(*error, ChainError::HasLockedBlock(_, _))
+         if matches!(*error, ChainError::HasIncompatibleConfirmedVote(_, _))
     );
 
     // Let rounds 6 and 7 time out.
@@ -3646,7 +3646,7 @@ where
         .into_proposal_with_round(&key_pairs[1], Round::MultiLeader(1));
     let result = worker.handle_block_proposal(proposal2).await;
     assert_matches!(result, Err(WorkerError::ChainError(err))
-        if matches!(*err, ChainError::HasLockedBlock(_, Round::Fast))
+        if matches!(*err, ChainError::HasIncompatibleConfirmedVote(_, Round::Fast))
     );
     let proposal3 = block1
         .clone()
