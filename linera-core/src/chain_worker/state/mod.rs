@@ -295,7 +295,7 @@ where
         Ok((response, actions))
     }
 
-    /// Returns the requested blob, if it belongs to the current locked block or pending proposal.
+    /// Returns the requested blob, if it belongs to the current locking block or pending proposal.
     pub(super) async fn download_pending_blob(&self, blob_id: BlobId) -> Result<Blob, WorkerError> {
         let maybe_blob = self.chain.manager.pending_blob(&blob_id).await?;
         maybe_blob.ok_or_else(|| WorkerError::BlobsNotFound(vec![blob_id]))

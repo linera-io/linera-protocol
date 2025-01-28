@@ -32,7 +32,7 @@ use linera_chain::{
         IncomingBundle, LiteValue, LiteVote, Medium, MessageAction, MessageBundle, Origin,
         OutgoingMessage, PostedMessage, ProposedBlock, SignatureAggregator,
     },
-    manager::LockedBlock,
+    manager::LockingBlock,
     test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt, VoteTestExt},
     types::{
         CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate, Timeout,
@@ -3360,8 +3360,8 @@ where
     let (_, _) = worker.handle_block_proposal(proposal).await?;
     let (response, _) = worker.handle_chain_info_query(query_values.clone()).await?;
     assert_eq!(
-        response.info.manager.requested_locked,
-        Some(Box::new(LockedBlock::Regular(certificate2)))
+        response.info.manager.requested_locking,
+        Some(Box::new(LockingBlock::Regular(certificate2)))
     );
     let vote = response.info.manager.pending.as_ref().unwrap();
     assert_eq!(vote.value, lite_value2);
@@ -3395,8 +3395,7 @@ where
         .await?;
     assert_eq!(response.info.manager.current_round, Round::SingleLeader(8));
 
-    // If the worker does not belong to a validator, it does update its locked block even if it's
-    // from a past round.
+    // The worker updates its locking block even if it's from a past round.
     let certificate =
         make_certificate_with_round(&committee, &worker, value1, Round::SingleLeader(7));
     let worker = worker.with_key_pair(None).await; // Forget validator keys.
@@ -3405,8 +3404,8 @@ where
         .await?;
     let (response, _) = worker.handle_chain_info_query(query_values).await?;
     assert_eq!(
-        response.info.manager.requested_locked,
-        Some(Box::new(LockedBlock::Regular(certificate)))
+        response.info.manager.requested_locking,
+        Some(Box::new(LockingBlock::Regular(certificate)))
     );
     Ok(())
 }
@@ -3669,8 +3668,8 @@ where
     let query_values = ChainInfoQuery::new(chain_id).with_manager_values();
     let (response, _) = worker.handle_chain_info_query(query_values).await?;
     assert_eq!(
-        response.info.manager.requested_locked,
-        Some(Box::new(LockedBlock::Regular(certificate2)))
+        response.info.manager.requested_locking,
+        Some(Box::new(LockingBlock::Regular(certificate2)))
     );
     let vote = response.info.manager.pending.as_ref().unwrap();
     assert_eq!(vote.value, lite_value2);

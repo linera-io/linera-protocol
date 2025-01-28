@@ -44,7 +44,7 @@ use linera_chain::{
         BlockProposal, ChainAndHeight, ExecutedBlock, IncomingBundle, LiteVote, MessageAction,
         ProposedBlock,
     },
-    manager::LockedBlock,
+    manager::LockingBlock,
     types::{
         CertificateKind, CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate,
         GenericCertificate, LiteCertificate, Timeout, TimeoutCertificate, ValidatedBlock,
@@ -1751,14 +1751,14 @@ where
         if let Some(proposal) = info.manager.requested_proposed {
             proposals.push(*proposal);
         }
-        if let Some(locked) = info.manager.requested_locked {
-            match *locked {
-                LockedBlock::Fast(proposal) => {
+        if let Some(locking) = info.manager.requested_locking {
+            match *locking {
+                LockingBlock::Fast(proposal) => {
                     proposals.push(proposal);
                 }
-                LockedBlock::Regular(cert) => {
+                LockingBlock::Regular(cert) => {
                     let hash = cert.hash();
-                    if let Err(err) = self.try_process_locked_block_from(remote_node, cert).await {
+                    if let Err(err) = self.try_process_locking_block_from(remote_node, cert).await {
                         warn!(
                             "Skipping certificate {hash} from validator {}: {err}",
                             remote_node.name
@@ -1798,7 +1798,7 @@ where
         Ok(())
     }
 
-    async fn try_process_locked_block_from(
+    async fn try_process_locking_block_from(
         &self,
         remote_node: &RemoteNode<P::Node>,
         certificate: GenericCertificate<ValidatedBlock>,
@@ -1977,7 +1977,7 @@ where
 
             let maybe_blob = {
                 let chain_state_view = self.chain_state_view().await?;
-                chain_state_view.manager.locked_blobs.get(&blob_id).await?
+                chain_state_view.manager.locking_blobs.get(&blob_id).await?
             };
 
             if let Some(blob) = maybe_blob {
@@ -2419,17 +2419,18 @@ where
         let info = self.request_leader_timeout_if_needed().await?;
 
         // If there is a validated block in the current round, finalize it.
-        if info.manager.has_locked_block_in_current_round() && !info.manager.current_round.is_fast()
+        if info.manager.has_locking_block_in_current_round()
+            && !info.manager.current_round.is_fast()
         {
-            return self.finalize_locked_block(info).await;
+            return self.finalize_locking_block(info).await;
         }
 
         // Otherwise we have to re-propose the highest validated block, if there is one.
         let pending: Option<ProposedBlock> = self.state().pending_proposal().clone();
-        let executed_block = if let Some(locked) = &info.manager.requested_locked {
-            match &**locked {
-                LockedBlock::Regular(certificate) => certificate.block().clone().into(),
-                LockedBlock::Fast(proposal) => {
+        let executed_block = if let Some(locking) = &info.manager.requested_locking {
+            match &**locking {
+                LockingBlock::Regular(certificate) => certificate.block().clone().into(),
+                LockingBlock::Fast(proposal) => {
                     let block = proposal.content.block.clone();
                     self.stage_block_execution(block).await?.0
                 }
@@ -2456,12 +2457,12 @@ where
             .already_handled_proposal(round, &executed_block.block);
         let key_pair = self.key_pair().await?;
         // Create the final block proposal.
-        let proposal = if let Some(locked) = info.manager.requested_locked {
-            Box::new(match *locked {
-                LockedBlock::Regular(cert) => {
+        let proposal = if let Some(locking) = info.manager.requested_locking {
+            Box::new(match *locking {
+                LockingBlock::Regular(cert) => {
                     BlockProposal::new_retry(round, cert, &key_pair, blobs)
                 }
-                LockedBlock::Fast(proposal) => {
+                LockingBlock::Fast(proposal) => {
                     BlockProposal::new_initial(round, proposal.content.block, &key_pair, blobs)
                 }
             })
@@ -2510,19 +2511,19 @@ where
         Ok(info)
     }
 
-    /// Finalizes the locked block.
+    /// Finalizes the locking block.
     ///
-    /// Panics if there is no locked block; fails if the locked block is not in the current round.
-    async fn finalize_locked_block(
+    /// Panics if there is no locking block; fails if the locking block is not in the current round.
+    async fn finalize_locking_block(
         &self,
         info: Box<ChainInfo>,
     ) -> Result<ClientOutcome<Option<ConfirmedBlockCertificate>>, ChainClientError> {
-        let locked = info
+        let locking = info
             .manager
-            .requested_locked
-            .expect("Should have a locked block");
-        let LockedBlock::Regular(certificate) = *locked else {
-            panic!("Should have a locked validated block");
+            .requested_locking
+            .expect("Should have a locking block");
+        let LockingBlock::Regular(certificate) = *locking else {
+            panic!("Should have a locking validated block");
         };
         let committee = self.local_committee().await?;
         match self.finalize_block(&committee, certificate.clone()).await {
