@@ -376,7 +376,6 @@ impl ServiceStoreClientInternal {
         num_chunks: i32,
     ) -> Result<S, ServiceStoreError> {
         let mut handles = Vec::new();
-        println!("read_entries: message_index={message_index} num_chunks={num_chunks}");
         for index in 0..num_chunks {
             let handle = self.read_single_entry(message_index, index);
             handles.push(handle);
