@@ -29,7 +29,7 @@ Optionally, contributors may also be able to create a block to accept a new epoc
 (i.e. a change of validators).
 
 <!--
-TODO: The following documentation involves `sleep`ing to avoid some race conditions. See:
+TODO: The following documentation involves sleep to avoid some race conditions. See:
   - https://github.com/linera-io/linera-protocol/issues/1176
   - https://github.com/linera-io/linera-protocol/issues/1177
 -->
