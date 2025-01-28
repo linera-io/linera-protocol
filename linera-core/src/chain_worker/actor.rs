@@ -23,7 +23,7 @@ use linera_chain::{
 };
 use linera_execution::{
     committee::{Epoch, ValidatorName},
-    Query, QueryContext, QueryResponse, ServiceRuntimeEndpoint, ServiceSyncRuntime,
+    Query, QueryContext, QueryOutcome, QueryResponse, ServiceRuntimeEndpoint, ServiceSyncRuntime,
 };
 use linera_storage::Storage;
 use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
@@ -279,7 +279,12 @@ where
                     callback.send(self.worker.chain_state_view().await).is_ok()
                 }
                 ChainWorkerRequest::QueryApplication { query, callback } => callback
-                    .send(self.worker.query_application(query).await)
+                    .send(
+                        self.worker
+                            .query_application(query)
+                            .await
+                            .map(|QueryOutcome { response }| response),
+                    )
                     .is_ok(),
                 ChainWorkerRequest::DescribeApplication {
                     application_id,
