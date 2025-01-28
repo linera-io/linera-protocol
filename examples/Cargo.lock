@@ -4985,7 +4985,6 @@ dependencies = [
  "async-graphql",
  "fungible",
  "linera-sdk",
- "matching-engine",
  "serde",
  "tokio",
 ]
