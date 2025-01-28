@@ -13,7 +13,7 @@ use futures::stream::{self, StreamExt, TryStreamExt};
 use linera_base::{
     crypto::CryptoHash,
     data_types::{
-        Amount, ArithmeticError, Blob, BlockHeight, OracleResponse, Round, Timestamp,
+        Amount, ArithmeticError, Blob, BlockHeight, OracleResponse, Timestamp,
         UserApplicationDescription,
     },
     ensure,
@@ -666,7 +666,7 @@ where
         &mut self,
         block: &ProposedBlock,
         local_time: Timestamp,
-        round: Option<Round>,
+        round: Option<u32>,
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
     ) -> Result<BlockExecutionOutcome, ChainError> {
         #[cfg(with_metrics)]
@@ -938,7 +938,7 @@ where
         posted_message: &PostedMessage,
         incoming_bundle: &IncomingBundle,
         block: &ProposedBlock,
-        round: Option<Round>,
+        round: Option<u32>,
         txn_index: u32,
         local_time: Timestamp,
         txn_tracker: &mut TransactionTracker,

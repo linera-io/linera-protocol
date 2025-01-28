@@ -6,8 +6,7 @@
 use linera_base::{
     abi::{ContractAbi, ServiceAbi},
     data_types::{
-        Amount, ApplicationPermissions, BlockHeight, Resources, Round, SendMessageRequest,
-        Timestamp,
+        Amount, ApplicationPermissions, BlockHeight, Resources, SendMessageRequest, Timestamp,
     },
     identifiers::{
         Account, AccountOwner, ApplicationId, BytecodeId, ChainId, ChannelName, Destination,
@@ -322,8 +321,8 @@ where
     }
 
     /// Returns the round in which this block was validated.
-    pub fn validation_round(&mut self) -> Round {
-        wit::validation_round().into()
+    pub fn validation_round(&mut self) -> Option<u32> {
+        wit::validation_round()
     }
 }
 

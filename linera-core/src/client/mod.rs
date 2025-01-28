@@ -1903,7 +1903,7 @@ where
     async fn stage_block_execution_and_discard_failing_messages(
         &self,
         mut block: ProposedBlock,
-        round: Option<Round>,
+        round: Option<u32>,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), ChainClientError> {
         loop {
             let result = self.stage_block_execution(block.clone(), round).await;
@@ -1945,7 +1945,7 @@ where
     async fn stage_block_execution(
         &self,
         block: ProposedBlock,
-        round: Option<Round>,
+        round: Option<u32>,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), ChainClientError> {
         loop {
             let result = self
@@ -2131,7 +2131,7 @@ where
         // Accessing the round number in single-leader rounds where we are not the leader
         // is not currently supported.
         let round = match Self::round_for_new_proposal(&info, &identity, &block, true)? {
-            Either::Left(round) => Some(round),
+            Either::Left(round) => round.multi_leader(),
             Either::Right(_) => None,
         };
         let (executed_block, _) = self
@@ -2452,28 +2452,11 @@ where
             // Otherwise we are free to propose our own pending block.
             // Use the round number assuming there are oracle responses.
             // Using the round number during execution counts as an oracle.
-            let (round, timeout) =
-                match Self::round_for_new_proposal(&info, &identity, &block, true)? {
-                    Either::Left(round) => (Some(round), None),
-                    Either::Right(timeout) => (None, Some(timeout)),
-                };
-            match self.stage_block_execution(block, round).await {
-                Ok((executed_block, _)) => executed_block,
-                Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(
-                    WorkerError::ChainError(error),
-                ))) if matches!(
-                    &*error, ChainError::ExecutionError(error, _)
-                    if matches!(&**error, ExecutionError::MissingRound)
-                ) =>
-                {
-                    // During execution the round number was accessed, so the timeout applies.
-                    let timeout = timeout.ok_or_else(|| {
-                        ChainClientError::InternalError("Should have either timeout or round")
-                    })?;
-                    return Ok(ClientOutcome::WaitForTimeout(timeout));
-                }
-                Err(error) => return Err(error),
-            }
+            let round = match Self::round_for_new_proposal(&info, &identity, &block, true)? {
+                Either::Left(round) => round.multi_leader(),
+                Either::Right(_) => None,
+            };
+            self.stage_block_execution(block, round).await?.0
         } else {
             return Ok(ClientOutcome::Committed(None)); // Nothing to do.
         };

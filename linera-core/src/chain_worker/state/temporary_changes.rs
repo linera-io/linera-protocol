@@ -5,7 +5,7 @@
 
 use linera_base::{
     data_types::{
-        ArithmeticError, Blob, BlobContent, CompressedBytecode, Round, Timestamp,
+        ArithmeticError, Blob, BlobContent, CompressedBytecode, Timestamp,
         UserApplicationDescription,
     },
     ensure,
@@ -127,7 +127,7 @@ where
     pub(super) async fn stage_block_execution(
         &mut self,
         block: ProposedBlock,
-        round: Option<Round>,
+        round: Option<u32>,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), WorkerError> {
         let local_time = self.0.storage.clock().current_time();
         let signer = block.authenticated_signer;
@@ -242,7 +242,7 @@ where
             Box::pin(
                 self.0
                     .chain
-                    .execute_block(block, local_time, Some(*round), None),
+                    .execute_block(block, local_time, round.multi_leader(), None),
             )
             .await?
         };

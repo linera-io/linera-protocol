@@ -9,7 +9,7 @@ use std::{
 
 use futures::{future::Either, stream, StreamExt as _, TryStreamExt as _};
 use linera_base::{
-    data_types::{ArithmeticError, Blob, BlockHeight, Round, UserApplicationDescription},
+    data_types::{ArithmeticError, Blob, BlockHeight, UserApplicationDescription},
     identifiers::{BlobId, ChainId, MessageId, UserApplicationId},
 };
 use linera_chain::{
@@ -174,7 +174,7 @@ where
     pub async fn stage_block_execution(
         &self,
         block: ProposedBlock,
-        round: Option<Round>,
+        round: Option<u32>,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), LocalNodeError> {
         Ok(self.node.state.stage_block_execution(block, round).await?)
     }

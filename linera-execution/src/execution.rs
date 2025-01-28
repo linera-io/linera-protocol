@@ -8,7 +8,7 @@ use std::{
 
 use futures::{stream::FuturesOrdered, FutureExt, StreamExt, TryStreamExt};
 use linera_base::{
-    data_types::{Amount, BlockHeight, Round, Timestamp},
+    data_types::{Amount, BlockHeight, Timestamp},
     identifiers::{Account, AccountOwner, ChainId, Destination, Owner},
 };
 use linera_views::{
@@ -75,7 +75,7 @@ where
             authenticated_signer: None,
             authenticated_caller_id: None,
             height: application_description.creation.height,
-            round: Some(Round::Fast),
+            round: None,
             index: Some(0),
         };
 
@@ -150,7 +150,7 @@ impl UserAction {
         }
     }
 
-    pub(crate) fn round(&self) -> Option<Round> {
+    pub(crate) fn round(&self) -> Option<u32> {
         match self {
             UserAction::Instantiate(context, _) => context.round,
             UserAction::Operation(context, _) => context.round,

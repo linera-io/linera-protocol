@@ -685,7 +685,7 @@ OracleResponse:
     4:
       Round:
         NEWTYPE:
-          TYPENAME: Round
+          OPTION: U32
 Origin:
   STRUCT:
     - sender:

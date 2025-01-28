@@ -5,7 +5,7 @@
 
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Amount, BlockHeight, Round, TimeDelta, Timestamp},
+    data_types::{Amount, BlockHeight, TimeDelta, Timestamp},
     identifiers::{ApplicationId, BytecodeId, ChainId, MessageId, Owner},
     ownership::{ChainOwnership, CloseChainError, TimeoutConfig},
 };
@@ -132,17 +132,6 @@ impl From<wit_system_api::CloseChainError> for CloseChainError {
     fn from(guest: wit_system_api::CloseChainError) -> Self {
         match guest {
             wit_system_api::CloseChainError::NotPermitted => CloseChainError::NotPermitted,
-        }
-    }
-}
-
-impl From<wit_system_api::Round> for Round {
-    fn from(round: wit_system_api::Round) -> Self {
-        match round {
-            wit_system_api::Round::Fast => Self::Fast,
-            wit_system_api::Round::MultiLeader(r) => Self::MultiLeader(r),
-            wit_system_api::Round::SingleLeader(r) => Self::SingleLeader(r),
-            wit_system_api::Round::Validator(r) => Self::Validator(r),
         }
     }
 }

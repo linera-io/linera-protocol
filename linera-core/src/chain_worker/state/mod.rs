@@ -13,7 +13,7 @@ use std::{
 
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Blob, BlockHeight, Round, UserApplicationDescription},
+    data_types::{Blob, BlockHeight, UserApplicationDescription},
     ensure,
     hashed::Hashed,
     identifiers::{BlobId, ChainId, UserApplicationId},
@@ -179,7 +179,7 @@ where
     pub(super) async fn stage_block_execution(
         &mut self,
         block: ProposedBlock,
-        round: Option<Round>,
+        round: Option<u32>,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), WorkerError> {
         ChainWorkerStateWithTemporaryChanges::new(self)
             .await

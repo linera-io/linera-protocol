@@ -33,7 +33,7 @@ use {
     futures::{stream, StreamExt as _, TryStreamExt as _},
     linera_base::{
         crypto::PublicKey,
-        data_types::{Amount, Round},
+        data_types::Amount,
         identifiers::{AccountOwner, ApplicationId, Owner},
     },
     linera_chain::data_types::{
@@ -972,7 +972,7 @@ where
     pub async fn stage_block_execution(
         &self,
         block: ProposedBlock,
-        round: Option<Round>,
+        round: Option<u32>,
     ) -> Result<ExecutedBlock, Error> {
         Ok(self
             .client

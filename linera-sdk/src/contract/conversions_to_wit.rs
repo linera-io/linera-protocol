@@ -6,8 +6,8 @@
 use linera_base::{
     crypto::CryptoHash,
     data_types::{
-        Amount, ApplicationPermissions, BlockHeight, Resources, Round, SendMessageRequest,
-        TimeDelta, Timestamp,
+        Amount, ApplicationPermissions, BlockHeight, Resources, SendMessageRequest, TimeDelta,
+        Timestamp,
     },
     identifiers::{
         Account, AccountOwner, ApplicationId, BytecodeId, ChainId, ChannelName, Destination,
@@ -252,17 +252,6 @@ impl From<ChainOwnership> for wit_system_api::ChainOwnership {
             multi_leader_rounds,
             open_multi_leader_rounds,
             timeout_config: timeout_config.into(),
-        }
-    }
-}
-
-impl From<Round> for wit_system_api::Round {
-    fn from(round: Round) -> Self {
-        match round {
-            Round::Fast => Self::Fast,
-            Round::MultiLeader(r) => Self::MultiLeader(r),
-            Round::SingleLeader(r) => Self::SingleLeader(r),
-            Round::Validator(r) => Self::Validator(r),
         }
     }
 }

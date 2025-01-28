@@ -13,7 +13,7 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{
         Amount, ApplicationPermissions, ArithmeticError, BlockHeight, OracleResponse, Resources,
-        Round, SendMessageRequest, Timestamp,
+        SendMessageRequest, Timestamp,
     },
     ensure,
     identifiers::{
@@ -65,8 +65,8 @@ pub struct SyncRuntimeInternal<UserInstance> {
     /// The height of the next block that will be added to this chain. During operations
     /// and messages, this is the current block height.
     height: BlockHeight,
-    /// The current consensus round. Only available during block validation.
-    round: Option<Round>,
+    /// The current consensus round. Only available during block validation in multi-leader rounds.
+    round: Option<u32>,
     /// The current local time.
     local_time: Timestamp,
     /// The authenticated signer of the operation or message, if any.
@@ -285,7 +285,7 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
     fn new(
         chain_id: ChainId,
         height: BlockHeight,
-        round: Option<Round>,
+        round: Option<u32>,
         local_time: Timestamp,
         authenticated_signer: Option<Owner>,
         executing_message: Option<ExecutingMessage>,
@@ -1500,7 +1500,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         Ok(())
     }
 
-    fn validation_round(&mut self) -> Result<Round, ExecutionError> {
+    fn validation_round(&mut self) -> Result<Option<u32>, ExecutionError> {
         let mut this = self.inner();
         let round =
             if let Some(response) = this.transaction_tracker.next_replayed_oracle_response()? {
@@ -1509,7 +1509,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
                     _ => return Err(ExecutionError::OracleResponseMismatch),
                 }
             } else {
-                this.round.ok_or_else(|| ExecutionError::MissingRound)?
+                this.round
             };
         this.transaction_tracker
             .add_oracle_response(OracleResponse::Round(round));

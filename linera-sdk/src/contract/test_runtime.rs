@@ -11,8 +11,7 @@ use std::{
 use linera_base::{
     abi::{ContractAbi, ServiceAbi},
     data_types::{
-        Amount, ApplicationPermissions, BlockHeight, Resources, Round, SendMessageRequest,
-        Timestamp,
+        Amount, ApplicationPermissions, BlockHeight, Resources, SendMessageRequest, Timestamp,
     },
     identifiers::{
         Account, AccountOwner, ApplicationId, BytecodeId, ChainId, ChannelName, Destination,
@@ -43,7 +42,7 @@ where
     chain_id: Option<ChainId>,
     authenticated_signer: Option<Option<Owner>>,
     block_height: Option<BlockHeight>,
-    round: Option<Round>,
+    round: Option<u32>,
     message_id: Option<Option<MessageId>>,
     message_is_bouncing: Option<Option<bool>>,
     authenticated_caller_id: Option<Option<ApplicationId>>,
@@ -254,14 +253,14 @@ where
         self
     }
 
-    /// Configures the round number to return during the test.
-    pub fn with_round(mut self, round: Round) -> Self {
+    /// Configures the multi-leader round number to return during the test.
+    pub fn with_round(mut self, round: u32) -> Self {
         self.round = Some(round);
         self
     }
 
-    /// Configures the round number to return during the test.
-    pub fn set_round(&mut self, round: Round) -> &mut Self {
+    /// Configures the multi-leader round number to return during the test.
+    pub fn set_round(&mut self, round: u32) -> &mut Self {
         self.round = Some(round);
         self
     }
@@ -841,8 +840,8 @@ where
     }
 
     /// Returns the round in which this block was validated.
-    pub fn validation_round(&mut self) -> Round {
-        self.round.expect("Missing round number")
+    pub fn validation_round(&mut self) -> Option<u32> {
+        self.round
     }
 }
 

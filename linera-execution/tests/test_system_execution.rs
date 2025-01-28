@@ -5,7 +5,7 @@
 
 use linera_base::{
     crypto::{CryptoHash, KeyPair},
-    data_types::{Amount, BlockHeight, Round, Timestamp},
+    data_types::{Amount, BlockHeight, Timestamp},
     identifiers::{Account, AccountOwner, ChainDescription, ChainId, MessageId, Owner},
     ownership::ChainOwnership,
 };
@@ -37,7 +37,7 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
     let context = OperationContext {
         chain_id: ChainId::root(0),
         height: BlockHeight(0),
-        round: Some(Round::MultiLeader(0)),
+        round: Some(0),
         index: Some(0),
         authenticated_signer: Some(owner),
         authenticated_caller_id: None,
@@ -84,7 +84,7 @@ async fn test_simple_system_message() -> anyhow::Result<()> {
         chain_id: ChainId::root(0),
         is_bouncing: false,
         height: BlockHeight(0),
-        round: Some(Round::MultiLeader(0)),
+        round: Some(0),
         certificate_hash: CryptoHash::test_hash("certificate"),
         message_id: MessageId {
             chain_id: ChainId::root(1),
