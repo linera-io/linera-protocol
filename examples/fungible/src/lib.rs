@@ -12,7 +12,7 @@ use {
     futures::{stream, StreamExt},
     linera_sdk::{
         base::{ApplicationId, BytecodeId},
-        test::{ActiveChain, TestValidator},
+        test::{ActiveChain, QueryOutcome, TestValidator},
     },
 };
 
@@ -127,7 +127,7 @@ pub async fn query_account(
         "query {{ accounts {{ entry(key: {}) {{ value }} }} }}",
         account_owner.to_value()
     );
-    let response = chain.graphql_query(application_id, query).await;
+    let QueryOutcome { response, .. } = chain.graphql_query(application_id, query).await;
     let balance = response.pointer("/accounts/entry/value")?.as_str()?;
 
     Some(

@@ -498,7 +498,7 @@ impl ActiveChain {
         &self,
         application_id: ApplicationId<Abi>,
         query: impl Into<async_graphql::Request>,
-    ) -> serde_json::Value
+    ) -> QueryOutcome<serde_json::Value>
     where
         Abi: ServiceAbi<Query = async_graphql::Request, QueryResponse = async_graphql::Response>,
     {
@@ -511,9 +511,13 @@ impl ActiveChain {
                 query_str, response.errors
             );
         }
-        response
+        let json_response = response
             .data
             .into_json()
-            .expect("Unexpected non-JSON query response")
+            .expect("Unexpected non-JSON query response");
+
+        QueryOutcome {
+            response: json_response,
+        }
     }
 }
