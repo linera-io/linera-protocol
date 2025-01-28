@@ -3,7 +3,7 @@
 
 //! # Chain manager
 //!
-//! This module contains the consensus mechanism for all microchains. Whenever a block is
+//! This module implements the consensus mechanism for managing all microchains. Whenever a block is
 //! confirmed, a new chain manager is created for the next block height. It manages the consensus
 //! state until a new block is confirmed. As long as less than a third of the validators are faulty,
 //! it guarantees that at most one `ConfirmedBlock` certificate will be created for this height.
