@@ -21,18 +21,18 @@ from low to high levels in the dependency graph)
   definitions, including cryptography.
 
 * [`linera-version`](https://linera-io.github.io/linera-protocol/linera_version/index.html)
-  A library to manage version infos in binaries and services.
+  A library to manage version info in binaries and services.
 
 * [`linera-views`](https://linera-io.github.io/linera-protocol/linera_views/index.html) A
   library mapping complex data structures onto a key-value store. The corresponding
   procedural macros are implemented in `linera-views-derive`.
 
 * [`linera-execution`](https://linera-io.github.io/linera-protocol/linera_execution/index.html)
-  Persistent data and the corresponding logics for runtime and execution of Linera
+  Persistent data and the corresponding logic for runtime and execution of Linera
   applications.
 
 * [`linera-chain`](https://linera-io.github.io/linera-protocol/linera_chain/index.html)
-  Persistent data and the corresponding logics for chains of blocks, certificates, and
+  Persistent data and the corresponding logic for chains of blocks, certificates, and
   cross-chain messaging.
 
 * [`linera-storage`](https://linera-io.github.io/linera-protocol/linera_storage/index.html)
