@@ -4,11 +4,11 @@
 /*! ABI of the Requests For Quotes Example Application */
 
 use async_graphql::{scalar, InputObject, Request, Response, SimpleObject};
+use fungible::Account;
 use linera_sdk::{
-    base::{Amount, ApplicationId, BytecodeId, ChainId, ContractAbi, MessageId, Owner, ServiceAbi},
+    base::{Amount, ApplicationId, ChainId, ContractAbi, Owner, ServiceAbi},
     graphql::GraphQLMutationRoot,
 };
-use matching_engine::{Order, Price};
 use serde::{Deserialize, Serialize};
 
 pub struct RfqAbi;
@@ -21,11 +21,6 @@ impl ContractAbi for RfqAbi {
 impl ServiceAbi for RfqAbi {
     type Query = Request;
     type QueryResponse = Response;
-}
-
-#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
-pub struct Parameters {
-    pub me_bytecode_id: BytecodeId,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, SimpleObject, InputObject)]
@@ -59,6 +54,14 @@ impl RequestId {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, SimpleObject, InputObject)]
+#[graphql(input_name = "TokensInput")]
+pub struct Tokens {
+    pub token_id: ApplicationId,
+    pub owner: Account,
+    pub amount: Amount,
+}
+
 /// Operations that can be sent to the application.
 #[derive(Debug, Serialize, Deserialize, GraphQLMutationRoot)]
 pub enum Operation {
@@ -69,7 +72,7 @@ pub enum Operation {
     },
     ProvideQuote {
         request_id: RequestId,
-        quote: Price,
+        quote: Amount,
         quoter_owner: Owner,
     },
     AcceptQuote {
@@ -78,9 +81,6 @@ pub enum Operation {
         fee_budget: Amount,
     },
     FinalizeDeal {
-        request_id: RequestId,
-    },
-    CloseRequest {
         request_id: RequestId,
     },
     CancelRequest {
@@ -99,13 +99,11 @@ pub enum Message {
     },
     ProvideQuote {
         seq_number: u64,
-        quote: Price,
+        quote: Amount,
         quoter_owner: Owner,
     },
     QuoteAccepted {
         request_id: RequestId,
-        matching_engine_message_id: MessageId,
-        matching_engine_app_id: ApplicationId,
     },
     CancelRequest {
         seq_number: u64,
@@ -113,13 +111,11 @@ pub enum Message {
     StartMatchingEngine {
         initiator: ChainId,
         request_id: RequestId,
-        order: Order,
         token_pair: Box<TokenPair>,
-        matching_engine_message_id: MessageId,
+        tokens: Box<Tokens>,
     },
     TokensSent {
-        matching_engine_app_id: ApplicationId,
-        order: Order,
+        tokens: Box<Tokens>,
     },
     CloseChain,
     ChainClosed {

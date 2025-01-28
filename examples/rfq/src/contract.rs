@@ -8,18 +8,15 @@ mod state;
 use fungible::{Account, FungibleTokenAbi};
 use linera_sdk::{
     base::{
-        Amount, ApplicationPermissions, ChainId, ChainOwnership, Owner, TimeoutConfig,
-        WithContractAbi,
+        AccountOwner, Amount, ApplicationPermissions, ChainId, ChainOwnership, Owner,
+        TimeoutConfig, WithContractAbi,
     },
     views::{RootView, View},
     Contract, ContractRuntime,
 };
-use matching_engine::{
-    MatchingEngineAbi, Operation as MEOperation, Order, OrderNature, Parameters as MEParameters,
-};
-use rfq::{Message, Operation, Parameters, RequestId, RfqAbi};
+use rfq::{Message, Operation, RequestId, RfqAbi, TokenPair, Tokens};
 
-use self::state::RfqState;
+use self::state::{QuoteProvided, RfqState};
 
 pub struct RfqContract {
     state: RfqState,
@@ -35,7 +32,7 @@ impl WithContractAbi for RfqContract {
 impl Contract for RfqContract {
     type Message = Message;
     type InstantiationArgument = ();
-    type Parameters = Parameters;
+    type Parameters = ();
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = RfqState::load(runtime.root_view_storage_context())
@@ -46,10 +43,14 @@ impl Contract for RfqContract {
 
     async fn instantiate(&mut self, _argument: ()) {
         // Validate that the application parameters were configured correctly.
-        let _ = self.runtime.application_parameters();
+        self.runtime.application_parameters();
     }
 
     async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
+        if self.state.is_temp_chain() {
+            // No operations should be executed directly on a temporary chain
+            return;
+        }
         match operation {
             Operation::RequestQuote {
                 target,
@@ -74,9 +75,15 @@ impl Contract for RfqContract {
                 quote,
                 quoter_owner,
             } => {
-                self.state
-                    .update_state_with_quote(&request_id, quote, quoter_owner)
-                    .await;
+                let request_data = self
+                    .state
+                    .request_data(&request_id)
+                    .await
+                    .expect("Request not found!");
+                if request_data.we_requested {
+                    return;
+                }
+                request_data.update_state_with_quote(quote, quoter_owner);
                 let message = Message::ProvideQuote {
                     seq_number: request_id.seq_number(),
                     quote,
@@ -92,60 +99,84 @@ impl Contract for RfqContract {
                 owner,
                 fee_budget,
             } => {
-                let matching_engine_chain_id =
-                    self.start_exchange(&request_id, fee_budget, owner).await;
-                self.state
-                    .start_exchange(&request_id, matching_engine_chain_id)
+                let request_data = self
+                    .state
+                    .request_data(&request_id)
+                    .await
+                    .expect("Request not found!");
+                if !request_data.we_requested {
+                    return;
+                }
+                let quote_provided = request_data.quote_provided();
+                let token_pair = request_data.token_pair();
+                let temp_chain_id = self
+                    .start_exchange(
+                        request_id.clone(),
+                        quote_provided,
+                        token_pair,
+                        fee_budget,
+                        owner,
+                    )
                     .await;
+                self.state
+                    .request_data(&request_id)
+                    .await
+                    .expect("Request not found!")
+                    .start_exchange(temp_chain_id);
             }
             Operation::FinalizeDeal { request_id } => {
-                let awaiting_tokens = self.state.get_awaiting_tokens(&request_id).await;
+                let request_data = self
+                    .state
+                    .request_data(&request_id)
+                    .await
+                    .expect("Request not found!");
+                let awaiting_tokens = request_data.get_awaiting_tokens();
                 let owner = awaiting_tokens.quoter_account;
-                let order = Order::Insert {
-                    owner,
-                    amount: awaiting_tokens.amount,
-                    nature: OrderNature::Bid,
-                    price: awaiting_tokens.price,
-                };
                 // the message should have been sent from the temporary chain
-                let matching_engine_chain_id = awaiting_tokens.matching_engine_chain_id;
+                let temp_chain_id = awaiting_tokens.temp_chain_id;
 
                 // transfer tokens to the new chain
                 let token_pair = awaiting_tokens.token_pair;
                 let transfer = fungible::Operation::Transfer {
                     owner,
-                    amount: matching_engine::product_price_amount(
-                        awaiting_tokens.price,
-                        awaiting_tokens.amount,
-                    ),
+                    amount: awaiting_tokens.amount_offered,
                     target_account: Account {
-                        chain_id: matching_engine_chain_id,
-                        owner,
+                        chain_id: temp_chain_id,
+                        owner: AccountOwner::Application(
+                            self.runtime.application_id().forget_abi(),
+                        ),
                     },
                 };
-                let token = token_pair.token_asked.with_abi::<FungibleTokenAbi>();
-                self.runtime.call_application(true, token, &transfer);
+                let token = token_pair.token_asked;
+                self.runtime.call_application(
+                    true,
+                    token.with_abi::<FungibleTokenAbi>(),
+                    &transfer,
+                );
 
                 let message = Message::TokensSent {
-                    matching_engine_app_id: awaiting_tokens.matching_engine_app_id,
-                    order,
+                    tokens: Box::new(Tokens {
+                        token_id: token,
+                        owner: Account {
+                            chain_id: self.runtime.chain_id(),
+                            owner,
+                        },
+                        amount: awaiting_tokens.amount_offered,
+                    }),
                 };
                 self.runtime
                     .prepare_message(message)
                     .with_authentication()
-                    .send_to(matching_engine_chain_id);
-                self.state
-                    .start_exchange(&request_id, matching_engine_chain_id)
-                    .await;
+                    .send_to(temp_chain_id);
+                request_data.start_exchange(temp_chain_id);
             }
             Operation::CancelRequest { request_id } => {
-                if let Some(matching_engine_chain_id) = self.state.cancel_request(&request_id).await
-                {
+                if let Some(temp_chain_id) = self.state.cancel_request(&request_id).await {
                     let message = Message::CloseChain;
                     self.runtime
                         .prepare_message(message)
                         .with_authentication()
-                        .send_to(matching_engine_chain_id);
+                        .send_to(temp_chain_id);
                 } else {
                     let message = Message::CancelRequest {
                         seq_number: request_id.seq_number(),
@@ -155,16 +186,6 @@ impl Contract for RfqContract {
                         .with_authentication()
                         .send_to(request_id.chain_id());
                 }
-            }
-            Operation::CloseRequest { request_id } => {
-                let matching_engine_chain_id =
-                    self.state.get_matching_engine_chain_id(&request_id).await;
-                // send messages to the other party's chain and to the temporary chain
-                let message = Message::CloseChain;
-                self.runtime
-                    .prepare_message(message)
-                    .with_authentication()
-                    .send_to(matching_engine_chain_id);
             }
         }
     }
@@ -183,34 +204,28 @@ impl Contract for RfqContract {
                 ..
             } => {
                 self.state
-                    .update_state_with_quote(&request_id, quote, quoter_owner)
-                    .await;
+                    .request_data(&request_id)
+                    .await
+                    .expect("Request not found!")
+                    .update_state_with_quote(quote, quoter_owner);
             }
-            Message::QuoteAccepted {
-                request_id,
-                matching_engine_message_id: _,
-                matching_engine_app_id,
-                ..
-            } => {
-                let matching_engine_chain_id = self.get_message_creation_chain_id();
+            Message::QuoteAccepted { request_id } => {
+                let temp_chain_id = self.get_message_creation_chain_id();
                 self.state
-                    .quote_accepted(
-                        &request_id,
-                        matching_engine_chain_id,
-                        matching_engine_app_id,
-                    )
-                    .await;
+                    .request_data(&request_id)
+                    .await
+                    .expect("Request not found!")
+                    .quote_accepted(temp_chain_id);
             }
             Message::CancelRequest { .. } => {
-                if let Some(matching_engine_chain_id) = self.state.cancel_request(&request_id).await
-                {
+                if let Some(temp_chain_id) = self.state.cancel_request(&request_id).await {
                     // the other side wasn't aware of the chain yet, or they would have
                     // sent `RequestClosed` - we have to close it ourselves
                     let message = Message::CloseChain;
                     self.runtime
                         .prepare_message(message)
                         .with_authentication()
-                        .send_to(matching_engine_chain_id);
+                        .send_to(temp_chain_id);
                 }
             }
             Message::ChainClosed { request_id } => {
@@ -221,152 +236,72 @@ impl Contract for RfqContract {
                 request_id,
                 initiator,
                 token_pair,
-                order,
-                matching_engine_message_id,
+                tokens,
             } => {
-                // create the matching engine app
-                let parameters = self.runtime.application_parameters();
-                let me_parameters = MEParameters {
-                    tokens: [
-                        token_pair.token_asked.with_abi::<FungibleTokenAbi>(),
-                        token_pair.token_offered.with_abi::<FungibleTokenAbi>(),
-                    ],
-                };
-                let me_application_id = self
-                    .runtime
-                    .create_application::<MatchingEngineAbi, MEParameters, ()>(
-                        parameters.me_bytecode_id,
-                        &me_parameters,
-                        &(),
-                        vec![],
-                    );
-
-                let mut application_permissions =
-                    ApplicationPermissions::new_single(self.runtime.application_id().forget_abi());
-                application_permissions
-                    .close_chain
-                    .push(me_application_id.forget_abi());
-                self.runtime
-                    .change_application_permissions(application_permissions)
-                    .expect("Couldn't grant Matching Engine the permission to close the chain!");
-
                 // save the info in the app state
                 self.state.init_temp_chain_state(
                     request_id.clone(),
                     initiator,
-                    me_application_id.forget_abi(),
                     *token_pair,
+                    *tokens,
                 );
-                // save the account owner for chain closing protection
-                if let Order::Insert { owner, .. } = &order {
-                    self.state.add_owner_to_temp_chain_state(*owner, initiator);
-                }
 
-                // submit the order in the name of the temp chain creator
-                self.runtime.call_application(
-                    true,
-                    me_application_id,
-                    &MEOperation::ExecuteOrder { order },
-                );
                 // inform the other side that the temporary chain is ready
                 let message = Message::QuoteAccepted {
                     request_id: RequestId::new(initiator, request_id.seq_number()),
-                    matching_engine_message_id,
-                    matching_engine_app_id: me_application_id.forget_abi(),
                 };
                 self.runtime
                     .prepare_message(message)
                     .with_authentication()
                     .send_to(request_id.chain_id());
             }
-            Message::TokensSent {
-                matching_engine_app_id,
-                order,
-            } => {
-                // save the account owner for chain closing protection
-                if let Order::Insert { owner, .. } = &order {
-                    let chain_id = self.get_message_creation_chain_id();
-                    self.state.add_owner_to_temp_chain_state(*owner, chain_id);
-                }
-                self.runtime.call_application(
-                    true,
-                    matching_engine_app_id.with_abi::<MatchingEngineAbi>(),
-                    &MEOperation::ExecuteOrder { order },
-                );
-            }
-            Message::CloseChain => {
-                // we're executing on the temporary chain - let's close it if accounts
-                // are empty
-                let token_pair = self.state.temp_chain_token_pair();
-                for token_holder in self.state.temp_chain_account_owners() {
-                    for token_id in [token_pair.token_asked, token_pair.token_offered] {
-                        let amount = match self.runtime.call_application(
+            Message::TokensSent { tokens } => {
+                match self.state.take_temp_chain_held_tokens() {
+                    None => {
+                        // This should never really happen, but if it does, return the
+                        // sent tokens
+                        let app_id = self.runtime.application_id().forget_abi();
+                        self.runtime.call_application(
                             true,
-                            token_id.with_abi::<fungible::FungibleTokenAbi>(),
-                            &fungible::Operation::Balance {
-                                owner: token_holder.account_owner,
+                            tokens.token_id.with_abi::<fungible::FungibleTokenAbi>(),
+                            &fungible::Operation::Transfer {
+                                owner: AccountOwner::Application(app_id),
+                                amount: tokens.amount,
+                                target_account: tokens.owner,
                             },
-                        ) {
-                            fungible::FungibleResponse::Balance(amount) => amount,
-                            _ => Amount::ZERO,
-                        };
-                        // if any owner still has any tokens available, we do not
-                        // close the chain - they have to claim the tokens first
-                        if !amount.is_zero()
-                            && Some(token_holder.account_owner)
-                                != self
-                                    .runtime
-                                    .authenticated_signer()
-                                    .map(|owner| owner.into())
-                        {
-                            return;
-                        } else if !amount.is_zero() {
-                            // there are some tokens, but we are the owner, so we can
-                            // transfer them out
-                            self.runtime.call_application(
-                                true,
-                                token_id.with_abi::<fungible::FungibleTokenAbi>(),
-                                &fungible::Operation::Transfer {
-                                    amount,
-                                    owner: token_holder.account_owner,
-                                    target_account: Account {
-                                        chain_id: token_holder.chain_id,
-                                        owner: token_holder.account_owner,
-                                    },
-                                },
-                            );
-                        }
+                        );
+                    }
+                    Some(held_tokens) => {
+                        // we have tokens from both parties now: return them to the
+                        // correct parties
+                        let app_id = self.runtime.application_id().forget_abi();
+                        self.runtime.call_application(
+                            true,
+                            tokens.token_id.with_abi::<fungible::FungibleTokenAbi>(),
+                            &fungible::Operation::Transfer {
+                                owner: AccountOwner::Application(app_id),
+                                amount: tokens.amount,
+                                target_account: held_tokens.owner,
+                            },
+                        );
+                        self.runtime.call_application(
+                            true,
+                            held_tokens
+                                .token_id
+                                .with_abi::<fungible::FungibleTokenAbi>(),
+                            &fungible::Operation::Transfer {
+                                owner: AccountOwner::Application(app_id),
+                                amount: held_tokens.amount,
+                                target_account: tokens.owner,
+                            },
+                        );
                     }
                 }
-
-                // if we reached here, no tokens are left on the chain
-                let matching_engine_app_id = self
-                    .state
-                    .me_application_id()
-                    .expect("No TempChainState found!");
-                self.runtime.call_application(
-                    true,
-                    matching_engine_app_id.with_abi::<MatchingEngineAbi>(),
-                    &MEOperation::CloseChain,
-                );
-
-                // let both users know that the chain is now closed
-                let (initiator, request_id) = self.state.temp_chain_initiator_and_request_id();
-                let message = Message::ChainClosed {
-                    request_id: request_id.clone(),
-                };
-                self.runtime
-                    .prepare_message(message)
-                    .with_authentication()
-                    .send_to(initiator);
-
-                let other_chain = request_id.chain_id();
-                let request_id = RequestId::new(initiator, request_id.seq_number());
-                let message = Message::ChainClosed { request_id };
-                self.runtime
-                    .prepare_message(message)
-                    .with_authentication()
-                    .send_to(other_chain);
+                // exchange is finished, we can close the chain
+                self.close_chain();
+            }
+            Message::CloseChain => {
+                self.close_chain();
             }
         }
     }
@@ -386,11 +321,12 @@ impl RfqContract {
 
     async fn start_exchange(
         &mut self,
-        request_id: &RequestId,
+        request_id: RequestId,
+        quote_provided: QuoteProvided,
+        token_pair: TokenPair,
         fee_budget: Amount,
         owner: Owner,
     ) -> ChainId {
-        let quote_provided = self.state.quote_provided(request_id).await;
         let ownership = ChainOwnership::multiple(
             [(owner, 100), (quote_provided.get_quoter_owner(), 100)],
             100,
@@ -398,38 +334,80 @@ impl RfqContract {
         );
         let app_id = self.runtime.application_id();
         let permissions = ApplicationPermissions::new_single(app_id.forget_abi());
-        let (matching_engine_message_id, matching_engine_chain_id) =
-            self.runtime.open_chain(ownership, permissions, fee_budget);
-
-        let token_pair = self.state.token_pair(request_id).await;
+        let (_, temp_chain_id) = self.runtime.open_chain(ownership, permissions, fee_budget);
 
         // transfer tokens to the new chain
         let transfer = fungible::Operation::Transfer {
             owner: owner.into(),
             amount: quote_provided.get_amount(),
             target_account: Account {
-                chain_id: matching_engine_chain_id,
-                owner: owner.into(),
+                chain_id: temp_chain_id,
+                owner: AccountOwner::Application(self.runtime.application_id().forget_abi()),
             },
         };
-        let token = token_pair.token_offered.with_abi::<FungibleTokenAbi>();
-        self.runtime.call_application(true, token, &transfer);
+        let token = token_pair.token_offered;
+        self.runtime
+            .call_application(true, token.with_abi::<FungibleTokenAbi>(), &transfer);
 
         // signal to the temporary chain that it should start the exchange!
         let initiator = self.runtime.chain_id();
-        let order = quote_provided.get_ask_order(owner.into());
         let message = Message::StartMatchingEngine {
             initiator,
-            request_id: request_id.clone(),
-            order,
+            request_id,
             token_pair: Box::new(token_pair),
-            matching_engine_message_id,
+            tokens: Box::new(Tokens {
+                token_id: token,
+                owner: Account {
+                    chain_id: self.runtime.chain_id(),
+                    owner: owner.into(),
+                },
+                amount: quote_provided.get_amount(),
+            }),
         };
         self.runtime
             .prepare_message(message)
             .with_authentication()
-            .send_to(matching_engine_chain_id);
+            .send_to(temp_chain_id);
 
-        matching_engine_chain_id
+        temp_chain_id
+    }
+
+    fn close_chain(&mut self) {
+        // we're executing on the temporary chain
+        // if we hold some tokens, we return them before closing
+        if let Some(tokens) = self.state.temp_chain_held_tokens() {
+            let app_id = self.runtime.application_id().forget_abi();
+            self.runtime.call_application(
+                true,
+                tokens.token_id.with_abi::<fungible::FungibleTokenAbi>(),
+                &fungible::Operation::Transfer {
+                    owner: AccountOwner::Application(app_id),
+                    amount: tokens.amount,
+                    target_account: tokens.owner,
+                },
+            );
+        }
+
+        self.runtime
+            .close_chain()
+            .expect("Failed to close the temporary chain");
+
+        // let both users know that the chain is now closed
+        let (initiator, request_id) = self.state.temp_chain_initiator_and_request_id();
+        let message = Message::ChainClosed {
+            request_id: request_id.clone(),
+        };
+        self.runtime
+            .prepare_message(message)
+            .with_authentication()
+            .send_to(initiator);
+
+        let other_chain = request_id.chain_id();
+        let request_id = RequestId::new(initiator, request_id.seq_number());
+        let message = Message::ChainClosed { request_id };
+        self.runtime
+            .prepare_message(message)
+            .with_authentication()
+            .send_to(other_chain);
     }
 }
