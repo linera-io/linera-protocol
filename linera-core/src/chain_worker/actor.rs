@@ -141,7 +141,7 @@ where
         callback: oneshot::Sender<Result<(ChainInfoResponse, NetworkActions), WorkerError>>,
     },
 
-    /// Get a blob if it belongs to the current locked block or pending proposal.
+    /// Get a blob if it belongs to the current locking block or pending proposal.
     DownloadPendingBlob {
         blob_id: BlobId,
         #[debug(skip)]

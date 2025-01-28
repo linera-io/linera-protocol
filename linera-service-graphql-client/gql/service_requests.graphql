@@ -119,7 +119,7 @@ query Chain(
     manager {
       ownership
       seed
-      lockedBlobs {
+      lockingBlobs {
         keys
       }
       roundTimeout

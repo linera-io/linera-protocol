@@ -221,9 +221,9 @@ type ChainManager {
 	"""
 	seed: Int!
 	"""
-	These are blobs published or read by the locked block.
+	These are blobs published or read by the locking block.
 	"""
-	lockedBlobs: MapView_BlobId_Blob_3711e760!
+	lockingBlobs: MapView_BlobId_Blob_3711e760!
 	"""
 	The time after which we are ready to sign a timeout certificate for the current round.
 	"""

@@ -32,7 +32,7 @@ use linera_chain::{
         IncomingBundle, LiteValue, LiteVote, Medium, MessageAction, MessageBundle, Origin,
         OutgoingMessage, PostedMessage, ProposedBlock, SignatureAggregator,
     },
-    manager::LockedBlock,
+    manager::LockingBlock,
     test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt, VoteTestExt},
     types::{
         CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate, Timeout,
@@ -3324,17 +3324,17 @@ where
     let block2 = make_child_block(&value0.clone()).with_simple_transfer(ChainId::root(1), amount);
     let (executed_block2, _) = worker.stage_block_execution(block2.clone()).await?;
 
-    // Since round 3 is already over, a validated block from round 3 won't update the validator's
-    // locked block; certificate1 (with block1) remains locked.
+    // Since round 3 is already over, the validator won't vote for a validated block from round 3.
     let value2 = Hashed::new(ValidatedBlock::new(executed_block2.clone()));
     let certificate =
         make_certificate_with_round(&committee, &worker, value2.clone(), Round::SingleLeader(2));
     worker.handle_validated_certificate(certificate).await?;
     let query_values = ChainInfoQuery::new(chain_id).with_manager_values();
     let (response, _) = worker.handle_chain_info_query(query_values.clone()).await?;
+    let manager = response.info.manager;
     assert_eq!(
-        response.info.manager.requested_locked,
-        Some(Box::new(LockedBlock::Regular(certificate1)))
+        manager.requested_confirmed.unwrap().inner().block(),
+        certificate1.block()
     );
 
     // Proposing block2 now would fail.
@@ -3344,7 +3344,7 @@ where
         .into_proposal_with_round(&key_pairs[1], Round::SingleLeader(5));
     let result = worker.handle_block_proposal(proposal.clone()).await;
     assert_matches!(result, Err(WorkerError::ChainError(error))
-         if matches!(*error, ChainError::HasLockedBlock(_, _))
+         if matches!(*error, ChainError::HasIncompatibleConfirmedVote(_, _))
     );
 
     // But with the validated block certificate for block2, it is allowed.
@@ -3360,8 +3360,8 @@ where
     let (_, _) = worker.handle_block_proposal(proposal).await?;
     let (response, _) = worker.handle_chain_info_query(query_values.clone()).await?;
     assert_eq!(
-        response.info.manager.requested_locked,
-        Some(Box::new(LockedBlock::Regular(certificate2)))
+        response.info.manager.requested_locking,
+        Some(Box::new(LockingBlock::Regular(certificate2)))
     );
     let vote = response.info.manager.pending.as_ref().unwrap();
     assert_eq!(vote.value, lite_value2);
@@ -3384,7 +3384,7 @@ where
     let proposal = block1.into_proposal_with_round(&key_pairs[0], Round::SingleLeader(6));
     let result = worker.handle_block_proposal(proposal.clone()).await;
     assert_matches!(result, Err(WorkerError::ChainError(error))
-         if matches!(*error, ChainError::HasLockedBlock(_, _))
+         if matches!(*error, ChainError::HasIncompatibleConfirmedVote(_, _))
     );
 
     // Let rounds 6 and 7 time out.
@@ -3395,8 +3395,7 @@ where
         .await?;
     assert_eq!(response.info.manager.current_round, Round::SingleLeader(8));
 
-    // If the worker does not belong to a validator, it does update its locked block even if it's
-    // from a past round.
+    // The worker updates its locking block even if it's from a past round.
     let certificate =
         make_certificate_with_round(&committee, &worker, value1, Round::SingleLeader(7));
     let worker = worker.with_key_pair(None).await; // Forget validator keys.
@@ -3405,8 +3404,8 @@ where
         .await?;
     let (response, _) = worker.handle_chain_info_query(query_values).await?;
     assert_eq!(
-        response.info.manager.requested_locked,
-        Some(Box::new(LockedBlock::Regular(certificate)))
+        response.info.manager.requested_locking,
+        Some(Box::new(LockingBlock::Regular(certificate)))
     );
     Ok(())
 }
@@ -3646,7 +3645,7 @@ where
         .into_proposal_with_round(&key_pairs[1], Round::MultiLeader(1));
     let result = worker.handle_block_proposal(proposal2).await;
     assert_matches!(result, Err(WorkerError::ChainError(err))
-        if matches!(*err, ChainError::HasLockedBlock(_, Round::Fast))
+        if matches!(*err, ChainError::HasIncompatibleConfirmedVote(_, Round::Fast))
     );
     let proposal3 = block1
         .clone()
@@ -3669,8 +3668,8 @@ where
     let query_values = ChainInfoQuery::new(chain_id).with_manager_values();
     let (response, _) = worker.handle_chain_info_query(query_values).await?;
     assert_eq!(
-        response.info.manager.requested_locked,
-        Some(Box::new(LockedBlock::Regular(certificate2)))
+        response.info.manager.requested_locking,
+        Some(Box::new(LockingBlock::Regular(certificate2)))
     );
     let vote = response.info.manager.pending.as_ref().unwrap();
     assert_eq!(vote.value, lite_value2);
