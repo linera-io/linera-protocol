@@ -58,7 +58,7 @@ pub async fn get_orders(
 ///     User_b thus commits 4 + 4 = 8 token B on the matching engine chain and is left
 ///     with 1 token B.
 /// * The price that is matching is 2 where a transaction can actually occur
-///   * Only 3 token B can be exhanged against 6 tokens A.
+///   * Only 3 token B can be exchanged against 6 tokens A.
 ///   * So, the order from user_b is only partially filled.
 /// * Then the orders are cancelled and the user get back their tokens.
 ///   After the exchange we have
