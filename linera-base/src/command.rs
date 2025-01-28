@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Command functionality used for spanning child processes.
+//! Command functionality used for spawning child processes.
 
 use std::{
     path::{Path, PathBuf},
