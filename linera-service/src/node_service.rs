@@ -34,7 +34,7 @@ use linera_core::{
 use linera_execution::{
     committee::{Committee, Epoch},
     system::{AdminOperation, Recipient, SystemChannel},
-    Operation, Query, QueryResponse, SystemOperation,
+    Operation, Query, QueryOutcome, QueryResponse, SystemOperation,
 };
 use linera_sdk::base::BlobContent;
 use linera_storage::Storage;
@@ -1007,7 +1007,7 @@ where
             .map_err(|_| NodeServiceError::UnknownChainId {
                 chain_id: chain_id.to_string(),
             })?;
-        let response = client.query_application(query).await?;
+        let QueryOutcome { response } = client.query_application(query).await?;
         let user_response_bytes = match response {
             QueryResponse::System(_) => {
                 unreachable!("cannot get a system response for a user query")

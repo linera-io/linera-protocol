@@ -2170,13 +2170,13 @@ where
 
     /// Queries an application.
     #[instrument(level = "trace", skip(query))]
-    pub async fn query_application(&self, query: Query) -> Result<QueryResponse, ChainClientError> {
-        let QueryOutcome { response } = self
+    pub async fn query_application(&self, query: Query) -> Result<QueryOutcome, ChainClientError> {
+        let outcome = self
             .client
             .local_node
             .query_application(self.chain_id, query)
             .await?;
-        Ok(response)
+        Ok(outcome)
     }
 
     /// Queries a system application.
