@@ -2184,14 +2184,14 @@ where
     pub async fn query_system_application(
         &self,
         query: SystemQuery,
-    ) -> Result<SystemResponse, ChainClientError> {
+    ) -> Result<QueryOutcome<SystemResponse>, ChainClientError> {
         let QueryOutcome { response } = self
             .client
             .local_node
             .query_application(self.chain_id, Query::System(query))
             .await?;
         match response {
-            QueryResponse::System(response) => Ok(response),
+            QueryResponse::System(response) => Ok(QueryOutcome { response }),
             _ => Err(ChainClientError::InternalError(
                 "Unexpected response for system query",
             )),
