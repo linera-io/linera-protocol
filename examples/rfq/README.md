@@ -1,8 +1,8 @@
 # Request For Quotes (RFQ) Example Application
 
 This example implements a Request For Quotes (RFQ) application, which demonstrates atomic swaps on
-the Linera protocol. Prerequisites for the RFQ application are the `fungible` application, as well
-as the Matching Engine application, as we will be using the Matching Engine to execute the swap.
+the Linera protocol. Prerequisites for the RFQ application are the `fungible` application, as the
+application needs some tokens to be exchanged.
 
 # How it works
 
@@ -12,35 +12,28 @@ operation. Such an operation defines the pair of tokens that are intended to be 
 application IDs, as well as the amount to be exchanged.
 
 Once user B receives the request, they can respond with a quote using the `ProvideQuote` operation.
-In it, they specify the price they are willing to offer, as well as their owner ID (which will be
-required for setting up the temporary chain for the atomic swap). It is possible that multiple
-requests could have been received: the user specifies which one they are responding to using a request
-ID, consisting of the other party's chain ID and a sequence number.
+In it, they specify the amount of the other token they are willing to offer, as well as their
+owner ID (which will be required for setting up the temporary chain for the atomic swap). It is
+possible that multiple requests could have been received: the user specifies which one they are
+responding to using a request ID, consisting of the other party's chain ID and a sequence number.
 
 User A, after receiving the quote, has the option to either cancel the whole request using the
 `CancelRequest` operation, or accept it using the `AcceptQuote` operation. Cancelling the request
 removes it from the application state and notifies the other party. Accepting the request launches
 the exchange process.
 
-Initially, a temporary chain for the atomic swap is automatically created. An instance of the
-Matching Engine application is created on the chain, tokens are transferred to the chain (they are
-initially assumed to exist on user A's chain - if they don't, the operation will fail), a Matching
-Engine order is submitted and user B is notified.
+Initially, a temporary chain for the atomic swap is automatically created. Tokens are transferred
+to the chain (they are initially assumed to exist on user A's chain - if they don't, the operation
+will fail) and put in the RFQ application's custody, and user B is notified.
 
 The temporary chain is owned by both users, which means both users can withdraw from the exchange at
-any time, and they don't depend on the other user for chain liveness.
+any time using the `CancelRequest` operation, and they don't depend on the other user for chain
+liveness.
 
 User B can then either cancel the request, or send their tokens to the temporary chain using the
 `FinalizeDeal` operation. If they choose to finalize the deal, the tokens are sent (like before, they
-are assumed to exist on user B's chain) and a Matching Engine order is submitted.
-
-If there were no issues, at this point Matching Engine will match the orders submitted by the two
-users and perform the swap.
-
-After the swap, the tokens remain on the temporary chain. In order to claim them, both users have
-to submit the `CloseRequest` operation. If all tokens have been claimed, `CloseRequest` will also
-automatically trigger the closing of the temporary chain and removal of the requests from the users'
-application states. The claimed tokens are returned to the respective users' chains.
+are assumed to exist on user B's chain) to the RFQ applications custody. The application will then
+return each batch of tokens to the other owner and close the temporary chain automatically.
 
 # Usage
 
@@ -94,20 +87,11 @@ APP_ID_1=$(linera --with-wallet 0 project publish-and-create \
 
 Each user is granted 500 tokens of each type.
 
-We also need to publish the bytecode for the Matching Engine application (without instantiating it).
-
-```bash
-ME_BCID=$(linera -w 0 publish-bytecode \
-    examples/target/wasm32-unknown-unknown/release/matching_engine_{contract,service}.wasm)
-```
-
-Lastly, we have to create the RFQ application. We pass in the bytecode ID of the Matching Engine
-bytecode, so that the application can instantiate the Matching Engine on the temporary chains for us.
+Lastly, we have to create the RFQ application.
 
 ```bash
 APP_RFQ=$(linera -w 0 --wait-for-outgoing-messages \
     project publish-and-create examples/rfq \
-    --json-parameters "{\"me_bytecode_id\":\"$ME_BCID\"}" \
     --required-application-ids $APP_ID_0 $APP_ID_1)
 ```
 
@@ -184,7 +168,7 @@ mutation {
 }
 ```
 
-User A will now provide a quote to user B - they are willing to exchange the tokens for a price of 2.
+User A will now provide a quote to user B - they are willing to exchange 50 FUN2 for 100 FUN1.
 In user A's tab, perform the following mutation:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_0/applications/$APP_RFQ
@@ -194,14 +178,14 @@ mutation {
       otherChainId:"$CHAIN_1",
       seqNum:0
     },
-    quote: { price: 2 },
+    quote: "100",
     quoterOwner: "$OWNER_0",
   )
 }
 ```
 
 User B can now accept the quote. In user B's tab, perform the following mutation. This will create
-the temporary chain, send tokens to it, create a Matching Engine instance and submit an order.
+the temporary chain and send tokens to it.
 
 ```gql,uri=http://localhost:8081/chains/$CHAIN_1/applications/$APP_RFQ
 mutation {
@@ -229,37 +213,8 @@ mutation {
 }
 ```
 
-At this point, the Matching Engine should have matched the orders and performed the swap. The tokens,
-however, remain on the temporary chain. In order to claim them, the users have to close the request.
-
-In user B's tab, perform the following mutation:
-
-```gql,uri=http://localhost:8081/chains/$CHAIN_1/applications/$APP_RFQ
-mutation {
-  closeRequest(
-    requestId: {
-      otherChainId:"$CHAIN_0",
-      seqNum:0
-    },
-  )
-}
-```
-
-In user A's tab, perform the following mutation:
-
-```gql,uri=http://localhost:8080/chains/$CHAIN_0/applications/$APP_RFQ
-mutation {
-  closeRequest(
-    requestId: {
-      otherChainId:"$CHAIN_1",
-      seqNum:0
-    },
-  )
-}
-```
-
-After these mutations are run, the tokens will be returned to the user chains and the temporary chain
-will be closed. You can check whether the amounts of tokens are correct by navigating to
+At this point, the RFQ application should have performed the swap and closed the chain. You can
+check whether the amounts of tokens are correct by navigating to
 `http://localhost:8080/chains/$CHAIN_0/applications/$APP_ID_0` (user A's FUN1 account),
 `http://localhost:8080/chains/$CHAIN_0/applications/$APP_ID_1` (user A's FUN2 account),
 `http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_0` (user B's FUN1 account) and
