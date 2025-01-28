@@ -32,7 +32,7 @@ use crate::{
     system::CreateApplicationResult,
     util::{ReceiverExt, UnboundedSenderExt},
     BaseRuntime, BytecodeId, ContractRuntime, ExecutionError, FinalizeContext, MessageContext,
-    OperationContext, QueryContext, QueryOutcome, RawExecutionOutcome, ServiceRuntime,
+    Operation, OperationContext, QueryContext, QueryOutcome, RawExecutionOutcome, ServiceRuntime,
     TransactionTracker, UserApplicationDescription, UserApplicationId, UserContractCode,
     UserContractInstance, UserServiceCode, UserServiceInstance, MAX_EVENT_KEY_LEN,
     MAX_STREAM_NAME_LEN,
@@ -95,6 +95,8 @@ pub struct SyncRuntimeInternal<UserInstance> {
     active_applications: HashSet<UserApplicationId>,
     /// The tracking information for this transaction.
     transaction_tracker: TransactionTracker,
+    /// The operations scheduled during this query.
+    scheduled_operations: Vec<Operation>,
 
     /// Track application states based on views.
     view_user_states: BTreeMap<UserApplicationId, ViewUserState>,
@@ -312,6 +314,7 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
             refund_grant_to,
             resource_controller,
             transaction_tracker,
+            scheduled_operations: Vec::new(),
         }
     }
 
@@ -973,12 +976,13 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
                     local_time: self.local_time,
                 };
                 let sender = self.execution_state_sender.clone();
-                let outcome =
-                    ServiceSyncRuntime::new(sender, context).run_query(application_id, query)?;
+
                 let QueryOutcome {
                     response,
-                    operations: _,
-                } = outcome;
+                    operations,
+                } = ServiceSyncRuntime::new(sender, context).run_query(application_id, query)?;
+
+                self.scheduled_operations.extend(operations);
                 response
             };
         self.transaction_tracker
@@ -1626,13 +1630,13 @@ impl ServiceSyncRuntime {
         application_id: UserApplicationId,
         query: Vec<u8>,
     ) -> Result<QueryOutcome<Vec<u8>>, ExecutionError> {
-        let response = self
-            .handle_mut()
-            .try_query_application(application_id, query)?;
+        let this = self.handle_mut();
+        let response = this.try_query_application(application_id, query)?;
+        let operations = mem::take(&mut this.inner().scheduled_operations);
 
         Ok(QueryOutcome {
             response,
-            operations: vec![],
+            operations,
         })
     }
 
