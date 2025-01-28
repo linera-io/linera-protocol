@@ -1,101 +1,113 @@
-# <img src="https://github.com/linera-io/linera-protocol/assets/1105398/fe08c941-93af-4114-bb83-bcc0eaec95f9" width="250" height="90" />
+<div align="center">
+  <a href="https://linera.io">
+    <img src="https://github.com/linera-io/linera-protocol/assets/1105398/fe08c941-93af-4114-bb83-bcc0eaec95f9" alt="Linera Protocol Logo" width="300">
+  </a>
+</div>
+<div align="center">
 
 [![License](https://img.shields.io/badge/license-Apache-green.svg)](LICENSE)
 [![Build Status for Rust](https://github.com/linera-io/linera-protocol/actions/workflows/rust.yml/badge.svg)](https://github.com/linera-io/linera-protocol/actions/workflows/rust.yml)
 [![Build Status for Documentation](https://github.com/linera-io/linera-protocol/actions/workflows/documentation.yml/badge.svg)](https://github.com/linera-io/linera-protocol/actions/workflows/documentation.yml)
 [![Build Status for DynamoDB](https://github.com/linera-io/linera-protocol/actions/workflows/dynamodb.yml/badge.svg)](https://github.com/linera-io/linera-protocol/actions/workflows/dynamodb.yml)
-<!-- [![Build Status for Kubernetes](https://github.com/linera-io/linera-protocol/actions/workflows/kubernetes.yml/badge.svg)](https://github.com/linera-io/linera-protocol/actions/workflows/kubernetes.yml) -->
+[![Website](https://img.shields.io/badge/Website-Linera.io-blue?style=flat&logo=google-chrome)](https://linera.io)
+[![Telegram](https://img.shields.io/badge/Telegram-26A5E4?logo=telegram&logoColor=white)](https://t.me/linera_io)
+[![Discord](https://img.shields.io/badge/Discord-5865F2?logo=discord&logoColor=white)](https://discord.gg/linera)
+[![Twitter](https://img.shields.io/twitter/follow/linera_io?style=social)](https://x.com/linera_io)
 
-[Linera](https://linera.io) is a decentralized blockchain infrastructure designed for highly scalable,
-low-latency Web3 applications.
-
-Visit our [developer page](https://linera.dev) and read our
-[whitepaper](https://linera.io/whitepaper) to learn more about the Linera protocol.
-
-## Repository Structure
-
-The main crates and directories of this repository can be summarized as follows: (listed
-from low to high levels in the dependency graph)
-
-* [`linera-base`](https://linera-io.github.io/linera-protocol/linera_base/index.html) Base
-  definitions, including cryptography.
-
-* [`linera-version`](https://linera-io.github.io/linera-protocol/linera_version/index.html)
-  A library to manage version info in binaries and services.
-
-* [`linera-views`](https://linera-io.github.io/linera-protocol/linera_views/index.html) A
-  library mapping complex data structures onto a key-value store. The corresponding
-  procedural macros are implemented in `linera-views-derive`.
-
-* [`linera-execution`](https://linera-io.github.io/linera-protocol/linera_execution/index.html)
-  Persistent data and the corresponding logic for runtime and execution of Linera
-  applications.
-
-* [`linera-chain`](https://linera-io.github.io/linera-protocol/linera_chain/index.html)
-  Persistent data and the corresponding logic for chains of blocks, certificates, and
-  cross-chain messaging.
-
-* [`linera-storage`](https://linera-io.github.io/linera-protocol/linera_storage/index.html)
-  Defines the storage abstractions for the protocol on top of `linera-chain`.
-
-* [`linera-core`](https://linera-io.github.io/linera-protocol/linera_core/index.html) The
-  core Linera protocol, including client and server logic, node synchronization, etc.
-
-* [`linera-rpc`](https://linera-io.github.io/linera-protocol/linera_rpc/index.html)
-  Defines the data-type for RPC messages (currently all client &#x2194; proxy &#x2194;
-  chain &#x2194; chain interactions), and track the corresponding data schemas.
-
-* [`linera-client`](https://linera-io.github.io/linera-protocol/linera_client/index.html)
-  Library for writing Linera clients.  Used for the command-line
-  client and the node service in `linera-service`, as well as the Web
-  client in [`linera-web`](https://github.com/linera-io/linera-web/).
-
-* [`linera-service`](https://linera-io.github.io/linera-protocol/linera_service/index.html)
-  Executable for clients (aka CLI wallets), proxy (aka validator frontend) and servers.
-
-* [`linera-sdk`](https://linera-io.github.io/linera-protocol/linera_sdk/index.html) The
-  library to develop Linera applications written in Rust for the Wasm virtual machine. The
-  corresponding procedural macros are implemented in `linera-sdk-derive`.
-
-* [`examples`](./examples) Examples of Linera applications written in Rust.
+</div>
 
 
-## Quickstart with the Linera service CLI
+# 🌐 **Linera Protocol**
 
-The following commands set up a local test network and run some transfers between the
-microchains owned by a single wallet.
+**Decentralized blockchain infrastructure for highly scalable, low-latency Web3 applications.**  
+
+📖 **[Developer Page](https://linera.dev)** | 📄 **[Whitepaper](https://linera.io/whitepaper)**  
+
+---
+
+## 📂 **Repository Structure**
+
+### 🛠 Core Components
+- [`linera-base`](https://linera-io.github.io/linera-protocol/linera_base/index.html) – Base definitions, including cryptography.
+- [`linera-version`](https://linera-io.github.io/linera-protocol/linera_version/index.html) – Manages version info in binaries and services.
+- [`linera-storage`](https://linera-io.github.io/linera-protocol/linera_storage/index.html) – Defines storage abstractions.
+- [`linera-core`](https://linera-io.github.io/linera-protocol/linera_core/index.html) – Core protocol logic for synchronization and validation.
+- [`linera-sdk`](https://linera-io.github.io/linera-protocol/linera_sdk/index.html) – Develop Linera applications in Rust for Wasm VM.
+
+### 🔗 **Other Components**
+- [`linera-rpc`](https://linera-io.github.io/linera-protocol/linera_rpc/index.html) – Handles RPC messages and schemas.
+- [`linera-client`](https://linera-io.github.io/linera-protocol/linera_client/index.html) – Command-line and Web clients.
+- [`linera-service`](https://linera-io.github.io/linera-protocol/linera_service/index.html) – Executable for client operations.
+- [`examples`](./examples) – Example applications built on Linera.
+
+---
+
+## 🚀 **Quickstart with Linera CLI**
+
+**1️⃣ Compile Linera and add it to `$PATH`:**  
 
 ```bash
-# Make sure to compile the Linera binaries and add them in the $PATH.
-# cargo build -p linera-storage-service -p linera-service --bins --features storage-service
+cargo build -p linera-storage-service -p linera-service --bins --features storage-service
+```
+
+```bash
 export PATH="$PWD/target/debug:$PATH"
+```
 
-# Import the optional helper function `linera_spawn_and_read_wallet_variables`.
+**2️⃣ Start a local test network:**  
+
+```bash
 source /dev/stdin <<<"$(linera net helper 2>/dev/null)"
-
-# Run a local test network with the default parameters and a number of microchains
-# owned by the default wallet. (The helper function `linera_spawn_and_read_wallet_variables`
-# is used to set the two environment variables LINERA_{WALLET,STORAGE}.)
-linera_spawn_and_read_wallet_variables \
+```
+ 
+```bash
 linera net up
+```
 
-# Print the set of validators.
+**3️⃣ Query validators and balances:**  
+```bash
 linera query-validators
+``` 
 
-# Query the chain balance of some of the chains.
-CHAIN1="e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65"
-CHAIN2="69705f85ac4c9fef6c02b4d83426aaaf05154c645ec1c61665f8e450f0468bc0"
-linera query-balance "$CHAIN1"
-linera query-balance "$CHAIN2"
+```bash
+linera query-balance "$CHAIN1"  
+```
 
-# Transfer 10 units then 5 back
-linera transfer 10 --from "$CHAIN1" --to "$CHAIN2"
-linera transfer 5 --from "$CHAIN2" --to "$CHAIN1"
-
-# Query balances again
-linera query-balance "$CHAIN1"
+```bash
 linera query-balance "$CHAIN2"
 ```
 
-More complex examples may be found in our [developer manual](https://linera.dev) as well
-as the [example applications](./examples) in this repository.
+**4️⃣ Transfer assets:**  
+
+```bash
+linera transfer 10 --from "$CHAIN1" --to "$CHAIN2" 
+```
+```bash
+linera transfer 5 --from "$CHAIN2" --to "$CHAIN1"
+```
+
+**5️⃣ Check balances again:** 
+
+```bash
+linera query-balance "$CHAIN1" 
+```
+```bash
+linera query-balance "$CHAIN2"
+```
+For more examples, check the **[Developer Manual](https://linera.dev)** and **[Example Applications](./examples)**.
+
+---
+
+## 💬 **Join the Community**
+
+<p align="left">
+  <a href="https://t.me/linera_io">
+    <img src="https://img.shields.io/badge/Telegram-26A5E4?logo=telegram&logoColor=white&style=for-the-badge" alt="Telegram">
+  </a>
+  <a href="https://discord.gg/linera">
+    <img src="https://img.shields.io/badge/Discord-5865F2?logo=discord&logoColor=white&style=for-the-badge" alt="Discord">
+  </a>
+  <a href="https://x.com/linera_io">
+    <img src="https://img.shields.io/badge/Twitter-000000?logo=x&logoColor=white&style=for-the-badge" alt="Twitter (X)">
+  </a>
+</p>
