@@ -27,9 +27,9 @@ use linera_execution::{
         SystemExecutionState,
     },
     BaseRuntime, ContractRuntime, ExecutionError, ExecutionOutcome, ExecutionRuntimeContext,
-    Message, MessageKind, Operation, OperationContext, Query, QueryContext, QueryResponse,
-    RawExecutionOutcome, RawOutgoingMessage, ResourceControlPolicy, ResourceController,
-    SystemOperation, TransactionTracker,
+    Message, MessageKind, Operation, OperationContext, Query, QueryContext, QueryOutcome,
+    QueryResponse, RawExecutionOutcome, RawOutgoingMessage, ResourceControlPolicy,
+    ResourceController, SystemOperation, TransactionTracker,
 };
 use linera_views::{batch::Batch, context::Context, views::View};
 use test_case::test_case;
@@ -222,7 +222,9 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
         )
         .await
         .unwrap(),
-        QueryResponse::User(dummy_operation.clone())
+        QueryOutcome {
+            response: QueryResponse::User(dummy_operation.clone())
+        }
     );
 
     assert_eq!(
@@ -236,7 +238,9 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
         )
         .await
         .unwrap(),
-        QueryResponse::User(dummy_operation)
+        QueryOutcome {
+            response: QueryResponse::User(dummy_operation)
+        }
     );
     Ok(())
 }

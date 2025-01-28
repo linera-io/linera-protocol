@@ -25,8 +25,8 @@ use linera_base::{
 use linera_execution::{
     committee::ValidatorName, system::OpenChainConfig, ExecutionOutcome, ExecutionRuntimeContext,
     ExecutionStateView, Message, MessageContext, Operation, OperationContext, Query, QueryContext,
-    QueryResponse, RawExecutionOutcome, RawOutgoingMessage, ResourceController, ResourceTracker,
-    ServiceRuntimeEndpoint, TransactionTracker,
+    QueryOutcome, QueryResponse, RawExecutionOutcome, RawOutgoingMessage, ResourceController,
+    ResourceTracker, ServiceRuntimeEndpoint, TransactionTracker,
 };
 use linera_views::{
     context::Context,
@@ -344,6 +344,7 @@ where
             .query_application(context, query, service_runtime_endpoint)
             .await
             .with_execution_context(ChainExecutionContext::Query)
+            .map(|QueryOutcome { response }| response)
     }
 
     pub async fn describe_application(

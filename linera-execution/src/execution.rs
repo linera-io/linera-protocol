@@ -33,8 +33,8 @@ use crate::{
     resources::ResourceController, system::SystemExecutionStateView, ContractSyncRuntime,
     ExecutionError, ExecutionOutcome, ExecutionRuntimeConfig, ExecutionRuntimeContext, Message,
     MessageContext, MessageKind, Operation, OperationContext, Query, QueryContext, QueryOutcome,
-    QueryResponse, RawExecutionOutcome, RawOutgoingMessage, ServiceSyncRuntime, SystemMessage,
-    TransactionTracker, UserApplicationDescription, UserApplicationId,
+    RawExecutionOutcome, RawOutgoingMessage, ServiceSyncRuntime, SystemMessage, TransactionTracker,
+    UserApplicationDescription, UserApplicationId,
 };
 
 /// A view accessing the execution state of a chain.
@@ -485,19 +485,19 @@ where
         context: QueryContext,
         query: Query,
         endpoint: Option<&mut ServiceRuntimeEndpoint>,
-    ) -> Result<QueryResponse, ExecutionError> {
+    ) -> Result<QueryOutcome, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         match query {
             Query::System(query) => {
-                let QueryOutcome { response } = self.system.handle_query(context, query).await?;
-                Ok(QueryResponse::System(response))
+                let outcome = self.system.handle_query(context, query).await?;
+                Ok(outcome.into())
             }
             Query::User {
                 application_id,
                 bytes,
             } => {
                 let ExecutionRuntimeConfig {} = self.context().extra().execution_runtime_config();
-                let QueryOutcome { response } = match endpoint {
+                let outcome = match endpoint {
                     Some(endpoint) => {
                         self.query_user_application_with_long_lived_service(
                             application_id,
@@ -513,7 +513,7 @@ where
                             .await?
                     }
                 };
-                Ok(QueryResponse::User(response))
+                Ok(outcome.into())
             }
         }
     }
