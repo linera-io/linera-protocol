@@ -998,33 +998,18 @@ where
         request: &Request,
         chain_id: ChainId,
     ) -> Result<async_graphql::Response, NodeServiceError> {
-        let bytes = serde_json::to_vec(&request)?;
-        let query = Query::User {
-            application_id,
-            bytes,
-        };
-        let client = self
-            .context
-            .lock()
-            .await
-            .make_chain_client(chain_id)
-            .map_err(|_| NodeServiceError::UnknownChainId {
-                chain_id: chain_id.to_string(),
-            })?;
         let QueryOutcome {
-            response,
+            response: user_response_bytes,
             operations,
-        } = client.query_application(query).await?;
-        let user_response_bytes = match response {
-            QueryResponse::System(_) => {
-                unreachable!("cannot get a system response for a user query")
-            }
-            QueryResponse::User(user) => user,
-        };
+        } = self
+            .query_user_application(application_id, request, chain_id)
+            .await?;
+
         ensure!(
             operations.is_empty(),
             NodeServiceError::UnexpectedOperationsFromQuery
         );
+
         Ok(serde_json::from_slice(&user_response_bytes)?)
     }
 
@@ -1036,9 +1021,13 @@ where
         chain_id: ChainId,
     ) -> Result<async_graphql::Response, NodeServiceError> {
         debug!("Request: {:?}", &request);
-        let graphql_response = self
-            .user_application_query(application_id, request, chain_id)
+        let QueryOutcome {
+            response,
+            operations: _,
+        } = self
+            .query_user_application(application_id, request, chain_id)
             .await?;
+        let graphql_response = serde_json::from_slice::<async_graphql::Response>(&response)?;
         if graphql_response.is_err() {
             let errors = graphql_response
                 .errors
@@ -1079,6 +1068,41 @@ where
             util::wait_for_next_round(&mut stream, timeout).await;
         };
         Ok(async_graphql::Response::new(hash.to_value()))
+    }
+
+    /// Queries a user application, returning the raw [`QueryOutcome`].
+    async fn query_user_application(
+        &self,
+        application_id: UserApplicationId,
+        request: &Request,
+        chain_id: ChainId,
+    ) -> Result<QueryOutcome<Vec<u8>>, NodeServiceError> {
+        let bytes = serde_json::to_vec(&request)?;
+        let query = Query::User {
+            application_id,
+            bytes,
+        };
+        let client = self
+            .context
+            .lock()
+            .await
+            .make_chain_client(chain_id)
+            .map_err(|_| NodeServiceError::UnknownChainId {
+                chain_id: chain_id.to_string(),
+            })?;
+        let QueryOutcome {
+            response,
+            operations,
+        } = client.query_application(query).await?;
+        match response {
+            QueryResponse::System(_) => {
+                unreachable!("cannot get a system response for a user query")
+            }
+            QueryResponse::User(user_response_bytes) => Ok(QueryOutcome {
+                response: user_response_bytes,
+                operations,
+            }),
+        }
     }
 
     /// Executes a GraphQL query and generates a response for our `Schema`.
