@@ -9,7 +9,7 @@ We have designed a `KeyValueStore` trait that represents the basic functionaliti
 of a key-value store whose keys are `Vec<u8>` and whose values are `Vec<u8>`.
 
 We provide an implementation of the trait `KeyValueStore` for the following key-value stores:
-* `MemoryStore` is using the memory (and uses internally a simple B-Tree map).
+* `MemoryStore` uses the memory (and uses internally a simple B-Tree map).
 * `RocksDbStore` is a disk-based key-value store
 * `DynamoDbStore` is the AWS-based DynamoDB service.
 * `ScyllaDbStore` is a cloud based Cassandra compatible database.

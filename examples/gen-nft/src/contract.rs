@@ -169,7 +169,7 @@ impl GenNftContract {
             .get(token_id)
             .await
             .expect("Failure in retrieving NFT")
-            .expect("NFT {token_id} not found")
+            .expect("NFT not found")
     }
 
     async fn mint(&mut self, owner: AccountOwner, prompt: String) {
