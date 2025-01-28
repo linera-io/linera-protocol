@@ -32,8 +32,6 @@ impl Contract for AmmContract {
     type Message = Message;
     type InstantiationArgument = ();
     type Parameters = Parameters;
-    type Operation = Operation;
-    type Response = ();
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = AmmState::load(runtime.root_view_storage_context())
