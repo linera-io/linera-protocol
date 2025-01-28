@@ -21,7 +21,7 @@ use linera_chain::{types::ConfirmedBlockCertificate, ChainError, ChainExecutionC
 use linera_core::{data_types::ChainInfoQuery, worker::WorkerError};
 use linera_execution::{
     system::{SystemExecutionError, SystemOperation, CREATE_APPLICATION_MESSAGE_INDEX},
-    ExecutionError, Query, QueryResponse,
+    ExecutionError, Query, QueryOutcome, QueryResponse,
 };
 use linera_storage::Storage as _;
 use serde::Serialize;
@@ -468,7 +468,7 @@ impl ActiveChain {
     {
         let query_bytes = serde_json::to_vec(&query).expect("Failed to serialize query");
 
-        let response = self
+        let QueryOutcome { response } = self
             .validator
             .worker()
             .query_application(

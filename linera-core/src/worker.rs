@@ -35,7 +35,7 @@ use linera_chain::{
 };
 use linera_execution::{
     committee::{Epoch, ValidatorName},
-    ExecutionError, Query, QueryOutcome, QueryResponse,
+    ExecutionError, Query, QueryOutcome,
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;
@@ -523,12 +523,11 @@ where
         &self,
         chain_id: ChainId,
         query: Query,
-    ) -> Result<QueryResponse, WorkerError> {
+    ) -> Result<QueryOutcome, WorkerError> {
         self.query_chain_worker(chain_id, move |callback| {
             ChainWorkerRequest::QueryApplication { query, callback }
         })
         .await
-        .map(|QueryOutcome { response }| response)
     }
 
     #[instrument(level = "trace", skip(self, chain_id, application_id))]
