@@ -28,6 +28,7 @@ where
     query_application_handler: Mutex<Option<QueryApplicationHandler>>,
     url_blobs: Mutex<Option<HashMap<String, Vec<u8>>>>,
     blobs: Mutex<Option<HashMap<DataBlobHash, Vec<u8>>>>,
+    scheduled_operations: Mutex<Vec<Vec<u8>>>,
     key_value_store: KeyValueStore,
 }
 
@@ -57,6 +58,7 @@ where
             query_application_handler: Mutex::new(None),
             url_blobs: Mutex::new(None),
             blobs: Mutex::new(None),
+            scheduled_operations: Mutex::new(vec![]),
             key_value_store: KeyValueStore::mock(),
         }
     }
@@ -281,6 +283,13 @@ where
             .keys()
             .cloned()
             .collect()
+    }
+
+    /// Schedules an operation to be included in the block being built.
+    ///
+    /// The operation is specified as an opaque blob of bytes.
+    pub fn schedule_raw_operation(&self, operation: Vec<u8>) {
+        self.scheduled_operations.lock().unwrap().push(operation);
     }
 
     /// Configures the handler for application queries made during the test.
