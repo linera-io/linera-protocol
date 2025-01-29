@@ -7,21 +7,22 @@ use std::{borrow::Cow, collections::BTreeMap};
 
 use futures::future::Either;
 use linera_base::{
-    data_types::{Blob, BlockHeight, Timestamp},
+    data_types::{Blob, BlobContent, BlockHeight, CompressedBytecode, Timestamp},
     ensure,
-    identifiers::{ChainId, MessageId},
+    identifiers::{BlobType, ChainId, MessageId, Owner},
 };
 use linera_chain::{
     data_types::{
-        BlockExecutionOutcome, BlockProposal, ExecutedBlock, MessageBundle, Origin, Target,
+        BlockExecutionOutcome, BlockProposal, ExecutedBlock, MessageBundle, Origin,
+        ProposalContent, Target,
     },
     manager,
     types::{ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
-    ChainStateView,
+    ChainError, ChainStateView,
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
-    BlobState,
+    BlobState, ResourceControlPolicy,
 };
 use linera_storage::{Clock as _, Storage};
 use linera_views::{
@@ -124,6 +125,94 @@ where
         Ok((info, actions))
     }
 
+    pub(super) async fn validate_block(
+        &mut self,
+        proposal: &BlockProposal,
+    ) -> Result<(), WorkerError> {
+        let BlockProposal {
+            content:
+                ProposalContent {
+                    block,
+                    round,
+                    outcome,
+                },
+            public_key,
+            owner,
+            blobs: _,
+            validated_block_certificate,
+            signature: _,
+        } = proposal;
+
+        ensure!(
+            validated_block_certificate.is_some() == outcome.is_some(),
+            WorkerError::InvalidBlockProposal(
+                "Must contain a validation certificate if and only if \
+                 it contains the execution outcome from a previous round"
+                    .to_string()
+            )
+        );
+        ensure!(
+            *owner == Owner::from(public_key),
+            WorkerError::InvalidBlockProposal("Public key does not match owner".into())
+        );
+        self.state.ensure_is_active()?;
+        // Check the epoch.
+        let (epoch, committee) = self
+            .state
+            .chain
+            .execution_state
+            .system
+            .current_committee()
+            .expect("chain is active");
+        check_block_epoch(epoch, block.chain_id, block.epoch)?;
+        let policy = committee.policy().clone();
+        // Check the authentication of the block.
+        ensure!(
+            self.state.chain.manager.verify_owner(proposal),
+            WorkerError::InvalidOwner
+        );
+        proposal.check_signature()?;
+        if let Some(lite_certificate) = validated_block_certificate {
+            // Verify that this block has been validated by a quorum before.
+            lite_certificate.check(committee)?;
+        } else if let Some(signer) = block.authenticated_signer {
+            // Check the authentication of the operations in the new block.
+            ensure!(signer == *owner, WorkerError::InvalidSigner(signer));
+        }
+        // Check if the chain is ready for this new block proposal.
+        // This should always pass for nodes without voting key.
+        self.state
+            .chain
+            .tip_state
+            .get()
+            .verify_block_chaining(block)?;
+        if self.state.chain.manager.check_proposed_block(proposal)? == manager::Outcome::Skip {
+            return Ok(());
+        }
+        let required_blob_ids = block
+            .published_blob_ids()
+            .into_iter()
+            .chain(outcome.iter().flat_map(|outcome| outcome.oracle_blob_ids()));
+        let maybe_blobs = self
+            .state
+            .maybe_get_required_blobs(required_blob_ids)
+            .await?;
+        let missing_blob_ids = super::missing_blob_ids(&maybe_blobs);
+        if !missing_blob_ids.is_empty() {
+            self.state
+                .chain
+                .pending_proposed_blobs
+                .try_load_entry_mut(owner)
+                .await?
+                .update(*round, maybe_blobs)
+                .await?;
+            self.save().await?;
+            return Err(WorkerError::BlobsNotFound(missing_blob_ids));
+        }
+        block.check_proposal_size(policy.maximum_block_proposal_size)?;
+        Ok(())
+    }
+
     /// Votes for a block proposal for the next block for this chain.
     pub(super) async fn vote_for_block_proposal(
         &mut self,
@@ -135,7 +224,7 @@ where
         let executed_block = outcome.with(proposal.content.block.clone());
         let blobs = if proposal.validated_block_certificate.is_some() {
             self.state
-                .get_required_blobs(executed_block.required_blob_ids(), &proposal.blobs)
+                .get_required_blobs(executed_block.required_blob_ids())
                 .await?
         } else {
             BTreeMap::new()
@@ -210,7 +299,7 @@ where
         let required_blob_ids = block.required_blob_ids();
         let maybe_blobs = self
             .state
-            .maybe_get_required_blobs(required_blob_ids, &[])
+            .maybe_get_required_blobs(required_blob_ids)
             .await?;
         let missing_blob_ids = super::missing_blob_ids(&maybe_blobs);
         if !missing_blob_ids.is_empty() {
@@ -312,7 +401,7 @@ where
         let required_blob_ids = executed_block.required_blob_ids();
         let blobs_result = self
             .state
-            .get_required_blobs(executed_block.required_blob_ids(), &[])
+            .get_required_blobs(executed_block.required_blob_ids())
             .await
             .map(|blobs| blobs.into_values().collect::<Vec<_>>());
 
@@ -585,6 +674,15 @@ where
         &mut self,
         blob: Blob,
     ) -> Result<ChainInfoResponse, WorkerError> {
+        let (_, committee) = self
+            .state
+            .chain
+            .execution_state
+            .system
+            .current_committee()
+            .ok_or_else(|| ChainError::InactiveChain(self.state.chain_id()))?;
+        let policy = committee.policy().clone();
+        Self::check_blob_size(blob.content(), &policy)?;
         self.state
             .chain
             .pending_validated_blobs
@@ -595,6 +693,31 @@ where
             &self.state.chain,
             self.state.config.key_pair(),
         ))
+    }
+
+    fn check_blob_size(
+        content: &BlobContent,
+        policy: &ResourceControlPolicy,
+    ) -> Result<(), WorkerError> {
+        ensure!(
+            u64::try_from(content.bytes().len())
+                .ok()
+                .is_some_and(|size| size <= policy.maximum_blob_size),
+            WorkerError::BlobTooLarge
+        );
+        match content.blob_type() {
+            BlobType::ContractBytecode | BlobType::ServiceBytecode => {
+                ensure!(
+                    CompressedBytecode::decompressed_size_at_most(
+                        content.bytes(),
+                        policy.maximum_bytecode_size
+                    )?,
+                    WorkerError::BytecodeTooLarge
+                );
+            }
+            BlobType::Data => {}
+        }
+        Ok(())
     }
 
     /// Stores the chain state in persistent storage.

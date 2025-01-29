@@ -201,6 +201,8 @@ where
     /// Pending validated block that is still missing blobs.
     /// The incomplete set of blobs for the pending validated block.
     pub pending_validated_blobs: PendingBlobsView<C>,
+    /// The incomplete sets of blobs for upcoming proposals.
+    pub pending_proposed_blobs: ReentrantCollectionView<C, Owner, PendingBlobsView<C>>,
 
     /// Hashes of all certified blocks for this sender.
     /// This ends with `block_hash` and has length `usize::from(next_block_height)`.
@@ -887,6 +889,7 @@ where
         let maybe_committee = self.execution_state.system.current_committee().into_iter();
 
         self.pending_validated_blobs.clear();
+        self.pending_proposed_blobs.clear();
         self.manager.reset(
             self.execution_state.system.ownership.get().clone(),
             block.height.try_add_one()?,

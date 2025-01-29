@@ -144,12 +144,8 @@ impl ProposedBlock {
         Some((in_bundle, posted_message, config))
     }
 
-    pub fn check_proposal_size(
-        &self,
-        maximum_block_proposal_size: u64,
-        blobs: &[Blob],
-    ) -> Result<(), ChainError> {
-        let size = bcs::serialized_size(&(self, blobs))?;
+    pub fn check_proposal_size(&self, maximum_block_proposal_size: u64) -> Result<(), ChainError> {
+        let size = bcs::serialized_size(self)?;
         ensure!(
             size <= usize::try_from(maximum_block_proposal_size).unwrap_or(usize::MAX),
             ChainError::BlockProposalTooLarge
@@ -744,7 +740,7 @@ impl BlockExecutionOutcome {
         }
     }
 
-    fn oracle_blob_ids(&self) -> HashSet<BlobId> {
+    pub fn oracle_blob_ids(&self) -> HashSet<BlobId> {
         let mut required_blob_ids = HashSet::new();
         for responses in &self.oracle_responses {
             for response in responses {
@@ -824,8 +820,8 @@ impl BlockProposal {
         }
     }
 
-    pub fn check_signature(&self, public_key: PublicKey) -> Result<(), CryptoError> {
-        self.signature.check(&self.content, public_key)
+    pub fn check_signature(&self) -> Result<(), CryptoError> {
+        self.signature.check(&self.content, self.public_key)
     }
 }
 

@@ -2138,13 +2138,10 @@ where
         let (executed_block, _) = self
             .stage_block_execution_and_discard_failing_messages(block, round)
             .await?;
-        let blobs = self
-            .read_local_blobs(executed_block.required_blob_ids())
-            .await?;
         let block = &executed_block.block;
         let committee = self.local_committee().await?;
         let max_size = committee.policy().maximum_block_proposal_size;
-        block.check_proposal_size(max_size, &blobs)?;
+        block.check_proposal_size(max_size)?;
         self.state_mut().set_pending_proposal(block.clone());
         Ok(Hashed::new(ConfirmedBlock::new(executed_block)))
     }

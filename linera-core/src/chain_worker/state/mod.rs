@@ -8,6 +8,7 @@ mod temporary_changes;
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    iter,
     sync::{self, Arc},
 };
 
@@ -203,6 +204,10 @@ where
         &mut self,
         proposal: BlockProposal,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
+        ChainWorkerStateWithAttemptedChanges::new(&mut *self)
+            .await
+            .validate_block(&proposal)
+            .await?;
         let validation_outcome = ChainWorkerStateWithTemporaryChanges::new(self)
             .await
             .validate_block(&proposal)
@@ -322,16 +327,13 @@ where
         Ok(())
     }
 
-    /// Returns the blobs required by the given executed block. The ones that are not passed in
-    /// are read from the chain manager or from storage.
+    /// Reads the blobs from the chain manager or from storage. Returns an error if any are
+    /// missing.
     async fn get_required_blobs(
         &self,
         required_blob_ids: HashSet<BlobId>,
-        blobs: &[Blob],
     ) -> Result<BTreeMap<BlobId, Blob>, WorkerError> {
-        let maybe_blobs = self
-            .maybe_get_required_blobs(required_blob_ids, blobs)
-            .await?;
+        let maybe_blobs = self.maybe_get_required_blobs(required_blob_ids).await?;
         let not_found_blob_ids = missing_blob_ids(&maybe_blobs);
         ensure!(
             not_found_blob_ids.is_empty(),
@@ -343,29 +345,30 @@ where
             .collect())
     }
 
-    /// Returns the blobs required by the given executed block. The ones that are not passed in
-    /// are read from the chain manager or from storage.
+    /// Tries to read the blobs from the chain manager or storage. Returns `None` if not found.
     async fn maybe_get_required_blobs(
         &self,
-        required_blob_ids: HashSet<BlobId>,
-        provided_blobs: &[Blob],
+        blob_ids: impl IntoIterator<Item = BlobId>,
     ) -> Result<BTreeMap<BlobId, Option<Blob>>, WorkerError> {
-        let required_blob_ids = required_blob_ids.into_iter();
-        let mut maybe_blobs = BTreeMap::from_iter(required_blob_ids.map(|blob_id| (blob_id, None)));
+        let mut maybe_blobs = BTreeMap::from_iter(blob_ids.into_iter().zip(iter::repeat(None)));
 
-        for blob in provided_blobs {
-            if let Some(maybe_blob) = maybe_blobs.get_mut(&blob.id()) {
-                *maybe_blob = Some(blob.clone());
-            }
-        }
         for (blob_id, maybe_blob) in &mut maybe_blobs {
-            if maybe_blob.is_some() {
-                continue;
-            }
             if let Some(blob) = self.chain.manager.pending_blob(blob_id).await? {
                 *maybe_blob = Some(blob);
             } else if let Some(blob) = self.chain.pending_validated_blobs.get(blob_id).await? {
                 *maybe_blob = Some(blob);
+            } else {
+                for (_, pending_blobs) in self
+                    .chain
+                    .pending_proposed_blobs
+                    .try_load_all_entries()
+                    .await?
+                {
+                    if let Some(blob) = pending_blobs.get(blob_id).await? {
+                        *maybe_blob = Some(blob);
+                        break;
+                    }
+                }
             }
         }
         let missing_blob_ids = missing_blob_ids(&maybe_blobs);

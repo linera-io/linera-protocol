@@ -276,6 +276,10 @@ type ChainStateExtendedView {
 	"""
 	pendingValidatedBlobs: PendingBlobsView!
 	"""
+	The incomplete sets of blobs for upcoming proposals.
+	"""
+	pendingProposedBlobs: ReentrantCollectionView_Owner_PendingBlobsView_3247061959!
+	"""
 	Hashes of all certified blocks for this sender.
 	This ends with `block_hash` and has length `usize::from(next_block_height)`.
 	"""
@@ -478,6 +482,14 @@ type Entry_Origin_InboxStateView_c4db01d6 {
 """
 A GraphQL-visible map item, complete with key.
 """
+type Entry_Owner_PendingBlobsView_c4f6af6f {
+	key: Owner!
+	value: PendingBlobsView!
+}
+
+"""
+A GraphQL-visible map item, complete with key.
+"""
 type Entry_Target_OutboxStateView_50a86149 {
 	key: Target!
 	value: OutboxStateView!
@@ -608,6 +620,10 @@ input MapFilters_Origin_742d451b {
 	keys: [Origin!]
 }
 
+input MapFilters_Owner_6898ce22 {
+	keys: [Owner!]
+}
+
 input MapFilters_Target_7aac1e1c {
 	keys: [Target!]
 }
@@ -626,6 +642,10 @@ input MapInput_ChannelFullName_3b59bf69 {
 
 input MapInput_Origin_742d451b {
 	filters: MapFilters_Origin_742d451b
+}
+
+input MapInput_Owner_6898ce22 {
+	filters: MapFilters_Owner_6898ce22
 }
 
 input MapInput_Target_7aac1e1c {
@@ -973,6 +993,12 @@ type ReentrantCollectionView_Origin_InboxStateView_3699835794 {
 	keys: [Origin!]!
 	entry(key: Origin!): Entry_Origin_InboxStateView_c4db01d6!
 	entries(input: MapInput_Origin_742d451b): [Entry_Origin_InboxStateView_c4db01d6!]!
+}
+
+type ReentrantCollectionView_Owner_PendingBlobsView_3247061959 {
+	keys: [Owner!]!
+	entry(key: Owner!): Entry_Owner_PendingBlobsView_c4f6af6f!
+	entries(input: MapInput_Owner_6898ce22): [Entry_Owner_PendingBlobsView_c4f6af6f!]!
 }
 
 type ReentrantCollectionView_Target_OutboxStateView_2789119133 {

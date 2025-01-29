@@ -4,23 +4,19 @@
 //! Operations that don't persist any changes to the chain state.
 
 use linera_base::{
-    data_types::{
-        ArithmeticError, Blob, BlobContent, CompressedBytecode, Timestamp,
-        UserApplicationDescription,
-    },
+    data_types::{ArithmeticError, Timestamp, UserApplicationDescription},
     ensure,
     hashed::Hashed,
-    identifiers::{AccountOwner, BlobType, GenericApplicationId, Owner, UserApplicationId},
+    identifiers::{AccountOwner, GenericApplicationId, UserApplicationId},
 };
 use linera_chain::{
     data_types::{
         BlockExecutionOutcome, BlockProposal, ChannelFullName, ExecutedBlock, IncomingBundle,
         Medium, MessageAction, ProposalContent, ProposedBlock,
     },
-    manager,
     types::ValidatedBlock,
 };
-use linera_execution::{ChannelSubscription, Query, QueryOutcome, ResourceControlPolicy};
+use linera_execution::{ChannelSubscription, Query, QueryOutcome};
 use linera_storage::{Clock as _, Storage};
 use linera_views::views::View;
 #[cfg(with_testing)]
@@ -32,7 +28,7 @@ use {
     },
 };
 
-use super::{check_block_epoch, ChainWorkerState};
+use super::ChainWorkerState;
 use crate::{
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse},
     worker::WorkerError,
@@ -163,71 +159,12 @@ where
                     round,
                     outcome,
                 },
-            public_key,
-            owner,
-            blobs,
+            public_key: _,
+            owner: _,
+            blobs: _,
             validated_block_certificate,
             signature: _,
         } = proposal;
-        ensure!(
-            validated_block_certificate.is_some() == outcome.is_some(),
-            WorkerError::InvalidBlockProposal(
-                "Must contain a validation certificate if and only if \
-                 it contains the execution outcome from a previous round"
-                    .to_string()
-            )
-        );
-        ensure!(
-            *owner == Owner::from(public_key),
-            WorkerError::InvalidBlockProposal("Public key does not match owner".into())
-        );
-        self.0.ensure_is_active()?;
-        // Check the epoch.
-        let (epoch, committee) = self
-            .0
-            .chain
-            .execution_state
-            .system
-            .current_committee()
-            .expect("chain is active");
-        check_block_epoch(epoch, block.chain_id, block.epoch)?;
-        let policy = committee.policy().clone();
-        // Check the authentication of the block.
-        ensure!(
-            self.0.chain.manager.verify_owner(proposal),
-            WorkerError::InvalidOwner
-        );
-        proposal.check_signature(*public_key)?;
-        if let Some(lite_certificate) = validated_block_certificate {
-            // Verify that this block has been validated by a quorum before.
-            lite_certificate.check(committee)?;
-        } else if let Some(signer) = block.authenticated_signer {
-            // Check the authentication of the operations in the new block.
-            ensure!(signer == *owner, WorkerError::InvalidSigner(signer));
-        }
-        // Check if the chain is ready for this new block proposal.
-        // This should always pass for nodes without voting key.
-        self.0.chain.tip_state.get().verify_block_chaining(block)?;
-        if self.0.chain.manager.check_proposed_block(proposal)? == manager::Outcome::Skip {
-            return Ok(None);
-        }
-        // Update the inboxes so that we can verify the provided hashed certificate values are
-        // legitimately required.
-        // Actual execution happens below, after other validity checks.
-        self.0
-            .chain
-            .remove_bundles_from_inboxes(block.timestamp, &block.incoming_bundles)
-            .await?;
-        // Verify that no unrelated blobs were provided.
-        let published_blob_ids = block.published_blob_ids();
-        let provided_blob_ids = blobs.iter().map(Blob::id);
-        ensure!(
-            published_blob_ids.iter().copied().eq(provided_blob_ids),
-            WorkerError::WrongBlobsInProposal
-        );
-        for blob in blobs {
-            Self::check_blob_size(blob.content(), &policy)?;
-        }
 
         let local_time = self.0.storage.clock().current_time();
         ensure!(
@@ -236,6 +173,10 @@ where
         );
         self.0.storage.clock().sleep_until(block.timestamp).await;
         let local_time = self.0.storage.clock().current_time();
+        self.0
+            .chain
+            .remove_bundles_from_inboxes(block.timestamp, &block.incoming_bundles)
+            .await?;
         let outcome = if let Some(outcome) = outcome {
             outcome.clone()
         } else {
@@ -248,13 +189,6 @@ where
         };
 
         let executed_block = outcome.with(block.clone());
-        let required_blobs = self
-            .0
-            .get_required_blobs(executed_block.required_blob_ids(), blobs)
-            .await?
-            .into_values()
-            .collect::<Vec<_>>();
-        block.check_proposal_size(policy.maximum_block_proposal_size, &required_blobs)?;
         if let Some(lite_certificate) = &validated_block_certificate {
             let value = Hashed::new(ValidatedBlock::new(executed_block.clone()));
             lite_certificate
@@ -354,31 +288,6 @@ where
             info.manager.add_values(&chain.manager);
         }
         Ok(ChainInfoResponse::new(info, self.0.config.key_pair()))
-    }
-
-    fn check_blob_size(
-        content: &BlobContent,
-        policy: &ResourceControlPolicy,
-    ) -> Result<(), WorkerError> {
-        ensure!(
-            u64::try_from(content.bytes().len())
-                .ok()
-                .is_some_and(|size| size <= policy.maximum_blob_size),
-            WorkerError::BlobTooLarge
-        );
-        match content.blob_type() {
-            BlobType::ContractBytecode | BlobType::ServiceBytecode => {
-                ensure!(
-                    CompressedBytecode::decompressed_size_at_most(
-                        content.bytes(),
-                        policy.maximum_bytecode_size
-                    )?,
-                    WorkerError::BytecodeTooLarge
-                );
-            }
-            BlobType::Data => {}
-        }
-        Ok(())
     }
 }
 
