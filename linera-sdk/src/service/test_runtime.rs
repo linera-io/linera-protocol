@@ -3,7 +3,7 @@
 
 //! Runtime types to simulate interfacing with the host executing the service.
 
-use std::{collections::HashMap, sync::Mutex};
+use std::{collections::HashMap, mem, sync::Mutex};
 
 use linera_base::{
     abi::ServiceAbi,
@@ -300,6 +300,12 @@ where
         let bytes = bcs::to_bytes(operation).expect("Failed to serialize application operation");
 
         self.schedule_raw_operation(bytes);
+    }
+
+    /// Returns the list of operations scheduled since the last call to this method or
+    /// since the mock runtime was created.
+    pub fn raw_scheduled_operations(&self) -> Vec<Vec<u8>> {
+        mem::take(&mut self.scheduled_operations.lock().unwrap())
     }
 
     /// Configures the handler for application queries made during the test.
