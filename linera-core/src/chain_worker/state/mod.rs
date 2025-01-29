@@ -364,8 +364,7 @@ where
             }
             if let Some(blob) = self.chain.manager.pending_blob(blob_id).await? {
                 *maybe_blob = Some(blob);
-            } else if let Some(Some(blob)) = self.chain.pending_validated_blobs.get(blob_id).await?
-            {
+            } else if let Some(blob) = self.chain.pending_validated_blobs.get(blob_id).await? {
                 *maybe_blob = Some(blob);
             }
         }

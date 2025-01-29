@@ -271,9 +271,10 @@ type ChainStateExtendedView {
 	"""
 	manager: ChainManager!
 	"""
+	Pending validated block that is still missing blobs.
 	The incomplete set of blobs for the pending validated block.
 	"""
-	pendingValidatedBlobs: MapView_BlobId_Blob_9f0b41f3!
+	pendingValidatedBlobs: PendingBlobsView!
 	"""
 	Hashes of all certified blocks for this sender.
 	This ends with `block_hash` and has length `usize::from(next_block_height)`.
@@ -888,6 +889,20 @@ type OutgoingMessage {
 The owner of a chain. This is currently the hash of the owner's public key used to verify signatures.
 """
 scalar Owner
+
+"""
+The pending blobs belonging to a block that can't be processed without them.
+"""
+type PendingBlobsView {
+	"""
+	The round in which the block is validated.
+	"""
+	round: Round!
+	"""
+	The map of blobs needed to process the block.
+	"""
+	pendingBlobs: MapView_BlobId_Blob_9f0b41f3!
+}
 
 """
 A message together with kind, authentication and grant information.
