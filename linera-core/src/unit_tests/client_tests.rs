@@ -15,7 +15,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{IncomingBundle, Medium, MessageBundle, Origin, PostedMessage},
-    manager::LockedBlock,
+    manager::LockingBlock,
     types::Timeout,
     ChainError, ChainExecutionContext,
 };
@@ -1360,7 +1360,7 @@ where
             .node(i)
             .chain_info_with_manager_values(chain_id2)
             .await?;
-        assert_eq!(info.manager.requested_locked, None);
+        assert_eq!(info.manager.requested_locking, None);
     }
 
     // Now 2 goes offline and the other validators are working again.
@@ -1369,9 +1369,9 @@ where
 
     // We make validator 3 (who does not have the block proposal) process the validated block.
     let info2_a = client2_a.chain_info_with_manager_values().await?;
-    let locked = *info2_a.manager.requested_locked.unwrap();
-    let LockedBlock::Regular(validated) = locked else {
-        panic!("Unexpected locked fast block.");
+    let locking = *info2_a.manager.requested_locking.unwrap();
+    let LockingBlock::Regular(validated) = locking else {
+        panic!("Unexpected locking fast block.");
     };
     {
         let node3 = builder.node(3);
@@ -1388,12 +1388,12 @@ where
         );
     }
 
-    // Client 2B should be able to synchronize the locked block and the blobs from validator 3.
+    // Client 2B should be able to synchronize the locking block and the blobs from validator 3.
     client2_b.synchronize_from_validators().await.unwrap();
     let info2_b = client2_b.chain_info_with_manager_values().await?;
     assert_eq!(
-        LockedBlock::Regular(validated),
-        *info2_b.manager.requested_locked.unwrap()
+        LockingBlock::Regular(validated),
+        *info2_b.manager.requested_locking.unwrap()
     );
     let bt_certificate = client2_b
         .burn(None, Amount::from_tokens(1))
@@ -1516,7 +1516,7 @@ where
                 .operations,
             blob_0_1_operations,
         );
-        assert!(validator_manager.requested_locked.is_none());
+        assert!(validator_manager.requested_locking.is_none());
     }
 
     builder.set_fault_type([2], FaultType::Offline).await;
@@ -1664,9 +1664,9 @@ where
     // Validator 2 may or may not have processed the validated block before the update was
     // canceled due to the errors from the faulty validators. Submit it again to make sure
     // it's there, so that client 2 can download and re-propose it later.
-    let locked = *manager.requested_locked.unwrap();
-    let LockedBlock::Regular(validated_block_certificate) = locked else {
-        panic!("Unexpected locked fast block.");
+    let locking = *manager.requested_locking.unwrap();
+    let LockingBlock::Regular(validated_block_certificate) = locking else {
+        panic!("Unexpected locking fast block.");
     };
     let resubmission_result = builder
         .node(2)
@@ -1692,13 +1692,13 @@ where
         );
 
         if i == 2 {
-            let locked = *validator_manager.requested_locked.unwrap();
-            let LockedBlock::Regular(validated) = locked else {
-                panic!("Unexpected locked fast block.");
+            let locking = *validator_manager.requested_locking.unwrap();
+            let LockingBlock::Regular(validated) = locking else {
+                panic!("Unexpected locking fast block.");
             };
             assert_eq!(validated.block().body.operations, blob_0_1_operations,);
         } else {
-            assert!(validator_manager.requested_locked.is_none());
+            assert!(validator_manager.requested_locking.is_none());
         }
     }
 
@@ -1731,9 +1731,9 @@ where
     // Validator 3 may or may not have processed the validated block before the update was
     // canceled due to the errors from the faulty validators. Submit it again to make sure
     // it's there, so that client 2 can download and re-propose it later.
-    let locked = *manager.requested_locked.unwrap();
-    let LockedBlock::Regular(validated_block_certificate) = locked else {
-        panic!("Unexpected locked fast block.");
+    let locking = *manager.requested_locking.unwrap();
+    let LockingBlock::Regular(validated_block_certificate) = locking else {
+        panic!("Unexpected locking fast block.");
     };
     let resubmission_result = builder
         .node(3)
@@ -1756,9 +1756,9 @@ where
             .operations,
         blob_2_3_operations,
     );
-    let locked = *validator_manager.requested_locked.unwrap();
-    let LockedBlock::Regular(validated) = locked else {
-        panic!("Unexpected locked fast block.");
+    let locking = *validator_manager.requested_locking.unwrap();
+    let LockingBlock::Regular(validated) = locking else {
+        panic!("Unexpected locking fast block.");
     };
     assert_eq!(validated.block().body.operations, blob_2_3_operations,);
 
@@ -1989,7 +1989,7 @@ where
         .unwrap()
         .manager;
     assert_eq!(
-        manager.requested_locked.unwrap().round(),
+        manager.requested_locking.unwrap().round(),
         Round::MultiLeader(1)
     );
     assert!(client0.pending_proposal().is_some());
@@ -2105,9 +2105,9 @@ where
     // Validator 0 may or may not have processed the validated block before the update was
     // canceled due to the errors from the faulty validators. Submit it again to make sure
     // it's there, so that client 1 can download and re-propose it later.
-    let locked = *manager.requested_locked.unwrap();
-    let LockedBlock::Regular(validated_block_certificate) = locked else {
-        panic!("Unexpected locked fast block.");
+    let locking = *manager.requested_locking.unwrap();
+    let LockingBlock::Regular(validated_block_certificate) = locking else {
+        panic!("Unexpected locking fast block.");
     };
     builder
         .node(0)
@@ -2129,7 +2129,7 @@ where
         .unwrap()
         .manager;
     assert!(manager.requested_proposed.is_some());
-    assert!(manager.requested_locked.is_none());
+    assert!(manager.requested_locking.is_none());
     assert_eq!(manager.current_round, Round::MultiLeader(0));
     let result = client1.burn(None, Amount::from_tokens(2)).await;
     assert!(result.is_err());
@@ -2145,7 +2145,7 @@ where
         .unwrap()
         .manager;
     assert_eq!(
-        manager.requested_locked.unwrap().round(),
+        manager.requested_locking.unwrap().round(),
         Round::MultiLeader(0)
     );
     assert_eq!(manager.current_round, Round::MultiLeader(1));

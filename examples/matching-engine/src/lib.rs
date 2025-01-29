@@ -102,7 +102,7 @@ impl PriceBid {
     }
 }
 
-/// We use the custom serialization for the PriceAsk so that the order of the serialization
+/// We use the custom serialization for the PriceBid so that the order of the serialization
 /// corresponds to the order of the Prices.
 impl CustomSerialize for PriceBid {
     fn to_custom_bytes(&self) -> Result<Vec<u8>, ViewError> {

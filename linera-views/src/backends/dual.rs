@@ -33,7 +33,7 @@ pub enum StoreInUse {
     Second,
 }
 
-/// The trait for a (static) root key assignement.
+/// The trait for a (static) root key assignment.
 pub trait DualStoreRootKeyAssignment {
     /// Obtains the store assigned to this root key.
     fn assigned_store(root_key: &[u8]) -> Result<StoreInUse, bcs::Error>;
@@ -48,7 +48,7 @@ pub struct DualStore<S1, S2, A> {
     second_store: S2,
     /// Which store is currently in use given the root key. (The root key in the other store will be set arbitrarily.)
     store_in_use: StoreInUse,
-    /// Marker for the static root key assignement.
+    /// Marker for the static root key assignment.
     _marker: std::marker::PhantomData<A>,
 }
 

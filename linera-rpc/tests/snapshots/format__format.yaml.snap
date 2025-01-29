@@ -283,9 +283,9 @@ ChainManagerInfo:
     - requested_proposed:
         OPTION:
           TYPENAME: BlockProposal
-    - requested_locked:
+    - requested_locking:
         OPTION:
-          TYPENAME: LockedBlock
+          TYPENAME: LockingBlock
     - timeout:
         OPTION:
           TYPENAME: TimeoutCertificate
@@ -481,7 +481,7 @@ LiteVote:
         TYPENAME: ValidatorName
     - signature:
         TYPENAME: Signature
-LockedBlock:
+LockingBlock:
   ENUM:
     0:
       Fast:
@@ -685,6 +685,10 @@ OracleResponse:
           TYPENAME: BlobId
     3:
       Assert: UNIT
+    4:
+      Round:
+        NEWTYPE:
+          OPTION: U32
 Origin:
   STRUCT:
     - sender:

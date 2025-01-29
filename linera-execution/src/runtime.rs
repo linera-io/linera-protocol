@@ -65,6 +65,8 @@ pub struct SyncRuntimeInternal<UserInstance> {
     /// The height of the next block that will be added to this chain. During operations
     /// and messages, this is the current block height.
     height: BlockHeight,
+    /// The current consensus round. Only available during block validation in multi-leader rounds.
+    round: Option<u32>,
     /// The current local time.
     local_time: Timestamp,
     /// The authenticated signer of the operation or message, if any.
@@ -283,6 +285,7 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
     fn new(
         chain_id: ChainId,
         height: BlockHeight,
+        round: Option<u32>,
         local_time: Timestamp,
         authenticated_signer: Option<Owner>,
         executing_message: Option<ExecutingMessage>,
@@ -294,6 +297,7 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
         Self {
             chain_id,
             height,
+            round,
             local_time,
             authenticated_signer,
             executing_message,
@@ -443,6 +447,7 @@ impl SyncRuntimeInternal<UserContractInstance> {
             authenticated_signer,
             authenticated_caller_id,
             height: self.height,
+            round: self.round,
             index: None,
         };
         self.push_application(ApplicationStatus {
@@ -1070,6 +1075,7 @@ impl ContractSyncRuntime {
             SyncRuntimeInternal::new(
                 chain_id,
                 action.height(),
+                action.round(),
                 local_time,
                 action.signer(),
                 if let UserAction::Message(context, _) = action {
@@ -1136,6 +1142,7 @@ impl ContractSyncRuntimeHandle {
             authenticated_signer: action.signer(),
             chain_id,
             height: action.height(),
+            round: action.round(),
         };
 
         {
@@ -1506,6 +1513,22 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
             .recv_response()?;
         Ok(())
     }
+
+    fn validation_round(&mut self) -> Result<Option<u32>, ExecutionError> {
+        let mut this = self.inner();
+        let round =
+            if let Some(response) = this.transaction_tracker.next_replayed_oracle_response()? {
+                match response {
+                    OracleResponse::Round(round) => round,
+                    _ => return Err(ExecutionError::OracleResponseMismatch),
+                }
+            } else {
+                this.round
+            };
+        this.transaction_tracker
+            .add_oracle_response(OracleResponse::Round(round));
+        Ok(round)
+    }
 }
 
 impl ServiceSyncRuntime {
@@ -1515,6 +1538,7 @@ impl ServiceSyncRuntime {
             SyncRuntimeInternal::new(
                 context.chain_id,
                 context.next_block_height,
+                None,
                 context.local_time,
                 None,
                 None,

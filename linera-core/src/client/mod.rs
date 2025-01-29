@@ -44,7 +44,7 @@ use linera_chain::{
         BlockProposal, ChainAndHeight, ExecutedBlock, IncomingBundle, LiteVote, MessageAction,
         ProposedBlock,
     },
-    manager::LockedBlock,
+    manager::LockingBlock,
     types::{
         CertificateKind, CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate,
         GenericCertificate, LiteCertificate, Timeout, TimeoutCertificate, ValidatedBlock,
@@ -1747,53 +1747,18 @@ where
         {
             return Ok(());
         };
+        let mut proposals = Vec::new();
         if let Some(proposal) = info.manager.requested_proposed {
-            let owner = proposal.owner;
-            while let Err(original_err) = self
-                .client
-                .local_node
-                .handle_block_proposal(*proposal.clone())
-                .await
-            {
-                if let LocalNodeError::BlobsNotFound(blob_ids) = &original_err {
-                    self.update_local_node_with_blobs_from(blob_ids.clone(), remote_node)
-                        .await?;
-                    continue; // We found the missing blobs: retry.
-                }
-
-                warn!(
-                    "Skipping proposal from {} and validator {}: {}",
-                    owner, remote_node.name, original_err
-                );
-                break;
-            }
+            proposals.push(*proposal);
         }
-        if let Some(locked) = info.manager.requested_locked {
-            match *locked {
-                LockedBlock::Fast(proposal) => {
-                    let owner = proposal.owner;
-                    while let Err(original_err) = self
-                        .client
-                        .local_node
-                        .handle_block_proposal(proposal.clone())
-                        .await
-                    {
-                        if let LocalNodeError::BlobsNotFound(blob_ids) = &original_err {
-                            self.update_local_node_with_blobs_from(blob_ids.clone(), remote_node)
-                                .await?;
-                            continue; // We found the missing blobs: retry.
-                        }
-
-                        warn!(
-                            "Skipping proposal from {} and validator {}: {}",
-                            owner, remote_node.name, original_err
-                        );
-                        break;
-                    }
+        if let Some(locking) = info.manager.requested_locking {
+            match *locking {
+                LockingBlock::Fast(proposal) => {
+                    proposals.push(proposal);
                 }
-                LockedBlock::Regular(cert) => {
+                LockingBlock::Regular(cert) => {
                     let hash = cert.hash();
-                    if let Err(err) = self.try_process_locked_block_from(remote_node, cert).await {
+                    if let Err(err) = self.try_process_locking_block_from(remote_node, cert).await {
                         warn!(
                             "Skipping certificate {hash} from validator {}: {err}",
                             remote_node.name
@@ -1802,10 +1767,38 @@ where
                 }
             }
         }
+        for proposal in proposals {
+            let owner = proposal.owner;
+            if let Err(mut err) = self
+                .client
+                .local_node
+                .handle_block_proposal(proposal.clone())
+                .await
+            {
+                if let LocalNodeError::BlobsNotFound(blob_ids) = &err {
+                    self.update_local_node_with_blobs_from(blob_ids.clone(), remote_node)
+                        .await?;
+                    // We found the missing blobs: retry.
+                    if let Err(new_err) = self
+                        .client
+                        .local_node
+                        .handle_block_proposal(proposal.clone())
+                        .await
+                    {
+                        err = new_err;
+                    } else {
+                        continue;
+                    }
+                }
+
+                let name = &remote_node.name;
+                warn!("Skipping proposal from {owner} and validator {name}: {err}",);
+            }
+        }
         Ok(())
     }
 
-    async fn try_process_locked_block_from(
+    async fn try_process_locking_block_from(
         &self,
         remote_node: &RemoteNode<P::Node>,
         certificate: GenericCertificate<ValidatedBlock>,
@@ -1910,9 +1903,10 @@ where
     async fn stage_block_execution_and_discard_failing_messages(
         &self,
         mut block: ProposedBlock,
+        round: Option<u32>,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), ChainClientError> {
         loop {
-            let result = self.stage_block_execution(block.clone()).await;
+            let result = self.stage_block_execution(block.clone(), round).await;
             if let Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(
                 WorkerError::ChainError(chain_error),
             ))) = &result
@@ -1951,12 +1945,13 @@ where
     async fn stage_block_execution(
         &self,
         block: ProposedBlock,
+        round: Option<u32>,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), ChainClientError> {
         loop {
             let result = self
                 .client
                 .local_node
-                .stage_block_execution(block.clone())
+                .stage_block_execution(block.clone(), round)
                 .await;
             if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
                 self.receive_certificates_for_blobs(blob_ids.clone())
@@ -1984,7 +1979,7 @@ where
 
             let maybe_blob = {
                 let chain_state_view = self.chain_state_view().await?;
-                chain_state_view.manager.locked_blobs.get(&blob_id).await?
+                chain_state_view.manager.locking_blobs.get(&blob_id).await?
             };
 
             if let Some(blob) = maybe_blob {
@@ -2129,8 +2124,18 @@ where
         };
         // Make sure every incoming message succeeds and otherwise remove them.
         // Also, compute the final certified hash while we're at it.
+
+        let info = self.chain_info().await?;
+        // Use the round number assuming there are oracle responses.
+        // Using the round number during execution counts as an oracle.
+        // Accessing the round number in single-leader rounds where we are not the leader
+        // is not currently supported.
+        let round = match Self::round_for_new_proposal(&info, &identity, &block, true)? {
+            Either::Left(round) => round.multi_leader(),
+            Either::Right(_) => None,
+        };
         let (executed_block, _) = self
-            .stage_block_execution_and_discard_failing_messages(block)
+            .stage_block_execution_and_discard_failing_messages(block, round)
             .await?;
         let blobs = self
             .read_local_blobs(executed_block.required_blob_ids())
@@ -2277,7 +2282,7 @@ where
             timestamp,
         };
         match self
-            .stage_block_execution_and_discard_failing_messages(block)
+            .stage_block_execution_and_discard_failing_messages(block, None)
             .await
         {
             Ok((_, response)) => Ok((
@@ -2426,30 +2431,42 @@ where
         let info = self.request_leader_timeout_if_needed().await?;
 
         // If there is a validated block in the current round, finalize it.
-        if info.manager.has_locked_block_in_current_round() && !info.manager.current_round.is_fast()
+        if info.manager.has_locking_block_in_current_round()
+            && !info.manager.current_round.is_fast()
         {
-            return self.finalize_locked_block(info).await;
+            return self.finalize_locking_block(info).await;
         }
+        let identity = self.identity().await?;
 
         // Otherwise we have to re-propose the highest validated block, if there is one.
         let pending: Option<ProposedBlock> = self.state().pending_proposal().clone();
-        let executed_block = if let Some(locked) = &info.manager.requested_locked {
-            match &**locked {
-                LockedBlock::Regular(certificate) => certificate.block().clone().into(),
-                LockedBlock::Fast(proposal) => {
+        let executed_block = if let Some(locking) = &info.manager.requested_locking {
+            match &**locking {
+                LockingBlock::Regular(certificate) => certificate.block().clone().into(),
+                LockingBlock::Fast(proposal) => {
                     let block = proposal.content.block.clone();
-                    self.stage_block_execution(block).await?.0
+                    self.stage_block_execution(block, None).await?.0
                 }
             }
         } else if let Some(block) = pending {
             // Otherwise we are free to propose our own pending block.
-            self.stage_block_execution(block).await?.0
+            // Use the round number assuming there are oracle responses.
+            // Using the round number during execution counts as an oracle.
+            let round = match Self::round_for_new_proposal(&info, &identity, &block, true)? {
+                Either::Left(round) => round.multi_leader(),
+                Either::Right(_) => None,
+            };
+            self.stage_block_execution(block, round).await?.0
         } else {
             return Ok(ClientOutcome::Committed(None)); // Nothing to do.
         };
 
-        let identity = self.identity().await?;
-        let round = match Self::round_for_new_proposal(&info, &identity, &executed_block)? {
+        let round = match Self::round_for_new_proposal(
+            &info,
+            &identity,
+            &executed_block.block,
+            executed_block.outcome.has_oracle_responses(),
+        )? {
             Either::Left(round) => round,
             Either::Right(timeout) => return Ok(ClientOutcome::WaitForTimeout(timeout)),
         };
@@ -2463,12 +2480,12 @@ where
             .already_handled_proposal(round, &executed_block.block);
         let key_pair = self.key_pair().await?;
         // Create the final block proposal.
-        let proposal = if let Some(locked) = info.manager.requested_locked {
-            Box::new(match *locked {
-                LockedBlock::Regular(cert) => {
+        let proposal = if let Some(locking) = info.manager.requested_locking {
+            Box::new(match *locking {
+                LockingBlock::Regular(cert) => {
                     BlockProposal::new_retry(round, cert, &key_pair, blobs)
                 }
-                LockedBlock::Fast(proposal) => {
+                LockingBlock::Fast(proposal) => {
                     BlockProposal::new_initial(round, proposal.content.block, &key_pair, blobs)
                 }
             })
@@ -2517,19 +2534,19 @@ where
         Ok(info)
     }
 
-    /// Finalizes the locked block.
+    /// Finalizes the locking block.
     ///
-    /// Panics if there is no locked block; fails if the locked block is not in the current round.
-    async fn finalize_locked_block(
+    /// Panics if there is no locking block; fails if the locking block is not in the current round.
+    async fn finalize_locking_block(
         &self,
         info: Box<ChainInfo>,
     ) -> Result<ClientOutcome<Option<ConfirmedBlockCertificate>>, ChainClientError> {
-        let locked = info
+        let locking = info
             .manager
-            .requested_locked
-            .expect("Should have a locked block");
-        let LockedBlock::Regular(certificate) = *locked else {
-            panic!("Should have a locked validated block");
+            .requested_locking
+            .expect("Should have a locking block");
+        let LockingBlock::Regular(certificate) = *locking else {
+            panic!("Should have a locking validated block");
         };
         let committee = self.local_committee().await?;
         match self.finalize_block(&committee, certificate.clone()).await {
@@ -2552,17 +2569,16 @@ where
     fn round_for_new_proposal(
         info: &ChainInfo,
         identity: &Owner,
-        executed_block: &ExecutedBlock,
+        block: &ProposedBlock,
+        has_oracle_responses: bool,
     ) -> Result<Either<Round, RoundTimeout>, ChainClientError> {
         let manager = &info.manager;
-        let block = &executed_block.block;
         // If there is a conflicting proposal in the current round, we can only propose if the
         // next round can be started without a timeout, i.e. if we are in a multi-leader round.
         // Similarly, we cannot propose a block that uses oracles in the fast round.
         let conflict = manager.requested_proposed.as_ref().is_some_and(|proposal| {
             proposal.content.round == manager.current_round && proposal.content.block != *block
-        }) || (manager.current_round.is_fast()
-            && executed_block.outcome.has_oracle_responses());
+        }) || (manager.current_round.is_fast() && has_oracle_responses);
         let round = if !conflict {
             manager.current_round
         } else if let Some(round) = manager
@@ -3228,7 +3244,7 @@ where
         // deadlock, because of the issue described in
         // https://github.com/linera-io/linera-protocol/pull/1173.
 
-        // TODO(#2013): replace this lock with an asychronous communication channel
+        // TODO(#2013): replace this lock with an asynchronous communication channel
 
         let mut process_notifications = FuturesUnordered::new();
 

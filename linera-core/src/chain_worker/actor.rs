@@ -85,6 +85,7 @@ where
     /// Execute a block but discard any changes to the chain state.
     StageBlockExecution {
         block: ProposedBlock,
+        round: Option<u32>,
         #[debug(skip)]
         callback: oneshot::Sender<Result<(ExecutedBlock, ChainInfoResponse), WorkerError>>,
     },
@@ -141,7 +142,7 @@ where
         callback: oneshot::Sender<Result<(ChainInfoResponse, NetworkActions), WorkerError>>,
     },
 
-    /// Get a blob if it belongs to the current locked block or pending proposal.
+    /// Get a blob if it belongs to the current locking block or pending proposal.
     DownloadPendingBlob {
         blob_id: BlobId,
         #[debug(skip)]
@@ -286,8 +287,12 @@ where
                 } => callback
                     .send(self.worker.describe_application(application_id).await)
                     .is_ok(),
-                ChainWorkerRequest::StageBlockExecution { block, callback } => callback
-                    .send(self.worker.stage_block_execution(block).await)
+                ChainWorkerRequest::StageBlockExecution {
+                    block,
+                    round,
+                    callback,
+                } => callback
+                    .send(self.worker.stage_block_execution(block, round).await)
                     .is_ok(),
                 ChainWorkerRequest::ProcessTimeout {
                     certificate,

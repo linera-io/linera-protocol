@@ -273,6 +273,7 @@ where
         authenticated_signer: None,
         authenticated_caller_id: None,
         height: run_block.height,
+        round: Some(0),
         index: Some(0),
     };
     let mut controller = ResourceController::default();

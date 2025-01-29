@@ -178,6 +178,7 @@ fn create_runtime<Application>() -> (
     let runtime = SyncRuntimeInternal::new(
         chain_id,
         BlockHeight(0),
+        Some(0),
         Timestamp::from(0),
         None,
         None,

@@ -333,6 +333,11 @@ where
     pub fn assert_data_blob_exists(&mut self, hash: DataBlobHash) {
         wit::assert_data_blob_exists(hash.0.into())
     }
+
+    /// Returns the round in which this block was validated.
+    pub fn validation_round(&mut self) -> Option<u32> {
+        wit::validation_round()
+    }
 }
 
 /// A helper type that uses the builder pattern to configure how a message is sent, and then

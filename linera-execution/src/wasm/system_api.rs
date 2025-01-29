@@ -443,6 +443,15 @@ where
             .consume_fuel(fuel)
             .map_err(|e| RuntimeError::Custom(e.into()))
     }
+
+    /// Returns the round in which this block was validated.
+    fn validation_round(caller: &mut Caller) -> Result<Option<u32>, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime_mut()
+            .validation_round()
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
 }
 
 /// An implementation of the system API made available to services.

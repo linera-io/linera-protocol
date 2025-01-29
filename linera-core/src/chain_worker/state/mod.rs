@@ -179,10 +179,11 @@ where
     pub(super) async fn stage_block_execution(
         &mut self,
         block: ProposedBlock,
+        round: Option<u32>,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), WorkerError> {
         ChainWorkerStateWithTemporaryChanges::new(self)
             .await
-            .stage_block_execution(block)
+            .stage_block_execution(block, round)
             .await
     }
 
@@ -295,7 +296,7 @@ where
         Ok((response, actions))
     }
 
-    /// Returns the requested blob, if it belongs to the current locked block or pending proposal.
+    /// Returns the requested blob, if it belongs to the current locking block or pending proposal.
     pub(super) async fn download_pending_blob(&self, blob_id: BlobId) -> Result<Blob, WorkerError> {
         let maybe_blob = self.chain.manager.pending_blob(&blob_id).await?;
         maybe_blob.ok_or_else(|| WorkerError::BlobsNotFound(vec![blob_id]))

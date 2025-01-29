@@ -29,7 +29,7 @@ Optionally, contributors may also be able to create a block to accept a new epoc
 (i.e. a change of validators).
 
 <!--
-TODO: The following documentation involves `sleep`ing to avoid some race conditions. See:
+TODO: The following documentation involves sleep to avoid some race conditions. See:
   - https://github.com/linera-io/linera-protocol/issues/1176
   - https://github.com/linera-io/linera-protocol/issues/1177
 -->
@@ -39,7 +39,7 @@ TODO: The following documentation involves `sleep`ing to avoid some race conditi
 ### Setting Up
 
 The WebAssembly binaries for the bytecode can be built and published using [steps from the
-book](https://linera-io.github.io/linera-documentation/getting_started/first_app.html),
+book](https://linera.dev/developers/getting_started.html),
 summarized below.
 
 Set up the path and the helper function.

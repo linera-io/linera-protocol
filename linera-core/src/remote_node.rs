@@ -153,10 +153,10 @@ impl<N: ValidatorNode> RemoteNode<N> {
     ) -> Result<Box<ChainInfo>, NodeError> {
         let manager = &response.info.manager;
         let proposed = manager.requested_proposed.as_ref();
-        let locked = manager.requested_locked.as_ref();
+        let locking = manager.requested_locking.as_ref();
         ensure!(
             proposed.map_or(true, |proposal| proposal.content.block.chain_id == chain_id)
-                && locked.map_or(true, |cert| cert.chain_id() == chain_id)
+                && locking.map_or(true, |cert| cert.chain_id() == chain_id)
                 && response.check(&self.name).is_ok(),
             NodeError::InvalidChainInfoResponse
         );
