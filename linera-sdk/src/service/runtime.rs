@@ -3,7 +3,7 @@
 
 //! Runtime types to interface with the host executing the service.
 
-use std::cell::Cell;
+use std::sync::Mutex;
 
 use linera_base::{
     abi::ServiceAbi,
@@ -19,14 +19,14 @@ pub struct ServiceRuntime<Application>
 where
     Application: Service,
 {
-    application_parameters: Cell<Option<Application::Parameters>>,
-    application_id: Cell<Option<ApplicationId<Application::Abi>>>,
-    chain_id: Cell<Option<ChainId>>,
-    next_block_height: Cell<Option<BlockHeight>>,
-    timestamp: Cell<Option<Timestamp>>,
-    chain_balance: Cell<Option<Amount>>,
-    owner_balances: Cell<Option<Vec<(AccountOwner, Amount)>>>,
-    balance_owners: Cell<Option<Vec<AccountOwner>>>,
+    application_parameters: Mutex<Option<Application::Parameters>>,
+    application_id: Mutex<Option<ApplicationId<Application::Abi>>>,
+    chain_id: Mutex<Option<ChainId>>,
+    next_block_height: Mutex<Option<BlockHeight>>,
+    timestamp: Mutex<Option<Timestamp>>,
+    chain_balance: Mutex<Option<Amount>>,
+    owner_balances: Mutex<Option<Vec<(AccountOwner, Amount)>>>,
+    balance_owners: Mutex<Option<Vec<AccountOwner>>>,
 }
 
 impl<Application> ServiceRuntime<Application>
@@ -36,14 +36,14 @@ where
     /// Creates a new [`ServiceRuntime`] instance for a service.
     pub(crate) fn new() -> Self {
         ServiceRuntime {
-            application_parameters: Cell::new(None),
-            application_id: Cell::new(None),
-            chain_id: Cell::new(None),
-            next_block_height: Cell::new(None),
-            timestamp: Cell::new(None),
-            chain_balance: Cell::new(None),
-            owner_balances: Cell::new(None),
-            balance_owners: Cell::new(None),
+            application_parameters: Mutex::new(None),
+            application_id: Mutex::new(None),
+            chain_id: Mutex::new(None),
+            next_block_height: Mutex::new(None),
+            timestamp: Mutex::new(None),
+            chain_balance: Mutex::new(None),
+            owner_balances: Mutex::new(None),
+            balance_owners: Mutex::new(None),
         }
     }
 
@@ -140,14 +140,20 @@ where
         wit::fetch_url(url)
     }
 
-    /// Loads a value from the `cell` cache or fetches it and stores it in the cache.
-    fn fetch_value_through_cache<T>(cell: &Cell<Option<T>>, fetch: impl FnOnce() -> T) -> T
+    /// Loads a value from the `slot` cache or fetches it and stores it in the cache.
+    fn fetch_value_through_cache<T>(slot: &Mutex<Option<T>>, fetch: impl FnOnce() -> T) -> T
     where
         T: Clone,
     {
-        let value = cell.take().unwrap_or_else(fetch);
-        cell.set(Some(value.clone()));
-        value
+        let mut value = slot
+            .lock()
+            .expect("Mutex should never be poisoned because service runs in a single thread");
+
+        if value.is_none() {
+            *value = Some(fetch());
+        }
+
+        value.clone().expect("Value should be populated above")
     }
 
     /// Reads a data blob with the given hash from storage.
