@@ -8,9 +8,10 @@ use std::{collections::HashMap, mem, sync::Mutex};
 use linera_base::{
     abi::ServiceAbi,
     data_types::{Amount, BlockHeight, Timestamp},
+    hex,
     identifiers::{AccountOwner, ApplicationId, ChainId},
 };
-use serde::Serialize;
+use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{DataBlobHash, KeyValueStore, Service, ViewStorageContext};
 
@@ -302,10 +303,38 @@ where
         self.schedule_raw_operation(bytes);
     }
 
-    /// Returns the list of operations scheduled since the last call to this method or
-    /// since the mock runtime was created.
+    /// Returns the list of operations scheduled since the most recent of:
+    ///
+    /// - the last call to this method;
+    /// - the last call to [`Self::scheduled_operations`];
+    /// - or since the mock runtime was created.
     pub fn raw_scheduled_operations(&self) -> Vec<Vec<u8>> {
         mem::take(&mut self.scheduled_operations.lock().unwrap())
+    }
+
+    /// Returns the list of operations scheduled since the most recent of:
+    ///
+    /// - the last call to this method;
+    /// - the last call to [`Self::raw_scheduled_operations`];
+    /// - or since the mock runtime was created.
+    ///
+    /// All operations are deserialized using BCS into the `Operation` generic type.
+    pub fn scheduled_operations<Operation>(&self) -> Vec<Operation>
+    where
+        Operation: DeserializeOwned,
+    {
+        self.raw_scheduled_operations()
+            .into_iter()
+            .enumerate()
+            .map(|(index, bytes)| {
+                bcs::from_bytes(&bytes).unwrap_or_else(|error| {
+                    panic!(
+                        "Failed to deserialize scheduled operation #{index} (0x{}): {error}",
+                        hex::encode(bytes)
+                    )
+                })
+            })
+            .collect()
     }
 
     /// Configures the handler for application queries made during the test.
