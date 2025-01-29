@@ -1134,7 +1134,14 @@ impl<'a> Deserialize<'a> for Blob {
 }
 
 doc_scalar!(Bytecode, "A WebAssembly module's bytecode");
-doc_scalar!(Amount, "A non-negative amount of tokens.");
+doc_scalar!(Amount, r#"
+A non-negative amount of tokens.
+
+An example of an `Amount`:
+```
+"1.234"
+```
+"#);
 doc_scalar!(BlockHeight, "A block height to identify blocks in a chain");
 doc_scalar!(
     Timestamp,
