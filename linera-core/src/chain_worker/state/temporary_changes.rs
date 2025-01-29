@@ -161,7 +161,6 @@ where
                 },
             public_key: _,
             owner: _,
-            blobs: _,
             validated_block_certificate,
             signature: _,
         } = proposal;

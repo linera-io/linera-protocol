@@ -800,7 +800,6 @@ where
                 linera_base::data_types::Round::Fast,
                 block.clone(),
                 key_pair,
-                vec![],
             );
             proposals.push(RpcMessage::BlockProposal(Box::new(proposal)));
             next_recipient = chain.chain_id;

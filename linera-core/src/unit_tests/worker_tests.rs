@@ -3362,12 +3362,8 @@ where
     // But with the validated block certificate for block2, it is allowed.
     let certificate2 =
         make_certificate_with_round(&committee, &worker, value2.clone(), Round::SingleLeader(4));
-    let proposal = BlockProposal::new_retry(
-        Round::SingleLeader(5),
-        certificate2.clone(),
-        &key_pairs[1],
-        Vec::new(),
-    );
+    let proposal =
+        BlockProposal::new_retry(Round::SingleLeader(5), certificate2.clone(), &key_pairs[1]);
     let lite_value2 = LiteValue::new(&value2);
     let (_, _) = worker.handle_block_proposal(proposal).await?;
     let (response, _) = worker.handle_chain_info_query(query_values.clone()).await?;
@@ -3670,12 +3666,8 @@ where
     let value2 = Hashed::new(ValidatedBlock::new(executed_block2.clone()));
     let certificate2 =
         make_certificate_with_round(&committee, &worker, value2.clone(), Round::MultiLeader(0));
-    let proposal = BlockProposal::new_retry(
-        Round::MultiLeader(3),
-        certificate2.clone(),
-        &key_pairs[1],
-        Vec::new(),
-    );
+    let proposal =
+        BlockProposal::new_retry(Round::MultiLeader(3), certificate2.clone(), &key_pairs[1]);
     let lite_value2 = LiteValue::new(&value2);
     let (_, _) = worker.handle_block_proposal(proposal).await?;
     let query_values = ChainInfoQuery::new(chain_id).with_manager_values();

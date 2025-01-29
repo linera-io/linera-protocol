@@ -12,7 +12,7 @@ use custom_debug_derive::Debug;
 use linera_base::{
     bcs,
     crypto::{BcsHashable, BcsSignable, CryptoError, CryptoHash, KeyPair, PublicKey, Signature},
-    data_types::{Amount, Blob, BlockHeight, OracleResponse, Round, Timestamp},
+    data_types::{Amount, BlockHeight, OracleResponse, Round, Timestamp},
     doc_scalar, ensure,
     hashed::Hashed,
     hex_debug,
@@ -308,8 +308,6 @@ pub struct BlockProposal {
     pub owner: Owner,
     pub public_key: PublicKey,
     pub signature: Signature,
-    #[debug(skip_if = Vec::is_empty)]
-    pub blobs: Vec<Blob>,
     #[debug(skip_if = Option::is_none)]
     pub validated_block_certificate: Option<LiteCertificate<'static>>,
 }
@@ -773,12 +771,7 @@ pub struct ProposalContent {
 }
 
 impl BlockProposal {
-    pub fn new_initial(
-        round: Round,
-        block: ProposedBlock,
-        secret: &KeyPair,
-        blobs: Vec<Blob>,
-    ) -> Self {
+    pub fn new_initial(round: Round, block: ProposedBlock, secret: &KeyPair) -> Self {
         let content = ProposalContent {
             round,
             block,
@@ -790,7 +783,6 @@ impl BlockProposal {
             public_key: secret.public(),
             owner: secret.public().into(),
             signature,
-            blobs,
             validated_block_certificate: None,
         }
     }
@@ -799,7 +791,6 @@ impl BlockProposal {
         round: Round,
         validated_block_certificate: ValidatedBlockCertificate,
         secret: &KeyPair,
-        blobs: Vec<Blob>,
     ) -> Self {
         let lite_cert = validated_block_certificate.lite_certificate().cloned();
         let block = validated_block_certificate.into_inner().into_inner();
@@ -815,13 +806,21 @@ impl BlockProposal {
             public_key: secret.public(),
             owner: secret.public().into(),
             signature,
-            blobs,
             validated_block_certificate: Some(lite_cert),
         }
     }
 
     pub fn check_signature(&self) -> Result<(), CryptoError> {
         self.signature.check(&self.content, self.public_key)
+    }
+
+    pub fn required_blob_ids(&self) -> impl Iterator<Item = BlobId> + '_ {
+        self.content.block.published_blob_ids().into_iter().chain(
+            self.content
+                .outcome
+                .iter()
+                .flat_map(|outcome| outcome.oracle_blob_ids()),
+        )
     }
 }
 

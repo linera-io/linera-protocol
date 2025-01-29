@@ -22,10 +22,12 @@ use linera_base::{
     },
 };
 use linera_execution::{
-    committee::ValidatorName, system::OpenChainConfig, ExecutionOutcome, ExecutionRuntimeContext,
-    ExecutionStateView, Message, MessageContext, Operation, OperationContext, Query, QueryContext,
-    QueryOutcome, RawExecutionOutcome, RawOutgoingMessage, ResourceController, ResourceTracker,
-    ServiceRuntimeEndpoint, TransactionTracker,
+    committee::{Committee, Epoch, ValidatorName},
+    system::OpenChainConfig,
+    ExecutionOutcome, ExecutionRuntimeContext, ExecutionStateView, Message, MessageContext,
+    Operation, OperationContext, Query, QueryContext, QueryOutcome, RawExecutionOutcome,
+    RawOutgoingMessage, ResourceController, ResourceTracker, ServiceRuntimeEndpoint,
+    TransactionTracker,
 };
 use linera_views::{
     context::Context,
@@ -587,6 +589,13 @@ where
         Ok(true)
     }
 
+    pub fn current_committee(&self) -> Result<(Epoch, &Committee), ChainError> {
+        self.execution_state
+            .system
+            .current_committee()
+            .ok_or_else(|| ChainError::InactiveChain(self.chain_id()))
+    }
+
     /// Removes the incoming message bundles in the block from the inboxes.
     pub async fn remove_bundles_from_inboxes(
         &mut self,
@@ -701,9 +710,7 @@ where
             ChainError::InvalidBlockTimestamp
         );
         self.execution_state.system.timestamp.set(block.timestamp);
-        let Some((_, committee)) = self.execution_state.system.current_committee() else {
-            return Err(ChainError::InactiveChain(chain_id));
-        };
+        let (_, committee) = self.current_committee()?;
         let mut resource_controller = ResourceController {
             policy: Arc::new(committee.policy().clone()),
             tracker: ResourceTracker::default(),

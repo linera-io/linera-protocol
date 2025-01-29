@@ -18,7 +18,7 @@ use linera_chain::{
     },
     manager,
     types::{ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
-    ChainError, ChainStateView,
+    ChainStateView,
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
@@ -74,13 +74,7 @@ where
         // Check that the chain is active and ready for this timeout.
         // Verify the certificate. Returns a catch-all error to make client code more robust.
         self.state.ensure_is_active()?;
-        let (chain_epoch, committee) = self
-            .state
-            .chain
-            .execution_state
-            .system
-            .current_committee()
-            .expect("chain is active");
+        let (chain_epoch, committee) = self.state.chain.current_committee()?;
         ensure!(
             certificate.inner().epoch == chain_epoch,
             WorkerError::InvalidEpoch {
@@ -138,7 +132,6 @@ where
                 },
             public_key,
             owner,
-            blobs: _,
             validated_block_certificate,
             signature: _,
         } = proposal;
@@ -157,13 +150,7 @@ where
         );
         self.state.ensure_is_active()?;
         // Check the epoch.
-        let (epoch, committee) = self
-            .state
-            .chain
-            .execution_state
-            .system
-            .current_committee()
-            .expect("chain is active");
+        let (epoch, committee) = self.state.chain.current_committee()?;
         check_block_epoch(epoch, block.chain_id, block.epoch)?;
         let policy = committee.policy().clone();
         // Check the authentication of the block.
@@ -189,13 +176,9 @@ where
         if self.state.chain.manager.check_proposed_block(proposal)? == manager::Outcome::Skip {
             return Ok(());
         }
-        let required_blob_ids = block
-            .published_blob_ids()
-            .into_iter()
-            .chain(outcome.iter().flat_map(|outcome| outcome.oracle_blob_ids()));
         let maybe_blobs = self
             .state
-            .maybe_get_required_blobs(required_blob_ids)
+            .maybe_get_required_blobs(proposal.required_blob_ids())
             .await?;
         let missing_blob_ids = super::missing_blob_ids(&maybe_blobs);
         if !missing_blob_ids.is_empty() {
@@ -222,13 +205,10 @@ where
     ) -> Result<(), WorkerError> {
         // Create the vote and store it in the chain state.
         let executed_block = outcome.with(proposal.content.block.clone());
-        let blobs = if proposal.validated_block_certificate.is_some() {
-            self.state
-                .get_required_blobs(executed_block.required_blob_ids())
-                .await?
-        } else {
-            BTreeMap::new()
-        };
+        let blobs = self
+            .state
+            .get_required_blobs(proposal.required_blob_ids())
+            .await?;
         let key_pair = self.state.config.key_pair();
         let manager = &mut self.state.chain.manager;
         match manager.create_vote(proposal, executed_block, key_pair, local_time, blobs)? {
@@ -261,13 +241,7 @@ where
         // Check that the chain is active and ready for this validated block.
         // Verify the certificate. Returns a catch-all error to make client code more robust.
         self.state.ensure_is_active()?;
-        let (epoch, committee) = self
-            .state
-            .chain
-            .execution_state
-            .system
-            .current_committee()
-            .expect("chain is active");
+        let (epoch, committee) = self.state.chain.current_committee()?;
         check_block_epoch(epoch, header.chain_id, header.epoch)?;
         certificate.check(committee)?;
         let mut actions = NetworkActions::default();
@@ -379,13 +353,7 @@ where
         }
         self.state.ensure_is_active()?;
         // Verify the certificate.
-        let (epoch, committee) = self
-            .state
-            .chain
-            .execution_state
-            .system
-            .current_committee()
-            .expect("chain is active");
+        let (epoch, committee) = self.state.chain.current_committee()?;
         check_block_epoch(
             epoch,
             executed_block.block.chain_id,
@@ -674,20 +642,22 @@ where
         &mut self,
         blob: Blob,
     ) -> Result<ChainInfoResponse, WorkerError> {
-        let (_, committee) = self
-            .state
-            .chain
-            .execution_state
-            .system
-            .current_committee()
-            .ok_or_else(|| ChainError::InactiveChain(self.state.chain_id()))?;
-        let policy = committee.policy().clone();
-        Self::check_blob_size(blob.content(), &policy)?;
+        let (_, committee) = self.state.chain.current_committee()?;
+        Self::check_blob_size(blob.content(), committee.policy())?;
         self.state
             .chain
             .pending_validated_blobs
             .maybe_insert(&blob)
             .await?;
+        for (_, mut pending_blobs) in self
+            .state
+            .chain
+            .pending_proposed_blobs
+            .try_load_all_entries_mut()
+            .await?
+        {
+            pending_blobs.maybe_insert(&blob).await?;
+        }
         self.save().await?;
         Ok(ChainInfoResponse::new(
             &self.state.chain,

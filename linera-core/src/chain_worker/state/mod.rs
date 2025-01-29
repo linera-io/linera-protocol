@@ -303,8 +303,10 @@ where
 
     /// Returns the requested blob, if it belongs to the current locking block or pending proposal.
     pub(super) async fn download_pending_blob(&self, blob_id: BlobId) -> Result<Blob, WorkerError> {
-        let maybe_blob = self.chain.manager.pending_blob(&blob_id).await?;
-        maybe_blob.ok_or_else(|| WorkerError::BlobsNotFound(vec![blob_id]))
+        if let Some(blob) = self.chain.manager.pending_blob(&blob_id).await? {
+            return Ok(blob);
+        }
+        Ok(self.storage.read_blob(blob_id).await?)
     }
 
     /// Adds the blob to pending blocks or validated block certificates that are missing it.
@@ -331,7 +333,7 @@ where
     /// missing.
     async fn get_required_blobs(
         &self,
-        required_blob_ids: HashSet<BlobId>,
+        required_blob_ids: impl IntoIterator<Item = BlobId>,
     ) -> Result<BTreeMap<BlobId, Blob>, WorkerError> {
         let maybe_blobs = self.maybe_get_required_blobs(required_blob_ids).await?;
         let not_found_blob_ids = missing_blob_ids(&maybe_blobs);

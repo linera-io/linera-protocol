@@ -215,9 +215,6 @@ message BlockProposal {
 
   // A lite certificate for a validated block that justifies the proposal in this round.
   optional bytes validated_block_certificate = 6;
-
-  // Required blob
-  bytes blobs = 7;
 }
 
 // A certified statement from the committee, without the value.

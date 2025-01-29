@@ -153,9 +153,6 @@ BlockProposal:
         TYPENAME: PublicKey
     - signature:
         TYPENAME: Signature
-    - blobs:
-        SEQ:
-          TYPENAME: BlobContent
     - validated_block_certificate:
         OPTION:
           TYPENAME: LiteCertificate
