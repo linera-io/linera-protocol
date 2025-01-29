@@ -5,7 +5,7 @@
 
 mod state;
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
 use fungible::{Operation, Parameters};
@@ -21,7 +21,7 @@ use self::state::FungibleTokenState;
 #[derive(Clone)]
 pub struct FungibleTokenService {
     state: Arc<FungibleTokenState>,
-    runtime: Arc<Mutex<ServiceRuntime<Self>>>,
+    runtime: Arc<ServiceRuntime<Self>>,
 }
 
 linera_sdk::service!(FungibleTokenService);
@@ -39,7 +39,7 @@ impl Service for FungibleTokenService {
             .expect("Failed to load state");
         FungibleTokenService {
             state: Arc::new(state),
-            runtime: Arc::new(Mutex::new(runtime)),
+            runtime: Arc::new(runtime),
         }
     }
 
@@ -57,10 +57,6 @@ impl FungibleTokenService {
     }
 
     async fn ticker_symbol(&self) -> Result<String, async_graphql::Error> {
-        let runtime = self
-            .runtime
-            .try_lock()
-            .expect("Services only run in a single-thread");
-        Ok(runtime.application_parameters().ticker_symbol)
+        Ok(self.runtime.application_parameters().ticker_symbol)
     }
 }

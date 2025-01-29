@@ -10,7 +10,7 @@ mod token;
 
 use std::{
     collections::{BTreeMap, BTreeSet},
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
 
 use async_graphql::{Context, EmptySubscription, Object, Request, Response, Schema};
@@ -29,7 +29,7 @@ use crate::model::ModelContext;
 
 pub struct GenNftService {
     state: Arc<GenNftState>,
-    runtime: Arc<Mutex<ServiceRuntime<Self>>>,
+    runtime: Arc<ServiceRuntime<Self>>,
 }
 
 linera_sdk::service!(GenNftService);
@@ -47,7 +47,7 @@ impl Service for GenNftService {
             .expect("Failed to load state");
         GenNftService {
             state: Arc::new(state),
-            runtime: Arc::new(Mutex::new(runtime)),
+            runtime: Arc::new(runtime),
         }
     }
 
@@ -162,10 +162,7 @@ impl QueryRoot {
     }
 
     async fn prompt(&self, ctx: &Context<'_>, prompt: String) -> String {
-        let runtime = ctx
-            .data::<Arc<Mutex<ServiceRuntime<GenNftService>>>>()
-            .unwrap();
-        let runtime = runtime.lock().unwrap();
+        let runtime = ctx.data::<Arc<ServiceRuntime<GenNftService>>>().unwrap();
         info!("prompt: {}", prompt);
         let raw_weights = runtime.fetch_url("http://localhost:10001/model.bin");
         info!("got weights: {}B", raw_weights.len());

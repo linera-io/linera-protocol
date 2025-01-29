@@ -7,7 +7,7 @@ mod state;
 
 use std::{
     collections::{BTreeMap, BTreeSet},
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
 
 use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
@@ -24,7 +24,7 @@ use self::state::NonFungibleTokenState;
 
 pub struct NonFungibleTokenService {
     state: Arc<NonFungibleTokenState>,
-    runtime: Arc<Mutex<ServiceRuntime<Self>>>,
+    runtime: Arc<ServiceRuntime<Self>>,
 }
 
 linera_sdk::service!(NonFungibleTokenService);
@@ -42,7 +42,7 @@ impl Service for NonFungibleTokenService {
             .expect("Failed to load state");
         NonFungibleTokenService {
             state: Arc::new(state),
-            runtime: Arc::new(Mutex::new(runtime)),
+            runtime: Arc::new(runtime),
         }
     }
 
@@ -62,7 +62,7 @@ impl Service for NonFungibleTokenService {
 
 struct QueryRoot {
     non_fungible_token: Arc<NonFungibleTokenState>,
-    runtime: Arc<Mutex<ServiceRuntime<NonFungibleTokenService>>>,
+    runtime: Arc<ServiceRuntime<NonFungibleTokenService>>,
 }
 
 #[Object]
@@ -77,13 +77,7 @@ impl QueryRoot {
             .unwrap();
 
         if let Some(nft) = nft {
-            let payload = {
-                let mut runtime = self
-                    .runtime
-                    .try_lock()
-                    .expect("Services only run in a single thread");
-                runtime.read_data_blob(nft.blob_hash)
-            };
+            let payload = self.runtime.read_data_blob(nft.blob_hash);
             let nft_output = NftOutput::new_with_token_id(token_id, nft, payload);
             Some(nft_output)
         } else {
@@ -97,13 +91,7 @@ impl QueryRoot {
             .nfts
             .for_each_index_value(|_token_id, nft| {
                 let nft = nft.into_owned();
-                let payload = {
-                    let mut runtime = self
-                        .runtime
-                        .try_lock()
-                        .expect("Services only run in a single thread");
-                    runtime.read_data_blob(nft.blob_hash)
-                };
+                let payload = self.runtime.read_data_blob(nft.blob_hash);
                 let nft_output = NftOutput::new(nft, payload);
                 nfts.insert(nft_output.token_id.clone(), nft_output);
                 Ok(())
@@ -163,13 +151,7 @@ impl QueryRoot {
                 .await
                 .unwrap()
                 .unwrap();
-            let payload = {
-                let mut runtime = self
-                    .runtime
-                    .try_lock()
-                    .expect("Services only run in a single thread");
-                runtime.read_data_blob(nft.blob_hash)
-            };
+            let payload = self.runtime.read_data_blob(nft.blob_hash);
             let nft_output = NftOutput::new(nft, payload);
             result.insert(nft_output.token_id.clone(), nft_output);
         }
