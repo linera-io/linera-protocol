@@ -100,6 +100,7 @@ on the second user's chain.
 
 ```bash
 linera -w 1 request-application $APP_RFQ
+sleep 2
 ```
 
 ## Using the RFQ Application
@@ -109,6 +110,7 @@ First, node services for both users' wallets have to be started:
 ```bash
 linera -w 0 service --port 8080 &
 linera -w 1 service --port 8081 &
+sleep 5
 ```
 
 ### Using GraphiQL
@@ -140,7 +142,23 @@ mutation {
 
 Claim 500 FUN2 from `$OWNER_1` in `$CHAIN_0` to `$OWNER_1` in `$CHAIN_1`, so they're in the proper chain.
 Run `echo "http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_1"` to print the URL
-of the GraphiQL interface for the FUN1 app. Navigate to that URL and enter the same request as above.
+of the GraphiQL interface for the FUN1 app. Navigate to that URL and enter the same request:
+
+```gql,uri=http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_1
+mutation {
+  claim(
+    sourceAccount: {
+      chainId: "$CHAIN_0",
+      owner: "User:$OWNER_1",
+    }
+    amount: "500.",
+    targetAccount: {
+      chainId: "$CHAIN_1",
+      owner: "User:$OWNER_1"
+    }
+  )
+}
+```
 
 Now we are ready to submit a request for quote. In this scenario, user B wants a quote from user A
 for 50 FUN2 tokens.
@@ -176,7 +194,8 @@ mutation {
   provideQuote(
     requestId: {
       otherChainId:"$CHAIN_1",
-      seqNum:0
+      seqNum:0,
+      weRequested:false
     },
     quote: "100",
     quoterOwner: "$OWNER_0",
@@ -193,6 +212,7 @@ mutation {
     requestId:{
       otherChainId:"$CHAIN_0",
       seqNum:0,
+      weRequested:true
     },
     owner:"$OWNER_1",
     feeBudget:"0",
@@ -207,27 +227,49 @@ mutation {
   finalizeDeal(
     requestId: {
       otherChainId:"$CHAIN_1",
-      seqNum:0
+      seqNum:0,
+      weRequested:false
     },
   )
 }
 ```
 
 At this point, the RFQ application should have performed the swap and closed the chain. You can
-check whether the amounts of tokens are correct by navigating to
-`http://localhost:8080/chains/$CHAIN_0/applications/$APP_ID_0` (user A's FUN1 account),
-`http://localhost:8080/chains/$CHAIN_0/applications/$APP_ID_1` (user A's FUN2 account),
-`http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_0` (user B's FUN1 account) and
-`http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_1` (user B's FUN2 account) and
-performing the following query:
+check whether the amounts of tokens are correct by navigating to the following URLs and performing
+the following queries:
 
-```gql
+`http://localhost:8080/chains/$CHAIN_0/applications/$APP_ID_0` - user A's FUN1 account should have
+400 tokens:
+
+```gql,uri=http://localhost:8080/chains/$CHAIN_0/applications/$APP_ID_0
 query {
-  accounts {
-    entries { key value }
-  }
+  accounts { entry(key: "User:$OWNER_0") { value } }
 }
 ```
 
-You should see 400 FUN1 and 550 FUN2 in user A's accounts and 600 FUN1 and 450 FUN2 in user B's
-accounts.
+`http://localhost:8080/chains/$CHAIN_0/applications/$APP_ID_1` - user A's FUN2 account should have
+550 tokens:
+
+```gql,uri=http://localhost:8080/chains/$CHAIN_0/applications/$APP_ID_1
+query {
+  accounts { entry(key: "User:$OWNER_0") { value } }
+}
+```
+
+`http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_0` - user B's FUN1 account should have
+600 tokens:
+
+```gql,uri=http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_0
+query {
+  accounts { entry(key: "User:$OWNER_1") { value } }
+}
+```
+
+`http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_1` - user B's FUN2 account should have
+450 tokens:
+
+```gql,uri=http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_1
+query {
+  accounts { entry(key: "User:$OWNER_1") { value } }
+}
+```
