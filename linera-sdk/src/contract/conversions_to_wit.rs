@@ -224,12 +224,17 @@ impl From<ApplicationPermissions> for wit_system_api::ApplicationPermissions {
             execute_operations,
             mandatory_applications,
             close_chain,
+            change_application_permissions,
         } = permissions;
         Self {
             execute_operations: execute_operations
                 .map(|app_ids| app_ids.into_iter().map(Into::into).collect()),
             mandatory_applications: mandatory_applications.into_iter().map(Into::into).collect(),
             close_chain: close_chain.into_iter().map(Into::into).collect(),
+            change_application_permissions: change_application_permissions
+                .into_iter()
+                .map(Into::into)
+                .collect(),
         }
     }
 }

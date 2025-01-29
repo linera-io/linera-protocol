@@ -9,7 +9,7 @@ use linera_base::{
     identifiers::{
         Account, AccountOwner, ApplicationId, ChainId, ChannelName, MessageId, Owner, StreamName,
     },
-    ownership::{ChainOwnership, CloseChainError},
+    ownership::{ChainOwnership, ChangeApplicationPermissionsError, CloseChainError},
 };
 use linera_views::batch::{Batch, WriteOperation};
 use linera_witty::{wit_export, Instance, RuntimeError};
@@ -296,6 +296,25 @@ where
             Ok(()) => Ok(Ok(())),
             Err(ExecutionError::UnauthorizedApplication(_)) => {
                 Ok(Err(CloseChainError::NotPermitted))
+            }
+            Err(error) => Err(RuntimeError::Custom(error.into())),
+        }
+    }
+
+    /// Changes the application permissions for the current chain. Returns an error if the
+    /// application doesn't have permission to do so.
+    fn change_application_permissions(
+        caller: &mut Caller,
+        application_permissions: ApplicationPermissions,
+    ) -> Result<Result<(), ChangeApplicationPermissionsError>, RuntimeError> {
+        match caller
+            .user_data_mut()
+            .runtime
+            .change_application_permissions(application_permissions)
+        {
+            Ok(()) => Ok(Ok(())),
+            Err(ExecutionError::UnauthorizedApplication(_)) => {
+                Ok(Err(ChangeApplicationPermissionsError::NotPermitted))
             }
             Err(error) => Err(RuntimeError::Custom(error.into())),
         }

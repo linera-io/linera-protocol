@@ -182,8 +182,16 @@ impl ChainOwnership {
 /// Errors that can happen when attempting to close a chain.
 #[derive(Clone, Copy, Debug, Error, WitStore, WitType)]
 pub enum CloseChainError {
-    /// Authenticated signer wasn't allowed to close the chain.
+    /// The application wasn't allowed to close the chain.
     #[error("Unauthorized attempt to close the chain")]
+    NotPermitted,
+}
+
+/// Errors that can happen when attempting to change the application permissions.
+#[derive(Clone, Copy, Debug, Error, WitStore, WitType)]
+pub enum ChangeApplicationPermissionsError {
+    /// The application wasn't allowed to change the application permissions.
+    #[error("Unauthorized attempt to change the application permissions")]
     NotPermitted,
 }
 
