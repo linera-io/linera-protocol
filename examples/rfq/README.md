@@ -32,7 +32,7 @@ liveness.
 
 User B can then either cancel the request, or send their tokens to the temporary chain using the
 `FinalizeDeal` operation. If they choose to finalize the deal, the tokens are sent (like before, they
-are assumed to exist on user B's chain) to the RFQ applications custody. The application will then
+are assumed to exist on user B's chain) to the RFQ application's custody. The application will then
 return each batch of tokens to the other owner and close the temporary chain automatically.
 
 # Usage

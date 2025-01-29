@@ -67,7 +67,6 @@ impl RequestState {
 #[derive(Clone, Debug, Serialize, Deserialize, SimpleObject)]
 pub struct RequestData {
     state: RequestState,
-    pub we_requested: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, SimpleObject)]
@@ -123,7 +122,7 @@ impl RequestData {
         }
     }
 
-    pub fn quote_accepted(&mut self, temp_chain_id: ChainId) {
+    pub fn accept_quote(&mut self, temp_chain_id: ChainId) {
         match &self.state {
             RequestState::QuoteProvided(QuoteProvided {
                 token_pair,
@@ -142,7 +141,7 @@ impl RequestData {
         }
     }
 
-    pub fn get_awaiting_tokens(&self) -> AwaitingTokens {
+    pub fn awaiting_tokens(&self) -> AwaitingTokens {
         match &self.state {
             RequestState::AwaitingTokens(awaiting_tokens) => (**awaiting_tokens).clone(),
             _ => panic!("Request not in the AwaitingTokens state!"),
@@ -165,10 +164,9 @@ impl RfqState {
         let request_state = RequestState::QuoteRequested(QuoteRequested { token_pair, amount });
         self.requests
             .insert(
-                &RequestId::new(target, seq_number),
+                &RequestId::new(target, seq_number, true),
                 RequestData {
                     state: request_state,
-                    we_requested: true,
                 },
             )
             .expect("Couldn't insert a new request state");
@@ -184,10 +182,9 @@ impl RfqState {
     ) {
         self.requests
             .insert(
-                &request_id,
+                &request_id.with_we_requested(false),
                 RequestData {
                     state: RequestState::QuoteRequested(QuoteRequested { token_pair, amount }),
-                    we_requested: false,
                 },
             )
             .expect("Couldn't insert a new request state");
@@ -202,7 +199,7 @@ impl RfqState {
             .expect("Request not found");
         match req_data.state {
             RequestState::ExchangeInProgress(ExchangeInProgress { temp_chain_id })
-                if req_data.we_requested =>
+                if request_id.is_our_request() =>
             {
                 Some(temp_chain_id)
             }

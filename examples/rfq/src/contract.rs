@@ -80,8 +80,8 @@ impl Contract for RfqContract {
                     .request_data(&request_id)
                     .await
                     .expect("Request not found!");
-                if request_data.we_requested {
-                    return;
+                if request_id.is_our_request() {
+                    panic!("Tried to provide a quote for our own request!");
                 }
                 request_data.update_state_with_quote(quote, quoter_owner);
                 let message = Message::ProvideQuote {
@@ -104,8 +104,8 @@ impl Contract for RfqContract {
                     .request_data(&request_id)
                     .await
                     .expect("Request not found!");
-                if !request_data.we_requested {
-                    return;
+                if !request_id.is_our_request() {
+                    panic!("Tried to accept a quote we have provided");
                 }
                 let quote_provided = request_data.quote_provided();
                 let token_pair = request_data.token_pair();
@@ -130,7 +130,7 @@ impl Contract for RfqContract {
                     .request_data(&request_id)
                     .await
                     .expect("Request not found!");
-                let awaiting_tokens = request_data.get_awaiting_tokens();
+                let awaiting_tokens = request_data.awaiting_tokens();
                 let owner = awaiting_tokens.quoter_account;
                 // the message should have been sent from the temporary chain
                 let temp_chain_id = awaiting_tokens.temp_chain_id;
@@ -180,6 +180,7 @@ impl Contract for RfqContract {
                 } else {
                     let message = Message::CancelRequest {
                         seq_number: request_id.seq_number(),
+                        recipient_requested: !request_id.is_our_request(),
                     };
                     self.runtime
                         .prepare_message(message)
@@ -191,7 +192,7 @@ impl Contract for RfqContract {
     }
 
     async fn execute_message(&mut self, message: Self::Message) {
-        let request_id = RequestId::new(self.get_message_creation_chain_id(), message.seq_number());
+        let request_id = message.request_id(self.get_message_creation_chain_id());
         match message {
             Message::RequestQuote {
                 token_pair, amount, ..
@@ -215,7 +216,7 @@ impl Contract for RfqContract {
                     .request_data(&request_id)
                     .await
                     .expect("Request not found!")
-                    .quote_accepted(temp_chain_id);
+                    .accept_quote(temp_chain_id);
             }
             Message::CancelRequest { .. } => {
                 if let Some(temp_chain_id) = self.state.cancel_request(&request_id).await {
@@ -232,7 +233,7 @@ impl Contract for RfqContract {
                 self.state.close_request(&request_id).await;
             }
             // the message below should only be executed on the temporary chains
-            Message::StartMatchingEngine {
+            Message::StartExchange {
                 request_id,
                 initiator,
                 token_pair,
@@ -248,7 +249,7 @@ impl Contract for RfqContract {
 
                 // inform the other side that the temporary chain is ready
                 let message = Message::QuoteAccepted {
-                    request_id: RequestId::new(initiator, request_id.seq_number()),
+                    request_id: RequestId::new(initiator, request_id.seq_number(), false),
                 };
                 self.runtime
                     .prepare_message(message)
@@ -351,7 +352,7 @@ impl RfqContract {
 
         // signal to the temporary chain that it should start the exchange!
         let initiator = self.runtime.chain_id();
-        let message = Message::StartMatchingEngine {
+        let message = Message::StartExchange {
             initiator,
             request_id,
             token_pair: Box::new(token_pair),
@@ -403,7 +404,7 @@ impl RfqContract {
             .send_to(initiator);
 
         let other_chain = request_id.chain_id();
-        let request_id = RequestId::new(initiator, request_id.seq_number());
+        let request_id = RequestId::new(initiator, request_id.seq_number(), false);
         let message = Message::ChainClosed { request_id };
         self.runtime
             .prepare_message(message)

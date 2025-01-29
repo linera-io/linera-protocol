@@ -35,13 +35,15 @@ pub struct TokenPair {
 pub struct RequestId {
     other_chain_id: ChainId,
     seq_num: u64,
+    we_requested: bool,
 }
 
 impl RequestId {
-    pub fn new(other_chain_id: ChainId, seq_num: u64) -> Self {
+    pub fn new(other_chain_id: ChainId, seq_num: u64, we_requested: bool) -> Self {
         Self {
             other_chain_id,
             seq_num,
+            we_requested,
         }
     }
 
@@ -51,6 +53,17 @@ impl RequestId {
 
     pub fn seq_number(&self) -> u64 {
         self.seq_num
+    }
+
+    pub fn is_our_request(&self) -> bool {
+        self.we_requested
+    }
+
+    pub fn with_we_requested(self, we_requested: bool) -> Self {
+        Self {
+            we_requested,
+            ..self
+        }
     }
 }
 
@@ -107,8 +120,9 @@ pub enum Message {
     },
     CancelRequest {
         seq_number: u64,
+        recipient_requested: bool,
     },
-    StartMatchingEngine {
+    StartExchange {
         initiator: ChainId,
         request_id: RequestId,
         token_pair: Box<TokenPair>,
@@ -124,17 +138,24 @@ pub enum Message {
 }
 
 impl Message {
-    pub fn seq_number(&self) -> u64 {
+    pub fn request_id(&self, other_chain_id: ChainId) -> RequestId {
         match self {
-            Message::RequestQuote { seq_number, .. }
-            | Message::ProvideQuote { seq_number, .. }
-            | Message::CancelRequest { seq_number, .. } => *seq_number,
-            Message::StartMatchingEngine { request_id, .. }
-            | Message::QuoteAccepted { request_id, .. }
-            | Message::ChainClosed { request_id } => request_id.seq_num,
+            Message::RequestQuote { seq_number, .. } => {
+                RequestId::new(other_chain_id, *seq_number, false)
+            }
+            Message::ProvideQuote { seq_number, .. } => {
+                RequestId::new(other_chain_id, *seq_number, true)
+            }
+            Message::QuoteAccepted { request_id }
+            | Message::StartExchange { request_id, .. }
+            | Message::ChainClosed { request_id } => request_id.clone(),
+            Message::CancelRequest {
+                seq_number,
+                recipient_requested,
+            } => RequestId::new(other_chain_id, *seq_number, *recipient_requested),
             Message::TokensSent { .. } | Message::CloseChain => {
-                // not important, we can just return 0
-                0
+                // unused
+                RequestId::new(other_chain_id, 0, false)
             }
         }
     }
