@@ -394,7 +394,7 @@ where
     }
 
     /// Fetches a blob from a given hash.
-    pub fn read_data_blob(&mut self, hash: DataBlobHash) -> Vec<u8> {
+    pub fn read_data_blob(&self, hash: DataBlobHash) -> Vec<u8> {
         self.blobs
             .lock()
             .unwrap()
@@ -409,7 +409,7 @@ where
     }
 
     /// Asserts that a blob with the given hash exists in storage.
-    pub fn assert_blob_exists(&mut self, hash: DataBlobHash) {
+    pub fn assert_blob_exists(&self, hash: DataBlobHash) {
         self.blobs
             .lock()
             .unwrap()
