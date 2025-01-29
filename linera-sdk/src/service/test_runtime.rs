@@ -10,6 +10,7 @@ use linera_base::{
     data_types::{Amount, BlockHeight, Timestamp},
     identifiers::{AccountOwner, ApplicationId, ChainId},
 };
+use serde::Serialize;
 
 use crate::{DataBlobHash, KeyValueStore, Service, ViewStorageContext};
 
@@ -290,6 +291,15 @@ where
     /// The operation is specified as an opaque blob of bytes.
     pub fn schedule_raw_operation(&self, operation: Vec<u8>) {
         self.scheduled_operations.lock().unwrap().push(operation);
+    }
+
+    /// Schedules an operation to be included in the block being built.
+    ///
+    /// The operation is serialized using BCS.
+    pub fn schedule_operation(&self, operation: &impl Serialize) {
+        let bytes = bcs::to_bytes(operation).expect("Failed to serialize application operation");
+
+        self.schedule_raw_operation(bytes);
     }
 
     /// Configures the handler for application queries made during the test.
