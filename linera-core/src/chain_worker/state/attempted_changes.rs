@@ -187,7 +187,7 @@ where
                 .pending_proposed_blobs
                 .try_load_entry_mut(owner)
                 .await?
-                .update(*round, maybe_blobs)
+                .update(*round, validated_block_certificate.is_some(), maybe_blobs)
                 .await?;
             self.save().await?;
             return Err(WorkerError::BlobsNotFound(missing_blob_ids));
@@ -280,7 +280,7 @@ where
             self.state
                 .chain
                 .pending_validated_blobs
-                .update(certificate.round, maybe_blobs)
+                .update(certificate.round, true, maybe_blobs)
                 .await?;
             self.save().await?;
             return Err(WorkerError::BlobsNotFound(missing_blob_ids));
@@ -642,8 +642,6 @@ where
         &mut self,
         blob: Blob,
     ) -> Result<ChainInfoResponse, WorkerError> {
-        let (_, committee) = self.state.chain.current_committee()?;
-        Self::check_blob_size(blob.content(), committee.policy())?;
         self.state
             .chain
             .pending_validated_blobs
@@ -656,6 +654,10 @@ where
             .try_load_all_entries_mut()
             .await?
         {
+            if !pending_blobs.validated.get() {
+                let (_, committee) = self.state.chain.current_committee()?;
+                Self::check_blob_size(blob.content(), committee.policy())?;
+            }
             pending_blobs.maybe_insert(&blob).await?;
         }
         self.save().await?;

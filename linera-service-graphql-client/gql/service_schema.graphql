@@ -923,6 +923,14 @@ type PendingBlobsView {
 	"""
 	round: Round!
 	"""
+	Whether these blobs were already validated.
+	
+	This is only `false` for _new_ block proposals, not when re-proposing blocks from earlier
+	rounds or when handling validated block certificates. If it is false, the pending blobs are
+	only the ones published by the new block, not the ones that are only read.
+	"""
+	validated: Boolean!
+	"""
 	The map of blobs needed to process the block.
 	"""
 	pendingBlobs: MapView_BlobId_Blob_9f0b41f3!
