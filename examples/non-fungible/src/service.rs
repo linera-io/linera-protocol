@@ -52,7 +52,9 @@ impl Service for NonFungibleTokenService {
                 non_fungible_token: self.state.clone(),
                 runtime: self.runtime.clone(),
             },
-            MutationRoot,
+            MutationRoot {
+                runtime: self.runtime.clone(),
+            },
             EmptySubscription,
         )
         .finish();
@@ -160,17 +162,20 @@ impl QueryRoot {
     }
 }
 
-struct MutationRoot;
+struct MutationRoot {
+    runtime: Arc<ServiceRuntime<NonFungibleTokenService>>,
+}
 
 #[Object]
 impl MutationRoot {
     async fn mint(&self, minter: AccountOwner, name: String, blob_hash: DataBlobHash) -> Vec<u8> {
-        bcs::to_bytes(&Operation::Mint {
+        let operation = Operation::Mint {
             minter,
             name,
             blob_hash,
-        })
-        .unwrap()
+        };
+        self.runtime.schedule_operation(&operation);
+        bcs::to_bytes(&operation).unwrap()
     }
 
     async fn transfer(
@@ -179,14 +184,15 @@ impl MutationRoot {
         token_id: String,
         target_account: Account,
     ) -> Vec<u8> {
-        bcs::to_bytes(&Operation::Transfer {
+        let operation = Operation::Transfer {
             source_owner,
             token_id: TokenId {
                 id: STANDARD_NO_PAD.decode(token_id).unwrap(),
             },
             target_account,
-        })
-        .unwrap()
+        };
+        self.runtime.schedule_operation(&operation);
+        bcs::to_bytes(&operation).unwrap()
     }
 
     async fn claim(
@@ -195,13 +201,14 @@ impl MutationRoot {
         token_id: String,
         target_account: Account,
     ) -> Vec<u8> {
-        bcs::to_bytes(&Operation::Claim {
+        let operation = Operation::Claim {
             source_account,
             token_id: TokenId {
                 id: STANDARD_NO_PAD.decode(token_id).unwrap(),
             },
             target_account,
-        })
-        .unwrap()
+        };
+        self.runtime.schedule_operation(&operation);
+        bcs::to_bytes(&operation).unwrap()
     }
 }
