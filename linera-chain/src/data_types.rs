@@ -29,6 +29,7 @@ use linera_execution::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    block::ValidatedBlock,
     types::{
         CertificateKind, CertificateValue, GenericCertificate, LiteCertificate,
         ValidatedBlockCertificate,
@@ -821,6 +822,31 @@ impl BlockProposal {
                 .iter()
                 .flat_map(|outcome| outcome.oracle_blob_ids()),
         )
+    }
+
+    /// Checks that the public key matches the owner and that the optional certificate matches
+    /// the outcome.
+    pub fn check_invariants(&self) -> Result<(), &'static str> {
+        ensure!(
+            self.owner == Owner::from(&self.public_key),
+            "Public key does not match owner"
+        );
+        match (&self.validated_block_certificate, &self.content.outcome) {
+            (None, None) => {}
+            (None, Some(_)) | (Some(_), None) => {
+                return Err("Must contain a validation certificate if and only if \
+                     it contains the execution outcome from a previous round");
+            }
+            (Some(lite_certificate), Some(outcome)) => {
+                let executed_block = outcome.clone().with(self.content.block.clone());
+                let value = Hashed::new(ValidatedBlock::new(executed_block));
+                ensure!(
+                    lite_certificate.check_value(&value),
+                    "Lite certificate must match the given block and execution outcome"
+                );
+            }
+        }
+        Ok(())
     }
 }
 

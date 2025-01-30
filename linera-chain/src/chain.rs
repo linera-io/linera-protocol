@@ -20,6 +20,7 @@ use linera_base::{
         ChainId, ChannelName, Destination, GenericApplicationId, MessageId, Owner, StreamId,
         UserApplicationId,
     },
+    ownership::ChainOwnership,
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
@@ -594,6 +595,10 @@ where
             .system
             .current_committee()
             .ok_or_else(|| ChainError::InactiveChain(self.chain_id()))
+    }
+
+    pub fn ownership(&self) -> &ChainOwnership {
+        self.execution_state.system.ownership.get()
     }
 
     /// Removes the incoming message bundles in the block from the inboxes.

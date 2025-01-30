@@ -204,13 +204,18 @@ where
         &mut self,
         proposal: BlockProposal,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
+        self.ensure_is_active()?;
+        proposal
+            .check_invariants()
+            .map_err(|msg| WorkerError::InvalidBlockProposal(msg.to_string()))?;
+        proposal.check_signature()?;
         ChainWorkerStateWithAttemptedChanges::new(&mut *self)
             .await
             .validate_block(&proposal)
             .await?;
         let validation_outcome = ChainWorkerStateWithTemporaryChanges::new(self)
             .await
-            .validate_block(&proposal)
+            .validate_proposal_content(&proposal.content)
             .await?;
 
         let actions = if let Some((outcome, local_time)) = validation_outcome {

@@ -9,7 +9,7 @@ use futures::future::Either;
 use linera_base::{
     data_types::{Blob, BlobContent, BlockHeight, CompressedBytecode, Timestamp},
     ensure,
-    identifiers::{BlobType, ChainId, MessageId, Owner},
+    identifiers::{BlobType, ChainId, MessageId},
 };
 use linera_chain::{
     data_types::{
@@ -119,6 +119,7 @@ where
         Ok((info, actions))
     }
 
+    /// Validateds a proposal's signatures and blobs.
     pub(super) async fn validate_block(
         &mut self,
         proposal: &BlockProposal,
@@ -128,37 +129,25 @@ where
                 ProposalContent {
                     block,
                     round,
-                    outcome,
+                    outcome: _,
                 },
-            public_key,
+            public_key: _,
             owner,
             validated_block_certificate,
             signature: _,
         } = proposal;
 
-        ensure!(
-            validated_block_certificate.is_some() == outcome.is_some(),
-            WorkerError::InvalidBlockProposal(
-                "Must contain a validation certificate if and only if \
-                 it contains the execution outcome from a previous round"
-                    .to_string()
-            )
-        );
-        ensure!(
-            *owner == Owner::from(public_key),
-            WorkerError::InvalidBlockProposal("Public key does not match owner".into())
-        );
-        self.state.ensure_is_active()?;
+        let chain = &self.state.chain;
         // Check the epoch.
-        let (epoch, committee) = self.state.chain.current_committee()?;
+        let (epoch, committee) = chain.current_committee()?;
         check_block_epoch(epoch, block.chain_id, block.epoch)?;
         let policy = committee.policy().clone();
+        block.check_proposal_size(policy.maximum_block_proposal_size)?;
         // Check the authentication of the block.
         ensure!(
-            self.state.chain.manager.verify_owner(proposal),
+            chain.manager.verify_owner(proposal),
             WorkerError::InvalidOwner
         );
-        proposal.check_signature()?;
         if let Some(lite_certificate) = validated_block_certificate {
             // Verify that this block has been validated by a quorum before.
             lite_certificate.check(committee)?;
@@ -167,13 +156,8 @@ where
             ensure!(signer == *owner, WorkerError::InvalidSigner(signer));
         }
         // Check if the chain is ready for this new block proposal.
-        // This should always pass for nodes without voting key.
-        self.state
-            .chain
-            .tip_state
-            .get()
-            .verify_block_chaining(block)?;
-        if self.state.chain.manager.check_proposed_block(proposal)? == manager::Outcome::Skip {
+        chain.tip_state.get().verify_block_chaining(block)?;
+        if chain.manager.check_proposed_block(proposal)? == manager::Outcome::Skip {
             return Ok(());
         }
         let maybe_blobs = self
@@ -182,20 +166,12 @@ where
             .await?;
         let missing_blob_ids = super::missing_blob_ids(&maybe_blobs);
         if !missing_blob_ids.is_empty() {
-            if self
-                .state
-                .chain
-                .execution_state
-                .system
-                .ownership
-                .get()
-                .open_multi_leader_rounds
-            {
+            let chain = &mut self.state.chain;
+            if chain.ownership().open_multi_leader_rounds {
                 // TODO(#3203): Allow multiple pending proposals on permissionless chains.
-                self.state.chain.pending_proposed_blobs.clear();
+                chain.pending_proposed_blobs.clear();
             }
-            self.state
-                .chain
+            chain
                 .pending_proposed_blobs
                 .try_load_entry_mut(owner)
                 .await?
@@ -204,7 +180,6 @@ where
             self.save().await?;
             return Err(WorkerError::BlobsNotFound(missing_blob_ids));
         }
-        block.check_proposal_size(policy.maximum_block_proposal_size)?;
         Ok(())
     }
 
@@ -628,14 +603,13 @@ where
             chain.execution_state.system.epoch.get(),
             chain.unskippable_bundles.front().await?,
         ) {
-            let ownership = chain.execution_state.system.ownership.get();
             let elapsed = self
                 .state
                 .storage
                 .clock()
                 .current_time()
                 .delta_since(entry.seen);
-            if elapsed >= ownership.timeout_config.fallback_duration {
+            if elapsed >= chain.ownership().timeout_config.fallback_duration {
                 let chain_id = chain.chain_id();
                 let height = chain.tip_state.get().next_block_height;
                 let key_pair = self.state.config.key_pair();

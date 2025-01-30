@@ -6,15 +6,11 @@
 use linera_base::{
     data_types::{ArithmeticError, Timestamp, UserApplicationDescription},
     ensure,
-    hashed::Hashed,
     identifiers::{AccountOwner, GenericApplicationId, UserApplicationId},
 };
-use linera_chain::{
-    data_types::{
-        BlockExecutionOutcome, BlockProposal, ChannelFullName, ExecutedBlock, IncomingBundle,
-        Medium, MessageAction, ProposalContent, ProposedBlock,
-    },
-    types::ValidatedBlock,
+use linera_chain::data_types::{
+    BlockExecutionOutcome, ChannelFullName, ExecutedBlock, IncomingBundle, Medium, MessageAction,
+    ProposalContent, ProposedBlock,
 };
 use linera_execution::{ChannelSubscription, Query, QueryOutcome};
 use linera_storage::{Clock as _, Storage};
@@ -148,22 +144,15 @@ where
     }
 
     /// Validates a block proposed to extend this chain.
-    pub(super) async fn validate_block(
+    pub(super) async fn validate_proposal_content(
         &mut self,
-        proposal: &BlockProposal,
+        content: &ProposalContent,
     ) -> Result<Option<(BlockExecutionOutcome, Timestamp)>, WorkerError> {
-        let BlockProposal {
-            content:
-                ProposalContent {
-                    block,
-                    round,
-                    outcome,
-                },
-            public_key: _,
-            owner: _,
-            validated_block_certificate,
-            signature: _,
-        } = proposal;
+        let ProposalContent {
+            block,
+            round,
+            outcome,
+        } = content;
 
         let local_time = self.0.storage.clock().current_time();
         ensure!(
@@ -172,41 +161,29 @@ where
         );
         self.0.storage.clock().sleep_until(block.timestamp).await;
         let local_time = self.0.storage.clock().current_time();
-        self.0
-            .chain
+
+        let chain = &mut self.0.chain;
+        chain
             .remove_bundles_from_inboxes(block.timestamp, &block.incoming_bundles)
             .await?;
         let outcome = if let Some(outcome) = outcome {
             outcome.clone()
         } else {
-            Box::pin(
-                self.0
-                    .chain
-                    .execute_block(block, local_time, round.multi_leader(), None),
-            )
-            .await?
+            Box::pin(chain.execute_block(block, local_time, round.multi_leader(), None)).await?
         };
 
         let executed_block = outcome.with(block.clone());
-        if let Some(lite_certificate) = &validated_block_certificate {
-            let value = Hashed::new(ValidatedBlock::new(executed_block.clone()));
-            lite_certificate
-                .clone()
-                .with_value(value)
-                .ok_or_else(|| WorkerError::InvalidLiteCertificate)?;
-        }
         ensure!(
             !round.is_fast() || !executed_block.outcome.has_oracle_responses(),
             WorkerError::FastBlockUsingOracles
         );
         // Check if the counters of tip_state would be valid.
-        self.0
-            .chain
+        chain
             .tip_state
             .get()
             .verify_counters(block, &executed_block.outcome)?;
         // Verify that the resulting chain would have no unconfirmed incoming messages.
-        self.0.chain.validate_incoming_bundles().await?;
+        chain.validate_incoming_bundles().await?;
         Ok(Some((executed_block.outcome, local_time)))
     }
 
