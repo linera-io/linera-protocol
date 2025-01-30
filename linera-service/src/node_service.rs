@@ -44,7 +44,7 @@ use serde_json::json;
 use thiserror::Error as ThisError;
 use tokio::sync::OwnedRwLockReadGuard;
 use tower_http::cors::CorsLayer;
-use tracing::{debug, error, info, instrument};
+use tracing::{debug, error, info, instrument, trace};
 
 use crate::util;
 
@@ -91,8 +91,6 @@ enum NodeServiceError {
     HeterogeneousOperations,
     #[error("failed to parse GraphQL query: {error}")]
     GraphQLParseError { error: String },
-    #[error("malformed application response")]
-    MalformedApplicationResponse,
     #[error("application service error: {errors:?}")]
     ApplicationServiceError { errors: Vec<String> },
     #[error("chain ID not found: {chain_id}")]
@@ -125,8 +123,7 @@ impl IntoResponse for NodeServiceError {
             NodeServiceError::JsonError(e) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, vec![e.to_string()])
             }
-            NodeServiceError::MalformedApplicationResponse
-            | NodeServiceError::UnexpectedOperationsFromQuery => {
+            NodeServiceError::UnexpectedOperationsFromQuery => {
                 (StatusCode::INTERNAL_SERVER_ERROR, vec![self.to_string()])
             }
             NodeServiceError::MissingOperation
@@ -861,36 +858,6 @@ fn operation_type(document: &ExecutableDocument) -> Result<OperationType, NodeSe
     }
 }
 
-/// Extracts the underlying byte vector from a serialized GraphQL response
-/// from an application.
-fn bytes_from_response(data: async_graphql::Value) -> Vec<Vec<u8>> {
-    if let async_graphql::Value::Object(map) = data {
-        map.values()
-            .filter_map(|value| {
-                if let async_graphql::Value::List(list) = value {
-                    bytes_from_list(list)
-                } else {
-                    None
-                }
-            })
-            .collect()
-    } else {
-        vec![]
-    }
-}
-
-fn bytes_from_list(list: &[async_graphql::Value]) -> Option<Vec<u8>> {
-    list.iter()
-        .map(|item| {
-            if let async_graphql::Value::Number(n) = item {
-                n.as_u64().map(|n| n as u8)
-            } else {
-                None
-            }
-        })
-        .collect()
-}
-
 /// The `NodeService` is a server that exposes a web-server to the client.
 /// The node service is primarily used to explore the state of a chain in GraphQL.
 pub struct NodeService<C>
@@ -1023,7 +990,7 @@ where
         debug!("Request: {:?}", &request);
         let QueryOutcome {
             response,
-            operations: _,
+            operations,
         } = self
             .query_user_application(application_id, request, chain_id)
             .await?;
@@ -1036,18 +1003,7 @@ where
                 .collect();
             return Err(NodeServiceError::ApplicationServiceError { errors });
         }
-        debug!("Response: {:?}", &graphql_response);
-        let bcs_bytes_list = bytes_from_response(graphql_response.data);
-        if bcs_bytes_list.is_empty() {
-            return Err(NodeServiceError::MalformedApplicationResponse);
-        }
-        let operations = bcs_bytes_list
-            .into_iter()
-            .map(|bytes| Operation::User {
-                application_id,
-                bytes,
-            })
-            .collect::<Vec<_>>();
+        trace!("Operations: {operations:?}");
 
         let client = self
             .context
