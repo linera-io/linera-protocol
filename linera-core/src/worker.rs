@@ -227,6 +227,8 @@ pub enum WorkerError {
     BlobTooLarge,
     #[error("Bytecode exceeds size limit")]
     BytecodeTooLarge,
+    #[error("Number of published blobs per block must not exceed {0}")]
+    TooManyPublishedBlobs(u64),
     #[error(transparent)]
     Decompression(#[from] DecompressionError),
 }

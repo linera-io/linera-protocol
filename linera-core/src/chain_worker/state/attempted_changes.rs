@@ -656,7 +656,13 @@ where
         {
             if !pending_blobs.validated.get() {
                 let (_, committee) = self.state.chain.current_committee()?;
-                Self::check_blob_size(blob.content(), committee.policy())?;
+                let policy = committee.policy();
+                Self::check_blob_size(blob.content(), policy)?;
+                ensure!(
+                    u64::try_from(pending_blobs.pending_blobs.count().await?)
+                        .is_ok_and(|count| count < policy.maximum_published_blobs),
+                    WorkerError::TooManyPublishedBlobs(policy.maximum_published_blobs)
+                );
             }
             pending_blobs.maybe_insert(&blob).await?;
         }

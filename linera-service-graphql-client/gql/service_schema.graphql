@@ -1085,6 +1085,10 @@ input ResourceControlPolicy {
 	"""
 	maximumBlobSize: Int!
 	"""
+	The maximum number of published blobs per block.
+	"""
+	maximumPublishedBlobs: Int!
+	"""
 	The maximum size of a block proposal.
 	"""
 	maximumBlockProposalSize: Int!

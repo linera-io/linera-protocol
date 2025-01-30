@@ -617,6 +617,7 @@ impl Runnable for Job {
                                     maximum_fuel_per_block,
                                     maximum_executed_block_size,
                                     maximum_blob_size,
+                                    maximum_published_blobs,
                                     maximum_bytecode_size,
                                     maximum_block_proposal_size,
                                     maximum_bytes_read_per_block,
@@ -669,6 +670,9 @@ impl Runnable for Job {
                                     }
                                     if let Some(maximum_blob_size) = maximum_blob_size {
                                         policy.maximum_blob_size = maximum_blob_size;
+                                    }
+                                    if let Some(maximum_published_blobs) = maximum_published_blobs {
+                                        policy.maximum_published_blobs = maximum_published_blobs;
                                     }
                                     if let Some(maximum_block_proposal_size) =
                                         maximum_block_proposal_size
@@ -1495,6 +1499,7 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
             maximum_fuel_per_block,
             maximum_executed_block_size,
             maximum_blob_size,
+            maximum_published_blobs,
             maximum_bytecode_size,
             maximum_block_proposal_size,
             maximum_bytes_read_per_block,
@@ -1511,6 +1516,7 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
                 maximum_bytes_written_per_block.unwrap_or(u64::MAX);
             let maximum_executed_block_size = maximum_executed_block_size.unwrap_or(u64::MAX);
             let maximum_blob_size = maximum_blob_size.unwrap_or(u64::MAX);
+            let maximum_published_blobs = maximum_published_blobs.unwrap_or(u64::MAX);
             let maximum_bytecode_size = maximum_bytecode_size.unwrap_or(u64::MAX);
             let maximum_block_proposal_size = maximum_block_proposal_size.unwrap_or(u64::MAX);
             let policy = ResourceControlPolicy {
@@ -1528,6 +1534,7 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
                 maximum_fuel_per_block,
                 maximum_executed_block_size,
                 maximum_blob_size,
+                maximum_published_blobs,
                 maximum_bytecode_size,
                 maximum_block_proposal_size,
                 maximum_bytes_read_per_block,

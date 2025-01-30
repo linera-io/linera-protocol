@@ -798,6 +798,7 @@ ResourceControlPolicy:
     - maximum_executed_block_size: U64
     - maximum_bytecode_size: U64
     - maximum_blob_size: U64
+    - maximum_published_blobs: U64
     - maximum_block_proposal_size: U64
     - maximum_bytes_read_per_block: U64
     - maximum_bytes_written_per_block: U64

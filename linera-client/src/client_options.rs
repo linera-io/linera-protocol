@@ -543,6 +543,10 @@ pub enum ClientCommand {
         #[arg(long)]
         maximum_blob_size: Option<u64>,
 
+        /// Set the maximum number of published blobs per block.
+        #[arg(long)]
+        maximum_published_blobs: Option<u64>,
+
         /// Set the maximum size of decompressed contract or service bytecode, in bytes.
         #[arg(long)]
         maximum_bytecode_size: Option<u64>,
@@ -673,6 +677,10 @@ pub enum ClientCommand {
         /// in bytes.
         #[arg(long)]
         maximum_blob_size: Option<u64>,
+
+        /// Set the maximum number of published blobs per block.
+        #[arg(long)]
+        maximum_published_blobs: Option<u64>,
 
         /// Set the maximum size of a block proposal, in bytes.
         #[arg(long)]

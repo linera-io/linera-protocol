@@ -249,6 +249,7 @@ impl ClientWrapper {
             maximum_fuel_per_block,
             maximum_executed_block_size,
             maximum_blob_size,
+            maximum_published_blobs,
             maximum_bytecode_size,
             maximum_block_proposal_size,
             maximum_bytes_read_per_block,
@@ -283,6 +284,10 @@ impl ClientWrapper {
                 &maximum_executed_block_size.to_string(),
             ])
             .args(["--maximum-blob-size", &maximum_blob_size.to_string()])
+            .args([
+                "--maximum-published-blobs",
+                &maximum_published_blobs.to_string(),
+            ])
             .args([
                 "--maximum-bytecode-size",
                 &maximum_bytecode_size.to_string(),
