@@ -190,7 +190,7 @@ On both http://localhost:8080 and http://localhost:8081, you recognize the crowd
 application by its ID. The entry also has a field `link`. If you open that in a new tab, you
 see the GraphQL API for that application on that chain.
 
-Let's pledge 30 tokens by the campaign creator themself.
+Let's pledge 30 tokens by the campaign creator themselves.
 For `$OWNER_0` on 8080, run `echo "http://localhost:8080/chains/$CHAIN_0/applications/$APP_ID_1"` to get the URL, open it
 and run the following query:
 
