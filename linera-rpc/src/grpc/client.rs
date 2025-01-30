@@ -117,7 +117,6 @@ impl GrpcClient {
         Fut: Future<Output = Result<tonic::Response<S>, Status>>,
         R: IntoRequest<R> + Clone,
     {
-        debug!(request = ?request, "sending gRPC request");
         let mut retry_count = 0;
         let request_inner = request.try_into().map_err(|_| NodeError::GrpcError {
             error: "could not convert request to proto".to_string(),
@@ -184,6 +183,11 @@ impl TryFrom<api::PendingBlobResult> for BlobContent {
 
 macro_rules! client_delegate {
     ($self:ident, $handler:ident, $req:ident) => {{
+        debug!(
+            handler = stringify!($handler),
+            request = ?$req,
+            "sending gRPC request"
+        );
         $self
             .delegate(
                 |mut client, req| async move { client.$handler(req).await },
