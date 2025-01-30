@@ -81,6 +81,7 @@ linera net up
 
 # Print the set of validators.
 linera query-validators
+linera query-validators true
 
 # Query the chain balance of some of the chains.
 CHAIN1="e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65"
@@ -91,6 +92,10 @@ linera query-balance "$CHAIN2"
 # Transfer 10 units then 5 back
 linera transfer 10 --from "$CHAIN1" --to "$CHAIN2"
 linera transfer 5 --from "$CHAIN2" --to "$CHAIN1"
+
+# Transfer 20 units then 10 back
+linera transfer 20 --from "$CHAIN3" --to "$CHAIN2"
+linera transfer 20 --from "$CHAIN4" --to "$CHAIN1"
 
 # Query balances again
 linera query-balance "$CHAIN1"
