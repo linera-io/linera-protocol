@@ -57,7 +57,9 @@ impl Service for GenNftService {
             QueryRoot {
                 non_fungible_token: self.state.clone(),
             },
-            MutationRoot,
+            MutationRoot {
+                runtime: self.runtime.clone(),
+            },
             EmptySubscription,
         )
         .data(runtime)
@@ -175,12 +177,16 @@ impl QueryRoot {
     }
 }
 
-struct MutationRoot;
+struct MutationRoot {
+    runtime: Arc<ServiceRuntime<GenNftService>>,
+}
 
 #[Object]
 impl MutationRoot {
     async fn mint(&self, minter: AccountOwner, prompt: String) -> Vec<u8> {
-        bcs::to_bytes(&Operation::Mint { minter, prompt }).unwrap()
+        let operation = Operation::Mint { minter, prompt };
+        self.runtime.schedule_operation(&operation);
+        bcs::to_bytes(&operation).unwrap()
     }
 
     async fn transfer(
@@ -189,14 +195,15 @@ impl MutationRoot {
         token_id: String,
         target_account: Account,
     ) -> Vec<u8> {
-        bcs::to_bytes(&Operation::Transfer {
+        let operation = Operation::Transfer {
             source_owner,
             token_id: TokenId {
                 id: STANDARD_NO_PAD.decode(token_id).unwrap(),
             },
             target_account,
-        })
-        .unwrap()
+        };
+        self.runtime.schedule_operation(&operation);
+        bcs::to_bytes(&operation).unwrap()
     }
 
     async fn claim(
@@ -205,13 +212,14 @@ impl MutationRoot {
         token_id: String,
         target_account: Account,
     ) -> Vec<u8> {
-        bcs::to_bytes(&Operation::Claim {
+        let operation = Operation::Claim {
             source_account,
             token_id: TokenId {
                 id: STANDARD_NO_PAD.decode(token_id).unwrap(),
             },
             target_account,
-        })
-        .unwrap()
+        };
+        self.runtime.schedule_operation(&operation);
+        bcs::to_bytes(&operation).unwrap()
     }
 }
