@@ -182,6 +182,18 @@ where
             .await?;
         let missing_blob_ids = super::missing_blob_ids(&maybe_blobs);
         if !missing_blob_ids.is_empty() {
+            if self
+                .state
+                .chain
+                .execution_state
+                .system
+                .ownership
+                .get()
+                .open_multi_leader_rounds
+            {
+                // TODO(#3203): Allow multiple pending proposals on permissionless chains.
+                self.state.chain.pending_proposed_blobs.clear();
+            }
             self.state
                 .chain
                 .pending_proposed_blobs
