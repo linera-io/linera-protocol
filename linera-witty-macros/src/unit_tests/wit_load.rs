@@ -177,7 +177,7 @@ fn enum_type() {
             <Instance::Runtime as linera_witty::Runtime>::Memory:
                 linera_witty::RuntimeMemory<Instance>,
         {
-            let discriminant = <u8 as linera_witty::WitLoad>::load(memory, location,)?;
+            let discriminant = <u8 as linera_witty::WitLoad>::load(memory, location)?;
             location = location
                 .after::<u8>()
                 .after_padding_for::<linera_witty::HList![]>()
@@ -451,7 +451,7 @@ fn enum_type_with_skipped_fields() {
             <Instance::Runtime as linera_witty::Runtime>::Memory:
                 linera_witty::RuntimeMemory<Instance>,
         {
-            let discriminant = <u8 as linera_witty::WitLoad>::load(memory, location,)?;
+            let discriminant = <u8 as linera_witty::WitLoad>::load(memory, location)?;
             location = location
                 .after::<u8>()
                 .after_padding_for::<linera_witty::HList![]>()

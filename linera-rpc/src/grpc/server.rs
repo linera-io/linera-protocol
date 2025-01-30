@@ -462,7 +462,8 @@ where
                             .with_label_values(&["handle_block_proposal"])
                             .inc();
                     }
-                    warn!(nickname = self.state.nickname(), %error, "Failed to handle block proposal");
+                    let nickname = self.state.nickname();
+                    warn!(nickname, %error, "Failed to handle block proposal");
                     NodeError::from(error).try_into()?
                 }
             },
@@ -512,10 +513,11 @@ where
                         .with_label_values(&["handle_lite_certificate"])
                         .inc();
                 }
+                let nickname = self.state.nickname();
                 if let WorkerError::MissingCertificateValue = &error {
-                    debug!(nickname = self.state.nickname(), %error, "Failed to handle lite certificate");
+                    debug!(nickname, %error, "Failed to handle lite certificate");
                 } else {
-                    error!(nickname = self.state.nickname(), %error, "Failed to handle lite certificate");
+                    error!(nickname, %error, "Failed to handle lite certificate");
                 }
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
@@ -565,7 +567,8 @@ where
                         .with_label_values(&["handle_confirmed_certificate"])
                         .inc();
                 }
-                error!(nickname = self.state.nickname(), %error, "Failed to handle confirmed certificate");
+                let nickname = self.state.nickname();
+                error!(nickname, %error, "Failed to handle confirmed certificate");
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
         }
@@ -605,7 +608,8 @@ where
                         .with_label_values(&["handle_validated_certificate"])
                         .inc();
                 }
-                error!(nickname = self.state.nickname(), %error, "Failed to handle validated certificate");
+                let nickname = self.state.nickname();
+                error!(nickname, %error, "Failed to handle validated certificate");
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
         }
@@ -644,7 +648,8 @@ where
                         .with_label_values(&["handle_timeout_certificate"])
                         .inc();
                 }
-                error!(nickname = self.state.nickname(), %error, "Failed to handle timeout certificate");
+                let nickname = self.state.nickname();
+                error!(nickname, %error, "Failed to handle timeout certificate");
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
         }
@@ -679,7 +684,8 @@ where
                         .with_label_values(&["handle_chain_info_query"])
                         .inc();
                 }
-                error!(nickname = self.state.nickname(), %error, "Failed to handle chain info query");
+                let nickname = self.state.nickname();
+                error!(nickname, %error, "Failed to handle chain info query");
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
         }
@@ -718,7 +724,8 @@ where
                         .with_label_values(&["download_pending_blob"])
                         .inc();
                 }
-                error!(nickname = self.state.nickname(), %error, "Failed to download pending blob");
+                let nickname = self.state.nickname();
+                error!(nickname, %error, "Failed to download pending blob");
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
         }
@@ -754,7 +761,8 @@ where
                         .with_label_values(&["handle_pending_blob"])
                         .inc();
                 }
-                error!(nickname = self.state.nickname(), %error, "Failed to handle pending blob");
+                let nickname = self.state.nickname();
+                error!(nickname, %error, "Failed to handle pending blob");
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
         }
@@ -788,7 +796,8 @@ where
                         .with_label_values(&["handle_cross_chain_request"])
                         .inc();
                 }
-                error!(nickname = self.state.nickname(), %error, "Failed to handle cross-chain request");
+                let nickname = self.state.nickname();
+                error!(nickname, %error, "Failed to handle cross-chain request");
             }
         }
         Ok(Response::new(()))

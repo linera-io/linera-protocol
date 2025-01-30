@@ -132,7 +132,7 @@ impl GrpcClient {
                 }
                 Err(s) => {
                     return Err(NodeError::GrpcError {
-                        error: format!("remote request [{handler}] failed with status: {s:?}",),
+                        error: format!("remote request [{handler}] failed with status: {s:?}"),
                     });
                 }
                 Ok(result) => return Ok(result.into_inner()),
