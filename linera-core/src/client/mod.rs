@@ -2156,7 +2156,7 @@ where
     fn next_timestamp(
         &self,
         incoming_bundles: &[IncomingBundle],
-        block_time: Timestamp,
+        current_time: Timestamp,
     ) -> Timestamp {
         let local_time = self.storage_client().clock().current_time();
         incoming_bundles
@@ -2164,7 +2164,7 @@ where
             .map(|msg| msg.bundle.timestamp)
             .max()
             .map_or(local_time, |timestamp| timestamp.max(local_time))
-            .max(block_time)
+            .max(current_time)
     }
 
     /// Queries an application.
