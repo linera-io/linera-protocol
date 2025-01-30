@@ -41,7 +41,7 @@ use crate::{
 mod data_types_tests;
 
 /// A block containing operations to apply on a given chain, as well as the
-/// acknowledgment of a number of incoming messages from other chains.
+/// acknowledgement of a number of incoming messages from other chains.
 /// * Incoming messages must be selected in the order they were
 ///   produced by the sending chain, but can be skipped.
 /// * When a block is proposed to a validator, all cross-chain messages must have been
