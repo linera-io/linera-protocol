@@ -21,6 +21,7 @@ interface contract-system-api {
     get-chain-ownership: func() -> chain-ownership;
     open-chain: func(chain-ownership: chain-ownership, application-permissions: application-permissions, balance: amount) -> tuple<message-id, chain-id>;
     close-chain: func() -> result<tuple<>, close-chain-error>;
+    change-application-permissions: func(application-permissions: application-permissions) -> result<tuple<>, change-application-permissions-error>;
     create-application: func(bytecode-id: bytecode-id, parameters: list<u8>, argument: list<u8>, required-application-ids: list<application-id>) -> application-id;
     try-call-application: func(authenticated: bool, callee-id: application-id, argument: list<u8>) -> list<u8>;
     emit: func(name: stream-name, key: list<u8>, value: list<u8>);
@@ -31,6 +32,7 @@ interface contract-system-api {
     assert-data-blob-exists: func(hash: crypto-hash);
     log: func(message: string, level: log-level);
     consume-fuel: func(fuel: u64);
+    validation-round: func() -> option<u32>;
 
     record account {
         chain-id: chain-id,
@@ -55,6 +57,7 @@ interface contract-system-api {
         execute-operations: option<list<application-id>>,
         mandatory-applications: list<application-id>,
         close-chain: list<application-id>,
+        change-application-permissions: list<application-id>,
     }
 
     record block-height {
@@ -76,6 +79,10 @@ interface contract-system-api {
         multi-leader-rounds: u32,
         open-multi-leader-rounds: bool,
         timeout-config: timeout-config,
+    }
+
+    enum change-application-permissions-error {
+        not-permitted,
     }
 
     record channel-name {

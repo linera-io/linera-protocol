@@ -4930,6 +4930,7 @@ dependencies = [
  "cfg_aliases",
  "clap",
  "criterion",
+ "futures",
  "linera-base",
  "linera-storage-service",
  "linera-version",

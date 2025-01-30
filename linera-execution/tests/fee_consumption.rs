@@ -190,6 +190,7 @@ async fn test_fee_consumption(
         authenticated_signer,
         refund_grant_to,
         height: BlockHeight(0),
+        round: Some(0),
         certificate_hash: CryptoHash::default(),
         message_id: MessageId::default(),
     };

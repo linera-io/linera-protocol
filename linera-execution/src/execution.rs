@@ -75,6 +75,7 @@ where
             authenticated_signer: None,
             authenticated_caller_id: None,
             height: application_description.creation.height,
+            round: None,
             index: Some(0),
         };
 
@@ -146,6 +147,14 @@ impl UserAction {
             UserAction::Instantiate(context, _) => context.height,
             UserAction::Operation(context, _) => context.height,
             UserAction::Message(context, _) => context.height,
+        }
+    }
+
+    pub(crate) fn round(&self) -> Option<u32> {
+        match self {
+            UserAction::Instantiate(context, _) => context.round,
+            UserAction::Operation(context, _) => context.round,
+            UserAction::Message(context, _) => context.round,
         }
     }
 }

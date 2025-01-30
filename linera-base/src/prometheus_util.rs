@@ -12,7 +12,7 @@ use crate::time::Instant;
 
 const LINERA_NAMESPACE: &str = "linera";
 
-/// Wrapper arount prometheus register_int_counter_vec! macro which also sets the linera namespace
+/// Wrapper around prometheus register_int_counter_vec! macro which also sets the linera namespace
 pub fn register_int_counter_vec(
     name: &str,
     description: &str,
@@ -22,7 +22,7 @@ pub fn register_int_counter_vec(
     register_int_counter_vec!(counter_opts, label_names).expect("IntCounter can be created")
 }
 
-/// Wrapper arount prometheus register_histogram_vec! macro which also sets the linera namespace
+/// Wrapper around prometheus register_histogram_vec! macro which also sets the linera namespace
 pub fn register_histogram_vec(
     name: &str,
     description: &str,
@@ -70,14 +70,14 @@ impl<Metric> ActiveMeasurementGuard<'_, Metric>
 where
     Metric: MeasureLatency,
 {
-    /// Finishes the measurement, updates the `Metric` and the returns the measured latency in
+    /// Finishes the measurement, updates the `Metric` and returns the measured latency in
     /// milliseconds.
     pub fn finish(mut self) -> f64 {
         self.finish_by_ref()
     }
 
     /// Finishes the measurement without taking ownership of this [`ActiveMeasurementGuard`],
-    /// updates the `Metric` and the returns the measured latency in milliseconds.
+    /// updates the `Metric` and returns the measured latency in milliseconds.
     fn finish_by_ref(&mut self) -> f64 {
         match self.metric.take() {
             Some(metric) => {

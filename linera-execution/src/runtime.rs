@@ -65,6 +65,8 @@ pub struct SyncRuntimeInternal<UserInstance> {
     /// The height of the next block that will be added to this chain. During operations
     /// and messages, this is the current block height.
     height: BlockHeight,
+    /// The current consensus round. Only available during block validation in multi-leader rounds.
+    round: Option<u32>,
     /// The current local time.
     local_time: Timestamp,
     /// The authenticated signer of the operation or message, if any.
@@ -283,6 +285,7 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
     fn new(
         chain_id: ChainId,
         height: BlockHeight,
+        round: Option<u32>,
         local_time: Timestamp,
         authenticated_signer: Option<Owner>,
         executing_message: Option<ExecutingMessage>,
@@ -294,6 +297,7 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
         Self {
             chain_id,
             height,
+            round,
             local_time,
             authenticated_signer,
             executing_message,
@@ -443,6 +447,7 @@ impl SyncRuntimeInternal<UserContractInstance> {
             authenticated_signer,
             authenticated_caller_id,
             height: self.height,
+            round: self.round,
             index: None,
         };
         self.push_application(ApplicationStatus {
@@ -1070,6 +1075,7 @@ impl ContractSyncRuntime {
             SyncRuntimeInternal::new(
                 chain_id,
                 action.height(),
+                action.round(),
                 local_time,
                 action.signer(),
                 if let UserAction::Message(context, _) = action {
@@ -1136,6 +1142,7 @@ impl ContractSyncRuntimeHandle {
             authenticated_signer: action.signer(),
             chain_id,
             height: action.height(),
+            round: action.round(),
         };
 
         {
@@ -1415,6 +1422,21 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
             .recv_response()?
     }
 
+    fn change_application_permissions(
+        &mut self,
+        application_permissions: ApplicationPermissions,
+    ) -> Result<(), ExecutionError> {
+        let mut this = self.inner();
+        let application_id = this.current_application().id;
+        this.execution_state_sender
+            .send_request(|callback| ExecutionRequest::ChangeApplicationPermissions {
+                application_id,
+                application_permissions,
+                callback,
+            })?
+            .recv_response()?
+    }
+
     fn create_application(
         &mut self,
         bytecode_id: BytecodeId,
@@ -1423,25 +1445,21 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         required_application_ids: Vec<UserApplicationId>,
     ) -> Result<UserApplicationId, ExecutionError> {
         let chain_id = self.inner().chain_id;
-        let context = OperationContext {
+        let height = self.block_height()?;
+        let index = self.inner().transaction_tracker.next_message_index();
+
+        let message_id = MessageId {
             chain_id,
-            authenticated_signer: self.authenticated_signer()?,
-            authenticated_caller_id: self.authenticated_caller_id()?,
-            height: self.block_height()?,
-            index: None,
+            height,
+            index,
         };
 
-        let mut this = self.inner();
-        let message_id = MessageId {
-            chain_id: context.chain_id,
-            height: context.height,
-            index: this.transaction_tracker.next_message_index(),
-        };
         let CreateApplicationResult {
             app_id,
             message,
             blobs_to_register,
-        } = this
+        } = self
+            .inner()
             .execution_state_sender
             .send_request(|callback| ExecutionRequest::CreateApplication {
                 next_message_id: message_id,
@@ -1452,16 +1470,23 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
             })?
             .recv_response()??;
         for blob_id in blobs_to_register {
-            this.transaction_tracker
+            self.inner()
+                .transaction_tracker
                 .replay_oracle_response(OracleResponse::Blob(blob_id))?;
         }
         let outcome = RawExecutionOutcome::default().with_message(message);
-        this.transaction_tracker.add_system_outcome(outcome)?;
+        self.inner()
+            .transaction_tracker
+            .add_system_outcome(outcome)?;
 
-        drop(this);
+        let (contract, context) = self.inner().prepare_for_call(self.clone(), true, app_id)?;
 
-        let user_action = UserAction::Instantiate(context, argument);
-        self.run_action(app_id, chain_id, user_action)?;
+        contract
+            .try_lock()
+            .expect("Applications should not have reentrant calls")
+            .instantiate(context, argument)?;
+
+        self.inner().finish_call()?;
 
         Ok(app_id)
     }
@@ -1488,6 +1513,22 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
             .recv_response()?;
         Ok(())
     }
+
+    fn validation_round(&mut self) -> Result<Option<u32>, ExecutionError> {
+        let mut this = self.inner();
+        let round =
+            if let Some(response) = this.transaction_tracker.next_replayed_oracle_response()? {
+                match response {
+                    OracleResponse::Round(round) => round,
+                    _ => return Err(ExecutionError::OracleResponseMismatch),
+                }
+            } else {
+                this.round
+            };
+        this.transaction_tracker
+            .add_oracle_response(OracleResponse::Round(round));
+        Ok(round)
+    }
 }
 
 impl ServiceSyncRuntime {
@@ -1497,6 +1538,7 @@ impl ServiceSyncRuntime {
             SyncRuntimeInternal::new(
                 context.chain_id,
                 context.next_block_height,
+                None,
                 context.local_time,
                 None,
                 None,

@@ -603,6 +603,14 @@ impl Round {
         matches!(self, Round::MultiLeader(_))
     }
 
+    /// Returns the round number if this is a multi-leader round, `None` otherwise.
+    pub fn multi_leader(&self) -> Option<u32> {
+        match self {
+            Round::MultiLeader(number) => Some(*number),
+            _ => None,
+        }
+    }
+
     /// Whether the round is the fast round.
     pub fn is_fast(&self) -> bool {
         matches!(self, Round::Fast)
@@ -716,6 +724,10 @@ pub struct ApplicationPermissions {
     #[graphql(default)]
     #[debug(skip_if = Vec::is_empty)]
     pub close_chain: Vec<ApplicationId>,
+    /// These applications are allowed to change the application permissions using the system API.
+    #[graphql(default)]
+    #[debug(skip_if = Vec::is_empty)]
+    pub change_application_permissions: Vec<ApplicationId>,
 }
 
 impl ApplicationPermissions {
@@ -726,6 +738,7 @@ impl ApplicationPermissions {
             execute_operations: Some(vec![app_id]),
             mandatory_applications: vec![app_id],
             close_chain: vec![app_id],
+            change_application_permissions: vec![app_id],
         }
     }
 
@@ -741,6 +754,12 @@ impl ApplicationPermissions {
     /// Returns whether the given application is allowed to close this chain.
     pub fn can_close_chain(&self, app_id: &ApplicationId) -> bool {
         self.close_chain.contains(app_id)
+    }
+
+    /// Returns whether the given application is allowed to change the application
+    /// permissions for this chain.
+    pub fn can_change_application_permissions(&self, app_id: &ApplicationId) -> bool {
+        self.change_application_permissions.contains(app_id)
     }
 }
 
@@ -763,6 +782,8 @@ pub enum OracleResponse {
     Blob(BlobId),
     /// An assertion oracle that passed.
     Assert,
+    /// The block's validation round.
+    Round(Option<u32>),
 }
 
 impl Display for OracleResponse {
@@ -774,6 +795,8 @@ impl Display for OracleResponse {
             OracleResponse::Post(bytes) => write!(f, "Post:{}", STANDARD_NO_PAD.encode(bytes))?,
             OracleResponse::Blob(blob_id) => write!(f, "Blob:{}", blob_id)?,
             OracleResponse::Assert => write!(f, "Assert")?,
+            OracleResponse::Round(Some(round)) => write!(f, "Round:{round}")?,
+            OracleResponse::Round(None) => write!(f, "Round:None")?,
         };
 
         Ok(())

@@ -108,7 +108,7 @@ pub trait ValidatorNode {
     /// Downloads a blob. Returns an error if the validator does not have the blob.
     async fn download_blob(&self, blob_id: BlobId) -> Result<BlobContent, NodeError>;
 
-    /// Downloads a blob that belongs to a pending proposal or the locked block on a chain.
+    /// Downloads a blob that belongs to a pending proposal or the locking block on a chain.
     async fn download_pending_blob(
         &self,
         chain_id: ChainId,

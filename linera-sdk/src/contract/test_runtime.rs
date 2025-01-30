@@ -17,7 +17,7 @@ use linera_base::{
         Account, AccountOwner, ApplicationId, BytecodeId, ChainId, ChannelName, Destination,
         MessageId, Owner, StreamName,
     },
-    ownership::{ChainOwnership, CloseChainError},
+    ownership::{ChainOwnership, ChangeApplicationPermissionsError, CloseChainError},
 };
 use serde::Serialize;
 
@@ -42,6 +42,7 @@ where
     chain_id: Option<ChainId>,
     authenticated_signer: Option<Option<Owner>>,
     block_height: Option<BlockHeight>,
+    round: Option<u32>,
     message_id: Option<Option<MessageId>>,
     message_is_bouncing: Option<Option<bool>>,
     authenticated_caller_id: Option<Option<ApplicationId>>,
@@ -50,6 +51,7 @@ where
     owner_balances: Option<HashMap<AccountOwner, Amount>>,
     chain_ownership: Option<ChainOwnership>,
     can_close_chain: Option<bool>,
+    can_change_application_permissions: Option<bool>,
     call_application_handler: Option<CallApplicationHandler>,
     send_message_requests: Arc<Mutex<Vec<SendMessageRequest<Application::Message>>>>,
     subscribe_requests: Vec<(ChainId, ChannelName)>,
@@ -89,6 +91,7 @@ where
             chain_id: None,
             authenticated_signer: None,
             block_height: None,
+            round: None,
             message_id: None,
             message_is_bouncing: None,
             authenticated_caller_id: None,
@@ -97,6 +100,7 @@ where
             owner_balances: None,
             chain_ownership: None,
             can_close_chain: None,
+            can_change_application_permissions: None,
             call_application_handler: None,
             send_message_requests: Arc::default(),
             subscribe_requests: Vec::new(),
@@ -248,6 +252,18 @@ where
     /// Configures the block height to return during the test.
     pub fn set_block_height(&mut self, block_height: BlockHeight) -> &mut Self {
         self.block_height = Some(block_height);
+        self
+    }
+
+    /// Configures the multi-leader round number to return during the test.
+    pub fn with_round(mut self, round: u32) -> Self {
+        self.round = Some(round);
+        self
+    }
+
+    /// Configures the multi-leader round number to return during the test.
+    pub fn set_round(&mut self, round: u32) -> &mut Self {
+        self.round = Some(round);
         self
     }
 
@@ -580,6 +596,26 @@ where
         self
     }
 
+    /// Configures if the application being tested is allowed to change the application
+    /// permissions on the chain.
+    pub fn with_can_change_application_permissions(
+        mut self,
+        can_change_application_permissions: bool,
+    ) -> Self {
+        self.can_change_application_permissions = Some(can_change_application_permissions);
+        self
+    }
+
+    /// Configures if the application being tested is allowed to change the application
+    /// permissions on the chain.
+    pub fn set_can_change_application_permissions(
+        &mut self,
+        can_change_application_permissions: bool,
+    ) -> &mut Self {
+        self.can_change_application_permissions = Some(can_change_application_permissions);
+        self
+    }
+
     /// Closes the current chain. Returns an error if the application doesn't have
     /// permission to do so.
     pub fn close_chain(&mut self) -> Result<(), CloseChainError> {
@@ -592,6 +628,31 @@ where
             Ok(())
         } else {
             Err(CloseChainError::NotPermitted)
+        }
+    }
+
+    /// Changes the application permissions on the current chain. Returns an error if the
+    /// application doesn't have permission to do so.
+    pub fn change_application_permissions(
+        &mut self,
+        application_permissions: ApplicationPermissions,
+    ) -> Result<(), ChangeApplicationPermissionsError> {
+        let authorized = self.can_change_application_permissions.expect(
+            "Authorization to change the application permissions has not been mocked, \
+            please call `MockContractRuntime::set_can_close_chain` first",
+        );
+
+        if authorized {
+            let application_id = self
+                .application_id
+                .expect("The application doesn't have an ID!")
+                .forget_abi();
+            self.can_close_chain = Some(application_permissions.can_close_chain(&application_id));
+            self.can_change_application_permissions =
+                Some(application_permissions.can_change_application_permissions(&application_id));
+            Ok(())
+        } else {
+            Err(ChangeApplicationPermissionsError::NotPermitted)
         }
     }
 
@@ -631,17 +692,20 @@ where
     }
 
     /// Adds a new expected call to `create_application`.
-    pub fn add_expected_create_application_call<A: Contract>(
+    pub fn add_expected_create_application_call<Parameters, InstantiationArgument>(
         &mut self,
         bytecode_id: BytecodeId,
-        parameters: &A::Parameters,
-        argument: &A::InstantiationArgument,
+        parameters: &Parameters,
+        argument: &InstantiationArgument,
         required_application_ids: Vec<ApplicationId>,
         application_id: ApplicationId,
-    ) {
-        let parameters = bcs::to_bytes(parameters)
+    ) where
+        Parameters: Serialize,
+        InstantiationArgument: Serialize,
+    {
+        let parameters = serde_json::to_vec(parameters)
             .expect("Failed to serialize `Parameters` type for a cross-application call");
-        let argument = bcs::to_bytes(argument).expect(
+        let argument = serde_json::to_vec(argument).expect(
             "Failed to serialize `InstantiationArgument` type for a cross-application call",
         );
         self.expected_create_application_calls
@@ -655,13 +719,18 @@ where
     }
 
     /// Creates a new on-chain application, based on the supplied bytecode and parameters.
-    pub fn create_application<A: Contract>(
+    pub fn create_application<Abi, Parameters, InstantiationArgument>(
         &mut self,
         bytecode_id: BytecodeId,
-        parameters: &A::Parameters,
-        argument: &A::InstantiationArgument,
+        parameters: &Parameters,
+        argument: &InstantiationArgument,
         required_application_ids: Vec<ApplicationId>,
-    ) -> ApplicationId<A::Abi> {
+    ) -> ApplicationId<Abi>
+    where
+        Abi: ContractAbi,
+        Parameters: Serialize,
+        InstantiationArgument: Serialize,
+    {
         let ExpectedCreateApplicationCall {
             bytecode_id: expected_bytecode_id,
             parameters: expected_parameters,
@@ -672,16 +741,16 @@ where
             .expected_create_application_calls
             .pop_front()
             .expect("Unexpected create_application call");
-        let parameters = bcs::to_bytes(parameters)
+        let parameters = serde_json::to_vec(parameters)
             .expect("Failed to serialize `Parameters` type for a cross-application call");
-        let argument = bcs::to_bytes(argument).expect(
+        let argument = serde_json::to_vec(argument).expect(
             "Failed to serialize `InstantiationArgument` type for a cross-application call",
         );
         assert_eq!(bytecode_id, expected_bytecode_id);
         assert_eq!(parameters, expected_parameters);
         assert_eq!(argument, expected_argument);
         assert_eq!(required_application_ids, expected_required_app_ids);
-        application_id.with_abi::<A::Abi>()
+        application_id.with_abi::<Abi>()
     }
 
     /// Configures the handler for cross-application calls made during the test.
@@ -823,6 +892,11 @@ where
             maybe_request.expect("Unexpected assert_data_blob_exists request");
         assert_eq!(hash, expected_blob_hash);
         response.expect("Blob does not exist!");
+    }
+
+    /// Returns the round in which this block was validated.
+    pub fn validation_round(&mut self) -> Option<u32> {
+        self.round
     }
 }
 

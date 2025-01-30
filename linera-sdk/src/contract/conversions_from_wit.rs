@@ -7,7 +7,9 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, BlockHeight, TimeDelta, Timestamp},
     identifiers::{ApplicationId, BytecodeId, ChainId, MessageId, Owner},
-    ownership::{ChainOwnership, CloseChainError, TimeoutConfig},
+    ownership::{
+        ChainOwnership, ChangeApplicationPermissionsError, CloseChainError, TimeoutConfig,
+    },
 };
 
 use super::wit::contract_system_api as wit_system_api;
@@ -132,6 +134,16 @@ impl From<wit_system_api::CloseChainError> for CloseChainError {
     fn from(guest: wit_system_api::CloseChainError) -> Self {
         match guest {
             wit_system_api::CloseChainError::NotPermitted => CloseChainError::NotPermitted,
+        }
+    }
+}
+
+impl From<wit_system_api::ChangeApplicationPermissionsError> for ChangeApplicationPermissionsError {
+    fn from(guest: wit_system_api::ChangeApplicationPermissionsError) -> Self {
+        match guest {
+            wit_system_api::ChangeApplicationPermissionsError::NotPermitted => {
+                ChangeApplicationPermissionsError::NotPermitted
+            }
         }
     }
 }

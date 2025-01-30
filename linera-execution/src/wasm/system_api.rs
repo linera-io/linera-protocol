@@ -9,7 +9,7 @@ use linera_base::{
     identifiers::{
         Account, AccountOwner, ApplicationId, ChainId, ChannelName, MessageId, Owner, StreamName,
     },
-    ownership::{ChainOwnership, CloseChainError},
+    ownership::{ChainOwnership, ChangeApplicationPermissionsError, CloseChainError},
 };
 use linera_views::batch::{Batch, WriteOperation};
 use linera_witty::{wit_export, Instance, RuntimeError};
@@ -301,6 +301,25 @@ where
         }
     }
 
+    /// Changes the application permissions for the current chain. Returns an error if the
+    /// application doesn't have permission to do so.
+    fn change_application_permissions(
+        caller: &mut Caller,
+        application_permissions: ApplicationPermissions,
+    ) -> Result<Result<(), ChangeApplicationPermissionsError>, RuntimeError> {
+        match caller
+            .user_data_mut()
+            .runtime
+            .change_application_permissions(application_permissions)
+        {
+            Ok(()) => Ok(Ok(())),
+            Err(ExecutionError::UnauthorizedApplication(_)) => {
+                Ok(Err(ChangeApplicationPermissionsError::NotPermitted))
+            }
+            Err(error) => Err(RuntimeError::Custom(error.into())),
+        }
+    }
+
     /// Creates a new application on the chain, based on the supplied bytecode and
     /// parameters.
     fn create_application(
@@ -423,6 +442,15 @@ where
             .runtime_mut()
             .consume_fuel(fuel)
             .map_err(|e| RuntimeError::Custom(e.into()))
+    }
+
+    /// Returns the round in which this block was validated.
+    fn validation_round(caller: &mut Caller) -> Result<Option<u32>, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime_mut()
+            .validation_round()
+            .map_err(|error| RuntimeError::Custom(error.into()))
     }
 }
 

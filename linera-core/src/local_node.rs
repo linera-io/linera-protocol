@@ -174,8 +174,9 @@ where
     pub async fn stage_block_execution(
         &self,
         block: ProposedBlock,
+        round: Option<u32>,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), LocalNodeError> {
-        Ok(self.node.state.stage_block_execution(block).await?)
+        Ok(self.node.state.stage_block_execution(block, round).await?)
     }
 
     /// Reads blobs from storage.
@@ -187,9 +188,9 @@ where
         Ok(storage.read_blobs(blob_ids).await?.into_iter().collect())
     }
 
-    /// Looks for the specified blobs in the local chain manager's locked blobs.
+    /// Looks for the specified blobs in the local chain manager's locking blobs.
     /// Returns `Ok(None)` if any of the blobs is not found.
-    pub async fn get_locked_blobs(
+    pub async fn get_locking_blobs(
         &self,
         blob_ids: &[BlobId],
         chain_id: ChainId,
@@ -197,7 +198,7 @@ where
         let chain = self.chain_state_view(chain_id).await?;
         let mut blobs = Vec::new();
         for blob_id in blob_ids {
-            match chain.manager.locked_blobs.get(blob_id).await? {
+            match chain.manager.locking_blobs.get(blob_id).await? {
                 None => return Ok(None),
                 Some(blob) => blobs.push(blob),
             }

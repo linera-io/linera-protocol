@@ -3,7 +3,7 @@
 
 #![cfg_attr(target_arch = "wasm32", no_main)]
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
 use fungible::{Operation, Parameters};
@@ -16,7 +16,7 @@ use native_fungible::{AccountEntry, TICKER_SYMBOL};
 
 #[derive(Clone)]
 pub struct NativeFungibleTokenService {
-    runtime: Arc<Mutex<ServiceRuntime<Self>>>,
+    runtime: Arc<ServiceRuntime<Self>>,
 }
 
 linera_sdk::service!(NativeFungibleTokenService);
@@ -30,7 +30,7 @@ impl Service for NativeFungibleTokenService {
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
         NativeFungibleTokenService {
-            runtime: Arc::new(Mutex::new(runtime)),
+            runtime: Arc::new(runtime),
         }
     }
 
@@ -42,29 +42,20 @@ impl Service for NativeFungibleTokenService {
 }
 
 struct Accounts {
-    runtime: Arc<Mutex<ServiceRuntime<NativeFungibleTokenService>>>,
+    runtime: Arc<ServiceRuntime<NativeFungibleTokenService>>,
 }
 
 #[Object]
 impl Accounts {
     // Define a field that lets you query by key
     async fn entry(&self, key: AccountOwner) -> AccountEntry {
-        let runtime = self
-            .runtime
-            .try_lock()
-            .expect("Services only run in a single thread");
-
-        let value = runtime.owner_balance(key);
+        let value = self.runtime.owner_balance(key);
 
         AccountEntry { key, value }
     }
 
     async fn entries(&self) -> Vec<AccountEntry> {
-        let runtime = self
-            .runtime
-            .try_lock()
-            .expect("Services only run in a single thread");
-        runtime
+        self.runtime
             .owner_balances()
             .into_iter()
             .map(|(owner, amount)| AccountEntry {
@@ -75,11 +66,7 @@ impl Accounts {
     }
 
     async fn keys(&self) -> Vec<AccountOwner> {
-        let runtime = self
-            .runtime
-            .try_lock()
-            .expect("Services only run in a single thread");
-        runtime.balance_owners()
+        self.runtime.balance_owners()
     }
 }
 

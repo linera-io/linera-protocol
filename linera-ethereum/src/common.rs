@@ -17,7 +17,7 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 pub enum EthereumQueryError {
     /// The id should be matching
-    #[error("the is should be matching")]
+    #[error("the id should be matching")]
     IdIsNotMatching,
 
     /// wrong jsonrpc version

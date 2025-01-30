@@ -1329,6 +1329,10 @@ pub struct ApplicationPermissionsConfig {
     /// These applications are allowed to close the current chain using the system API.
     #[arg(long)]
     pub close_chain: Option<Vec<ApplicationId>>,
+    /// These applications are allowed to change the application permissions on the current chain
+    /// using the system API.
+    #[arg(long)]
+    pub change_application_permissions: Option<Vec<ApplicationId>>,
 }
 
 impl From<ApplicationPermissionsConfig> for ApplicationPermissions {
@@ -1337,6 +1341,9 @@ impl From<ApplicationPermissionsConfig> for ApplicationPermissions {
             execute_operations: config.execute_operations,
             mandatory_applications: config.mandatory_applications.unwrap_or_default(),
             close_chain: config.close_chain.unwrap_or_default(),
+            change_application_permissions: config
+                .change_application_permissions
+                .unwrap_or_default(),
         }
     }
 }
