@@ -18,6 +18,7 @@ use self::state::RfqState;
 
 pub struct RfqService {
     state: Arc<RfqState>,
+    runtime: Arc<ServiceRuntime<Self>>,
 }
 
 linera_sdk::service!(RfqService);
@@ -35,6 +36,7 @@ impl Service for RfqService {
             .expect("Failed to load state");
         RfqService {
             state: Arc::new(state),
+            runtime: Arc::new(runtime),
         }
     }
 

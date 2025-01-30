@@ -17,6 +17,7 @@ use crate::state::MatchingEngineState;
 
 pub struct MatchingEngineService {
     state: Arc<MatchingEngineState>,
+    runtime: Arc<ServiceRuntime<Self>>,
 }
 
 linera_sdk::service!(MatchingEngineService);
@@ -34,6 +35,7 @@ impl Service for MatchingEngineService {
             .expect("Failed to load state");
         MatchingEngineService {
             state: Arc::new(state),
+            runtime: Arc::new(runtime),
         }
     }
 

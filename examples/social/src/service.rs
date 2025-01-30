@@ -16,6 +16,7 @@ use state::SocialState;
 
 pub struct SocialService {
     state: Arc<SocialState>,
+    runtime: Arc<ServiceRuntime<Self>>,
 }
 
 linera_sdk::service!(SocialService);
@@ -33,6 +34,7 @@ impl Service for SocialService {
             .expect("Failed to load state");
         SocialService {
             state: Arc::new(state),
+            runtime: Arc::new(runtime),
         }
     }
 

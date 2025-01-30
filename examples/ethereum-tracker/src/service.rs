@@ -18,6 +18,7 @@ use self::state::EthereumTrackerState;
 #[derive(Clone)]
 pub struct EthereumTrackerService {
     state: Arc<EthereumTrackerState>,
+    runtime: Arc<ServiceRuntime<Self>>,
 }
 
 linera_sdk::service!(EthereumTrackerService);
@@ -35,6 +36,7 @@ impl Service for EthereumTrackerService {
             .expect("Failed to load state");
         EthereumTrackerService {
             state: Arc::new(state),
+            runtime: Arc::new(runtime),
         }
     }
 

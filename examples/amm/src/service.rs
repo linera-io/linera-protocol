@@ -17,6 +17,7 @@ use self::state::AmmState;
 
 pub struct AmmService {
     state: Arc<AmmState>,
+    runtime: Arc<ServiceRuntime<Self>>,
 }
 
 linera_sdk::service!(AmmService);
@@ -34,6 +35,7 @@ impl Service for AmmService {
             .expect("Failed to load state");
         AmmService {
             state: Arc::new(state),
+            runtime: Arc::new(runtime),
         }
     }
 

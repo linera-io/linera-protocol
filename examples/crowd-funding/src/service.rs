@@ -19,6 +19,7 @@ use state::CrowdFundingState;
 
 pub struct CrowdFundingService {
     state: Arc<CrowdFundingState>,
+    runtime: Arc<ServiceRuntime<Self>>,
 }
 
 linera_sdk::service!(CrowdFundingService);
@@ -36,6 +37,7 @@ impl Service for CrowdFundingService {
             .expect("Failed to load state");
         CrowdFundingService {
             state: Arc::new(state),
+            runtime: Arc::new(runtime),
         }
     }
 
