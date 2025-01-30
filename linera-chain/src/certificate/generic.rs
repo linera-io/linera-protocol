@@ -75,7 +75,7 @@ impl<T> GenericCertificate<T> {
     }
 
     /// Adds a signature to the certificate's list of signatures
-    /// It's the responsibility of the caller to not insert duplicates
+    /// It's the responsibility of the caller to not to insert duplicates
     pub fn add_signature(
         &mut self,
         signature: (ValidatorName, Signature),
