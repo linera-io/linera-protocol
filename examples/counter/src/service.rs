@@ -5,6 +5,8 @@
 
 mod state;
 
+use std::sync::Arc;
+
 use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
 use linera_sdk::{base::WithServiceAbi, views::View, Service, ServiceRuntime};
 
@@ -12,6 +14,7 @@ use self::state::CounterState;
 
 pub struct CounterService {
     state: CounterState,
+    runtime: Arc<ServiceRuntime<Self>>,
 }
 
 linera_sdk::service!(CounterService);
@@ -27,7 +30,10 @@ impl Service for CounterService {
         let state = CounterState::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
-        CounterService { state }
+        CounterService {
+            state,
+            runtime: Arc::new(runtime),
+        }
     }
 
     async fn handle_query(&self, request: Request) -> Response {
@@ -35,7 +41,9 @@ impl Service for CounterService {
             QueryRoot {
                 value: *self.state.value.get(),
             },
-            MutationRoot {},
+            MutationRoot {
+                runtime: self.runtime.clone(),
+            },
             EmptySubscription,
         )
         .finish();
@@ -43,11 +51,14 @@ impl Service for CounterService {
     }
 }
 
-struct MutationRoot;
+struct MutationRoot {
+    runtime: Arc<ServiceRuntime<CounterService>>,
+}
 
 #[Object]
 impl MutationRoot {
     async fn increment(&self, value: u64) -> Vec<u8> {
+        self.runtime.schedule_operation(&value);
         bcs::to_bytes(&value).unwrap()
     }
 }
