@@ -60,8 +60,8 @@ impl HexState {
         }
         let active = self.board.get().active_player();
         let runtime = ctx.data::<Arc<ServiceRuntime<HexService>>>().unwrap();
-        let block_time = runtime.system_time();
-        if self.clock.get().timed_out(block_time, active) {
+        let current_time = runtime.system_time();
+        if self.clock.get().timed_out(current_time, active) {
             return Some(active.other());
         }
         None
