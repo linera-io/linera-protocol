@@ -43,7 +43,7 @@ impl Service for EthereumTrackerService {
     async fn handle_query(&self, request: Request) -> Response {
         let schema = Schema::build(
             self.state.clone(),
-            Operation::mutation_root(),
+            Operation::mutation_root(self.runtime.clone()),
             EmptySubscription,
         )
         .finish();

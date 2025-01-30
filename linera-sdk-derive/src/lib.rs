@@ -80,22 +80,34 @@ fn generate_mutation_root_code(input: ItemEnum, crate_root: &str) -> TokenStream
 
     quote! {
         /// Mutation root
-        pub struct #mutation_root_name;
-
-        #[async_graphql::Object]
-        impl #mutation_root_name {
-            #
-
-            (#methods)
-
-            *
+        pub struct #mutation_root_name<Application>
+        where
+            Application: #crate_root::Service,
+            #crate_root::ServiceRuntime<Application>: Send + Sync,
+        {
+            runtime: ::std::sync::Arc<#crate_root::ServiceRuntime<Application>>,
         }
 
-        impl #crate_root::graphql::GraphQLMutationRoot for #enum_name {
-            type MutationRoot = #mutation_root_name;
+        #[async_graphql::Object]
+        impl<Application> #mutation_root_name<Application>
+        where
+            Application: #crate_root::Service,
+            #crate_root::ServiceRuntime<Application>: Send + Sync,
+        {
+            #(#methods)*
+        }
 
-            fn mutation_root() -> Self::MutationRoot {
-                #mutation_root_name
+        impl<Application> #crate_root::graphql::GraphQLMutationRoot<Application> for #enum_name
+        where
+            Application: #crate_root::Service,
+            #crate_root::ServiceRuntime<Application>: Send + Sync,
+        {
+            type MutationRoot = #mutation_root_name<Application>;
+
+            fn mutation_root(
+                runtime: ::std::sync::Arc<#crate_root::ServiceRuntime<Application>>,
+            ) -> Self::MutationRoot {
+                #mutation_root_name { runtime }
             }
         }
     }
@@ -134,10 +146,20 @@ pub mod tests {
 
         let expected = quote! {
             /// Mutation root
-            pub struct SomeOperationMutationRoot;
+            pub struct SomeOperationMutationRoot<Application>
+            where
+                Application: linera_sdk::Service,
+                linera_sdk::ServiceRuntime<Application>: Send + Sync,
+            {
+                runtime: ::std::sync::Arc<linera_sdk::ServiceRuntime<Application>>,
+            }
 
             #[async_graphql::Object]
-            impl SomeOperationMutationRoot {
+            impl<Application> SomeOperationMutationRoot<Application>
+            where
+                Application: linera_sdk::Service,
+                linera_sdk::ServiceRuntime<Application>: Send + Sync,
+            {
                 async fn tuple_variant(&self, field0: String,) -> Vec<u8> {
                     linera_sdk::bcs::to_bytes(&SomeOperation::TupleVariant(field0,)).unwrap()
                 }
@@ -149,11 +171,18 @@ pub mod tests {
                 }
             }
 
-            impl linera_sdk::graphql::GraphQLMutationRoot for SomeOperation {
-                type MutationRoot = SomeOperationMutationRoot;
+            impl<Application> linera_sdk::graphql::GraphQLMutationRoot<Application>
+                for SomeOperation
+            where
+                Application: linera_sdk::Service,
+                linera_sdk::ServiceRuntime<Application>: Send + Sync,
+            {
+                type MutationRoot = SomeOperationMutationRoot<Application>;
 
-                fn mutation_root() -> Self::MutationRoot {
-                    SomeOperationMutationRoot
+                fn mutation_root(
+                    runtime: ::std::sync::Arc<linera_sdk::ServiceRuntime<Application>>,
+                ) -> Self::MutationRoot {
+                    SomeOperationMutationRoot { runtime }
                 }
             }
         };
