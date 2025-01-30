@@ -43,9 +43,9 @@ use linera_execution::{
     committee::{Committee, ValidatorName, ValidatorState},
     Message, ResourceControlPolicy, SystemMessage,
 };
+use linera_faucet_server::FaucetService;
 use linera_service::{
     cli_wrappers,
-    faucet::FaucetService,
     node_service::NodeService,
     project::{self, Project},
     util, wallet,
