@@ -8,7 +8,7 @@
 use hex_game::{HexAbi, Operation, Timeouts};
 use linera_sdk::{
     base::{Amount, ChainDescription, KeyPair, TimeDelta},
-    test::{ActiveChain, TestValidator},
+    test::{ActiveChain, QueryOutcome, TestValidator},
 };
 
 #[test_log::test(tokio::test)]
@@ -57,7 +57,7 @@ async fn hex_game() {
         })
         .await;
 
-    let response = chain.graphql_query(app_id, "query { winner }").await;
+    let QueryOutcome { response, .. } = chain.graphql_query(app_id, "query { winner }").await;
     assert!(response["winner"].is_null());
 
     chain.set_key_pair(key_pair2.copy());
@@ -67,7 +67,7 @@ async fn hex_game() {
         })
         .await;
 
-    let response = chain.graphql_query(app_id, "query { winner }").await;
+    let QueryOutcome { response, .. } = chain.graphql_query(app_id, "query { winner }").await;
     assert_eq!(Some("TWO"), response["winner"].as_str());
     assert!(chain.is_closed().await);
 }
@@ -154,6 +154,6 @@ async fn hex_game_clock() {
         })
         .await;
 
-    let response = chain.graphql_query(app_id, "query { winner }").await;
+    let QueryOutcome { response, .. } = chain.graphql_query(app_id, "query { winner }").await;
     assert_eq!(Some("ONE"), response["winner"].as_str());
 }

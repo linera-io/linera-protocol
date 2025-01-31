@@ -1504,7 +1504,6 @@ version = "0.1.0"
 dependencies = [
  "assert_matches",
  "async-graphql",
- "bcs",
  "futures",
  "linera-sdk",
  "serde_json",

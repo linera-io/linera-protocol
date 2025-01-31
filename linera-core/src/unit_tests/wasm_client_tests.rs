@@ -25,7 +25,8 @@ use linera_base::{
 };
 use linera_chain::data_types::{EventRecord, MessageAction, OutgoingMessage};
 use linera_execution::{
-    Message, MessageKind, Operation, ResourceControlPolicy, SystemMessage, WasmRuntime,
+    Message, MessageKind, Operation, QueryOutcome, ResourceControlPolicy, SystemMessage,
+    WasmRuntime,
 };
 use serde_json::json;
 use test_case::test_case;
@@ -137,16 +138,19 @@ where
         .unwrap();
 
     let query = Request::new("{ value }");
-    let response = creator
+    let outcome = creator
         .query_user_application(application_id, &query)
         .await
         .unwrap();
 
-    let expected = async_graphql::Response::new(
-        async_graphql::Value::from_json(json!({"value": 15})).unwrap(),
-    );
+    let expected = QueryOutcome {
+        response: async_graphql::Response::new(
+            async_graphql::Value::from_json(json!({"value": 15})).unwrap(),
+        ),
+        operations: vec![],
+    };
 
-    assert_eq!(expected, response);
+    assert_eq!(outcome, expected);
     // Creating the application used fuel because of the `instantiate` call.
     let balance_after_init = creator.local_balance().await?;
     assert!(balance_after_init < balance_after_messaging);
@@ -361,15 +365,19 @@ where
     receiver.process_inbox().await.unwrap();
 
     let query = Request::new("{ value }");
-    let response = receiver
+    let outcome = receiver
         .query_user_application(application_id2, &query)
         .await
         .unwrap();
 
-    let expected =
-        async_graphql::Response::new(async_graphql::Value::from_json(json!({"value": 5})).unwrap());
+    let expected = QueryOutcome {
+        response: async_graphql::Response::new(
+            async_graphql::Value::from_json(json!({"value": 5})).unwrap(),
+        ),
+        operations: vec![],
+    };
 
-    assert_eq!(expected, response);
+    assert_eq!(outcome, expected);
 
     // Try again with a value that will make the (untracked) message fail.
     let operation = meta_counter::Operation::fail(receiver_id);
@@ -779,20 +787,23 @@ where
         .any(|msg| matches!(&msg.bundle.messages[0].message, Message::User { .. })));
 
     let query = async_graphql::Request::new("{ receivedPosts { keys { author, index } } }");
-    let posts = receiver
+    let outcome = receiver
         .query_user_application(application_id, &query)
         .await?;
-    let expected = async_graphql::Response::new(
-        async_graphql::Value::from_json(json!({
-            "receivedPosts": {
-                "keys": [
-                    { "author": sender.chain_id, "index": 0 }
-                ]
-            }
-        }))
-        .unwrap(),
-    );
-    assert_eq!(posts, expected);
+    let expected = QueryOutcome {
+        response: async_graphql::Response::new(
+            async_graphql::Value::from_json(json!({
+                "receivedPosts": {
+                    "keys": [
+                        { "author": sender.chain_id, "index": 0 }
+                    ]
+                }
+            }))
+            .unwrap(),
+        ),
+        operations: vec![],
+    };
+    assert_eq!(outcome, expected);
 
     // Request to unsubscribe from the sender.
     let request_unsubscribe = social::Operation::Unsubscribe {
@@ -833,19 +844,22 @@ where
 
     // There is still only one post it can see.
     let query = async_graphql::Request::new("{ receivedPosts { keys { author, index } } }");
-    let posts = receiver
+    let outcome = receiver
         .query_user_application(application_id, &query)
         .await
         .unwrap();
-    let expected = async_graphql::Response::new(
-        async_graphql::Value::from_json(json!({
-            "receivedPosts": {
-                "keys": [ { "author": sender.chain_id, "index": 0 } ]
-            }
-        }))
-        .unwrap(),
-    );
-    assert_eq!(posts, expected);
+    let expected = QueryOutcome {
+        response: async_graphql::Response::new(
+            async_graphql::Value::from_json(json!({
+                "receivedPosts": {
+                    "keys": [ { "author": sender.chain_id, "index": 0 } ]
+                }
+            }))
+            .unwrap(),
+        ),
+        operations: vec![],
+    };
+    assert_eq!(outcome, expected);
 
     Ok(())
 }

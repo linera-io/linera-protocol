@@ -32,9 +32,10 @@ use crate::{
     system::CreateApplicationResult,
     util::{ReceiverExt, UnboundedSenderExt},
     BaseRuntime, BytecodeId, ContractRuntime, ExecutionError, FinalizeContext, MessageContext,
-    OperationContext, QueryContext, RawExecutionOutcome, ServiceRuntime, TransactionTracker,
-    UserApplicationDescription, UserApplicationId, UserContractCode, UserContractInstance,
-    UserServiceCode, UserServiceInstance, MAX_EVENT_KEY_LEN, MAX_STREAM_NAME_LEN,
+    Operation, OperationContext, QueryContext, QueryOutcome, RawExecutionOutcome, ServiceRuntime,
+    TransactionTracker, UserApplicationDescription, UserApplicationId, UserContractCode,
+    UserContractInstance, UserServiceCode, UserServiceInstance, MAX_EVENT_KEY_LEN,
+    MAX_STREAM_NAME_LEN,
 };
 
 #[cfg(test)]
@@ -94,6 +95,8 @@ pub struct SyncRuntimeInternal<UserInstance> {
     active_applications: HashSet<UserApplicationId>,
     /// The tracking information for this transaction.
     transaction_tracker: TransactionTracker,
+    /// The operations scheduled during this query.
+    scheduled_operations: Vec<Operation>,
 
     /// Track application states based on views.
     view_user_states: BTreeMap<UserApplicationId, ViewUserState>,
@@ -311,6 +314,7 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
             refund_grant_to,
             resource_controller,
             transaction_tracker,
+            scheduled_operations: Vec::new(),
         }
     }
 
@@ -972,7 +976,14 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
                     local_time: self.local_time,
                 };
                 let sender = self.execution_state_sender.clone();
-                ServiceSyncRuntime::new(sender, context).run_query(application_id, query)?
+
+                let QueryOutcome {
+                    response,
+                    operations,
+                } = ServiceSyncRuntime::new(sender, context).run_query(application_id, query)?;
+
+                self.scheduled_operations.extend(operations);
+                response
             };
         self.transaction_tracker
             .add_oracle_response(OracleResponse::Service(response.clone()));
@@ -1618,9 +1629,15 @@ impl ServiceSyncRuntime {
         &mut self,
         application_id: UserApplicationId,
         query: Vec<u8>,
-    ) -> Result<Vec<u8>, ExecutionError> {
-        self.handle_mut()
-            .try_query_application(application_id, query)
+    ) -> Result<QueryOutcome<Vec<u8>>, ExecutionError> {
+        let this = self.handle_mut();
+        let response = this.try_query_application(application_id, query)?;
+        let operations = mem::take(&mut this.inner().scheduled_operations);
+
+        Ok(QueryOutcome {
+            response,
+            operations,
+        })
     }
 
     /// Obtains the [`SyncRuntimeHandle`] stored in this [`ServiceSyncRuntime`].
@@ -1674,6 +1691,18 @@ impl ServiceRuntime for ServiceSyncRuntimeHandle {
             .send_request(|callback| ExecutionRequest::FetchUrl { url, callback })?
             .recv_response()
     }
+
+    fn schedule_operation(&mut self, operation: Vec<u8>) -> Result<(), ExecutionError> {
+        let mut this = self.inner();
+        let application_id = this.application_id()?;
+
+        this.scheduled_operations.push(Operation::User {
+            application_id,
+            bytes: operation,
+        });
+
+        Ok(())
+    }
 }
 
 /// A request to the service runtime actor.
@@ -1682,7 +1711,7 @@ pub enum ServiceRuntimeRequest {
         application_id: UserApplicationId,
         context: QueryContext,
         query: Vec<u8>,
-        callback: oneshot::Sender<Result<Vec<u8>, ExecutionError>>,
+        callback: oneshot::Sender<Result<QueryOutcome<Vec<u8>>, ExecutionError>>,
     },
 }
 

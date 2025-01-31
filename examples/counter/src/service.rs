@@ -5,6 +5,8 @@
 
 mod state;
 
+use std::sync::Arc;
+
 use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
 use linera_sdk::{base::WithServiceAbi, views::View, Service, ServiceRuntime};
 
@@ -12,6 +14,7 @@ use self::state::CounterState;
 
 pub struct CounterService {
     state: CounterState,
+    runtime: Arc<ServiceRuntime<Self>>,
 }
 
 linera_sdk::service!(CounterService);
@@ -27,7 +30,10 @@ impl Service for CounterService {
         let state = CounterState::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
-        CounterService { state }
+        CounterService {
+            state,
+            runtime: Arc::new(runtime),
+        }
     }
 
     async fn handle_query(&self, request: Request) -> Response {
@@ -35,7 +41,9 @@ impl Service for CounterService {
             QueryRoot {
                 value: *self.state.value.get(),
             },
-            MutationRoot {},
+            MutationRoot {
+                runtime: self.runtime.clone(),
+            },
             EmptySubscription,
         )
         .finish();
@@ -43,12 +51,15 @@ impl Service for CounterService {
     }
 }
 
-struct MutationRoot;
+struct MutationRoot {
+    runtime: Arc<ServiceRuntime<CounterService>>,
+}
 
 #[Object]
 impl MutationRoot {
-    async fn increment(&self, value: u64) -> Vec<u8> {
-        bcs::to_bytes(&value).unwrap()
+    async fn increment(&self, value: u64) -> [u8; 0] {
+        self.runtime.schedule_operation(&value);
+        []
     }
 }
 
@@ -65,6 +76,8 @@ impl QueryRoot {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use async_graphql::{Request, Response, Value};
     use futures::FutureExt as _;
     use linera_sdk::{util::BlockingWait, views::View, Service, ServiceRuntime};
@@ -75,13 +88,13 @@ mod tests {
     #[test]
     fn query() {
         let value = 61_098_721_u64;
-        let runtime = ServiceRuntime::<CounterService>::new();
+        let runtime = Arc::new(ServiceRuntime::<CounterService>::new());
         let mut state = CounterState::load(runtime.root_view_storage_context())
             .blocking_wait()
             .expect("Failed to read from mock key value store");
         state.value.set(value);
 
-        let service = CounterService { state };
+        let service = CounterService { state, runtime };
         let request = Request::new("{ value }");
 
         let response = service

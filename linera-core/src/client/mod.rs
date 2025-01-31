@@ -58,7 +58,8 @@ use linera_execution::{
         AdminOperation, OpenChainConfig, Recipient, SystemChannel, SystemOperation,
         CREATE_APPLICATION_MESSAGE_INDEX, OPEN_CHAIN_MESSAGE_INDEX,
     },
-    ExecutionError, Operation, Query, Response, SystemExecutionError, SystemQuery, SystemResponse,
+    ExecutionError, Operation, Query, QueryOutcome, QueryResponse, SystemExecutionError,
+    SystemQuery, SystemResponse,
 };
 use linera_storage::{Clock as _, Storage};
 use linera_views::views::ViewError;
@@ -2169,13 +2170,13 @@ where
 
     /// Queries an application.
     #[instrument(level = "trace", skip(query))]
-    pub async fn query_application(&self, query: Query) -> Result<Response, ChainClientError> {
-        let response = self
+    pub async fn query_application(&self, query: Query) -> Result<QueryOutcome, ChainClientError> {
+        let outcome = self
             .client
             .local_node
             .query_application(self.chain_id, query)
             .await?;
-        Ok(response)
+        Ok(outcome)
     }
 
     /// Queries a system application.
@@ -2183,14 +2184,20 @@ where
     pub async fn query_system_application(
         &self,
         query: SystemQuery,
-    ) -> Result<SystemResponse, ChainClientError> {
-        let response = self
+    ) -> Result<QueryOutcome<SystemResponse>, ChainClientError> {
+        let QueryOutcome {
+            response,
+            operations,
+        } = self
             .client
             .local_node
             .query_application(self.chain_id, Query::System(query))
             .await?;
         match response {
-            Response::System(response) => Ok(response),
+            QueryResponse::System(response) => Ok(QueryOutcome {
+                response,
+                operations,
+            }),
             _ => Err(ChainClientError::InternalError(
                 "Unexpected response for system query",
             )),
@@ -2203,15 +2210,24 @@ where
         &self,
         application_id: UserApplicationId<A>,
         query: &A::Query,
-    ) -> Result<A::QueryResponse, ChainClientError> {
+    ) -> Result<QueryOutcome<A::QueryResponse>, ChainClientError> {
         let query = Query::user(application_id, query)?;
-        let response = self
+        let QueryOutcome {
+            response,
+            operations,
+        } = self
             .client
             .local_node
             .query_application(self.chain_id, query)
             .await?;
         match response {
-            Response::User(response) => Ok(serde_json::from_slice(&response)?),
+            QueryResponse::User(response_bytes) => {
+                let response = serde_json::from_slice(&response_bytes)?;
+                Ok(QueryOutcome {
+                    response,
+                    operations,
+                })
+            }
             _ => Err(ChainClientError::InternalError(
                 "Unexpected response for user query",
             )),

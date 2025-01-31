@@ -27,7 +27,7 @@ use linera_chain::{
 };
 use linera_execution::{
     committee::{Epoch, ValidatorName},
-    Message, Query, QueryContext, Response, ServiceRuntimeEndpoint, SystemMessage,
+    Message, Query, QueryContext, QueryOutcome, ServiceRuntimeEndpoint, SystemMessage,
 };
 use linera_storage::{Clock as _, Storage};
 use linera_views::views::{ClonableView, ViewError};
@@ -157,7 +157,7 @@ where
     pub(super) async fn query_application(
         &mut self,
         query: Query,
-    ) -> Result<Response, WorkerError> {
+    ) -> Result<QueryOutcome, WorkerError> {
         ChainWorkerStateWithTemporaryChanges::new(self)
             .await
             .query_application(query)

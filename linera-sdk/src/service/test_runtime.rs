@@ -3,13 +3,15 @@
 
 //! Runtime types to simulate interfacing with the host executing the service.
 
-use std::{collections::HashMap, sync::Mutex};
+use std::{collections::HashMap, mem, sync::Mutex};
 
 use linera_base::{
     abi::ServiceAbi,
     data_types::{Amount, BlockHeight, Timestamp},
+    hex,
     identifiers::{AccountOwner, ApplicationId, ChainId},
 };
+use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{DataBlobHash, KeyValueStore, Service, ViewStorageContext};
 
@@ -28,6 +30,7 @@ where
     query_application_handler: Mutex<Option<QueryApplicationHandler>>,
     url_blobs: Mutex<Option<HashMap<String, Vec<u8>>>>,
     blobs: Mutex<Option<HashMap<DataBlobHash, Vec<u8>>>>,
+    scheduled_operations: Mutex<Vec<Vec<u8>>>,
     key_value_store: KeyValueStore,
 }
 
@@ -57,6 +60,7 @@ where
             query_application_handler: Mutex::new(None),
             url_blobs: Mutex::new(None),
             blobs: Mutex::new(None),
+            scheduled_operations: Mutex::new(vec![]),
             key_value_store: KeyValueStore::mock(),
         }
     }
@@ -280,6 +284,56 @@ where
             )
             .keys()
             .cloned()
+            .collect()
+    }
+
+    /// Schedules an operation to be included in the block being built.
+    ///
+    /// The operation is specified as an opaque blob of bytes.
+    pub fn schedule_raw_operation(&self, operation: Vec<u8>) {
+        self.scheduled_operations.lock().unwrap().push(operation);
+    }
+
+    /// Schedules an operation to be included in the block being built.
+    ///
+    /// The operation is serialized using BCS.
+    pub fn schedule_operation(&self, operation: &impl Serialize) {
+        let bytes = bcs::to_bytes(operation).expect("Failed to serialize application operation");
+
+        self.schedule_raw_operation(bytes);
+    }
+
+    /// Returns the list of operations scheduled since the most recent of:
+    ///
+    /// - the last call to this method;
+    /// - the last call to [`Self::scheduled_operations`];
+    /// - or since the mock runtime was created.
+    pub fn raw_scheduled_operations(&self) -> Vec<Vec<u8>> {
+        mem::take(&mut self.scheduled_operations.lock().unwrap())
+    }
+
+    /// Returns the list of operations scheduled since the most recent of:
+    ///
+    /// - the last call to this method;
+    /// - the last call to [`Self::raw_scheduled_operations`];
+    /// - or since the mock runtime was created.
+    ///
+    /// All operations are deserialized using BCS into the `Operation` generic type.
+    pub fn scheduled_operations<Operation>(&self) -> Vec<Operation>
+    where
+        Operation: DeserializeOwned,
+    {
+        self.raw_scheduled_operations()
+            .into_iter()
+            .enumerate()
+            .map(|(index, bytes)| {
+                bcs::from_bytes(&bytes).unwrap_or_else(|error| {
+                    panic!(
+                        "Failed to deserialize scheduled operation #{index} (0x{}): {error}",
+                        hex::encode(bytes)
+                    )
+                })
+            })
             .collect()
     }
 

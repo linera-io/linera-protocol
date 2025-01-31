@@ -2,6 +2,8 @@
 
 mod state;
 
+use std::sync::Arc;
+
 use async_graphql::{{EmptySubscription, Object, Schema}};
 use linera_sdk::{{
     base::WithServiceAbi, graphql::GraphQLMutationRoot, views::View, Service, ServiceRuntime,
@@ -13,7 +15,7 @@ use self::state::{project_name}State;
 
 pub struct {project_name}Service {{
     state: {project_name}State,
-    runtime: ServiceRuntime<Self>,
+    runtime: Arc<ServiceRuntime<Self>>,
 }}
 
 linera_sdk::service!({project_name}Service);
@@ -29,7 +31,10 @@ impl Service for {project_name}Service {{
         let state = {project_name}State::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
-        {project_name}Service {{ state, runtime }}
+        {project_name}Service {{
+            state,
+            runtime: Arc::new(runtime),
+        }}
     }}
 
     async fn handle_query(&self, query: Self::Query) -> Self::QueryResponse {{
@@ -37,7 +42,7 @@ impl Service for {project_name}Service {{
             QueryRoot {{
                 value: *self.state.value.get(),
             }},
-            Operation::mutation_root(),
+            Operation::mutation_root(self.runtime.clone()),
             EmptySubscription,
         )
         .finish()

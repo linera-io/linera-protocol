@@ -559,6 +559,15 @@ where
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
+    /// Schedules an operation to be included in the block being built by this query.
+    fn schedule_operation(caller: &mut Caller, operation: Vec<u8>) -> Result<(), RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .schedule_operation(operation)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
     /// Queries another application.
     fn try_query_application(
         caller: &mut Caller,

@@ -21,7 +21,7 @@ use linera_chain::{types::ConfirmedBlockCertificate, ChainError, ChainExecutionC
 use linera_core::{data_types::ChainInfoQuery, worker::WorkerError};
 use linera_execution::{
     system::{SystemExecutionError, SystemOperation, CREATE_APPLICATION_MESSAGE_INDEX},
-    ExecutionError, Query, Response,
+    ExecutionError, Query, QueryOutcome, QueryResponse,
 };
 use linera_storage::Storage as _;
 use serde::Serialize;
@@ -462,13 +462,16 @@ impl ActiveChain {
         &self,
         application_id: ApplicationId<Abi>,
         query: Abi::Query,
-    ) -> Abi::QueryResponse
+    ) -> QueryOutcome<Abi::QueryResponse>
     where
         Abi: ServiceAbi,
     {
         let query_bytes = serde_json::to_vec(&query).expect("Failed to serialize query");
 
-        let response = self
+        let QueryOutcome {
+            response,
+            operations,
+        } = self
             .validator
             .worker()
             .query_application(
@@ -481,11 +484,18 @@ impl ActiveChain {
             .await
             .expect("Failed to query application");
 
-        match response {
-            Response::User(bytes) => {
+        let deserialized_response = match response {
+            QueryResponse::User(bytes) => {
                 serde_json::from_slice(&bytes).expect("Failed to deserialize query response")
             }
-            Response::System(_) => unreachable!("User query returned a system response"),
+            QueryResponse::System(_) => {
+                unreachable!("User query returned a system response")
+            }
+        };
+
+        QueryOutcome {
+            response: deserialized_response,
+            operations,
         }
     }
 
@@ -496,22 +506,30 @@ impl ActiveChain {
         &self,
         application_id: ApplicationId<Abi>,
         query: impl Into<async_graphql::Request>,
-    ) -> serde_json::Value
+    ) -> QueryOutcome<serde_json::Value>
     where
         Abi: ServiceAbi<Query = async_graphql::Request, QueryResponse = async_graphql::Response>,
     {
         let query = query.into();
         let query_str = query.query.clone();
-        let response = self.query(application_id, query).await;
+        let QueryOutcome {
+            response,
+            operations,
+        } = self.query(application_id, query).await;
         if !response.errors.is_empty() {
             panic!(
                 "GraphQL query:\n{}\nyielded errors:\n{:#?}",
                 query_str, response.errors
             );
         }
-        response
+        let json_response = response
             .data
             .into_json()
-            .expect("Unexpected non-JSON query response")
+            .expect("Unexpected non-JSON query response");
+
+        QueryOutcome {
+            response: json_response,
+            operations,
+        }
     }
 }
