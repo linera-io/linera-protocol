@@ -1,7 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{io, io::Write};
+use std::{
+    collections::HashMap, io::{self, Write}, sync::{Arc, Mutex}
+};
 
 use anyhow::Result;
 use clap::Parser;
@@ -150,10 +152,10 @@ async fn main() {
     let model = openai.completion_model(&opt.model);
     let node_service = LineraNodeService::new(opt.node_service_url.parse().unwrap()).unwrap();
 
-    let graphql_def = node_service.get_graphql_definition().await.unwrap();
+    let system_graphql_def = node_service.system_graphql_definition().await.unwrap();
     let graphql_context = format!(
         "This is the GraphQL schema for interfacing with the Linera service: {}",
-        graphql_def
+        system_graphql_def
     );
 
     // Configure the agent
@@ -167,9 +169,19 @@ async fn main() {
     chat(agent).await;
 }
 
-#[derive(Deserialize)]
-struct NodeServiceArgs {
-    input: String,
+#[derive(Debug, Deserialize)]
+#[serde(tag = "type")]
+enum NodeServiceArgs {
+    QuerySystem {
+        query: String,
+    },
+    AddApplication {
+        application_id: String,
+    },
+    QueryApplication {
+        application_id: String,
+        query: String,
+    },
 }
 
 #[derive(Serialize, Deserialize)]
@@ -181,6 +193,8 @@ struct NodeServiceOutput {
 struct LineraNodeService {
     url: Url,
     client: Client,
+    // A map from application id to GraphQL definition.
+    applications: Arc<Mutex<HashMap<String, String>>>,
 }
 
 impl LineraNodeService {
@@ -188,13 +202,18 @@ impl LineraNodeService {
         Ok(Self {
             url,
             client: Client::new(),
+            applications: Arc::new(Mutex::new(HashMap::new())),
         })
     }
 
-    async fn get_graphql_definition(&self) -> Result<String> {
+    async fn system_graphql_definition(&self) -> Result<String> {
+        self.get_graphql_definition(self.url.clone()).await
+    } 
+
+    async fn get_graphql_definition(&self, url: Url) -> Result<String> {
         let response = self
             .client
-            .post(self.url.clone())
+            .post(url)
             .json(&json!({
                 "operationName": "IntrospectionQuery",
                 "query": INTROSPECTION_QUERY
@@ -228,14 +247,45 @@ impl Tool for LineraNodeService {
     }
 
     async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
-        println!("Req: {}", args.input);
-        let response = self
-            .client
-            .post(self.url.clone())
-            .json(&json!({ "query": args.input }))
-            .send()
-            .await?;
-        response.json().await
+        eprintln!("Args: {:?}", args);
+        match args {
+            NodeServiceArgs::QuerySystem { query } => {
+                let response = self
+                    .client
+                    .post(self.url.clone())
+                    .json(&json!({ "query": query }))
+                    .send()
+                    .await?;
+                response.json().await
+            }
+            NodeServiceArgs::AddApplication { application_id } => {
+                let url = self.url.join(&application_id).unwrap();
+                let graphql_def = self.get_graphql_definition(url).await.unwrap();
+                {
+                    let mut applications = self.applications.lock().unwrap();
+                    applications.insert(application_id, graphql_def);
+                }
+                Ok(NodeServiceOutput {
+                    data: json!({ "success": true }),
+                    errors: None,
+                })
+            }
+            NodeServiceArgs::QueryApplication {
+                application_id,
+                query,
+            } => {
+                unimplemented!();
+                // let applications = self.applications.lock().unwrap();
+                // let url = self.url.join(&application_id).unwrap();
+                // let response = self
+                //     .client
+                //     .post(url)
+                //     .json(&json!({ "query": query }))
+                //     .send()
+                //     .await?;
+                // response.json().await
+            }
+        }
     }
 }
 
