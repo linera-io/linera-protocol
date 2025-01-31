@@ -1696,7 +1696,7 @@ where
             let LockingBlock::Regular(validated) = locking else {
                 panic!("Unexpected locking fast block.");
             };
-            assert_eq!(validated.block().body.operations, blob_0_1_operations,);
+            assert_eq!(validated.block().body.operations, blob_0_1_operations);
         } else {
             assert!(validator_manager.requested_locking.is_none());
         }
@@ -1760,7 +1760,7 @@ where
     let LockingBlock::Regular(validated) = locking else {
         panic!("Unexpected locking fast block.");
     };
-    assert_eq!(validated.block().body.operations, blob_2_3_operations,);
+    assert_eq!(validated.block().body.operations, blob_2_3_operations);
 
     builder.set_fault_type([1], FaultType::Offline).await;
     builder.set_fault_type([0, 2, 3], FaultType::Honest).await;

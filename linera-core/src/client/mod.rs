@@ -1792,7 +1792,7 @@ where
                 }
 
                 let name = &remote_node.name;
-                warn!("Skipping proposal from {owner} and validator {name}: {err}",);
+                warn!("Skipping proposal from {owner} and validator {name}: {err}");
             }
         }
         Ok(())
