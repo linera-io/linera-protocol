@@ -147,14 +147,12 @@ where
             Some(Either::Left(vote)) => {
                 self.state
                     .block_values
-                    .insert(Cow::Borrowed(vote.value.inner().inner()))
-                    .await;
+                    .insert(Cow::Borrowed(vote.value.inner().inner()));
             }
             Some(Either::Right(vote)) => {
                 self.state
                     .block_values
-                    .insert(Cow::Borrowed(vote.value.inner().inner()))
-                    .await;
+                    .insert(Cow::Borrowed(vote.value.inner().inner()));
             }
             None => (),
         }
@@ -208,8 +206,7 @@ where
 
         self.state
             .block_values
-            .insert(Cow::Borrowed(certificate.inner().inner()))
-            .await;
+            .insert(Cow::Borrowed(certificate.inner().inner()));
         let required_blob_ids = block.required_blob_ids();
         let maybe_blobs = self
             .state
@@ -399,8 +396,7 @@ where
 
         self.state
             .block_values
-            .insert(Cow::Owned(certificate.into_inner().into_inner()))
-            .await;
+            .insert(Cow::Owned(certificate.into_inner().into_inner()));
 
         self.register_delivery_notifier(block_height, &actions, notify_when_messages_are_delivered)
             .await;

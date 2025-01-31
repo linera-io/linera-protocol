@@ -407,7 +407,6 @@ where
         let executed_block = self
             .executed_block_cache
             .get(&certificate.value.value_hash)
-            .await
             .ok_or(WorkerError::MissingCertificateValue)?;
 
         match certificate.value.kind {
