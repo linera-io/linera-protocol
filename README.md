@@ -68,7 +68,12 @@ linera net up
 ```bash
 linera query-validators
 ``` 
-
+```bash
+CHAIN1="e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65"
+``` 
+```bash
+CHAIN2="69705f85ac4c9fef6c02b4d83426aaaf05154c645ec1c61665f8e450f0468bc0"
+``` 
 ```bash
 linera query-balance "$CHAIN1"  
 ```
