@@ -86,10 +86,10 @@ linera query-validators
 CHAIN1="e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65"
 CHAIN2="69705f85ac4c9fef6c02b4d83426aaaf05154c645ec1c61665f8e450f0468bc0"
 linera query-balance "$CHAIN1"
-linera query-balance "$CHAIN2"
+linera query-balance "$CHAIN3"
 
 # Transfer 10 units then 5 back
-linera transfer 10 --from "$CHAIN1" --to "$CHAIN2"
+linera transfer 10 --from "$CHAIN1" --to "$CHAIN3"
 linera transfer 5 --from "$CHAIN2" --to "$CHAIN1"
 
 # Query balances again
