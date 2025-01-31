@@ -57,9 +57,9 @@ struct MutationRoot {
 
 #[Object]
 impl MutationRoot {
-    async fn increment(&self, value: u64) -> Vec<u8> {
+    async fn increment(&self, value: u64) -> [u8; 0] {
         self.runtime.schedule_operation(&value);
-        bcs::to_bytes(&value).unwrap()
+        []
     }
 }
 

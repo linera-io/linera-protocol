@@ -168,14 +168,14 @@ struct MutationRoot {
 
 #[Object]
 impl MutationRoot {
-    async fn mint(&self, minter: AccountOwner, name: String, blob_hash: DataBlobHash) -> Vec<u8> {
+    async fn mint(&self, minter: AccountOwner, name: String, blob_hash: DataBlobHash) -> [u8; 0] {
         let operation = Operation::Mint {
             minter,
             name,
             blob_hash,
         };
         self.runtime.schedule_operation(&operation);
-        bcs::to_bytes(&operation).unwrap()
+        []
     }
 
     async fn transfer(
@@ -183,7 +183,7 @@ impl MutationRoot {
         source_owner: AccountOwner,
         token_id: String,
         target_account: Account,
-    ) -> Vec<u8> {
+    ) -> [u8; 0] {
         let operation = Operation::Transfer {
             source_owner,
             token_id: TokenId {
@@ -192,7 +192,7 @@ impl MutationRoot {
             target_account,
         };
         self.runtime.schedule_operation(&operation);
-        bcs::to_bytes(&operation).unwrap()
+        []
     }
 
     async fn claim(
@@ -200,7 +200,7 @@ impl MutationRoot {
         source_account: Account,
         token_id: String,
         target_account: Account,
-    ) -> Vec<u8> {
+    ) -> [u8; 0] {
         let operation = Operation::Claim {
             source_account,
             token_id: TokenId {
@@ -209,6 +209,6 @@ impl MutationRoot {
             target_account,
         };
         self.runtime.schedule_operation(&operation);
-        bcs::to_bytes(&operation).unwrap()
+        []
     }
 }

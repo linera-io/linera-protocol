@@ -46,13 +46,14 @@ fn generate_mutation_root_code(input: ItemEnum, crate_root: &str) -> TokenStream
                     field_names.push(name);
                 }
                 methods.push(quote! {
-                    async fn #function_name(&self, #(#fields,)*) -> Vec<u8> {
+                    async fn #function_name(&self, #(#fields,)*) -> [u8; 0] {
                         let operation = #enum_name::#variant_name {
                             #(#field_names,)*
                         };
 
                         self.runtime.schedule_operation(&operation);
-                        #crate_root::bcs::to_bytes(&operation).unwrap()
+
+                        []
                     }
                 });
             }
@@ -66,23 +67,25 @@ fn generate_mutation_root_code(input: ItemEnum, crate_root: &str) -> TokenStream
                     field_names.push(name);
                 }
                 methods.push(quote! {
-                    async fn #function_name(&self, #(#fields,)*) -> Vec<u8> {
+                    async fn #function_name(&self, #(#fields,)*) -> [u8; 0] {
                         let operation = #enum_name::#variant_name(
                             #(#field_names,)*
                         );
 
                         self.runtime.schedule_operation(&operation);
-                        #crate_root::bcs::to_bytes(&operation).unwrap()
+
+                        []
                     }
                 });
             }
             Fields::Unit => {
                 methods.push(quote! {
-                    async fn #function_name(&self) -> Vec<u8> {
+                    async fn #function_name(&self) -> [u8; 0] {
                         let operation = #enum_name::#variant_name;
 
                         self.runtime.schedule_operation(&operation);
-                        #crate_root::bcs::to_bytes(&operation).unwrap()
+
+                        []
                     }
                 });
             }
@@ -171,22 +174,22 @@ pub mod tests {
                 Application: linera_sdk::Service,
                 linera_sdk::ServiceRuntime<Application>: Send + Sync,
             {
-                async fn tuple_variant(&self, field0: String,) -> Vec<u8> {
+                async fn tuple_variant(&self, field0: String,) -> [u8; 0] {
                     let operation = SomeOperation::TupleVariant(field0,);
                     self.runtime.schedule_operation(&operation);
-                    linera_sdk::bcs::to_bytes(&operation).unwrap()
+                    []
                 }
 
-                async fn struct_variant(&self, a: u32, b: u64,) -> Vec<u8> {
+                async fn struct_variant(&self, a: u32, b: u64,) -> [u8; 0] {
                     let operation = SomeOperation::StructVariant { a, b, };
                     self.runtime.schedule_operation(&operation);
-                    linera_sdk::bcs::to_bytes(&operation).unwrap()
+                    []
                 }
 
-                async fn empty_variant(&self) -> Vec<u8> {
+                async fn empty_variant(&self) -> [u8; 0] {
                     let operation = SomeOperation::EmptyVariant;
                     self.runtime.schedule_operation(&operation);
-                    linera_sdk::bcs::to_bytes(&operation).unwrap()
+                    []
                 }
             }
 
