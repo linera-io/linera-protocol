@@ -9,7 +9,7 @@ use reqwest::Client;
 use rig::{
     agent::AgentBuilder,
     completion::{Chat, Message, ToolDefinition},
-    providers::openai,
+    providers::{openai, deepseek},
     tool::Tool,
 };
 use serde::{Deserialize, Serialize};
@@ -146,8 +146,7 @@ struct Opt {
 async fn main() {
     let opt = Opt::parse();
 
-    let openai = openai::Client::from_env();
-    let model = openai.completion_model(&opt.model);
+    // let model = agent_from_opts(&opt.model);
     let node_service = LineraNodeService::new(opt.node_service_url.parse().unwrap()).unwrap();
 
     let graphql_def = node_service.get_graphql_definition().await.unwrap();
@@ -156,15 +155,7 @@ async fn main() {
         graphql_def
     );
 
-    // Configure the agent
-    let agent = AgentBuilder::new(model)
-        .preamble(PREAMBLE)
-        .context(LINERA_CONTEXT)
-        .context(&graphql_context)
-        .tool(node_service)
-        .build();
-
-    chat(agent).await;
+    start_chat(&opt.model, &graphql_context, node_service).await;
 }
 
 #[derive(Deserialize)]
@@ -236,6 +227,36 @@ impl Tool for LineraNodeService {
             .send()
             .await?;
         response.json().await
+    }
+}
+
+async fn start_chat(model_name: &str, graphql_context: &str, node_service: LineraNodeService) {
+    match model_name {
+        _ if model_name.starts_with("gpt") => {
+            let openai = openai::Client::from_env();
+            let model = openai.completion_model(model_name);
+            let agent = AgentBuilder::new(model)
+                .preamble(PREAMBLE)
+                .context(LINERA_CONTEXT)
+                .context(graphql_context)
+                .tool(node_service)
+                .build();
+
+            chat(agent).await;
+        }
+        _ if model_name.starts_with("deepseek") => {
+            let deepseek = deepseek::Client::from_env();
+            let model = deepseek.completion_model(model_name);
+            let agent = AgentBuilder::new(model)
+                .preamble(PREAMBLE)
+                .context(LINERA_CONTEXT)
+                .context(graphql_context)
+                .tool(node_service)
+                .build();
+
+            chat(agent).await;
+        }
+        _ => panic!("Model {model_name} not recoginised. Try `gpt-*` or `deepseek-*`"),
     }
 }
 
