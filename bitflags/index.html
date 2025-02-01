@@ -1,0 +1,161 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Generate types for C-style flags with ergonomic APIs."><title>bitflags - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="bitflags" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../bitflags/index.html">bitflags</a><span class="version">2.6.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li><li><a href="#macros">Macros</a></li><li><a href="#structs">Structs</a></li><li><a href="#traits">Traits</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">bitflags</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/bitflags/lib.rs.html#11-927">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Generate types for C-style flags with ergonomic APIs.</p>
+<h2 id="getting-started"><a class="doc-anchor" href="#getting-started">§</a>Getting started</h2>
+<p>Add <code>bitflags</code> to your <code>Cargo.toml</code>:</p>
+<div class="example-wrap"><pre class="language-toml"><code>[dependencies.bitflags]
+version = &quot;2.6.0&quot;
+</code></pre></div><h3 id="generating-flags-types"><a class="doc-anchor" href="#generating-flags-types">§</a>Generating flags types</h3>
+<p>Use the <a href="macro.bitflags.html" title="macro bitflags::bitflags"><code>bitflags</code></a> macro to generate flags types:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>bitflags::bitflags;
+
+<span class="macro">bitflags!</span> {
+    <span class="kw">pub struct </span>Flags: u32 {
+        <span class="kw">const </span>A = <span class="number">0b00000001</span>;
+        <span class="kw">const </span>B = <span class="number">0b00000010</span>;
+        <span class="kw">const </span>C = <span class="number">0b00000100</span>;
+    }
+}</code></pre></div>
+<p>See the docs for the <code>bitflags</code> macro for the full syntax.</p>
+<p>Also see the <a href="./example_generated/index.html"><code>example_generated</code></a> module for an example of what the <code>bitflags</code> macro generates for a flags type.</p>
+<h4 id="externally-defined-flags"><a class="doc-anchor" href="#externally-defined-flags">§</a>Externally defined flags</h4>
+<p>If you’re generating flags types for an external source, such as a C API, you can define
+an extra unnamed flag as a mask of all bits the external source may ever set. Usually this would be all bits (<code>!0</code>):</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">bitflags!</span> {
+    <span class="kw">pub struct </span>Flags: u32 {
+        <span class="kw">const </span>A = <span class="number">0b00000001</span>;
+        <span class="kw">const </span>B = <span class="number">0b00000010</span>;
+        <span class="kw">const </span>C = <span class="number">0b00000100</span>;
+
+        <span class="comment">// The source may set any bits
+        </span><span class="kw">const _ </span>= !<span class="number">0</span>;
+    }
+}</code></pre></div>
+<p>Why should you do this? Generated methods like <code>all</code> and truncating operators like <code>!</code> only consider
+bits in defined flags. Adding an unnamed flag makes those methods consider additional bits,
+without generating additional constants for them. It helps compatibility when the external source
+may start setting additional bits at any time. The <a href="#known-and-unknown-bits">known and unknown bits</a>
+section has more details on this behavior.</p>
+<h4 id="custom-derives"><a class="doc-anchor" href="#custom-derives">§</a>Custom derives</h4>
+<p>You can derive some traits on generated flags types if you enable Cargo features. The following
+libraries are currently supported:</p>
+<ul>
+<li><code>serde</code>: Support <code>#[derive(Serialize, Deserialize)]</code>, using text for human-readable formats,
+and a raw number for binary formats.</li>
+<li><code>arbitrary</code>: Support <code>#[derive(Arbitrary)]</code>, only generating flags values with known bits.</li>
+<li><code>bytemuck</code>: Support <code>#[derive(Pod, Zeroable)]</code>, for casting between flags values and their
+underlying bits values.</li>
+</ul>
+<p>You can also define your own flags type outside of the <a href="macro.bitflags.html" title="macro bitflags::bitflags"><code>bitflags</code></a> macro and then use it to generate methods.
+This can be useful if you need a custom <code>#[derive]</code> attribute for a library that <code>bitflags</code> doesn’t
+natively support:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(SomeTrait)]
+</span><span class="kw">pub struct </span>Flags(u32);
+
+<span class="macro">bitflags!</span> {
+    <span class="kw">impl </span>Flags: u32 {
+        <span class="kw">const </span>A = <span class="number">0b00000001</span>;
+        <span class="kw">const </span>B = <span class="number">0b00000010</span>;
+        <span class="kw">const </span>C = <span class="number">0b00000100</span>;
+    }
+}</code></pre></div>
+<h4 id="adding-custom-methods"><a class="doc-anchor" href="#adding-custom-methods">§</a>Adding custom methods</h4>
+<p>The <a href="macro.bitflags.html" title="macro bitflags::bitflags"><code>bitflags</code></a> macro supports attributes on generated flags types within the macro itself, while
+<code>impl</code> blocks can be added outside of it:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">bitflags!</span> {
+    <span class="comment">// Attributes can be applied to flags types
+    </span><span class="attr">#[repr(transparent)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    </span><span class="kw">pub struct </span>Flags: u32 {
+        <span class="kw">const </span>A = <span class="number">0b00000001</span>;
+        <span class="kw">const </span>B = <span class="number">0b00000010</span>;
+        <span class="kw">const </span>C = <span class="number">0b00000100</span>;
+    }
+}
+
+<span class="comment">// Impl blocks can be added to flags types
+</span><span class="kw">impl </span>Flags {
+    <span class="kw">pub fn </span>as_u64(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64 {
+        <span class="self">self</span>.bits() <span class="kw">as </span>u64
+    }
+}</code></pre></div>
+<h3 id="working-with-flags-values"><a class="doc-anchor" href="#working-with-flags-values">§</a>Working with flags values</h3>
+<p>Use generated constants and standard bitwise operators to interact with flags values:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// union
+</span><span class="kw">let </span>ab = Flags::A | Flags::B;
+
+<span class="comment">// intersection
+</span><span class="kw">let </span>a = ab &amp; Flags::A;
+
+<span class="comment">// difference
+</span><span class="kw">let </span>b = ab - Flags::A;
+
+<span class="comment">// complement
+</span><span class="kw">let </span>c = !ab;</code></pre></div>
+<p>See the docs for the <a href="trait.Flags.html" title="trait bitflags::Flags"><code>Flags</code></a> trait for more details on operators and how they behave.</p>
+<h2 id="formatting-and-parsing"><a class="doc-anchor" href="#formatting-and-parsing">§</a>Formatting and parsing</h2>
+<p><code>bitflags</code> defines a text format that can be used to convert any flags value to and from strings.</p>
+<p>See the <a href="parser/index.html" title="mod bitflags::parser"><code>parser</code></a> module for more details.</p>
+<h2 id="specification"><a class="doc-anchor" href="#specification">§</a>Specification</h2>
+<p>The terminology and behavior of generated flags types is
+<a href="https://github.com/bitflags/bitflags/blob/main/spec.md">specified in the source repository</a>.
+Details are repeated in these docs where appropriate, but is exhaustively listed in the spec. Some
+things are worth calling out explicitly here.</p>
+<h3 id="flags-types-flags-values-flags"><a class="doc-anchor" href="#flags-types-flags-values-flags">§</a>Flags types, flags values, flags</h3>
+<p>The spec and these docs use consistent terminology to refer to things in the bitflags domain:</p>
+<ul>
+<li><strong>Bits type</strong>: A type that defines a fixed number of bits at specific locations.</li>
+<li><strong>Flag</strong>: A set of bits in a bits type that may have a unique name.</li>
+<li><strong>Flags type</strong>: A set of defined flags over a specific bits type.</li>
+<li><strong>Flags value</strong>: An instance of a flags type using its specific bits value for storage.</li>
+</ul>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">bitflags!</span> {
+    <span class="kw">struct </span>FlagsType: u8 {
+<span class="comment">//                    -- Bits type
+//         --------- Flags type
+        </span><span class="kw">const </span>A = <span class="number">1</span>;
+<span class="comment">//            ----- Flag
+    </span>}
+}
+
+<span class="kw">let </span>flag = FlagsType::A;
+<span class="comment">//  ---- Flags value</span></code></pre></div>
+<h3 id="known-and-unknown-bits"><a class="doc-anchor" href="#known-and-unknown-bits">§</a>Known and unknown bits</h3>
+<p>Any bits in a flag you define are called <em>known bits</em>. Any other bits are <em>unknown bits</em>.
+In the following flags type:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">bitflags!</span> {
+    <span class="kw">struct </span>Flags: u8 {
+        <span class="kw">const </span>A = <span class="number">1</span>;
+        <span class="kw">const </span>B = <span class="number">1 </span>&lt;&lt; <span class="number">1</span>;
+        <span class="kw">const </span>C = <span class="number">1 </span>&lt;&lt; <span class="number">2</span>;
+    }
+}</code></pre></div>
+<p>The known bits are <code>0b0000_0111</code> and the unknown bits are <code>0b1111_1000</code>.</p>
+<p><code>bitflags</code> doesn’t guarantee that a flags value will only ever have known bits set, but some operators
+will unset any unknown bits they encounter. In a future version of <code>bitflags</code>, all operators will
+unset unknown bits.</p>
+<p>If you’re using <code>bitflags</code> for flags types defined externally, such as from C, you probably want all
+bits to be considered known, in case that external source changes. You can do this using an unnamed
+flag, as described in <a href="#externally-defined-flags">externally defined flags</a>.</p>
+<h3 id="zero-bit-flags"><a class="doc-anchor" href="#zero-bit-flags">§</a>Zero-bit flags</h3>
+<p>Flags with no bits set should be avoided because they interact strangely with <a href="trait.Flags.html#method.contains" title="method bitflags::Flags::contains"><code>Flags::contains</code></a>
+and <a href="trait.Flags.html#method.intersects" title="method bitflags::Flags::intersects"><code>Flags::intersects</code></a>. A zero-bit flag is always contained, but is never intersected. The
+names of zero-bit flags can be parsed, but are never formatted.</p>
+<h3 id="multi-bit-flags"><a class="doc-anchor" href="#multi-bit-flags">§</a>Multi-bit flags</h3>
+<p>Flags that set multiple bits should be avoided unless each bit is also in a single-bit flag.
+Take the following flags type as an example:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">bitflags!</span> {
+    <span class="kw">struct </span>Flags: u8 {
+        <span class="kw">const </span>A = <span class="number">1</span>;
+        <span class="kw">const </span>B = <span class="number">1 </span>| <span class="number">1 </span>&lt;&lt; <span class="number">1</span>;
+    }
+}</code></pre></div>
+<p>The result of <code>Flags::A ^ Flags::B</code> is <code>0b0000_0010</code>, which doesn’t correspond to either
+<code>Flags::A</code> or <code>Flags::B</code> even though it’s still a known bit.</p>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.BitFlags"><code>pub use traits::BitFlags;</code></div><div class="desc docblock-short"><span class="stab deprecated" title="">Deprecated</span></div></li></ul><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="iter/index.html" title="mod bitflags::iter">iter</a></div><div class="desc docblock-short">Yield the bits of a source flags value in a set of contained flags values.</div></li><li><div class="item-name"><a class="mod" href="parser/index.html" title="mod bitflags::parser">parser</a></div><div class="desc docblock-short">Parsing flags from text.</div></li></ul><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="macro" href="macro.bitflags.html" title="macro bitflags::bitflags">bitflags</a></div><div class="desc docblock-short">Generate a flags type.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Flag.html" title="struct bitflags::Flag">Flag</a></div><div class="desc docblock-short">A defined flags value that may be named or unnamed.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.Bits.html" title="trait bitflags::Bits">Bits</a></div><div class="desc docblock-short">A bits type that can be used as storage for a flags type.</div></li><li><div class="item-name"><a class="trait" href="trait.Flags.html" title="trait bitflags::Flags">Flags</a></div><div class="desc docblock-short">A set of defined flags using a bits type as storage.</div></li></ul></section></div></main></body></html>

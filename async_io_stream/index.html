@@ -1,0 +1,90 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="async_io_stream"><title>async_io_stream - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="async_io_stream" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../async_io_stream/index.html">async_io_stream</a><span class="version">0.3.3</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#structs">Structs</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">async_io_stream</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/async_io_stream/lib.rs.html#1-827">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="async_io_stream"><a class="doc-anchor" href="#async_io_stream">§</a>async_io_stream</h2>
+<p><a href="https://github.com/RichardLitt/standard-readme"><img src="https://img.shields.io/badge/readme%20style-standard-brightgreen.svg?style=flat-square" alt="standard-readme compliant" /></a>
+<a href="https://github.com/najamelan/async_io_stream/actions"><img src="https://github.com/najamelan/async_io_stream/workflows/ci/badge.svg?branch=master" alt="Build Status" /></a>
+<a href="https://docs.rs/async_io_stream"><img src="https://docs.rs/async_io_stream/badge.svg" alt="Docs" /></a>
+<a href="https://crates.io/crates/async_io_stream"><img src="https://img.shields.io/crates/v/async_io_stream.svg" alt="crates.io" /></a></p>
+<blockquote>
+<p>IntoAsyncRead on steroids</p>
+</blockquote>
+<p>Provides a similar functionality as <a href="https://docs.rs/futures/0.3.4/futures/stream/trait.TryStreamExt.html#method.into_async_read"><code>futures-util::IntoAsyncRead</code></a>. This crate handles both AsyncRead and AsyncWrite for an underlying type
+that implements <code>Stream</code> and <code>Sink</code>. The stream needs to be a <code>TryStream</code> over <code>I: AsRef&lt;u8&gt;</code> and <code>std::io::Error</code>. The <code>Sink</code>
+must be over <code>I: From&lt; Vec&lt;u8&gt; &gt;</code> with the same error.</p>
+<p>The main other difference is that we will always try to use the complete buffer(s) provided by clients. That is for <code>poll_read</code>,
+if more items are available on the <code>Stream</code>, we try to fill the entire buffer by using several messages. Implementations are
+provided for vectored io in order to use all buffers maximally, compared to the default implementation which would only take
+into account the first buffer.</p>
+<p>For the <code>Sink</code> all data passed in is made into one item of the <code>Sink</code>.</p>
+<p><a href="https://docs.rs/futures/0.3.4/futures/io/trait.AsyncBufRead.html"><code>AsyncBufRead</code></a> is also implemented, which can be used to
+avoid a copy of the data when reading.</p>
+<p>Care is taken when polling the underlying <code>Stream</code> several times, to send a dummy waker so the underlying <code>Stream</code> doesn’t try to wake up the task when we didn’t return <code>Poll::Pending</code>. This is, if we already have data to return, we can’t return <code>Poll::Pending</code>. If the underlying <code>Stream</code> returns an error, we will buffer it for the next poll.</p>
+<h3 id="table-of-contents"><a class="doc-anchor" href="#table-of-contents">§</a>Table of Contents</h3>
+<ul>
+<li><a href="#install">Install</a>
+<ul>
+<li><a href="#upgrade">Upgrade</a></li>
+<li><a href="#dependencies">Dependencies</a></li>
+<li><a href="#security">Security</a></li>
+</ul>
+</li>
+<li><a href="#usage">Usage</a>
+<ul>
+<li><a href="#basic-example">Basic Example</a></li>
+<li><a href="#api">API</a></li>
+</ul>
+</li>
+<li><a href="#contributing">Contributing</a>
+<ul>
+<li><a href="#code-of-conduct">Code of Conduct</a></li>
+</ul>
+</li>
+<li><a href="#license">License</a></li>
+</ul>
+<h3 id="install"><a class="doc-anchor" href="#install">§</a>Install</h3>
+<p>With <a href="https://github.com/killercup/cargo-edit">cargo add</a>:
+<code>cargo add async_io_stream</code></p>
+<p>With <a href="https://gitlab.com/storedbox/cargo-yaml">cargo yaml</a>:</p>
+<div class="example-wrap"><pre class="language-yaml"><code>dependencies:
+
+   async_io_stream: ^0.3
+</code></pre></div>
+<p>With Cargo.toml</p>
+<div class="example-wrap"><pre class="language-toml"><code>[dependencies]
+
+    async_io_stream = &quot;0.3&quot;
+</code></pre></div><h4 id="upgrade"><a class="doc-anchor" href="#upgrade">§</a>Upgrade</h4>
+<p>Please check out the <a href="https://github.com/najamelan/async_io_stream/blob/master/CHANGELOG.md">changelog</a> when upgrading.</p>
+<h4 id="dependencies"><a class="doc-anchor" href="#dependencies">§</a>Dependencies</h4>
+<p>This crate has few dependencies. Cargo will automatically handle it’s dependencies for you.</p>
+<p>Optionally with the <code>map_pharos</code> feature, the <code>Observable</code> trait is re-implemented and forwarded to the inner type.
+This allows out of band error handling, as <code>AsyncRead</code>/<code>AsyncWrite</code> can only return <code>std::io::Error</code> and codecs will usually
+stop processing the transport as soon as any error is returned. This allows notifying clients of non-fatal errors or events.</p>
+<p>When the <code>tokio_io</code> feature is enabled, implementation for the traits <code>AsyncRead</code>/<code>AsyncWrite</code> from tokio are provided.</p>
+<h4 id="security"><a class="doc-anchor" href="#security">§</a>Security</h4>
+<p>This crate uses <code>#![ forbid(unsafe_code) ]</code>. There is no maximum size protection for the buffers. The crate has not been
+fuzz tested as we never interprete any of the data that passes through.</p>
+<h3 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h3><h4 id="basic-example"><a class="doc-anchor" href="#basic-example">§</a>Basic example</h4>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use
+</span>{
+   async_io_stream :: { IoStream              } ,
+   futures::io     :: { AsyncWrite, AsyncRead } ,
+   futures         :: { Stream, Sink          } ,
+   std             :: { io                    } ,
+};
+
+<span class="kw">fn </span>usage( transport: <span class="kw">impl </span>Stream&lt; Item=<span class="prelude-ty">Result</span>&lt;Vec&lt;u8&gt;, io::Error&gt; &gt; + Sink&lt; Vec&lt;u8&gt;, Error=io::Error &gt; + Unpin )
+
+   -&gt; <span class="kw">impl </span>AsyncRead + AsyncWrite + Unpin
+{
+	IoStream::new( transport )
+}
+</code></pre></div>
+<h3 id="api"><a class="doc-anchor" href="#api">§</a>API</h3>
+<p>API documentation can be found on <a href="https://docs.rs/async_io_stream">docs.rs</a>.</p>
+<h3 id="contributing"><a class="doc-anchor" href="#contributing">§</a>Contributing</h3>
+<p>Please check out the <a href="https://github.com/najamelan/async_io_stream/blob/master/CONTRIBUTING.md">contribution guidelines</a>.</p>
+<h4 id="testing"><a class="doc-anchor" href="#testing">§</a>Testing</h4><h4 id="code-of-conduct"><a class="doc-anchor" href="#code-of-conduct">§</a>Code of conduct</h4>
+<p>Any of the behaviors described in <a href="https://github.com/stumpsyn/policies/blob/master/citizen_code_of_conduct.md#4-unacceptable-behavior">point 4 “Unacceptable Behavior” of the Citizens Code of Conduct</a> are not welcome here and might get you banned. If anyone including maintainers and moderators of the project fail to respect these/your limits, you are entitled to call them out.</p>
+<h3 id="license"><a class="doc-anchor" href="#license">§</a>License</h3>
+<p><a href="https://unlicense.org/">Unlicence</a></p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.IoStream.html" title="struct async_io_stream::IoStream">IoStream</a></div><div class="desc docblock-short">A wrapper over a TryStream + Sink that implements <a href="../futures_io/if_std/trait.AsyncRead.html" title="trait futures_io::if_std::AsyncRead"><code>AsyncRead</code></a>/<a href="../futures_io/if_std/trait.AsyncWrite.html" title="trait futures_io::if_std::AsyncWrite"><code>AsyncWrite</code></a> and <a href="../futures_io/if_std/trait.AsyncBufRead.html" title="trait futures_io::if_std::AsyncBufRead"><code>AsyncBufRead</code></a>.
+See the readme for more information.</div></li></ul></section></div></main></body></html>

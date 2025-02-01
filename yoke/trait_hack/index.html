@@ -1,0 +1,183 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Workarounds for adding trait bounds to `yoke` objects."><title>yoke::trait_hack - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="yoke" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../yoke/index.html">yoke</a><span class="version">0.7.5</span></h2></div><h2 class="location"><a href="#">Module trait_hack</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#structs">Structs</a></li></ul></section><h2><a href="../index.html">In crate yoke</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">yoke</a>::<wbr><a class="mod" href="#">trait_hack</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/yoke/trait_hack.rs.html#5-319">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Workarounds for adding trait bounds to <code>yoke</code> objects.</p>
+<h2 id="trait-bounds-in-yoke"><a class="doc-anchor" href="#trait-bounds-in-yoke">§</a>Trait bounds in Yoke</h2>
+<p><a href="https://github.com/rust-lang/rust/issues/89196">Compiler bug #89196</a> makes it tricky to add
+trait bounds involving <code>yoke</code> types.</p>
+<p>For example, you may want to write:</p>
+<p><code>where for&lt;'a&gt; &lt;Y as Yokeable&lt;'a&gt;&gt;::Output: MyTrait</code></p>
+<p>The above trait bound will compile, but at call sites, you get errors such as:</p>
+<blockquote>
+<p>the trait <code>for&lt;'de&gt; MyTrait</code> is not implemented for <code>&lt;Y as Yokeable&lt;'de&gt;&gt;::Output</code></p>
+</blockquote>
+<p>There are two known workarounds:</p>
+<ol>
+<li>If the trait is well-defined on references, like <code>Debug</code>, bind the trait to a reference:
+<code>where for&lt;'a&gt; &amp;'a &lt;Y as Yokeable&lt;'a&gt;&gt;::Output: MyTrait</code></li>
+<li>If the trait involves <code>Self</code>, like <code>Clone</code>, use <a href="struct.YokeTraitHack.html" title="struct yoke::trait_hack::YokeTraitHack"><code>YokeTraitHack</code></a>:
+<code>where for&lt;'a&gt; YokeTraitHack&lt;&lt;Y as Yokeable&lt;'a&gt;&gt;::Output&gt;: MyTrait</code></li>
+</ol>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Code that does not compile (<a href="https://play.rust-lang.org/?version=beta&amp;mode=debug&amp;edition=2018&amp;gist=ebbda5b15a398d648bdff9e439b27dc0">playground</a>):</p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>yoke::<span class="kw-2">*</span>;
+
+<span class="kw">trait </span>MiniDataMarker {
+    <span class="kw">type </span>Yokeable: <span class="kw">for</span>&lt;<span class="lifetime">'a</span>&gt; Yokeable&lt;<span class="lifetime">'a</span>&gt;;
+}
+
+<span class="kw">struct </span>MiniDataPayload&lt;M&gt;
+<span class="kw">where
+    </span>M: MiniDataMarker
+{
+    <span class="kw">pub </span>yoke: Yoke&lt;M::Yokeable, ()&gt;,
+}
+
+<span class="kw">impl</span>&lt;M&gt; Clone <span class="kw">for </span>MiniDataPayload&lt;M&gt;
+<span class="kw">where
+    </span>M: MiniDataMarker,
+    <span class="kw">for</span>&lt;<span class="lifetime">'a</span>&gt; &lt;M::Yokeable <span class="kw">as </span>Yokeable&lt;<span class="lifetime">'a</span>&gt;&gt;::Output: Clone,
+{
+    <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self </span>{
+        <span class="macro">unimplemented!</span>()
+    }
+}
+
+<span class="kw">trait </span>MiniDataProvider&lt;M&gt;
+<span class="kw">where
+    </span>M: MiniDataMarker
+{
+    <span class="kw">fn </span>mini_load_data(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; MiniDataPayload&lt;M&gt;;
+}
+
+<span class="kw">struct </span>MiniStructProvider&lt;M&gt;
+<span class="kw">where
+    </span>M: MiniDataMarker,
+{
+    <span class="kw">pub </span>payload: MiniDataPayload&lt;M&gt;,
+}
+
+<span class="kw">impl</span>&lt;M&gt; MiniDataProvider&lt;M&gt; <span class="kw">for </span>MiniStructProvider&lt;M&gt;
+<span class="kw">where
+    </span>M: MiniDataMarker,
+    <span class="kw">for</span>&lt;<span class="lifetime">'a</span>&gt; &lt;M::Yokeable <span class="kw">as </span>Yokeable&lt;<span class="lifetime">'a</span>&gt;&gt;::Output: Clone,
+{
+    <span class="kw">fn </span>mini_load_data(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; MiniDataPayload&lt;M&gt; {
+        <span class="self">self</span>.payload.clone()
+    }
+}
+
+<span class="attr">#[derive(Clone)]
+</span><span class="kw">struct </span>SimpleStruct(<span class="kw">pub </span>u32);
+
+<span class="kw">unsafe impl</span>&lt;<span class="lifetime">'a</span>&gt; Yokeable&lt;<span class="lifetime">'a</span>&gt; <span class="kw">for </span>SimpleStruct {
+    <span class="comment">// (not shown; see `Yokeable` for examples)
+</span>}
+
+<span class="kw">impl </span>MiniDataMarker <span class="kw">for </span>SimpleStruct {
+    <span class="kw">type </span>DataStruct = SimpleStruct;
+}
+
+<span class="kw">let </span>provider = MiniStructProvider {
+    payload: MiniDataPayload {
+        yoke: Yoke::new_always_owned(SimpleStruct(<span class="number">42</span>))
+    }
+};
+
+<span class="comment">// Broken:
+// "method cannot be called on `MiniStructProvider&lt;_&gt;` due to unsatisfied trait bounds"
+</span><span class="kw">let </span>payload: MiniDataPayload&lt;SimpleStruct&gt; = provider.mini_load_data();
+
+<span class="comment">// Working:
+</span><span class="kw">let </span>payload = MiniDataProvider::&lt;SimpleStruct&gt;::mini_load_data(<span class="kw-2">&amp;</span>provider);
+
+<span class="macro">assert_eq!</span>(payload.yoke.get().<span class="number">0</span>, <span class="number">42</span>);</code></pre></div>
+<p>Example for binding the trait to a reference:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>yoke::Yoke;
+<span class="kw">use </span>yoke::Yokeable;
+
+<span class="comment">// Example trait and struct for illustration purposes:
+</span><span class="kw">trait </span>MyTrait {
+    <span class="kw">fn </span>demo(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u32;
+}
+<span class="kw">struct </span>MyStruct(u32);
+<span class="kw">impl </span>MyTrait <span class="kw">for </span>MyStruct {
+    <span class="kw">fn </span>demo(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u32 {
+        <span class="self">self</span>.<span class="number">0
+    </span>}
+}
+<span class="kw">unsafe impl</span>&lt;<span class="lifetime">'a</span>&gt; Yokeable&lt;<span class="lifetime">'a</span>&gt; <span class="kw">for </span>MyStruct {
+    <span class="comment">// (not shown; see `Yokeable` for examples)
+</span>}
+
+<span class="comment">// The trait needs to be defined on references:
+</span><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>, T&gt; MyTrait <span class="kw">for </span><span class="kw-2">&amp;</span><span class="lifetime">'a </span>T
+<span class="kw">where
+    </span>T: MyTrait,
+{
+    <span class="kw">fn </span>demo(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u32 {
+        <span class="self">self</span>.demo()
+    }
+}
+
+<span class="kw">impl</span>&lt;Y, C&gt; MyTrait <span class="kw">for </span>Yoke&lt;Y, C&gt;
+<span class="kw">where
+    </span>Y: <span class="kw">for</span>&lt;<span class="lifetime">'a</span>&gt; Yokeable&lt;<span class="lifetime">'a</span>&gt;,
+    <span class="kw">for</span>&lt;<span class="lifetime">'a</span>&gt; <span class="kw-2">&amp;</span><span class="lifetime">'a </span>&lt;Y <span class="kw">as </span>Yokeable&lt;<span class="lifetime">'a</span>&gt;&gt;::Output: MyTrait,
+{
+    <span class="kw">fn </span>demo(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u32 {
+        <span class="self">self</span>.get().demo()
+    }
+}
+
+<span class="kw">fn </span>example() {
+    <span class="kw">let </span>y = Yoke::&lt;MyStruct, ()&gt;::new_always_owned(MyStruct(<span class="number">42</span>));
+    <span class="kw">let _</span>: <span class="kw-2">&amp;</span><span class="kw">dyn </span>MyTrait = <span class="kw-2">&amp;</span>y;
+}</code></pre></div>
+<p>Example for using <a href="struct.YokeTraitHack.html" title="struct yoke::trait_hack::YokeTraitHack"><code>YokeTraitHack</code></a>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::rc::Rc;
+<span class="kw">use </span>yoke::trait_hack::YokeTraitHack;
+<span class="kw">use </span>yoke::Yoke;
+<span class="kw">use </span>yoke::Yokeable;
+
+<span class="comment">// Example trait and struct for illustration purposes:
+</span><span class="kw">trait </span>MyTrait {
+    <span class="kw">fn </span>demo(data: u32) -&gt; <span class="self">Self</span>;
+}
+<span class="kw">struct </span>MyStruct(u32);
+<span class="kw">impl </span>MyTrait <span class="kw">for </span>MyStruct {
+    <span class="kw">fn </span>demo(data: u32) -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>(data)
+    }
+}
+<span class="kw">unsafe impl</span>&lt;<span class="lifetime">'a</span>&gt; Yokeable&lt;<span class="lifetime">'a</span>&gt; <span class="kw">for </span>MyStruct {
+    <span class="comment">// (not shown; see `Yokeable` for examples)
+</span>}
+
+<span class="comment">// The trait needs to be defined on YokeTraitHack:
+</span><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>, T&gt; MyTrait <span class="kw">for </span>YokeTraitHack&lt;T&gt;
+<span class="kw">where
+    </span>T: MyTrait,
+{
+    <span class="kw">fn </span>demo(data: u32) -&gt; <span class="self">Self </span>{
+        YokeTraitHack(T::demo(data))
+    }
+}
+
+<span class="kw">impl</span>&lt;Y&gt; MyTrait <span class="kw">for </span>Yoke&lt;Y, Rc&lt;u32&gt;&gt;
+<span class="kw">where
+    </span>Y: <span class="kw">for</span>&lt;<span class="lifetime">'a</span>&gt; Yokeable&lt;<span class="lifetime">'a</span>&gt;,
+    <span class="kw">for</span>&lt;<span class="lifetime">'a</span>&gt; YokeTraitHack&lt;&lt;Y <span class="kw">as </span>Yokeable&lt;<span class="lifetime">'a</span>&gt;&gt;::Output&gt;: MyTrait,
+{
+    <span class="kw">fn </span>demo(data: u32) -&gt; <span class="self">Self </span>{
+        <span class="kw">let </span>rc_u32: Rc&lt;u32&gt; = Rc::new(data);
+        Yoke::attach_to_cart(rc_u32, |u| {
+            YokeTraitHack::&lt;&lt;Y <span class="kw">as </span>Yokeable&gt;::Output&gt;::demo(<span class="kw-2">*</span>u).<span class="number">0
+        </span>})
+    }
+}
+
+<span class="kw">fn </span>example() {
+    <span class="kw">let _ </span>= Yoke::&lt;MyStruct, Rc&lt;u32&gt;&gt;::demo(<span class="number">42</span>);
+}</code></pre></div>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.YokeTraitHack.html" title="struct yoke::trait_hack::YokeTraitHack">YokeTraitHack</a></div><div class="desc docblock-short">A wrapper around a type <code>T</code>, forwarding trait calls down to the inner type.</div></li></ul></section></div></main></body></html>

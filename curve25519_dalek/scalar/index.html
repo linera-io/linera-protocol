@@ -1,0 +1,79 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Arithmetic on scalars (integers mod the group order)."><title>curve25519_dalek::scalar - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="curve25519_dalek" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../../curve25519_dalek/index.html"><img src="https://cdn.jsdelivr.net/gh/dalek-cryptography/curve25519-dalek/docs/assets/dalek-logo-clear.png" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../../curve25519_dalek/index.html"><img src="https://cdn.jsdelivr.net/gh/dalek-cryptography/curve25519-dalek/docs/assets/dalek-logo-clear.png" alt="logo"></a><h2><a href="../../curve25519_dalek/index.html">curve25519_dalek</a><span class="version">4.1.3</span></h2></div><h2 class="location"><a href="#">Module scalar</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#functions">Functions</a></li></ul></section><h2><a href="../index.html">In crate curve25519_dalek</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">curve25519_dalek</a>::<wbr><a class="mod" href="#">scalar</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/curve25519_dalek/scalar.rs.html#14-2081">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Arithmetic on scalars (integers mod the group order).</p>
+<p>Both the Ristretto group and the Ed25519 basepoint have prime order
+\( \ell = 2^{252} + 27742317777372353535851937790883648493 \).</p>
+<p>This code is intended to be useful with both the Ristretto group
+(where everything is done modulo \( \ell \)), and the X/Ed25519
+setting, which mandates specific bit-twiddles that are not
+well-defined modulo \( \ell \).</p>
+<p>All arithmetic on <code>Scalars</code> is done modulo \( \ell \).</p>
+<h2 id="constructing-a-scalar"><a class="doc-anchor" href="#constructing-a-scalar">§</a>Constructing a scalar</h2>
+<p>To create a <a href="struct.Scalar.html"><code>Scalar</code></a> from a supposedly canonical encoding, use
+<a href="struct.Scalar.html#method.from_canonical_bytes"><code>Scalar::from_canonical_bytes</code></a>.</p>
+<p>This function does input validation, ensuring that the input bytes
+are the canonical encoding of a <code>Scalar</code>.
+If they are, we’ll get
+<code>Some(Scalar)</code> in return:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>curve25519_dalek::scalar::Scalar;
+
+<span class="kw">let </span>one_as_bytes: [u8; <span class="number">32</span>] = Scalar::ONE.to_bytes();
+<span class="kw">let </span>a: <span class="prelude-ty">Option</span>&lt;Scalar&gt; = Scalar::from_canonical_bytes(one_as_bytes).into();
+
+<span class="macro">assert!</span>(a.is_some());</code></pre></div>
+<p>However, if we give it bytes representing a scalar larger than \( \ell \)
+(in this case, \( \ell + 2 \)), we’ll get <code>None</code> back:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>curve25519_dalek::scalar::Scalar;
+
+<span class="kw">let </span>l_plus_two_bytes: [u8; <span class="number">32</span>] = [
+   <span class="number">0xef</span>, <span class="number">0xd3</span>, <span class="number">0xf5</span>, <span class="number">0x5c</span>, <span class="number">0x1a</span>, <span class="number">0x63</span>, <span class="number">0x12</span>, <span class="number">0x58</span>,
+   <span class="number">0xd6</span>, <span class="number">0x9c</span>, <span class="number">0xf7</span>, <span class="number">0xa2</span>, <span class="number">0xde</span>, <span class="number">0xf9</span>, <span class="number">0xde</span>, <span class="number">0x14</span>,
+   <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>,
+   <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x10</span>,
+];
+<span class="kw">let </span>a: <span class="prelude-ty">Option</span>&lt;Scalar&gt; = Scalar::from_canonical_bytes(l_plus_two_bytes).into();
+
+<span class="macro">assert!</span>(a.is_none());</code></pre></div>
+<p>Another way to create a <code>Scalar</code> is by reducing a \(256\)-bit integer mod
+\( \ell \), for which one may use the
+<a href="struct.Scalar.html#method.from_bytes_mod_order"><code>Scalar::from_bytes_mod_order</code></a>
+method.  In the case of the second example above, this would reduce the
+resultant scalar \( \mod \ell \), producing \( 2 \):</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>curve25519_dalek::scalar::Scalar;
+
+<span class="kw">let </span>l_plus_two_bytes: [u8; <span class="number">32</span>] = [
+   <span class="number">0xef</span>, <span class="number">0xd3</span>, <span class="number">0xf5</span>, <span class="number">0x5c</span>, <span class="number">0x1a</span>, <span class="number">0x63</span>, <span class="number">0x12</span>, <span class="number">0x58</span>,
+   <span class="number">0xd6</span>, <span class="number">0x9c</span>, <span class="number">0xf7</span>, <span class="number">0xa2</span>, <span class="number">0xde</span>, <span class="number">0xf9</span>, <span class="number">0xde</span>, <span class="number">0x14</span>,
+   <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>,
+   <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x10</span>,
+];
+<span class="kw">let </span>a: Scalar = Scalar::from_bytes_mod_order(l_plus_two_bytes);
+
+<span class="kw">let </span>two: Scalar = Scalar::ONE + Scalar::ONE;
+
+<span class="macro">assert!</span>(a == two);</code></pre></div>
+<p>There is also a constructor that reduces a \(512\)-bit integer,
+<a href="struct.Scalar.html#method.from_bytes_mod_order_wide" title="associated function curve25519_dalek::scalar::Scalar::from_bytes_mod_order_wide"><code>Scalar::from_bytes_mod_order_wide</code></a>.</p>
+<p>To construct a <code>Scalar</code> as the hash of some input data, use
+<a href="struct.Scalar.html#method.hash_from_bytes" title="associated function curve25519_dalek::scalar::Scalar::hash_from_bytes"><code>Scalar::hash_from_bytes</code></a>, which takes a buffer, or
+<a href="struct.Scalar.html#method.from_hash" title="associated function curve25519_dalek::scalar::Scalar::from_hash"><code>Scalar::from_hash</code></a>, which allows an IUF API.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>sha2::{Digest, Sha512};
+<span class="kw">use </span>curve25519_dalek::scalar::Scalar;
+
+<span class="comment">// Hashing a single byte slice
+</span><span class="kw">let </span>a = Scalar::hash_from_bytes::&lt;Sha512&gt;(<span class="string">b"Abolish ICE"</span>);
+
+<span class="comment">// Streaming data into a hash object
+</span><span class="kw">let </span><span class="kw-2">mut </span>hasher = Sha512::default();
+hasher.update(<span class="string">b"Abolish "</span>);
+hasher.update(<span class="string">b"ICE"</span>);
+<span class="kw">let </span>a2 = Scalar::from_hash(hasher);
+
+<span class="macro">assert_eq!</span>(a, a2);</code></pre></div>
+<p>See also <code>Scalar::hash_from_bytes</code> and <code>Scalar::from_hash</code> that
+reduces a \(512\)-bit integer, if the optional <code>digest</code> feature
+has been enabled.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Scalar.html" title="struct curve25519_dalek::scalar::Scalar">Scalar</a></div><div class="desc docblock-short">The <code>Scalar</code> struct holds an element of \(\mathbb Z / \ell\mathbb Z \).</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.clamp_integer.html" title="fn curve25519_dalek::scalar::clamp_integer">clamp_integer</a></div><div class="desc docblock-short"><em>Clamps</em> the given little-endian representation of a 32-byte integer. Clamping the value puts
+it in the range:</div></li></ul></section></div></main></body></html>

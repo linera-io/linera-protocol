@@ -1,0 +1,91 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Indicate that a type is observable. You can call `observe` to get a stream of events."><title>Observable in pharos - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="pharos" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../pharos/index.html">pharos</a><span class="version">0.5.3</span></h2></div><h2 class="location"><a href="#">Observable</a></h2><div class="sidebar-elems"><section><h3><a href="#required-associated-types">Required Associated Types</a></h3><ul class="block"><li><a href="#associatedtype.Error">Error</a></li></ul><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.observe">observe</a></li></ul><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In crate pharos</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="index.html">pharos</a>::<wbr><a class="trait" href="#">Observable</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/pharos/observable.rs.html#74-95">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub trait Observable&lt;Event&gt;<div class="where">where
+    Event: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a> + 'static + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a>,</div>{
+    type <a href="#associatedtype.Error" class="associatedtype">Error</a>: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/error/trait.Error.html" title="trait core::error::Error">Error</a>;
+
+    // Required method
+    fn <a href="#tymethod.observe" class="fn">observe</a>(
+        &amp;mut self,
+        options: <a class="struct" href="struct.ObserveConfig.html" title="struct pharos::ObserveConfig">ObserveConfig</a>&lt;Event&gt;,
+    ) -&gt; <a class="type" href="type.Observe.html" title="type pharos::Observe">Observe</a>&lt;'_, Event, Self::<a class="associatedtype" href="trait.Observable.html#associatedtype.Error" title="type pharos::Observable::Error">Error</a>&gt;;
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Indicate that a type is observable. You can call <a href="trait.Observable.html#tymethod.observe" title="method pharos::Observable::observe"><code>observe</code></a> to get a
+stream of events.</p>
+<p>Generally used with a <a href="struct.Pharos.html" title="struct pharos::Pharos">Pharos</a> object which manages the observers for you.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>pharos::<span class="kw-2">*</span>;
+<span class="kw">use </span>futures::stream::StreamExt;
+
+<span class="comment">// The event we want to broadcast
+//
+</span><span class="attr">#[ derive( Debug, Clone ) ]
+</span><span class="comment">//
+</span><span class="kw">enum </span>Steps
+{
+  Step1     ,
+  Step2     ,
+  Done      ,
+
+  <span class="comment">// Data is possible, but it has to be clone and will be cloned for each observer
+  // except observers that filter this event out.
+  //
+  </span>Error(u8) ,
+}
+
+
+<span class="kw">impl </span>Steps
+{
+   <span class="comment">// We can use this as a predicate to filter events.
+   //
+   </span><span class="kw">fn </span>is_err( <span class="kw-2">&amp;</span><span class="self">self </span>) -&gt; bool
+   {
+      <span class="kw">match </span><span class="self">self
+      </span>{
+         <span class="self">Self</span>::Error(<span class="kw">_</span>) =&gt; <span class="bool-val">true  </span>,
+         <span class="kw">_              </span>=&gt; <span class="bool-val">false </span>,
+      }
+   }
+}
+
+
+<span class="comment">// The object we want to be observable.
+//
+</span><span class="kw">struct </span>Foo { pharos: Pharos&lt;Steps&gt; };
+
+<span class="kw">impl </span>Observable&lt;Steps&gt; <span class="kw">for </span>Foo
+{
+   <span class="kw">type </span>Error = PharErr;
+
+   <span class="comment">// Pharos implements observable, so we just forward the call.
+   //
+   </span><span class="kw">fn </span>observe( <span class="kw-2">&amp;mut </span><span class="self">self</span>, options: ObserveConfig&lt;Steps&gt; ) -&gt; Observe&lt; <span class="lifetime">'_</span>, Steps, <span class="self">Self</span>::Error&gt;
+   {
+      <span class="self">self</span>.pharos.observe( options )
+   }
+}
+
+
+<span class="comment">// use in async context
+//
+</span><span class="kw">async fn </span>task()
+{
+   <span class="kw">let </span><span class="kw-2">mut </span>foo    = Foo { pharos: Pharos::default() };
+   <span class="kw">let </span><span class="kw-2">mut </span>errors = foo.observe( Filter::Pointer( Steps::is_err ).into() ).<span class="kw">await</span>.expect( <span class="string">"observe" </span>);
+
+   <span class="comment">// will only be notified on errors thanks to the filter.
+   //
+   </span><span class="kw">let </span>next_error = errors.next().<span class="kw">await</span>;
+}</code></pre></div>
+</div></details><h2 id="required-associated-types" class="section-header">Required Associated Types<a href="#required-associated-types" class="anchor">§</a></h2><div class="methods"><details class="toggle" open><summary><section id="associatedtype.Error" class="method"><a class="src rightside" href="../src/pharos/observable.rs.html#89">source</a><h4 class="code-header">type <a href="#associatedtype.Error" class="associatedtype">Error</a>: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/error/trait.Error.html" title="trait core::error::Error">Error</a></h4></section></summary><div class="docblock"><p>The error type that is returned if observing is not possible.</p>
+<p><a href="struct.Pharos.html" title="struct pharos::Pharos">Pharos</a> implements
+<a href="https://docs.rs/futures-preview/0.3.0-alpha.19/futures/sink/trait.Sink.html">Sink</a>
+which has a close method, so observing will no longer be possible after close is called.</p>
+<p>Other than that, you might want to have moments in your objects lifetime when you don’t want to take
+any more observers. Returning a result from <a href="trait.Observable.html#tymethod.observe" title="method pharos::Observable::observe">observe</a> enables that.</p>
+<p>You can of course map the error of pharos to your own error type.</p>
+</div></details></div><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.observe" class="method"><a class="src rightside" href="../src/pharos/observable.rs.html#94">source</a><h4 class="code-header">fn <a href="#tymethod.observe" class="fn">observe</a>(
+    &amp;mut self,
+    options: <a class="struct" href="struct.ObserveConfig.html" title="struct pharos::ObserveConfig">ObserveConfig</a>&lt;Event&gt;,
+) -&gt; <a class="type" href="type.Observe.html" title="type pharos::Observe">Observe</a>&lt;'_, Event, Self::<a class="associatedtype" href="trait.Observable.html#associatedtype.Error" title="type pharos::Observable::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Add an observer to the observable. Options allow chosing the channel type and
+to filter events with a predicate.</p>
+</div></details></div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><details class="toggle implementors-toggle"><summary><section id="impl-Observable%3CEvent%3E-for-Pharos%3CEvent%3E" class="impl"><a class="src rightside" href="../src/pharos/pharos.rs.html#126-173">source</a><a href="#impl-Observable%3CEvent%3E-for-Pharos%3CEvent%3E" class="anchor">§</a><h3 class="code-header">impl&lt;Event&gt; <a class="trait" href="trait.Observable.html" title="trait pharos::Observable">Observable</a>&lt;Event&gt; for <a class="struct" href="struct.Pharos.html" title="struct pharos::Pharos">Pharos</a>&lt;Event&gt;<div class="where">where
+    Event: 'static + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a>,</div></h3></section></summary><div class="impl-items"><section id="associatedtype.Error-1" class="associatedtype trait-impl"><a href="#associatedtype.Error-1" class="anchor">§</a><h4 class="code-header">type <a href="#associatedtype.Error" class="associatedtype">Error</a> = <a class="struct" href="struct.PharErr.html" title="struct pharos::PharErr">PharErr</a></h4></section></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Observable%3CEvent%3E-for-SharedPharos%3CEvent%3E" class="impl"><a class="src rightside" href="../src/pharos/shared_pharos.rs.html#58-68">source</a><a href="#impl-Observable%3CEvent%3E-for-SharedPharos%3CEvent%3E" class="anchor">§</a><h3 class="code-header">impl&lt;Event&gt; <a class="trait" href="trait.Observable.html" title="trait pharos::Observable">Observable</a>&lt;Event&gt; for <a class="struct" href="struct.SharedPharos.html" title="struct pharos::SharedPharos">SharedPharos</a>&lt;Event&gt;<div class="where">where
+    Event: 'static + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a>,</div></h3></section></summary><div class="impl-items"><section id="associatedtype.Error-2" class="associatedtype trait-impl"><a href="#associatedtype.Error-2" class="anchor">§</a><h4 class="code-header">type <a href="#associatedtype.Error" class="associatedtype">Error</a> = <a class="struct" href="struct.PharErr.html" title="struct pharos::PharErr">PharErr</a></h4></section></div></details></div><script src="../trait.impl/pharos/observable/trait.Observable.js" async></script></section></div></main></body></html>

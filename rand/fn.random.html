@@ -1,0 +1,60 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Generates a random value using the thread-local random number generator."><title>random in rand - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="rand" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="icon" href="https://www.rust-lang.org/favicon.ico"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../rand/index.html"><img src="https://www.rust-lang.org/logos/rust-logo-128x128-blk.png" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../rand/index.html"><img src="https://www.rust-lang.org/logos/rust-logo-128x128-blk.png" alt="logo"></a><h2><a href="../rand/index.html">rand</a><span class="version">0.8.5</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="index.html">rand</a>::<wbr><a class="fn" href="#">random</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/rand/lib.rs.html#183-186">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn random&lt;T&gt;() -&gt; T<div class="where">where
+    <a class="struct" href="distributions/struct.Standard.html" title="struct rand::distributions::Standard">Standard</a>: <a class="trait" href="distributions/trait.Distribution.html" title="trait rand::distributions::Distribution">Distribution</a>&lt;T&gt;,</div></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Generates a random value using the thread-local random number generator.</p>
+<p>This is simply a shortcut for <code>thread_rng().gen()</code>. See <a href="fn.thread_rng.html" title="fn rand::thread_rng"><code>thread_rng</code></a> for
+documentation of the entropy source and <a href="distributions/struct.Standard.html" title="struct rand::distributions::Standard"><code>Standard</code></a> for documentation of
+distributions and type-specific generation.</p>
+<h2 id="provided-implementations"><a class="doc-anchor" href="#provided-implementations">§</a>Provided implementations</h2>
+<p>The following types have provided implementations that
+generate values with the following ranges and distributions:</p>
+<ul>
+<li>Integers (<code>i32</code>, <code>u32</code>, <code>isize</code>, <code>usize</code>, etc.): Uniformly distributed
+over all values of the type.</li>
+<li><code>char</code>: Uniformly distributed over all Unicode scalar values, i.e. all
+code points in the range <code>0...0x10_FFFF</code>, except for the range
+<code>0xD800...0xDFFF</code> (the surrogate code points). This includes
+unassigned/reserved code points.</li>
+<li><code>bool</code>: Generates <code>false</code> or <code>true</code>, each with probability 0.5.</li>
+<li>Floating point types (<code>f32</code> and <code>f64</code>): Uniformly distributed in the
+half-open range <code>[0, 1)</code>. See notes below.</li>
+<li>Wrapping integers (<code>Wrapping&lt;T&gt;</code>), besides the type identical to their
+normal integer variants.</li>
+</ul>
+<p>Also supported is the generation of the following
+compound types where all component types are supported:</p>
+<ul>
+<li>Tuples (up to 12 elements): each element is generated sequentially.</li>
+<li>Arrays (up to 32 elements): each element is generated sequentially;
+see also <a href="trait.Rng.html#method.fill" title="method rand::Rng::fill"><code>Rng::fill</code></a> which supports arbitrary array length for integer
+types and tends to be faster for <code>u32</code> and smaller types.</li>
+<li><code>Option&lt;T&gt;</code> first generates a <code>bool</code>, and if true generates and returns
+<code>Some(value)</code> where <code>value: T</code>, otherwise returning <code>None</code>.</li>
+</ul>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>x = rand::random::&lt;u8&gt;();
+<span class="macro">println!</span>(<span class="string">"{}"</span>, x);
+
+<span class="kw">let </span>y = rand::random::&lt;f64&gt;();
+<span class="macro">println!</span>(<span class="string">"{}"</span>, y);
+
+<span class="kw">if </span>rand::random() { <span class="comment">// generates a boolean
+    </span><span class="macro">println!</span>(<span class="string">"Better lucky than good!"</span>);
+}</code></pre></div>
+<p>If you’re calling <code>random()</code> in a loop, caching the generator as in the
+following example can increase performance.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rand::Rng;
+
+<span class="kw">let </span><span class="kw-2">mut </span>v = <span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>];
+
+<span class="kw">for </span>x <span class="kw">in </span>v.iter_mut() {
+    <span class="kw-2">*</span>x = rand::random()
+}
+
+<span class="comment">// can be made faster by caching thread_rng
+
+</span><span class="kw">let </span><span class="kw-2">mut </span>rng = rand::thread_rng();
+
+<span class="kw">for </span>x <span class="kw">in </span>v.iter_mut() {
+    <span class="kw-2">*</span>x = rng.gen();
+}</code></pre></div>
+</div></details></section></div></main></body></html>

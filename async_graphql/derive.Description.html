@@ -1,0 +1,39 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Attach a description to `Object`, `Scalar` or `Subscription`."><title>Description in async_graphql - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="async_graphql" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc derive"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../async_graphql/index.html">async_graphql</a><span class="version">7.0.2</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Derive Macro <a href="index.html">async_graphql</a>::<wbr><a class="derive" href="#">Description</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/async_graphql_derive/lib.rs.html#187">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>#[derive(Description)]
+{
+    <span class="comment">// Attributes available to this derive:</span>
+    #[graphql]
+}
+</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Attach a description to <code>Object</code>, <code>Scalar</code> or <code>Subscription</code>.</p>
+<p>The three types above use the rustdoc on the implementation block as
+the GraphQL type description, but if you want to use the rustdoc on the
+type declaration as the GraphQL type description, you can use that derived macro.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>async_graphql::<span class="kw-2">*</span>;
+
+<span class="doccomment">/// This is MyObj
+</span><span class="attr">#[derive(Description, Default)]
+</span><span class="kw">struct </span>MyObj;
+
+<span class="attr">#[Object(use_type_description)]
+</span><span class="kw">impl </span>MyObj {
+    <span class="kw">async fn </span>value(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; i32 {
+        <span class="number">100
+    </span>}
+}
+
+<span class="attr">#[derive(SimpleObject, Default)]
+</span><span class="kw">struct </span>Query {
+    obj: MyObj,
+}
+
+<span class="kw">let </span>schema = Schema::new(Query::default(), EmptyMutation, EmptySubscription);
+<span class="macro">assert_eq!</span>(
+    schema
+        .execute(<span class="string">r#"{ __type(name: "MyObj") { description } }"#</span>)
+        .<span class="kw">await
+        </span>.data,
+    <span class="macro">value!</span>({
+        <span class="string">"__type"</span>: { <span class="string">"description"</span>: <span class="string">"This is MyObj" </span>}
+    })
+);</code></pre></div>
+</div></details></section></div></main></body></html>

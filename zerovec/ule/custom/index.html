@@ -1,0 +1,126 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Documentation on implementing custom VarULE types."><title>zerovec::ule::custom - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="zerovec" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../zerovec/index.html">zerovec</a><span class="version">0.10.4</span></h2></div><h2 class="location"><a href="#">Module custom</a></h2><div class="sidebar-elems"><h2><a href="../index.html">In zerovec::ule</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../../index.html">zerovec</a>::<wbr><a href="../index.html">ule</a>::<wbr><a class="mod" href="#">custom</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/zerovec/ule/custom.rs.html#5-145">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Documentation on implementing custom VarULE types.</p>
+<p>This module contains documentation for defining custom VarULE types,
+especially those using complex custom dynamically sized types.</p>
+<p>In <em>most cases</em> you should be able to create custom VarULE types using
+<a href="../../attr.make_ule.html" title="attr zerovec::make_ule"><code>#[make_varule]</code></a>.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<p>For example, if your regular stack type is:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>zerofrom::ZeroFrom;
+<span class="kw">use </span>zerovec::ule::<span class="kw-2">*</span>;
+<span class="kw">use </span>zerovec::ZeroVec;
+
+<span class="attr">#[derive(serde::Serialize, serde::Deserialize)]
+</span><span class="kw">struct </span>Foo&lt;<span class="lifetime">'a</span>&gt; {
+    field1: char,
+    field2: u32,
+    <span class="attr">#[serde(borrow)]
+    </span>field3: ZeroVec&lt;<span class="lifetime">'a</span>, u32&gt;,
+}</code></pre></div>
+<p>then the ULE type will be implemented as follows. Ideally, you should have
+<code>EncodeAsVarULE</code> and <code>ZeroFrom</code> implementations on <code>Foo</code> pertaining to <code>FooULE</code>,
+as well as a <code>Serialize</code> impl on <code>FooULE</code> and a <code>Deserialize</code> impl on <code>Box&lt;FooULE&gt;</code>
+to enable human-readable serialization and deserialization.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>zerovec::{ZeroVec, VarZeroVec, ZeroSlice};
+<span class="kw">use </span>zerovec::ule::<span class="kw-2">*</span>;
+<span class="kw">use </span>zerofrom::ZeroFrom;
+<span class="kw">use </span>core::mem;
+
+
+<span class="comment">// Must be repr(C, packed) for safety of VarULE!
+// Must also only contain ULE types
+</span><span class="attr">#[repr(C, packed)]
+</span><span class="kw">struct </span>FooULE {
+    field1: &lt;char <span class="kw">as </span>AsULE&gt;::ULE,   
+    field2: &lt;u32 <span class="kw">as </span>AsULE&gt;::ULE,
+    field3: ZeroSlice&lt;u32&gt;,
+}
+
+<span class="comment">// Safety (based on the safety checklist on the VarULE trait):
+//  1. FooULE does not include any uninitialized or padding bytes. (achieved by `#[repr(C, packed)]` on
+//     a struct with only ULE fields)
+//  2. FooULE is aligned to 1 byte. (achieved by `#[repr(C, packed)]` on
+//     a struct with only ULE fields)
+//  3. The impl of `validate_byte_slice()` returns an error if any byte is not valid.
+//  4. The impl of `validate_byte_slice()` returns an error if the slice cannot be used in its entirety
+//  5. The impl of `from_byte_slice_unchecked()` returns a reference to the same data.
+//  6. The other VarULE methods use the default impl.
+//  7. FooULE byte equality is semantic equality
+</span><span class="kw">unsafe impl </span>VarULE <span class="kw">for </span>FooULE {
+    <span class="kw">fn </span>validate_byte_slice(bytes: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;(), ZeroVecError&gt; {
+        <span class="comment">// validate each field
+        </span>&lt;char <span class="kw">as </span>AsULE&gt;::ULE::validate_byte_slice(<span class="kw-2">&amp;</span>bytes[<span class="number">0</span>..<span class="number">3</span>]).map_err(|<span class="kw">_</span>| ZeroVecError::parse::&lt;<span class="self">Self</span>&gt;())<span class="question-mark">?</span>;
+        &lt;u32 <span class="kw">as </span>AsULE&gt;::ULE::validate_byte_slice(<span class="kw-2">&amp;</span>bytes[<span class="number">3</span>..<span class="number">7</span>]).map_err(|<span class="kw">_</span>| ZeroVecError::parse::&lt;<span class="self">Self</span>&gt;())<span class="question-mark">?</span>;
+        <span class="kw">let _ </span>= ZeroVec::&lt;u32&gt;::parse_byte_slice(<span class="kw-2">&amp;</span>bytes[<span class="number">7</span>..]).map_err(|<span class="kw">_</span>| ZeroVecError::parse::&lt;<span class="self">Self</span>&gt;())<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(())
+    }
+    <span class="kw">unsafe fn </span>from_byte_slice_unchecked(bytes: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="kw-2">&amp;</span><span class="self">Self </span>{
+        <span class="kw">let </span>ptr = bytes.as_ptr();
+        <span class="kw">let </span>len = bytes.len();
+        <span class="comment">// subtract the length of the char and u32 to get the length of the array
+        </span><span class="kw">let </span>len_new = (len - <span class="number">7</span>) / <span class="number">4</span>;
+        <span class="comment">// it's hard constructing custom DSTs, we fake a pointer/length construction
+        // eventually we can use the Pointer::Metadata APIs when they stabilize
+        </span><span class="kw">let </span>fake_slice = core::ptr::slice_from_raw_parts(ptr <span class="kw">as </span><span class="kw-2">*const </span>&lt;u32 <span class="kw">as </span>AsULE&gt;::ULE, len_new);
+        <span class="kw-2">&amp;*</span>(fake_slice <span class="kw">as </span><span class="kw-2">*const </span><span class="self">Self</span>)
+    }
+}
+
+<span class="kw">unsafe impl </span>EncodeAsVarULE&lt;FooULE&gt; <span class="kw">for </span>Foo&lt;<span class="lifetime">'_</span>&gt; {
+   <span class="kw">fn </span>encode_var_ule_as_slices&lt;R&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, cb: <span class="kw">impl </span>FnOnce(<span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span>[u8]]) -&gt; R) -&gt; R {
+       <span class="comment">// take each field, convert to ULE byte slices, and pass them through
+       </span>cb(<span class="kw-2">&amp;</span>[&lt;char <span class="kw">as </span>AsULE&gt;::ULE::as_byte_slice(<span class="kw-2">&amp;</span>[<span class="self">self</span>.field1.to_unaligned()]),
+            &lt;u32 <span class="kw">as </span>AsULE&gt;::ULE::as_byte_slice(<span class="kw-2">&amp;</span>[<span class="self">self</span>.field2.to_unaligned()]),
+            <span class="comment">// the ZeroVec is already in the correct slice format
+            </span><span class="self">self</span>.field3.as_bytes()])
+   }
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; ZeroFrom&lt;<span class="lifetime">'a</span>, FooULE&gt; <span class="kw">for </span>Foo&lt;<span class="lifetime">'a</span>&gt; {
+    <span class="kw">fn </span>zero_from(other: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>FooULE) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{
+            field1: AsULE::from_unaligned(other.field1),
+            field2: AsULE::from_unaligned(other.field2),
+            field3: ZeroFrom::zero_from(<span class="kw-2">&amp;</span>other.field3),
+        }
+    }
+}
+
+
+<span class="kw">impl </span>serde::Serialize <span class="kw">for </span>FooULE
+{
+    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+    <span class="kw">where
+        </span>S: serde::Serializer,
+    {
+        Foo::zero_from(<span class="self">self</span>).serialize(serializer)
+    }
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">'de</span>&gt; serde::Deserialize&lt;<span class="lifetime">'de</span>&gt; <span class="kw">for </span>Box&lt;FooULE&gt;
+{
+    <span class="kw">fn </span>deserialize&lt;D&gt;(deserializer: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, D::Error&gt;
+    <span class="kw">where
+        </span>D: serde::Deserializer&lt;<span class="lifetime">'de</span>&gt;,
+    {
+        <span class="kw">let </span><span class="kw-2">mut </span>foo = Foo::deserialize(deserializer)<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(encode_varule_to_box(<span class="kw-2">&amp;</span>foo))
+    }
+}
+
+<span class="kw">fn </span>main() {
+    <span class="kw">let </span><span class="kw-2">mut </span>foos = [Foo {field1: <span class="string">'u'</span>, field2: <span class="number">983</span>, field3: ZeroVec::alloc_from_slice(<span class="kw-2">&amp;</span>[<span class="number">1212</span>,<span class="number">2309</span>,<span class="number">500</span>,<span class="number">7000</span>])},
+                    Foo {field1: <span class="string">'l'</span>, field2: <span class="number">1010</span>, field3: ZeroVec::alloc_from_slice(<span class="kw-2">&amp;</span>[<span class="number">1932</span>, <span class="number">0</span>, <span class="number">8888</span>, <span class="number">91237</span>])}];
+
+    <span class="kw">let </span>vzv = VarZeroVec::&lt;<span class="kw">_</span>&gt;::from(<span class="kw-2">&amp;</span>foos);
+
+    <span class="macro">assert_eq!</span>(char::from_unaligned(vzv.get(<span class="number">0</span>).unwrap().field1), <span class="string">'u'</span>);
+    <span class="macro">assert_eq!</span>(u32::from_unaligned(vzv.get(<span class="number">0</span>).unwrap().field2), <span class="number">983</span>);
+    <span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span>vzv.get(<span class="number">0</span>).unwrap().field3, <span class="kw-2">&amp;</span>[<span class="number">1212</span>,<span class="number">2309</span>,<span class="number">500</span>,<span class="number">7000</span>][..]);
+
+    <span class="macro">assert_eq!</span>(char::from_unaligned(vzv.get(<span class="number">1</span>).unwrap().field1), <span class="string">'l'</span>);
+    <span class="macro">assert_eq!</span>(u32::from_unaligned(vzv.get(<span class="number">1</span>).unwrap().field2), <span class="number">1010</span>);
+    <span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span>vzv.get(<span class="number">1</span>).unwrap().field3, <span class="kw-2">&amp;</span>[<span class="number">1932</span>, <span class="number">0</span>, <span class="number">8888</span>, <span class="number">91237</span>][..]);
+}</code></pre></div>
+</div></details></section></div></main></body></html>

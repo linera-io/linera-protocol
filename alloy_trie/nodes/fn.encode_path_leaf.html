@@ -1,0 +1,41 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Encodes a given path leaf as a compact array of bytes."><title>encode_path_leaf in alloy_trie::nodes - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="alloy_trie" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="icon" href="https://raw.githubusercontent.com/alloy-rs/core/main/assets/favicon.ico"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../../alloy_trie/index.html"><img src="https://raw.githubusercontent.com/alloy-rs/core/main/assets/alloy.jpg" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../../alloy_trie/index.html"><img src="https://raw.githubusercontent.com/alloy-rs/core/main/assets/alloy.jpg" alt="logo"></a><h2><a href="../../alloy_trie/index.html">alloy_trie</a><span class="version">0.7.8</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In alloy_trie::nodes</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../index.html">alloy_trie</a>::<wbr><a href="index.html">nodes</a>::<wbr><a class="fn" href="#">encode_path_leaf</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/alloy_trie/nodes/mod.rs.html#229-249">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn encode_path_leaf(nibbles: &amp;<a class="struct" href="../../nybbles/nibbles/struct.Nibbles.html" title="struct nybbles::nibbles::Nibbles">Nibbles</a>, is_leaf: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>) -&gt; <a class="struct" href="../../smallvec/struct.SmallVec.html" title="struct smallvec::SmallVec">SmallVec</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.array.html">36</a>]&gt;</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Encodes a given path leaf as a compact array of bytes.</p>
+<p>In resulted array, each byte represents two “nibbles” (half-bytes or 4 bits) of the original hex
+data, along with additional information about the leaf itself.</p>
+<p>The method takes the following input:
+<code>is_leaf</code>: A boolean value indicating whether the current node is a leaf node or not.</p>
+<p>The first byte of the encoded vector is set based on the <code>is_leaf</code> flag and the parity of
+the hex data length (even or odd number of nibbles).</p>
+<ul>
+<li>If the node is an extension with even length, the header byte is <code>0x00</code>.</li>
+<li>If the node is an extension with odd length, the header byte is <code>0x10 + &lt;first nibble&gt;</code>.</li>
+<li>If the node is a leaf with even length, the header byte is <code>0x20</code>.</li>
+<li>If the node is a leaf with odd length, the header byte is <code>0x30 + &lt;first nibble&gt;</code>.</li>
+</ul>
+<p>If there is an odd number of nibbles, store the first nibble in the lower 4 bits of the
+first byte of encoded.</p>
+<h2 id="returns"><a class="doc-anchor" href="#returns">§</a>Returns</h2>
+<p>A vector containing the compact byte representation of the nibble sequence, including the
+header byte.</p>
+<p>This vector’s length is <code>self.len() / 2 + 1</code>. For stack-allocated nibbles, this is at most
+33 bytes, so 36 was chosen as the stack capacity to round up to the next usize-aligned
+size.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>alloy_trie::nodes::encode_path_leaf;
+<span class="kw">use </span>nybbles::Nibbles;
+
+<span class="comment">// Extension node with an even path length:
+</span><span class="kw">let </span>nibbles = Nibbles::from_nibbles(<span class="kw-2">&amp;</span>[<span class="number">0x0A</span>, <span class="number">0x0B</span>, <span class="number">0x0C</span>, <span class="number">0x0D</span>]);
+<span class="macro">assert_eq!</span>(encode_path_leaf(<span class="kw-2">&amp;</span>nibbles, <span class="bool-val">false</span>)[..], [<span class="number">0x00</span>, <span class="number">0xAB</span>, <span class="number">0xCD</span>]);
+
+<span class="comment">// Extension node with an odd path length:
+</span><span class="kw">let </span>nibbles = Nibbles::from_nibbles(<span class="kw-2">&amp;</span>[<span class="number">0x0A</span>, <span class="number">0x0B</span>, <span class="number">0x0C</span>]);
+<span class="macro">assert_eq!</span>(encode_path_leaf(<span class="kw-2">&amp;</span>nibbles, <span class="bool-val">false</span>)[..], [<span class="number">0x1A</span>, <span class="number">0xBC</span>]);
+
+<span class="comment">// Leaf node with an even path length:
+</span><span class="kw">let </span>nibbles = Nibbles::from_nibbles(<span class="kw-2">&amp;</span>[<span class="number">0x0A</span>, <span class="number">0x0B</span>, <span class="number">0x0C</span>, <span class="number">0x0D</span>]);
+<span class="macro">assert_eq!</span>(encode_path_leaf(<span class="kw-2">&amp;</span>nibbles, <span class="bool-val">true</span>)[..], [<span class="number">0x20</span>, <span class="number">0xAB</span>, <span class="number">0xCD</span>]);
+
+<span class="comment">// Leaf node with an odd path length:
+</span><span class="kw">let </span>nibbles = Nibbles::from_nibbles(<span class="kw-2">&amp;</span>[<span class="number">0x0A</span>, <span class="number">0x0B</span>, <span class="number">0x0C</span>]);
+<span class="macro">assert_eq!</span>(encode_path_leaf(<span class="kw-2">&amp;</span>nibbles, <span class="bool-val">true</span>)[..], [<span class="number">0x3A</span>, <span class="number">0xBC</span>]);</code></pre></div>
+</div></details></section></div></main></body></html>

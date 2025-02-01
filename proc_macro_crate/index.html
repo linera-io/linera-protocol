@@ -1,0 +1,69 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="   Build Status"><title>proc_macro_crate - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="proc_macro_crate" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../proc_macro_crate/index.html">proc_macro_crate</a><span class="version">1.3.1</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#enums">Enums</a></li><li><a href="#functions">Functions</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">proc_macro_crate</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/proc_macro_crate/lib.rs.html#1-438">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><a href="https://docs.rs/proc-macro-crate/"><img src="https://docs.rs/proc-macro-crate/badge.svg" alt="" /></a> <a href="https://crates.io/crates/proc-macro-crate"><img src="https://img.shields.io/crates/v/proc-macro-crate.svg" alt="" /></a> <a href="https://crates.io/crates/proc-macro-crate"><img src="https://img.shields.io/crates/d/proc-macro-crate.png" alt="" /></a> <a href="https://travis-ci.org/bkchr/proc-macro-crate"><img src="https://travis-ci.org/bkchr/proc-macro-crate.png?branch=master" alt="Build Status" /></a></p>
+<p>Providing support for <code>$crate</code> in procedural macros.</p>
+<ul>
+<li><a href="#introduction">Introduction</a></li>
+<li><a href="#example">Example</a></li>
+<li><a href="#license">License</a></li>
+</ul>
+<h3 id="introduction"><a class="doc-anchor" href="#introduction">§</a>Introduction</h3>
+<p>In <code>macro_rules!</code> <code>$crate</code> is used to get the path of the crate where a macro is declared in. In
+procedural macros there is currently no easy way to get this path. A common hack is to import the
+desired crate with a know name and use this. However, with rust edition 2018 and dropping
+<code>extern crate</code> declarations from <code>lib.rs</code>, people start to rename crates in <code>Cargo.toml</code> directly.
+However, this breaks importing the crate, as the proc-macro developer does not know the renamed
+name of the crate that should be imported.</p>
+<p>This crate provides a way to get the name of a crate, even if it renamed in <code>Cargo.toml</code>. For this
+purpose a single function <code>crate_name</code> is provided. This function needs to be called in the context
+of a proc-macro with the name of the desired crate. <code>CARGO_MANIFEST_DIR</code> will be used to find the
+current active <code>Cargo.toml</code> and this <code>Cargo.toml</code> is searched for the desired crate.</p>
+<h3 id="example"><a class="doc-anchor" href="#example">§</a>Example</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>quote::quote;
+<span class="kw">use </span>syn::Ident;
+<span class="kw">use </span>proc_macro2::Span;
+<span class="kw">use </span>proc_macro_crate::{crate_name, FoundCrate};
+
+<span class="kw">fn </span>import_my_crate() {
+    <span class="kw">let </span>found_crate = crate_name(<span class="string">"my-crate"</span>).expect(<span class="string">"my-crate is present in `Cargo.toml`"</span>);
+
+    <span class="kw">match </span>found_crate {
+        FoundCrate::Itself =&gt; <span class="macro">quote!</span>( <span class="kw">crate</span>::Something ),
+        FoundCrate::Name(name) =&gt; {
+            <span class="kw">let </span>ident = Ident::new(<span class="kw-2">&amp;</span>name, Span::call_site());
+            <span class="macro">quote!</span>( #ident::Something )
+        }
+    };
+}
+</code></pre></div>
+<h3 id="edge-cases"><a class="doc-anchor" href="#edge-cases">§</a>Edge cases</h3>
+<p>There are multiple edge cases when it comes to determining the correct crate. If you for example
+import a crate as its own dependency, like this:</p>
+<div class="example-wrap"><pre class="language-toml"><code>[package]
+name = &quot;my_crate&quot;
+
+[dev-dependencies]
+my_crate = { version = &quot;0.1&quot;, features = [ &quot;test-feature&quot; ] }
+</code></pre></div>
+<p>The crate will return <code>FoundCrate::Itself</code> and you will not be able to find the other instance
+of your crate in <code>dev-dependencies</code>. Other similar cases are when one crate is imported multiple
+times:</p>
+<div class="example-wrap"><pre class="language-toml"><code>[package]
+name = &quot;my_crate&quot;
+
+[dependencies]
+some-crate = { version = &quot;0.5&quot; }
+some-crate-old = { package = &quot;some-crate&quot;, version = &quot;0.1&quot; }
+</code></pre></div>
+<p>When searching for <code>some-crate</code> in this <code>Cargo.toml</code> it will return <code>FoundCrate::Name("some_old_crate")</code>,
+aka the last definition of the crate in the <code>Cargo.toml</code>.</p>
+<h3 id="license"><a class="doc-anchor" href="#license">§</a>License</h3>
+<p>Licensed under either of</p>
+<ul>
+<li>
+<p><a href="https://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a></p>
+</li>
+<li>
+<p><a href="https://opensource.org/licenses/MIT">MIT license</a></p>
+</li>
+</ul>
+<p>at your option.</p>
+</div></details><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.Error.html" title="enum proc_macro_crate::Error">Error</a></div><div class="desc docblock-short">Error type used by this crate.</div></li><li><div class="item-name"><a class="enum" href="enum.FoundCrate.html" title="enum proc_macro_crate::FoundCrate">FoundCrate</a></div><div class="desc docblock-short">The crate as found by <a href="fn.crate_name.html" title="fn proc_macro_crate::crate_name"><code>crate_name</code></a>.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.crate_name.html" title="fn proc_macro_crate::crate_name">crate_name</a></div><div class="desc docblock-short">Find the crate name for the given <code>orig_name</code> in the current <code>Cargo.toml</code>.</div></li></ul></section></div></main></body></html>

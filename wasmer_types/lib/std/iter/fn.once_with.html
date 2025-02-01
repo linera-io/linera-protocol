@@ -1,0 +1,45 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Creates an iterator that lazily generates a value exactly once by invoking the provided closure."><title>once_with in wasmer_types::lib::std::iter - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="wasmer_types" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../../wasmer_types/index.html">wasmer_types</a><span class="version">4.4.0</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In wasmer_types::lib::std::iter</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../../../index.html">wasmer_types</a>::<wbr><a href="../../index.html">lib</a>::<wbr><a href="../index.html">std</a>::<wbr><a href="index.html">iter</a>::<wbr><a class="fn" href="#">once_with</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><span class="since" title="Stable since Rust version 1.43.0">1.43.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/iter/sources/once_with.rs.html#61">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn once_with&lt;A, F&gt;(gen: F) -&gt; <a class="struct" href="struct.OnceWith.html" title="struct wasmer_types::lib::std::iter::OnceWith">OnceWith</a>&lt;F&gt; <a href="#" class="tooltip" data-notable-ty="OnceWith&lt;F&gt;">ⓘ</a><div class="where">where
+    F: <a class="trait" href="../ops/trait.FnOnce.html" title="trait wasmer_types::lib::std::ops::FnOnce">FnOnce</a>() -&gt; A,</div></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Creates an iterator that lazily generates a value exactly once by invoking
+the provided closure.</p>
+<p>This is commonly used to adapt a single value coroutine into a <a href="trait.Iterator.html#method.chain" title="method wasmer_types::lib::std::iter::Iterator::chain"><code>chain()</code></a> of
+other kinds of iteration. Maybe you have an iterator that covers almost
+everything, but you need an extra special case. Maybe you have a function
+which works on iterators, but you only need to process one value.</p>
+<p>Unlike <a href="fn.once.html" title="fn wasmer_types::lib::std::iter::once"><code>once()</code></a>, this function will lazily generate the value on request.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Basic usage:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::iter;
+
+<span class="comment">// one is the loneliest number
+</span><span class="kw">let </span><span class="kw-2">mut </span>one = iter::once_with(|| <span class="number">1</span>);
+
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="number">1</span>), one.next());
+
+<span class="comment">// just one, that's all we get
+</span><span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, one.next());</code></pre></div>
+<p>Chaining together with another iterator. Let’s say that we want to iterate
+over each file of the <code>.foo</code> directory, but also a configuration file,
+<code>.foorc</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::iter;
+<span class="kw">use </span>std::fs;
+<span class="kw">use </span>std::path::PathBuf;
+
+<span class="kw">let </span>dirs = fs::read_dir(<span class="string">".foo"</span>).unwrap();
+
+<span class="comment">// we need to convert from an iterator of DirEntry-s to an iterator of
+// PathBufs, so we use map
+</span><span class="kw">let </span>dirs = dirs.map(|file| file.unwrap().path());
+
+<span class="comment">// now, our iterator just for our config file
+</span><span class="kw">let </span>config = iter::once_with(|| PathBuf::from(<span class="string">".foorc"</span>));
+
+<span class="comment">// chain the two iterators together into one big iterator
+</span><span class="kw">let </span>files = dirs.chain(config);
+
+<span class="comment">// this will give us all of the files in .foo as well as .foorc
+</span><span class="kw">for </span>f <span class="kw">in </span>files {
+    <span class="macro">println!</span>(<span class="string">"{f:?}"</span>);
+}</code></pre></div>
+</div></details><script type="text/json" id="notable-traits-data">{"OnceWith<F>":"<h3>Notable traits for <code><a class=\"struct\" href=\"struct.OnceWith.html\" title=\"struct wasmer_types::lib::std::iter::OnceWith\">OnceWith</a>&lt;F&gt;</code></h3><pre><code><div class=\"where\">impl&lt;A, F&gt; <a class=\"trait\" href=\"trait.Iterator.html\" title=\"trait wasmer_types::lib::std::iter::Iterator\">Iterator</a> for <a class=\"struct\" href=\"struct.OnceWith.html\" title=\"struct wasmer_types::lib::std::iter::OnceWith\">OnceWith</a>&lt;F&gt;<div class=\"where\">where\n    F: <a class=\"trait\" href=\"../ops/trait.FnOnce.html\" title=\"trait wasmer_types::lib::std::ops::FnOnce\">FnOnce</a>() -&gt; A,</div></div><div class=\"where\">    type <a href=\"trait.Iterator.html#associatedtype.Item\" class=\"associatedtype\">Item</a> = A;</div>"}</script></section></div></main></body></html>

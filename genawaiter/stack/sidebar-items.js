@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"attr":["producer_fn"],"macro":["let_gen","let_gen_using"],"struct":["Gen","Shelf"],"type":["Co"]};

@@ -1,0 +1,253 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A counterpart of `Archive` that’s suitable for unsized types."><title>ArchiveUnsized in rkyv - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="rkyv" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="icon" href="
+    data:image/svg+xml,%3Csvg xmlns=&#x27;http://www.w3.org/2000/svg&#x27;
+    viewBox=&#x27;0 0 26.458 26.458&#x27;%3E%3Cpath d=&#x27;M0 0v26.458h26.458V0zm9.175 3.772l8.107 8.106
+    2.702-2.702 2.702 13.512-13.512-2.702 2.703-2.702-8.107-8.107z&#x27;/%3E%3C/svg%3E
+"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../rkyv/index.html"><img src="
+    data:image/svg+xml,%3Csvg xmlns=&quot;http://www.w3.org/2000/svg&quot; width=&quot;100&quot; height=&quot;100&quot;
+    viewBox=&quot;0 0 26.458 26.458&quot;%3E%3Cpath d=&quot;M0 0v26.458h26.458V0zm9.175 3.772l8.107 8.106
+    2.702-2.702 2.702 13.512-13.512-2.702 2.703-2.702-8.107-8.107z&quot;/%3E%3C/svg%3E
+" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../rkyv/index.html"><img src="
+    data:image/svg+xml,%3Csvg xmlns=&quot;http://www.w3.org/2000/svg&quot; width=&quot;100&quot; height=&quot;100&quot;
+    viewBox=&quot;0 0 26.458 26.458&quot;%3E%3Cpath d=&quot;M0 0v26.458h26.458V0zm9.175 3.772l8.107 8.106
+    2.702-2.702 2.702 13.512-13.512-2.702 2.703-2.702-8.107-8.107z&quot;/%3E%3C/svg%3E
+" alt="logo"></a><h2><a href="../rkyv/index.html">rkyv</a><span class="version">0.7.45</span></h2></div><h2 class="location"><a href="#">ArchiveUnsized</a></h2><div class="sidebar-elems"><section><h3><a href="#required-associated-types">Required Associated Types</a></h3><ul class="block"><li><a href="#associatedtype.Archived">Archived</a></li><li><a href="#associatedtype.MetadataResolver">MetadataResolver</a></li></ul><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.resolve_metadata">resolve_metadata</a></li></ul><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.resolve_unsized">resolve_unsized</a></li></ul><h3><a href="#foreign-impls">Implementations on Foreign Types</a></h3><ul class="block"><li><a href="#impl-ArchiveUnsized-for-CStr">CStr</a></li><li><a href="#impl-ArchiveUnsized-for-%5BT%5D">[T]</a></li><li><a href="#impl-ArchiveUnsized-for-str">str</a></li></ul><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In crate rkyv</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="index.html">rkyv</a>::<wbr><a class="trait" href="#">ArchiveUnsized</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/rkyv/lib.rs.html#622-677">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub trait ArchiveUnsized: <a class="trait" href="../ptr_meta/trait.Pointee.html" title="trait ptr_meta::Pointee">Pointee</a> {
+    type <a href="#associatedtype.Archived" class="associatedtype">Archived</a>: <a class="trait" href="trait.ArchivePointee.html" title="trait rkyv::ArchivePointee">ArchivePointee</a> + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>;
+    type <a href="#associatedtype.MetadataResolver" class="associatedtype">MetadataResolver</a>;
+
+    // Required method
+    unsafe fn <a href="#tymethod.resolve_metadata" class="fn">resolve_metadata</a>(
+        &amp;self,
+        pos: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>,
+        resolver: Self::<a class="associatedtype" href="trait.ArchiveUnsized.html#associatedtype.MetadataResolver" title="type rkyv::ArchiveUnsized::MetadataResolver">MetadataResolver</a>,
+        out: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.pointer.html">*mut </a><a class="type" href="type.ArchivedMetadata.html" title="type rkyv::ArchivedMetadata">ArchivedMetadata</a>&lt;Self&gt;,
+    );
+
+    // Provided method
+    unsafe fn <a href="#method.resolve_unsized" class="fn">resolve_unsized</a>(
+        &amp;self,
+        from: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>,
+        to: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>,
+        resolver: Self::<a class="associatedtype" href="trait.ArchiveUnsized.html#associatedtype.MetadataResolver" title="type rkyv::ArchiveUnsized::MetadataResolver">MetadataResolver</a>,
+        out: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.pointer.html">*mut </a><a class="type" href="type.RelPtr.html" title="type rkyv::RelPtr">RelPtr</a>&lt;Self::<a class="associatedtype" href="trait.ArchiveUnsized.html#associatedtype.Archived" title="type rkyv::ArchiveUnsized::Archived">Archived</a>&gt;,
+    ) { ... }
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A counterpart of <a href="trait.Archive.html" title="trait rkyv::Archive"><code>Archive</code></a> that’s suitable for unsized types.</p>
+<p>Unlike <code>Archive</code>, types that implement <code>ArchiveUnsized</code> must be serialized separately from their
+owning object. For example, whereas an <code>i32</code> might be laid out as part of a larger struct, a
+<code>Box&lt;i32&gt;</code> would serialize the <code>i32</code> somewhere in the archive and the <code>Box</code> would point to it as
+part of the larger struct. Because of this, the equivalent <a href="trait.Archive.html#associatedtype.Resolver" title="associated type rkyv::Archive::Resolver"><code>Resolver</code></a> type
+for <code>ArchiveUnsized</code> is always a <code>usize</code> representing the position of the serialized value.</p>
+<p><code>ArchiveUnsized</code> is automatically implemented for all types that implement <a href="trait.Archive.html" title="trait rkyv::Archive"><code>Archive</code></a>. Nothing
+special needs to be done to use them with types like <code>Box</code>, <code>Rc</code>, and <code>Arc</code>. It is also already
+implemented for slices and string slices, and the <code>rkyv_dyn</code> crate can be used to archive trait
+objects. Other unsized types must manually implement <code>ArchiveUnsized</code>.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>This example shows how to manually implement <code>ArchiveUnsized</code> for an unsized type. Special care
+must be taken to ensure that the types are laid out correctly.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>core::{mem::transmute, ops::{Deref, DerefMut}};
+<span class="kw">use </span>ptr_meta::Pointee;
+<span class="kw">use </span>rkyv::{
+    from_archived,
+    to_archived,
+    archived_unsized_value,
+    ser::{serializers::AlignedSerializer, Serializer},
+    AlignedVec,
+    Archive,
+    Archived,
+    ArchivedMetadata,
+    ArchivePointee,
+    ArchiveUnsized,
+    FixedUsize,
+    RelPtr,
+    Serialize,
+    SerializeUnsized,
+};
+
+<span class="comment">// We're going to be dealing mostly with blocks that have a trailing slice
+</span><span class="kw">pub struct </span>Block&lt;H, T: <span class="question-mark">?</span>Sized&gt; {
+    head: H,
+    tail: T,
+}
+
+<span class="kw">impl</span>&lt;H, T&gt; Pointee <span class="kw">for </span>Block&lt;H, [T]&gt; {
+    <span class="kw">type </span>Metadata = usize;
+}
+
+<span class="comment">// For blocks with trailing slices, we need to store the length of the slice
+// in the metadata.
+</span><span class="kw">pub struct </span>BlockSliceMetadata {
+    len: Archived&lt;usize&gt;,
+}
+
+<span class="comment">// ArchivePointee is automatically derived for sized types because pointers
+// to sized types don't need to store any extra information. Because we're
+// making an unsized block, we need to define what metadata gets stored with
+// our data pointer.
+</span><span class="kw">impl</span>&lt;H, T&gt; ArchivePointee <span class="kw">for </span>Block&lt;H, [T]&gt; {
+    <span class="comment">// This is the extra data that needs to get stored for blocks with
+    // trailing slices
+    </span><span class="kw">type </span>ArchivedMetadata = BlockSliceMetadata;
+
+    <span class="comment">// We need to be able to turn our archived metadata into regular
+    // metadata for our type
+    </span><span class="kw">fn </span>pointer_metadata(
+        archived: <span class="kw-2">&amp;</span><span class="self">Self</span>::ArchivedMetadata
+    ) -&gt; &lt;<span class="self">Self </span><span class="kw">as </span>Pointee&gt;::Metadata {
+        <span class="macro">from_archived!</span>(archived.len) <span class="kw">as </span>usize
+    }
+}
+
+<span class="comment">// We're implementing ArchiveUnsized for just Block&lt;H, [T]&gt;. We can still
+// implement Archive for blocks with sized tails and they won't conflict.
+</span><span class="kw">impl</span>&lt;H: Archive, T: Archive&gt; ArchiveUnsized <span class="kw">for </span>Block&lt;H, [T]&gt; {
+    <span class="comment">// We'll reuse our block type as our archived type.
+    </span><span class="kw">type </span>Archived = Block&lt;Archived&lt;H&gt;, [Archived&lt;T&gt;]&gt;;
+
+    <span class="comment">// This is where we'd put any resolve data for our metadata.
+    // Most of the time, this can just be () because most metadata is Copy,
+    // but the option is there if you need it.
+    </span><span class="kw">type </span>MetadataResolver = ();
+
+    <span class="comment">// Here's where we make the metadata for our pointer.
+    // This also gets the position and resolver for the metadata, but we
+    // don't need it in this case.
+    </span><span class="kw">unsafe fn </span>resolve_metadata(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        <span class="kw">_</span>: usize,
+        <span class="kw">_</span>: <span class="self">Self</span>::MetadataResolver,
+        out: <span class="kw-2">*mut </span>ArchivedMetadata&lt;<span class="self">Self</span>&gt;,
+    ) {
+        <span class="kw">unsafe </span>{
+            out.write(BlockSliceMetadata {
+                len: <span class="macro">to_archived!</span>(<span class="self">self</span>.tail.len() <span class="kw">as </span>FixedUsize),
+            });
+        }
+    }
+}
+
+<span class="comment">// The bounds we use on our serializer type indicate that we need basic
+// serializer capabilities, and then whatever capabilities our head and tail
+// types need to serialize themselves.
+</span><span class="kw">impl</span>&lt;
+    H: Serialize&lt;S&gt;,
+    T: Serialize&lt;S&gt;,
+    S: Serializer + <span class="question-mark">?</span>Sized
+&gt; SerializeUnsized&lt;S&gt; <span class="kw">for </span>Block&lt;H, [T]&gt; {
+    <span class="comment">// This is where we construct our unsized type in the serializer
+    </span><span class="kw">fn </span>serialize_unsized(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        serializer: <span class="kw-2">&amp;mut </span>S
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;usize, S::Error&gt; {
+        <span class="comment">// First, we archive the head and all the tails. This will make sure
+        // that when we finally build our block, we don't accidentally mess
+        // up the structure with serialized dependencies.
+        </span><span class="kw">let </span>head_resolver = <span class="self">self</span>.head.serialize(serializer)<span class="question-mark">?</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>resolvers = Vec::new();
+        <span class="kw">for </span>tail <span class="kw">in </span><span class="self">self</span>.tail.iter() {
+            resolvers.push(tail.serialize(serializer)<span class="question-mark">?</span>);
+        }
+        <span class="comment">// Now we align our serializer for our archived type and write it.
+        // We can't align for unsized types so we treat the trailing slice
+        // like an array of 0 length for now.
+        </span>serializer.align_for::&lt;Block&lt;Archived&lt;H&gt;, [Archived&lt;T&gt;; <span class="number">0</span>]&gt;&gt;()<span class="question-mark">?</span>;
+        <span class="kw">let </span>result = <span class="kw">unsafe </span>{
+            serializer.resolve_aligned(<span class="kw-2">&amp;</span><span class="self">self</span>.head, head_resolver)<span class="question-mark">?
+        </span>};
+        serializer.align_for::&lt;Archived&lt;T&gt;&gt;()<span class="question-mark">?</span>;
+        <span class="kw">for </span>(item, resolver) <span class="kw">in </span><span class="self">self</span>.tail.iter().zip(resolvers.drain(..)) {
+            <span class="kw">unsafe </span>{
+                serializer.resolve_aligned(item, resolver)<span class="question-mark">?</span>;
+            }
+        }
+        <span class="prelude-val">Ok</span>(result)
+    }
+
+    <span class="comment">// This is where we serialize the metadata for our type. In this case,
+    // we do all the work in resolve and don't need to do anything here.
+    </span><span class="kw">fn </span>serialize_metadata(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        serializer: <span class="kw-2">&amp;mut </span>S
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>::MetadataResolver, S::Error&gt; {
+        <span class="prelude-val">Ok</span>(())
+    }
+}
+
+<span class="kw">let </span>value = Block {
+    head: <span class="string">"Numbers 1-4"</span>.to_string(),
+    tail: [<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>],
+};
+<span class="comment">// We have a Block&lt;String, [i32; 4]&gt; but we want to it to be a
+// Block&lt;String, [i32]&gt;, so we need to do more pointer transmutation
+</span><span class="kw">let </span>ptr = (<span class="kw-2">&amp;</span>value <span class="kw">as </span><span class="kw-2">*const </span>Block&lt;String, [i32; <span class="number">4</span>]&gt;).cast::&lt;()&gt;();
+<span class="kw">let </span>unsized_value = <span class="kw">unsafe </span>{
+    <span class="kw-2">&amp;*</span>transmute::&lt;(<span class="kw-2">*const </span>(), usize), <span class="kw-2">*const </span>Block&lt;String, [i32]&gt;&gt;((ptr, <span class="number">4</span>))
+};
+
+<span class="kw">let </span><span class="kw-2">mut </span>serializer = AlignedSerializer::new(AlignedVec::new());
+<span class="kw">let </span>pos = serializer.serialize_unsized_value(unsized_value)
+    .expect(<span class="string">"failed to archive block"</span>);
+<span class="kw">let </span>buf = serializer.into_inner();
+
+<span class="kw">let </span>archived_ref = <span class="kw">unsafe </span>{
+    archived_unsized_value::&lt;Block&lt;String, [i32]&gt;&gt;(buf.as_slice(), pos)
+};
+<span class="macro">assert_eq!</span>(archived_ref.head, <span class="string">"Numbers 1-4"</span>);
+<span class="macro">assert_eq!</span>(archived_ref.tail.len(), <span class="number">4</span>);
+<span class="macro">assert_eq!</span>(archived_ref.tail, [<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>]);</code></pre></div>
+</div></details><h2 id="required-associated-types" class="section-header">Required Associated Types<a href="#required-associated-types" class="anchor">§</a></h2><div class="methods"><details class="toggle" open><summary><section id="associatedtype.Archived" class="method"><a class="src rightside" href="../src/rkyv/lib.rs.html#627">source</a><h4 class="code-header">type <a href="#associatedtype.Archived" class="associatedtype">Archived</a>: <a class="trait" href="trait.ArchivePointee.html" title="trait rkyv::ArchivePointee">ArchivePointee</a> + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></h4></section></summary><div class="docblock"><p>The archived counterpart of this type. Unlike <code>Archive</code>, it may be unsized.</p>
+<p>This type must implement <a href="trait.ArchivePointee.html" title="trait rkyv::ArchivePointee"><code>ArchivePointee</code></a>, a trait that helps make valid pointers using
+archived pointer metadata.</p>
+</div></details><details class="toggle" open><summary><section id="associatedtype.MetadataResolver" class="method"><a class="src rightside" href="../src/rkyv/lib.rs.html#633">source</a><h4 class="code-header">type <a href="#associatedtype.MetadataResolver" class="associatedtype">MetadataResolver</a></h4></section></summary><div class="docblock"><p>The resolver for the metadata of this type.</p>
+<p>Because the pointer metadata must be archived with the relative pointer and not with the
+structure itself, its resolver must be passed back to the structure holding the pointer.</p>
+</div></details></div><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.resolve_metadata" class="method"><a class="src rightside" href="../src/rkyv/lib.rs.html#647-652">source</a><h4 class="code-header">unsafe fn <a href="#tymethod.resolve_metadata" class="fn">resolve_metadata</a>(
+    &amp;self,
+    pos: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>,
+    resolver: Self::<a class="associatedtype" href="trait.ArchiveUnsized.html#associatedtype.MetadataResolver" title="type rkyv::ArchiveUnsized::MetadataResolver">MetadataResolver</a>,
+    out: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.pointer.html">*mut </a><a class="type" href="type.ArchivedMetadata.html" title="type rkyv::ArchivedMetadata">ArchivedMetadata</a>&lt;Self&gt;,
+)</h4></section></summary><div class="docblock"><p>Creates the archived version of the metadata for this value at the given position and writes
+it to the given output.</p>
+<p>The output should be initialized field-by-field rather than by writing a whole struct.
+Performing a typed copy will mark all of the padding bytes as uninitialized, but they must
+remain set to the value they currently have. This prevents leaking uninitialized memory to
+the final archive.</p>
+<h5 id="safety"><a class="doc-anchor" href="#safety">§</a>Safety</h5>
+<ul>
+<li><code>pos</code> must be the position of <code>out</code> within the archive</li>
+<li><code>resolver</code> must be the result of serializing this object’s metadata</li>
+</ul>
+</div></details></div><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.resolve_unsized" class="method"><a class="src rightside" href="../src/rkyv/lib.rs.html#668-676">source</a><h4 class="code-header">unsafe fn <a href="#method.resolve_unsized" class="fn">resolve_unsized</a>(
+    &amp;self,
+    from: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>,
+    to: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>,
+    resolver: Self::<a class="associatedtype" href="trait.ArchiveUnsized.html#associatedtype.MetadataResolver" title="type rkyv::ArchiveUnsized::MetadataResolver">MetadataResolver</a>,
+    out: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.pointer.html">*mut </a><a class="type" href="type.RelPtr.html" title="type rkyv::RelPtr">RelPtr</a>&lt;Self::<a class="associatedtype" href="trait.ArchiveUnsized.html#associatedtype.Archived" title="type rkyv::ArchiveUnsized::Archived">Archived</a>&gt;,
+)</h4></section></summary><div class="docblock"><p>Resolves a relative pointer to this value with the given <code>from</code> and <code>to</code> and writes it to
+the given output.</p>
+<p>The output should be initialized field-by-field rather than by writing a whole struct.
+Performing a typed copy will mark all of the padding bytes as uninitialized, but they must
+remain set to the value they currently have. This prevents leaking uninitialized memory to
+the final archive.</p>
+<h5 id="safety-1"><a class="doc-anchor" href="#safety-1">§</a>Safety</h5>
+<ul>
+<li><code>from</code> must be the position of <code>out</code> within the archive</li>
+<li><code>to</code> must be the position of some <code>Self::Archived</code> within the archive</li>
+<li><code>resolver</code> must be the result of serializing this object</li>
+</ul>
+</div></details></div><h2 id="foreign-impls" class="section-header">Implementations on Foreign Types<a href="#foreign-impls" class="anchor">§</a></h2><details class="toggle implementors-toggle"><summary><section id="impl-ArchiveUnsized-for-str" class="impl"><a class="src rightside" href="../src/rkyv/impls/core/mod.rs.html#314-328">source</a><a href="#impl-ArchiveUnsized-for-str" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.ArchiveUnsized.html" title="trait rkyv::ArchiveUnsized">ArchiveUnsized</a> for <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a></h3></section></summary><div class="docblock"><p><code>str</code></p>
+</div><div class="impl-items"><section id="associatedtype.Archived-1" class="associatedtype trait-impl"><a href="#associatedtype.Archived-1" class="anchor">§</a><h4 class="code-header">type <a href="#associatedtype.Archived" class="associatedtype">Archived</a> = <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a></h4></section><section id="associatedtype.MetadataResolver-1" class="associatedtype trait-impl"><a href="#associatedtype.MetadataResolver-1" class="anchor">§</a><h4 class="code-header">type <a href="#associatedtype.MetadataResolver" class="associatedtype">MetadataResolver</a> = <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a></h4></section><section id="method.resolve_metadata" class="method trait-impl"><a class="src rightside" href="../src/rkyv/impls/core/mod.rs.html#320-327">source</a><a href="#method.resolve_metadata" class="anchor">§</a><h4 class="code-header">unsafe fn <a href="#tymethod.resolve_metadata" class="fn">resolve_metadata</a>(
+    &amp;self,
+    _: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>,
+    _: Self::<a class="associatedtype" href="trait.ArchiveUnsized.html#associatedtype.MetadataResolver" title="type rkyv::ArchiveUnsized::MetadataResolver">MetadataResolver</a>,
+    out: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.pointer.html">*mut </a><a class="type" href="type.ArchivedMetadata.html" title="type rkyv::ArchivedMetadata">ArchivedMetadata</a>&lt;Self&gt;,
+)</h4></section></div></details><details class="toggle implementors-toggle"><summary><section id="impl-ArchiveUnsized-for-CStr" class="impl"><a class="src rightside" href="../src/rkyv/impls/std/ffi.rs.html#14-28">source</a><a href="#impl-ArchiveUnsized-for-CStr" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.ArchiveUnsized.html" title="trait rkyv::ArchiveUnsized">ArchiveUnsized</a> for <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/ffi/c_str/struct.CStr.html" title="struct core::ffi::c_str::CStr">CStr</a></h3></section></summary><div class="impl-items"><section id="associatedtype.Archived-2" class="associatedtype trait-impl"><a href="#associatedtype.Archived-2" class="anchor">§</a><h4 class="code-header">type <a href="#associatedtype.Archived" class="associatedtype">Archived</a> = <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/ffi/c_str/struct.CStr.html" title="struct core::ffi::c_str::CStr">CStr</a></h4></section><section id="associatedtype.MetadataResolver-2" class="associatedtype trait-impl"><a href="#associatedtype.MetadataResolver-2" class="anchor">§</a><h4 class="code-header">type <a href="#associatedtype.MetadataResolver" class="associatedtype">MetadataResolver</a> = <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a></h4></section><section id="method.resolve_metadata-1" class="method trait-impl"><a class="src rightside" href="../src/rkyv/impls/std/ffi.rs.html#20-27">source</a><a href="#method.resolve_metadata-1" class="anchor">§</a><h4 class="code-header">unsafe fn <a href="#tymethod.resolve_metadata" class="fn">resolve_metadata</a>(
+    &amp;self,
+    _: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>,
+    _: Self::<a class="associatedtype" href="trait.ArchiveUnsized.html#associatedtype.MetadataResolver" title="type rkyv::ArchiveUnsized::MetadataResolver">MetadataResolver</a>,
+    out: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.pointer.html">*mut </a><a class="type" href="type.ArchivedMetadata.html" title="type rkyv::ArchivedMetadata">ArchivedMetadata</a>&lt;Self&gt;,
+)</h4></section></div></details><details class="toggle implementors-toggle"><summary><section id="impl-ArchiveUnsized-for-%5BT%5D" class="impl"><a class="src rightside" href="../src/rkyv/impls/core/mod.rs.html#178-192">source</a><a href="#impl-ArchiveUnsized-for-%5BT%5D" class="anchor">§</a><h3 class="code-header">impl&lt;T: <a class="trait" href="trait.Archive.html" title="trait rkyv::Archive">Archive</a>&gt; <a class="trait" href="trait.ArchiveUnsized.html" title="trait rkyv::ArchiveUnsized">ArchiveUnsized</a> for <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.slice.html">[T]</a></h3></section></summary><div class="impl-items"><section id="associatedtype.Archived-3" class="associatedtype trait-impl"><a href="#associatedtype.Archived-3" class="anchor">§</a><h4 class="code-header">type <a href="#associatedtype.Archived" class="associatedtype">Archived</a> = [&lt;T as <a class="trait" href="trait.Archive.html" title="trait rkyv::Archive">Archive</a>&gt;::<a class="associatedtype" href="trait.Archive.html#associatedtype.Archived" title="type rkyv::Archive::Archived">Archived</a>]</h4></section><section id="associatedtype.MetadataResolver-3" class="associatedtype trait-impl"><a href="#associatedtype.MetadataResolver-3" class="anchor">§</a><h4 class="code-header">type <a href="#associatedtype.MetadataResolver" class="associatedtype">MetadataResolver</a> = <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a></h4></section><section id="method.resolve_metadata-2" class="method trait-impl"><a class="src rightside" href="../src/rkyv/impls/core/mod.rs.html#184-191">source</a><a href="#method.resolve_metadata-2" class="anchor">§</a><h4 class="code-header">unsafe fn <a href="#tymethod.resolve_metadata" class="fn">resolve_metadata</a>(
+    &amp;self,
+    _: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>,
+    _: Self::<a class="associatedtype" href="trait.ArchiveUnsized.html#associatedtype.MetadataResolver" title="type rkyv::ArchiveUnsized::MetadataResolver">MetadataResolver</a>,
+    out: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.pointer.html">*mut </a><a class="type" href="type.ArchivedMetadata.html" title="type rkyv::ArchivedMetadata">ArchivedMetadata</a>&lt;Self&gt;,
+)</h4></section></div></details><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><details class="toggle implementors-toggle"><summary><section id="impl-ArchiveUnsized-for-T" class="impl"><a class="src rightside" href="../src/rkyv/impls/core/mod.rs.html#24-37">source</a><a href="#impl-ArchiveUnsized-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T: <a class="trait" href="trait.Archive.html" title="trait rkyv::Archive">Archive</a>&gt; <a class="trait" href="trait.ArchiveUnsized.html" title="trait rkyv::ArchiveUnsized">ArchiveUnsized</a> for T</h3></section></summary><div class="impl-items"><section id="associatedtype.Archived-4" class="associatedtype trait-impl"><a href="#associatedtype.Archived-4" class="anchor">§</a><h4 class="code-header">type <a href="#associatedtype.Archived" class="associatedtype">Archived</a> = &lt;T as <a class="trait" href="trait.Archive.html" title="trait rkyv::Archive">Archive</a>&gt;::<a class="associatedtype" href="trait.Archive.html#associatedtype.Archived" title="type rkyv::Archive::Archived">Archived</a></h4></section><section id="associatedtype.MetadataResolver-4" class="associatedtype trait-impl"><a href="#associatedtype.MetadataResolver-4" class="anchor">§</a><h4 class="code-header">type <a href="#associatedtype.MetadataResolver" class="associatedtype">MetadataResolver</a> = <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a></h4></section></div></details></div><script src="../trait.impl/rkyv/trait.ArchiveUnsized.js" data-ignore-extern-crates="std,core" async></script></section></div></main></body></html>

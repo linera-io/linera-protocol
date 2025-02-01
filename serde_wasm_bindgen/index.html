@@ -1,0 +1,118 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Crates.io docs.rs GitHub Sponsors"><title>serde_wasm_bindgen - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="serde_wasm_bindgen" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../serde_wasm_bindgen/index.html">serde_wasm_bindgen</a><span class="version">0.6.5</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#functions">Functions</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">serde_wasm_bindgen</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/serde_wasm_bindgen/lib.rs.html#1-187">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><a href="https://crates.io/crates/serde-wasm-bindgen"><img src="https://img.shields.io/crates/d/serde-wasm-bindgen?logo=rust" alt="Crates.io" /></a>
+<a href="https://docs.rs/serde-wasm-bindgen/"><img src="https://img.shields.io/docsrs/serde-wasm-bindgen" alt="docs.rs" /></a>
+<a href="https://github.com/sponsors/RReverser"><img src="https://img.shields.io/github/sponsors/rreverser" alt="GitHub Sponsors" /></a></p>
+<p>This is a native integration of <a href="https://serde.rs/">Serde</a> with <a href="https://github.com/rustwasm/wasm-bindgen">wasm-bindgen</a>. It allows to convert Rust data types into native JavaScript types and vice versa.</p>
+<p>Initially this library was created while working for <a href="https://github.com/cloudflare">@Cloudflare</a> as <a href="https://github.com/rustwasm/wasm-bindgen/issues/1258">an alternative implementation</a> to the JSON-based Serde support built into the <code>wasm-bindgen</code> but, <a href="https://github.com/rustwasm/wasm-bindgen/pull/3031">nowadays</a> <code>serde-wasm-bindgen</code> is the officially preferred approach. It provides much smaller code size overhead than JSON, and, in most common cases, provides much faster serialization/deserialization as well.</p>
+<h3 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h3>
+<p>Copied almost verbatim from the <a href="https://rustwasm.github.io/wasm-bindgen/reference/arbitrary-data-with-serde.html#serializing-and-deserializing-arbitrary-data-into-and-from-jsvalue-with-serde"><code>wasm-bindgen</code> guide</a>:</p>
+<h4 id="add-dependencies"><a class="doc-anchor" href="#add-dependencies">§</a>Add dependencies</h4>
+<p>To use <code>serde-wasm-bindgen</code>, you first have to add it as a dependency in your
+<code>Cargo.toml</code>. You also need the <code>serde</code> crate, with the <code>derive</code> feature
+enabled, to allow your types to be serialized and deserialized with Serde.</p>
+<div class="example-wrap"><pre class="language-toml"><code>[dependencies]
+serde = { version = &quot;1.0&quot;, features = [&quot;derive&quot;] }
+serde-wasm-bindgen = &quot;0.4&quot;
+</code></pre></div><h4 id="derive-the-serialize-and-deserialize-traits"><a class="doc-anchor" href="#derive-the-serialize-and-deserialize-traits">§</a>Derive the <code>Serialize</code> and <code>Deserialize</code> Traits</h4>
+<p>Add <code>#[derive(Serialize, Deserialize)]</code> to your type. All of your type
+members must also be supported by Serde, i.e. their types must also implement
+the <code>Serialize</code> and <code>Deserialize</code> traits.</p>
+<p>Note that you don’t need to use the <code>#[wasm_bindgen]</code> macro.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>serde::{Serialize, Deserialize};
+
+<span class="attr">#[derive(Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>Example {
+    <span class="kw">pub </span>field1: HashMap&lt;u32, String&gt;,
+    <span class="kw">pub </span>field2: Vec&lt;Vec&lt;f32&gt;&gt;,
+    <span class="kw">pub </span>field3: [f32; <span class="number">4</span>],
+}</code></pre></div>
+<h4 id="send-it-to-javascript-with-serde_wasm_bindgento_value"><a class="doc-anchor" href="#send-it-to-javascript-with-serde_wasm_bindgento_value">§</a>Send it to JavaScript with <code>serde_wasm_bindgen::to_value</code></h4>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[wasm_bindgen]
+</span><span class="kw">pub fn </span>send_example_to_js() -&gt; <span class="prelude-ty">Result</span>&lt;JsValue, JsValue&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>field1 = HashMap::new();
+    field1.insert(<span class="number">0</span>, String::from(<span class="string">"ex"</span>));
+
+    <span class="kw">let </span>example = Example {
+        field1,
+        field2: <span class="macro">vec!</span>[<span class="macro">vec!</span>[<span class="number">1.</span>, <span class="number">2.</span>], <span class="macro">vec!</span>[<span class="number">3.</span>, <span class="number">4.</span>]],
+        field3: [<span class="number">1.</span>, <span class="number">2.</span>, <span class="number">3.</span>, <span class="number">4.</span>]
+    };
+
+    <span class="prelude-val">Ok</span>(serde_wasm_bindgen::to_value(<span class="kw-2">&amp;</span>example)<span class="question-mark">?</span>)
+}</code></pre></div>
+<h4 id="receive-it-from-javascript-with-serde_wasm_bindgenfrom_value"><a class="doc-anchor" href="#receive-it-from-javascript-with-serde_wasm_bindgenfrom_value">§</a>Receive it from JavaScript with <code>serde_wasm_bindgen::from_value</code></h4>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[wasm_bindgen]
+</span><span class="kw">pub fn </span>receive_example_from_js(val: JsValue) -&gt; <span class="prelude-ty">Result</span>&lt;(), JsValue&gt; {
+    <span class="kw">let </span>example: Example = serde_wasm_bindgen::from_value(val)<span class="question-mark">?</span>;
+    <span class="comment">/* …do something with `example`… */
+    </span><span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<h4 id="javascript-usage"><a class="doc-anchor" href="#javascript-usage">§</a>JavaScript Usage</h4>
+<p>In the <code>JsValue</code> that JavaScript gets, <code>field1</code> will be a <code>Map&lt;number, string&gt;</code>,
+<code>field2</code> will be an <code>Array&lt;Array&lt;number&gt;&gt;</code>, and <code>field3</code> will be an <code>Array&lt;number&gt;</code>.</p>
+<div class="example-wrap"><pre class="language-js"><code>import { send_example_to_js, receive_example_from_js } from &quot;example&quot;;
+
+// Get the example object from wasm.
+let example = send_example_to_js();
+
+// Add another &quot;Vec&quot; element to the end of the &quot;Vec&lt;Vec&lt;f32&gt;&gt;&quot;
+example.field2.push([5, 6]);
+
+// Send the example object back to wasm.
+receive_example_from_js(example);
+</code></pre></div><h3 id="supported-types"><a class="doc-anchor" href="#supported-types">§</a>Supported Types</h3>
+<p>Note that, even though it might often be the case, by default this library doesn’t attempt
+to be strictly compatible with JSON, instead prioritising better
+compatibility with common JavaScript idioms and representations.</p>
+<p>If you need JSON compatibility (e.g. you want to serialize <code>HashMap&lt;String, …&gt;</code>
+as plain objects instead of JavaScript <code>Map</code> instances), use the
+<a href="https://docs.rs/serde-wasm-bindgen/latest/serde_wasm_bindgen/struct.Serializer.html#method.json_compatible"><code>Serializer::json_compatible()</code></a> preset.</p>
+<p>By default, Rust ⬄ JavaScript conversions in <code>serde-wasm-bindgen</code> follow this table:</p>
+<div><table><thead><tr><th>Rust</th><th>JavaScript</th><th>Also supported in <code>from_value</code></th></tr></thead><tbody>
+<tr><td><code>()</code> and <code>Option&lt;T&gt;::None</code></td><td><code>undefined</code></td><td><code>null</code></td></tr>
+<tr><td><code>bool</code></td><td><code>boolean</code></td><td></td></tr>
+<tr><td><code>f32</code>, <code>f64</code></td><td><code>number</code></td><td></td></tr>
+<tr><td><code>u8</code>, <code>i8</code>, …, <code>u32</code>, <code>i32</code></td><td><code>number</code> in the <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number/isSafeInteger">safe integer</a> range</td><td></td></tr>
+<tr><td><code>u64</code>, <code>i64</code>, <code>usize</code>, <code>isize</code></td><td><code>number</code> in the <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number/isSafeInteger">safe integer</a> range</td><td><code>bigint</code></td></tr>
+<tr><td><code>u128</code>, <code>i128</code></td><td><code>bigint</code></td><td></td></tr>
+<tr><td><code>String</code></td><td><code>string</code></td><td></td></tr>
+<tr><td><code>char</code></td><td>single-codepoint <code>string</code></td><td></td></tr>
+<tr><td><code>Enum::Variant { … }</code></td><td><a href="https://serde.rs/enum-representations.html">as configured in Serde</a></td><td></td></tr>
+<tr><td><code>HashMap&lt;K, V&gt;</code>, <code>BTreeMap</code>, etc.</td><td><code>Map&lt;K, V&gt;</code></td><td>any iterable over <code>[K, V]</code></td></tr>
+<tr><td><code>Struct { key1: value1, … }</code></td><td><code>{ key1: value1, … }</code> object</td><td></td></tr>
+<tr><td>tuple, <code>Vec&lt;T&gt;</code>, <code>HashSet</code>, etc.</td><td><code>T[]</code> array</td><td>any iterable over <code>T</code></td></tr>
+<tr><td><a href="https://github.com/serde-rs/bytes"><code>serde_bytes</code></a> byte buffer</td><td><code>Uint8Array</code></td><td><code>ArrayBuffer</code>, <code>Array</code></td></tr>
+</tbody></table>
+</div>
+<p>The first two columns show idiomatic representations on Rust and JavaScript sides, while the 3rd column shows which JavaScript values
+are additionally supported when deserializing from JavaScript to the Rust type.</p>
+<h4 id="serializer-configuration-options"><a class="doc-anchor" href="#serializer-configuration-options">§</a>Serializer configuration options</h4>
+<p>You can customize serialization from Rust to JavaScript by setting the following options on the <a href="https://docs.rs/serde-wasm-bindgen/latest/serde_wasm_bindgen/struct.Serializer.html"><code>Serializer::new()</code></a> instance (all default to false):</p>
+<ul>
+<li><code>.serialize_missing_as_null(true)</code>: Serialize <code>()</code>, unit structs and <code>Option::None</code> to <code>null</code> instead of <code>undefined</code>.</li>
+<li><code>.serialize_maps_as_objects(true)</code>: Serialize maps into plain JavaScript objects instead of ES2015 Maps.</li>
+<li><code>.serialize_large_number_types_as_bigints(true)</code>: Serialize <code>u64</code>, <code>i64</code>, <code>usize</code> and <code>isize</code> to <code>bigint</code>s instead of attempting to fit them into the <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number/isSafeInteger">safe integer</a> <code>number</code> or failing.</li>
+<li><code>.serialize_bytes_as_arrays(true)</code>: Serialize bytes into plain JavaScript arrays instead of ES2015 Uint8Arrays.</li>
+</ul>
+<p>You can also use the <code>Serializer::json_compatible()</code> preset to create a JSON compatible serializer. It enables <code>serialize_missing_as_null</code>, <code>serialize_maps_as_objects</code>, and <code>serialize_bytes_as_arrays</code> under the hood.</p>
+<h4 id="preserving-javascript-values"><a class="doc-anchor" href="#preserving-javascript-values">§</a>Preserving JavaScript values</h4>
+<p>Sometimes you want to preserve original JavaScript value instead of converting it into a Rust type. This is particularly useful for types that can’t be converted without losing the data, such as <a href="https://docs.rs/js-sys/latest/js_sys/struct.Date.html"><code>Date</code></a>, <a href="https://docs.rs/js-sys/latest/js_sys/struct.RegExp.html"><code>RegExp</code></a> or 3rd-party types.</p>
+<p><code>serde_wasm_bindgen::preserve</code> allows you to do just that:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>Example {
+    <span class="kw">pub </span>regular_field: i32,
+
+    <span class="attr">#[serde(with = <span class="string">"serde_wasm_bindgen::preserve"</span>)]
+    </span><span class="kw">pub </span>preserved_date: js_sys::Date,
+
+    <span class="attr">#[serde(with = <span class="string">"serde_wasm_bindgen::preserve"</span>)]
+    </span><span class="kw">pub </span>preserved_arbitrary_value: JsValue,
+}</code></pre></div>
+<h3 id="typescript-support"><a class="doc-anchor" href="#typescript-support">§</a>TypeScript support</h3>
+<p>There’s no built-in type generation in this crate, but you can <a href="https://github.com/madonoharu/tsify">tsify</a> with the <code>js</code> feature which integrates with <code>serde-wasm-bindgen</code> under the hood. Aside from generating structural typings, it also allows to derive <code>IntoWasmAbi</code> / <code>FromWasmAbi</code> so that you don’t have to write <code>from_value</code> / <code>to_value</code> by hand.</p>
+<h3 id="license"><a class="doc-anchor" href="#license">§</a>License</h3>
+<p>Licensed under the MIT license. See the
+<a href="https://github.com/RReverser/serde-wasm-bindgen/blob/master/LICENSE">LICENSE</a>
+file for details.</p>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="preserve/index.html" title="mod serde_wasm_bindgen::preserve">preserve</a></div><div class="desc docblock-short">Serialization and deserialization functions that pass JavaScript objects through unchanged.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Deserializer.html" title="struct serde_wasm_bindgen::Deserializer">Deserializer</a></div><div class="desc docblock-short">A newtype that allows using any <a href="../wasm_bindgen/struct.JsValue.html" title="struct wasm_bindgen::JsValue"><code>JsValue</code></a> as a <a href="../serde/de/trait.Deserializer.html" title="trait serde::de::Deserializer"><code>de::Deserializer</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.Error.html" title="struct serde_wasm_bindgen::Error">Error</a></div><div class="desc docblock-short">A newtype that represents Serde errors as JavaScript exceptions.</div></li><li><div class="item-name"><a class="struct" href="struct.Serializer.html" title="struct serde_wasm_bindgen::Serializer">Serializer</a></div><div class="desc docblock-short">A <a href="../serde/ser/trait.Serializer.html" title="trait serde::ser::Serializer"><code>serde::Serializer</code></a> that converts supported Rust values into a <a href="../wasm_bindgen/struct.JsValue.html" title="struct wasm_bindgen::JsValue"><code>JsValue</code></a>.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.from_value.html" title="fn serde_wasm_bindgen::from_value">from_value</a></div><div class="desc docblock-short">Converts <a href="../wasm_bindgen/struct.JsValue.html" title="struct wasm_bindgen::JsValue"><code>JsValue</code></a> into a Rust type.</div></li><li><div class="item-name"><a class="fn" href="fn.to_value.html" title="fn serde_wasm_bindgen::to_value">to_value</a></div><div class="desc docblock-short">Converts a Rust value into a <a href="../wasm_bindgen/struct.JsValue.html" title="struct wasm_bindgen::JsValue"><code>JsValue</code></a>.</div></li></ul></section></div></main></body></html>

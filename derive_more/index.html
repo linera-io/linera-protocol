@@ -1,0 +1,176 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="`derive_more`"><title>derive_more - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="derive_more" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../derive_more/index.html">derive_more</a><span class="version">1.0.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#derives">Derive Macros</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">derive_more</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/derive_more/lib.rs.html#3-450">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="derive_more"><a class="doc-anchor" href="#derive_more">§</a><code>derive_more</code></h2>
+<p><a href="https://github.com/JelteF/derive_more/actions"><img src="https://github.com/JelteF/derive_more/workflows/CI/badge.svg" alt="Build Status" /></a>
+<a href="https://crates.io/crates/derive_more"><img src="https://img.shields.io/crates/v/derive_more.svg" alt="Latest Version" /></a>
+<a href="https://docs.rs/derive_more"><img src="https://docs.rs/derive_more/badge.svg" alt="Rust Documentation" /></a>
+<a href="https://raw.githubusercontent.com/JelteF/derive_more/master/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="GitHub license" /></a>
+<a href="https://blog.rust-lang.org/2023/12/28/Rust-1.75.0.html"><img src="https://img.shields.io/badge/rustc-1.75+-lightgray.svg" alt="Rust 1.75+" /></a>
+<a href="https://github.com/rust-secure-code/safety-dance"><img src="https://img.shields.io/badge/unsafe-forbidden-success.svg" alt="Unsafe Forbidden" /></a></p>
+<p>Rust has lots of builtin traits that are implemented for its basic types, such
+as <code>Add</code>, <code>Not</code>, <code>From</code> or <code>Display</code>.
+However, when wrapping these types inside your own structs or enums you lose the
+implementations of these traits and are required to recreate them.
+This is especially annoying when your own structures are very simple, such as
+when using the commonly advised newtype pattern (e.g. <code>MyInt(i32)</code>).</p>
+<p>This library tries to remove these annoyances and the corresponding boilerplate code.
+It does this by allowing you to derive lots of commonly used traits for both structs and enums.</p>
+<h3 id="example-code"><a class="doc-anchor" href="#example-code">§</a>Example code</h3>
+<p>By using this library the following code just works:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>derive_more::{Add, Display, From, Into};
+
+<span class="attr">#[derive(PartialEq, From, Add)]
+</span><span class="kw">struct </span>MyInt(i32);
+
+<span class="attr">#[derive(PartialEq, From, Into)]
+</span><span class="kw">struct </span>Point2D {
+    x: i32,
+    y: i32,
+}
+
+<span class="attr">#[derive(PartialEq, From, Add, Display)]
+</span><span class="kw">enum </span>MyEnum {
+    <span class="attr">#[display(<span class="string">"int: {_0}"</span>)]
+    </span>Int(i32),
+    Uint(u32),
+    <span class="attr">#[display(<span class="string">"nothing"</span>)]
+    </span>Nothing,
+}
+
+<span class="macro">assert!</span>(MyInt(<span class="number">11</span>) == MyInt(<span class="number">5</span>) + <span class="number">6</span>.into());
+<span class="macro">assert!</span>((<span class="number">5</span>, <span class="number">6</span>) == Point2D { x: <span class="number">5</span>, y: <span class="number">6 </span>}.into());
+<span class="macro">assert!</span>(MyEnum::Int(<span class="number">15</span>) == (MyEnum::Int(<span class="number">8</span>) + <span class="number">7</span>.into()).unwrap());
+<span class="macro">assert!</span>(MyEnum::Int(<span class="number">15</span>).to_string() == <span class="string">"int: 15"</span>);
+<span class="macro">assert!</span>(MyEnum::Uint(<span class="number">42</span>).to_string() == <span class="string">"42"</span>);
+<span class="macro">assert!</span>(MyEnum::Nothing.to_string() == <span class="string">"nothing"</span>);</code></pre></div>
+<h3 id="the-derivable-traits"><a class="doc-anchor" href="#the-derivable-traits">§</a>The derivable traits</h3>
+<p>Below are all the traits that you can derive using this library.
+Some trait derivations are so similar that the further documentation will only show a single one
+of them.
+You can recognize these by the “-like” suffix in their name.
+The trait name before that will be the only one that is used throughout the further
+documentation.</p>
+<p>It is important to understand what code gets generated when using one of the
+derives from this crate.
+That is why the links below explain what code gets generated for a trait for
+each group from before.</p>
+<p>You can use the <a href="https://github.com/dtolnay/cargo-expand"><code>cargo-expand</code></a> utility to see the exact code that is generated
+for your specific type.
+This will show you your code with all macros and derives expanded.</p>
+<p><strong>NOTE</strong>: You still have to derive each trait separately. So <code>#[derive(Mul)]</code> doesn’t
+automatically derive <code>Div</code> as well. To derive both you should do <code>#[derive(Mul, Div)]</code></p>
+<h4 id="conversion-traits"><a class="doc-anchor" href="#conversion-traits">§</a>Conversion traits</h4>
+<p>These are traits that are used to convert automatically between types.</p>
+<ol>
+<li><a href="derive.From.html" title="derive derive_more::From"><code>From</code></a></li>
+<li><a href="derive.Into.html" title="derive derive_more::Into"><code>Into</code></a></li>
+<li><a href="derive.FromStr.html" title="derive derive_more::FromStr"><code>FromStr</code></a></li>
+<li><a href="macro@crate::TryFrom"><code>TryFrom</code></a></li>
+<li><a href="macro@crate::TryInto"><code>TryInto</code></a></li>
+<li><a href="derive.IntoIterator.html" title="derive derive_more::IntoIterator"><code>IntoIterator</code></a></li>
+<li><a href="derive.AsRef.html" title="derive derive_more::AsRef"><code>AsRef</code></a>, <a href="https://docs.rs/derive_more/latest/derive_more/derive.AsMut.html"><code>AsMut</code></a></li>
+</ol>
+<h4 id="formatting-traits"><a class="doc-anchor" href="#formatting-traits">§</a>Formatting traits</h4>
+<p>These traits are used for converting a struct to a string in different ways.</p>
+<ol>
+<li><a href="macro@crate::Debug"><code>Debug</code></a></li>
+<li><a href="derive.Display.html" title="derive derive_more::Display"><code>Display</code>-like</a>, contains <code>Display</code>, <code>Binary</code>, <code>Octal</code>, <code>LowerHex</code>,
+<code>UpperHex</code>, <code>LowerExp</code>, <code>UpperExp</code>, <code>Pointer</code></li>
+</ol>
+<h4 id="error-handling-traits"><a class="doc-anchor" href="#error-handling-traits">§</a>Error-handling traits</h4>
+<p>These traits are used to define error-types.</p>
+<ol>
+<li><a href="macro@crate::Error"><code>Error</code></a></li>
+</ol>
+<h4 id="operators"><a class="doc-anchor" href="#operators">§</a>Operators</h4>
+<p>These are traits that can be used for operator overloading.</p>
+<ol>
+<li><a href="derive.Index.html" title="derive derive_more::Index"><code>Index</code></a></li>
+<li><a href="derive.Deref.html" title="derive derive_more::Deref"><code>Deref</code></a></li>
+<li><a href="derive.Not.html" title="derive derive_more::Not"><code>Not</code>-like</a>, contains <code>Not</code> and <code>Neg</code></li>
+<li><a href="derive.Add.html" title="derive derive_more::Add"><code>Add</code>-like</a>, contains <code>Add</code>, <code>Sub</code>, <code>BitAnd</code>, <code>BitOr</code>, <code>BitXor</code></li>
+<li><a href="macro@crate::Mul"><code>Mul</code>-like</a>, contains <code>Mul</code>, <code>Div</code>, <code>Rem</code>, <code>Shr</code> and <code>Shl</code></li>
+<li><a href="macro@crate::Sum"><code>Sum</code>-like</a>, contains <code>Sum</code> and <code>Product</code></li>
+<li><a href="derive.IndexMut.html" title="derive derive_more::IndexMut"><code>IndexMut</code></a></li>
+<li><a href="derive.DerefMut.html" title="derive derive_more::DerefMut"><code>DerefMut</code></a></li>
+<li><a href="derive.AddAssign.html" title="derive derive_more::AddAssign"><code>AddAssign</code>-like</a>, contains <code>AddAssign</code>, <code>SubAssign</code>, <code>BitAndAssign</code>,
+<code>BitOrAssign</code> and <code>BitXorAssign</code></li>
+<li><a href="macro@crate::MulAssign"><code>MulAssign</code>-like</a>, contains <code>MulAssign</code>, <code>DivAssign</code>, <code>RemAssign</code>,
+<code>ShrAssign</code> and <code>ShlAssign</code></li>
+</ol>
+<h4 id="static-methods"><a class="doc-anchor" href="#static-methods">§</a>Static methods</h4>
+<p>These don’t derive traits, but derive static methods instead.</p>
+<ol>
+<li><a href="macro@crate::Constructor"><code>Constructor</code></a>, this derives a <code>new</code> method that can be used as a constructor.
+This is very basic if you need more customization for your constructor, check
+out the <a href="https://github.com/nrc/derive-new"><code>derive-new</code></a> crate.</li>
+<li><a href="macro@crate::IsVariant"><code>IsVariant</code></a>, for each variant <code>foo</code> of an enum type, derives a <code>is_foo</code> method.</li>
+<li><a href="macro@crate::Unwrap"><code>Unwrap</code></a>, for each variant <code>foo</code> of an enum type, derives an <code>unwrap_foo</code> method.</li>
+<li><a href="macro@crate::TryUnwrap"><code>TryUnwrap</code></a>, for each variant <code>foo</code> of an enum type, derives an <code>try_unwrap_foo</code> method.</li>
+</ol>
+<h4 id="re-exports"><a class="doc-anchor" href="#re-exports">§</a>Re-exports</h4>
+<p>This crate also re-exports all the standard library traits that it adds derives
+for. So, both the <code>Display</code> derive and the <code>Display</code> trait will be in scope when
+you add the following code:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>derive_more::Display; <span class="comment">// also imports `core::fmt::Display`</span></code></pre></div>
+<p>For derive macros only, without the corresponding traits, do import them from
+the <code>derive</code> module:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>derive_more::derive::Display; <span class="comment">// imports macro only</span></code></pre></div>
+<h5 id="hygiene"><a class="doc-anchor" href="#hygiene">§</a>Hygiene</h5>
+<p>For hygiene purposes, macros use <code>derive_more::*</code> absolute paths in their expansions.
+This might introduce a trouble, if you want to re-export <code>derive_more</code> macros in your
+own crate without using the <code>derive_more</code> as a direct dependency in downstream crates:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>my_lib::Display; <span class="comment">// re-exported in `my_lib` crate
+
+</span><span class="attr">#[derive(Display)] </span><span class="comment">// error: could not find `derive_more` in the list of imported crates
+</span><span class="kw">struct </span>MyInt(i32);</code></pre></div>
+<p>In such case, you should re-export the <code>derive_more</code> module too:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>my_lib::{derive_more, Display}; <span class="comment">// re-exported in `my_lib` crate
+
+</span><span class="attr">#[derive(Display)] </span><span class="comment">// works fine now!
+</span><span class="kw">struct </span>MyInt(i32);</code></pre></div>
+<h3 id="installation"><a class="doc-anchor" href="#installation">§</a>Installation</h3>
+<p>To avoid redundant compilation times, by default no derives are supported.
+You have to enable each type of derive as a feature in <code>Cargo.toml</code>:</p>
+<div class="example-wrap"><pre class="language-toml"><code>[dependencies]
+# You can specify the types of derives that you need for less time spent
+# compiling. For the full list of features see this crate its `Cargo.toml`.
+derive_more = { version = &quot;1&quot;, features = [&quot;from&quot;, &quot;add&quot;, &quot;iterator&quot;] }
+</code></pre></div><div class="example-wrap"><pre class="language-toml"><code>[dependencies]
+# If you don&#39;t care much about compilation times and simply want to have
+# support for all the possible derives, you can use the &quot;full&quot; feature.
+derive_more = { version = &quot;1&quot;, features = [&quot;full&quot;] }
+</code></pre></div><div class="example-wrap"><pre class="language-toml"><code>[dependencies]
+# If you run in a `no_std` environment you should disable the default features,
+# because the only default feature is the &quot;std&quot; feature.
+# NOTE: You can combine this with &quot;full&quot; feature to get support for all the
+#       possible derives in a `no_std` environment.
+derive_more = { version = &quot;1&quot;, default-features = false }
+</code></pre></div>
+<p>And this to the top of your Rust file:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// use the derives that you want in the file
+</span><span class="kw">use </span>derive_more::{Add, Display, From};</code></pre></div>
+<p>If you’re still using Rust 2015, add this instead:</p>
+
+<div class="example-wrap edition"><a href="#" class="tooltip" title="This example runs with edition 2015">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">extern crate </span>core;
+<span class="attr">#[macro_use]
+</span><span class="kw">extern crate </span>derive_more;</code></pre></div>
+<h3 id="msrv-policy"><a class="doc-anchor" href="#msrv-policy">§</a><a href="https://doc.rust-lang.org/cargo/reference/manifest.html#the-rust-version-field">MSRV</a> policy</h3>
+<p>This library requires Rust 1.75 or higher.</p>
+<p>Changing <a href="https://doc.rust-lang.org/cargo/reference/manifest.html#the-rust-version-field">MSRV</a> (minimum supported Rust version) of this crate is treated as a <strong>minor version change</strong> in terms of <a href="http://semver.org">Semantic Versioning</a>.</p>
+<ul>
+<li>So, if <a href="https://doc.rust-lang.org/cargo/reference/manifest.html#the-rust-version-field">MSRV</a> changes are <strong>NOT concerning</strong> for your project, just use the default <a href="https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#caret-requirements">caret requirement</a>:<div class="example-wrap"><pre class="language-toml"><code>[dependencies]
+derive_more = &quot;1&quot; # or &quot;1.0&quot;, or &quot;^1.0&quot;
+</code></pre></div></li>
+<li>However, if <a href="https://doc.rust-lang.org/cargo/reference/manifest.html#the-rust-version-field">MSRV</a> changes are concerning for your project, then use the <a href="https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#tilde-requirements">tilde requirement</a> to <strong>pin to a specific minor version</strong>:<div class="example-wrap"><pre class="language-toml"><code>[dependencies]
+derive_more = &quot;~1.0&quot; # or &quot;~1.0.0&quot;
+</code></pre></div></li>
+</ul>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="derive/index.html" title="mod derive_more::derive">derive</a></div><div class="desc docblock-short">Module containing macro definitions only, without corresponding traits.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.FromStrError.html" title="struct derive_more::FromStrError">FromStrError</a></div><div class="desc docblock-short">Error of parsing an enum value its string representation.</div></li><li><div class="item-name"><a class="struct" href="struct.UnitError.html" title="struct derive_more::UnitError">UnitError</a></div><div class="desc docblock-short">Error returned by the derived implementations when an arithmetic or logic
+operation is invoked on a unit-like variant of an enum.</div></li><li><div class="item-name"><a class="struct" href="struct.WrongVariantError.html" title="struct derive_more::WrongVariantError">WrongVariantError</a></div><div class="desc docblock-short">Error returned by the derived implementations when an arithmetic or logic
+operation is invoked on mismatched enum variants.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.BinaryError.html" title="enum derive_more::BinaryError">BinaryError</a></div><div class="desc docblock-short">Possible errors returned by the derived implementations of binary
+arithmetic or logic operations.</div></li></ul><h2 id="derives" class="section-header">Derive Macros<a href="#derives" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="derive" href="derive.Add.html" title="derive derive_more::Add">Add</a></div><div class="desc docblock-short">What <code>#[derive(Add)]</code> generates</div></li><li><div class="item-name"><a class="derive" href="derive.AddAssign.html" title="derive derive_more::AddAssign">AddAssign</a></div><div class="desc docblock-short">What <code>#[derive(AddAssign)]</code> generates</div></li><li><div class="item-name"><a class="derive" href="derive.AsMut.html" title="derive derive_more::AsMut">AsMut</a></div><div class="desc docblock-short">What <code>#[derive(AsRef)]</code> generates</div></li><li><div class="item-name"><a class="derive" href="derive.AsRef.html" title="derive derive_more::AsRef">AsRef</a></div><div class="desc docblock-short">What <code>#[derive(AsRef)]</code> generates</div></li><li><div class="item-name"><a class="derive" href="derive.Binary.html" title="derive derive_more::Binary">Binary</a></div><div class="desc docblock-short">What <code>#[derive(Display)]</code> generates</div></li><li><div class="item-name"><a class="derive" href="derive.BitAnd.html" title="derive derive_more::BitAnd">BitAnd</a></div><div class="desc docblock-short">What <code>#[derive(Add)]</code> generates</div></li><li><div class="item-name"><a class="derive" href="derive.BitAndAssign.html" title="derive derive_more::BitAndAssign">BitAndAssign</a></div><div class="desc docblock-short">What <code>#[derive(AddAssign)]</code> generates</div></li><li><div class="item-name"><a class="derive" href="derive.BitOr.html" title="derive derive_more::BitOr">BitOr</a></div><div class="desc docblock-short">What <code>#[derive(Add)]</code> generates</div></li><li><div class="item-name"><a class="derive" href="derive.BitOrAssign.html" title="derive derive_more::BitOrAssign">BitOrAssign</a></div><div class="desc docblock-short">What <code>#[derive(AddAssign)]</code> generates</div></li><li><div class="item-name"><a class="derive" href="derive.BitXor.html" title="derive derive_more::BitXor">BitXor</a></div><div class="desc docblock-short">What <code>#[derive(Add)]</code> generates</div></li><li><div class="item-name"><a class="derive" href="derive.BitXorAssign.html" title="derive derive_more::BitXorAssign">BitXorAssign</a></div><div class="desc docblock-short">What <code>#[derive(AddAssign)]</code> generates</div></li><li><div class="item-name"><a class="derive" href="derive.Deref.html" title="derive derive_more::Deref">Deref</a></div><div class="desc docblock-short">Using <code>#[derive(Deref)]</code></div></li><li><div class="item-name"><a class="derive" href="derive.DerefMut.html" title="derive derive_more::DerefMut">DerefMut</a></div><div class="desc docblock-short">What <code>#[derive(DerefMut)]</code> generates</div></li><li><div class="item-name"><a class="derive" href="derive.Display.html" title="derive derive_more::Display">Display</a></div><div class="desc docblock-short">What <code>#[derive(Display)]</code> generates</div></li><li><div class="item-name"><a class="derive" href="derive.From.html" title="derive derive_more::From">From</a></div><div class="desc docblock-short">What <code>#[derive(From)]</code> generates</div></li><li><div class="item-name"><a class="derive" href="derive.FromStr.html" title="derive derive_more::FromStr">FromStr</a></div><div class="desc docblock-short">What <code>#[derive(FromStr)]</code> generates</div></li><li><div class="item-name"><a class="derive" href="derive.Index.html" title="derive derive_more::Index">Index</a></div><div class="desc docblock-short">What <code>#[derive(Index)]</code> generates</div></li><li><div class="item-name"><a class="derive" href="derive.IndexMut.html" title="derive derive_more::IndexMut">IndexMut</a></div><div class="desc docblock-short">What <code>#[derive(IndexMut)]</code> generates</div></li><li><div class="item-name"><a class="derive" href="derive.Into.html" title="derive derive_more::Into">Into</a></div><div class="desc docblock-short">What <code>#[derive(Into)]</code> generates</div></li><li><div class="item-name"><a class="derive" href="derive.IntoIterator.html" title="derive derive_more::IntoIterator">IntoIterator</a></div><div class="desc docblock-short">Using <code>#[derive(IntoIterator)]</code></div></li><li><div class="item-name"><a class="derive" href="derive.LowerExp.html" title="derive derive_more::LowerExp">LowerExp</a></div><div class="desc docblock-short">What <code>#[derive(Display)]</code> generates</div></li><li><div class="item-name"><a class="derive" href="derive.LowerHex.html" title="derive derive_more::LowerHex">LowerHex</a></div><div class="desc docblock-short">What <code>#[derive(Display)]</code> generates</div></li><li><div class="item-name"><a class="derive" href="derive.Neg.html" title="derive derive_more::Neg">Neg</a></div><div class="desc docblock-short">What <code>#[derive(Not)]</code> generates</div></li><li><div class="item-name"><a class="derive" href="derive.Not.html" title="derive derive_more::Not">Not</a></div><div class="desc docblock-short">What <code>#[derive(Not)]</code> generates</div></li><li><div class="item-name"><a class="derive" href="derive.Octal.html" title="derive derive_more::Octal">Octal</a></div><div class="desc docblock-short">What <code>#[derive(Display)]</code> generates</div></li><li><div class="item-name"><a class="derive" href="derive.Pointer.html" title="derive derive_more::Pointer">Pointer</a></div><div class="desc docblock-short">What <code>#[derive(Display)]</code> generates</div></li><li><div class="item-name"><a class="derive" href="derive.Sub.html" title="derive derive_more::Sub">Sub</a></div><div class="desc docblock-short">What <code>#[derive(Add)]</code> generates</div></li><li><div class="item-name"><a class="derive" href="derive.SubAssign.html" title="derive derive_more::SubAssign">SubAssign</a></div><div class="desc docblock-short">What <code>#[derive(AddAssign)]</code> generates</div></li><li><div class="item-name"><a class="derive" href="derive.UpperExp.html" title="derive derive_more::UpperExp">UpperExp</a></div><div class="desc docblock-short">What <code>#[derive(Display)]</code> generates</div></li><li><div class="item-name"><a class="derive" href="derive.UpperHex.html" title="derive derive_more::UpperHex">UpperHex</a></div><div class="desc docblock-short">What <code>#[derive(Display)]</code> generates</div></li></ul></section></div></main></body></html>

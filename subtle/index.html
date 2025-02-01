@@ -1,0 +1,54 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="subtle   "><title>subtle - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="subtle" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../subtle/index.html"><img src="https://doc.dalek.rs/assets/dalek-logo-clear.png" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../subtle/index.html"><img src="https://doc.dalek.rs/assets/dalek-logo-clear.png" alt="logo"></a><h2><a href="../subtle/index.html">subtle</a><span class="version">2.6.1</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#traits">Traits</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">subtle</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/subtle/lib.rs.html#11-1008">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="subtle---"><a class="doc-anchor" href="#subtle---">§</a>subtle <a href="https://crates.io/crates/subtle"><img src="https://img.shields.io/crates/v/subtle.svg" alt="" /></a> <a href="https://doc.dalek.rs/subtle"><img src="https://img.shields.io/badge/dynamic/json.svg?label=docs&amp;uri=https%3A%2F%2Fcrates.io%2Fapi%2Fv1%2Fcrates%2Fsubtle%2Fversions&amp;query=%24.versions%5B0%5D.num&amp;colorB=4F74A6" alt="" /></a> <a href="https://travis-ci.org/dalek-cryptography/subtle"><img src="https://travis-ci.org/dalek-cryptography/subtle.svg?branch=master" alt="" /></a></h2>
+<p><strong>Pure-Rust traits and utilities for constant-time cryptographic implementations.</strong></p>
+<p>It consists of a <code>Choice</code> type, and a collection of traits using <code>Choice</code>
+instead of <code>bool</code> which are intended to execute in constant-time.  The <code>Choice</code>
+type is a wrapper around a <code>u8</code> that holds a <code>0</code> or <code>1</code>.</p>
+<div class="example-wrap"><pre class="language-toml"><code>subtle = &quot;2.6&quot;
+</code></pre></div>
+<p>This crate represents a “best-effort” attempt, since side-channels
+are ultimately a property of a deployed cryptographic system
+including the hardware it runs on, not just of software.</p>
+<p>The traits are implemented using bitwise operations, and should execute in
+constant time provided that a) the bitwise operations are constant-time and
+b) the bitwise operations are not recognized as a conditional assignment and
+optimized back into a branch.</p>
+<p>For a compiler to recognize that bitwise operations represent a conditional
+assignment, it needs to know that the value used to generate the bitmasks is
+really a boolean <code>i1</code> rather than an <code>i8</code> byte value. In an attempt to
+prevent this refinement, the crate tries to hide the value of a <code>Choice</code>’s
+inner <code>u8</code> by passing it through a volatile read. For more information, see
+the <em>About</em> section below.</p>
+<p>Rust versions from 1.51 or higher have const generics support. You may enable
+<code>const-generics</code> feautre to have <code>subtle</code> traits implemented for arrays <code>[T; N]</code>.</p>
+<p>Versions prior to <code>2.2</code> recommended use of the <code>nightly</code> feature to enable an
+optimization barrier; this is not required in versions <code>2.2</code> and above.</p>
+<p>Note: the <code>subtle</code> crate contains <code>debug_assert</code>s to check invariants during
+debug builds. These invariant checks involve secret-dependent branches, and
+are not present when compiled in release mode. This crate is intended to be
+used in release mode.</p>
+<h3 id="documentation"><a class="doc-anchor" href="#documentation">§</a>Documentation</h3>
+<p>Documentation is available <a href="https://docs.rs/subtle">here</a>.</p>
+<h3 id="minimum-supported-rust-version"><a class="doc-anchor" href="#minimum-supported-rust-version">§</a>Minimum Supported Rust Version</h3>
+<p>Rust <strong>1.41</strong> or higher.</p>
+<p>Minimum supported Rust version can be changed in the future, but it will be done with a minor version bump.</p>
+<h3 id="about"><a class="doc-anchor" href="#about">§</a>About</h3>
+<p>This library aims to be the Rust equivalent of Go’s <code>crypto/subtle</code> module.</p>
+<p>Old versions of the optimization barrier in <code>impl From&lt;u8&gt; for Choice</code> were
+based on Tim Maclean’s <a href="https://www.chosenplaintext.ca/open-source/rust-timing-shield/security">work on <code>rust-timing-shield</code></a>,
+which attempts to provide a more comprehensive approach for preventing
+software side-channels in Rust code.
+From version <code>2.2</code>, it was based on Diane Hosfelt and Amber Sprenkels’ work on
+“Secret Types in Rust”.</p>
+<p><code>subtle</code> is authored by isis agora lovecruft and Henry de Valence.</p>
+<h3 id="warning"><a class="doc-anchor" href="#warning">§</a>Warning</h3>
+<p>This code is a low-level library, intended for specific use-cases implementing
+cryptographic protocols.  It represents a best-effort attempt to protect
+against some software side-channels.  Because side-channel resistance is not a
+property of software alone, but of software together with hardware, any such
+effort is fundamentally limited.</p>
+<p><strong>USE AT YOUR OWN RISK</strong></p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.BlackBox.html" title="struct subtle::BlackBox">BlackBox</a></div><div class="desc docblock-short">Wrapper type which implements an optimization barrier for all accesses.</div></li><li><div class="item-name"><a class="struct" href="struct.Choice.html" title="struct subtle::Choice">Choice</a></div><div class="desc docblock-short">The <code>Choice</code> struct represents a choice for use in conditional assignment.</div></li><li><div class="item-name"><a class="struct" href="struct.CtOption.html" title="struct subtle::CtOption">CtOption</a></div><div class="desc docblock-short">The <code>CtOption&lt;T&gt;</code> type represents an optional value similar to the
+<a href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option"><code>Option&lt;T&gt;</code></a> type but is intended for
+use in constant time APIs.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.ConditionallyNegatable.html" title="trait subtle::ConditionallyNegatable">ConditionallyNegatable</a></div><div class="desc docblock-short">A type which can be conditionally negated in constant time.</div></li><li><div class="item-name"><a class="trait" href="trait.ConditionallySelectable.html" title="trait subtle::ConditionallySelectable">ConditionallySelectable</a></div><div class="desc docblock-short">A type which can be conditionally selected in constant time.</div></li><li><div class="item-name"><a class="trait" href="trait.ConstantTimeEq.html" title="trait subtle::ConstantTimeEq">ConstantTimeEq</a></div><div class="desc docblock-short">An <code>Eq</code>-like trait that produces a <code>Choice</code> instead of a <code>bool</code>.</div></li><li><div class="item-name"><a class="trait" href="trait.ConstantTimeGreater.html" title="trait subtle::ConstantTimeGreater">ConstantTimeGreater</a></div><div class="desc docblock-short">A type which can be compared in some manner and be determined to be greater
+than another of the same type.</div></li><li><div class="item-name"><a class="trait" href="trait.ConstantTimeLess.html" title="trait subtle::ConstantTimeLess">ConstantTimeLess</a></div><div class="desc docblock-short">A type which can be compared in some manner and be determined to be less
+than another of the same type.</div></li></ul></section></div></main></body></html>

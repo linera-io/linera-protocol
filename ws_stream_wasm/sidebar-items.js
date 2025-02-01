@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["WsErr","WsEvent","WsMessage","WsState"],"struct":["CloseEvent","WsMeta","WsStream","WsStreamIo"]};

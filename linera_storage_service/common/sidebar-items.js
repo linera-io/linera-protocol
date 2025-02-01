@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["MAX_PAYLOAD_SIZE"],"enum":["KeyTag","ServiceStoreError"],"fn":["get_service_storage_binary","storage_service_test_endpoint"],"struct":["ServiceStoreInternalConfig"],"type":["ServiceStoreConfig"]};

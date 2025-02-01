@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["AggregationRule","ClusterRole","ClusterRoleBinding","PolicyRule","Role","RoleBinding","RoleRef","Subject"]};
