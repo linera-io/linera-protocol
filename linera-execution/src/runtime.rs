@@ -17,8 +17,8 @@ use linera_base::{
     },
     ensure,
     identifiers::{
-        Account, AccountOwner, ApplicationId, BlobId, BlobType, ChainId, ChannelName, MessageId,
-        Owner, StreamName,
+        Account, AccountOwner, ApplicationId, BlobId, BlobType, ChainId,
+        ChannelName, MessageId, Metadata, Mint, Owner, StreamName
     },
     ownership::ChainOwnership,
 };
@@ -619,6 +619,14 @@ impl<UserInstance> BaseRuntime for SyncRuntimeHandle<UserInstance> {
         self.inner().chain_ownership()
     }
 
+    fn nft_get_owner(&mut self, mint: Mint) -> Result<Option<Account>, ExecutionError> {
+        self.inner().nft_get_owner(mint)
+    }
+
+    fn nft_get_metadata(&mut self, mint: Mint) -> Result<Option<Metadata>, ExecutionError> {
+        self.inner().nft_get_metadata(mint)
+    }
+
     fn contains_key_new(&mut self, key: Vec<u8>) -> Result<Self::ContainsKey, ExecutionError> {
         self.inner().contains_key_new(key)
     }
@@ -789,6 +797,18 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
     fn chain_ownership(&mut self) -> Result<ChainOwnership, ExecutionError> {
         self.execution_state_sender
             .send_request(|callback| ExecutionRequest::ChainOwnership { callback })?
+            .recv_response()
+    }
+
+    fn nft_get_owner(&mut self, mint: Mint) -> Result<Option<Account>, ExecutionError> {
+        self.execution_state_sender
+            .send_request(|callback| ExecutionRequest::AssetOwner { mint, callback })?
+            .recv_response()
+    }
+
+    fn nft_get_metadata(&mut self, mint: Mint) -> Result<Option<Metadata>, ExecutionError> {
+        self.execution_state_sender
+            .send_request(|callback| ExecutionRequest::AssetMetadata { mint, callback })?
             .recv_response()
     }
 
@@ -1350,6 +1370,54 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         this.transaction_tracker
             .add_system_outcome(execution_outcome)?;
         Ok(())
+    }
+
+    fn nft_mint(&mut self, metadata: Metadata, recipient: Account) -> Result<bool, ExecutionError> {
+        let this = self.inner();
+
+        let mint_outcome = this.
+            execution_state_sender
+            .send_request(|callback| ExecutionRequest::MintAsset {
+                metadata,
+                recipient,
+                callback,
+            })?
+            .recv_response()?;
+
+        Ok(mint_outcome)
+    }
+
+    fn nft_transfer(&mut self, mint: Mint, recipient: Account) -> Result<bool, ExecutionError> {
+        let this = self.inner();
+        let chain_id = this.chain_id;
+
+        let transfer_outcome = this.
+            execution_state_sender
+            .send_request(|callback| ExecutionRequest::TranferAsset {
+                mint,
+                sender: chain_id,
+                recipient,
+                callback,
+            })?
+            .recv_response()?;
+
+        Ok(transfer_outcome)
+    }
+
+    fn nft_burn(&mut self, mint: Mint) -> Result<bool, ExecutionError> {
+        let this = self.inner();
+        let chain_id = this.chain_id;
+
+        let burn_outcome = this.
+            execution_state_sender
+            .send_request(|callback| ExecutionRequest::BurnAsset {
+                mint,
+                sender: chain_id,
+                callback,
+            })?
+            .recv_response()?;
+
+        Ok(burn_outcome)
     }
 
     fn try_call_application(

@@ -6,7 +6,7 @@
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, BlockHeight, TimeDelta, Timestamp},
-    identifiers::{ApplicationId, BytecodeId, ChainId, MessageId, Owner},
+    identifiers::{ApplicationId, BytecodeId, ChainId, MessageId, Metadata, Mint, Owner},
     ownership::{
         ChainOwnership, ChangeApplicationPermissionsError, CloseChainError, TimeoutConfig,
     },
@@ -82,6 +82,23 @@ impl From<wit_system_api::CryptoHash> for CryptoHash {
 impl From<wit_system_api::Owner> for Owner {
     fn from(owner: wit_system_api::Owner) -> Self {
         Owner(owner.inner0.into())
+    }
+}
+
+impl From<wit_system_api::Mint> for Mint {
+    fn from(mint: wit_system_api::Mint) -> Self {
+        Self(mint.inner0.into())
+    }
+}
+
+impl From<wit_system_api::Metadata> for Metadata {
+    fn from(metadata: wit_system_api::Metadata) -> Self {
+        Self {
+            mint: metadata.mint.into(),
+            uri: metadata.uri,
+            name: metadata.name,
+            description: metadata.description,
+        }
     }
 }
 

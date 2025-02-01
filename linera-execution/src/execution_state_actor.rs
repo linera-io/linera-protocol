@@ -13,7 +13,7 @@ use linera_base::prometheus_util::{bucket_latencies, register_histogram_vec, Mea
 use linera_base::{
     data_types::{Amount, ApplicationPermissions, BlobContent, Timestamp},
     hex_debug, hex_vec_debug,
-    identifiers::{Account, AccountOwner, BlobId, MessageId, Owner},
+    identifiers::{Account, AccountOwner, BlobId, ChainId, MessageId, Metadata, Mint, Owner},
     ownership::ChainOwnership,
 };
 use linera_views::{batch::Batch, context::Context, views::View};
@@ -24,6 +24,7 @@ use reqwest::{header::CONTENT_TYPE, Client};
 
 use crate::{
     system::{CreateApplicationResult, OpenChainConfig, Recipient},
+    global_state::{get_asset_key, GlobalContext},
     util::RespondExt,
     BytecodeId, ExecutionError, ExecutionRuntimeContext, ExecutionStateView, RawExecutionOutcome,
     RawOutgoingMessage, SystemExecutionError, SystemMessage, UserApplicationDescription,
@@ -92,6 +93,7 @@ where
     // TODO(#1416): Support concurrent I/O.
     pub(crate) async fn handle_request(
         &mut self,
+        global_context: &GlobalContext,
         request: ExecutionRequest,
     ) -> Result<(), ExecutionError> {
         use ExecutionRequest::*;
@@ -171,6 +173,105 @@ where
 
                 execution_outcome.messages.push(message);
                 callback.respond(execution_outcome);
+            }
+
+            MintAsset {
+                metadata,
+                recipient,
+                callback,
+            } => {
+                let key = get_asset_key(metadata.mint.0.as_bytes());
+
+                let it = global_context.assets.lock();
+                match global_context.assets.contains(&key) {
+                    true => {
+                        drop(it);
+                        callback.respond(false)
+                    },
+                    false => {
+                        let _ = global_context.assets.write(&key, metadata, recipient);
+                        drop(it);
+                        callback.respond(true);
+                    }
+                }
+            }
+
+            AssetOwner { mint, callback } => {
+                let key = get_asset_key(mint.0.as_bytes());
+
+                let it = global_context.assets.lock();
+                let asset_info = global_context.assets.read(&key);
+                drop(it);
+
+                match asset_info {
+                    Some((owner, _)) => callback.respond(Some(owner)),
+                    None => callback.respond(None),
+                }
+            }
+
+            TranferAsset {
+                mint,
+                sender,
+                recipient,
+                callback
+            } => {
+                let key = get_asset_key(mint.0.as_bytes());
+
+                let it = global_context.assets.lock();
+                match global_context.assets.read(&key) {
+                    Some((owner, _)) => {
+                        // currently only [`ChainId`] is checked.
+                        if owner.chain_id != sender {
+                            drop(it);
+                            return Ok(callback.respond(false));
+                        }
+
+                        let _ = global_context.assets.update(&key, recipient);
+                        drop(it);
+                        callback.respond(true);
+                    },
+                    None => {
+                        drop(it);
+                        callback.respond(false);
+                    },
+                }
+            }
+
+            AssetMetadata { mint, callback } => {
+                let key = get_asset_key(mint.0.as_bytes());
+
+                let it = global_context.assets.lock();
+                let asset_info = global_context.assets.read(&key);
+                drop(it);
+
+                match asset_info {
+                    Some((_, metadata)) => callback.respond(Some(metadata)),
+                    None => callback.respond(None),
+                }
+            }
+
+            BurnAsset { mint, sender, callback } => {
+                let key = get_asset_key(mint.0.as_bytes());
+                let burn_address = todo!();
+
+                let it = global_context.assets.lock();
+                match global_context.assets.read(&key) {
+                    Some((owner, _)) => {
+                        // currently only [`ChainId`] is checked.
+                        if owner.chain_id != sender {
+                            drop(it);
+                            return Ok(callback.respond(false));
+                        }
+
+                        let _ = global_context.assets.update(&key, burn_address);
+                        drop(it);
+                        callback.respond(true);
+                    },
+                    None => {
+                        drop(it);
+                        callback.respond(false);
+                    },
+                }
             }
 
             SystemTimestamp { callback } => {
@@ -421,6 +522,40 @@ pub enum ExecutionRequest {
         application_id: UserApplicationId,
         #[debug(skip)]
         callback: Sender<RawExecutionOutcome<SystemMessage, Amount>>,
+    },
+
+    MintAsset {
+        metadata: Metadata,
+        recipient: Account,
+        #[debug(skip)]
+        callback: Sender<bool>
+    },
+
+    AssetOwner {
+        mint: Mint,
+        #[debug(skip)]
+        callback: Sender<Option<Account>>
+    },
+
+    TranferAsset {
+        mint: Mint,
+        sender: ChainId,
+        recipient: Account,
+        #[debug(skip)]
+        callback: Sender<bool>
+    },
+
+    AssetMetadata {
+        mint: Mint,
+        #[debug(skip)]
+        callback: Sender<Option<Metadata>>
+    },
+
+    BurnAsset {
+        mint: Mint,
+        sender: ChainId,
+        #[debug(skip)]
+        callback: Sender<bool>
     },
 
     SystemTimestamp {

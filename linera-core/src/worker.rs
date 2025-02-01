@@ -35,6 +35,7 @@ use linera_chain::{
 };
 use linera_execution::{
     committee::{Epoch, ValidatorName},
+    global_state::GlobalContext,
     ExecutionError, Query, QueryOutcome,
 };
 use linera_storage::Storage;
@@ -271,6 +272,9 @@ where
     /// Configuration options for the [`ChainWorker`]s.
     chain_worker_config: ChainWorkerConfig,
     executed_block_cache: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
+    /// Reference to the global state
+    /// persisted in the storage views
+    global_context: GlobalContext,
     /// Chain IDs that should be tracked by a worker.
     tracked_chains: Option<Arc<RwLock<HashSet<ChainId>>>>,
     /// One-shot channels to notify callers when messages of a particular chain have been
@@ -304,6 +308,7 @@ where
             storage,
             chain_worker_config: ChainWorkerConfig::default().with_key_pair(key_pair),
             executed_block_cache: Arc::new(ValueCache::default()),
+            global_context: GlobalContext::new(),
             tracked_chains: None,
             delivery_notifiers: Arc::default(),
             chain_worker_tasks: Arc::default(),
@@ -323,6 +328,7 @@ where
             storage,
             chain_worker_config: ChainWorkerConfig::default(),
             executed_block_cache: Arc::new(ValueCache::default()),
+            global_context: GlobalContext::new(),
             tracked_chains: Some(tracked_chains),
             delivery_notifiers: Arc::default(),
             chain_worker_tasks: Arc::default(),
@@ -702,6 +708,7 @@ where
             let actor = ChainWorkerActor::load(
                 self.chain_worker_config.clone(),
                 self.storage.clone(),
+                self.global_context.clone(),
                 self.executed_block_cache.clone(),
                 self.tracked_chains.clone(),
                 delivery_notifier,

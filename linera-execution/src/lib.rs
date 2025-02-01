@@ -21,6 +21,7 @@ pub mod test_utils;
 mod transaction_tracker;
 mod util;
 mod wasm;
+pub mod global_state;
 
 use std::{any::Any, fmt, str::FromStr, sync::Arc};
 
@@ -41,8 +42,8 @@ use linera_base::{
     },
     doc_scalar, hex_debug,
     identifiers::{
-        Account, AccountOwner, ApplicationId, BlobId, BytecodeId, ChainId, ChannelName,
-        Destination, GenericApplicationId, MessageId, Owner, StreamName, UserApplicationId,
+        Account, AccountOwner, ApplicationId, BlobId, BytecodeId, ChainId, ChannelName, Destination,
+        GenericApplicationId, MessageId, Metadata, Mint, Owner, StreamName, UserApplicationId
     },
     ownership::ChainOwnership,
     task,
@@ -493,6 +494,10 @@ pub trait BaseRuntime {
     /// Reads the current ownership configuration for this chain.
     fn chain_ownership(&mut self) -> Result<ChainOwnership, ExecutionError>;
 
+    fn nft_get_owner(&mut self, mint: Mint) -> Result<Option<Account>, ExecutionError>;
+
+    fn nft_get_metadata(&mut self, mint: Mint) -> Result<Option<Metadata>, ExecutionError>;
+
     /// Tests whether a key exists in the key-value store
     #[cfg(feature = "test")]
     fn contains_key(&mut self, key: Vec<u8>) -> Result<bool, ExecutionError> {
@@ -691,6 +696,12 @@ pub trait ContractRuntime: BaseRuntime {
         destination: Account,
         amount: Amount,
     ) -> Result<(), ExecutionError>;
+
+    fn nft_mint(&mut self, metadata: Metadata, recipient: Account) -> Result<bool, ExecutionError>;
+
+    fn nft_transfer(&mut self, mint: Mint, recipient: Account) -> Result<bool, ExecutionError>;
+
+    fn nft_burn(&mut self, mint: Mint) -> Result<bool, ExecutionError>;
 
     /// Calls another application. Forwarded sessions will now be visible to
     /// `callee_id` (but not to the caller any more).

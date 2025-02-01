@@ -22,6 +22,7 @@ use linera_chain::{
     ChainStateView,
 };
 use linera_execution::{
+    global_state::GlobalContext,
     committee::{Epoch, ValidatorName},
     Query, QueryContext, QueryOutcome, ServiceRuntimeEndpoint, ServiceSyncRuntime,
 };
@@ -181,6 +182,7 @@ where
     pub async fn load(
         config: ChainWorkerConfig,
         storage: StorageClient,
+        global_context: GlobalContext,
         executed_block_cache: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
         tracked_chains: Option<Arc<RwLock<HashSet<ChainId>>>>,
         delivery_notifier: DeliveryNotifier,
@@ -198,6 +200,7 @@ where
         let worker = ChainWorkerState::load(
             config,
             storage,
+            global_context,
             executed_block_cache,
             tracked_chains,
             delivery_notifier,

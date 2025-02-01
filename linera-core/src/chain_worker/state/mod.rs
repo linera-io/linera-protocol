@@ -28,6 +28,7 @@ use linera_chain::{
 };
 use linera_execution::{
     committee::{Epoch, ValidatorName},
+    global_state::GlobalContext,
     Message, Query, QueryContext, QueryOutcome, ServiceRuntimeEndpoint, SystemMessage,
 };
 use linera_storage::{Clock as _, Storage};
@@ -54,6 +55,7 @@ where
 {
     config: ChainWorkerConfig,
     storage: StorageClient,
+    global_context: GlobalContext,
     chain: ChainStateView<StorageClient::Context>,
     shared_chain_view: Option<Arc<RwLock<ChainStateView<StorageClient::Context>>>>,
     service_runtime_endpoint: Option<ServiceRuntimeEndpoint>,
@@ -72,6 +74,7 @@ where
     pub async fn load(
         config: ChainWorkerConfig,
         storage: StorageClient,
+        global_context: GlobalContext,
         block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
         tracked_chains: Option<Arc<sync::RwLock<HashSet<ChainId>>>>,
         delivery_notifier: DeliveryNotifier,
@@ -83,6 +86,7 @@ where
         Ok(ChainWorkerState {
             config,
             storage,
+            global_context,
             chain,
             shared_chain_view: None,
             service_runtime_endpoint,

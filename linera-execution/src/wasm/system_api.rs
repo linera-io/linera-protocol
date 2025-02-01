@@ -7,7 +7,8 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, ApplicationPermissions, BlockHeight, SendMessageRequest, Timestamp},
     identifiers::{
-        Account, AccountOwner, ApplicationId, ChainId, ChannelName, MessageId, Owner, StreamName,
+        Account, AccountOwner, ApplicationId, ChainId, ChannelName,
+        MessageId, Mint, Metadata, Owner, StreamName
     },
     ownership::{ChainOwnership, ChangeApplicationPermissionsError, CloseChainError},
 };
@@ -262,6 +263,59 @@ where
             .user_data_mut()
             .runtime
             .claim(source, destination, amount)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
+    /// Attempts to mint an non-fungible asset to the `recipient` account.
+    fn nft_mint(
+        caller: &mut Caller,
+        metadata: Metadata,
+        recipient: Account,
+    ) -> Result<bool, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .nft_mint(metadata, recipient)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
+    /// Returns the current owner of an asset associated with a `mint`, if it exists.
+    fn nft_get_owner(caller: &mut Caller, mint: Mint) -> Result<Option<Account>, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .nft_get_owner(mint)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
+    /// Attempts to transfer an asset from the current owner to the `recipient`.
+    fn nft_transfer(
+        caller: &mut Caller,
+        mint: Mint,
+        recipient: Account,
+    ) -> Result<bool, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .nft_transfer(mint, recipient)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
+    /// Returns the [`Metadata`] asscociated with this `mint`.
+    fn nft_get_metadata(caller: &mut Caller, mint: Mint) -> Result<Option<Metadata>, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .nft_get_metadata(mint)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
+    /// Attempt to burn an asset by its owner.
+    fn nft_burn(caller: &mut Caller, mint: Mint) -> Result<bool, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .nft_burn(mint)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
@@ -556,6 +610,24 @@ where
             .user_data_mut()
             .runtime
             .read_balance_owners()
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
+    /// Returns the current owner of an asset associated with a `mint`, if it exists.
+    fn nft_get_owner(caller: &mut Caller, mint: Mint) -> Result<Option<Account>, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .nft_get_owner(mint)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
+    /// Returns the [`Metadata`] asscociated with this `mint`.
+    fn nft_get_metadata(caller: &mut Caller, mint: Mint) -> Result<Option<Metadata>, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .nft_get_metadata(mint)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 

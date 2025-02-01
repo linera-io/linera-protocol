@@ -6,7 +6,7 @@
 use linera_base::{
     crypto::CryptoHash,
     data_types::BlockHeight,
-    identifiers::{AccountOwner, ApplicationId, BytecodeId, ChainId, MessageId, Owner},
+    identifiers::{AccountOwner, ApplicationId, BytecodeId, ChainId, MessageId, Mint, Owner},
 };
 
 use super::wit::service_system_api as wit_system_api;
@@ -67,6 +67,14 @@ impl From<ChainId> for wit_system_api::ChainId {
     fn from(chain_id: ChainId) -> Self {
         wit_system_api::ChainId {
             inner0: chain_id.0.into(),
+        }
+    }
+}
+
+impl From<Mint> for wit_system_api::Mint {
+    fn from(mint: Mint) -> Self {
+        wit_system_api::Mint {
+            inner0: mint.0.into(),
         }
     }
 }

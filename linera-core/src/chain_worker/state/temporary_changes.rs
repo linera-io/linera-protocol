@@ -100,7 +100,12 @@ where
         let outcome = self
             .0
             .chain
-            .query_application(local_time, query, self.0.service_runtime_endpoint.as_mut())
+            .query_application(
+                local_time,
+                query,
+                &self.0.global_context,
+                self.0.service_runtime_endpoint.as_mut()
+            )
             .await?;
         Ok(outcome)
     }
@@ -124,7 +129,13 @@ where
         let local_time = self.0.storage.clock().current_time();
         let signer = block.authenticated_signer;
 
-        let executed_block = Box::pin(self.0.chain.execute_block(&block, local_time, round, None))
+        let executed_block = Box::pin(self.0.chain.execute_block(
+                &block,
+                &self.0.global_context,
+                local_time,
+                round,
+                None,
+            ))
             .await?
             .with(block);
 
@@ -169,7 +180,14 @@ where
         let outcome = if let Some(outcome) = outcome {
             outcome.clone()
         } else {
-            Box::pin(chain.execute_block(block, local_time, round.multi_leader(), None)).await?
+            Box::pin(chain.execute_block(
+                    block,
+                    &self.0.global_context,
+                    local_time,
+                    round.multi_leader(),
+                    None,
+                ))
+                .await?
         };
 
         let executed_block = outcome.with(block.clone());

@@ -10,7 +10,7 @@ use linera_base::{
     },
     identifiers::{
         Account, AccountOwner, ApplicationId, BytecodeId, ChainId, ChannelName, Destination,
-        MessageId, Owner, StreamName,
+        MessageId, Owner, StreamName, Mint, Metadata,
     },
     ownership::{ChainOwnership, ChangeApplicationPermissionsError, CloseChainError},
 };
@@ -196,6 +196,33 @@ where
     /// Claims an `amount` of native tokens from a `source` account to a `destination` account.
     pub fn claim(&mut self, source: Account, destination: Account, amount: Amount) {
         wit::claim(source.into(), destination.into(), amount.into())
+    }
+
+    /// Mints a globaly unique asset.
+    pub fn nft_mint(&mut self, metadata: Metadata, recipient: Account) -> bool {
+        wit::nft_mint(metadata.into(), recipient())
+    }
+
+    /// Current on of a globaly unique asset.
+    pub fn nft_get_owner(&self, mint: Mint) -> Option<Account> {
+        wit::nft_get_owner(mint.into()).map(|account| account.into())
+    }
+
+    /// Tranfers the ownership rights of an asset to the recipient.
+    /// The ritual of tranfer of the ownership rights can only be performed by the current possessor.
+    pub fn nft_transfer(&mut self, mint: Mint, recipient: Account) -> bool {
+        wit::nft_transfer(mint.into(), recipient.into())
+    }
+
+    /// Fetches the metadata about an asset.
+    pub fn nft_get_metadata(&mut self, mint: Mint) -> Option<Metadata> {
+        wit::nft_get_metadata(mint.into()).map(|metadata| metadata.into())
+    }
+
+    /// Burns an asset.
+    /// Forever, for the rest of the eternity.
+    pub fn nft_burn(&mut self, mint: Mint) -> bool {
+        wit::nft_burn(mint.into())
     }
 
     /// Retrieves the owner configuration for the current chain.

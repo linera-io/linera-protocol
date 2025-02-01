@@ -8,7 +8,7 @@ use std::sync::Mutex;
 use linera_base::{
     abi::ServiceAbi,
     data_types::{Amount, BlockHeight, Timestamp},
-    identifiers::{AccountOwner, ApplicationId, ChainId},
+    identifiers::{AccountOwner, ApplicationId, ChainId, Mint, Metadata},
 };
 use serde::Serialize;
 
@@ -134,6 +134,16 @@ where
         let bytes = bcs::to_bytes(operation).expect("Failed to serialize application operation");
 
         wit::schedule_operation(&bytes);
+    }
+
+    /// Current owner of a globaly unique asset.
+    pub fn nft_get_owner(&self, mint: Mint) -> Option<Account> {
+        wit::nft_get_owner(mint.into()).map(|account| account.into())
+    }
+
+    /// Fetches the metadata about an asset.
+    pub fn nft_get_metadata(&mut self, mint: Mint) -> Option<Metadata> {
+        wit::nft_get_metadata(mint.into()).map(|metadata| metadata.into())
     }
 
     /// Queries another application.

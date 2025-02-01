@@ -10,8 +10,7 @@ use linera_base::{
         Timestamp,
     },
     identifiers::{
-        Account, AccountOwner, ApplicationId, BytecodeId, ChainId, ChannelName, Destination,
-        MessageId, Owner, StreamName,
+        Account, AccountOwner, ApplicationId, BytecodeId, ChainId, ChannelName, Destination, MessageId, Metadata, Mint, Owner, StreamName
     },
     ownership::{ChainOwnership, TimeoutConfig},
 };
@@ -85,6 +84,26 @@ impl From<ChainId> for wit_system_api::ChainId {
     fn from(chain_id: ChainId) -> Self {
         wit_system_api::ChainId {
             inner0: chain_id.0.into(),
+        }
+    }
+}
+
+
+impl From<Mint> for wit_system_api::Mint {
+    fn from(mint: Mint) -> Self {
+        wit_system_api::Mint {
+            inner0: mint.0.into(),
+        }
+    }
+}
+
+impl From<Metadata> for wit_system_api::Metadata {
+    fn from(metadata: Metadata) -> Self {
+        wit_system_api::Metadata {
+            mint: metadata.mint.into(),
+            uri: metadata.uri,
+            name: metadata.name,
+            description: metadata.description,
         }
     }
 }

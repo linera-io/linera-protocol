@@ -18,6 +18,15 @@ interface contract-system-api {
     unsubscribe: func(chain: chain-id, channel: channel-name);
     transfer: func(source: option<account-owner>, destination: account, amount: amount);
     claim: func(source: account, destination: account, amount: amount);
+    nft-mint: func(metadata: metadata, recipient: account) -> bool;
+    nft-get-owner: func(mint: mint) -> option<account>;
+    nft-transfer: func(mint: mint, recipient: account) -> bool;
+    // maybe this can be stored in the contract itself, rather than on the world tree.
+    // can be retrieved by contract call to application.
+    // Something like runtime enforced trait like functionality 
+    // that nft contracts must implement and abide by.
+    nft-get-metadata: func(mint: mint) -> option<metadata>;
+    nft-burn: func(mint: mint) -> bool;
     get-chain-ownership: func() -> chain-ownership;
     open-chain: func(chain-ownership: chain-ownership, application-permissions: application-permissions, balance: amount) -> tuple<message-id, chain-id>;
     close-chain: func() -> result<tuple<>, close-chain-error>;
@@ -103,6 +112,19 @@ interface contract-system-api {
     variant destination {
         recipient(chain-id),
         subscribers(channel-name),
+    }
+
+    record metadata {
+        mint: mint,
+        uri: string,
+        name: string,
+        description: string,
+    }
+
+    // this can be the DataBlobHash
+    // i.e. hash of the actual entity that is to be non fungibly tokenized
+    record mint {
+        inner0: crypto-hash,
     }
 
     enum log-level {

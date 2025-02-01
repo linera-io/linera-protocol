@@ -23,6 +23,7 @@ use linera_base::{
     ownership::ChainOwnership,
 };
 use linera_execution::{
+    global_state::GlobalContext,
     committee::{Committee, Epoch, ValidatorName},
     system::OpenChainConfig,
     ExecutionOutcome, ExecutionRuntimeContext, ExecutionStateView, Message, MessageContext,
@@ -334,6 +335,7 @@ where
         &mut self,
         local_time: Timestamp,
         query: Query,
+        global_context: &GlobalContext,
         service_runtime_endpoint: Option<&mut ServiceRuntimeEndpoint>,
     ) -> Result<QueryOutcome, ChainError> {
         let context = QueryContext {
@@ -342,7 +344,12 @@ where
             local_time,
         };
         self.execution_state
-            .query_application(context, query, service_runtime_endpoint)
+            .query_application(
+                context,
+                query,
+                global_context,
+                service_runtime_endpoint
+            )
             .await
             .with_execution_context(ChainExecutionContext::Query)
     }
@@ -677,6 +684,7 @@ where
     pub async fn execute_block(
         &mut self,
         block: &ProposedBlock,
+        global_context: &GlobalContext,
         local_time: Timestamp,
         round: Option<u32>,
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
@@ -798,6 +806,7 @@ where
                             block,
                             round,
                             txn_index,
+                            global_context,
                             local_time,
                             &mut txn_tracker,
                             &mut resource_controller,
@@ -823,6 +832,7 @@ where
                         context,
                         local_time,
                         operation.clone(),
+                        global_context,
                         &mut txn_tracker,
                         &mut resource_controller,
                     ))
@@ -950,6 +960,7 @@ where
         block: &ProposedBlock,
         round: Option<u32>,
         txn_index: u32,
+        global_context: &GlobalContext,
         local_time: Timestamp,
         txn_tracker: &mut TransactionTracker,
         resource_controller: &mut ResourceController<Option<Owner>>,
@@ -976,6 +987,7 @@ where
                     context,
                     local_time,
                     posted_message.message.clone(),
+                    global_context,
                     (grant > Amount::ZERO).then_some(&mut grant),
                     txn_tracker,
                     resource_controller,

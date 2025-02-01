@@ -30,11 +30,11 @@ use {
 
 use super::{runtime::ServiceRuntimeRequest, ExecutionRequest};
 use crate::{
-    resources::ResourceController, system::SystemExecutionStateView, ContractSyncRuntime,
-    ExecutionError, ExecutionOutcome, ExecutionRuntimeConfig, ExecutionRuntimeContext, Message,
-    MessageContext, MessageKind, Operation, OperationContext, Query, QueryContext, QueryOutcome,
-    RawExecutionOutcome, RawOutgoingMessage, ServiceSyncRuntime, SystemMessage, TransactionTracker,
-    UserApplicationDescription, UserApplicationId,
+    global_state::GlobalContext, resources::ResourceController, system::SystemExecutionStateView,
+    ContractSyncRuntime, ExecutionError, ExecutionOutcome, ExecutionRuntimeConfig, ExecutionRuntimeContext,
+    Message, MessageContext, MessageKind, Operation, OperationContext, Query, QueryContext,
+    QueryOutcome, RawExecutionOutcome, RawOutgoingMessage, ServiceSyncRuntime, SystemMessage,
+    TransactionTracker, UserApplicationDescription, UserApplicationId,
 };
 
 /// A view accessing the execution state of a chain.
@@ -64,6 +64,7 @@ where
         &mut self,
         contract: UserContractCode,
         local_time: Timestamp,
+        global_context: &GlobalContext,
         application_description: UserApplicationDescription,
         instantiation_argument: Vec<u8>,
         contract_blob: Blob,
@@ -114,6 +115,7 @@ where
             chain_id,
             local_time,
             action,
+            global_context,
             context.refund_grant_to(),
             None,
             &mut txn_tracker,
@@ -171,6 +173,7 @@ where
         chain_id: ChainId,
         local_time: Timestamp,
         action: UserAction,
+        global_context: &GlobalContext,
         refund_grant_to: Option<Account>,
         grant: Option<&mut Amount>,
         txn_tracker: &mut TransactionTracker,
@@ -182,6 +185,7 @@ where
             chain_id,
             local_time,
             action,
+            global_context,
             refund_grant_to,
             grant,
             txn_tracker,
@@ -198,6 +202,7 @@ where
         chain_id: ChainId,
         local_time: Timestamp,
         action: UserAction,
+        global_context: &GlobalContext,
         refund_grant_to: Option<Account>,
         grant: Option<&mut Amount>,
         txn_tracker: &mut TransactionTracker,
@@ -239,7 +244,7 @@ where
         contract_runtime_task.send(code)?;
 
         while let Some(request) = execution_state_receiver.next().await {
-            self.handle_request(request).await?;
+            self.handle_request(global_context, request).await?;
         }
 
         let (controller, txn_tracker_moved) = contract_runtime_task.join().await?;
@@ -326,6 +331,7 @@ where
         context: OperationContext,
         local_time: Timestamp,
         operation: Operation,
+        global_context: &GlobalContext,
         txn_tracker: &mut TransactionTracker,
         resource_controller: &mut ResourceController<Option<Owner>>,
     ) -> Result<(), ExecutionError> {
@@ -343,6 +349,7 @@ where
                         context.chain_id,
                         local_time,
                         user_action,
+                        global_context,
                         context.refund_grant_to(),
                         None,
                         txn_tracker,
@@ -360,6 +367,7 @@ where
                     context.chain_id,
                     local_time,
                     UserAction::Operation(context, bytes),
+                    global_context,
                     context.refund_grant_to(),
                     None,
                     txn_tracker,
@@ -376,6 +384,7 @@ where
         context: MessageContext,
         local_time: Timestamp,
         message: Message,
+        global_context: &GlobalContext,
         grant: Option<&mut Amount>,
         txn_tracker: &mut TransactionTracker,
         resource_controller: &mut ResourceController<Option<Owner>>,
@@ -398,6 +407,7 @@ where
                     context.chain_id,
                     local_time,
                     UserAction::Message(context, bytes),
+                    global_context,
                     context.refund_grant_to,
                     grant,
                     txn_tracker,
@@ -484,6 +494,7 @@ where
         &mut self,
         context: QueryContext,
         query: Query,
+        global_context: &GlobalContext,
         endpoint: Option<&mut ServiceRuntimeEndpoint>,
     ) -> Result<QueryOutcome, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
@@ -503,14 +514,20 @@ where
                             application_id,
                             context,
                             bytes,
+                            global_context,
                             &mut endpoint.incoming_execution_requests,
                             &mut endpoint.runtime_request_sender,
                         )
                         .await?
                     }
                     None => {
-                        self.query_user_application(application_id, context, bytes)
-                            .await?
+                        self.query_user_application(
+                            application_id,
+                            context,
+                            bytes,
+                            global_context,
+                        )
+                        .await?
                     }
                 };
                 Ok(outcome.into())
@@ -523,6 +540,7 @@ where
         application_id: UserApplicationId,
         context: QueryContext,
         query: Vec<u8>,
+        global_context: &GlobalContext,
     ) -> Result<QueryOutcome<Vec<u8>>, ExecutionError> {
         let (execution_state_sender, mut execution_state_receiver) =
             futures::channel::mpsc::unbounded();
@@ -542,7 +560,7 @@ where
         service_runtime_task.send(code)?;
 
         while let Some(request) = execution_state_receiver.next().await {
-            self.handle_request(request).await?;
+            self.handle_request(global_context, request).await?;
         }
 
         service_runtime_task.join().await
@@ -553,6 +571,7 @@ where
         application_id: UserApplicationId,
         context: QueryContext,
         query: Vec<u8>,
+        global_context: &GlobalContext,
         incoming_execution_requests: &mut futures::channel::mpsc::UnboundedReceiver<
             ExecutionRequest,
         >,
@@ -574,7 +593,7 @@ where
             futures::select! {
                 maybe_request = incoming_execution_requests.next() => {
                     if let Some(request) = maybe_request {
-                        self.handle_request(request).await?;
+                        self.handle_request(global_context, request).await?;
                     }
                 }
                 outcome = &mut outcome_receiver => {

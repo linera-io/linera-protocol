@@ -100,6 +100,38 @@ impl FromStr for Account {
     }
 }
 
+/// The mint associated with this asset.
+#[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Copy, Clone, Serialize, Deserialize, WitLoad, WitStore, WitType)]
+pub struct NftMint(pub CryptoHash);
+
+/// Handy elegant Alias
+pub type Mint = NftMint;
+
+/// Necessary minimal data associated with a minted asset.
+#[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone, Serialize, Deserialize, WitLoad, WitStore, WitType)]
+pub struct NftMetadata {
+    /// The mint associated with this asset.
+    pub mint: Mint,
+    /// Link to the asset's data and metadata json file.
+    pub uri: String,
+    /// A name for the asset.
+    pub name: String,
+    /// A samll description of the asset.
+    pub description: String,
+}
+
+/// Handy elegant Alias
+pub type Metadata = NftMetadata;
+
+/// Just for convinience
+pub fn hash_bytes(bytes: &[u8]) -> CryptoHash {
+    use sha3::digest::Digest;
+
+    let mut hasher = sha3::Sha3_256::new();
+    hasher.update(bytes);
+    hasher.finalize()[..].try_into().unwrap()
+}
+
 /// How to create a chain.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
 pub enum ChainDescription {

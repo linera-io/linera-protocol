@@ -393,6 +393,7 @@ where
         let local_time = self.state.storage.clock().current_time();
         let verified_outcome = Box::pin(self.state.chain.execute_block(
             &executed_block.block,
+            &self.state.global_context,
             local_time,
             None,
             Some(executed_block.outcome.oracle_responses.clone()),

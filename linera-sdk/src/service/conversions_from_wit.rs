@@ -6,7 +6,7 @@
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, BlockHeight, Timestamp},
-    identifiers::{AccountOwner, ApplicationId, BytecodeId, ChainId, MessageId, Owner},
+    identifiers::{Account, AccountOwner, ApplicationId, BytecodeId, ChainId, MessageId, Metadata, Mint, Owner},
 };
 
 use super::wit::service_system_api as wit_system_api;
@@ -14,6 +14,15 @@ use super::wit::service_system_api as wit_system_api;
 impl From<wit_system_api::CryptoHash> for ChainId {
     fn from(hash_value: wit_system_api::CryptoHash) -> Self {
         ChainId(hash_value.into())
+    }
+}
+
+impl From<wit_system_api::Account> for Account {
+    fn from(account: wit_system_api::Account) -> Self {
+        Self {
+            chain_id: account.chain_id.into(),
+            owner: account.owner.map(|owner| owner.into()),
+        }
     }
 }
 
@@ -62,6 +71,23 @@ impl From<wit_system_api::CryptoHash> for CryptoHash {
             hash_value.part3,
             hash_value.part4,
         ])
+    }
+}
+
+impl From<wit_system_api::Mint> for Mint {
+    fn from(mint: wit_system_api::Mint) -> Self {
+        Self(mint.inner0.into())
+    }
+}
+
+impl From<wit_system_api::Metadata> for Metadata {
+    fn from(metadata: wit_system_api::Metadata) -> Self {
+        Self {
+            mint: metadata.mint.into(),
+            uri: format!("{:?}", metadata.uri),
+            name: format!("{:?}", metadata.name),
+            description: format!("{:?}", metadata.description),
+        }
     }
 }
 
