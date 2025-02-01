@@ -9,8 +9,9 @@ use linera_views::{
     batch::Batch,
     store::TestKeyValueStore as _,
     test_utils::{
-        admin_test, get_random_byte_vector, get_random_test_scenarios, run_reads,
-        run_test_batch_from_blank, run_writes_from_blank, run_writes_from_state,
+        get_random_byte_vector, get_random_test_scenarios, namespace_admin_test,
+        root_key_admin_test, run_reads, run_test_batch_from_blank, run_writes_from_blank,
+        run_writes_from_state,
     },
 };
 
@@ -38,9 +39,13 @@ async fn test_storage_service_writes_from_state() -> Result<()> {
 }
 
 #[tokio::test]
-async fn test_storage_service_admin() -> Result<()> {
-    admin_test::<ServiceStoreClient>().await;
-    Ok(())
+async fn test_storage_service_namespace_admin() {
+    namespace_admin_test::<ServiceStoreClient>().await;
+}
+
+#[tokio::test]
+async fn test_storage_service_root_key_admin() {
+    root_key_admin_test::<ServiceStoreClient>().await;
 }
 
 #[tokio::test]

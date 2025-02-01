@@ -25,13 +25,13 @@ use tracing_subscriber::fmt::format::FmtSpan;
 use crate::key_value_store::{
     statement::Operation,
     store_processor_server::{StoreProcessor, StoreProcessorServer},
-    KeyValue, OptValue, ReplyContainsKey, ReplyContainsKeys, ReplyCreateNamespace, ReplyDeleteAll,
-    ReplyDeleteNamespace, ReplyExistsNamespace, ReplyFindKeyValuesByPrefix, ReplyFindKeysByPrefix,
-    ReplyListAll, ReplyReadMultiValues, ReplyReadValue, ReplySpecificChunk,
-    ReplyWriteBatchExtended, RequestContainsKey, RequestContainsKeys, RequestCreateNamespace,
-    RequestDeleteAll, RequestDeleteNamespace, RequestExistsNamespace, RequestFindKeyValuesByPrefix,
-    RequestFindKeysByPrefix, RequestListAll, RequestReadMultiValues, RequestReadValue,
-    RequestSpecificChunk, RequestWriteBatchExtended,
+    KeyValue, OptValue, ReplyContainsKey, ReplyContainsKeys, ReplyExistsNamespace,
+    ReplyFindKeyValuesByPrefix, ReplyFindKeysByPrefix, ReplyListAll, ReplyListRootKeys,
+    ReplyReadMultiValues, ReplyReadValue, ReplySpecificChunk, RequestContainsKey,
+    RequestContainsKeys, RequestCreateNamespace, RequestDeleteNamespace, RequestExistsNamespace,
+    RequestFindKeyValuesByPrefix, RequestFindKeysByPrefix, RequestInsertRootKey,
+    RequestListRootKeys, RequestReadMultiValues, RequestReadValue, RequestSpecificChunk,
+    RequestWriteBatchExtended,
 };
 
 pub mod key_value_store {
@@ -183,10 +183,17 @@ impl ServiceStoreServer {
         self.find_keys_by_prefix(&[KeyTag::Namespace as u8]).await
     }
 
+    pub async fn list_root_keys(&self, namespace: &[u8]) -> Result<Vec<Vec<u8>>, Status> {
+        let mut full_key = vec![KeyTag::RootKey as u8];
+        full_key.extend(namespace);
+        self.find_keys_by_prefix(&full_key).await
+    }
+
     pub async fn delete_all(&self) -> Result<(), Status> {
         let mut batch = Batch::new();
         batch.delete_key_prefix(vec![KeyTag::Key as u8]);
         batch.delete_key_prefix(vec![KeyTag::Namespace as u8]);
+        batch.delete_key_prefix(vec![KeyTag::RootKey as u8]);
         self.write_batch(batch).await
     }
 
@@ -212,6 +219,18 @@ impl ServiceStoreServer {
         let mut key_prefix = vec![KeyTag::Key as u8];
         key_prefix.extend(namespace);
         batch.delete_key_prefix(key_prefix);
+        let mut key_prefix = vec![KeyTag::RootKey as u8];
+        key_prefix.extend(namespace);
+        batch.delete_key_prefix(key_prefix);
+        self.write_batch(batch).await
+    }
+
+    pub async fn insert_root_key(&self, namespace: &[u8], root_key: &[u8]) -> Result<(), Status> {
+        let mut batch = Batch::new();
+        let mut full_key = vec![KeyTag::RootKey as u8];
+        full_key.extend(namespace);
+        full_key.extend(root_key);
+        batch.put_key_value_bytes(full_key, vec![]);
         self.write_batch(batch).await
     }
 
@@ -414,7 +433,7 @@ impl StoreProcessor for ServiceStoreServer {
     async fn process_write_batch_extended(
         &self,
         request: Request<RequestWriteBatchExtended>,
-    ) -> Result<Response<ReplyWriteBatchExtended>, Status> {
+    ) -> Result<Response<()>, Status> {
         let request = request.into_inner();
         let RequestWriteBatchExtended { statements } = request;
         let mut batch = Batch::default();
@@ -450,8 +469,7 @@ impl StoreProcessor for ServiceStoreServer {
         if !batch.is_empty() {
             self.write_batch(batch).await?;
         }
-        let response = ReplyWriteBatchExtended {};
-        Ok(Response::new(response))
+        Ok(Response::new(()))
     }
 
     #[instrument(target = "store_server", skip_all, err, fields(message_index = ?request.get_ref().message_index, index = ?request.get_ref().index))]
@@ -482,12 +500,11 @@ impl StoreProcessor for ServiceStoreServer {
     async fn process_create_namespace(
         &self,
         request: Request<RequestCreateNamespace>,
-    ) -> Result<Response<ReplyCreateNamespace>, Status> {
+    ) -> Result<Response<()>, Status> {
         let request = request.into_inner();
         let RequestCreateNamespace { namespace } = request;
         self.create_namespace(&namespace).await?;
-        let response = ReplyCreateNamespace {};
-        Ok(Response::new(response))
+        Ok(Response::new(()))
     }
 
     #[instrument(target = "store_server", skip_all, err, fields(namespace = ?request.get_ref().namespace))]
@@ -506,18 +523,17 @@ impl StoreProcessor for ServiceStoreServer {
     async fn process_delete_namespace(
         &self,
         request: Request<RequestDeleteNamespace>,
-    ) -> Result<Response<ReplyDeleteNamespace>, Status> {
+    ) -> Result<Response<()>, Status> {
         let request = request.into_inner();
         let RequestDeleteNamespace { namespace } = request;
         self.delete_namespace(&namespace).await?;
-        let response = ReplyDeleteNamespace {};
-        Ok(Response::new(response))
+        Ok(Response::new(()))
     }
 
     #[instrument(target = "store_server", skip_all, err, fields(list_all = "list_all"))]
     async fn process_list_all(
         &self,
-        _request: Request<RequestListAll>,
+        _request: Request<()>,
     ) -> Result<Response<ReplyListAll>, Status> {
         let namespaces = self.list_all().await?;
         let response = ReplyListAll { namespaces };
@@ -528,15 +544,47 @@ impl StoreProcessor for ServiceStoreServer {
         target = "store_server",
         skip_all,
         err,
+        fields(list_all = "list_root_keys")
+    )]
+    async fn process_list_root_keys(
+        &self,
+        request: Request<RequestListRootKeys>,
+    ) -> Result<Response<ReplyListRootKeys>, Status> {
+        let request = request.into_inner();
+        let RequestListRootKeys { namespace } = request;
+        let root_keys = self.list_root_keys(&namespace).await?;
+        let response = ReplyListRootKeys { root_keys };
+        Ok(Response::new(response))
+    }
+
+    #[instrument(
+        target = "store_server",
+        skip_all,
+        err,
+        fields(list_all = "insert_root_key")
+    )]
+    async fn process_insert_root_key(
+        &self,
+        request: Request<RequestInsertRootKey>,
+    ) -> Result<Response<()>, Status> {
+        let request = request.into_inner();
+        let RequestInsertRootKey {
+            namespace,
+            root_key,
+        } = request;
+        self.insert_root_key(&namespace, &root_key).await?;
+        Ok(Response::new(()))
+    }
+
+    #[instrument(
+        target = "store_server",
+        skip_all,
+        err,
         fields(delete_all = "delete_all")
     )]
-    async fn process_delete_all(
-        &self,
-        _request: Request<RequestDeleteAll>,
-    ) -> Result<Response<ReplyDeleteAll>, Status> {
+    async fn process_delete_all(&self, _request: Request<()>) -> Result<Response<()>, Status> {
         self.delete_all().await?;
-        let response = ReplyDeleteAll {};
-        Ok(Response::new(response))
+        Ok(Response::new(()))
     }
 }
 

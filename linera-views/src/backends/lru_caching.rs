@@ -302,14 +302,21 @@ where
         Ok(LruCachingStore::new(store, cache_size))
     }
 
-    fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, Self::Error> {
-        let store = self.store.clone_with_root_key(root_key)?;
+    async fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, Self::Error> {
+        let store = self.store.clone_with_root_key(root_key).await?;
         let cache_size = self.cache_size();
         Ok(LruCachingStore::new(store, cache_size))
     }
 
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, Self::Error> {
         K::list_all(&config.inner_config).await
+    }
+
+    async fn list_root_keys(
+        config: &Self::Config,
+        namespace: &str,
+    ) -> Result<Vec<Vec<u8>>, Self::Error> {
+        K::list_root_keys(&config.inner_config, namespace).await
     }
 
     async fn delete_all(config: &Self::Config) -> Result<(), Self::Error> {

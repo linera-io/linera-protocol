@@ -1,33 +1,43 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::{fmt::Debug, marker::PhantomData};
+
 #[cfg(with_dynamodb)]
 use linera_views::dynamo_db::DynamoDbStore;
 #[cfg(with_rocksdb)]
 use linera_views::rocks_db::RocksDbStore;
 #[cfg(with_scylladb)]
 use linera_views::scylla_db::ScyllaDbStore;
-use linera_views::{memory::MemoryStore, test_utils::admin_test};
+use linera_views::{
+    memory::MemoryStore,
+    store::TestKeyValueStore,
+    test_utils::{namespace_admin_test, root_key_admin_test},
+};
+use test_case::test_case;
 
+#[test_case(PhantomData::<MemoryStore>; "MemoryStore")]
+#[cfg_attr(with_rocksdb, test_case(PhantomData::<RocksDbStore>; "RocksDbStore"))]
+#[cfg_attr(with_dynamodb, test_case(PhantomData::<DynamoDbStore>; "DynamoDbStore"))]
+#[cfg_attr(with_scylladb, test_case(PhantomData::<ScyllaDbStore>; "ScyllaDbStore"))]
 #[tokio::test]
-async fn admin_test_memory() {
-    admin_test::<MemoryStore>().await;
+async fn namespace_admin_test_cases<K>(_view_type: PhantomData<K>)
+where
+    K: TestKeyValueStore,
+    K::Error: Debug,
+{
+    namespace_admin_test::<K>().await;
 }
 
-#[cfg(with_rocksdb)]
+#[test_case(PhantomData::<MemoryStore>; "MemoryStore")]
+#[cfg_attr(with_rocksdb, test_case(PhantomData::<RocksDbStore>; "RocksDbStore"))]
+#[cfg_attr(with_dynamodb, test_case(PhantomData::<DynamoDbStore>; "DynamoDbStore"))]
+#[cfg_attr(with_scylladb, test_case(PhantomData::<ScyllaDbStore>; "ScyllaDbStore"))]
 #[tokio::test]
-async fn admin_test_rocks_db() {
-    admin_test::<RocksDbStore>().await;
-}
-
-#[cfg(with_dynamodb)]
-#[tokio::test]
-async fn admin_test_dynamo_db() {
-    admin_test::<DynamoDbStore>().await;
-}
-
-#[cfg(with_scylladb)]
-#[tokio::test]
-async fn admin_test_scylla_db() {
-    admin_test::<ScyllaDbStore>().await;
+async fn root_key_admin_test_cases<K>(_view_type: PhantomData<K>)
+where
+    K: TestKeyValueStore,
+    K::Error: Debug,
+{
+    root_key_admin_test::<K>().await;
 }
