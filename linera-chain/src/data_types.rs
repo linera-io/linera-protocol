@@ -12,7 +12,7 @@ use custom_debug_derive::Debug;
 use linera_base::{
     bcs,
     crypto::{BcsHashable, BcsSignable, CryptoError, CryptoHash, KeyPair, PublicKey, Signature},
-    data_types::{Amount, Blob, BlockHeight, OracleResponse, Round, Timestamp},
+    data_types::{Amount, BlockHeight, OracleResponse, Round, Timestamp},
     doc_scalar, ensure,
     hashed::Hashed,
     hex_debug,
@@ -29,6 +29,7 @@ use linera_execution::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    block::ValidatedBlock,
     types::{
         CertificateKind, CertificateValue, GenericCertificate, LiteCertificate,
         ValidatedBlockCertificate,
@@ -144,12 +145,8 @@ impl ProposedBlock {
         Some((in_bundle, posted_message, config))
     }
 
-    pub fn check_proposal_size(
-        &self,
-        maximum_block_proposal_size: u64,
-        blobs: &[Blob],
-    ) -> Result<(), ChainError> {
-        let size = bcs::serialized_size(&(self, blobs))?;
+    pub fn check_proposal_size(&self, maximum_block_proposal_size: u64) -> Result<(), ChainError> {
+        let size = bcs::serialized_size(self)?;
         ensure!(
             size <= usize::try_from(maximum_block_proposal_size).unwrap_or(usize::MAX),
             ChainError::BlockProposalTooLarge
@@ -312,8 +309,6 @@ pub struct BlockProposal {
     pub owner: Owner,
     pub public_key: PublicKey,
     pub signature: Signature,
-    #[debug(skip_if = Vec::is_empty)]
-    pub blobs: Vec<Blob>,
     #[debug(skip_if = Option::is_none)]
     pub validated_block_certificate: Option<LiteCertificate<'static>>,
 }
@@ -744,7 +739,7 @@ impl BlockExecutionOutcome {
         }
     }
 
-    fn oracle_blob_ids(&self) -> HashSet<BlobId> {
+    pub fn oracle_blob_ids(&self) -> HashSet<BlobId> {
         let mut required_blob_ids = HashSet::new();
         for responses in &self.oracle_responses {
             for response in responses {
@@ -777,12 +772,7 @@ pub struct ProposalContent {
 }
 
 impl BlockProposal {
-    pub fn new_initial(
-        round: Round,
-        block: ProposedBlock,
-        secret: &KeyPair,
-        blobs: Vec<Blob>,
-    ) -> Self {
+    pub fn new_initial(round: Round, block: ProposedBlock, secret: &KeyPair) -> Self {
         let content = ProposalContent {
             round,
             block,
@@ -794,7 +784,6 @@ impl BlockProposal {
             public_key: secret.public(),
             owner: secret.public().into(),
             signature,
-            blobs,
             validated_block_certificate: None,
         }
     }
@@ -803,7 +792,6 @@ impl BlockProposal {
         round: Round,
         validated_block_certificate: ValidatedBlockCertificate,
         secret: &KeyPair,
-        blobs: Vec<Blob>,
     ) -> Self {
         let lite_cert = validated_block_certificate.lite_certificate().cloned();
         let block = validated_block_certificate.into_inner().into_inner();
@@ -819,13 +807,46 @@ impl BlockProposal {
             public_key: secret.public(),
             owner: secret.public().into(),
             signature,
-            blobs,
             validated_block_certificate: Some(lite_cert),
         }
     }
 
-    pub fn check_signature(&self, public_key: PublicKey) -> Result<(), CryptoError> {
-        self.signature.check(&self.content, public_key)
+    pub fn check_signature(&self) -> Result<(), CryptoError> {
+        self.signature.check(&self.content, self.public_key)
+    }
+
+    pub fn required_blob_ids(&self) -> impl Iterator<Item = BlobId> + '_ {
+        self.content.block.published_blob_ids().into_iter().chain(
+            self.content
+                .outcome
+                .iter()
+                .flat_map(|outcome| outcome.oracle_blob_ids()),
+        )
+    }
+
+    /// Checks that the public key matches the owner and that the optional certificate matches
+    /// the outcome.
+    pub fn check_invariants(&self) -> Result<(), &'static str> {
+        ensure!(
+            self.owner == Owner::from(&self.public_key),
+            "Public key does not match owner"
+        );
+        match (&self.validated_block_certificate, &self.content.outcome) {
+            (None, None) => {}
+            (None, Some(_)) | (Some(_), None) => {
+                return Err("Must contain a validation certificate if and only if \
+                     it contains the execution outcome from a previous round");
+            }
+            (Some(lite_certificate), Some(outcome)) => {
+                let executed_block = outcome.clone().with(self.content.block.clone());
+                let value = Hashed::new(ValidatedBlock::new(executed_block));
+                ensure!(
+                    lite_certificate.check_value(&value),
+                    "Lite certificate must match the given block and execution outcome"
+                );
+            }
+        }
+        Ok(())
     }
 }
 

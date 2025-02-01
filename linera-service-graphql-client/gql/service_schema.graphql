@@ -225,6 +225,10 @@ type ChainManager {
 	"""
 	seed: Int!
 	"""
+	These are blobs published or read by the proposed block.
+	"""
+	proposedBlobs: MapView_BlobId_Blob_3711e760!
+	"""
 	These are blobs published or read by the locking block.
 	"""
 	lockingBlobs: MapView_BlobId_Blob_3711e760!
@@ -271,9 +275,14 @@ type ChainStateExtendedView {
 	"""
 	manager: ChainManager!
 	"""
+	Pending validated block that is still missing blobs.
 	The incomplete set of blobs for the pending validated block.
 	"""
-	pendingValidatedBlobs: MapView_BlobId_Blob_9f0b41f3!
+	pendingValidatedBlobs: PendingBlobsView!
+	"""
+	The incomplete sets of blobs for upcoming proposals.
+	"""
+	pendingProposedBlobs: ReentrantCollectionView_Owner_PendingBlobsView_3247061959!
 	"""
 	Hashes of all certified blocks for this sender.
 	This ends with `block_hash` and has length `usize::from(next_block_height)`.
@@ -477,6 +486,14 @@ type Entry_Origin_InboxStateView_c4db01d6 {
 """
 A GraphQL-visible map item, complete with key.
 """
+type Entry_Owner_PendingBlobsView_c4f6af6f {
+	key: Owner!
+	value: PendingBlobsView!
+}
+
+"""
+A GraphQL-visible map item, complete with key.
+"""
 type Entry_Target_OutboxStateView_50a86149 {
 	key: Target!
 	value: OutboxStateView!
@@ -607,6 +624,10 @@ input MapFilters_Origin_742d451b {
 	keys: [Origin!]
 }
 
+input MapFilters_Owner_6898ce22 {
+	keys: [Owner!]
+}
+
 input MapFilters_Target_7aac1e1c {
 	keys: [Target!]
 }
@@ -625,6 +646,10 @@ input MapInput_ChannelFullName_3b59bf69 {
 
 input MapInput_Origin_742d451b {
 	filters: MapFilters_Origin_742d451b
+}
+
+input MapInput_Owner_6898ce22 {
+	filters: MapFilters_Owner_6898ce22
 }
 
 input MapInput_Target_7aac1e1c {
@@ -890,6 +915,28 @@ The owner of a chain. This is currently the hash of the owner's public key used 
 scalar Owner
 
 """
+The pending blobs belonging to a block that can't be processed without them.
+"""
+type PendingBlobsView {
+	"""
+	The round in which the block is validated.
+	"""
+	round: Round!
+	"""
+	Whether these blobs were already validated.
+	
+	This is only `false` for _new_ block proposals, not when re-proposing blocks from earlier
+	rounds or when handling validated block certificates. If it is false, the pending blobs are
+	only the ones published by the new block, not the ones that are only read.
+	"""
+	validated: Boolean!
+	"""
+	The map of blobs needed to process the block.
+	"""
+	pendingBlobs: MapView_BlobId_Blob_9f0b41f3!
+}
+
+"""
 A message together with kind, authentication and grant information.
 """
 type PostedMessage {
@@ -958,6 +1005,12 @@ type ReentrantCollectionView_Origin_InboxStateView_3699835794 {
 	keys: [Origin!]!
 	entry(key: Origin!): Entry_Origin_InboxStateView_c4db01d6!
 	entries(input: MapInput_Origin_742d451b): [Entry_Origin_InboxStateView_c4db01d6!]!
+}
+
+type ReentrantCollectionView_Owner_PendingBlobsView_3247061959 {
+	keys: [Owner!]!
+	entry(key: Owner!): Entry_Owner_PendingBlobsView_c4f6af6f!
+	entries(input: MapInput_Owner_6898ce22): [Entry_Owner_PendingBlobsView_c4f6af6f!]!
 }
 
 type ReentrantCollectionView_Target_OutboxStateView_2789119133 {
@@ -1031,6 +1084,10 @@ input ResourceControlPolicy {
 	The maximum size of a blob.
 	"""
 	maximumBlobSize: Int!
+	"""
+	The maximum number of published blobs per block.
+	"""
+	maximumPublishedBlobs: Int!
 	"""
 	The maximum size of a block proposal.
 	"""
