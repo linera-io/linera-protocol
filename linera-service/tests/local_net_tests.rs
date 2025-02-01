@@ -15,9 +15,10 @@ use std::{env, path::PathBuf, process::Command, time::Duration};
 use anyhow::Result;
 use common::INTEGRATION_TEST_GUARD;
 use linera_base::{
-    data_types::Amount,
+    data_types::{Amount, BlockHeight},
     identifiers::{Account, AccountOwner, ChainId},
 };
+use linera_core::{data_types::ChainInfoQuery, node::ValidatorNode};
 use linera_service::{
     cli_wrappers::{
         local_net::{
@@ -842,6 +843,75 @@ async fn test_end_to_end_benchmark(mut config: LocalNetConfig) -> Result<()> {
 
     net.ensure_is_running().await?;
     net.terminate().await?;
+
+    Ok(())
+}
+
+/// Tests if the `sync-validator` command uploads missing certificates to a validator.
+// TODO: Fix test for simple-net
+// #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Udp) ; "scylladb_udp"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
+// #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Tcp) ; "storage_service_tcp"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+// #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Tcp) ; "scylladb_tcp"))]
+// #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Tcp) ; "aws_tcp"))]
+// #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Udp) ; "aws_udp"))]
+#[test_log::test(tokio::test)]
+async fn test_sync_validator(config: LocalNetConfig) -> Result<()> {
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    tracing::info!("Starting test {}", test_name!());
+
+    const BLOCKS_TO_CREATE: usize = 5;
+
+    let (mut net, client) = config.instantiate().await?;
+
+    // Stop a validator to force it to lag behind the others
+    net.stop_validator(0).await?;
+
+    // Create some blocks
+    let sender_chain = client.default_chain().expect("Client has no default chain");
+    let (_, receiver_chain) = client
+        .open_chain(sender_chain, None, Amount::from_tokens(1_000))
+        .await?;
+
+    for amount in 1..=BLOCKS_TO_CREATE {
+        client
+            .transfer(
+                Amount::from_tokens(amount as u128),
+                sender_chain,
+                receiver_chain,
+            )
+            .await?;
+    }
+
+    // Restart the stopped validator
+    net.start_validator(0).await?;
+
+    let lagging_validator = net.validator_client(0).await?;
+
+    let state_before_sync = lagging_validator
+        .handle_chain_info_query(ChainInfoQuery::new(sender_chain))
+        .await?;
+    assert_eq!(state_before_sync.info.next_block_height, BlockHeight::ZERO);
+
+    // Synchronize the validator
+    let validator_name = net
+        .validator_name(0)
+        .expect("Missing name for the first validator")
+        .parse()?;
+    client
+        .sync_validator([&sender_chain], validator_name)
+        .await
+        .expect("Missing lagging validator name");
+
+    let state_after_sync = lagging_validator
+        .handle_chain_info_query(ChainInfoQuery::new(sender_chain))
+        .await?;
+    assert_eq!(
+        state_after_sync.info.next_block_height,
+        BlockHeight(BLOCKS_TO_CREATE as u64 + 1)
+    );
 
     Ok(())
 }

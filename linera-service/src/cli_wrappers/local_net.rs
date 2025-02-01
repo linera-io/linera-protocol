@@ -20,6 +20,7 @@ use linera_base::{
     data_types::Amount,
 };
 use linera_client::storage::{StorageConfig, StorageConfigNamespace};
+use linera_core::node::ValidatorNodeProvider;
 use linera_execution::ResourceControlPolicy;
 #[cfg(all(feature = "storage-service", with_testing))]
 use linera_storage_service::common::storage_service_test_endpoint;
@@ -626,6 +627,34 @@ impl LocalNet {
         }
         self.running_validators.insert(validator, validator_proxy);
         Ok(())
+    }
+
+    /// Terminates all the processes of a given `validator`.
+    pub async fn stop_validator(&mut self, validator: usize) -> Result<()> {
+        if let Some(mut validator) = self.running_validators.remove(&validator) {
+            validator.terminate().await?;
+        }
+        Ok(())
+    }
+
+    /// Returns a [`linera_rpc::Client`] to interact directly with a `validator`.
+    pub async fn validator_client(&mut self, validator: usize) -> Result<linera_rpc::Client> {
+        let node_provider = linera_rpc::NodeProvider::new(linera_rpc::NodeOptions {
+            send_timeout: Duration::from_secs(1),
+            recv_timeout: Duration::from_secs(1),
+            retry_delay: Duration::ZERO,
+            max_retries: 0,
+        });
+
+        let port = Self::proxy_port(validator);
+        let schema = match self.network.internal {
+            Network::Grpc | Network::Grpcs => "grpc",
+            Network::Tcp => "tcp",
+            Network::Udp => "udp",
+        };
+        let address = format!("{schema}:localhost:{port}");
+
+        Ok(node_provider.make_node(&address)?)
     }
 }
 
