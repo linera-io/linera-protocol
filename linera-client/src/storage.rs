@@ -4,7 +4,10 @@
 use std::{fmt, str::FromStr};
 
 use async_trait::async_trait;
+use linera_base::identifiers::BlobId;
 use linera_execution::WasmRuntime;
+#[cfg(with_storage)]
+use linera_storage::list_all_blob_ids;
 use linera_storage::{DbStorage, Storage};
 #[cfg(feature = "storage-service")]
 use linera_storage_service::{
@@ -551,6 +554,41 @@ impl StoreConfig {
             StoreConfig::ScyllaDb(config, _namespace) => {
                 let tables = ScyllaDbStore::list_all(&config).await?;
                 Ok(tables)
+            }
+        }
+    }
+
+    /// Lists all the namespaces of the storage
+    pub async fn list_blob_ids(self) -> Result<Vec<BlobId>, ViewError> {
+        match self {
+            StoreConfig::Memory(_, _) => Err(ViewError::StoreError {
+                backend: "memory".to_string(),
+                error: "list_blob_ids is not supported for the memory storage".to_string(),
+            }),
+            #[cfg(feature = "storage-service")]
+            StoreConfig::Service(config, namespace) => {
+                let store =
+                    ServiceStoreClient::maybe_create_and_connect(&config, &namespace, ROOT_KEY)
+                        .await?;
+                list_all_blob_ids(&store).await
+            }
+            #[cfg(feature = "rocksdb")]
+            StoreConfig::RocksDb(config, namespace) => {
+                let store =
+                    RocksDbStore::maybe_create_and_connect(&config, &namespace, ROOT_KEY).await?;
+                list_all_blob_ids(&store).await
+            }
+            #[cfg(feature = "dynamodb")]
+            StoreConfig::DynamoDb(config, namespace) => {
+                let store =
+                    DynamoDbStore::maybe_create_and_connect(&config, &namespace, ROOT_KEY).await?;
+                list_all_blob_ids(&store).await
+            }
+            #[cfg(feature = "scylladb")]
+            StoreConfig::ScyllaDb(config, namespace) => {
+                let store =
+                    ScyllaDbStore::maybe_create_and_connect(&config, &namespace, ROOT_KEY).await?;
+                list_all_blob_ids(&store).await
             }
         }
     }
