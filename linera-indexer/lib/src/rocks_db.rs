@@ -5,6 +5,7 @@ use std::path::PathBuf;
 
 use clap::Parser as _;
 use linera_views::{
+    lru_caching::read_storage_cache_policy,
     rocks_db::{PathWithGuard, RocksDbSpawnMode, RocksDbStore, RocksDbStoreConfig},
     store::{AdminKeyValueStore, CommonStoreConfig},
 };
@@ -28,9 +29,9 @@ pub struct RocksDbConfig {
     /// The maximal number of simultaneous stream queries to the database
     #[arg(long, default_value = "10")]
     pub max_stream_queries: usize,
-    /// The maximal number of entries in the storage cache.
-    #[arg(long, default_value = "1000")]
-    cache_size: usize,
+    /// The file of the storage cache policy
+    #[arg(long)]
+    storage_cache_policy: Option<String>,
 }
 
 pub type RocksDbRunner = Runner<RocksDbStore, RocksDbConfig>;
@@ -38,10 +39,12 @@ pub type RocksDbRunner = Runner<RocksDbStore, RocksDbConfig>;
 impl RocksDbRunner {
     pub async fn load() -> Result<Self, IndexerError> {
         let config = IndexerConfig::<RocksDbConfig>::parse();
+        let storage_cache_policy =
+            read_storage_cache_policy(config.client.storage_cache_policy.clone());
         let common_config = CommonStoreConfig {
             max_concurrent_queries: config.client.max_concurrent_queries,
             max_stream_queries: config.client.max_stream_queries,
-            cache_size: config.client.cache_size,
+            storage_cache_policy,
         };
         let path_buf = config.client.storage.as_path().to_path_buf();
         let path_with_guard = PathWithGuard::new(path_buf);

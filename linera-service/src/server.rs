@@ -33,7 +33,7 @@ use linera_rpc::{
 use linera_service::prometheus_server;
 use linera_service::util;
 use linera_storage::Storage;
-use linera_views::store::CommonStoreConfig;
+use linera_views::{lru_caching::read_storage_cache_policy, store::CommonStoreConfig};
 use serde::Deserialize;
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
@@ -356,9 +356,9 @@ enum ServerCommand {
         #[arg(long, default_value = "10")]
         max_stream_queries: usize,
 
-        /// The maximal number of entries in the storage cache.
-        #[arg(long, default_value = "1000")]
-        cache_size: usize,
+        /// The storage cache policy
+        #[arg(long)]
+        storage_cache_policy: Option<String>,
     },
 
     /// Act as a trusted third-party and generate all server configurations
@@ -397,9 +397,9 @@ enum ServerCommand {
         #[arg(long, default_value = "10")]
         max_stream_queries: usize,
 
-        /// The maximal number of entries in the storage cache.
-        #[arg(long, default_value = "1000")]
-        cache_size: usize,
+        /// The storage cache policy
+        #[arg(long)]
+        storage_cache_policy: Option<String>,
     },
 
     /// Replaces the configurations of the shards by following the given template.
@@ -500,7 +500,7 @@ async fn run(options: ServerOptions) {
             max_loaded_chains,
             max_concurrent_queries,
             max_stream_queries,
-            cache_size,
+            storage_cache_policy,
         } => {
             linera_version::VERSION_INFO.log();
 
@@ -525,10 +525,11 @@ async fn run(options: ServerOptions) {
                 max_loaded_chains,
             };
             let wasm_runtime = wasm_runtime.with_wasm_default();
+            let storage_cache_policy = read_storage_cache_policy(storage_cache_policy);
             let common_config = CommonStoreConfig {
                 max_concurrent_queries,
                 max_stream_queries,
-                cache_size,
+                storage_cache_policy,
             };
             let full_storage_config = storage_config
                 .add_common_config(common_config)
@@ -584,14 +585,15 @@ async fn run(options: ServerOptions) {
             genesis_config_path,
             max_concurrent_queries,
             max_stream_queries,
-            cache_size,
+            storage_cache_policy,
         } => {
             let genesis_config: GenesisConfig =
                 util::read_json(&genesis_config_path).expect("Failed to read initial chain config");
+            let storage_cache_policy = read_storage_cache_policy(storage_cache_policy);
             let common_config = CommonStoreConfig {
                 max_concurrent_queries,
                 max_stream_queries,
-                cache_size,
+                storage_cache_policy,
             };
             let full_storage_config = storage_config
                 .add_common_config(common_config)
