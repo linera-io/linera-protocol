@@ -342,7 +342,7 @@ pub struct BlockHeader {
 /// The body of a block containing all the data included in the block.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
 pub struct BlockBody {
-    /// A selection of incoming messages to be executed first. Successive messages of same
+    /// A selection of incoming messages to be executed first. Successive messages of the same
     /// sender and height are grouped together for conciseness.
     pub incoming_bundles: Vec<IncomingBundle>,
     /// The operations to execute.
