@@ -3,7 +3,7 @@
 These [WIT files](https://component-model.bytecodealliance.org/design/wit.html) define the
 interface that Linera applications compiled to [WebAssembly (Wasm)](https://webassembly.org) must
 adhere to. Application contracts should implement the [`contract.wit`](./contract.wit) interfaces,
-application services should implement the [`service.wit`](./service.wit) interfaces.
+and application services should implement the [`service.wit`](./service.wit) interfaces.
 
 ## Generation of the WIT files
 
