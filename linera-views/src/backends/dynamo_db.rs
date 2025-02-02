@@ -517,7 +517,7 @@ impl DynamoDbStoreInternal {
         if namespace.len() < 3 {
             return Err(InvalidNamespace::TooShort);
         }
-        if namespace.len() > 255 {
+        if namespace.len() > 63 {
             return Err(InvalidNamespace::TooLong);
         }
         if !namespace.chars().all(|character| {
