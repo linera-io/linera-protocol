@@ -331,7 +331,7 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
             .expect("Call stack is unexpectedly empty")
     }
 
-    /// Returns a mutable refernce to the [`ApplicationStatus`] of the current application.
+    /// Returns a mutable reference to the [`ApplicationStatus`] of the current application.
     ///
     /// The current application is the last to be pushed to the `call_stack`.
     ///

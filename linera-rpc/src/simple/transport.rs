@@ -241,7 +241,7 @@ where
         }
     }
 
-    /// Creates a [`UpdServer`] bound to the provided `address`, handling messages using the
+    /// Creates a [`UdpServer`] bound to the provided `address`, handling messages using the
     /// provided `handler`.
     async fn bind(address: impl ToSocketAddrs, handler: State) -> Result<Self, std::io::Error> {
         let socket = UdpSocket::bind(address).await?;
