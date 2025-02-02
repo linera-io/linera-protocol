@@ -46,8 +46,8 @@ use crate::{
     committee::{Committee, Epoch},
     ApplicationRegistryView, ChannelName, ChannelSubscription, Destination,
     ExecutionRuntimeContext, MessageContext, MessageKind, OperationContext, QueryContext,
-    RawExecutionOutcome, RawOutgoingMessage, TransactionTracker, UserApplicationDescription,
-    UserApplicationId,
+    QueryOutcome, RawExecutionOutcome, RawOutgoingMessage, TransactionTracker,
+    UserApplicationDescription, UserApplicationId,
 };
 
 /// The relative index of the `OpenChain` message created by the `OpenChain` operation.
@@ -942,12 +942,15 @@ where
         &mut self,
         context: QueryContext,
         _query: SystemQuery,
-    ) -> Result<SystemResponse, SystemExecutionError> {
+    ) -> Result<QueryOutcome<SystemResponse>, SystemExecutionError> {
         let response = SystemResponse {
             chain_id: context.chain_id,
             balance: *self.balance.get(),
         };
-        Ok(response)
+        Ok(QueryOutcome {
+            response,
+            operations: vec![],
+        })
     }
 
     /// Returns the messages to open a new chain, and subtracts the new chain's balance

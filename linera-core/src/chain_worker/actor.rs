@@ -23,7 +23,7 @@ use linera_chain::{
 };
 use linera_execution::{
     committee::{Epoch, ValidatorName},
-    Query, QueryContext, Response, ServiceRuntimeEndpoint, ServiceSyncRuntime,
+    Query, QueryContext, QueryOutcome, ServiceRuntimeEndpoint, ServiceSyncRuntime,
 };
 use linera_storage::Storage;
 use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
@@ -72,7 +72,7 @@ where
     QueryApplication {
         query: Query,
         #[debug(skip)]
-        callback: oneshot::Sender<Result<Response, WorkerError>>,
+        callback: oneshot::Sender<Result<QueryOutcome, WorkerError>>,
     },
 
     /// Describe an application.

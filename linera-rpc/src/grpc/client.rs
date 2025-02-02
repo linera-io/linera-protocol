@@ -117,7 +117,6 @@ impl GrpcClient {
         Fut: Future<Output = Result<tonic::Response<S>, Status>>,
         R: IntoRequest<R> + Clone,
     {
-        debug!(request = ?request, "sending gRPC request");
         let mut retry_count = 0;
         let request_inner = request.try_into().map_err(|_| NodeError::GrpcError {
             error: "could not convert request to proto".to_string(),
@@ -132,7 +131,7 @@ impl GrpcClient {
                 }
                 Err(s) => {
                     return Err(NodeError::GrpcError {
-                        error: format!("remote request [{handler}] failed with status: {s:?}",),
+                        error: format!("remote request [{handler}] failed with status: {s:?}"),
                     });
                 }
                 Ok(result) => return Ok(result.into_inner()),
@@ -184,6 +183,11 @@ impl TryFrom<api::PendingBlobResult> for BlobContent {
 
 macro_rules! client_delegate {
     ($self:ident, $handler:ident, $req:ident) => {{
+        debug!(
+            handler = stringify!($handler),
+            request = ?$req,
+            "sending gRPC request"
+        );
         $self
             .delegate(
                 |mut client, req| async move { client.$handler(req).await },
@@ -364,14 +368,12 @@ impl ValidatorNode for GrpcClient {
 
     #[instrument(target = "grpc_client", skip(self), err, fields(address = self.address))]
     async fn upload_blob(&self, content: BlobContent) -> Result<BlobId, NodeError> {
-        let req = api::BlobContent::try_from(content)?;
-        Ok(client_delegate!(self, upload_blob, req)?.try_into()?)
+        Ok(client_delegate!(self, upload_blob, content)?.try_into()?)
     }
 
     #[instrument(target = "grpc_client", skip(self), err, fields(address = self.address))]
     async fn download_blob(&self, blob_id: BlobId) -> Result<BlobContent, NodeError> {
-        let req = api::BlobId::try_from(blob_id)?;
-        Ok(client_delegate!(self, download_blob, req)?.try_into()?)
+        Ok(client_delegate!(self, download_blob, blob_id)?.try_into()?)
     }
 
     #[instrument(target = "grpc_client", skip(self), err, fields(address = self.address))]
@@ -380,7 +382,7 @@ impl ValidatorNode for GrpcClient {
         chain_id: ChainId,
         blob_id: BlobId,
     ) -> Result<BlobContent, NodeError> {
-        let req = api::PendingBlobRequest::try_from((chain_id, blob_id))?;
+        let req = (chain_id, blob_id);
         client_delegate!(self, download_pending_blob, req)?.try_into()
     }
 
@@ -390,7 +392,7 @@ impl ValidatorNode for GrpcClient {
         chain_id: ChainId,
         blob: BlobContent,
     ) -> Result<ChainInfoResponse, NodeError> {
-        let req = api::HandlePendingBlobRequest::try_from((chain_id, blob))?;
+        let req = (chain_id, blob);
         GrpcClient::try_into_chain_info(client_delegate!(self, handle_pending_blob, req)?)
     }
 
@@ -445,14 +447,12 @@ impl ValidatorNode for GrpcClient {
 
     #[instrument(target = "grpc_client", skip(self), err, fields(address = self.address))]
     async fn blob_last_used_by(&self, blob_id: BlobId) -> Result<CryptoHash, NodeError> {
-        let req = api::BlobId::try_from(blob_id)?;
-        Ok(client_delegate!(self, blob_last_used_by, req)?.try_into()?)
+        Ok(client_delegate!(self, blob_last_used_by, blob_id)?.try_into()?)
     }
 
     #[instrument(target = "grpc_client", skip(self), err, fields(address = self.address))]
     async fn missing_blob_ids(&self, blob_ids: Vec<BlobId>) -> Result<Vec<BlobId>, NodeError> {
-        let req = api::BlobIds::try_from(blob_ids)?;
-        Ok(client_delegate!(self, missing_blob_ids, req)?.try_into()?)
+        Ok(client_delegate!(self, missing_blob_ids, blob_ids)?.try_into()?)
     }
 }
 

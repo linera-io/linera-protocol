@@ -22,8 +22,8 @@ use linera_chain::{
 use linera_execution::{
     committee::{Committee, Epoch},
     system::{Recipient, SystemOperation},
-    ExecutionError, Message, MessageKind, Operation, ResourceControlPolicy, SystemExecutionError,
-    SystemMessage, SystemQuery, SystemResponse,
+    ExecutionError, Message, MessageKind, Operation, QueryOutcome, ResourceControlPolicy,
+    SystemExecutionError, SystemMessage, SystemQuery, SystemResponse,
 };
 use linera_storage::{DbStorage, TestClock};
 use linera_views::memory::MemoryStore;
@@ -863,9 +863,12 @@ where
     );
     assert_eq!(
         client1.query_system_application(SystemQuery).await.unwrap(),
-        SystemResponse {
-            chain_id: client1.chain_id(),
-            balance: Amount::from_tokens(3),
+        QueryOutcome {
+            response: SystemResponse {
+                chain_id: client1.chain_id(),
+                balance: Amount::from_tokens(3),
+            },
+            operations: vec![],
         }
     );
     let certificate = client1
@@ -883,10 +886,13 @@ where
     assert_eq!(client1.local_balance().await.unwrap(), Amount::ZERO);
     assert_eq!(
         client1.query_system_application(SystemQuery).await.unwrap(),
-        SystemResponse {
-            chain_id: client1.chain_id(),
-            balance: Amount::ZERO,
-        }
+        QueryOutcome {
+            response: SystemResponse {
+                chain_id: client1.chain_id(),
+                balance: Amount::ZERO,
+            },
+            operations: vec![],
+        },
     );
 
     assert_eq!(
@@ -903,10 +909,13 @@ where
     assert_eq!(client2.local_balance().await.unwrap(), Amount::ZERO);
     assert_eq!(
         client2.query_system_application(SystemQuery).await.unwrap(),
-        SystemResponse {
-            chain_id: client2.chain_id(),
-            balance: Amount::from_tokens(0),
-        }
+        QueryOutcome {
+            response: SystemResponse {
+                chain_id: client2.chain_id(),
+                balance: Amount::from_tokens(0),
+            },
+            operations: vec![],
+        },
     );
 
     // Process the inbox and send back some money.
@@ -927,10 +936,13 @@ where
     // Local balance from client2 is now consolidated.
     assert_eq!(
         client2.query_system_application(SystemQuery).await.unwrap(),
-        SystemResponse {
-            chain_id: client2.chain_id(),
-            balance: Amount::from_tokens(2),
-        }
+        QueryOutcome {
+            response: SystemResponse {
+                chain_id: client2.chain_id(),
+                balance: Amount::from_tokens(2),
+            },
+            operations: vec![],
+        },
     );
     Ok(())
 }
@@ -1696,7 +1708,7 @@ where
             let LockingBlock::Regular(validated) = locking else {
                 panic!("Unexpected locking fast block.");
             };
-            assert_eq!(validated.block().body.operations, blob_0_1_operations,);
+            assert_eq!(validated.block().body.operations, blob_0_1_operations);
         } else {
             assert!(validator_manager.requested_locking.is_none());
         }
@@ -1760,7 +1772,7 @@ where
     let LockingBlock::Regular(validated) = locking else {
         panic!("Unexpected locking fast block.");
     };
-    assert_eq!(validated.block().body.operations, blob_2_3_operations,);
+    assert_eq!(validated.block().body.operations, blob_2_3_operations);
 
     builder.set_fault_type([1], FaultType::Offline).await;
     builder.set_fault_type([0, 2, 3], FaultType::Honest).await;

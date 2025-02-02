@@ -199,7 +199,6 @@ impl TryFrom<BlockProposal> for api::BlockProposal {
             public_key: Some(block_proposal.public_key.into()),
             owner: Some(block_proposal.owner.into()),
             signature: Some(block_proposal.signature.into()),
-            blobs: bincode::serialize(&block_proposal.blobs)?,
             validated_block_certificate: block_proposal
                 .validated_block_certificate
                 .map(|cert| bincode::serialize(&cert))
@@ -222,7 +221,6 @@ impl TryFrom<api::BlockProposal> for BlockProposal {
             public_key: try_proto_convert(block_proposal.public_key)?,
             owner: try_proto_convert(block_proposal.owner)?,
             signature: try_proto_convert(block_proposal.signature)?,
-            blobs: bincode::deserialize(&block_proposal.blobs)?,
             validated_block_certificate: block_proposal
                 .validated_block_certificate
                 .map(|bytes| bincode::deserialize(&bytes))
@@ -1224,7 +1222,6 @@ pub mod tests {
             owner: Owner::from(public_key),
             public_key,
             signature: Signature::new(&Foo("test".into()), &KeyPair::generate()),
-            blobs: vec![],
             validated_block_certificate: Some(cert),
         };
 

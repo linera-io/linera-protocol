@@ -17,6 +17,7 @@ pub mod data_types;
 mod inbox;
 pub mod manager;
 mod outbox;
+mod pending_blobs;
 #[cfg(with_testing)]
 pub mod test;
 

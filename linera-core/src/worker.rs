@@ -35,7 +35,7 @@ use linera_chain::{
 };
 use linera_execution::{
     committee::{Epoch, ValidatorName},
-    ExecutionError, Query, Response,
+    ExecutionError, Query, QueryOutcome,
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;
@@ -209,10 +209,6 @@ pub enum WorkerError {
     MissingCertificateValue,
     #[error("The hash certificate doesn't match its value.")]
     InvalidLiteCertificate,
-    #[error("An additional blob was provided that is not required: {blob_id}.")]
-    UnneededBlob { blob_id: BlobId },
-    #[error("The blobs provided in the proposal were not the published ones, in order.")]
-    WrongBlobsInProposal,
     #[error("Fast blocks cannot query oracles")]
     FastBlockUsingOracles,
     #[error("Blobs not found: {0:?}")]
@@ -227,6 +223,8 @@ pub enum WorkerError {
     BlobTooLarge,
     #[error("Bytecode exceeds size limit")]
     BytecodeTooLarge,
+    #[error("Number of published blobs per block must not exceed {0}")]
+    TooManyPublishedBlobs(u64),
     #[error(transparent)]
     Decompression(#[from] DecompressionError),
 }
@@ -407,7 +405,6 @@ where
         let executed_block = self
             .executed_block_cache
             .get(&certificate.value.value_hash)
-            .await
             .ok_or(WorkerError::MissingCertificateValue)?;
 
         match certificate.value.kind {
@@ -523,7 +520,7 @@ where
         &self,
         chain_id: ChainId,
         query: Query,
-    ) -> Result<Response, WorkerError> {
+    ) -> Result<QueryOutcome, WorkerError> {
         self.query_chain_worker(chain_id, move |callback| {
             ChainWorkerRequest::QueryApplication { query, callback }
         })

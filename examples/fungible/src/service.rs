@@ -44,8 +44,12 @@ impl Service for FungibleTokenService {
     }
 
     async fn handle_query(&self, request: Request) -> Response {
-        let schema =
-            Schema::build(self.clone(), Operation::mutation_root(), EmptySubscription).finish();
+        let schema = Schema::build(
+            self.clone(),
+            Operation::mutation_root(self.runtime.clone()),
+            EmptySubscription,
+        )
+        .finish();
         schema.execute(request).await
     }
 }

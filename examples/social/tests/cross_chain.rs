@@ -5,7 +5,7 @@
 
 #![cfg(not(target_arch = "wasm32"))]
 
-use linera_sdk::test::TestValidator;
+use linera_sdk::test::{QueryOutcome, TestValidator};
 use social::Operation;
 
 /// Test posting messages across microchains.
@@ -56,13 +56,13 @@ async fn test_cross_chain_posting() {
 
     // Querying the own posts
     let query = "query { ownPosts { entries(start: 0, end: 1) { timestamp, text } } }";
-    let response = chain2.graphql_query(application_id, query).await;
+    let QueryOutcome { response, .. } = chain2.graphql_query(application_id, query).await;
     let value = response["ownPosts"]["entries"][0]["text"].clone();
     assert_eq!(value, "Linera is the new Mastodon".to_string());
 
     // Now handling the received messages
     let query = "query { receivedPosts { keys { timestamp, author, index } } }";
-    let response = chain1.graphql_query(application_id, query).await;
+    let QueryOutcome { response, .. } = chain1.graphql_query(application_id, query).await;
     let author = response["receivedPosts"]["keys"][0]["author"].clone();
     assert_eq!(author, chain2.id().to_string());
 }

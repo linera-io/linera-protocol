@@ -146,10 +146,11 @@ async fn test_fee_consumption(
         maximum_fuel_per_block: 4_868_145_137,
         maximum_executed_block_size: 37,
         maximum_blob_size: 41,
-        maximum_bytecode_size: 43,
-        maximum_block_proposal_size: 47,
-        maximum_bytes_read_per_block: 53,
-        maximum_bytes_written_per_block: 59,
+        maximum_published_blobs: 43,
+        maximum_bytecode_size: 47,
+        maximum_block_proposal_size: 53,
+        maximum_bytes_read_per_block: 59,
+        maximum_bytes_written_per_block: 61,
     };
 
     let consumed_fees = spends

@@ -46,8 +46,8 @@ use linera_execution::{
         AdminOperation, OpenChainConfig, Recipient, SystemChannel, SystemMessage, SystemOperation,
     },
     test_utils::{ExpectedCall, RegisterMockApplication, SystemExecutionState},
-    ChannelSubscription, ExecutionError, Message, MessageKind, Query, QueryContext, Response,
-    SystemExecutionError, SystemQuery, SystemResponse,
+    ChannelSubscription, ExecutionError, Message, MessageKind, Query, QueryContext, QueryOutcome,
+    QueryResponse, SystemExecutionError, SystemQuery, SystemResponse,
 };
 use linera_storage::{DbStorage, Storage, TestClock};
 use linera_views::{
@@ -1907,19 +1907,25 @@ where
         worker
             .query_application(ChainId::root(1), Query::System(SystemQuery))
             .await?,
-        Response::System(SystemResponse {
-            chain_id: ChainId::root(1),
-            balance: Amount::from_tokens(5),
-        })
+        QueryOutcome {
+            response: QueryResponse::System(SystemResponse {
+                chain_id: ChainId::root(1),
+                balance: Amount::from_tokens(5),
+            }),
+            operations: vec![],
+        }
     );
     assert_eq!(
         worker
             .query_application(ChainId::root(2), Query::System(SystemQuery))
             .await?,
-        Response::System(SystemResponse {
-            chain_id: ChainId::root(2),
-            balance: Amount::ZERO,
-        })
+        QueryOutcome {
+            response: QueryResponse::System(SystemResponse {
+                chain_id: ChainId::root(2),
+                balance: Amount::ZERO,
+            }),
+            operations: vec![],
+        }
     );
 
     let certificate = make_simple_transfer_certificate(
@@ -1948,10 +1954,13 @@ where
         worker
             .query_application(ChainId::root(1), Query::System(SystemQuery))
             .await?,
-        Response::System(SystemResponse {
-            chain_id: ChainId::root(1),
-            balance: Amount::ZERO,
-        })
+        QueryOutcome {
+            response: QueryResponse::System(SystemResponse {
+                chain_id: ChainId::root(1),
+                balance: Amount::ZERO,
+            }),
+            operations: vec![],
+        }
     );
 
     // Try to use the money. This requires selecting the incoming message in a next block.
@@ -1986,10 +1995,13 @@ where
         worker
             .query_application(ChainId::root(2), Query::System(SystemQuery))
             .await?,
-        Response::System(SystemResponse {
-            chain_id: ChainId::root(2),
-            balance: Amount::from_tokens(4),
-        })
+        QueryOutcome {
+            response: QueryResponse::System(SystemResponse {
+                chain_id: ChainId::root(2),
+                balance: Amount::from_tokens(4),
+            }),
+            operations: vec![],
+        }
     );
 
     {
@@ -3350,12 +3362,8 @@ where
     // But with the validated block certificate for block2, it is allowed.
     let certificate2 =
         make_certificate_with_round(&committee, &worker, value2.clone(), Round::SingleLeader(4));
-    let proposal = BlockProposal::new_retry(
-        Round::SingleLeader(5),
-        certificate2.clone(),
-        &key_pairs[1],
-        Vec::new(),
-    );
+    let proposal =
+        BlockProposal::new_retry(Round::SingleLeader(5), certificate2.clone(), &key_pairs[1]);
     let lite_value2 = LiteValue::new(&value2);
     let (_, _) = worker.handle_block_proposal(proposal).await?;
     let (response, _) = worker.handle_chain_info_query(query_values.clone()).await?;
@@ -3658,12 +3666,8 @@ where
     let value2 = Hashed::new(ValidatedBlock::new(executed_block2.clone()));
     let certificate2 =
         make_certificate_with_round(&committee, &worker, value2.clone(), Round::MultiLeader(0));
-    let proposal = BlockProposal::new_retry(
-        Round::MultiLeader(3),
-        certificate2.clone(),
-        &key_pairs[1],
-        Vec::new(),
-    );
+    let proposal =
+        BlockProposal::new_retry(Round::MultiLeader(3), certificate2.clone(), &key_pairs[1]);
     let lite_value2 = LiteValue::new(&value2);
     let (_, _) = worker.handle_block_proposal(proposal).await?;
     let query_values = ChainInfoQuery::new(chain_id).with_manager_values();
@@ -3818,7 +3822,10 @@ where
 
         assert_eq!(
             worker.query_application(chain_id, query.clone()).await?,
-            Response::User(vec![])
+            QueryOutcome {
+                response: QueryResponse::User(vec![]),
+                operations: vec![],
+            }
         );
     }
 
@@ -3925,7 +3932,10 @@ where
 
         assert_eq!(
             worker.query_application(chain_id, query.clone()).await?,
-            Response::User(vec![])
+            QueryOutcome {
+                response: QueryResponse::User(vec![]),
+                operations: vec![],
+            }
         );
     }
 
@@ -3940,7 +3950,10 @@ where
 
         assert_eq!(
             worker.query_application(chain_id, query.clone()).await?,
-            Response::User(vec![])
+            QueryOutcome {
+                response: QueryResponse::User(vec![]),
+                operations: vec![],
+            }
         );
     }
 
@@ -3986,7 +3999,10 @@ where
 
         assert_eq!(
             worker.query_application(chain_id, query.clone()).await?,
-            Response::User(vec![])
+            QueryOutcome {
+                response: QueryResponse::User(vec![]),
+                operations: vec![],
+            }
         );
     }
 

@@ -641,6 +641,9 @@ pub trait ServiceRuntime: BaseRuntime {
 
     /// Fetches blob of bytes from an arbitrary URL.
     fn fetch_url(&mut self, url: &str) -> Result<Vec<u8>, ExecutionError>;
+
+    /// Schedules an operation to be included in the block proposed after execution.
+    fn schedule_operation(&mut self, operation: Vec<u8>) -> Result<(), ExecutionError>;
 }
 
 pub trait ContractRuntime: BaseRuntime {
@@ -783,9 +786,44 @@ pub enum Query {
     },
 }
 
+/// The outcome of the execution of a query.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct QueryOutcome<Response = QueryResponse> {
+    pub response: Response,
+    pub operations: Vec<Operation>,
+}
+
+impl From<QueryOutcome<SystemResponse>> for QueryOutcome {
+    fn from(system_outcome: QueryOutcome<SystemResponse>) -> Self {
+        let QueryOutcome {
+            response,
+            operations,
+        } = system_outcome;
+
+        QueryOutcome {
+            response: QueryResponse::System(response),
+            operations,
+        }
+    }
+}
+
+impl From<QueryOutcome<Vec<u8>>> for QueryOutcome {
+    fn from(user_service_outcome: QueryOutcome<Vec<u8>>) -> Self {
+        let QueryOutcome {
+            response,
+            operations,
+        } = user_service_outcome;
+
+        QueryOutcome {
+            response: QueryResponse::User(response),
+            operations,
+        }
+    }
+}
+
 /// The response to a query.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub enum Response {
+pub enum QueryResponse {
     /// A system response.
     System(SystemResponse),
     /// A user response (in serialized form).
@@ -1247,15 +1285,15 @@ impl Query {
     }
 }
 
-impl From<SystemResponse> for Response {
+impl From<SystemResponse> for QueryResponse {
     fn from(response: SystemResponse) -> Self {
-        Response::System(response)
+        QueryResponse::System(response)
     }
 }
 
-impl From<Vec<u8>> for Response {
+impl From<Vec<u8>> for QueryResponse {
     fn from(response: Vec<u8>) -> Self {
-        Response::User(response)
+        QueryResponse::User(response)
     }
 }
 

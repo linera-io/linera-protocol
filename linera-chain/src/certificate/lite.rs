@@ -74,6 +74,13 @@ impl<'a> LiteCertificate<'a> {
         Ok(&self.value)
     }
 
+    /// Checks whether the value matches this certificate.
+    pub fn check_value<T: CertificateValue>(&self, value: &Hashed<T>) -> bool {
+        self.value.chain_id == value.inner().chain_id()
+            && T::KIND == self.value.kind
+            && self.value.value_hash == value.hash()
+    }
+
     /// Returns the [`GenericCertificate`] with the specified value, if it matches.
     pub fn with_value<T: CertificateValue>(
         self,

@@ -159,6 +159,8 @@ where
     /// proposals in the same round, this contains only the first one.
     #[graphql(skip)]
     pub proposed: RegisterView<C, Option<BlockProposal>>,
+    /// These are blobs published or read by the proposed block.
+    pub proposed_blobs: MapView<C, BlobId, Blob>,
     /// Latest validated proposal that a validator may have voted to confirm. This is either the
     /// latest `ValidatedBlock` we have seen, or the proposal from the `Fast` round.
     #[graphql(skip)]
@@ -460,16 +462,16 @@ where
             {
                 let value = Hashed::new(ValidatedBlock::new(executed_block.clone()));
                 if let Some(certificate) = lite_cert.clone().with_value(value) {
-                    self.update_locking(LockingBlock::Regular(certificate), blobs)?;
+                    self.update_locking(LockingBlock::Regular(certificate), blobs.clone())?;
                 }
             }
         } else if round.is_fast() && self.locking_block.get().is_none() {
             // The fast block also counts as locking.
-            self.update_locking(LockingBlock::Fast(proposal.clone()), blobs)?;
+            self.update_locking(LockingBlock::Fast(proposal.clone()), blobs.clone())?;
         }
 
         // We record the proposed block, in case it affects the current round number.
-        self.update_proposed(proposal.clone());
+        self.update_proposed(proposal.clone(), blobs)?;
         self.update_current_round(local_time);
 
         let Some(key_pair) = key_pair else {
@@ -521,10 +523,8 @@ where
 
     /// Returns the requested blob if it belongs to the proposal or the locking block.
     pub async fn pending_blob(&self, blob_id: &BlobId) -> Result<Option<Blob>, ViewError> {
-        if let Some(proposal) = self.proposed.get() {
-            if let Some(blob) = proposal.blobs.iter().find(|blob| blob.id() == *blob_id) {
-                return Ok(Some(blob.clone()));
-            }
+        if let Some(blob) = self.proposed_blobs.get(blob_id).await? {
+            return Ok(Some(blob));
         }
         self.locking_blobs.get(blob_id).await
     }
@@ -651,13 +651,22 @@ where
     }
 
     /// Sets the proposed block, if it is newer than our known latest proposal.
-    fn update_proposed(&mut self, proposal: BlockProposal) {
+    fn update_proposed(
+        &mut self,
+        proposal: BlockProposal,
+        blobs: BTreeMap<BlobId, Blob>,
+    ) -> Result<(), ViewError> {
         if let Some(old_proposal) = self.proposed.get() {
             if old_proposal.content.round >= proposal.content.round {
-                return;
+                return Ok(());
             }
         }
         self.proposed.set(Some(proposal));
+        self.proposed_blobs.clear();
+        for (blob_id, blob) in blobs {
+            self.proposed_blobs.insert(&blob_id, blob)?;
+        }
+        Ok(())
     }
 
     /// Sets the locking block and the associated blobs, if it is newer than the known one.

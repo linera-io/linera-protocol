@@ -19,6 +19,7 @@ use state::CrowdFundingState;
 
 pub struct CrowdFundingService {
     state: Arc<CrowdFundingState>,
+    runtime: Arc<ServiceRuntime<Self>>,
 }
 
 linera_sdk::service!(CrowdFundingService);
@@ -36,13 +37,14 @@ impl Service for CrowdFundingService {
             .expect("Failed to load state");
         CrowdFundingService {
             state: Arc::new(state),
+            runtime: Arc::new(runtime),
         }
     }
 
     async fn handle_query(&self, request: Request) -> Response {
         let schema = Schema::build(
             self.state.clone(),
-            Operation::mutation_root(),
+            Operation::mutation_root(self.runtime.clone()),
             EmptySubscription,
         )
         .finish();

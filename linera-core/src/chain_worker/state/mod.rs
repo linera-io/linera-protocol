@@ -8,6 +8,7 @@ mod temporary_changes;
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    iter,
     sync::{self, Arc},
 };
 
@@ -27,7 +28,7 @@ use linera_chain::{
 };
 use linera_execution::{
     committee::{Epoch, ValidatorName},
-    Message, Query, QueryContext, Response, ServiceRuntimeEndpoint, SystemMessage,
+    Message, Query, QueryContext, QueryOutcome, ServiceRuntimeEndpoint, SystemMessage,
 };
 use linera_storage::{Clock as _, Storage};
 use linera_views::views::{ClonableView, ViewError};
@@ -157,7 +158,7 @@ where
     pub(super) async fn query_application(
         &mut self,
         query: Query,
-    ) -> Result<Response, WorkerError> {
+    ) -> Result<QueryOutcome, WorkerError> {
         ChainWorkerStateWithTemporaryChanges::new(self)
             .await
             .query_application(query)
@@ -203,9 +204,18 @@ where
         &mut self,
         proposal: BlockProposal,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        let validation_outcome = ChainWorkerStateWithTemporaryChanges::new(self)
+        self.ensure_is_active()?;
+        proposal
+            .check_invariants()
+            .map_err(|msg| WorkerError::InvalidBlockProposal(msg.to_string()))?;
+        proposal.check_signature()?;
+        ChainWorkerStateWithAttemptedChanges::new(&mut *self)
             .await
             .validate_block(&proposal)
+            .await?;
+        let validation_outcome = ChainWorkerStateWithTemporaryChanges::new(self)
+            .await
+            .validate_proposal_content(&proposal.content)
             .await?;
 
         let actions = if let Some((outcome, local_time)) = validation_outcome {
@@ -298,8 +308,10 @@ where
 
     /// Returns the requested blob, if it belongs to the current locking block or pending proposal.
     pub(super) async fn download_pending_blob(&self, blob_id: BlobId) -> Result<Blob, WorkerError> {
-        let maybe_blob = self.chain.manager.pending_blob(&blob_id).await?;
-        maybe_blob.ok_or_else(|| WorkerError::BlobsNotFound(vec![blob_id]))
+        if let Some(blob) = self.chain.manager.pending_blob(&blob_id).await? {
+            return Ok(blob);
+        }
+        Ok(self.storage.read_blob(blob_id).await?)
     }
 
     /// Adds the blob to pending blocks or validated block certificates that are missing it.
@@ -322,16 +334,13 @@ where
         Ok(())
     }
 
-    /// Returns the blobs required by the given executed block. The ones that are not passed in
-    /// are read from the chain manager or from storage.
+    /// Reads the blobs from the chain manager or from storage. Returns an error if any are
+    /// missing.
     async fn get_required_blobs(
         &self,
-        required_blob_ids: HashSet<BlobId>,
-        blobs: &[Blob],
+        required_blob_ids: impl IntoIterator<Item = BlobId>,
     ) -> Result<BTreeMap<BlobId, Blob>, WorkerError> {
-        let maybe_blobs = self
-            .maybe_get_required_blobs(required_blob_ids, blobs)
-            .await?;
+        let maybe_blobs = self.maybe_get_required_blobs(required_blob_ids).await?;
         let not_found_blob_ids = missing_blob_ids(&maybe_blobs);
         ensure!(
             not_found_blob_ids.is_empty(),
@@ -343,30 +352,30 @@ where
             .collect())
     }
 
-    /// Returns the blobs required by the given executed block. The ones that are not passed in
-    /// are read from the chain manager or from storage.
+    /// Tries to read the blobs from the chain manager or storage. Returns `None` if not found.
     async fn maybe_get_required_blobs(
         &self,
-        required_blob_ids: HashSet<BlobId>,
-        provided_blobs: &[Blob],
+        blob_ids: impl IntoIterator<Item = BlobId>,
     ) -> Result<BTreeMap<BlobId, Option<Blob>>, WorkerError> {
-        let required_blob_ids = required_blob_ids.into_iter();
-        let mut maybe_blobs = BTreeMap::from_iter(required_blob_ids.map(|blob_id| (blob_id, None)));
+        let mut maybe_blobs = BTreeMap::from_iter(blob_ids.into_iter().zip(iter::repeat(None)));
 
-        for blob in provided_blobs {
-            if let Some(maybe_blob) = maybe_blobs.get_mut(&blob.id()) {
-                *maybe_blob = Some(blob.clone());
-            }
-        }
         for (blob_id, maybe_blob) in &mut maybe_blobs {
-            if maybe_blob.is_some() {
-                continue;
-            }
             if let Some(blob) = self.chain.manager.pending_blob(blob_id).await? {
                 *maybe_blob = Some(blob);
-            } else if let Some(Some(blob)) = self.chain.pending_validated_blobs.get(blob_id).await?
-            {
+            } else if let Some(blob) = self.chain.pending_validated_blobs.get(blob_id).await? {
                 *maybe_blob = Some(blob);
+            } else {
+                for (_, pending_blobs) in self
+                    .chain
+                    .pending_proposed_blobs
+                    .try_load_all_entries()
+                    .await?
+                {
+                    if let Some(blob) = pending_blobs.get(blob_id).await? {
+                        *maybe_blob = Some(blob);
+                        break;
+                    }
+                }
             }
         }
         let missing_blob_ids = missing_blob_ids(&maybe_blobs);

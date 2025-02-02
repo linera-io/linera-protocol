@@ -11,8 +11,9 @@ use linera_base::{
 };
 use linera_execution::{
     system::Recipient, test_utils::SystemExecutionState, ExecutionOutcome, Message, MessageContext,
-    Operation, OperationContext, Query, QueryContext, RawExecutionOutcome, ResourceController,
-    Response, SystemMessage, SystemOperation, SystemQuery, SystemResponse, TransactionTracker,
+    Operation, OperationContext, Query, QueryContext, QueryOutcome, QueryResponse,
+    RawExecutionOutcome, ResourceController, SystemMessage, SystemOperation, SystemQuery,
+    SystemResponse, TransactionTracker,
 };
 
 #[tokio::test]
@@ -126,16 +127,20 @@ async fn test_simple_system_query() -> anyhow::Result<()> {
         next_block_height: BlockHeight(0),
         local_time: Timestamp::from(0),
     };
-    let response = view
+    let QueryOutcome {
+        response,
+        operations,
+    } = view
         .query_application(context, Query::System(SystemQuery), None)
         .await
         .unwrap();
     assert_eq!(
         response,
-        Response::System(SystemResponse {
+        QueryResponse::System(SystemResponse {
             chain_id: ChainId::root(0),
             balance: Amount::from_tokens(4)
         })
     );
+    assert!(operations.is_empty());
     Ok(())
 }

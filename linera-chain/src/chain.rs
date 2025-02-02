@@ -13,25 +13,26 @@ use futures::stream::{self, StreamExt, TryStreamExt};
 use linera_base::{
     crypto::CryptoHash,
     data_types::{
-        Amount, ArithmeticError, Blob, BlockHeight, OracleResponse, Timestamp,
-        UserApplicationDescription,
+        Amount, ArithmeticError, BlockHeight, OracleResponse, Timestamp, UserApplicationDescription,
     },
     ensure,
     identifiers::{
-        BlobId, ChainId, ChannelName, Destination, GenericApplicationId, MessageId, Owner,
-        StreamId, UserApplicationId,
+        ChainId, ChannelName, Destination, GenericApplicationId, MessageId, Owner, StreamId,
+        UserApplicationId,
     },
+    ownership::ChainOwnership,
 };
 use linera_execution::{
-    committee::ValidatorName, system::OpenChainConfig, ExecutionOutcome, ExecutionRuntimeContext,
-    ExecutionStateView, Message, MessageContext, Operation, OperationContext, Query, QueryContext,
-    RawExecutionOutcome, RawOutgoingMessage, ResourceController, ResourceTracker, Response,
-    ServiceRuntimeEndpoint, TransactionTracker,
+    committee::{Committee, Epoch, ValidatorName},
+    system::OpenChainConfig,
+    ExecutionOutcome, ExecutionRuntimeContext, ExecutionStateView, Message, MessageContext,
+    Operation, OperationContext, Query, QueryContext, QueryOutcome, RawExecutionOutcome,
+    RawOutgoingMessage, ResourceController, ResourceTracker, ServiceRuntimeEndpoint,
+    TransactionTracker,
 };
 use linera_views::{
     context::Context,
     log_view::LogView,
-    map_view::MapView,
     queue_view::QueueView,
     reentrant_collection_view::ReentrantCollectionView,
     register_view::RegisterView,
@@ -49,7 +50,7 @@ use crate::{
     inbox::{Cursor, InboxError, InboxStateView},
     manager::ChainManager,
     outbox::OutboxStateView,
-    types::ValidatedBlockCertificate,
+    pending_blobs::PendingBlobsView,
     ChainError, ChainExecutionContext, ExecutionResultExt,
 };
 
@@ -201,10 +202,10 @@ where
     /// Consensus state.
     pub manager: ChainManager<C>,
     /// Pending validated block that is still missing blobs.
-    #[graphql(skip)]
-    pub pending_validated_block: RegisterView<C, Option<ValidatedBlockCertificate>>,
     /// The incomplete set of blobs for the pending validated block.
-    pub pending_validated_blobs: MapView<C, BlobId, Option<Blob>>,
+    pub pending_validated_blobs: PendingBlobsView<C>,
+    /// The incomplete sets of blobs for upcoming proposals.
+    pub pending_proposed_blobs: ReentrantCollectionView<C, Owner, PendingBlobsView<C>>,
 
     /// Hashes of all certified blocks for this sender.
     /// This ends with `block_hash` and has length `usize::from(next_block_height)`.
@@ -334,7 +335,7 @@ where
         local_time: Timestamp,
         query: Query,
         service_runtime_endpoint: Option<&mut ServiceRuntimeEndpoint>,
-    ) -> Result<Response, ChainError> {
+    ) -> Result<QueryOutcome, ChainError> {
         let context = QueryContext {
             chain_id: self.chain_id(),
             next_block_height: self.tip_state.get().next_block_height,
@@ -589,6 +590,17 @@ where
         Ok(true)
     }
 
+    pub fn current_committee(&self) -> Result<(Epoch, &Committee), ChainError> {
+        self.execution_state
+            .system
+            .current_committee()
+            .ok_or_else(|| ChainError::InactiveChain(self.chain_id()))
+    }
+
+    pub fn ownership(&self) -> &ChainOwnership {
+        self.execution_state.system.ownership.get()
+    }
+
     /// Removes the incoming message bundles in the block from the inboxes.
     pub async fn remove_bundles_from_inboxes(
         &mut self,
@@ -703,9 +715,7 @@ where
             ChainError::InvalidBlockTimestamp
         );
         self.execution_state.system.timestamp.set(block.timestamp);
-        let Some((_, committee)) = self.execution_state.system.current_committee() else {
-            return Err(ChainError::InactiveChain(chain_id));
-        };
+        let (_, committee) = self.current_committee()?;
         let mut resource_controller = ResourceController {
             policy: Arc::new(committee.policy().clone()),
             tracker: ResourceTracker::default(),
@@ -891,7 +901,7 @@ where
         let maybe_committee = self.execution_state.system.current_committee().into_iter();
 
         self.pending_validated_blobs.clear();
-        self.pending_validated_block.set(None);
+        self.pending_proposed_blobs.clear();
         self.manager.reset(
             self.execution_state.system.ownership.get().clone(),
             block.height.try_add_one()?,
