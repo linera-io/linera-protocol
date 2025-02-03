@@ -18,8 +18,9 @@ use linera_chain::types::ConfirmedBlockCertificate;
 use linera_core::{
     client::{BlanketMessagePolicy, ChainClient, Client, MessagePolicy},
     data_types::ClientOutcome,
-    join_set_ext::{JoinSet, JoinSetExt as _},
+    join_set_ext::JoinSet,
     node::CrossChainMessageDelivery,
+    JoinSetExt,
 };
 use linera_rpc::node_provider::{NodeOptions, NodeProvider};
 use linera_storage::Storage;
@@ -566,14 +567,48 @@ where
     W: Persist<Target = Wallet>,
 {
     pub async fn process_inboxes_and_force_validator_updates(&mut self) {
-        for chain_id in self.wallet.owned_chain_ids() {
-            let chain_client = self
-                .make_chain_client(chain_id)
-                .expect("chains in the wallet must exist");
-            self.process_inbox(&chain_client).await.unwrap();
-            chain_client.update_validators(None).await.unwrap();
-            self.update_wallet_from_client(&chain_client).await.unwrap();
+        let chain_clients = self
+            .wallet
+            .owned_chain_ids()
+            .iter()
+            .map(|chain_id| {
+                self.make_chain_client(*chain_id)
+                    .expect("chains in the wallet must exist")
+            })
+            .collect::<Vec<_>>();
+
+        let mut join_set = task::JoinSet::new();
+        for chain_client in chain_clients {
+            join_set.spawn(async move {
+                Self::process_inbox_without_updating_wallet(&chain_client)
+                    .await
+                    .expect("Processing inbox should not fail!");
+                chain_client
+                    .update_validators(None)
+                    .await
+                    .expect("Updating validators should not fail!");
+                chain_client
+            });
         }
+
+        let chain_clients = join_set.join_all().await;
+        for chain_client in &chain_clients {
+            self.update_wallet_from_client(chain_client).await.unwrap();
+        }
+    }
+
+    async fn process_inbox_without_updating_wallet(
+        chain_client: &ChainClient<NodeProvider, S>,
+    ) -> Result<Vec<ConfirmedBlockCertificate>, Error> {
+        // Try processing the inbox optimistically without waiting for validator notifications.
+        chain_client.synchronize_from_validators().await?;
+        let (certificates, maybe_timeout) = chain_client.process_inbox_without_prepare().await?;
+        assert!(
+            maybe_timeout.is_none(),
+            "Should not timeout within benchmark!"
+        );
+
+        Ok(certificates)
     }
 
     /// Creates chains if necessary, and returns a map of exactly `num_chains` chain IDs
