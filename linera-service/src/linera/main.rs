@@ -802,17 +802,28 @@ impl Runnable for Job {
                     fungible_application_id,
                 );
                 let num_proposal = proposals.len();
-                let mut values = HashMap::new();
 
+                let mut join_set = JoinSet::new();
                 for rpc_msg in &proposals {
                     if let RpcMessage::BlockProposal(proposal) = rpc_msg {
-                        let executed_block = context
-                            .stage_block_execution(proposal.content.block.clone(), None)
-                            .await?;
-                        let value = Hashed::new(ConfirmedBlock::new(executed_block));
-                        values.insert(value.hash(), value);
+                        let block = proposal.content.block.clone();
+                        let client = context.client.clone();
+                        join_set.spawn(async move {
+                            let executed_block = client
+                                .local_node()
+                                .stage_block_execution(block, None)
+                                .await?
+                                .0;
+                            let value = Hashed::new(ConfirmedBlock::new(executed_block));
+                            Ok::<_, anyhow::Error>((value.hash(), value))
+                        });
                     }
                 }
+                let values = join_set
+                    .join_all()
+                    .await
+                    .into_iter()
+                    .collect::<Result<HashMap<_, _>, _>>()?;
 
                 let responses = context.mass_broadcast("block proposals", proposals).await;
                 let votes = responses
