@@ -83,7 +83,6 @@ ed25519-dalek = { version = "2.1.1", default-features = false, features = [
     "zeroize",
 ] }
 either = "1.10.0"
-ethers = { version = "2.0.14", features = ["solc"] }
 flarch = "0.7.0"
 frunk = "0.4.2"
 fs-err = "2.11.0"
@@ -103,6 +102,7 @@ gloo-utils = "0.2.0"
 indexed_db_futures = "0.4.1"
 insta = "1.36.1"
 is-terminal = "0.4.12"
+alloy-sol-types = "0.8.18"
 alloy = { version = "0.9.2", default-features = false }
 alloy-signer-local = "0.9.2"
 alloy-primitives = { version = "0.8.18", default-features = false, features = ["serde"] }
@@ -132,6 +132,10 @@ rcgen = "0.12.1"
 reqwest = { version = "0.11.24", default-features = false, features = [
     "rustls-tls",
 ] }
+revm = "19.4.0"
+revm-interpreter = { version = "15.1.0", features = [ "serde" ] }
+revm-precompile = "16.0.0"
+revm-primitives = "15.1.0"
 rocksdb = "0.21.0"
 secp256k1 = { version = "0.30.0", default-features = false, features = [ "alloc", "rand", "serde" ] }
 scylla = "0.15.1"

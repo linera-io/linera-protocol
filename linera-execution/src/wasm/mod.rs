@@ -28,7 +28,7 @@ use wasmer::{WasmerContractInstance, WasmerServiceInstance};
 use wasmtime::{WasmtimeContractInstance, WasmtimeServiceInstance};
 #[cfg(with_metrics)]
 use {
-    linera_base::prometheus_util::{bucket_latencies, register_histogram_vec, MeasureLatency},
+    linera_base::prometheus_util::{bucket_latencies, register_histogram_vec, MeasureLatency as _},
     prometheus::HistogramVec,
     std::sync::LazyLock,
 };
@@ -46,8 +46,8 @@ use crate::{
 #[cfg(with_metrics)]
 static CONTRACT_INSTANTIATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
     register_histogram_vec(
-        "contract_instantiation_latency",
-        "Contract instantiation latency",
+        "wasm_contract_instantiation_latency",
+        "Wasm contract instantiation latency",
         &[],
         bucket_latencies(1.0),
     )
@@ -56,8 +56,8 @@ static CONTRACT_INSTANTIATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(||
 #[cfg(with_metrics)]
 static SERVICE_INSTANTIATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
     register_histogram_vec(
-        "service_instantiation_latency",
-        "Service instantiation latency",
+        "wasm_service_instantiation_latency",
+        "Wasm service instantiation latency",
         &[],
         bucket_latencies(1.0),
     )
@@ -76,7 +76,7 @@ pub enum WasmContractModule {
 }
 
 impl WasmContractModule {
-    /// Creates a new [`WasmContractModule`] using the WebAssembly module with the provided bytecodes.
+    /// Creates a new [`WasmContractModule`] using the WebAssembly module with the provided bytecode.
     pub async fn new(
         contract_bytecode: Bytecode,
         runtime: WasmRuntime,
@@ -100,7 +100,7 @@ impl WasmContractModule {
         }
     }
 
-    /// Creates a new [`WasmContractModule`] using the WebAssembly module in `bytecode_file`.
+    /// Creates a new [`WasmContractModule`] using the WebAssembly module in `contract_bytecode_file`.
     #[cfg(with_fs)]
     pub async fn from_file(
         contract_bytecode_file: impl AsRef<std::path::Path>,
@@ -150,7 +150,7 @@ pub enum WasmServiceModule {
 }
 
 impl WasmServiceModule {
-    /// Creates a new [`WasmServiceModule`] using the WebAssembly module with the provided bytecodes.
+    /// Creates a new [`WasmServiceModule`] using the WebAssembly module with the provided bytecode.
     pub async fn new(
         service_bytecode: Bytecode,
         runtime: WasmRuntime,
@@ -167,7 +167,7 @@ impl WasmServiceModule {
         }
     }
 
-    /// Creates a new [`WasmServiceModule`] using the WebAssembly module in `bytecode_file`.
+    /// Creates a new [`WasmServiceModule`] using the WebAssembly module in `service_bytecode_file`.
     #[cfg(with_fs)]
     pub async fn from_file(
         service_bytecode_file: impl AsRef<std::path::Path>,
@@ -269,7 +269,6 @@ const _: () = {
 };
 
 /// Errors that can occur when executing a user application in a WebAssembly module.
-#[cfg(any(with_wasmer, with_wasmtime))]
 #[derive(Debug, Error)]
 pub enum WasmExecutionError {
     #[error("Failed to load contract Wasm module: {_0}")]
