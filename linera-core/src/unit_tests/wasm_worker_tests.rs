@@ -34,7 +34,7 @@ use linera_execution::{
     system::{SystemMessage, SystemOperation},
     test_utils::SystemExecutionState,
     Message, MessageKind, Operation, OperationContext, ResourceController, TransactionTracker,
-    WasmContractModule, WasmRuntime,
+    VmContractModule, WasmRuntime,
 };
 use linera_storage::{DbStorage, Storage};
 #[cfg(feature = "dynamodb")]
@@ -129,7 +129,7 @@ where
     let service_blob_hash = service_blob_id.hash;
 
     let bytecode_id = BytecodeId::new(contract_blob_hash, service_blob_hash);
-    let contract = WasmContractModule::new(contract_bytecode, wasm_runtime).await?;
+    let contract = VmContractModule::new(contract_bytecode, wasm_runtime).await?;
 
     // Publish some bytecode.
     let publish_operation = SystemOperation::PublishBytecode { bytecode_id };

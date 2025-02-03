@@ -16,10 +16,10 @@ use wasm_instrument::{gas_metering, parity_wasm};
 use super::{
     module_cache::ModuleCache,
     system_api::{ContractSystemApi, ServiceSystemApi, SystemApiData, ViewSystemApi, WriteBatch},
-    ContractEntrypoints, ServiceEntrypoints, WasmExecutionError,
+    ContractEntrypoints, ServiceEntrypoints, VmExecutionError,
 };
 use crate::{
-    wasm::{WasmContractModule, WasmServiceModule},
+    wasm::{VmContractModule, VmServiceModule},
     ContractRuntime, ExecutionError, FinalizeContext, MessageContext, OperationContext,
     QueryContext, ServiceRuntime,
 };
@@ -56,16 +56,16 @@ pub struct WasmerServiceInstance<Runtime> {
     instance: EntrypointInstance<SystemApiData<Runtime>>,
 }
 
-impl WasmContractModule {
-    /// Creates a new [`WasmContractModule`] using Wasmer with the provided bytecodes.
-    pub async fn from_wasmer(contract_bytecode: Bytecode) -> Result<Self, WasmExecutionError> {
+impl VmContractModule {
+    /// Creates a new [`VmContractModule`] using Wasmer with the provided bytecodes.
+    pub async fn from_wasmer(contract_bytecode: Bytecode) -> Result<Self, VmExecutionError> {
         let mut contract_cache = CONTRACT_CACHE.lock().await;
         let (engine, module) = contract_cache
             .get_or_insert_with(contract_bytecode, CachedContractModule::new)
-            .map_err(WasmExecutionError::LoadContractModule)?
+            .map_err(VmExecutionError::LoadContractModule)?
             .create_execution_instance()
-            .map_err(WasmExecutionError::LoadContractModule)?;
-        Ok(WasmContractModule::Wasmer { engine, module })
+            .map_err(VmExecutionError::LoadContractModule)?;
+        Ok(VmContractModule::Wasmer { engine, module })
     }
 }
 
@@ -78,7 +78,7 @@ where
         contract_engine: wasmer::Engine,
         contract_module: &wasmer::Module,
         runtime: Runtime,
-    ) -> Result<Self, WasmExecutionError> {
+    ) -> Result<Self, VmExecutionError> {
         let system_api_data = SystemApiData::new(runtime);
         let mut instance_builder = InstanceBuilder::new(contract_engine, system_api_data);
 
@@ -91,16 +91,16 @@ where
     }
 }
 
-impl WasmServiceModule {
-    /// Creates a new [`WasmServiceModule`] using Wasmer with the provided bytecodes.
-    pub async fn from_wasmer(service_bytecode: Bytecode) -> Result<Self, WasmExecutionError> {
+impl VmServiceModule {
+    /// Creates a new [`VmServiceModule`] using Wasmer with the provided bytecodes.
+    pub async fn from_wasmer(service_bytecode: Bytecode) -> Result<Self, VmExecutionError> {
         let mut service_cache = SERVICE_CACHE.lock().await;
         let module = service_cache
             .get_or_insert_with(service_bytecode, |bytecode| {
                 wasmer::Module::new(&*SERVICE_ENGINE, bytecode).map_err(anyhow::Error::from)
             })
-            .map_err(WasmExecutionError::LoadServiceModule)?;
-        Ok(WasmServiceModule::Wasmer { module })
+            .map_err(VmExecutionError::LoadServiceModule)?;
+        Ok(VmServiceModule::Wasmer { module })
     }
 }
 
@@ -112,7 +112,7 @@ where
     pub fn prepare(
         service_module: &wasmer::Module,
         runtime: Runtime,
-    ) -> Result<Self, WasmExecutionError> {
+    ) -> Result<Self, VmExecutionError> {
         let system_api_data = SystemApiData::new(runtime);
         let mut instance_builder = InstanceBuilder::new(SERVICE_ENGINE.clone(), system_api_data);
 
@@ -136,7 +136,7 @@ where
     ) -> Result<(), ExecutionError> {
         ContractEntrypoints::new(&mut self.instance)
             .instantiate(argument)
-            .map_err(WasmExecutionError::from)?;
+            .map_err(VmExecutionError::from)?;
         Ok(())
     }
 
@@ -147,7 +147,7 @@ where
     ) -> Result<Vec<u8>, ExecutionError> {
         Ok(ContractEntrypoints::new(&mut self.instance)
             .execute_operation(operation)
-            .map_err(WasmExecutionError::from)?)
+            .map_err(VmExecutionError::from)?)
     }
 
     fn execute_message(
@@ -157,14 +157,14 @@ where
     ) -> Result<(), ExecutionError> {
         ContractEntrypoints::new(&mut self.instance)
             .execute_message(message)
-            .map_err(WasmExecutionError::from)?;
+            .map_err(VmExecutionError::from)?;
         Ok(())
     }
 
     fn finalize(&mut self, _context: FinalizeContext) -> Result<(), ExecutionError> {
         ContractEntrypoints::new(&mut self.instance)
             .finalize()
-            .map_err(WasmExecutionError::from)?;
+            .map_err(VmExecutionError::from)?;
         Ok(())
     }
 }
@@ -177,7 +177,7 @@ impl<Runtime: 'static> crate::UserService for WasmerServiceInstance<Runtime> {
     ) -> Result<Vec<u8>, ExecutionError> {
         Ok(ServiceEntrypoints::new(&mut self.instance)
             .handle_query(argument)
-            .map_err(WasmExecutionError::from)?)
+            .map_err(VmExecutionError::from)?)
     }
 }
 
@@ -192,7 +192,7 @@ impl From<wasmer::RuntimeError> for ExecutionError {
         error
             .downcast::<ExecutionError>()
             .unwrap_or_else(|unknown_error| {
-                ExecutionError::WasmError(WasmExecutionError::ExecuteModuleInWasmer(unknown_error))
+                ExecutionError::VmError(VmExecutionError::ExecuteModuleInWasmer(unknown_error))
             })
     }
 }
