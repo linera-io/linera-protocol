@@ -463,60 +463,60 @@ impl mass_client::MassClient for GrpcClient {
     async fn send(
         &self,
         requests: Vec<RpcMessage>,
-        max_in_flight: usize,
     ) -> Result<Vec<RpcMessage>, mass_client::MassClientError> {
         let client = self.client.clone();
-        let responses = stream::iter(requests)
-            .map(|request| {
-                let mut client = client.clone();
-                async move {
-                    let response = match request {
-                        RpcMessage::BlockProposal(proposal) => {
-                            let request = Request::new((*proposal).try_into()?);
-                            client.handle_block_proposal(request).await?
-                        }
-                        RpcMessage::TimeoutCertificate(request) => {
-                            let request = Request::new((*request).try_into()?);
-                            client.handle_timeout_certificate(request).await?
-                        }
-                        RpcMessage::ValidatedCertificate(request) => {
-                            let request = Request::new((*request).try_into()?);
-                            client.handle_validated_certificate(request).await?
-                        }
-                        RpcMessage::ConfirmedCertificate(request) => {
-                            let request = Request::new((*request).try_into()?);
-                            client.handle_confirmed_certificate(request).await?
-                        }
-                        msg => panic!("attempted to send msg: {:?}", msg),
-                    };
-                    match response
-                        .into_inner()
-                        .inner
-                        .ok_or(GrpcProtoConversionError::MissingField)?
-                    {
-                        api::chain_info_result::Inner::ChainInfoResponse(chain_info_response) => {
-                            Ok(Some(RpcMessage::ChainInfoResponse(Box::new(
-                                chain_info_response.try_into()?,
-                            ))))
-                        }
-                        api::chain_info_result::Inner::Error(error) => {
-                            let error = bincode::deserialize::<NodeError>(&error)
-                                .map_err(GrpcProtoConversionError::BincodeError)?;
-                            tracing::error!(?error, "received error response");
-                            Ok(None)
-                        }
+        let mut join_set: tokio::task::JoinSet<
+            Result<Option<RpcMessage>, mass_client::MassClientError>,
+        > = tokio::task::JoinSet::new();
+
+        // Spawn tasks for each request
+        for request in requests {
+            let mut client = client.clone();
+            join_set.spawn(async move {
+                let response = match request {
+                    RpcMessage::BlockProposal(proposal) => {
+                        let request = Request::new((*proposal).try_into()?);
+                        client.handle_block_proposal(request).await?
+                    }
+                    RpcMessage::TimeoutCertificate(request) => {
+                        let request = Request::new((*request).try_into()?);
+                        client.handle_timeout_certificate(request).await?
+                    }
+                    RpcMessage::ValidatedCertificate(request) => {
+                        let request = Request::new((*request).try_into()?);
+                        client.handle_validated_certificate(request).await?
+                    }
+                    RpcMessage::ConfirmedCertificate(request) => {
+                        let request = Request::new((*request).try_into()?);
+                        client.handle_confirmed_certificate(request).await?
+                    }
+                    msg => panic!("attempted to send msg: {:?}", msg),
+                };
+                match response
+                    .into_inner()
+                    .inner
+                    .ok_or(GrpcProtoConversionError::MissingField)?
+                {
+                    api::chain_info_result::Inner::ChainInfoResponse(chain_info_response) => {
+                        Ok(Some(RpcMessage::ChainInfoResponse(Box::new(
+                            chain_info_response.try_into()?,
+                        ))))
+                    }
+                    api::chain_info_result::Inner::Error(error) => {
+                        let error = bincode::deserialize::<NodeError>(&error)
+                            .map_err(GrpcProtoConversionError::BincodeError)?;
+                        tracing::error!(?error, "received error response");
+                        Ok(None)
                     }
                 }
-            })
-            .buffer_unordered(max_in_flight)
-            .filter_map(
-                |result: Result<Option<_>, mass_client::MassClientError>| async move {
-                    result.transpose()
-                },
-            )
-            .collect::<Vec<_>>()
+            });
+        }
+
+        let responses = join_set
+            .join_all()
             .await
             .into_iter()
+            .filter_map(|result| result.transpose())
             .collect::<Result<Vec<_>, _>>()?;
         Ok(responses)
     }

@@ -679,7 +679,6 @@ impl ClientWrapper {
     #[cfg(feature = "benchmark")]
     pub async fn benchmark(
         &self,
-        max_in_flight: usize,
         num_chains: usize,
         transactions_per_block: usize,
         fungible_application_id: Option<
@@ -689,7 +688,6 @@ impl ClientWrapper {
         let mut command = self.command().await?;
         command
             .arg("benchmark")
-            .args(["--max-in-flight", &max_in_flight.to_string()])
             .args(["--num-chains", &num_chains.to_string()])
             .args([
                 "--transactions-per-block",
