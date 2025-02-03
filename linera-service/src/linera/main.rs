@@ -764,10 +764,15 @@ impl Runnable for Job {
                 transactions_per_block,
                 fungible_application_id,
             } => {
+                let start = Instant::now();
                 // Below all block proposals are supposed to succeed without retries, we
                 // must make sure that all incoming payments have been accepted on-chain
                 // and that no validator is missing user certificates.
                 context.process_inboxes_and_force_validator_updates().await;
+                info!(
+                    "Processed inboxes and forced validator updates in {} ms",
+                    start.elapsed().as_millis()
+                );
 
                 let key_pairs = context
                     .make_benchmark_chains(num_chains, tokens_per_chain)
@@ -840,7 +845,7 @@ impl Runnable for Job {
                     }
                 });
                 info!(
-                    "Confirmed {} valid certificates for {} block proposals.",
+                    "Confirmed {} valid certificates for block proposals to {} chains.",
                     num_valid,
                     confirmed.len()
                 );
