@@ -759,7 +759,6 @@ impl Runnable for Job {
 
             #[cfg(feature = "benchmark")]
             Benchmark {
-                max_in_flight,
                 num_chains,
                 tokens_per_chain,
                 transactions_per_block,
@@ -775,9 +774,7 @@ impl Runnable for Job {
                     .await?;
 
                 if let Some(id) = fungible_application_id {
-                    context
-                        .supply_fungible_tokens(&key_pairs, id, max_in_flight)
-                        .await?;
+                    context.supply_fungible_tokens(&key_pairs, id).await?;
                 }
 
                 // For this command, we create proposals and gather certificates without using
@@ -801,9 +798,7 @@ impl Runnable for Job {
                     }
                 }
 
-                let responses = context
-                    .mass_broadcast("block proposals", max_in_flight, proposals)
-                    .await;
+                let responses = context.mass_broadcast("block proposals", proposals).await;
                 let votes = responses
                     .into_iter()
                     .filter_map(|message| {
@@ -833,9 +828,7 @@ impl Runnable for Job {
                         ))
                     })
                     .collect();
-                let responses = context
-                    .mass_broadcast("certificates", max_in_flight, messages)
-                    .await;
+                let responses = context.mass_broadcast("certificates", messages).await;
                 let mut confirmed = HashSet::new();
                 let num_valid = responses.into_iter().fold(0, |acc, message| {
                     match deserialize_response(message) {
