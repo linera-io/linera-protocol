@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashSet;
+use std::{collections::HashSet, time::Duration};
 
 use custom_debug_derive::Debug;
 use futures::{future::try_join_all, stream::FuturesUnordered, StreamExt};
@@ -313,8 +313,16 @@ impl<N: ValidatorNode> RemoteNode<N> {
         // Sequentially try each validator in random order.
         let mut validators = validators.iter().collect::<Vec<_>>();
         validators.shuffle(&mut rand::thread_rng());
-        for remote_node in validators {
-            if let Some(blob) = remote_node.try_download_blob(blob_id).await {
+        let mut stream = validators
+            .into_iter()
+            .zip(0..)
+            .map(|(remote_node, i)| async move {
+                tokio::time::sleep(Duration::from_secs(i * i)).await;
+                remote_node.try_download_blob(blob_id).await
+            })
+            .collect::<FuturesUnordered<_>>();
+        while let Some(maybe_blob) = stream.next().await {
+            if let Some(blob) = maybe_blob {
                 return Some(blob);
             }
         }
