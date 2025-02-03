@@ -131,13 +131,11 @@ impl<UserData> EntrypointInstance<UserData> {
 impl<UserData> Instance for EntrypointInstance<UserData> {
     type Runtime = Wasmer;
     type UserData = UserData;
-    type UserDataReference<'a>
-        = MutexGuard<'a, UserData>
+    type UserDataReference<'a> = MutexGuard<'a, UserData>
     where
         Self::UserData: 'a,
         Self: 'a;
-    type UserDataMutReference<'a>
-        = MutexGuard<'a, UserData>
+    type UserDataMutReference<'a> = MutexGuard<'a, UserData>
     where
         Self::UserData: 'a,
         Self: 'a;
@@ -162,13 +160,11 @@ pub type ReentrantInstance<'a, UserData> = FunctionEnvMut<'a, Environment<UserDa
 impl<UserData: 'static> Instance for ReentrantInstance<'_, UserData> {
     type Runtime = Wasmer;
     type UserData = UserData;
-    type UserDataReference<'a>
-        = MutexGuard<'a, UserData>
+    type UserDataReference<'a> = MutexGuard<'a, UserData>
     where
         Self::UserData: 'a,
         Self: 'a;
-    type UserDataMutReference<'a>
-        = MutexGuard<'a, UserData>
+    type UserDataMutReference<'a> = MutexGuard<'a, UserData>
     where
         Self::UserData: 'a,
         Self: 'a;
