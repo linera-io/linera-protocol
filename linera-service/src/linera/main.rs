@@ -785,7 +785,12 @@ impl Runnable for Job {
                 );
 
                 if let Some(id) = fungible_application_id {
+                    let start = Instant::now();
                     context.supply_fungible_tokens(&key_pairs, id).await?;
+                    info!(
+                        "Supplied fungible tokens in {} ms",
+                        start.elapsed().as_millis()
+                    );
                 }
 
                 // For this command, we create proposals and gather certificates without using

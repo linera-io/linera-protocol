@@ -773,8 +773,7 @@ where
             .expect("should execute block with OpenChain operations"))
     }
 
-    /// Creates chains if necessary, and returns a map of exactly `num_chains` chain IDs
-    /// with key pairs.
+    /// Supplies fungible tokens to the chains.
     pub async fn supply_fungible_tokens(
         &mut self,
         key_pairs: &HashMap<ChainId, KeyPair>,
@@ -807,11 +806,11 @@ where
             .collect();
         let chain_client = self.make_chain_client(default_chain_id)?;
         // Put at most 1000 fungible token operations in each block.
-        for operations in operations.chunks(1000) {
+        for operation_chunk in operations.chunks(1000) {
             chain_client
-                .execute_operations(operations.to_vec(), vec![])
+                .execute_operations(operation_chunk.to_vec(), vec![])
                 .await?
-                .expect("should execute block with OpenChain operations");
+                .expect("should execute block with Transfer operations");
         }
         self.update_wallet_from_client(&chain_client).await?;
         // Make sure all chains have registered the application now.
@@ -821,8 +820,10 @@ where
                 .make_chain_client(chain_id)
                 .expect("chain should have been created");
             join_set.spawn(async move {
-                for i in 0..5 {
-                    linera_base::time::timer::sleep(Duration::from_secs(i)).await;
+                let mut delay_ms = 0;
+                let mut total_delay_ms = 0;
+                loop {
+                    linera_base::time::timer::sleep(Duration::from_millis(delay_ms)).await;
                     chain_client.process_inbox().await?;
                     let chain_state = chain_client.chain_state_view().await?;
                     if chain_state
@@ -834,6 +835,18 @@ where
                         .await?
                     {
                         return Ok::<_, Error>(chain_client);
+                    }
+
+                    total_delay_ms += delay_ms;
+                    // If we've been waiting already for more than 10 seconds, give up.
+                    if total_delay_ms > 10_000 {
+                        break;
+                    }
+
+                    if delay_ms == 0 {
+                        delay_ms = 100;
+                    } else {
+                        delay_ms *= 2;
                     }
                 }
                 panic!("Could not instantiate application on chain {chain_id:?}");
