@@ -68,7 +68,7 @@ impl Specializations {
             abort!(
                 span,
                 "Failed to parse Witty specialization attribute. \
-                Expected: `#[witty_specialize_with(TypeParam = Type, ...))]`."
+                Expected: `#[witty_specialize_with(TypeParam = Type, ...)]`."
             );
         };
 
@@ -198,7 +198,7 @@ impl Specializations {
                     }),
             );
 
-        let (generic_parameters, _incorrect_type_generics, _unaltered_where_clasue) =
+        let (generic_parameters, _incorrect_type_generics, _unaltered_where_clause) =
             generics.split_for_impl();
 
         generic_parameters.into_token_stream()
@@ -241,7 +241,7 @@ impl Specialization {
     ///
     /// Note that the specialization is only done to the `where` clause and the type's fields. The
     /// types generic parameters needs to be changed separately (see
-    /// [`Specializatons::specialize_type_generics`].
+    /// [`Specializations::specialize_type_generics`].
     pub fn apply_to_derive_input(&self, input: &mut DeriveInput) {
         self.apply_to_generics(&mut input.generics);
         self.change_types_in_fields(&mut input.data);
