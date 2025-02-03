@@ -657,7 +657,7 @@ where
                 self.record_bytecode_blobs(blobs_to_register, txn_tracker)
                     .await?;
                 outcome.messages.push(message);
-                new_application = Some((app_id, instantiation_argument.clone()));
+                new_application = Some((app_id, instantiation_argument));
             }
             RequestApplication {
                 chain_id,
@@ -861,7 +861,7 @@ where
                     SystemExecutionError::InvalidCommitteeCreation
                 );
                 if epoch == chain_next_epoch {
-                    self.committees.get_mut().insert(epoch, committee.clone());
+                    self.committees.get_mut().insert(epoch, committee);
                     self.epoch.set(Some(epoch));
                 }
             }
@@ -872,18 +872,13 @@ where
                 for application in applications {
                     self.check_and_record_bytecode_blobs(&application.bytecode_id, txn_tracker)
                         .await?;
-                    self.registry
-                        .register_application(application.clone())
-                        .await?;
+                    self.registry.register_application(application).await?;
                 }
             }
             RequestApplication(application_id) => {
                 let applications = self
                     .registry
-                    .describe_applications_with_dependencies(
-                        vec![application_id],
-                        &Default::default(),
-                    )
+                    .describe_applications_with_dependencies(vec![application_id])
                     .await?;
                 let message = RawOutgoingMessage {
                     destination: Destination::Recipient(context.message_id.chain_id),
@@ -1051,7 +1046,7 @@ where
             }
         }
         self.registry
-            .register_new_application(id, parameters.clone(), required_application_ids.clone())
+            .register_new_application(id, parameters, required_application_ids)
             .await?;
         // Send a message to ourself to increment the message ID.
         let message = RawOutgoingMessage {

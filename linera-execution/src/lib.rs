@@ -1153,6 +1153,7 @@ impl Operation {
     }
 
     /// Creates a new user application operation following the `application_id`'s [`Abi`].
+    #[cfg(with_testing)]
     pub fn user<A: Abi>(
         application_id: UserApplicationId<A>,
         operation: &A::Operation,
@@ -1162,6 +1163,7 @@ impl Operation {
 
     /// Creates a new user application operation assuming that the `operation` is valid for the
     /// `application_id`.
+    #[cfg(with_testing)]
     pub fn user_without_abi(
         application_id: UserApplicationId<()>,
         operation: &impl Serialize,
