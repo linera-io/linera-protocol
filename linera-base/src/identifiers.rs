@@ -1026,15 +1026,23 @@ mod tests {
     fn chain_ids() {
         assert_eq!(
             &ChainId::root(0).to_string(),
-            "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65"
+            "aee928d4bf3880353b4a3cd9b6f88e6cc6e5ed050860abae439e7782e9b2dfe8"
+        );
+        assert_eq!(
+            &ChainId::root(1).to_string(),
+            "a3edc33d8e951a1139333be8a4b56646b5598a8f51216e86592d881808972b07"
+        );
+        assert_eq!(
+            &ChainId::root(2).to_string(),
+            "678e9f66507069d38955b593e93ddf192a23a4087225fd307eadad44e5544ae3"
         );
         assert_eq!(
             &ChainId::root(9).to_string(),
-            "256e1dbc00482ddd619c293cc0df94d366afe7980022bb22d99e33036fd465dd"
+            "63620ea465af9e9e0e8e4dd8d21593cc3a719feac5f096df8440f90738f4dbd8"
         );
         assert_eq!(
             &ChainId::root(999).to_string(),
-            "9c8a838e8f7b63194f6c7585455667a8379d2b5db19a3300e9961f0b1e9091ea"
+            "5487b70625ce71f7ee29154ad32aefa1c526cb483bdb783dea2e1d17bc497844"
         );
     }
 }

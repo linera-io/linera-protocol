@@ -15,7 +15,7 @@ type ChainOperation {
 }
 
 """
-A Sha3-256 value
+A Keccak256 value
 """
 scalar CryptoHash
 

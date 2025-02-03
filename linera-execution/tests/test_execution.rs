@@ -1347,6 +1347,7 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
             applications: vec![sending_target_description.clone(), caller_description],
         },
     };
+
     // The registration message for the second destination chain
     let second_registration_message = RawOutgoingMessage {
         destination: Destination::from(second_destination_chain),
@@ -1370,8 +1371,8 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
         &[
             ExecutionOutcome::System(
                 RawExecutionOutcome::default()
-                    .with_message(first_registration_message)
                     .with_message(second_registration_message)
+                    .with_message(first_registration_message)
             ),
             ExecutionOutcome::User(
                 silent_target_id,

@@ -429,7 +429,7 @@ The version of the Linera crates used in this build
 scalar CrateVersion
 
 """
-A Sha3-256 value
+A Keccak256 value
 """
 scalar CryptoHash
 

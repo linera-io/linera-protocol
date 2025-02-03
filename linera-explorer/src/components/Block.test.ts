@@ -12,7 +12,7 @@ test('Block mounting', () => {
           block: {
             header: {
               version: 1,
-              chainId: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65",
+              chainId: "aee928d4bf3880353b4a3cd9b6f88e6cc6e5ed050860abae439e7782e9b2dfe8",
               epoch: "0",
               height: 6,
               timestamp: 1694097511817833,
@@ -50,7 +50,7 @@ test('Block mounting', () => {
               incomingBundles: [{
                 origin: {
                   medium: "Direct",
-                  sender: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65"
+                  sender: "aee928d4bf3880353b4a3cd9b6f88e6cc6e5ed050860abae439e7782e9b2dfe8"
                 },
                 bundle: {
                   certificateHash: "f1c748c5e39591125250e85d57fdeac0b7ba44a32c12c616eb4537f93b6e5d0a",

@@ -56,7 +56,7 @@ APP_ID=$(linera --with-wallet 0 project publish-and-create examples/social)
 This will output the new application ID, e.g.:
 
 ```rust
-e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65010000000000000000000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65030000000000000000000000
+20dc1ed01670501414eb59defe71f9a7b817fe2da18fcdd5e704bbac32f5bd97a020afcb645167bcaacd1d8cee9083605f42a95de24e056f3a958c7ca91f9f728ac320aee928d4bf3880353b4a3cd9b6f88e6cc6e5ed050860abae439e7782e9b2dfe8020000000000000000000000
 ```
 
 With the `wallet show` command you can find the ID of the application creator's chain:
@@ -64,12 +64,12 @@ With the `wallet show` command you can find the ID of the application creator's 
 ```bash
 linera --with-wallet 0 wallet show
 
-CHAIN_1=1db1936dad0717597a7743a8353c9c0191c14c3a129b258e9743aec2b4f05d03
-CHAIN_2=e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65
+CHAIN_1=582843bc9322ed1928239ce3f6a855f6cd9ea94c8690907f113d6d7a8296a119
+CHAIN_2=aee928d4bf3880353b4a3cd9b6f88e6cc6e5ed050860abae439e7782e9b2dfe8
 ```
 
 ```rust
-e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65
+aee928d4bf3880353b4a3cd9b6f88e6cc6e5ed050860abae439e7782e9b2dfe8
 ```
 
 Now start a node service for each wallet, using two different ports:
