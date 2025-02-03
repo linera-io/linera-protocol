@@ -15,7 +15,7 @@ use futures::{
     future::BoxFuture,
     FutureExt as _, StreamExt,
 };
-use linera_base::identifiers::ChainId;
+use linera_base::{data_types::Blob, identifiers::ChainId};
 use linera_core::{
     node::NodeError,
     worker::{NetworkActions, Notification, WorkerError, WorkerState},
@@ -42,8 +42,8 @@ use super::{
         notifier_service_client::NotifierServiceClient,
         validator_worker_client::ValidatorWorkerClient,
         validator_worker_server::{ValidatorWorker as ValidatorWorkerRpc, ValidatorWorkerServer},
-        BlockProposal, ChainInfoQuery, ChainInfoResult, CrossChainRequest, LiteCertificate,
-        PendingBlobRequest, PendingBlobResult,
+        BlockProposal, ChainInfoQuery, ChainInfoResult, CrossChainRequest,
+        HandlePendingBlobRequest, LiteCertificate, PendingBlobRequest, PendingBlobResult,
     },
     pool::GrpcConnectionPool,
     GrpcError, GRPC_MAX_MESSAGE_SIZE,
@@ -462,7 +462,8 @@ where
                             .with_label_values(&["handle_block_proposal"])
                             .inc();
                     }
-                    warn!(nickname = self.state.nickname(), %error, "Failed to handle block proposal");
+                    let nickname = self.state.nickname();
+                    warn!(nickname, %error, "Failed to handle block proposal");
                     NodeError::from(error).try_into()?
                 }
             },
@@ -512,10 +513,11 @@ where
                         .with_label_values(&["handle_lite_certificate"])
                         .inc();
                 }
+                let nickname = self.state.nickname();
                 if let WorkerError::MissingCertificateValue = &error {
-                    debug!(nickname = self.state.nickname(), %error, "Failed to handle lite certificate");
+                    debug!(nickname, %error, "Failed to handle lite certificate");
                 } else {
-                    error!(nickname = self.state.nickname(), %error, "Failed to handle lite certificate");
+                    error!(nickname, %error, "Failed to handle lite certificate");
                 }
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
@@ -565,7 +567,8 @@ where
                         .with_label_values(&["handle_confirmed_certificate"])
                         .inc();
                 }
-                error!(nickname = self.state.nickname(), %error, "Failed to handle confirmed certificate");
+                let nickname = self.state.nickname();
+                error!(nickname, %error, "Failed to handle confirmed certificate");
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
         }
@@ -585,13 +588,12 @@ where
         request: Request<api::HandleValidatedCertificateRequest>,
     ) -> Result<Response<ChainInfoResult>, Status> {
         let start = Instant::now();
-        let HandleValidatedCertificateRequest { certificate, blobs } =
-            request.into_inner().try_into()?;
+        let HandleValidatedCertificateRequest { certificate } = request.into_inner().try_into()?;
         trace!(?certificate, "Handling certificate");
         match self
             .state
             .clone()
-            .handle_validated_certificate(certificate, blobs)
+            .handle_validated_certificate(certificate)
             .await
         {
             Ok((info, actions)) => {
@@ -606,7 +608,8 @@ where
                         .with_label_values(&["handle_validated_certificate"])
                         .inc();
                 }
-                error!(nickname = self.state.nickname(), %error, "Failed to handle validated certificate");
+                let nickname = self.state.nickname();
+                error!(nickname, %error, "Failed to handle validated certificate");
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
         }
@@ -645,7 +648,8 @@ where
                         .with_label_values(&["handle_timeout_certificate"])
                         .inc();
                 }
-                error!(nickname = self.state.nickname(), %error, "Failed to handle timeout certificate");
+                let nickname = self.state.nickname();
+                error!(nickname, %error, "Failed to handle timeout certificate");
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
         }
@@ -680,7 +684,8 @@ where
                         .with_label_values(&["handle_chain_info_query"])
                         .inc();
                 }
-                error!(nickname = self.state.nickname(), %error, "Failed to handle chain info query");
+                let nickname = self.state.nickname();
+                error!(nickname, %error, "Failed to handle chain info query");
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
         }
@@ -719,7 +724,45 @@ where
                         .with_label_values(&["download_pending_blob"])
                         .inc();
                 }
-                error!(nickname = self.state.nickname(), %error, "Failed to download pending blob");
+                let nickname = self.state.nickname();
+                error!(nickname, %error, "Failed to download pending blob");
+                Ok(Response::new(NodeError::from(error).try_into()?))
+            }
+        }
+    }
+
+    #[instrument(
+        target = "grpc_server",
+        skip_all,
+        err,
+        fields(
+            nickname = self.state.nickname(),
+            chain_id = ?request.get_ref().chain_id
+        )
+    )]
+    async fn handle_pending_blob(
+        &self,
+        request: Request<HandlePendingBlobRequest>,
+    ) -> Result<Response<ChainInfoResult>, Status> {
+        let start = Instant::now();
+        let (chain_id, blob_content) = request.into_inner().try_into()?;
+        let blob = Blob::new(blob_content);
+        let blob_id = blob.id();
+        trace!(?chain_id, ?blob_id, "Handle pending blob");
+        match self.state.clone().handle_pending_blob(chain_id, blob).await {
+            Ok(info) => {
+                Self::log_request_success_and_latency(start, "handle_pending_blob");
+                Ok(Response::new(info.try_into()?))
+            }
+            Err(error) => {
+                #[cfg(with_metrics)]
+                {
+                    SERVER_REQUEST_ERROR
+                        .with_label_values(&["handle_pending_blob"])
+                        .inc();
+                }
+                let nickname = self.state.nickname();
+                error!(nickname, %error, "Failed to handle pending blob");
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
         }
@@ -753,7 +796,8 @@ where
                         .with_label_values(&["handle_cross_chain_request"])
                         .inc();
                 }
-                error!(nickname = self.state.nickname(), %error, "Failed to handle cross-chain request");
+                let nickname = self.state.nickname();
+                error!(nickname, %error, "Failed to handle cross-chain request");
             }
         }
         Ok(Response::new(()))
@@ -803,6 +847,12 @@ impl GrpcProxyable for ChainInfoQuery {
 }
 
 impl GrpcProxyable for PendingBlobRequest {
+    fn chain_id(&self) -> Option<ChainId> {
+        self.chain_id.clone()?.try_into().ok()
+    }
+}
+
+impl GrpcProxyable for HandlePendingBlobRequest {
     fn chain_id(&self) -> Option<ChainId> {
         self.chain_id.clone()?.try_into().ok()
     }

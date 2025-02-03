@@ -61,8 +61,8 @@ APP_ID=$(linera -w0 --wait-for-outgoing-messages \
         \"blockDelay\": 100000000
     }")
 
-PUB_KEY_1=$(linera -w0 keygen)
-PUB_KEY_2=$(linera -w1 keygen)
+OWNER_1=$(linera -w0 keygen)
+OWNER_2=$(linera -w1 keygen)
 
 linera -w0 service --port 8080 &
 sleep 1
@@ -77,8 +77,8 @@ on the URL you get by running `echo "http://localhost:8080/chains/$CHAIN_1/appli
 mutation {
   start(
     players: [
-        "$PUB_KEY_1",
-        "$PUB_KEY_2"
+        "$OWNER_1",
+        "$OWNER_2"
     ],
     boardSize: 11,
     feeBudget: "1"
@@ -101,7 +101,7 @@ It contains the temporary chain's ID, and the ID of the message that created it:
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
 query {
   gameChains {
-    entry(key: "$PUB_KEY_1") {
+    entry(key: "$OWNER_1") {
       value {
         messageId chainId
       }
@@ -120,8 +120,8 @@ kill %% && sleep 1    # Kill the service so we can use CLI commands for wallet 0
 HEX_CHAIN=$(echo "$QUERY_RESULT" | jq -r '.gameChains.entry.value[0].chainId')
 MESSAGE_ID=$(echo "$QUERY_RESULT" | jq -r '.gameChains.entry.value[0].messageId')
 
-linera -w0 assign --key $PUB_KEY_1 --message-id $MESSAGE_ID
-linera -w1 assign --key $PUB_KEY_2 --message-id $MESSAGE_ID
+linera -w0 assign --owner $OWNER_1 --message-id $MESSAGE_ID
+linera -w1 assign --owner $OWNER_2 --message-id $MESSAGE_ID
 
 linera -w0 service --port 8080 &
 linera -w1 service --port 8081 &

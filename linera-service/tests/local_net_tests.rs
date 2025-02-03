@@ -309,13 +309,13 @@ async fn test_end_to_end_receipt_of_old_create_committee_messages(
     }
 
     // Create a new chain starting on the new epoch
-    let new_owner_key = client.keygen().await?;
+    let new_owner = client.keygen().await?;
     let ClaimOutcome {
         chain_id,
         message_id,
         ..
-    } = faucet.claim(&new_owner_key).await?;
-    client.assign(new_owner_key, message_id).await?;
+    } = faucet.claim(&new_owner).await?;
+    client.assign(new_owner, message_id).await?;
 
     // Attempt to receive the existing epoch change message
     client.process_inbox(chain_id).await?;
@@ -439,13 +439,13 @@ async fn test_end_to_end_receipt_of_old_remove_committee_messages(
     }
 
     // Create a new chain starting on the new epoch
-    let new_owner_key = client.keygen().await?;
+    let new_owner = client.keygen().await?;
     let ClaimOutcome {
         chain_id,
         message_id,
         ..
-    } = faucet.claim(&new_owner_key).await?;
-    client.assign(new_owner_key, message_id).await?;
+    } = faucet.claim(&new_owner).await?;
+    client.assign(new_owner, message_id).await?;
 
     // Attempt to receive the existing epoch change messages
     client.process_inbox(chain_id).await?;

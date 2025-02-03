@@ -149,8 +149,7 @@ async fn test_end_to_end_operations_indexer(config: impl LineraNetConfig) {
     );
 
     // checking indexer operation
-    let executed_block = last_block.value.executed_block;
-    let last_operation = executed_block.block.operations[0].clone();
+    let last_operation = last_block.value.block.body.operations[0].clone();
     let variables = get_operation::Variables {
         key: get_operation::OperationKeyKind::Last(chain0),
     };
@@ -172,7 +171,7 @@ async fn test_end_to_end_operations_indexer(config: impl LineraNetConfig) {
                 (
                     OperationKey {
                         chain_id: chain0,
-                        height: executed_block.block.height,
+                        height: last_block.value.block.header.height,
                         index: 0
                     },
                     last_hash,

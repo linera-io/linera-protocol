@@ -4,7 +4,7 @@
 use async_trait::async_trait;
 use linera_base::{
     crypto::{CryptoHash, KeyPair},
-    data_types::{Blob, BlobContent, Timestamp},
+    data_types::{BlobContent, Timestamp},
     identifiers::{BlobId, ChainId},
 };
 use linera_chain::{
@@ -72,7 +72,6 @@ impl ValidatorNode for DummyValidatorNode {
     async fn handle_validated_certificate(
         &self,
         _: GenericCertificate<ValidatedBlock>,
-        _: Vec<Blob>,
     ) -> Result<ChainInfoResponse, NodeError> {
         Err(NodeError::UnexpectedMessage)
     }
@@ -85,6 +84,14 @@ impl ValidatorNode for DummyValidatorNode {
     }
 
     async fn download_pending_blob(&self, _: ChainId, _: BlobId) -> Result<BlobContent, NodeError> {
+        Err(NodeError::UnexpectedMessage)
+    }
+
+    async fn handle_pending_blob(
+        &self,
+        _: ChainId,
+        _: BlobContent,
+    ) -> Result<ChainInfoResponse, NodeError> {
         Err(NodeError::UnexpectedMessage)
     }
 

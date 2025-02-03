@@ -11,8 +11,9 @@ use linera_base::{
 };
 use linera_execution::{
     system::Recipient, test_utils::SystemExecutionState, ExecutionOutcome, Message, MessageContext,
-    Operation, OperationContext, Query, QueryContext, RawExecutionOutcome, ResourceController,
-    Response, SystemMessage, SystemOperation, SystemQuery, SystemResponse, TransactionTracker,
+    Operation, OperationContext, Query, QueryContext, QueryOutcome, QueryResponse,
+    RawExecutionOutcome, ResourceController, SystemMessage, SystemOperation, SystemQuery,
+    SystemResponse, TransactionTracker,
 };
 
 #[tokio::test]
@@ -23,7 +24,7 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
         description: Some(ChainDescription::Root(0)),
         balance: Amount::from_tokens(4),
         ownership: ChainOwnership {
-            super_owners: [(owner, owner_key_pair.public())].into_iter().collect(),
+            super_owners: [owner].into_iter().collect(),
             ..ChainOwnership::default()
         },
         ..SystemExecutionState::default()
@@ -37,6 +38,7 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
     let context = OperationContext {
         chain_id: ChainId::root(0),
         height: BlockHeight(0),
+        round: Some(0),
         index: Some(0),
         authenticated_signer: Some(owner),
         authenticated_caller_id: None,
@@ -83,6 +85,7 @@ async fn test_simple_system_message() -> anyhow::Result<()> {
         chain_id: ChainId::root(0),
         is_bouncing: false,
         height: BlockHeight(0),
+        round: Some(0),
         certificate_hash: CryptoHash::test_hash("certificate"),
         message_id: MessageId {
             chain_id: ChainId::root(1),
@@ -124,16 +127,20 @@ async fn test_simple_system_query() -> anyhow::Result<()> {
         next_block_height: BlockHeight(0),
         local_time: Timestamp::from(0),
     };
-    let response = view
+    let QueryOutcome {
+        response,
+        operations,
+    } = view
         .query_application(context, Query::System(SystemQuery), None)
         .await
         .unwrap();
     assert_eq!(
         response,
-        Response::System(SystemResponse {
+        QueryResponse::System(SystemResponse {
             chain_id: ChainId::root(0),
             balance: Amount::from_tokens(4)
         })
     );
+    assert!(operations.is_empty());
     Ok(())
 }

@@ -19,7 +19,10 @@ mod mock_stubs;
 mod validator;
 
 #[cfg(with_integration_testing)]
-pub use linera_chain::data_types::{Medium, MessageAction};
+pub use {
+    linera_chain::data_types::{Medium, MessageAction},
+    linera_execution::QueryOutcome,
+};
 
 #[cfg(with_testing)]
 pub use self::mock_stubs::*;

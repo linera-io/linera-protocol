@@ -29,7 +29,6 @@ spec:
       labels:
         app: shards
     spec:
-      serviceAccountName: linera-admin
       terminationGracePeriodSeconds: 10
       initContainers:
         - name: linera-server-initializer

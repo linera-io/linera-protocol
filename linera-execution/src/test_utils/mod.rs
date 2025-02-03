@@ -68,6 +68,7 @@ pub fn create_dummy_operation_context() -> OperationContext {
     OperationContext {
         chain_id: ChainId::root(0),
         height: BlockHeight(0),
+        round: Some(0),
         index: Some(0),
         authenticated_signer: None,
         authenticated_caller_id: None,
@@ -82,6 +83,7 @@ pub fn create_dummy_message_context(authenticated_signer: Option<Owner>) -> Mess
         authenticated_signer,
         refund_grant_to: None,
         height: BlockHeight(0),
+        round: Some(0),
         certificate_hash: CryptoHash::test_hash("block receiving a message"),
         message_id: MessageId {
             chain_id: ChainId::root(0),
@@ -168,7 +170,7 @@ where
 {
     fn creator_chain_id(&self) -> ChainId {
         self.description.get().expect(
-            "Can't register applications on an system state with no associated `ChainDescription`",
+            "Can't register applications on a system state with no associated `ChainDescription`",
         ).into()
     }
 

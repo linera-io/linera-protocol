@@ -28,7 +28,7 @@ impl Template<C> {
 
     // Private functions are directly applied to the `Template` struct.
     async fn helper1(&self, ...) -> Result<.., IndexerError> {
-        // handle some thinfs on the `Template` struct
+        // handle some things on the `Template` struct
     }
 
     // Public functions are the ones accessible through the GraphQL server.

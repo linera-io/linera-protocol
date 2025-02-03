@@ -32,9 +32,9 @@ use super::{runtime::ServiceRuntimeRequest, ExecutionRequest};
 use crate::{
     resources::ResourceController, system::SystemExecutionStateView, ContractSyncRuntime,
     ExecutionError, ExecutionOutcome, ExecutionRuntimeConfig, ExecutionRuntimeContext, Message,
-    MessageContext, MessageKind, Operation, OperationContext, Query, QueryContext,
-    RawExecutionOutcome, RawOutgoingMessage, Response, ServiceSyncRuntime, SystemMessage,
-    TransactionTracker, UserApplicationDescription, UserApplicationId,
+    MessageContext, MessageKind, Operation, OperationContext, Query, QueryContext, QueryOutcome,
+    RawExecutionOutcome, RawOutgoingMessage, ServiceSyncRuntime, SystemMessage, TransactionTracker,
+    UserApplicationDescription, UserApplicationId,
 };
 
 /// A view accessing the execution state of a chain.
@@ -75,6 +75,7 @@ where
             authenticated_signer: None,
             authenticated_caller_id: None,
             height: application_description.creation.height,
+            round: None,
             index: Some(0),
         };
 
@@ -146,6 +147,14 @@ impl UserAction {
             UserAction::Instantiate(context, _) => context.height,
             UserAction::Operation(context, _) => context.height,
             UserAction::Message(context, _) => context.height,
+        }
+    }
+
+    pub(crate) fn round(&self) -> Option<u32> {
+        match self {
+            UserAction::Instantiate(context, _) => context.round,
+            UserAction::Operation(context, _) => context.round,
+            UserAction::Message(context, _) => context.round,
         }
     }
 }
@@ -476,19 +485,19 @@ where
         context: QueryContext,
         query: Query,
         endpoint: Option<&mut ServiceRuntimeEndpoint>,
-    ) -> Result<Response, ExecutionError> {
+    ) -> Result<QueryOutcome, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         match query {
             Query::System(query) => {
-                let response = self.system.handle_query(context, query).await?;
-                Ok(Response::System(response))
+                let outcome = self.system.handle_query(context, query).await?;
+                Ok(outcome.into())
             }
             Query::User {
                 application_id,
                 bytes,
             } => {
                 let ExecutionRuntimeConfig {} = self.context().extra().execution_runtime_config();
-                let response = match endpoint {
+                let outcome = match endpoint {
                     Some(endpoint) => {
                         self.query_user_application_with_long_lived_service(
                             application_id,
@@ -504,7 +513,7 @@ where
                             .await?
                     }
                 };
-                Ok(Response::User(response))
+                Ok(outcome.into())
             }
         }
     }
@@ -514,7 +523,7 @@ where
         application_id: UserApplicationId,
         context: QueryContext,
         query: Vec<u8>,
-    ) -> Result<Vec<u8>, ExecutionError> {
+    ) -> Result<QueryOutcome<Vec<u8>>, ExecutionError> {
         let (execution_state_sender, mut execution_state_receiver) =
             futures::channel::mpsc::unbounded();
         let (code, description) = self.load_service(application_id).await?;
@@ -548,16 +557,16 @@ where
             ExecutionRequest,
         >,
         runtime_request_sender: &mut std::sync::mpsc::Sender<ServiceRuntimeRequest>,
-    ) -> Result<Vec<u8>, ExecutionError> {
-        let (response_sender, response_receiver) = oneshot::channel();
-        let mut response_receiver = response_receiver.fuse();
+    ) -> Result<QueryOutcome<Vec<u8>>, ExecutionError> {
+        let (outcome_sender, outcome_receiver) = oneshot::channel();
+        let mut outcome_receiver = outcome_receiver.fuse();
 
         runtime_request_sender
             .send(ServiceRuntimeRequest::Query {
                 application_id,
                 context,
                 query,
-                callback: response_sender,
+                callback: outcome_sender,
             })
             .expect("Service runtime thread should only stop when `request_sender` is dropped");
 
@@ -568,8 +577,8 @@ where
                         self.handle_request(request).await?;
                     }
                 }
-                response = &mut response_receiver => {
-                    return response.map_err(|_| ExecutionError::MissingRuntimeResponse)?;
+                outcome = &mut outcome_receiver => {
+                    return outcome.map_err(|_| ExecutionError::MissingRuntimeResponse)?;
                 }
             }
         }

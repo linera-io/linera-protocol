@@ -8,7 +8,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use futures::lock::Mutex;
 use linera_base::{
-    crypto::KeyPair,
+    crypto::{KeyPair, PublicKey},
     data_types::{Amount, Timestamp},
     identifiers::ChainId,
 };
@@ -93,18 +93,18 @@ async fn test_faucet_rate_limiting() {
     // The faucet is releasing one token every 1000 microseconds. So at 1000 one claim should
     // succeed. At 3000, two more should have been unlocked.
     clock.set(Timestamp::from(999));
-    assert!(root.do_claim(KeyPair::generate().public()).await.is_err());
+    assert!(root.do_claim(PublicKey::test_key(0).into()).await.is_err());
     clock.set(Timestamp::from(1000));
-    assert!(root.do_claim(KeyPair::generate().public()).await.is_ok());
-    assert!(root.do_claim(KeyPair::generate().public()).await.is_err());
+    assert!(root.do_claim(PublicKey::test_key(1).into()).await.is_ok());
+    assert!(root.do_claim(PublicKey::test_key(2).into()).await.is_err());
     clock.set(Timestamp::from(3000));
-    assert!(root.do_claim(KeyPair::generate().public()).await.is_ok());
-    assert!(root.do_claim(KeyPair::generate().public()).await.is_ok());
-    assert!(root.do_claim(KeyPair::generate().public()).await.is_err());
+    assert!(root.do_claim(PublicKey::test_key(3).into()).await.is_ok());
+    assert!(root.do_claim(PublicKey::test_key(4).into()).await.is_ok());
+    assert!(root.do_claim(PublicKey::test_key(5).into()).await.is_err());
     // If a validator is offline, it will create a pending block and then fail.
     clock.set(Timestamp::from(6000));
     builder.set_fault_type([0, 1], FaultType::Offline).await;
-    assert!(root.do_claim(KeyPair::generate().public()).await.is_err());
+    assert!(root.do_claim(PublicKey::test_key(6).into()).await.is_err());
     assert_eq!(context.lock().await.update_calls, 4); // Also called in the last error case.
 }
 

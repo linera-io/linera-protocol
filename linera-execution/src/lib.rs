@@ -34,7 +34,7 @@ use derive_more::Display;
 use js_sys::wasm_bindgen::JsValue;
 use linera_base::{
     abi::Abi,
-    crypto::CryptoHash,
+    crypto::{BcsHashable, CryptoHash},
     data_types::{
         Amount, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, DecompressionError,
         Resources, SendMessageRequest, Timestamp, UserApplicationDescription,
@@ -398,6 +398,8 @@ pub struct OperationContext {
     pub authenticated_caller_id: Option<UserApplicationId>,
     /// The current block height.
     pub height: BlockHeight,
+    /// The consensus round number, if this is a block that gets validated in a multi-leader round.
+    pub round: Option<u32>,
     /// The current index of the operation.
     #[debug(skip_if = Option::is_none)]
     pub index: Option<u32>,
@@ -417,6 +419,8 @@ pub struct MessageContext {
     pub refund_grant_to: Option<Account>,
     /// The current block height.
     pub height: BlockHeight,
+    /// The consensus round number, if this is a block that gets validated in a multi-leader round.
+    pub round: Option<u32>,
     /// The hash of the remote certificate that created the message.
     pub certificate_hash: CryptoHash,
     /// The ID of the message (based on the operation height and index in the remote
@@ -433,6 +437,8 @@ pub struct FinalizeContext {
     pub authenticated_signer: Option<Owner>,
     /// The current block height.
     pub height: BlockHeight,
+    /// The consensus round number, if this is a block that gets validated in a multi-leader round.
+    pub round: Option<u32>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -635,6 +641,9 @@ pub trait ServiceRuntime: BaseRuntime {
 
     /// Fetches blob of bytes from an arbitrary URL.
     fn fetch_url(&mut self, url: &str) -> Result<Vec<u8>, ExecutionError>;
+
+    /// Schedules an operation to be included in the block proposed after execution.
+    fn schedule_operation(&mut self, operation: Vec<u8>) -> Result<(), ExecutionError>;
 }
 
 pub trait ContractRuntime: BaseRuntime {
@@ -711,6 +720,12 @@ pub trait ContractRuntime: BaseRuntime {
     /// Closes the current chain.
     fn close_chain(&mut self) -> Result<(), ExecutionError>;
 
+    /// Changes the application permissions on the current chain.
+    fn change_application_permissions(
+        &mut self,
+        application_permissions: ApplicationPermissions,
+    ) -> Result<(), ExecutionError>;
+
     /// Creates a new application on chain.
     fn create_application(
         &mut self,
@@ -722,6 +737,9 @@ pub trait ContractRuntime: BaseRuntime {
 
     /// Writes a batch of changes.
     fn write_batch(&mut self, batch: Batch) -> Result<(), ExecutionError>;
+
+    /// Returns the round in which this block was validated.
+    fn validation_round(&mut self) -> Result<Option<u32>, ExecutionError>;
 }
 
 /// An operation to be executed in a block.
@@ -737,6 +755,8 @@ pub enum Operation {
         bytes: Vec<u8>,
     },
 }
+
+impl<'de> BcsHashable<'de> for Operation {}
 
 /// A message to be sent and possibly executed in the receiver's block.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -766,9 +786,44 @@ pub enum Query {
     },
 }
 
+/// The outcome of the execution of a query.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct QueryOutcome<Response = QueryResponse> {
+    pub response: Response,
+    pub operations: Vec<Operation>,
+}
+
+impl From<QueryOutcome<SystemResponse>> for QueryOutcome {
+    fn from(system_outcome: QueryOutcome<SystemResponse>) -> Self {
+        let QueryOutcome {
+            response,
+            operations,
+        } = system_outcome;
+
+        QueryOutcome {
+            response: QueryResponse::System(response),
+            operations,
+        }
+    }
+}
+
+impl From<QueryOutcome<Vec<u8>>> for QueryOutcome {
+    fn from(user_service_outcome: QueryOutcome<Vec<u8>>) -> Self {
+        let QueryOutcome {
+            response,
+            operations,
+        } = user_service_outcome;
+
+        QueryOutcome {
+            response: QueryResponse::User(response),
+            operations,
+        }
+    }
+}
+
 /// The response to a query.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub enum Response {
+pub enum QueryResponse {
     /// A system response.
     System(SystemResponse),
     /// A user response (in serialized form).
@@ -1230,15 +1285,15 @@ impl Query {
     }
 }
 
-impl From<SystemResponse> for Response {
+impl From<SystemResponse> for QueryResponse {
     fn from(response: SystemResponse) -> Self {
-        Response::System(response)
+        QueryResponse::System(response)
     }
 }
 
-impl From<Vec<u8>> for Response {
+impl From<Vec<u8>> for QueryResponse {
     fn from(response: Vec<u8>) -> Self {
-        Response::User(response)
+        QueryResponse::User(response)
     }
 }
 

@@ -34,7 +34,7 @@ use linera_base::{
 use linera_chain::data_types::{Medium, Origin};
 use linera_core::worker::{Notification, Reason};
 use linera_sdk::{
-    base::{BlobContent, BlockHeight},
+    base::{BlobContent, BlockHeight, Owner},
     DataBlobHash,
 };
 #[cfg(any(
@@ -414,14 +414,12 @@ async fn test_wasm_end_to_end_ethereum_tracker(config: impl LineraNetConfig) -> 
 
     // Change the ownership so that the blocks inserted are not
     // fast blocks. Fast blocks are not allowed for the oracles.
-    let pub_key1 = {
+    let owner1 = {
         let wallet = client.load_wallet()?;
         let user_chain = wallet.get(chain).unwrap();
-        user_chain.key_pair.as_ref().unwrap().public()
+        user_chain.key_pair.as_ref().unwrap().public().into()
     };
-    client
-        .change_ownership(chain, vec![], vec![pub_key1])
-        .await?;
+    client.change_ownership(chain, vec![], vec![owner1]).await?;
 
     let (contract, service) = client.build_example("ethereum-tracker").await?;
 
@@ -2437,14 +2435,16 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) -> Result<()
     let (mut net, client) = config.instantiate().await?;
 
     let chain1 = client.load_wallet()?.default_chain().unwrap();
-    let public_key = client
-        .load_wallet()?
-        .get(chain1)
-        .unwrap()
-        .key_pair
-        .as_ref()
-        .unwrap()
-        .public();
+    let owner1 = Owner::from(
+        client
+            .load_wallet()?
+            .get(chain1)
+            .unwrap()
+            .key_pair
+            .as_ref()
+            .unwrap()
+            .public(),
+    );
 
     // Create a fungible token application with 10 tokens for owner 1.
     let owner = get_fungible_account_owner(&client);
@@ -2474,7 +2474,7 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) -> Result<()
     let query = format!(
         "mutation {{ openChain(\
             chainId:\"{chain1}\", \
-            publicKey:\"{public_key}\", \
+            owner:\"{owner1}\", \
             balance: \"1\"\
         ) }}"
     );
@@ -2488,7 +2488,7 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) -> Result<()
     let query = format!(
         "mutation {{ openMultiOwnerChain(\
             chainId: \"{chain1}\", \
-            publicKeys: [\"{public_key}\"], \
+            owners: [\"{owner1}\"], \
             applicationPermissions: {{ executeOperations: [\"{raw_app_id}\"] }}, \
             balance: \"1\"
         ) }}"
@@ -2565,15 +2565,15 @@ async fn test_end_to_end_multiple_wallets(config: impl LineraNetConfig) -> Resul
     let chain1 = *client1.load_wallet()?.chain_ids().first().unwrap();
 
     // Generate a key for Client 2.
-    let client2_key = client2.keygen().await?;
+    let owner2 = client2.keygen().await?;
 
     // Open chain on behalf of Client 2.
     let (message_id, chain2) = client1
-        .open_chain(chain1, Some(client2_key), Amount::ZERO)
+        .open_chain(chain1, Some(owner2), Amount::ZERO)
         .await?;
 
     // Assign chain2 to client2_key.
-    assert_eq!(chain2, client2.assign(client2_key, message_id).await?);
+    assert_eq!(chain2, client2.assign(owner2, message_id).await?);
 
     // Transfer a token to chain 2. Check that this increases the local balance, proving
     // that client 2 can create blocks on that chain.
@@ -2610,14 +2610,14 @@ async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) ->
     let chain1 = *client1.load_wallet()?.chain_ids().first().unwrap();
 
     // Generate keys for both clients.
-    let client1_key = client1.keygen().await?;
-    let client2_key = client2.keygen().await?;
+    let owner1 = client1.keygen().await?;
+    let owner2 = client2.keygen().await?;
 
     // Open a chain owned by both clients.
     let (message_id, chain2) = client1
         .open_multi_owner_chain(
             chain1,
-            vec![client1_key, client2_key],
+            vec![owner1, owner2],
             vec![100, 100],
             u32::MAX,
             Amount::from_tokens(6),
@@ -2626,10 +2626,10 @@ async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) ->
         .await?;
 
     // Assign chain2 to client1_key.
-    assert_eq!(chain2, client1.assign(client1_key, message_id).await?);
+    assert_eq!(chain2, client1.assign(owner1, message_id).await?);
 
     // Assign chain2 to client2_key.
-    assert_eq!(chain2, client2.assign(client2_key, message_id).await?);
+    assert_eq!(chain2, client2.assign(owner2, message_id).await?);
 
     client2.sync(chain2).await?;
 
@@ -2675,25 +2675,23 @@ async fn test_end_to_end_change_ownership(config: impl LineraNetConfig) -> Resul
     let (mut net, client) = config.instantiate().await?;
 
     let chain = client.load_wallet()?.default_chain().unwrap();
-    let pub_key1 = {
+    let owner1 = {
         let wallet = client.load_wallet()?;
         let user_chain = wallet.get(chain).unwrap();
-        user_chain.key_pair.as_ref().unwrap().public()
+        user_chain.key_pair.as_ref().unwrap().public().into()
     };
-    let pub_key2 = PublicKey::test_key(2);
+    let owner2 = PublicKey::test_key(2).into();
 
     // Make both keys owners.
     client
-        .change_ownership(chain, vec![], vec![pub_key1, pub_key2])
+        .change_ownership(chain, vec![], vec![owner1, owner2])
         .await?;
 
-    // Make pub_key2 the only (super) owner.
-    client
-        .change_ownership(chain, vec![pub_key2], vec![])
-        .await?;
+    // Make owner2 the only (super) owner.
+    client.change_ownership(chain, vec![owner2], vec![]).await?;
 
     // Now we're not the owner anymore.
-    let result = client.change_ownership(chain, vec![], vec![pub_key1]).await;
+    let result = client.change_ownership(chain, vec![], vec![owner1]).await;
     assert_matches::assert_matches!(result, Err(_));
 
     net.ensure_is_running().await?;
@@ -2721,7 +2719,7 @@ async fn test_end_to_end_assign_greatgrandchild_chain(config: impl LineraNetConf
     let chain1 = *client1.load_wallet()?.chain_ids().first().unwrap();
 
     // Generate keys for client 2.
-    let client2_key = client2.keygen().await?;
+    let owner2 = client2.keygen().await?;
 
     // Open a great-grandchild chain on behalf of client 2.
     let (_, grandparent) = client1
@@ -2729,9 +2727,9 @@ async fn test_end_to_end_assign_greatgrandchild_chain(config: impl LineraNetConf
         .await?;
     let (_, parent) = client1.open_chain(grandparent, None, Amount::ONE).await?;
     let (message_id, chain2) = client1
-        .open_chain(parent, Some(client2_key), Amount::ZERO)
+        .open_chain(parent, Some(owner2), Amount::ZERO)
         .await?;
-    client2.assign(client2_key, message_id).await?;
+    client2.assign(owner2, message_id).await?;
 
     // Transfer a token to chain 2. Check that this increases the local balance, proving
     // that client 2 can create blocks on that chain.
@@ -2800,13 +2798,13 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) -> Result<()> {
     let balance1 = client1.local_balance(Account::chain(chain1)).await?;
 
     // Generate keys for client 2.
-    let client2_key = client2.keygen().await?;
+    let owner2 = client2.keygen().await?;
 
     let mut faucet_service = client1
         .run_faucet(None, chain1, Amount::from_tokens(2))
         .await?;
     let faucet = faucet_service.instance();
-    let outcome = faucet.claim(&client2_key).await?;
+    let outcome = faucet.claim(&owner2).await?;
     let chain2 = outcome.chain_id;
     let message_id = outcome.message_id;
 
@@ -2832,7 +2830,7 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) -> Result<()> {
     assert!(faucet_balance > balance1 - Amount::from_tokens(5));
 
     // Assign chain2 to client2_key.
-    assert_eq!(chain2, client2.assign(client2_key, message_id).await?);
+    assert_eq!(chain2, client2.assign(owner2, message_id).await?);
 
     // Clients 2 and 3 should have the tokens, and own the chain.
     client2.sync(chain2).await?;
@@ -2985,20 +2983,20 @@ async fn test_end_to_end_listen_for_new_rounds(config: impl LineraNetConfig) -> 
     let chain1 = *client1.load_wallet()?.chain_ids().first().unwrap();
 
     // Open a chain owned by both clients, with only single-leader rounds.
-    let client1_key = client1.keygen().await?;
-    let client2_key = client2.keygen().await?;
+    let owner1 = client1.keygen().await?;
+    let owner2 = client2.keygen().await?;
     let (message_id, chain2) = client1
         .open_multi_owner_chain(
             chain1,
-            vec![client1_key, client2_key],
+            vec![owner1, owner2],
             vec![100, 100],
             0,
             Amount::from_tokens(9),
             u64::MAX,
         )
         .await?;
-    client1.assign(client1_key, message_id).await?;
-    client2.assign(client2_key, message_id).await?;
+    client1.assign(owner1, message_id).await?;
+    client2.assign(owner2, message_id).await?;
     client2.sync(chain2).await?;
 
     let (tx, mut rx) = mpsc::channel(8);
@@ -3193,14 +3191,13 @@ async fn test_end_to_end_repeated_transfers(config: impl LineraNetConfig) -> Res
         let mut block2 = node_service2
             .query_node(&format!(
                 "query {{ block(hash: \"{hash2}\", chainId: \"{chain_id2}\") {{ \
-                    value {{ executedBlock {{ block {{ incomingBundles {{ \
+                    value {{ block {{ body {{ incomingBundles {{ \
                         origin bundle {{ height }} \
                     }} }} }} }} \
                 }} }}"
             ))
             .await?;
-        let mut bundle =
-            block2["block"]["value"]["executedBlock"]["block"]["incomingBundles"][0].take();
+        let mut bundle = block2["block"]["value"]["block"]["body"]["incomingBundles"][0].take();
         let origin = serde_json::from_value::<Origin>(bundle["origin"].take())?;
         assert_eq!(origin.sender, chain_id1);
         assert_eq!(origin.medium, Medium::Direct);

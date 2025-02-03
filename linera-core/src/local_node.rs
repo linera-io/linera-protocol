@@ -13,11 +13,11 @@ use linera_base::{
     identifiers::{BlobId, ChainId, MessageId, UserApplicationId},
 };
 use linera_chain::{
-    data_types::{Block, BlockProposal, ExecutedBlock},
+    data_types::{BlockProposal, ExecutedBlock, ProposedBlock},
     types::{ConfirmedBlockCertificate, GenericCertificate, LiteCertificate},
     ChainStateView,
 };
-use linera_execution::{committee::ValidatorName, Query, Response};
+use linera_execution::{committee::ValidatorName, Query, QueryOutcome};
 use linera_storage::Storage;
 use linera_views::views::ViewError;
 use thiserror::Error;
@@ -111,12 +111,8 @@ where
         notifier: &impl Notifier,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
         match self.node.state.full_certificate(certificate).await? {
-            Either::Left(confirmed) => {
-                Ok(self.handle_certificate(confirmed, vec![], notifier).await?)
-            }
-            Either::Right(validated) => {
-                Ok(self.handle_certificate(validated, vec![], notifier).await?)
-            }
+            Either::Left(confirmed) => Ok(self.handle_certificate(confirmed, notifier).await?),
+            Either::Right(validated) => Ok(self.handle_certificate(validated, notifier).await?),
         }
     }
 
@@ -124,20 +120,17 @@ where
     pub async fn handle_certificate<T>(
         &self,
         certificate: GenericCertificate<T>,
-        blobs: Vec<Blob>,
         notifier: &impl Notifier,
     ) -> Result<ChainInfoResponse, LocalNodeError>
     where
         T: ProcessableCertificate,
     {
-        Ok(
-            Box::pin(self.node.state.fully_handle_certificate_with_notifications(
-                certificate,
-                blobs,
-                notifier,
-            ))
-            .await?,
+        Ok(Box::pin(
+            self.node
+                .state
+                .fully_handle_certificate_with_notifications(certificate, notifier),
         )
+        .await?)
     }
 
     #[instrument(level = "trace", skip_all)]
@@ -180,10 +173,10 @@ where
     #[instrument(level = "trace", skip_all)]
     pub async fn stage_block_execution(
         &self,
-        block: Block,
+        block: ProposedBlock,
+        round: Option<u32>,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), LocalNodeError> {
-        let (executed_block, info) = self.node.state.stage_block_execution(block).await?;
-        Ok((executed_block, info))
+        Ok(self.node.state.stage_block_execution(block, round).await?)
     }
 
     /// Reads blobs from storage.
@@ -195,9 +188,9 @@ where
         Ok(storage.read_blobs(blob_ids).await?.into_iter().collect())
     }
 
-    /// Looks for the specified blobs in the local chain manager's locked blobs.
+    /// Looks for the specified blobs in the local chain manager's locking blobs.
     /// Returns `Ok(None)` if any of the blobs is not found.
-    pub async fn get_locked_blobs(
+    pub async fn get_locking_blobs(
         &self,
         blob_ids: &[BlobId],
         chain_id: ChainId,
@@ -205,7 +198,7 @@ where
         let chain = self.chain_state_view(chain_id).await?;
         let mut blobs = Vec::new();
         for blob_id in blob_ids {
-            match chain.manager.locked_blobs.get(blob_id).await? {
+            match chain.manager.locking_blobs.get(blob_id).await? {
                 None => return Ok(None),
                 Some(blob) => blobs.push(blob),
             }
@@ -217,6 +210,17 @@ where
     pub async fn store_blobs(&self, blobs: &[Blob]) -> Result<(), LocalNodeError> {
         let storage = self.storage_client();
         storage.maybe_write_blobs(blobs).await?;
+        Ok(())
+    }
+
+    pub async fn handle_pending_blobs(
+        &self,
+        chain_id: ChainId,
+        blobs: Vec<Blob>,
+    ) -> Result<(), LocalNodeError> {
+        for blob in blobs {
+            self.node.state.handle_pending_blob(chain_id, blob).await?;
+        }
         Ok(())
     }
 
@@ -247,9 +251,9 @@ where
         &self,
         chain_id: ChainId,
         query: Query,
-    ) -> Result<Response, LocalNodeError> {
-        let response = self.node.state.query_application(chain_id, query).await?;
-        Ok(response)
+    ) -> Result<QueryOutcome, LocalNodeError> {
+        let outcome = self.node.state.query_application(chain_id, query).await?;
+        Ok(outcome)
     }
 
     #[instrument(level = "trace", skip(self))]

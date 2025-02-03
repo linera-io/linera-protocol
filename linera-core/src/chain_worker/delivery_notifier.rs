@@ -21,7 +21,7 @@ use tracing::warn;
 /// from specific [`BlockHeight`]s.
 ///
 /// The notifier instance can be cheaply `clone`d and works as a shared reference.
-/// However, its methods still require `&mut self` to hint that it should only changed by
+/// However, its methods still require `&mut self` to hint that it should only be changed by
 /// [`ChainWorkerStateWithAttemptedChanges`](super::ChainWorkerStateWithAttemptedChanges).
 #[derive(Clone, Default)]
 pub struct DeliveryNotifier {

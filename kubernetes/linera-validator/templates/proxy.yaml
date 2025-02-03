@@ -49,7 +49,6 @@ spec:
       labels:
         app: proxy
     spec:
-      serviceAccountName: linera-admin
       terminationGracePeriodSeconds: 10
       initContainers:
         - name: linera-proxy-initializer

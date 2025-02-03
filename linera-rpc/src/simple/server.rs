@@ -3,7 +3,7 @@
 
 use async_trait::async_trait;
 use futures::{channel::mpsc, stream::StreamExt};
-use linera_base::time::Duration;
+use linera_base::{data_types::Blob, time::Duration};
 use linera_core::{
     node::NodeError,
     worker::{NetworkActions, WorkerError, WorkerState},
@@ -209,7 +209,8 @@ where
                         Ok(Some(RpcMessage::ChainInfoResponse(Box::new(info))))
                     }
                     Err(error) => {
-                        warn!(nickname = self.server.state.nickname(), %error, "Failed to handle block proposal");
+                        let nickname = self.server.state.nickname();
+                        warn!(nickname, %error, "Failed to handle block proposal");
                         Err(error.into())
                     }
                 }
@@ -237,10 +238,11 @@ where
                         Ok(Some(RpcMessage::ChainInfoResponse(Box::new(info))))
                     }
                     Err(error) => {
+                        let nickname = self.server.state.nickname();
                         if let WorkerError::MissingCertificateValue = &error {
-                            debug!(nickname = self.server.state.nickname(), %error, "Failed to handle lite certificate");
+                            debug!(nickname, %error, "Failed to handle lite certificate");
                         } else {
-                            error!(nickname = self.server.state.nickname(), %error, "Failed to handle lite certificate");
+                            error!(nickname, %error, "Failed to handle lite certificate");
                         }
                         Err(error.into())
                     }
@@ -260,7 +262,8 @@ where
                         Ok(Some(RpcMessage::ChainInfoResponse(Box::new(info))))
                     }
                     Err(error) => {
-                        error!(nickname = self.server.state.nickname(), %error, "Failed to handle timeout certificate");
+                        let nickname = self.server.state.nickname();
+                        error!(nickname, %error, "Failed to handle timeout certificate");
                         Err(error.into())
                     }
                 }
@@ -269,7 +272,7 @@ where
                 match self
                     .server
                     .state
-                    .handle_validated_certificate(request.certificate, request.blobs)
+                    .handle_validated_certificate(request.certificate)
                     .await
                 {
                     Ok((info, actions)) => {
@@ -279,7 +282,10 @@ where
                         Ok(Some(RpcMessage::ChainInfoResponse(Box::new(info))))
                     }
                     Err(error) => {
-                        error!(nickname = self.server.state.nickname(), %error, "Failed to handle validated certificate");
+                        error!(
+                            nickname = self.server.state.nickname(), %error,
+                            "Failed to handle validated certificate"
+                        );
                         Err(error.into())
                     }
                 }
@@ -307,7 +313,8 @@ where
                         Ok(Some(RpcMessage::ChainInfoResponse(Box::new(info))))
                     }
                     Err(error) => {
-                        error!(nickname = self.server.state.nickname(), %error, "Failed to handle confirmed certificate");
+                        let nickname = self.server.state.nickname();
+                        error!(nickname, %error, "Failed to handle confirmed certificate");
                         Err(error.into())
                     }
                 }
@@ -321,7 +328,8 @@ where
                         Ok(Some(RpcMessage::ChainInfoResponse(Box::new(info))))
                     }
                     Err(error) => {
-                        error!(nickname = self.server.state.nickname(), %error, "Failed to handle chain info query");
+                        let nickname = self.server.state.nickname();
+                        error!(nickname, %error, "Failed to handle chain info query");
                         Err(error.into())
                     }
                 }
@@ -353,6 +361,22 @@ where
                     Err(error) => {
                         let nickname = self.server.state.nickname();
                         error!(nickname, %error, "Failed to handle pending blob request");
+                        Err(error.into())
+                    }
+                }
+            }
+            RpcMessage::HandlePendingBlob(request) => {
+                let (chain_id, blob_content) = *request;
+                match self
+                    .server
+                    .state
+                    .handle_pending_blob(chain_id, Blob::new(blob_content))
+                    .await
+                {
+                    Ok(info) => Ok(Some(RpcMessage::ChainInfoResponse(Box::new(info)))),
+                    Err(error) => {
+                        let nickname = self.server.state.nickname();
+                        error!(nickname, %error, "Failed to handle pending blob");
                         Err(error.into())
                     }
                 }

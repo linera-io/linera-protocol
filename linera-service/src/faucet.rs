@@ -8,9 +8,9 @@ use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
 use axum::{Extension, Router};
 use futures::lock::Mutex;
 use linera_base::{
-    crypto::{CryptoHash, PublicKey},
+    crypto::CryptoHash,
     data_types::{Amount, ApplicationPermissions, Timestamp},
-    identifiers::{ChainId, MessageId},
+    identifiers::{ChainId, MessageId, Owner},
     ownership::ChainOwnership,
 };
 use linera_client::{
@@ -100,8 +100,8 @@ where
     C: ClientContext,
 {
     /// Creates a new chain with the given authentication key, and transfers tokens to it.
-    async fn claim(&self, public_key: PublicKey) -> Result<ClaimOutcome, Error> {
-        self.do_claim(public_key).await
+    async fn claim(&self, owner: Owner) -> Result<ClaimOutcome, Error> {
+        self.do_claim(owner).await
     }
 }
 
@@ -109,7 +109,7 @@ impl<C> MutationRoot<C>
 where
     C: ClientContext,
 {
-    async fn do_claim(&self, public_key: PublicKey) -> Result<ClaimOutcome, Error> {
+    async fn do_claim(&self, owner: Owner) -> Result<ClaimOutcome, Error> {
         let client = self.context.lock().await.make_chain_client(self.chain_id)?;
 
         if self.start_timestamp < self.end_timestamp {
@@ -136,7 +136,7 @@ where
             }
         }
 
-        let ownership = ChainOwnership::single(public_key);
+        let ownership = ChainOwnership::single(owner);
         let result = client
             .open_chain(ownership, ApplicationPermissions::default(), self.amount)
             .await;

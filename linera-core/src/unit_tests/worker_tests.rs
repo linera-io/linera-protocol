@@ -28,10 +28,11 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, BlockExecutionOutcome, BlockProposal, ChainAndHeight, ChannelFullName,
+        BlockExecutionOutcome, BlockProposal, ChainAndHeight, ChannelFullName, ExecutedBlock,
         IncomingBundle, LiteValue, LiteVote, Medium, MessageAction, MessageBundle, Origin,
-        OutgoingMessage, PostedMessage, SignatureAggregator,
+        OutgoingMessage, PostedMessage, ProposedBlock, SignatureAggregator,
     },
+    manager::LockingBlock,
     test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt, VoteTestExt},
     types::{
         CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate, Timeout,
@@ -45,8 +46,8 @@ use linera_execution::{
         AdminOperation, OpenChainConfig, Recipient, SystemChannel, SystemMessage, SystemOperation,
     },
     test_utils::{ExpectedCall, RegisterMockApplication, SystemExecutionState},
-    ChannelSubscription, ExecutionError, Message, MessageKind, Query, QueryContext, Response,
-    SystemExecutionError, SystemQuery, SystemResponse,
+    ChannelSubscription, ExecutionError, Message, MessageKind, Query, QueryContext, QueryOutcome,
+    QueryResponse, SystemExecutionError, SystemQuery, SystemResponse,
 };
 use linera_storage::{DbStorage, Storage, TestClock};
 use linera_views::{
@@ -106,20 +107,20 @@ where
 /// Same as `init_worker` but also instantiates some initial chains.
 async fn init_worker_with_chains<S, I>(storage: S, balances: I) -> (Committee, WorkerState<S>)
 where
-    I: IntoIterator<Item = (ChainDescription, PublicKey, Amount)>,
+    I: IntoIterator<Item = (ChainDescription, Owner, Amount)>,
     S: Storage + Clone + Send + Sync + 'static,
 {
     let (committee, worker) = init_worker(
         storage, /* is_client */ false, /* has_long_lived_services */ false,
     );
-    for (description, pubk, balance) in balances {
+    for (description, owner, balance) in balances {
         worker
             .storage
             .create_chain(
                 committee.clone(),
                 ChainId::root(0),
                 description,
-                pubk,
+                owner,
                 balance,
                 Timestamp::from(0),
             )
@@ -133,7 +134,7 @@ where
 async fn init_worker_with_chain<S>(
     storage: S,
     description: ChainDescription,
-    owner: PublicKey,
+    owner: Owner,
     balance: Amount,
 ) -> (Committee, WorkerState<S>)
 where
@@ -266,7 +267,7 @@ where
     let chain_id = chain_description.into();
     let system_state = SystemExecutionState {
         committees: [(epoch, committee.clone())].into_iter().collect(),
-        ownership: ChainOwnership::single(key_pair.public()),
+        ownership: ChainOwnership::single(key_pair.public().into()),
         balance,
         balances,
         ..SystemExecutionState::new(epoch, chain_description, ChainId::root(0))
@@ -302,7 +303,7 @@ where
         })
         .collect::<Vec<_>>();
 
-    let block = Block {
+    let block = ProposedBlock {
         epoch,
         incoming_bundles,
         authenticated_signer,
@@ -404,7 +405,7 @@ fn update_recipient_direct(
     recipient: ChainId,
     certificate: &ConfirmedBlockCertificate,
 ) -> CrossChainRequest {
-    let sender = certificate.inner().executed_block().block.chain_id;
+    let sender = certificate.inner().block().header.chain_id;
     let bundles = certificate.message_bundles_for(&Medium::Direct, recipient);
     CrossChainRequest::UpdateRecipient {
         sender,
@@ -428,12 +429,12 @@ where
         vec![
             (
                 ChainDescription::Root(1),
-                sender_key_pair.public(),
+                sender_key_pair.public().into(),
                 Amount::from_tokens(5),
             ),
             (
                 ChainDescription::Root(2),
-                PublicKey::test_key(2),
+                PublicKey::test_key(2).into(),
                 Amount::ZERO,
             ),
         ],
@@ -474,12 +475,12 @@ where
         vec![
             (
                 ChainDescription::Root(1),
-                sender_key_pair.public(),
+                sender_key_pair.public().into(),
                 Amount::from_tokens(5),
             ),
             (
                 ChainDescription::Root(2),
-                PublicKey::test_key(2),
+                PublicKey::test_key(2).into(),
                 Amount::ZERO,
             ),
         ],
@@ -522,7 +523,7 @@ where
     let clock = storage_builder.clock();
     let key_pair = KeyPair::generate();
     let balance = Amount::from_tokens(5);
-    let balances = vec![(ChainDescription::Root(1), key_pair.public(), balance)];
+    let balances = vec![(ChainDescription::Root(1), key_pair.public().into(), balance)];
     let epoch = Epoch::ZERO;
     let (committee, worker) = init_worker_with_chains(storage, balances).await;
 
@@ -547,7 +548,7 @@ where
 
         let system_state = SystemExecutionState {
             committees: [(epoch, committee.clone())].into_iter().collect(),
-            ownership: ChainOwnership::single(key_pair.public()),
+            ownership: ChainOwnership::single(key_pair.public().into()),
             balance,
             timestamp: block_0_time,
             ..SystemExecutionState::new(epoch, ChainDescription::Root(1), ChainId::root(0))
@@ -563,7 +564,7 @@ where
         make_certificate(&committee, &worker, value)
     };
     worker
-        .fully_handle_certificate_with_notifications(certificate.clone(), vec![], &())
+        .fully_handle_certificate_with_notifications(certificate.clone(), &())
         .await?;
 
     {
@@ -594,12 +595,12 @@ where
         vec![
             (
                 ChainDescription::Root(1),
-                sender_key_pair.public(),
+                sender_key_pair.public().into(),
                 Amount::from_tokens(5),
             ),
             (
                 ChainDescription::Root(2),
-                PublicKey::test_key(2),
+                PublicKey::test_key(2).into(),
                 Amount::ZERO,
             ),
         ],
@@ -632,13 +633,11 @@ where
     B: StorageBuilder,
 {
     let sender_key_pair = KeyPair::generate();
-    let (committee, worker) = init_worker_with_chains(
+    let (committee, worker) = init_worker_with_chain(
         storage_builder.build().await?,
-        vec![(
-            ChainDescription::Root(1),
-            sender_key_pair.public(),
-            Amount::from_tokens(5),
-        )],
+        ChainDescription::Root(1),
+        sender_key_pair.public().into(),
+        Amount::from_tokens(5),
     )
     .await;
     let block_proposal0 = make_first_block(ChainId::root(1))
@@ -681,17 +680,17 @@ where
         .await?;
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
-    assert_eq!(
-        &chain
-            .manager
-            .validated_vote()
-            .unwrap()
-            .value()
-            .inner()
-            .executed_block()
-            .block,
-        &block_proposal0.content.block
-    ); // Multi-leader round - it's not confirmed yet.
+    let executed_block: ExecutedBlock = chain
+        .manager
+        .validated_vote()
+        .unwrap()
+        .value()
+        .inner()
+        .block()
+        .clone()
+        .into();
+    // Multi-leader round - it's not confirmed yet.
+    assert_eq!(&executed_block.block, &block_proposal0.content.block);
     assert!(chain.manager.confirmed_vote().is_none());
     let block_certificate0 = make_certificate(
         &committee,
@@ -701,21 +700,22 @@ where
     drop(chain);
 
     worker
-        .handle_validated_certificate(block_certificate0, vec![])
+        .handle_validated_certificate(block_certificate0)
         .await?;
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
-    assert_eq!(
-        &chain
-            .manager
-            .confirmed_vote()
-            .unwrap()
-            .value()
-            .inner()
-            .executed_block()
-            .block,
-        &block_proposal0.content.block
-    ); // Should be confirmed after handling the certificate.
+    let executed_block: ExecutedBlock = chain
+        .manager
+        .confirmed_vote()
+        .unwrap()
+        .value()
+        .inner()
+        .block()
+        .clone()
+        .into();
+
+    // Should be confirmed after handling the certificate.
+    assert_eq!(&executed_block.block, &block_proposal0.content.block);
     assert!(chain.manager.validated_vote().is_none());
     drop(chain);
 
@@ -731,17 +731,16 @@ where
 
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
-    assert_eq!(
-        &chain
-            .manager
-            .validated_vote()
-            .unwrap()
-            .value()
-            .inner()
-            .executed_block()
-            .block,
-        &block_proposal1.content.block
-    );
+    let executed_block: ExecutedBlock = chain
+        .manager
+        .validated_vote()
+        .unwrap()
+        .value()
+        .inner()
+        .block()
+        .clone()
+        .into();
+    assert_eq!(&executed_block.block, &block_proposal1.content.block);
     assert!(chain.manager.confirmed_vote().is_none());
     drop(chain);
     assert_matches!(
@@ -774,12 +773,12 @@ where
         vec![
             (
                 ChainDescription::Root(1),
-                sender_key_pair.public(),
+                sender_key_pair.public().into(),
                 Amount::from_tokens(6),
             ),
             (
                 ChainDescription::Root(2),
-                recipient_key_pair.public(),
+                recipient_key_pair.public().into(),
                 Amount::ZERO,
             ),
         ],
@@ -803,7 +802,7 @@ where
                 events: vec![Vec::new(); 2],
                 state_hash: SystemExecutionState {
                     committees: [(epoch, committee.clone())].into_iter().collect(),
-                    ownership: ChainOwnership::single(sender_key_pair.public()),
+                    ownership: ChainOwnership::single(sender_key_pair.public().into()),
                     balance: Amount::from_tokens(3),
                     ..SystemExecutionState::new(epoch, ChainDescription::Root(1), admin_id)
                 }
@@ -832,7 +831,7 @@ where
                 events: vec![Vec::new()],
                 state_hash: SystemExecutionState {
                     committees: [(epoch, committee.clone())].into_iter().collect(),
-                    ownership: ChainOwnership::single(sender_key_pair.public()),
+                    ownership: ChainOwnership::single(sender_key_pair.public().into()),
                     ..SystemExecutionState::new(epoch, ChainDescription::Root(1), admin_id)
                 }
                 .into_hash()
@@ -857,10 +856,10 @@ where
     // Run transfers
     let notifications = Arc::new(Mutex::new(Vec::new()));
     worker
-        .fully_handle_certificate_with_notifications(certificate0.clone(), vec![], &notifications)
+        .fully_handle_certificate_with_notifications(certificate0.clone(), &notifications)
         .await?;
     worker
-        .fully_handle_certificate_with_notifications(certificate1.clone(), vec![], &notifications)
+        .fully_handle_certificate_with_notifications(certificate1.clone(), &notifications)
         .await?;
     assert_eq!(
         *notifications.lock().unwrap(),
@@ -1068,7 +1067,7 @@ where
                     events: vec![Vec::new(); 2],
                     state_hash: SystemExecutionState {
                         committees: [(epoch, committee.clone())].into_iter().collect(),
-                        ownership: ChainOwnership::single(recipient_key_pair.public()),
+                        ownership: ChainOwnership::single(recipient_key_pair.public().into()),
                         ..SystemExecutionState::new(epoch, ChainDescription::Root(2), admin_id)
                     }
                     .into_hash()
@@ -1130,12 +1129,12 @@ where
         vec![
             (
                 ChainDescription::Root(1),
-                sender_key_pair.public(),
+                sender_key_pair.public().into(),
                 Amount::from_tokens(5),
             ),
             (
                 ChainDescription::Root(2),
-                PublicKey::test_key(2),
+                PublicKey::test_key(2).into(),
                 Amount::ZERO,
             ),
         ],
@@ -1176,7 +1175,7 @@ where
         storage_builder.build().await?,
         vec![(
             ChainDescription::Root(1),
-            sender_key_pair.public(),
+            sender_key_pair.public().into(),
             Amount::from_tokens(5),
         )],
     )
@@ -1200,7 +1199,7 @@ where
     drop(chain);
 
     let (chain_info_response, _actions) = worker
-        .handle_validated_certificate(validated_certificate, vec![])
+        .handle_validated_certificate(validated_certificate)
         .await?;
     chain_info_response.check(&ValidatorName(worker.public_key()))?;
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
@@ -1229,12 +1228,12 @@ where
         vec![
             (
                 ChainDescription::Root(1),
-                sender_key_pair.public(),
+                sender_key_pair.public().into(),
                 Amount::from_tokens(5),
             ),
             (
                 ChainDescription::Root(2),
-                PublicKey::test_key(2),
+                PublicKey::test_key(2).into(),
                 Amount::ZERO,
             ),
         ],
@@ -1270,7 +1269,7 @@ where
         storage_builder.build().await?,
         vec![(
             ChainDescription::Root(2),
-            PublicKey::test_key(2),
+            PublicKey::test_key(2).into(),
             Amount::ZERO,
         )],
     )
@@ -1289,7 +1288,7 @@ where
     .await;
     assert_matches!(
         worker
-            .fully_handle_certificate_with_notifications(certificate, vec![], &())
+            .fully_handle_certificate_with_notifications(certificate, &())
             .await,
         Err(WorkerError::ChainError(error)) if matches!(*error, ChainError::InactiveChain {..})
     );
@@ -1310,7 +1309,7 @@ where
         storage_builder.build().await?,
         vec![(
             ChainDescription::Root(2),
-            PublicKey::test_key(2),
+            PublicKey::test_key(2).into(),
             Amount::ZERO,
         )],
     )
@@ -1323,7 +1322,7 @@ where
         index: 0,
     });
     let chain_id = ChainId::from(description);
-    let ownership = ChainOwnership::single(sender_key_pair.public());
+    let ownership = ChainOwnership::single(sender_key_pair.public().into());
     let committees = BTreeMap::from_iter([(epoch, committee.clone())]);
     let subscriptions = BTreeSet::from_iter([ChannelSubscription {
         chain_id: admin_id,
@@ -1367,7 +1366,7 @@ where
     ));
     let certificate = make_certificate(&committee, &worker, value);
     let info = worker
-        .fully_handle_certificate_with_notifications(certificate, vec![], &())
+        .fully_handle_certificate_with_notifications(certificate, &())
         .await?
         .info;
     assert_eq!(info.next_block_height, BlockHeight::from(1));
@@ -1389,7 +1388,7 @@ where
         storage_builder.build().await?,
         vec![(
             ChainDescription::Root(2),
-            chain_key_pair.public(),
+            chain_key_pair.public().into(),
             Amount::from_tokens(5),
         )],
     )
@@ -1414,7 +1413,7 @@ where
     // compute the hash of the execution state.
     assert_matches!(
         worker
-            .fully_handle_certificate_with_notifications(certificate, vec![], &())
+            .fully_handle_certificate_with_notifications(certificate, &())
             .await,
         Err(WorkerError::IncorrectOutcome { .. })
     );
@@ -1436,12 +1435,12 @@ where
         vec![
             (
                 ChainDescription::Root(1),
-                sender_key_pair.public(),
+                sender_key_pair.public().into(),
                 Amount::from_tokens(5),
             ),
             (
                 ChainDescription::Root(2),
-                PublicKey::test_key(2),
+                PublicKey::test_key(2).into(),
                 Amount::ZERO,
             ),
         ],
@@ -1461,10 +1460,10 @@ where
     .await;
     // Replays are ignored.
     worker
-        .fully_handle_certificate_with_notifications(certificate.clone(), vec![], &())
+        .fully_handle_certificate_with_notifications(certificate.clone(), &())
         .await?;
     worker
-        .fully_handle_certificate_with_notifications(certificate, vec![], &())
+        .fully_handle_certificate_with_notifications(certificate, &())
         .await?;
     Ok(())
 }
@@ -1486,12 +1485,12 @@ where
         vec![
             (
                 ChainDescription::Root(1),
-                key_pair.public(),
+                key_pair.public().into(),
                 Amount::from_tokens(5),
             ),
             (
                 ChainDescription::Root(2),
-                PublicKey::test_key(2),
+                PublicKey::test_key(2).into(),
                 Amount::ZERO,
             ),
         ],
@@ -1522,7 +1521,7 @@ where
     )
     .await;
     worker
-        .fully_handle_certificate_with_notifications(certificate.clone(), vec![], &())
+        .fully_handle_certificate_with_notifications(certificate.clone(), &())
         .await?;
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
@@ -1587,12 +1586,12 @@ where
         vec![
             (
                 ChainDescription::Root(1),
-                sender_key_pair.public(),
+                sender_key_pair.public().into(),
                 Amount::ONE,
             ),
             (
                 ChainDescription::Root(2),
-                PublicKey::test_key(2),
+                PublicKey::test_key(2).into(),
                 Amount::MAX,
             ),
         ],
@@ -1612,7 +1611,7 @@ where
     )
     .await;
     worker
-        .fully_handle_certificate_with_notifications(certificate.clone(), vec![], &())
+        .fully_handle_certificate_with_notifications(certificate.clone(), &())
         .await?;
     let new_sender_chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(new_sender_chain.is_active());
@@ -1651,9 +1650,9 @@ where
 {
     let storage = storage_builder.build().await?;
     let key_pair = KeyPair::generate();
-    let name = key_pair.public();
+    let owner = key_pair.public().into();
     let (committee, worker) =
-        init_worker_with_chain(storage, ChainDescription::Root(1), name, Amount::ONE).await;
+        init_worker_with_chain(storage, ChainDescription::Root(1), owner, Amount::ONE).await;
 
     let certificate = make_simple_transfer_certificate(
         ChainDescription::Root(1),
@@ -1668,7 +1667,7 @@ where
     )
     .await;
     worker
-        .fully_handle_certificate_with_notifications(certificate.clone(), vec![], &())
+        .fully_handle_certificate_with_notifications(certificate.clone(), &())
         .await?;
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
@@ -1719,13 +1718,11 @@ where
     B: StorageBuilder,
 {
     let sender_key_pair = KeyPair::generate();
-    let (committee, worker) = init_worker_with_chains(
+    let (committee, worker) = init_worker_with_chain(
         storage_builder.build().await?,
-        vec![(
-            ChainDescription::Root(2),
-            PublicKey::test_key(2),
-            Amount::ONE,
-        )],
+        ChainDescription::Root(2),
+        PublicKey::test_key(2).into(),
+        Amount::ONE,
     )
     .await;
     let certificate = make_simple_transfer_certificate(
@@ -1895,12 +1892,12 @@ where
         vec![
             (
                 ChainDescription::Root(1),
-                sender_key_pair.public(),
+                sender_key_pair.public().into(),
                 Amount::from_tokens(5),
             ),
             (
                 ChainDescription::Root(2),
-                recipient_key_pair.public(),
+                recipient_key_pair.public().into(),
                 Amount::ZERO,
             ),
         ],
@@ -1910,19 +1907,25 @@ where
         worker
             .query_application(ChainId::root(1), Query::System(SystemQuery))
             .await?,
-        Response::System(SystemResponse {
-            chain_id: ChainId::root(1),
-            balance: Amount::from_tokens(5),
-        })
+        QueryOutcome {
+            response: QueryResponse::System(SystemResponse {
+                chain_id: ChainId::root(1),
+                balance: Amount::from_tokens(5),
+            }),
+            operations: vec![],
+        }
     );
     assert_eq!(
         worker
             .query_application(ChainId::root(2), Query::System(SystemQuery))
             .await?,
-        Response::System(SystemResponse {
-            chain_id: ChainId::root(2),
-            balance: Amount::ZERO,
-        })
+        QueryOutcome {
+            response: QueryResponse::System(SystemResponse {
+                chain_id: ChainId::root(2),
+                balance: Amount::ZERO,
+            }),
+            operations: vec![],
+        }
     );
 
     let certificate = make_simple_transfer_certificate(
@@ -1939,7 +1942,7 @@ where
     .await;
 
     let info = worker
-        .fully_handle_certificate_with_notifications(certificate.clone(), vec![], &())
+        .fully_handle_certificate_with_notifications(certificate.clone(), &())
         .await?
         .info;
     assert_eq!(ChainId::root(1), info.chain_id);
@@ -1951,10 +1954,13 @@ where
         worker
             .query_application(ChainId::root(1), Query::System(SystemQuery))
             .await?,
-        Response::System(SystemResponse {
-            chain_id: ChainId::root(1),
-            balance: Amount::ZERO,
-        })
+        QueryOutcome {
+            response: QueryResponse::System(SystemResponse {
+                chain_id: ChainId::root(1),
+                balance: Amount::ZERO,
+            }),
+            operations: vec![],
+        }
     );
 
     // Try to use the money. This requires selecting the incoming message in a next block.
@@ -1982,17 +1988,20 @@ where
     )
     .await;
     worker
-        .fully_handle_certificate_with_notifications(certificate.clone(), vec![], &())
+        .fully_handle_certificate_with_notifications(certificate.clone(), &())
         .await?;
 
     assert_eq!(
         worker
             .query_application(ChainId::root(2), Query::System(SystemQuery))
             .await?,
-        Response::System(SystemResponse {
-            chain_id: ChainId::root(2),
-            balance: Amount::from_tokens(4),
-        })
+        QueryOutcome {
+            response: QueryResponse::System(SystemResponse {
+                chain_id: ChainId::root(2),
+                balance: Amount::from_tokens(4),
+            }),
+            operations: vec![],
+        }
     );
 
     {
@@ -2042,13 +2051,11 @@ where
     B: StorageBuilder,
 {
     let sender_key_pair = KeyPair::generate();
-    let (committee, worker) = init_worker_with_chains(
+    let (committee, worker) = init_worker_with_chain(
         storage_builder.build().await?,
-        vec![(
-            ChainDescription::Root(1),
-            sender_key_pair.public(),
-            Amount::from_tokens(5),
-        )],
+        ChainDescription::Root(1),
+        sender_key_pair.public().into(),
+        Amount::from_tokens(5),
     )
     .await;
     let certificate = make_simple_transfer_certificate(
@@ -2065,7 +2072,7 @@ where
     .await;
 
     let info = worker
-        .fully_handle_certificate_with_notifications(certificate.clone(), vec![], &())
+        .fully_handle_certificate_with_notifications(certificate.clone(), &())
         .await?
         .info;
     assert_eq!(ChainId::root(1), info.chain_id);
@@ -2106,12 +2113,12 @@ where
         vec![
             (
                 ChainDescription::Root(1),
-                sender_key_pair.public(),
+                sender_key_pair.public().into(),
                 Amount::from_tokens(6),
             ),
             (
                 ChainDescription::Root(2),
-                recipient_key_pair.public(),
+                recipient_key_pair.public().into(),
                 Amount::ZERO,
             ),
         ],
@@ -2136,7 +2143,7 @@ where
     .await;
 
     worker
-        .fully_handle_certificate_with_notifications(certificate00.clone(), vec![], &())
+        .fully_handle_certificate_with_notifications(certificate00.clone(), &())
         .await?;
 
     let certificate01 = make_transfer_certificate(
@@ -2170,7 +2177,7 @@ where
     .await;
 
     worker
-        .fully_handle_certificate_with_notifications(certificate01.clone(), vec![], &())
+        .fully_handle_certificate_with_notifications(certificate01.clone(), &())
         .await?;
 
     {
@@ -2196,7 +2203,7 @@ where
     .await;
 
     worker
-        .fully_handle_certificate_with_notifications(certificate1.clone(), vec![], &())
+        .fully_handle_certificate_with_notifications(certificate1.clone(), &())
         .await?;
 
     let certificate2 = make_transfer_certificate(
@@ -2215,7 +2222,7 @@ where
     .await;
 
     worker
-        .fully_handle_certificate_with_notifications(certificate2.clone(), vec![], &())
+        .fully_handle_certificate_with_notifications(certificate2.clone(), &())
         .await?;
 
     // Reject the first transfer and try to use the money of the second one.
@@ -2268,7 +2275,7 @@ where
     .await;
 
     worker
-        .fully_handle_certificate_with_notifications(certificate.clone(), vec![], &())
+        .fully_handle_certificate_with_notifications(certificate.clone(), &())
         .await?;
 
     {
@@ -2309,7 +2316,7 @@ where
     .await;
 
     worker
-        .fully_handle_certificate_with_notifications(certificate3.clone(), vec![], &())
+        .fully_handle_certificate_with_notifications(certificate3.clone(), &())
         .await?;
 
     {
@@ -2332,13 +2339,11 @@ where
     B: StorageBuilder,
 {
     let key_pair = KeyPair::generate();
-    let (committee, worker) = init_worker_with_chains(
+    let (committee, worker) = init_worker_with_chain(
         storage_builder.build().await?,
-        vec![(
-            ChainDescription::Root(0),
-            key_pair.public(),
-            Amount::from_tokens(2),
-        )],
+        ChainDescription::Root(0),
+        key_pair.public().into(),
+        Amount::from_tokens(2),
     )
     .await;
     let mut committees = BTreeMap::new();
@@ -2370,7 +2375,7 @@ where
                         user_id,
                         MessageKind::Protected,
                         SystemMessage::OpenChain(OpenChainConfig {
-                            ownership: ChainOwnership::single(key_pair.public()),
+                            ownership: ChainOwnership::single(key_pair.public().into()),
                             epoch: Epoch::ZERO,
                             committees: committees.clone(),
                             admin_id,
@@ -2390,7 +2395,7 @@ where
                 events: vec![Vec::new()],
                 state_hash: SystemExecutionState {
                     committees: committees.clone(),
-                    ownership: ChainOwnership::single(key_pair.public()),
+                    ownership: ChainOwnership::single(key_pair.public().into()),
                     balance: Amount::from_tokens(2),
                     ..SystemExecutionState::new(Epoch::ZERO, ChainDescription::Root(0), admin_id)
                 }
@@ -2401,7 +2406,7 @@ where
             .with(
                 make_first_block(admin_id)
                     .with_operation(SystemOperation::OpenChain(OpenChainConfig {
-                        ownership: ChainOwnership::single(key_pair.public()),
+                        ownership: ChainOwnership::single(key_pair.public().into()),
                         epoch: Epoch::ZERO,
                         committees: committees.clone(),
                         admin_id,
@@ -2413,7 +2418,7 @@ where
         )),
     );
     worker
-        .fully_handle_certificate_with_notifications(certificate0.clone(), vec![], &())
+        .fully_handle_certificate_with_notifications(certificate0.clone(), &())
         .await?;
     {
         let admin_chain = worker.chain_state_view(admin_id).await?;
@@ -2457,7 +2462,7 @@ where
                 state_hash: SystemExecutionState {
                     // The root chain knows both committees at the end.
                     committees: committees2.clone(),
-                    ownership: ChainOwnership::single(key_pair.public()),
+                    ownership: ChainOwnership::single(key_pair.public().into()),
                     ..SystemExecutionState::new(Epoch::from(1), ChainDescription::Root(0), admin_id)
                 }
                 .into_hash()
@@ -2475,7 +2480,7 @@ where
         )),
     );
     worker
-        .fully_handle_certificate_with_notifications(certificate1.clone(), vec![], &())
+        .fully_handle_certificate_with_notifications(certificate1.clone(), &())
         .await?;
 
     {
@@ -2565,7 +2570,7 @@ where
                     .collect(),
                     // Finally the child knows about both committees and has the money.
                     committees: committees2.clone(),
-                    ownership: ChainOwnership::single(key_pair.public()),
+                    ownership: ChainOwnership::single(key_pair.public().into()),
                     balance: Amount::from_tokens(2),
                     ..SystemExecutionState::new(Epoch::from(1), user_description, admin_id)
                 }
@@ -2584,7 +2589,7 @@ where
                             transaction_index: 0,
                             messages: vec![Message::System(SystemMessage::OpenChain(
                                 OpenChainConfig {
-                                    ownership: ChainOwnership::single(key_pair.public()),
+                                    ownership: ChainOwnership::single(key_pair.public().into()),
                                     epoch: Epoch::from(0),
                                     committees: committees.clone(),
                                     admin_id,
@@ -2627,7 +2632,7 @@ where
         )),
     );
     worker
-        .fully_handle_certificate_with_notifications(certificate3, vec![], &())
+        .fully_handle_certificate_with_notifications(certificate3, &())
         .await?;
     {
         let user_chain = worker.chain_state_view(user_id).await?;
@@ -2685,17 +2690,13 @@ async fn test_transfers_and_committee_creation<B>(mut storage_builder: B) -> any
 where
     B: StorageBuilder,
 {
-    let key_pair0 = KeyPair::generate();
-    let key_pair1 = KeyPair::generate();
+    let owner0 = KeyPair::generate().public().into();
+    let owner1 = KeyPair::generate().public().into();
     let (committee, worker) = init_worker_with_chains(
         storage_builder.build().await?,
         vec![
-            (ChainDescription::Root(0), key_pair0.public(), Amount::ZERO),
-            (
-                ChainDescription::Root(1),
-                key_pair1.public(),
-                Amount::from_tokens(3),
-            ),
+            (ChainDescription::Root(0), owner0, Amount::ZERO),
+            (ChainDescription::Root(1), owner1, Amount::from_tokens(3)),
         ],
     )
     .await;
@@ -2714,7 +2715,7 @@ where
                 events: vec![Vec::new()],
                 state_hash: SystemExecutionState {
                     committees: committees.clone(),
-                    ownership: ChainOwnership::single(key_pair1.public()),
+                    ownership: ChainOwnership::single(owner1),
                     balance: Amount::from_tokens(2),
                     ..SystemExecutionState::new(Epoch::ZERO, ChainDescription::Root(1), admin_id)
                 }
@@ -2725,7 +2726,7 @@ where
             .with(
                 make_first_block(user_id)
                     .with_simple_transfer(admin_id, Amount::ONE)
-                    .with_authenticated_signer(Some(key_pair1.public().into())),
+                    .with_authenticated_signer(Some(owner1)),
             ),
         )),
     );
@@ -2748,7 +2749,7 @@ where
                 events: vec![Vec::new()],
                 state_hash: SystemExecutionState {
                     committees: committees2.clone(),
-                    ownership: ChainOwnership::single(key_pair0.public()),
+                    ownership: ChainOwnership::single(owner0),
                     ..SystemExecutionState::new(Epoch::from(1), ChainDescription::Root(0), admin_id)
                 }
                 .into_hash()
@@ -2766,12 +2767,12 @@ where
         )),
     );
     worker
-        .fully_handle_certificate_with_notifications(certificate1.clone(), vec![], &())
+        .fully_handle_certificate_with_notifications(certificate1.clone(), &())
         .await?;
 
     // Try to execute the transfer.
     worker
-        .fully_handle_certificate_with_notifications(certificate0.clone(), vec![], &())
+        .fully_handle_certificate_with_notifications(certificate0.clone(), &())
         .await?;
 
     // The transfer was started..
@@ -2820,17 +2821,13 @@ async fn test_transfers_and_committee_removal<B>(mut storage_builder: B) -> anyh
 where
     B: StorageBuilder,
 {
-    let key_pair0 = KeyPair::generate();
-    let key_pair1 = KeyPair::generate();
+    let owner0 = KeyPair::generate().public().into();
+    let owner1 = KeyPair::generate().public().into();
     let (committee, worker) = init_worker_with_chains(
         storage_builder.build().await?,
         vec![
-            (ChainDescription::Root(0), key_pair0.public(), Amount::ZERO),
-            (
-                ChainDescription::Root(1),
-                key_pair1.public(),
-                Amount::from_tokens(3),
-            ),
+            (ChainDescription::Root(0), owner0, Amount::ZERO),
+            (ChainDescription::Root(1), owner1, Amount::from_tokens(3)),
         ],
     )
     .await;
@@ -2849,7 +2846,7 @@ where
                 events: vec![Vec::new()],
                 state_hash: SystemExecutionState {
                     committees: committees.clone(),
-                    ownership: ChainOwnership::single(key_pair1.public()),
+                    ownership: ChainOwnership::single(owner1),
                     balance: Amount::from_tokens(2),
                     ..SystemExecutionState::new(Epoch::ZERO, ChainDescription::Root(1), admin_id)
                 }
@@ -2860,7 +2857,7 @@ where
             .with(
                 make_first_block(user_id)
                     .with_simple_transfer(admin_id, Amount::ONE)
-                    .with_authenticated_signer(Some(key_pair1.public().into())),
+                    .with_authenticated_signer(Some(owner1)),
             ),
         )),
     );
@@ -2883,7 +2880,7 @@ where
                 events: vec![Vec::new(); 2],
                 state_hash: SystemExecutionState {
                     committees: committees3.clone(),
-                    ownership: ChainOwnership::single(key_pair0.public()),
+                    ownership: ChainOwnership::single(owner0),
                     ..SystemExecutionState::new(Epoch::from(1), ChainDescription::Root(0), admin_id)
                 }
                 .into_hash()
@@ -2903,12 +2900,12 @@ where
         )),
     );
     worker
-        .fully_handle_certificate_with_notifications(certificate1.clone(), vec![], &())
+        .fully_handle_certificate_with_notifications(certificate1.clone(), &())
         .await?;
 
     // Try to execute the transfer from the user chain to the admin chain.
     worker
-        .fully_handle_certificate_with_notifications(certificate0.clone(), vec![], &())
+        .fully_handle_certificate_with_notifications(certificate0.clone(), &())
         .await?;
 
     {
@@ -2944,7 +2941,7 @@ where
                 events: vec![Vec::new()],
                 state_hash: SystemExecutionState {
                     committees: committees3.clone(),
-                    ownership: ChainOwnership::single(key_pair0.public()),
+                    ownership: ChainOwnership::single(owner0),
                     balance: Amount::ONE,
                     ..SystemExecutionState::new(Epoch::from(1), ChainDescription::Root(0), admin_id)
                 }
@@ -2971,7 +2968,7 @@ where
         )),
     );
     worker
-        .fully_handle_certificate_with_notifications(certificate2.clone(), vec![], &())
+        .fully_handle_certificate_with_notifications(certificate2.clone(), &())
         .await?;
 
     {
@@ -2987,7 +2984,7 @@ where
     // Try again to execute the transfer from the user chain to the admin chain.
     // This time, the epoch verification should be overruled.
     worker
-        .fully_handle_certificate_with_notifications(certificate0.clone(), vec![], &())
+        .fully_handle_certificate_with_notifications(certificate0.clone(), &())
         .await?;
 
     {
@@ -3234,28 +3231,30 @@ where
     let clock = storage_builder.clock();
     let chain_id = ChainId::root(0);
     let key_pairs = generate_key_pairs(2);
-    let (pub_key0, pub_key1) = (key_pairs[0].public(), key_pairs[1].public());
-    let balances = vec![(ChainDescription::Root(0), pub_key0, Amount::from_tokens(2))];
+    let owner0 = Owner::from(key_pairs[0].public());
+    let owner1 = Owner::from(key_pairs[1].public());
+    let balances = vec![(ChainDescription::Root(0), owner0, Amount::from_tokens(2))];
     let (committee, worker) = init_worker_with_chains(storage, balances).await;
 
     // Add another owner and use the leader-based protocol in all rounds.
     let block0 = make_first_block(chain_id)
         .with_operation(SystemOperation::ChangeOwnership {
             super_owners: Vec::new(),
-            owners: vec![(pub_key0, 100), (pub_key1, 100)],
+            owners: vec![(owner0, 100), (owner1, 100)],
             multi_leader_rounds: 0,
+            open_multi_leader_rounds: false,
             timeout_config: TimeoutConfig::default(),
         })
-        .with_authenticated_signer(Some(pub_key0.into()));
-    let (executed_block0, _) = worker.stage_block_execution(block0).await?;
+        .with_authenticated_signer(Some(owner0));
+    let (executed_block0, _) = worker.stage_block_execution(block0, None).await?;
     let value0 = Hashed::new(ConfirmedBlock::new(executed_block0));
     let certificate0 = make_certificate(&committee, &worker, value0.clone());
     let response = worker
-        .fully_handle_certificate_with_notifications(certificate0, vec![], &())
+        .fully_handle_certificate_with_notifications(certificate0, &())
         .await?;
 
     // The leader sequence is pseudorandom but deterministic. The first leader is owner 1.
-    assert_eq!(response.info.manager.leader, Some(Owner::from(pub_key1)));
+    assert_eq!(response.info.manager.leader, Some(owner1));
 
     // So owner 0 cannot propose a block in this round. And the next round hasn't started yet.
     let proposal = make_child_block(&value0.clone())
@@ -3292,14 +3291,14 @@ where
     let (response, _) = worker
         .handle_timeout_certificate(certificate_timeout)
         .await?;
-    assert_eq!(response.info.manager.leader, Some(Owner::from(pub_key0)));
+    assert_eq!(response.info.manager.leader, Some(owner0));
 
     // Now owner 0 can propose a block, but owner 1 can't.
     let block1 = make_child_block(&value0.clone());
-    let (executed_block1, _) = worker.stage_block_execution(block1.clone()).await?;
+    let (executed_block1, _) = worker.stage_block_execution(block1.clone(), None).await?;
     let proposal1_wrong_owner = block1
         .clone()
-        .with_authenticated_signer(Some(pub_key1.into()))
+        .with_authenticated_signer(Some(owner1))
         .into_proposal_with_round(&key_pairs[1], Round::SingleLeader(1));
     let result = worker.handle_block_proposal(proposal1_wrong_owner).await;
     assert_matches!(result, Err(WorkerError::InvalidOwner));
@@ -3313,7 +3312,7 @@ where
     let vote = response.info.manager.pending.clone().unwrap();
     let certificate1 = vote.with_value(value1.clone()).unwrap().into_certificate();
     let (response, _) = worker
-        .handle_validated_certificate(certificate1.clone(), vec![])
+        .handle_validated_certificate(certificate1.clone())
         .await?;
     let vote = response.info.manager.pending.as_ref().unwrap();
     let value = Hashed::new(ConfirmedBlock::new(executed_block1.clone()));
@@ -3329,54 +3328,48 @@ where
     let (response, _) = worker
         .handle_timeout_certificate(certificate_timeout)
         .await?;
-    assert_eq!(response.info.manager.leader, Some(Owner::from(pub_key1)));
+    assert_eq!(response.info.manager.leader, Some(owner1));
     assert_eq!(response.info.manager.current_round, Round::SingleLeader(5));
 
     // Create block2, also at height 1, but different from block 1.
     let amount = Amount::from_tokens(1);
     let block2 = make_child_block(&value0.clone()).with_simple_transfer(ChainId::root(1), amount);
-    let (executed_block2, _) = worker.stage_block_execution(block2.clone()).await?;
+    let (executed_block2, _) = worker.stage_block_execution(block2.clone(), None).await?;
 
-    // Since round 3 is already over, a validated block from round 3 won't update the validator's
-    // locked block; certificate1 (with block1) remains locked.
+    // Since round 3 is already over, the validator won't vote for a validated block from round 3.
     let value2 = Hashed::new(ValidatedBlock::new(executed_block2.clone()));
     let certificate =
         make_certificate_with_round(&committee, &worker, value2.clone(), Round::SingleLeader(2));
-    worker
-        .handle_validated_certificate(certificate, vec![])
-        .await?;
+    worker.handle_validated_certificate(certificate).await?;
     let query_values = ChainInfoQuery::new(chain_id).with_manager_values();
     let (response, _) = worker.handle_chain_info_query(query_values.clone()).await?;
+    let manager = response.info.manager;
     assert_eq!(
-        response.info.manager.requested_locked,
-        Some(Box::new(certificate1))
+        manager.requested_confirmed.unwrap().inner().block(),
+        certificate1.block()
     );
 
     // Proposing block2 now would fail.
     let proposal = block2
         .clone()
-        .with_authenticated_signer(Some(pub_key1.into()))
+        .with_authenticated_signer(Some(owner1))
         .into_proposal_with_round(&key_pairs[1], Round::SingleLeader(5));
     let result = worker.handle_block_proposal(proposal.clone()).await;
     assert_matches!(result, Err(WorkerError::ChainError(error))
-         if matches!(*error, ChainError::HasLockedBlock(_, _))
+         if matches!(*error, ChainError::HasIncompatibleConfirmedVote(_, _))
     );
 
     // But with the validated block certificate for block2, it is allowed.
     let certificate2 =
         make_certificate_with_round(&committee, &worker, value2.clone(), Round::SingleLeader(4));
-    let proposal = BlockProposal::new_retry(
-        Round::SingleLeader(5),
-        certificate2.clone(),
-        &key_pairs[1],
-        Vec::new(),
-    );
+    let proposal =
+        BlockProposal::new_retry(Round::SingleLeader(5), certificate2.clone(), &key_pairs[1]);
     let lite_value2 = LiteValue::new(&value2);
     let (_, _) = worker.handle_block_proposal(proposal).await?;
     let (response, _) = worker.handle_chain_info_query(query_values.clone()).await?;
     assert_eq!(
-        response.info.manager.requested_locked,
-        Some(Box::new(certificate2))
+        response.info.manager.requested_locking,
+        Some(Box::new(LockingBlock::Regular(certificate2)))
     );
     let vote = response.info.manager.pending.as_ref().unwrap();
     assert_eq!(vote.value, lite_value2);
@@ -3392,14 +3385,14 @@ where
     let (response, _) = worker
         .handle_timeout_certificate(certificate_timeout)
         .await?;
-    assert_eq!(response.info.manager.leader, Some(Owner::from(pub_key0)));
+    assert_eq!(response.info.manager.leader, Some(owner0));
     assert_eq!(response.info.manager.current_round, Round::SingleLeader(6));
 
     // Since the validator now voted for block2, it can't vote for block1 anymore.
     let proposal = block1.into_proposal_with_round(&key_pairs[0], Round::SingleLeader(6));
     let result = worker.handle_block_proposal(proposal.clone()).await;
     assert_matches!(result, Err(WorkerError::ChainError(error))
-         if matches!(*error, ChainError::HasLockedBlock(_, _))
+         if matches!(*error, ChainError::HasIncompatibleConfirmedVote(_, _))
     );
 
     // Let rounds 6 and 7 time out.
@@ -3410,18 +3403,17 @@ where
         .await?;
     assert_eq!(response.info.manager.current_round, Round::SingleLeader(8));
 
-    // If the worker does not belong to a validator, it does update its locked block even if it's
-    // from a past round.
+    // The worker updates its locking block even if it's from a past round.
     let certificate =
         make_certificate_with_round(&committee, &worker, value1, Round::SingleLeader(7));
     let worker = worker.with_key_pair(None).await; // Forget validator keys.
     worker
-        .handle_validated_certificate(certificate.clone(), vec![])
+        .handle_validated_certificate(certificate.clone())
         .await?;
     let (response, _) = worker.handle_chain_info_query(query_values).await?;
     assert_eq!(
-        response.info.manager.requested_locked,
-        Some(Box::new(certificate))
+        response.info.manager.requested_locking,
+        Some(Box::new(LockingBlock::Regular(certificate)))
     );
     Ok(())
 }
@@ -3439,25 +3431,27 @@ where
     let clock = storage_builder.clock();
     let chain_id = ChainId::root(0);
     let key_pairs = generate_key_pairs(2);
-    let (pub_key0, pub_key1) = (key_pairs[0].public(), key_pairs[1].public());
-    let balances = vec![(ChainDescription::Root(0), pub_key0, Amount::from_tokens(2))];
+    let owner0 = Owner::from(key_pairs[0].public());
+    let owner1 = Owner::from(key_pairs[1].public());
+    let balances = vec![(ChainDescription::Root(0), owner0, Amount::from_tokens(2))];
     let (committee, worker) = init_worker_with_chains(storage, balances).await;
 
     // Add another owner and configure two multi-leader rounds.
     let block0 = make_first_block(chain_id).with_operation(SystemOperation::ChangeOwnership {
-        super_owners: vec![pub_key0],
-        owners: vec![(pub_key0, 100), (pub_key1, 100)],
+        super_owners: vec![owner0],
+        owners: vec![(owner0, 100), (owner1, 100)],
         multi_leader_rounds: 2,
+        open_multi_leader_rounds: false,
         timeout_config: TimeoutConfig {
             fast_round_duration: Some(TimeDelta::from_secs(5)),
             ..TimeoutConfig::default()
         },
     });
-    let (executed_block0, _) = worker.stage_block_execution(block0).await?;
+    let (executed_block0, _) = worker.stage_block_execution(block0, None).await?;
     let value0 = Hashed::new(ConfirmedBlock::new(executed_block0));
     let certificate0 = make_certificate(&committee, &worker, value0.clone());
     let response = worker
-        .fully_handle_certificate_with_notifications(certificate0, vec![], &())
+        .fully_handle_certificate_with_notifications(certificate0, &())
         .await?;
 
     // The first round is the fast-block round, and owner 0 is a super owner.
@@ -3465,12 +3459,11 @@ where
     assert_eq!(response.info.manager.leader, None);
 
     // So owner 1 cannot propose a block in this round. And the next round hasn't started yet.
-    let proposal =
-        make_child_block(&value0.clone()).into_proposal_with_round(&key_pairs[1], Round::Fast);
+    let proposal = make_child_block(&value0).into_proposal_with_round(&key_pairs[1], Round::Fast);
     let result = worker.handle_block_proposal(proposal).await;
     assert_matches!(result, Err(WorkerError::InvalidOwner));
-    let proposal = make_child_block(&value0.clone())
-        .into_proposal_with_round(&key_pairs[1], Round::MultiLeader(0));
+    let proposal =
+        make_child_block(&value0).into_proposal_with_round(&key_pairs[1], Round::MultiLeader(0));
     let result = worker.handle_block_proposal(proposal).await;
     assert_matches!(result, Err(WorkerError::ChainError(ref error))
         if matches!(**error, ChainError::WrongRound(Round::Fast))
@@ -3505,12 +3498,76 @@ where
     let block1 = make_child_block(&value0);
     let proposal1 = block1
         .clone()
-        .with_authenticated_signer(Some(pub_key1.into()))
+        .with_authenticated_signer(Some(owner1))
         .into_proposal_with_round(&key_pairs[1], Round::MultiLeader(1));
     let _ = worker.handle_block_proposal(proposal1).await?;
     let query_values = ChainInfoQuery::new(chain_id).with_manager_values();
     let (response, _) = worker.handle_chain_info_query(query_values).await?;
     assert_eq!(response.info.manager.current_round, Round::MultiLeader(1));
+    Ok(())
+}
+
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_open_multi_leader_rounds<B>(mut storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let storage = storage_builder.build().await?;
+    let chain_id = ChainId::root(0);
+    let key_pair = KeyPair::generate();
+    let owner = key_pair.public().into();
+    let description = ChainDescription::Root(0);
+    let (committee, worker) =
+        init_worker_with_chain(storage, description, owner, Amount::from_tokens(2)).await;
+
+    // Configure open multi-leader rounds.
+    let change_ownership_block =
+        make_first_block(chain_id).with_operation(SystemOperation::ChangeOwnership {
+            super_owners: vec![],
+            owners: vec![(owner, 100)],
+            multi_leader_rounds: 2,
+            open_multi_leader_rounds: true,
+            timeout_config: TimeoutConfig {
+                fast_round_duration: Some(TimeDelta::from_secs(5)),
+                ..TimeoutConfig::default()
+            },
+        });
+    let (change_ownership_executed_block, _) = worker
+        .stage_block_execution(change_ownership_block, None)
+        .await?;
+    let change_ownership_value = Hashed::new(ConfirmedBlock::new(change_ownership_executed_block));
+    let change_ownership_certificate =
+        make_certificate(&committee, &worker, change_ownership_value.clone());
+    worker
+        .fully_handle_certificate_with_notifications(change_ownership_certificate, &())
+        .await?;
+
+    // The first round is the multi-leader round 0. Anyone is allowed to propose.
+    // But non-owners are not allowed to transfer the chain's funds.
+    let proposal = make_child_block(&change_ownership_value)
+        .with_transfer(None, Recipient::Burn, Amount::from_tokens(1))
+        .into_proposal_with_round(&KeyPair::generate(), Round::MultiLeader(0));
+    let result = worker.handle_block_proposal(proposal).await;
+    assert_matches!(result, Err(WorkerError::ChainError(error)) if matches!(&*error,
+        ChainError::ExecutionError(error, _) if matches!(&**error,
+        ExecutionError::SystemError(SystemExecutionError::UnauthenticatedTransferOwner
+    ))));
+
+    // Without the transfer, a random key pair can propose a block.
+    let proposal = make_child_block(&change_ownership_value)
+        .into_proposal_with_round(&KeyPair::generate(), Round::MultiLeader(0));
+    let (executed_block, _) = worker
+        .stage_block_execution(proposal.content.block.clone(), None)
+        .await?;
+    let value = Hashed::new(ConfirmedBlock::new(executed_block));
+    let (response, _) = worker.handle_block_proposal(proposal).await?;
+    let vote = response.info.manager.pending.unwrap();
+    assert_eq!(vote.round, Round::MultiLeader(0));
+    assert_eq!(vote.value.value_hash, value.hash());
     Ok(())
 }
 
@@ -3527,25 +3584,27 @@ where
     let clock = storage_builder.clock();
     let chain_id = ChainId::root(0);
     let key_pairs = generate_key_pairs(2);
-    let (pub_key0, pub_key1) = (key_pairs[0].public(), key_pairs[1].public());
-    let balances = vec![(ChainDescription::Root(0), pub_key0, Amount::from_tokens(2))];
+    let owner0 = Owner::from(key_pairs[0].public());
+    let owner1 = Owner::from(key_pairs[1].public());
+    let balances = vec![(ChainDescription::Root(0), owner0, Amount::from_tokens(2))];
     let (committee, worker) = init_worker_with_chains(storage, balances).await;
 
     // Add another owner and configure two multi-leader rounds.
     let block0 = make_first_block(chain_id).with_operation(SystemOperation::ChangeOwnership {
-        super_owners: vec![pub_key0],
-        owners: vec![(pub_key0, 100), (pub_key1, 100)],
+        super_owners: vec![owner0],
+        owners: vec![(owner0, 100), (owner1, 100)],
         multi_leader_rounds: 3,
+        open_multi_leader_rounds: false,
         timeout_config: TimeoutConfig {
             fast_round_duration: Some(TimeDelta::from_millis(5)),
             ..TimeoutConfig::default()
         },
     });
-    let (executed_block0, _) = worker.stage_block_execution(block0).await?;
+    let (executed_block0, _) = worker.stage_block_execution(block0, None).await?;
     let value0 = Hashed::new(ConfirmedBlock::new(executed_block0));
     let certificate0 = make_certificate(&committee, &worker, value0.clone());
     let response = worker
-        .fully_handle_certificate_with_notifications(certificate0, vec![], &())
+        .fully_handle_certificate_with_notifications(certificate0, &())
         .await?;
 
     // The first round is the fast-block round, and owner 0 is a super owner.
@@ -3557,10 +3616,11 @@ where
     let proposal1 = block1
         .clone()
         .into_proposal_with_round(&key_pairs[0], Round::Fast);
-    let (executed_block1, _) = worker.stage_block_execution(block1.clone()).await?;
+    let (executed_block1, _) = worker.stage_block_execution(block1.clone(), None).await?;
     let value1 = Hashed::new(ConfirmedBlock::new(executed_block1));
     let (response, _) = worker.handle_block_proposal(proposal1).await?;
     let vote = response.info.manager.pending.as_ref().unwrap();
+    assert_eq!(vote.round, Round::Fast);
     assert_eq!(vote.value.value_hash, value1.hash());
 
     // Set the clock to the end of the round.
@@ -3576,44 +3636,49 @@ where
     assert_eq!(response.info.manager.current_round, Round::MultiLeader(0));
     assert_eq!(response.info.manager.leader, None);
 
-    // Now any owner can propose a block. But block1 is locked.
-    let block2 = make_child_block(&value0)
-        .with_simple_transfer(ChainId::root(1), Amount::ONE)
-        .with_authenticated_signer(Some(pub_key1.into()));
-    let proposal2 = block2
+    // Now any owner can propose a block. But block1 is locked. Re-proposing it is allowed.
+    let proposal1b = block1
         .clone()
         .into_proposal_with_round(&key_pairs[1], Round::MultiLeader(0));
+    let (response, _) = worker.handle_block_proposal(proposal1b).await?;
+    let vote = response.info.manager.pending.as_ref().unwrap();
+    assert_eq!(vote.round, Round::MultiLeader(0));
+    assert_eq!(vote.value.value_hash, value1.hash());
+
+    // Proposing a different block is not.
+    let block2 = make_child_block(&value0)
+        .with_simple_transfer(ChainId::root(1), Amount::ONE)
+        .with_authenticated_signer(Some(owner1));
+    let proposal2 = block2
+        .clone()
+        .into_proposal_with_round(&key_pairs[1], Round::MultiLeader(1));
     let result = worker.handle_block_proposal(proposal2).await;
     assert_matches!(result, Err(WorkerError::ChainError(err))
-        if matches!(*err, ChainError::HasLockedBlock(_, Round::Fast))
+        if matches!(*err, ChainError::HasIncompatibleConfirmedVote(_, Round::Fast))
     );
     let proposal3 = block1
         .clone()
-        .into_proposal_with_round(&key_pairs[1], Round::MultiLeader(0));
+        .into_proposal_with_round(&key_pairs[1], Round::MultiLeader(2));
     worker.handle_block_proposal(proposal3).await?;
 
     // A validated block certificate from a later round can override the locked fast block.
-    let (executed_block2, _) = worker.stage_block_execution(block2.clone()).await?;
+    let (executed_block2, _) = worker.stage_block_execution(block2.clone(), None).await?;
     let value2 = Hashed::new(ValidatedBlock::new(executed_block2.clone()));
     let certificate2 =
         make_certificate_with_round(&committee, &worker, value2.clone(), Round::MultiLeader(0));
-    let proposal = BlockProposal::new_retry(
-        Round::MultiLeader(1),
-        certificate2.clone(),
-        &key_pairs[1],
-        Vec::new(),
-    );
+    let proposal =
+        BlockProposal::new_retry(Round::MultiLeader(3), certificate2.clone(), &key_pairs[1]);
     let lite_value2 = LiteValue::new(&value2);
     let (_, _) = worker.handle_block_proposal(proposal).await?;
     let query_values = ChainInfoQuery::new(chain_id).with_manager_values();
     let (response, _) = worker.handle_chain_info_query(query_values).await?;
     assert_eq!(
-        response.info.manager.requested_locked,
-        Some(Box::new(certificate2))
+        response.info.manager.requested_locking,
+        Some(Box::new(LockingBlock::Regular(certificate2)))
     );
     let vote = response.info.manager.pending.as_ref().unwrap();
     assert_eq!(vote.value, lite_value2);
-    assert_eq!(vote.round, Round::MultiLeader(1));
+    assert_eq!(vote.round, Round::MultiLeader(3));
     Ok(())
 }
 
@@ -3631,7 +3696,7 @@ where
     let chain_id = ChainId::root(1);
     let key_pair = KeyPair::generate();
     let balance = Amount::from_tokens(5);
-    let balances = vec![(ChainDescription::Root(1), key_pair.public(), balance)];
+    let balances = vec![(ChainDescription::Root(1), key_pair.public().into(), balance)];
     let (committee, worker) = init_worker_with_chains(storage, balances).await;
 
     // At time 0 we don't vote for fallback mode.
@@ -3652,11 +3717,11 @@ where
     let block = make_first_block(chain_id)
         .with_simple_transfer(chain_id, Amount::ONE)
         .with_authenticated_signer(Some(key_pair.public().into()));
-    let (executed_block, _) = worker.stage_block_execution(block).await?;
+    let (executed_block, _) = worker.stage_block_execution(block, None).await?;
     let value = Hashed::new(ConfirmedBlock::new(executed_block));
     let certificate = make_certificate(&committee, &worker, value);
     worker
-        .fully_handle_certificate_with_notifications(certificate, vec![], &())
+        .fully_handle_certificate_with_notifications(certificate, &())
         .await?;
 
     // The message only just arrived: No fallback mode.
@@ -3717,7 +3782,7 @@ where
             committee,
             ChainId::root(0),
             chain_description,
-            key_pair.public(),
+            key_pair.public().into(),
             balance,
             Timestamp::from(0),
         )
@@ -3757,7 +3822,10 @@ where
 
         assert_eq!(
             worker.query_application(chain_id, query.clone()).await?,
-            Response::User(vec![])
+            QueryOutcome {
+                response: QueryResponse::User(vec![]),
+                operations: vec![],
+            }
         );
     }
 
@@ -3803,7 +3871,7 @@ where
             committee.clone(),
             ChainId::root(0),
             chain_description,
-            key_pair.public(),
+            key_pair.public().into(),
             balance,
             Timestamp::from(0),
         )
@@ -3864,7 +3932,10 @@ where
 
         assert_eq!(
             worker.query_application(chain_id, query.clone()).await?,
-            Response::User(vec![])
+            QueryOutcome {
+                response: QueryResponse::User(vec![]),
+                operations: vec![],
+            }
         );
     }
 
@@ -3879,7 +3950,10 @@ where
 
         assert_eq!(
             worker.query_application(chain_id, query.clone()).await?,
-            Response::User(vec![])
+            QueryOutcome {
+                response: QueryResponse::User(vec![]),
+                operations: vec![],
+            }
         );
     }
 
@@ -3887,7 +3961,7 @@ where
     let admin_id = ChainId::root(0);
     let mut state = SystemExecutionState {
         committees: BTreeMap::from_iter([(epoch, committee.clone())]),
-        ownership: ChainOwnership::single(key_pair.public()),
+        ownership: ChainOwnership::single(key_pair.public().into()),
         balance,
         timestamp: Timestamp::from(BLOCK_TIMESTAMP),
         ..SystemExecutionState::new(epoch, chain_description, admin_id)
@@ -3925,7 +3999,10 @@ where
 
         assert_eq!(
             worker.query_application(chain_id, query.clone()).await?,
-            Response::User(vec![])
+            QueryOutcome {
+                response: QueryResponse::User(vec![]),
+                operations: vec![],
+            }
         );
     }
 

@@ -12,10 +12,12 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use dashmap::{mapref::entry::Entry, DashMap};
 use linera_base::{
-    crypto::{CryptoHash, PublicKey},
+    crypto::CryptoHash,
     data_types::{Amount, Blob, BlockHeight, TimeDelta, Timestamp, UserApplicationDescription},
     hashed::Hashed,
-    identifiers::{BlobId, ChainDescription, ChainId, GenericApplicationId, UserApplicationId},
+    identifiers::{
+        BlobId, ChainDescription, ChainId, GenericApplicationId, Owner, UserApplicationId,
+    },
     ownership::ChainOwnership,
 };
 use linera_chain::{
@@ -198,7 +200,7 @@ pub trait Storage: Sized {
         committee: Committee,
         admin_id: ChainId,
         description: ChainDescription,
-        public_key: PublicKey,
+        owner: Owner,
         balance: Amount,
         timestamp: Timestamp,
     ) -> Result<(), ChainError>
@@ -209,7 +211,7 @@ pub trait Storage: Sized {
         let mut chain = self.load_chain(id).await?;
         assert!(!chain.is_active(), "Attempting to create a chain twice");
         chain.manager.reset(
-            ChainOwnership::single(public_key),
+            ChainOwnership::single(owner),
             BlockHeight(0),
             self.clock().current_time(),
             committee.keys_and_weights(),
@@ -222,9 +224,7 @@ pub trait Storage: Sized {
             .committees
             .get_mut()
             .insert(Epoch::ZERO, committee);
-        system_state
-            .ownership
-            .set(ChainOwnership::single(public_key));
+        system_state.ownership.set(ChainOwnership::single(owner));
         system_state.balance.set(balance);
         system_state.timestamp.set(timestamp);
 

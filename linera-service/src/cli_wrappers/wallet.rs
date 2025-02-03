@@ -20,7 +20,7 @@ use futures::{SinkExt as _, Stream, StreamExt as _, TryStreamExt as _};
 use linera_base::{
     abi::ContractAbi,
     command::{resolve_binary, CommandExt},
-    crypto::{CryptoHash, PublicKey},
+    crypto::CryptoHash,
     data_types::{Amount, Bytecode},
     identifiers::{Account, ApplicationId, BytecodeId, ChainId, MessageId, Owner},
 };
@@ -249,6 +249,7 @@ impl ClientWrapper {
             maximum_fuel_per_block,
             maximum_executed_block_size,
             maximum_blob_size,
+            maximum_published_blobs,
             maximum_bytecode_size,
             maximum_block_proposal_size,
             maximum_bytes_read_per_block,
@@ -283,6 +284,10 @@ impl ClientWrapper {
                 &maximum_executed_block_size.to_string(),
             ])
             .args(["--maximum-blob-size", &maximum_blob_size.to_string()])
+            .args([
+                "--maximum-published-blobs",
+                &maximum_published_blobs.to_string(),
+            ])
             .args([
                 "--maximum-bytecode-size",
                 &maximum_bytecode_size.to_string(),
@@ -684,7 +689,7 @@ impl ClientWrapper {
     pub async fn open_chain(
         &self,
         from: ChainId,
-        to_public_key: Option<PublicKey>,
+        owner: Option<Owner>,
         initial_balance: Amount,
     ) -> Result<(MessageId, ChainId)> {
         let mut command = self.command().await?;
@@ -693,8 +698,8 @@ impl ClientWrapper {
             .args(["--from", &from.to_string()])
             .args(["--initial-balance", &initial_balance.to_string()]);
 
-        if let Some(public_key) = to_public_key {
-            command.args(["--to-public-key", &public_key.to_string()]);
+        if let Some(owner) = owner {
+            command.args(["--owner", &owner.to_string()]);
         }
 
         let stdout = command.spawn_and_wait_for_stdout().await?;
@@ -715,18 +720,18 @@ impl ClientWrapper {
             .load_wallet()?
             .default_chain()
             .context("no default chain found")?;
-        let key = client.keygen().await?;
+        let owner = client.keygen().await?;
         let (message_id, new_chain) = self
-            .open_chain(our_chain, Some(key), initial_balance)
+            .open_chain(our_chain, Some(owner), initial_balance)
             .await?;
-        assert_eq!(new_chain, client.assign(key, message_id).await?);
+        assert_eq!(new_chain, client.assign(owner, message_id).await?);
         Ok(new_chain)
     }
 
     pub async fn open_multi_owner_chain(
         &self,
         from: ChainId,
-        to_public_keys: Vec<PublicKey>,
+        owners: Vec<Owner>,
         weights: Vec<u64>,
         multi_leader_rounds: u32,
         balance: Amount,
@@ -736,8 +741,8 @@ impl ClientWrapper {
         command
             .arg("open-multi-owner-chain")
             .args(["--from", &from.to_string()])
-            .arg("--owner-public-keys")
-            .args(to_public_keys.iter().map(PublicKey::to_string))
+            .arg("--owners")
+            .args(owners.iter().map(Owner::to_string))
             .args(["--base-timeout-ms", &base_timeout_ms.to_string()]);
         if !weights.is_empty() {
             command
@@ -759,22 +764,22 @@ impl ClientWrapper {
     pub async fn change_ownership(
         &self,
         chain_id: ChainId,
-        super_owner_public_keys: Vec<PublicKey>,
-        owner_public_keys: Vec<PublicKey>,
+        super_owners: Vec<Owner>,
+        owners: Vec<Owner>,
     ) -> Result<()> {
         let mut command = self.command().await?;
         command
             .arg("change-ownership")
             .args(["--chain-id", &chain_id.to_string()]);
-        if !super_owner_public_keys.is_empty() {
+        if !super_owners.is_empty() {
             command
-                .arg("--super-owner-public-keys")
-                .args(super_owner_public_keys.iter().map(PublicKey::to_string));
+                .arg("--super-owners")
+                .args(super_owners.iter().map(Owner::to_string));
         }
-        if !owner_public_keys.is_empty() {
+        if !owners.is_empty() {
             command
-                .arg("--owner-public-keys")
-                .args(owner_public_keys.iter().map(PublicKey::to_string));
+                .arg("--owners")
+                .args(owners.iter().map(Owner::to_string));
         }
         command.spawn_and_wait_for_stdout().await?;
         Ok(())
@@ -893,14 +898,14 @@ impl ClientWrapper {
     }
 
     /// Runs `linera keygen`.
-    pub async fn keygen(&self) -> Result<PublicKey> {
+    pub async fn keygen(&self) -> Result<Owner> {
         let stdout = self
             .command()
             .await?
             .arg("keygen")
             .spawn_and_wait_for_stdout()
             .await?;
-        Ok(PublicKey::from_str(stdout.trim())?)
+        Ok(Owner::from_str(stdout.trim())?)
     }
 
     /// Returns the default chain.
@@ -909,12 +914,12 @@ impl ClientWrapper {
     }
 
     /// Runs `linera assign`.
-    pub async fn assign(&self, key: PublicKey, message_id: MessageId) -> Result<ChainId> {
+    pub async fn assign(&self, owner: Owner, message_id: MessageId) -> Result<ChainId> {
         let stdout = self
             .command()
             .await?
             .arg("assign")
-            .args(["--key", &key.to_string()])
+            .args(["--owner", &owner.to_string()])
             .args(["--message-id", &message_id.to_string()])
             .spawn_and_wait_for_stdout()
             .await?;
@@ -1472,9 +1477,9 @@ impl Faucet {
         })
     }
 
-    pub async fn claim(&self, public_key: &PublicKey) -> Result<ClaimOutcome> {
+    pub async fn claim(&self, owner: &Owner) -> Result<ClaimOutcome> {
         let query = format!(
-            "mutation {{ claim(publicKey: \"{public_key}\") {{ \
+            "mutation {{ claim(owner: \"{owner}\") {{ \
                 messageId chainId certificateHash \
             }} }}"
         );

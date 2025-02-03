@@ -132,18 +132,19 @@ pub struct Transfer;
 mod from {
     use linera_base::{hashed::Hashed, identifiers::StreamId};
     use linera_chain::{
+        block::{Block, BlockBody, BlockHeader},
         data_types::{
-            BlockExecutionOutcome, EventRecord, ExecutedBlock, IncomingBundle, MessageBundle,
-            OutgoingMessage, PostedMessage,
+            EventRecord, ExecutedBlock, IncomingBundle, MessageBundle, OutgoingMessage,
+            PostedMessage,
         },
         types::ConfirmedBlock,
     };
 
     use super::*;
 
-    impl From<block::BlockBlockValueExecutedBlockBlockIncomingBundles> for IncomingBundle {
-        fn from(val: block::BlockBlockValueExecutedBlockBlockIncomingBundles) -> Self {
-            let block::BlockBlockValueExecutedBlockBlockIncomingBundles {
+    impl From<block::BlockBlockValueBlockBodyIncomingBundles> for IncomingBundle {
+        fn from(val: block::BlockBlockValueBlockBodyIncomingBundles) -> Self {
+            let block::BlockBlockValueBlockBodyIncomingBundles {
                 origin,
                 bundle,
                 action,
@@ -156,9 +157,9 @@ mod from {
         }
     }
 
-    impl From<block::BlockBlockValueExecutedBlockBlockIncomingBundlesBundle> for MessageBundle {
-        fn from(val: block::BlockBlockValueExecutedBlockBlockIncomingBundlesBundle) -> Self {
-            let block::BlockBlockValueExecutedBlockBlockIncomingBundlesBundle {
+    impl From<block::BlockBlockValueBlockBodyIncomingBundlesBundle> for MessageBundle {
+        fn from(val: block::BlockBlockValueBlockBodyIncomingBundlesBundle) -> Self {
+            let block::BlockBlockValueBlockBodyIncomingBundlesBundle {
                 height,
                 timestamp,
                 certificate_hash,
@@ -176,11 +177,9 @@ mod from {
         }
     }
 
-    impl From<block::BlockBlockValueExecutedBlockBlockIncomingBundlesBundleMessages> for PostedMessage {
-        fn from(
-            val: block::BlockBlockValueExecutedBlockBlockIncomingBundlesBundleMessages,
-        ) -> Self {
-            let block::BlockBlockValueExecutedBlockBlockIncomingBundlesBundleMessages {
+    impl From<block::BlockBlockValueBlockBodyIncomingBundlesBundleMessages> for PostedMessage {
+        fn from(val: block::BlockBlockValueBlockBodyIncomingBundlesBundleMessages) -> Self {
+            let block::BlockBlockValueBlockBodyIncomingBundlesBundleMessages {
                 authenticated_signer,
                 grant,
                 refund_grant_to,
@@ -199,38 +198,9 @@ mod from {
         }
     }
 
-    impl From<block::BlockBlockValueExecutedBlockBlock> for linera_chain::data_types::Block {
-        fn from(val: block::BlockBlockValueExecutedBlockBlock) -> Self {
-            let block::BlockBlockValueExecutedBlockBlock {
-                chain_id,
-                epoch,
-                incoming_bundles,
-                operations,
-                height,
-                timestamp,
-                authenticated_signer,
-                previous_block_hash,
-            } = val;
-            let incoming_bundles = incoming_bundles
-                .into_iter()
-                .map(IncomingBundle::from)
-                .collect();
-            linera_chain::data_types::Block {
-                chain_id,
-                epoch,
-                incoming_bundles,
-                operations,
-                height,
-                timestamp,
-                authenticated_signer,
-                previous_block_hash,
-            }
-        }
-    }
-
-    impl From<block::BlockBlockValueExecutedBlockOutcomeMessages> for OutgoingMessage {
-        fn from(val: block::BlockBlockValueExecutedBlockOutcomeMessages) -> Self {
-            let block::BlockBlockValueExecutedBlockOutcomeMessages {
+    impl From<block::BlockBlockValueBlockBodyMessages> for OutgoingMessage {
+        fn from(val: block::BlockBlockValueBlockBodyMessages) -> Self {
+            let block::BlockBlockValueBlockBodyMessages {
                 destination,
                 authenticated_signer,
                 grant,
@@ -249,39 +219,72 @@ mod from {
         }
     }
 
-    impl From<block::BlockBlockValueExecutedBlock> for ExecutedBlock {
-        fn from(val: block::BlockBlockValueExecutedBlock) -> Self {
-            let block::BlockBlockValueExecutedBlock {
-                block,
-                outcome:
-                    block::BlockBlockValueExecutedBlockOutcome {
-                        messages,
-                        state_hash,
-                        oracle_responses,
-                        events,
-                    },
-            } = val;
-            let messages = messages
-                .into_iter()
-                .map(|messages| messages.into_iter().map(OutgoingMessage::from).collect())
-                .collect::<Vec<Vec<_>>>();
-            ExecutedBlock {
-                block: block.into(),
-                outcome: BlockExecutionOutcome {
-                    messages,
-                    state_hash,
-                    oracle_responses: oracle_responses.into_iter().map(Into::into).collect(),
-                    events: events
-                        .into_iter()
-                        .map(|events| events.into_iter().map(Into::into).collect())
-                        .collect(),
-                },
+    impl From<block::BlockBlockValueBlock> for ExecutedBlock {
+        fn from(val: block::BlockBlockValueBlock) -> Self {
+            let block::BlockBlockValueBlock { header, body } = val;
+            let block::BlockBlockValueBlockHeader {
+                chain_id,
+                epoch,
+                height,
+                timestamp,
+                authenticated_signer,
+                previous_block_hash,
+                state_hash,
+                bundles_hash,
+                messages_hash,
+                operations_hash,
+                oracle_responses_hash,
+                events_hash,
+            } = header;
+            let block::BlockBlockValueBlockBody {
+                incoming_bundles,
+                messages,
+                operations,
+                oracle_responses,
+                events,
+            } = body;
+
+            let block_header = BlockHeader {
+                chain_id,
+                epoch,
+                height,
+                timestamp,
+                authenticated_signer,
+                previous_block_hash,
+                state_hash,
+                bundles_hash,
+                messages_hash,
+                operations_hash,
+                oracle_responses_hash,
+                events_hash,
+            };
+            let block_body = BlockBody {
+                incoming_bundles: incoming_bundles
+                    .into_iter()
+                    .map(IncomingBundle::from)
+                    .collect(),
+                messages: messages
+                    .into_iter()
+                    .map(|messages| messages.into_iter().map(Into::into).collect())
+                    .collect::<Vec<Vec<_>>>(),
+                operations,
+                oracle_responses: oracle_responses.into_iter().map(Into::into).collect(),
+                events: events
+                    .into_iter()
+                    .map(|events| events.into_iter().map(Into::into).collect())
+                    .collect(),
+            };
+
+            Block {
+                header: block_header,
+                body: block_body,
             }
+            .into()
         }
     }
 
-    impl From<block::BlockBlockValueExecutedBlockOutcomeEvents> for EventRecord {
-        fn from(event: block::BlockBlockValueExecutedBlockOutcomeEvents) -> Self {
+    impl From<block::BlockBlockValueBlockBodyEvents> for EventRecord {
+        fn from(event: block::BlockBlockValueBlockBodyEvents) -> Self {
             EventRecord {
                 stream_id: event.stream_id.into(),
                 key: event.key.into_iter().map(|byte| byte as u8).collect(),
@@ -290,8 +293,8 @@ mod from {
         }
     }
 
-    impl From<block::BlockBlockValueExecutedBlockOutcomeEventsStreamId> for StreamId {
-        fn from(stream_id: block::BlockBlockValueExecutedBlockOutcomeEventsStreamId) -> Self {
+    impl From<block::BlockBlockValueBlockBodyEventsStreamId> for StreamId {
+        fn from(stream_id: block::BlockBlockValueBlockBodyEventsStreamId) -> Self {
             StreamId {
                 application_id: stream_id.application_id,
                 stream_name: stream_id.stream_name,
@@ -302,10 +305,8 @@ mod from {
     impl TryFrom<block::BlockBlock> for Hashed<ConfirmedBlock> {
         type Error = String;
         fn try_from(val: block::BlockBlock) -> Result<Self, Self::Error> {
-            match (val.value.status.as_str(), val.value.executed_block) {
-                ("confirmed", executed_block) => {
-                    Ok(Hashed::new(ConfirmedBlock::new(executed_block.into())))
-                }
+            match (val.value.status.as_str(), val.value.block) {
+                ("confirmed", block) => Ok(Hashed::new(ConfirmedBlock::new(block.into()))),
                 _ => Err(val.value.status),
             }
         }

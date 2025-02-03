@@ -6,12 +6,13 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet},
     fmt,
     hash::Hash,
+    mem,
     ops::Range,
 };
 
 use futures::{stream, stream::TryStreamExt, Future, StreamExt};
 use linera_base::{
-    data_types::{BlockHeight, Round},
+    data_types::{Blob, BlockHeight, Round},
     identifiers::{BlobId, ChainId},
     time::{timer::timeout, Duration, Instant},
 };
@@ -43,6 +44,7 @@ pub enum CommunicateAction {
     SubmitBlock {
         proposal: Box<BlockProposal>,
         blob_ids: HashSet<BlobId>,
+        published_blobs: Vec<Blob>,
     },
     FinalizeBlock {
         certificate: ValidatedBlockCertificate,
@@ -252,16 +254,17 @@ where
             Err(original_err @ NodeError::BlobsNotFound(blob_ids)) => {
                 self.remote_node
                     .check_blobs_not_found(&certificate, blob_ids)?;
-                let chain_id = certificate.inner().executed_block().block.chain_id;
-                // The certificate is for a validated block, i.e. for our locked block.
+                let chain_id = certificate.inner().chain_id();
+                // The certificate is for a validated block, i.e. for our locking block.
                 // Take the missing blobs from our local chain manager.
                 let blobs = self
                     .local_node
-                    .get_locked_blobs(blob_ids, chain_id)
+                    .get_locking_blobs(blob_ids, chain_id)
                     .await?
                     .ok_or_else(|| original_err.clone())?;
+                self.remote_node.send_pending_blobs(chain_id, blobs).await?;
                 self.remote_node
-                    .handle_validated_certificate(certificate, blobs)
+                    .handle_validated_certificate(certificate)
                     .await
             }
             _ => result,
@@ -272,12 +275,10 @@ where
         &mut self,
         proposal: Box<BlockProposal>,
         mut blob_ids: HashSet<BlobId>,
+        mut published_blobs: Vec<Blob>,
     ) -> Result<Box<ChainInfo>, ChainClientError> {
         let chain_id = proposal.content.block.chain_id;
         let mut sent_cross_chain_updates = false;
-        for blob in &proposal.blobs {
-            blob_ids.remove(&blob.id()); // Keep only blobs we may need to resend.
-        }
         loop {
             match self
                 .remote_node
@@ -299,9 +300,15 @@ where
                     // For `BlobsNotFound`, we assume that the local node should already be
                     // updated with the needed blobs, so sending the chain information about the
                     // certificates that last used the blobs to the validator node should be enough.
-                    let blob_ids = blob_ids.drain().collect::<Vec<_>>();
+                    let blob_ids = blob_ids
+                        .drain()
+                        .filter(|blob_id| !published_blobs.iter().any(|blob| blob.id() == *blob_id))
+                        .collect::<Vec<_>>();
                     let missing_blob_ids = self.remote_node.node.missing_blob_ids(blob_ids).await?;
                     let local_storage = self.local_node.storage_client();
+                    self.remote_node
+                        .send_pending_blobs(chain_id, mem::take(&mut published_blobs))
+                        .await?;
                     let blob_states = local_storage.read_blob_states(&missing_blob_ids).await?;
                     let mut chain_heights = BTreeMap::new();
                     for blob_state in blob_states {
@@ -414,8 +421,8 @@ where
                 (block.height, block.chain_id)
             }
             CommunicateAction::FinalizeBlock { certificate, .. } => (
-                certificate.inner().executed_block().block.height,
-                certificate.inner().executed_block().block.chain_id,
+                certificate.inner().block().header.height,
+                certificate.inner().block().header.chain_id,
             ),
             CommunicateAction::RequestTimeout {
                 height, chain_id, ..
@@ -427,8 +434,14 @@ where
             .await?;
         // Send the block proposal, certificate or timeout request and return a vote.
         let vote = match action {
-            CommunicateAction::SubmitBlock { proposal, blob_ids } => {
-                let info = self.send_block_proposal(proposal, blob_ids).await?;
+            CommunicateAction::SubmitBlock {
+                proposal,
+                blob_ids,
+                published_blobs,
+            } => {
+                let info = self
+                    .send_block_proposal(proposal, blob_ids, published_blobs)
+                    .await?;
                 info.manager.pending
             }
             CommunicateAction::FinalizeBlock {

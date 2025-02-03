@@ -46,9 +46,15 @@ enum ServiceStoreServerInternal {
 }
 
 #[derive(Default)]
+struct BigRead {
+    num_processed_chunks: usize,
+    chunks: Vec<Vec<u8>>,
+}
+
+#[derive(Default)]
 struct PendingBigReads {
     index: i64,
-    chunks_by_index: BTreeMap<i64, Vec<Vec<u8>>>,
+    big_reads: BTreeMap<i64, BigRead>,
 }
 
 struct ServiceStoreServer {
@@ -219,9 +225,11 @@ impl ServiceStoreServer {
         let mut pending_big_reads = self.pending_big_reads.write().await;
         let message_index = pending_big_reads.index;
         pending_big_reads.index += 1;
-        pending_big_reads
-            .chunks_by_index
-            .insert(message_index, chunks);
+        let big_read = BigRead {
+            num_processed_chunks: 0,
+            chunks,
+        };
+        pending_big_reads.big_reads.insert(message_index, big_read);
         (message_index, num_chunks)
     }
 }
@@ -457,13 +465,14 @@ impl StoreProcessor for ServiceStoreServer {
             index,
         } = request;
         let mut pending_big_reads = self.pending_big_reads.write().await;
-        let Some(entry) = pending_big_reads.chunks_by_index.get(&message_index) else {
+        let Some(entry) = pending_big_reads.big_reads.get_mut(&message_index) else {
             return Err(Status::not_found("process_specific_chunk"));
         };
         let index = index as usize;
-        let chunk = entry[index].clone();
-        if entry.len() == index + 1 {
-            pending_big_reads.chunks_by_index.remove(&message_index);
+        let chunk = entry.chunks[index].clone();
+        entry.num_processed_chunks += 1;
+        if entry.chunks.len() == entry.num_processed_chunks {
+            pending_big_reads.big_reads.remove(&message_index);
         }
         let response = ReplySpecificChunk { chunk };
         Ok(Response::new(response))

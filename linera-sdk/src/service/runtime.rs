@@ -3,13 +3,14 @@
 
 //! Runtime types to interface with the host executing the service.
 
-use std::cell::Cell;
+use std::sync::Mutex;
 
 use linera_base::{
     abi::ServiceAbi,
     data_types::{Amount, BlockHeight, Timestamp},
     identifiers::{AccountOwner, ApplicationId, ChainId},
 };
+use serde::Serialize;
 
 use super::wit::service_system_api as wit;
 use crate::{DataBlobHash, KeyValueStore, Service, ViewStorageContext};
@@ -19,14 +20,14 @@ pub struct ServiceRuntime<Application>
 where
     Application: Service,
 {
-    application_parameters: Cell<Option<Application::Parameters>>,
-    application_id: Cell<Option<ApplicationId<Application::Abi>>>,
-    chain_id: Cell<Option<ChainId>>,
-    next_block_height: Cell<Option<BlockHeight>>,
-    timestamp: Cell<Option<Timestamp>>,
-    chain_balance: Cell<Option<Amount>>,
-    owner_balances: Cell<Option<Vec<(AccountOwner, Amount)>>>,
-    balance_owners: Cell<Option<Vec<AccountOwner>>>,
+    application_parameters: Mutex<Option<Application::Parameters>>,
+    application_id: Mutex<Option<ApplicationId<Application::Abi>>>,
+    chain_id: Mutex<Option<ChainId>>,
+    next_block_height: Mutex<Option<BlockHeight>>,
+    timestamp: Mutex<Option<Timestamp>>,
+    chain_balance: Mutex<Option<Amount>>,
+    owner_balances: Mutex<Option<Vec<(AccountOwner, Amount)>>>,
+    balance_owners: Mutex<Option<Vec<AccountOwner>>>,
 }
 
 impl<Application> ServiceRuntime<Application>
@@ -36,14 +37,14 @@ where
     /// Creates a new [`ServiceRuntime`] instance for a service.
     pub(crate) fn new() -> Self {
         ServiceRuntime {
-            application_parameters: Cell::new(None),
-            application_id: Cell::new(None),
-            chain_id: Cell::new(None),
-            next_block_height: Cell::new(None),
-            timestamp: Cell::new(None),
-            chain_balance: Cell::new(None),
-            owner_balances: Cell::new(None),
-            balance_owners: Cell::new(None),
+            application_parameters: Mutex::new(None),
+            application_id: Mutex::new(None),
+            chain_id: Mutex::new(None),
+            next_block_height: Mutex::new(None),
+            timestamp: Mutex::new(None),
+            chain_balance: Mutex::new(None),
+            owner_balances: Mutex::new(None),
+            balance_owners: Mutex::new(None),
         }
     }
 
@@ -119,6 +120,22 @@ where
         })
     }
 
+    /// Schedules an operation to be included in the block being built.
+    ///
+    /// The operation is specified as an opaque blob of bytes.
+    pub fn schedule_raw_operation(&self, operation: Vec<u8>) {
+        wit::schedule_operation(&operation);
+    }
+
+    /// Schedules an operation to be included in the block being built.
+    ///
+    /// The operation is serialized using BCS.
+    pub fn schedule_operation(&self, operation: &impl Serialize) {
+        let bytes = bcs::to_bytes(operation).expect("Failed to serialize application operation");
+
+        wit::schedule_operation(&bytes);
+    }
+
     /// Queries another application.
     pub fn query_application<A: ServiceAbi>(
         &self,
@@ -140,23 +157,29 @@ where
         wit::fetch_url(url)
     }
 
-    /// Loads a value from the `cell` cache or fetches it and stores it in the cache.
-    fn fetch_value_through_cache<T>(cell: &Cell<Option<T>>, fetch: impl FnOnce() -> T) -> T
+    /// Loads a value from the `slot` cache or fetches it and stores it in the cache.
+    fn fetch_value_through_cache<T>(slot: &Mutex<Option<T>>, fetch: impl FnOnce() -> T) -> T
     where
         T: Clone,
     {
-        let value = cell.take().unwrap_or_else(fetch);
-        cell.set(Some(value.clone()));
-        value
+        let mut value = slot
+            .lock()
+            .expect("Mutex should never be poisoned because service runs in a single thread");
+
+        if value.is_none() {
+            *value = Some(fetch());
+        }
+
+        value.clone().expect("Value should be populated above")
     }
 
     /// Reads a data blob with the given hash from storage.
-    pub fn read_data_blob(&mut self, hash: DataBlobHash) -> Vec<u8> {
+    pub fn read_data_blob(&self, hash: DataBlobHash) -> Vec<u8> {
         wit::read_data_blob(hash.0.into())
     }
 
     /// Asserts that a data blob with the given hash exists in storage.
-    pub fn assert_data_blob_exists(&mut self, hash: DataBlobHash) {
+    pub fn assert_data_blob_exists(&self, hash: DataBlobHash) {
         wit::assert_data_blob_exists(hash.0.into())
     }
 }

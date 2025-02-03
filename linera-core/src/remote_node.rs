@@ -81,13 +81,9 @@ impl<N: ValidatorNode> RemoteNode<N> {
     pub(crate) async fn handle_validated_certificate(
         &self,
         certificate: ValidatedBlockCertificate,
-        blobs: Vec<Blob>,
     ) -> Result<Box<ChainInfo>, NodeError> {
         let chain_id = certificate.inner().chain_id();
-        let response = self
-            .node
-            .handle_validated_certificate(certificate, blobs)
-            .await?;
+        let response = self.node.handle_validated_certificate(certificate).await?;
         self.check_and_return_info(response, chain_id)
     }
 
@@ -124,8 +120,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
                 _ => return result,
             }
         }
-        self.handle_validated_certificate(certificate.clone(), vec![])
-            .await
+        self.handle_validated_certificate(certificate.clone()).await
     }
 
     pub(crate) async fn handle_optimized_confirmed_certificate(
@@ -158,11 +153,10 @@ impl<N: ValidatorNode> RemoteNode<N> {
     ) -> Result<Box<ChainInfo>, NodeError> {
         let manager = &response.info.manager;
         let proposed = manager.requested_proposed.as_ref();
-        let locked = manager.requested_locked.as_ref();
+        let locking = manager.requested_locking.as_ref();
         ensure!(
             proposed.map_or(true, |proposal| proposal.content.block.chain_id == chain_id)
-                && locked.map_or(true, |cert| cert.executed_block().block.chain_id
-                    == chain_id)
+                && locking.map_or(true, |cert| cert.chain_id() == chain_id)
                 && response.check(&self.name).is_ok(),
             NodeError::InvalidChainInfoResponse
         );
@@ -222,6 +216,20 @@ impl<N: ValidatorNode> RemoteNode<N> {
         let tasks = blobs
             .into_iter()
             .map(|blob| self.node.upload_blob(blob.into()));
+        try_join_all(tasks).await?;
+        Ok(())
+    }
+
+    /// Sends a pending validated block's blobs to the validator.
+    #[instrument(level = "trace")]
+    pub(crate) async fn send_pending_blobs(
+        &self,
+        chain_id: ChainId,
+        blobs: Vec<Blob>,
+    ) -> Result<(), NodeError> {
+        let tasks = blobs
+            .into_iter()
+            .map(|blob| self.node.handle_pending_blob(chain_id, blob.into_content()));
         try_join_all(tasks).await?;
         Ok(())
     }

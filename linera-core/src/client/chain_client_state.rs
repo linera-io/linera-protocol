@@ -11,7 +11,7 @@ use linera_base::{
     identifiers::{BlobId, Owner},
     ownership::ChainOwnership,
 };
-use linera_chain::data_types::Block;
+use linera_chain::data_types::ProposedBlock;
 use tokio::sync::Mutex;
 
 use super::ChainClientError;
@@ -30,7 +30,7 @@ pub struct ChainClientState {
     /// The block we are currently trying to propose for the next height, if any.
     ///
     /// This is always at the same height as `next_block_height`.
-    pending_block: Option<Block>,
+    pending_proposal: Option<ProposedBlock>,
     /// Known key pairs from present and past identities.
     known_key_pairs: BTreeMap<Owner, KeyPair>,
 
@@ -49,7 +49,7 @@ impl ChainClientState {
         block_hash: Option<CryptoHash>,
         timestamp: Timestamp,
         next_block_height: BlockHeight,
-        pending_block: Option<Block>,
+        pending_block: Option<ProposedBlock>,
         pending_blobs: BTreeMap<BlobId, Blob>,
     ) -> ChainClientState {
         let known_key_pairs = known_key_pairs
@@ -61,12 +61,12 @@ impl ChainClientState {
             block_hash,
             timestamp,
             next_block_height,
-            pending_block: None,
+            pending_proposal: None,
             pending_blobs,
             client_mutex: Arc::default(),
         };
         if let Some(block) = pending_block {
-            state.set_pending_block(block);
+            state.set_pending_proposal(block);
         }
         state
     }
@@ -83,13 +83,13 @@ impl ChainClientState {
         self.next_block_height
     }
 
-    pub fn pending_block(&self) -> &Option<Block> {
-        &self.pending_block
+    pub fn pending_proposal(&self) -> &Option<ProposedBlock> {
+        &self.pending_proposal
     }
 
-    pub(super) fn set_pending_block(&mut self, block: Block) {
+    pub(super) fn set_pending_proposal(&mut self, block: ProposedBlock) {
         if block.height == self.next_block_height {
-            self.pending_block = Some(block);
+            self.pending_proposal = Some(block);
         } else {
             tracing::error!(
                 "Not setting pending block at height {}, because next_block_height is {}.",
@@ -134,7 +134,7 @@ impl ChainClientState {
     }
 
     pub(super) fn clear_pending_block(&mut self) {
-        self.pending_block = None;
+        self.pending_proposal = None;
         self.pending_blobs.clear();
     }
 

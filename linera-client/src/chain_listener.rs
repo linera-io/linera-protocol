@@ -218,8 +218,8 @@ impl ChainListener {
                 context.lock().await.update_wallet(&client).await?;
             }
             let value = storage.read_hashed_confirmed_block(hash).await?;
-            let executed_block = value.inner().executed_block();
-            let new_chains = executed_block
+            let block = value.inner().block();
+            let new_chains = block
                 .messages()
                 .iter()
                 .flatten()
@@ -230,13 +230,13 @@ impl ChainListener {
                         ..
                     } = outgoing_message
                     {
-                        let keys = open_chain_config
+                        let owners = open_chain_config
                             .ownership
-                            .all_public_keys()
+                            .all_owners()
                             .cloned()
                             .collect::<Vec<_>>();
-                        let timestamp = executed_block.block.timestamp;
-                        Some((new_id, keys, timestamp))
+                        let timestamp = block.header.timestamp;
+                        Some((new_id, owners, timestamp))
                     } else {
                         None
                     }
@@ -249,7 +249,7 @@ impl ChainListener {
             for (new_id, owners, timestamp) in new_chains {
                 let key_pair = owners
                     .iter()
-                    .find_map(|public_key| context_guard.wallet().key_pair_for_pk(public_key));
+                    .find_map(|owner| context_guard.wallet().key_pair_for_owner(owner));
                 if key_pair.is_some() {
                     context_guard
                         .update_wallet_for_new_chain(*new_id, key_pair, timestamp)

@@ -36,6 +36,7 @@ pub enum RpcMessage {
     UploadBlob(Box<BlobContent>),
     DownloadBlob(Box<BlobId>),
     DownloadPendingBlob(Box<(ChainId, BlobId)>),
+    HandlePendingBlob(Box<(ChainId, BlobContent)>),
     DownloadConfirmedBlock(Box<CryptoHash>),
     DownloadCertificates(Vec<CryptoHash>),
     BlobLastUsedBy(Box<BlobId>),
@@ -77,6 +78,7 @@ impl RpcMessage {
             ChainInfoQuery(query) => query.chain_id,
             CrossChainRequest(request) => request.target_chain_id(),
             DownloadPendingBlob(request) => request.0,
+            HandlePendingBlob(request) => request.0,
             Vote(_)
             | Error(_)
             | ChainInfoResponse(_)
@@ -104,7 +106,7 @@ impl RpcMessage {
         Some(chain_id)
     }
 
-    /// Wether this messsage is "local" i.e. will be executed locally on the proxy
+    /// Whether this message is "local" i.e. will be executed locally on the proxy
     /// or if it'll be proxied to the server.
     pub fn is_local_message(&self) -> bool {
         use RpcMessage::*;
@@ -133,6 +135,7 @@ impl RpcMessage {
             | UploadBlobResponse(_)
             | DownloadPendingBlob(_)
             | DownloadPendingBlobResponse(_)
+            | HandlePendingBlob(_)
             | DownloadBlobResponse(_)
             | DownloadConfirmedBlockResponse(_)
             | BlobLastUsedByResponse(_)

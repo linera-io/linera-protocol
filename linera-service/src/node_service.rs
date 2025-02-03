@@ -14,8 +14,9 @@ use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
 use axum::{extract::Path, http::StatusCode, response, response::IntoResponse, Extension, Router};
 use futures::{lock::Mutex, Future};
 use linera_base::{
-    crypto::{CryptoError, CryptoHash, PublicKey},
+    crypto::{CryptoError, CryptoHash},
     data_types::{Amount, ApplicationPermissions, Bytecode, TimeDelta, UserApplicationDescription},
+    ensure,
     hashed::Hashed,
     identifiers::{ApplicationId, BytecodeId, ChainId, Owner, UserApplicationId},
     ownership::{ChainOwnership, TimeoutConfig},
@@ -34,7 +35,7 @@ use linera_core::{
 use linera_execution::{
     committee::{Committee, Epoch},
     system::{AdminOperation, Recipient, SystemChannel},
-    Operation, Query, Response, SystemOperation,
+    Operation, Query, QueryOutcome, QueryResponse, SystemOperation,
 };
 use linera_sdk::base::BlobContent;
 use linera_storage::Storage;
@@ -43,7 +44,7 @@ use serde_json::json;
 use thiserror::Error as ThisError;
 use tokio::sync::OwnedRwLockReadGuard;
 use tower_http::cors::CorsLayer;
-use tracing::{debug, error, info, instrument};
+use tracing::{debug, error, info, instrument, trace};
 
 use crate::util;
 
@@ -90,14 +91,14 @@ enum NodeServiceError {
     HeterogeneousOperations,
     #[error("failed to parse GraphQL query: {error}")]
     GraphQLParseError { error: String },
-    #[error("malformed application response")]
-    MalformedApplicationResponse,
     #[error("application service error: {errors:?}")]
     ApplicationServiceError { errors: Vec<String> },
     #[error("chain ID not found: {chain_id}")]
     UnknownChainId { chain_id: String },
     #[error("malformed chain ID: {0}")]
     InvalidChainId(CryptoError),
+    #[error("unexpected application operations added during non-mutation query")]
+    UnexpectedOperationsFromQuery,
 }
 
 impl From<ServerError> for NodeServiceError {
@@ -122,7 +123,7 @@ impl IntoResponse for NodeServiceError {
             NodeServiceError::JsonError(e) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, vec![e.to_string()])
             }
-            NodeServiceError::MalformedApplicationResponse => {
+            NodeServiceError::UnexpectedOperationsFromQuery => {
                 (StatusCode::INTERNAL_SERVER_ERROR, vec![self.to_string()])
             }
             NodeServiceError::MissingOperation
@@ -321,15 +322,15 @@ where
         .await
     }
 
-    /// Creates (or activates) a new chain by installing the given authentication key.
+    /// Creates (or activates) a new chain with the given owner.
     /// This will automatically subscribe to the future committees created by `admin_id`.
     async fn open_chain(
         &self,
         chain_id: ChainId,
-        public_key: PublicKey,
+        owner: Owner,
         balance: Option<Amount>,
     ) -> Result<ChainId, Error> {
-        let ownership = ChainOwnership::single(public_key);
+        let ownership = ChainOwnership::single(owner);
         let balance = balance.unwrap_or(Amount::ZERO);
         let message_id = self
             .apply_client_command(&chain_id, move |client| {
@@ -354,7 +355,7 @@ where
         &self,
         chain_id: ChainId,
         application_permissions: Option<ApplicationPermissions>,
-        public_keys: Vec<PublicKey>,
+        owners: Vec<Owner>,
         weights: Option<Vec<u64>>,
         multi_leader_rounds: Option<u32>,
         balance: Option<Amount>,
@@ -379,16 +380,16 @@ where
         fallback_duration_ms: u64,
     ) -> Result<ChainId, Error> {
         let owners = if let Some(weights) = weights {
-            if weights.len() != public_keys.len() {
+            if weights.len() != owners.len() {
                 return Err(Error::new(format!(
-                    "There are {} public keys but {} weights.",
-                    public_keys.len(),
+                    "There are {} owners but {} weights.",
+                    owners.len(),
                     weights.len()
                 )));
             }
-            public_keys.into_iter().zip(weights).collect::<Vec<_>>()
+            owners.into_iter().zip(weights).collect::<Vec<_>>()
         } else {
-            public_keys
+            owners
                 .into_iter()
                 .zip(iter::repeat(100))
                 .collect::<Vec<_>>()
@@ -431,15 +432,12 @@ where
     }
 
     /// Changes the authentication key of the chain.
-    async fn change_owner(
-        &self,
-        chain_id: ChainId,
-        new_public_key: PublicKey,
-    ) -> Result<CryptoHash, Error> {
+    async fn change_owner(&self, chain_id: ChainId, new_owner: Owner) -> Result<CryptoHash, Error> {
         let operation = SystemOperation::ChangeOwnership {
-            super_owners: vec![new_public_key],
+            super_owners: vec![new_owner],
             owners: Vec::new(),
             multi_leader_rounds: 2,
+            open_multi_leader_rounds: false,
             timeout_config: TimeoutConfig::default(),
         };
         self.execute_system_operation(operation, chain_id).await
@@ -450,9 +448,10 @@ where
     async fn change_multiple_owners(
         &self,
         chain_id: ChainId,
-        new_public_keys: Vec<PublicKey>,
+        new_owners: Vec<Owner>,
         new_weights: Vec<u64>,
         multi_leader_rounds: u32,
+        open_multi_leader_rounds: bool,
         #[graphql(desc = "The duration of the fast round, in milliseconds; default: no timeout")]
         fast_round_ms: Option<u64>,
         #[graphql(
@@ -475,8 +474,9 @@ where
     ) -> Result<CryptoHash, Error> {
         let operation = SystemOperation::ChangeOwnership {
             super_owners: Vec::new(),
-            owners: new_public_keys.into_iter().zip(new_weights).collect(),
+            owners: new_owners.into_iter().zip(new_weights).collect(),
             multi_leader_rounds,
+            open_multi_leader_rounds,
             timeout_config: TimeoutConfig {
                 fast_round_duration: fast_round_ms.map(TimeDelta::from_millis),
                 base_timeout: TimeDelta::from_millis(base_timeout_ms),
@@ -494,11 +494,13 @@ where
         close_chain: Vec<ApplicationId>,
         execute_operations: Option<Vec<ApplicationId>>,
         mandatory_applications: Vec<ApplicationId>,
+        change_application_permissions: Vec<ApplicationId>,
     ) -> Result<CryptoHash, Error> {
         let operation = SystemOperation::ChangeApplicationPermissions(ApplicationPermissions {
             execute_operations,
             mandatory_applications,
             close_chain,
+            change_application_permissions,
         });
         self.execute_system_operation(operation, chain_id).await
     }
@@ -856,36 +858,6 @@ fn operation_type(document: &ExecutableDocument) -> Result<OperationType, NodeSe
     }
 }
 
-/// Extracts the underlying byte vector from a serialized GraphQL response
-/// from an application.
-fn bytes_from_response(data: async_graphql::Value) -> Vec<Vec<u8>> {
-    if let async_graphql::Value::Object(map) = data {
-        map.values()
-            .filter_map(|value| {
-                if let async_graphql::Value::List(list) = value {
-                    bytes_from_list(list)
-                } else {
-                    None
-                }
-            })
-            .collect()
-    } else {
-        vec![]
-    }
-}
-
-fn bytes_from_list(list: &[async_graphql::Value]) -> Option<Vec<u8>> {
-    list.iter()
-        .map(|item| {
-            if let async_graphql::Value::Number(n) = item {
-                n.as_u64().map(|n| n as u8)
-            } else {
-                None
-            }
-        })
-        .collect()
-}
-
 /// The `NodeService` is a server that exposes a web-server to the client.
 /// The node service is primarily used to explore the state of a chain in GraphQL.
 pub struct NodeService<C>
@@ -993,24 +965,18 @@ where
         request: &Request,
         chain_id: ChainId,
     ) -> Result<async_graphql::Response, NodeServiceError> {
-        let bytes = serde_json::to_vec(&request)?;
-        let query = Query::User {
-            application_id,
-            bytes,
-        };
-        let client = self
-            .context
-            .lock()
-            .await
-            .make_chain_client(chain_id)
-            .map_err(|_| NodeServiceError::UnknownChainId {
-                chain_id: chain_id.to_string(),
-            })?;
-        let response = client.query_application(query).await?;
-        let user_response_bytes = match response {
-            Response::System(_) => unreachable!("cannot get a system response for a user query"),
-            Response::User(user) => user,
-        };
+        let QueryOutcome {
+            response: user_response_bytes,
+            operations,
+        } = self
+            .query_user_application(application_id, request, chain_id)
+            .await?;
+
+        ensure!(
+            operations.is_empty(),
+            NodeServiceError::UnexpectedOperationsFromQuery
+        );
+
         Ok(serde_json::from_slice(&user_response_bytes)?)
     }
 
@@ -1022,9 +988,13 @@ where
         chain_id: ChainId,
     ) -> Result<async_graphql::Response, NodeServiceError> {
         debug!("Request: {:?}", &request);
-        let graphql_response = self
-            .user_application_query(application_id, request, chain_id)
+        let QueryOutcome {
+            response,
+            operations,
+        } = self
+            .query_user_application(application_id, request, chain_id)
             .await?;
+        let graphql_response = serde_json::from_slice::<async_graphql::Response>(&response)?;
         if graphql_response.is_err() {
             let errors = graphql_response
                 .errors
@@ -1033,18 +1003,7 @@ where
                 .collect();
             return Err(NodeServiceError::ApplicationServiceError { errors });
         }
-        debug!("Response: {:?}", &graphql_response);
-        let bcs_bytes_list = bytes_from_response(graphql_response.data);
-        if bcs_bytes_list.is_empty() {
-            return Err(NodeServiceError::MalformedApplicationResponse);
-        }
-        let operations = bcs_bytes_list
-            .into_iter()
-            .map(|bytes| Operation::User {
-                application_id,
-                bytes,
-            })
-            .collect::<Vec<_>>();
+        trace!("Operations: {operations:?}");
 
         let client = self
             .context
@@ -1065,6 +1024,41 @@ where
             util::wait_for_next_round(&mut stream, timeout).await;
         };
         Ok(async_graphql::Response::new(hash.to_value()))
+    }
+
+    /// Queries a user application, returning the raw [`QueryOutcome`].
+    async fn query_user_application(
+        &self,
+        application_id: UserApplicationId,
+        request: &Request,
+        chain_id: ChainId,
+    ) -> Result<QueryOutcome<Vec<u8>>, NodeServiceError> {
+        let bytes = serde_json::to_vec(&request)?;
+        let query = Query::User {
+            application_id,
+            bytes,
+        };
+        let client = self
+            .context
+            .lock()
+            .await
+            .make_chain_client(chain_id)
+            .map_err(|_| NodeServiceError::UnknownChainId {
+                chain_id: chain_id.to_string(),
+            })?;
+        let QueryOutcome {
+            response,
+            operations,
+        } = client.query_application(query).await?;
+        match response {
+            QueryResponse::System(_) => {
+                unreachable!("cannot get a system response for a user query")
+            }
+            QueryResponse::User(user_response_bytes) => Ok(QueryOutcome {
+                response: user_response_bytes,
+                operations,
+            }),
+        }
     }
 
     /// Executes a GraphQL query and generates a response for our `Schema`.

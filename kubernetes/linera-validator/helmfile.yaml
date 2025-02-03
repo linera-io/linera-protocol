@@ -1,3 +1,11 @@
+environments:
+  default:
+    values:
+      - writeToGrafanaCloud: {{ env "LINERA_WRITE_TO_GRAFANA_CLOUD" | default "false" }}
+        validatorLabel: {{ env "LINERA_VALIDATOR_LABEL" | default (printf "local-%s" (env "USER")) }}
+
+---
+
 repositories:
   - name: scylla
     url: https://scylla-operator-charts.storage.googleapis.com/stable
@@ -16,22 +24,15 @@ releases:
     needs:
       - scylla/scylla
     values:
-      - {{ env "LINERA_HELMFILE_VALUES_LINERA_CORE" | default "values-local.yaml" }}
+      {{ if .Values.writeToGrafanaCloud -}}
+      - grafanaCloudUsername: {{ fetchSecretValue (env "LINERA_GRAFANA_CLOUD_USERNAME_SECRET") | quote }}
+        grafanaCloudAPIToken: {{ fetchSecretValue (env "LINERA_GRAFANA_CLOUD_API_TOKEN_SECRET") | quote }}
+      {{- end }}
+      - writeToGrafanaCloud: {{ .Values.writeToGrafanaCloud }}
+      - {{ env "LINERA_HELMFILE_VALUES_LINERA_CORE" | default "values-local.yaml.gotmpl" }}
     set:
       - name: installCRDs
         value: "true"
-      - name: validator.serverConfig
-        value: {{ env "LINERA_HELMFILE_SET_SERVER_CONFIG" | default "working/server_1.json" }}
-      - name: validator.genesisConfig
-        value: {{ env "LINERA_HELMFILE_SET_GENESIS_CONFIG" | default "working/genesis.json" }}
-      - name: numShards
-        value: {{ env "LINERA_HELMFILE_SET_NUM_SHARDS" | default 10 }}
-      - name: lineraImage
-        value: {{ env "LINERA_HELMFILE_LINERA_IMAGE" | default "linera:latest" }}
-      - name: staticIpGcpName
-        value: {{ env "LINERA_HELMFILE_STATIC_IP_GCP_NAME" | default "" }}
-      - name: validatorDomainName
-        value: {{ env "LINERA_HELMFILE_VALIDATOR_DOMAIN_NAME" | default "" }}
   - name: scylla
     version: v1.13.0
     namespace: scylla

@@ -7,12 +7,12 @@ use std::{
 };
 
 use linera_base::{
-    crypto::{CryptoHash, CryptoRng, KeyPair, PublicKey},
+    crypto::{CryptoHash, CryptoRng, KeyPair},
     data_types::{Blob, BlockHeight, Timestamp},
     ensure,
-    identifiers::{BlobId, ChainDescription, ChainId},
+    identifiers::{BlobId, ChainDescription, ChainId, Owner},
 };
-use linera_chain::data_types::Block;
+use linera_chain::data_types::ProposedBlock;
 use linera_core::{client::ChainClient, node::ValidatorNodeProvider};
 use linera_storage::Storage;
 use rand::Rng as _;
@@ -23,7 +23,7 @@ use crate::{config::GenesisConfig, error, Error};
 #[derive(Serialize, Deserialize)]
 pub struct Wallet {
     pub chains: BTreeMap<ChainId, UserChain>,
-    pub unassigned_key_pairs: HashMap<PublicKey, KeyPair>,
+    pub unassigned_key_pairs: HashMap<Owner, KeyPair>,
     pub default: Option<ChainId>,
     pub genesis_config: GenesisConfig,
     pub testing_prng_seed: Option<u64>,
@@ -111,14 +111,15 @@ impl Wallet {
         self.chains.values_mut()
     }
 
-    pub fn add_unassigned_key_pair(&mut self, keypair: KeyPair) {
-        self.unassigned_key_pairs.insert(keypair.public(), keypair);
+    pub fn add_unassigned_key_pair(&mut self, key_pair: KeyPair) {
+        let owner = key_pair.public().into();
+        self.unassigned_key_pairs.insert(owner, key_pair);
     }
 
-    pub fn key_pair_for_pk(&self, key: &PublicKey) -> Option<KeyPair> {
+    pub fn key_pair_for_owner(&self, owner: &Owner) -> Option<KeyPair> {
         if let Some(key_pair) = self
             .unassigned_key_pairs
-            .get(key)
+            .get(owner)
             .map(|key_pair| key_pair.copy())
         {
             return Some(key_pair);
@@ -126,19 +127,19 @@ impl Wallet {
         self.chains
             .values()
             .filter_map(|user_chain| user_chain.key_pair.as_ref())
-            .find(|key_pair| key_pair.public() == *key)
+            .find(|key_pair| Owner::from(key_pair.public()) == *owner)
             .map(|key_pair| key_pair.copy())
     }
 
-    pub fn assign_new_chain_to_key(
+    pub fn assign_new_chain_to_owner(
         &mut self,
-        key: PublicKey,
+        owner: Owner,
         chain_id: ChainId,
         timestamp: Timestamp,
     ) -> Result<(), Error> {
         let key_pair = self
             .unassigned_key_pairs
-            .remove(&key)
+            .remove(&owner)
             .ok_or(error::Inner::NonexistentKeypair(chain_id))?;
         let user_chain = UserChain {
             chain_id,
@@ -177,7 +178,7 @@ impl Wallet {
                 block_hash: state.block_hash(),
                 next_block_height: state.next_block_height(),
                 timestamp: state.timestamp(),
-                pending_block: state.pending_block().clone(),
+                pending_block: state.pending_proposal().clone(),
                 pending_blobs: state.pending_blobs().clone(),
             },
         );
@@ -209,7 +210,7 @@ pub struct UserChain {
     pub block_hash: Option<CryptoHash>,
     pub timestamp: Timestamp,
     pub next_block_height: BlockHeight,
-    pub pending_block: Option<Block>,
+    pub pending_block: Option<ProposedBlock>,
     pub pending_blobs: BTreeMap<BlobId, Blob>,
 }
 

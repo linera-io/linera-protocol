@@ -43,6 +43,10 @@ input ApplicationPermissions {
 	These applications are allowed to close the current chain using the system API.
 	"""
 	closeChain: [ApplicationId!]! = []
+	"""
+	These applications are allowed to change the application permissions using the system API.
+	"""
+	changeApplicationPermissions: [ApplicationId!]! = []
 }
 
 """
@@ -56,23 +60,28 @@ A content-addressed blob ID i.e. the hash of the `BlobContent`
 scalar BlobId
 
 """
-A block containing operations to apply on a given chain, as well as the
-acknowledgment of a number of incoming messages from other chains.
-* Incoming messages must be selected in the order they were
-produced by the sending chain, but can be skipped.
-* When a block is proposed to a validator, all cross-chain messages must have been
-received ahead of time in the inbox of the chain.
-* This constraint does not apply to the execution of confirmed blocks.
+Block defines the atomic unit of growth of the Linera chain.
+
+As part of the block body, contains all the incoming messages
+and operations to execute which define a state transition of the chain.
+Resulting messages produced by the operations are also included in the block body,
+together with oracle responses and events.
 """
 type Block {
 	"""
-	The chain to which this block belongs.
+	Header of the block containing metadata of the block.
 	"""
-	chainId: ChainId!
+	header: BlockHeader!
 	"""
-	The number identifying the current configuration.
+	Body of the block containing all of the data.
 	"""
-	epoch: Epoch!
+	body: BlockBody!
+}
+
+"""
+The body of a block containing all the data included in the block.
+"""
+type BlockBody {
 	"""
 	A selection of incoming messages to be executed first. Successive messages of same
 	sender and height are grouped together for conciseness.
@@ -83,40 +92,9 @@ type Block {
 	"""
 	operations: [Operation!]!
 	"""
-	The block height.
-	"""
-	height: BlockHeight!
-	"""
-	The timestamp when this block was created. This must be later than all messages received
-	in this block, but no later than the current time.
-	"""
-	timestamp: Timestamp!
-	"""
-	The user signing for the operations in the block and paying for their execution
-	fees. If set, this must be the `owner` in the block proposal. `None` means that
-	the default account of the chain is used. This value is also used as recipient of
-	potential refunds for the message grants created by the operations.
-	"""
-	authenticatedSigner: Owner
-	"""
-	Certified hash (see `Certificate` below) of the previous block in the
-	chain, if any.
-	"""
-	previousBlockHash: CryptoHash
-}
-
-"""
-The messages and the state hash resulting from a [`Block`]'s execution.
-"""
-type BlockExecutionOutcome {
-	"""
 	The list of outgoing messages for each transaction.
 	"""
 	messages: [[OutgoingMessage!]!]!
-	"""
-	The hash of the chain's execution state after this block.
-	"""
-	stateHash: CryptoHash!
 	"""
 	The record of oracle responses for each transaction.
 	"""
@@ -125,6 +103,65 @@ type BlockExecutionOutcome {
 	The list of events produced by each transaction.
 	"""
 	events: [[EventRecord!]!]!
+}
+
+"""
+Succinct representation of a block.
+Contains all the metadata to follow the chain of blocks or verifying
+inclusion (event, message, oracle response, etc.) in the block's body.
+"""
+type BlockHeader {
+	"""
+	The chain to which this block belongs.
+	"""
+	chainId: ChainId!
+	"""
+	The number identifying the current configuration.
+	"""
+	epoch: Epoch!
+	"""
+	The block height.
+	"""
+	height: BlockHeight!
+	"""
+	The timestamp when this block was created.
+	"""
+	timestamp: Timestamp!
+	"""
+	The hash of the chain's execution state after this block.
+	"""
+	stateHash: CryptoHash!
+	"""
+	Certified hash of the previous block in the chain, if any.
+	"""
+	previousBlockHash: CryptoHash
+	"""
+	The user signing for the operations in the block and paying for their execution
+	fees. If set, this must be the `owner` in the block proposal. `None` means that
+	the default account of the chain is used. This value is also used as recipient of
+	potential refunds for the message grants created by the operations.
+	"""
+	authenticatedSigner: Owner
+	"""
+	Cryptographic hash of all the incoming bundles in the block.
+	"""
+	bundlesHash: CryptoHash!
+	"""
+	Cryptographic hash of all the operations in the block.
+	"""
+	operationsHash: CryptoHash!
+	"""
+	Cryptographic hash of all the messages in the block.
+	"""
+	messagesHash: CryptoHash!
+	"""
+	Cryptographic hash of all the oracle responses in the block.
+	"""
+	oracleResponsesHash: CryptoHash!
+	"""
+	Cryptographic hash of all the events in the block.
+	"""
+	eventsHash: CryptoHash!
 }
 
 """
@@ -188,9 +225,13 @@ type ChainManager {
 	"""
 	seed: Int!
 	"""
-	These are blobs published or read by the locked block.
+	These are blobs published or read by the proposed block.
 	"""
-	lockedBlobs: MapView_BlobId_Blob_3711e760!
+	proposedBlobs: MapView_BlobId_Blob_3711e760!
+	"""
+	These are blobs published or read by the locking block.
+	"""
+	lockingBlobs: MapView_BlobId_Blob_3711e760!
 	"""
 	The time after which we are ready to sign a timeout certificate for the current round.
 	"""
@@ -233,6 +274,15 @@ type ChainStateExtendedView {
 	Consensus state.
 	"""
 	manager: ChainManager!
+	"""
+	Pending validated block that is still missing blobs.
+	The incomplete set of blobs for the pending validated block.
+	"""
+	pendingValidatedBlobs: PendingBlobsView!
+	"""
+	The incomplete sets of blobs for upcoming proposals.
+	"""
+	pendingProposedBlobs: ReentrantCollectionView_Owner_PendingBlobsView_3247061959!
 	"""
 	Hashes of all certified blocks for this sender.
 	This ends with `block_hash` and has length `usize::from(next_block_height)`.
@@ -369,7 +419,7 @@ input Committee {
 }
 
 type ConfirmedBlock {
-	executedBlock: ExecutedBlock!
+	block: Block!
 	status: String!
 }
 
@@ -404,6 +454,14 @@ type Entry_AccountOwner_Amount_aaf96548 {
 """
 A GraphQL-visible map item, complete with key.
 """
+type Entry_BlobId_Blob_50b95aa1 {
+	key: BlobId!
+	value: Blob
+}
+
+"""
+A GraphQL-visible map item, complete with key.
+"""
 type Entry_BlobId_Blob_9f0b41f3 {
 	key: BlobId!
 	value: Blob
@@ -423,6 +481,14 @@ A GraphQL-visible map item, complete with key.
 type Entry_Origin_InboxStateView_c4db01d6 {
 	key: Origin!
 	value: InboxStateView!
+}
+
+"""
+A GraphQL-visible map item, complete with key.
+"""
+type Entry_Owner_PendingBlobsView_c4f6af6f {
+	key: Owner!
+	value: PendingBlobsView!
 }
 
 """
@@ -454,14 +520,6 @@ type EventRecord {
 	The payload data.
 	"""
 	value: [Int!]!
-}
-
-"""
-A [`Block`], together with the outcome from its execution.
-"""
-type ExecutedBlock {
-	block: Block!
-	outcome: BlockExecutionOutcome!
 }
 
 type ExecutionStateView {
@@ -566,6 +624,10 @@ input MapFilters_Origin_742d451b {
 	keys: [Origin!]
 }
 
+input MapFilters_Owner_6898ce22 {
+	keys: [Owner!]
+}
+
 input MapFilters_Target_7aac1e1c {
 	keys: [Target!]
 }
@@ -586,6 +648,10 @@ input MapInput_Origin_742d451b {
 	filters: MapFilters_Origin_742d451b
 }
 
+input MapInput_Owner_6898ce22 {
+	filters: MapFilters_Owner_6898ce22
+}
+
 input MapInput_Target_7aac1e1c {
 	filters: MapFilters_Target_7aac1e1c
 }
@@ -600,6 +666,12 @@ type MapView_BlobId_Blob_3711e760 {
 	keys(count: Int): [BlobId!]!
 	entry(key: BlobId!): Entry_BlobId_Blob_9f0b41f3!
 	entries(input: MapInput_BlobId_4d2a0555): [Entry_BlobId_Blob_9f0b41f3!]!
+}
+
+type MapView_BlobId_Blob_9f0b41f3 {
+	keys(count: Int): [BlobId!]!
+	entry(key: BlobId!): Entry_BlobId_Blob_50b95aa1!
+	entries(input: MapInput_BlobId_4d2a0555): [Entry_BlobId_Blob_50b95aa1!]!
 }
 
 """
@@ -668,15 +740,15 @@ type MutationRoot {
 	"""
 	readDataBlob(chainId: ChainId!, hash: CryptoHash!): CryptoHash!
 	"""
-	Creates (or activates) a new chain by installing the given authentication key.
+	Creates (or activates) a new chain with the given owner.
 	This will automatically subscribe to the future committees created by `admin_id`.
 	"""
-	openChain(chainId: ChainId!, publicKey: PublicKey!, balance: Amount): ChainId!
+	openChain(chainId: ChainId!, owner: Owner!, balance: Amount): ChainId!
 	"""
 	Creates (or activates) a new chain by installing the given authentication keys.
 	This will automatically subscribe to the future committees created by `admin_id`.
 	"""
-	openMultiOwnerChain(		chainId: ChainId!,		applicationPermissions: ApplicationPermissions,		publicKeys: [PublicKey!]!,		weights: [Int!],		multiLeaderRounds: Int,		balance: Amount,
+	openMultiOwnerChain(		chainId: ChainId!,		applicationPermissions: ApplicationPermissions,		owners: [Owner!]!,		weights: [Int!],		multiLeaderRounds: Int,		balance: Amount,
 		"""
 		The duration of the fast round, in milliseconds; default: no timeout
 		"""
@@ -701,11 +773,11 @@ type MutationRoot {
 	"""
 	Changes the authentication key of the chain.
 	"""
-	changeOwner(chainId: ChainId!, newPublicKey: PublicKey!): CryptoHash!
+	changeOwner(chainId: ChainId!, newOwner: Owner!): CryptoHash!
 	"""
 	Changes the authentication key of the chain.
 	"""
-	changeMultipleOwners(		chainId: ChainId!,		newPublicKeys: [PublicKey!]!,		newWeights: [Int!]!,		multiLeaderRounds: Int!,
+	changeMultipleOwners(		chainId: ChainId!,		newOwners: [Owner!]!,		newWeights: [Int!]!,		multiLeaderRounds: Int!,		openMultiLeaderRounds: Boolean!,
 		"""
 		The duration of the fast round, in milliseconds; default: no timeout
 		"""
@@ -726,7 +798,7 @@ type MutationRoot {
 	"""
 	Changes the application permissions configuration on this chain.
 	"""
-	changeApplicationPermissions(chainId: ChainId!, closeChain: [ApplicationId!]!, executeOperations: [ApplicationId!], mandatoryApplications: [ApplicationId!]!): CryptoHash!
+	changeApplicationPermissions(chainId: ChainId!, closeChain: [ApplicationId!]!, executeOperations: [ApplicationId!], mandatoryApplications: [ApplicationId!]!, changeApplicationPermissions: [ApplicationId!]!): CryptoHash!
 	"""
 	(admin chain only) Registers a new committee. This will notify the subscribers of
 	the admin chain so that they can migrate to the new epoch (by accepting the
@@ -843,6 +915,28 @@ The owner of a chain. This is currently the hash of the owner's public key used 
 scalar Owner
 
 """
+The pending blobs belonging to a block that can't be processed without them.
+"""
+type PendingBlobsView {
+	"""
+	The round in which the block is validated.
+	"""
+	round: Round!
+	"""
+	Whether these blobs were already validated.
+	
+	This is only `false` for _new_ block proposals, not when re-proposing blocks from earlier
+	rounds or when handling validated block certificates. If it is false, the pending blobs are
+	only the ones published by the new block, not the ones that are only read.
+	"""
+	validated: Boolean!
+	"""
+	The map of blobs needed to process the block.
+	"""
+	pendingBlobs: MapView_BlobId_Blob_9f0b41f3!
+}
+
+"""
 A message together with kind, authentication and grant information.
 """
 type PostedMessage {
@@ -871,11 +965,6 @@ type PostedMessage {
 	"""
 	message: Message!
 }
-
-"""
-A signature public key
-"""
-scalar PublicKey
 
 type QueryRoot {
 	chain(chainId: ChainId!): ChainStateExtendedView!
@@ -916,6 +1005,12 @@ type ReentrantCollectionView_Origin_InboxStateView_3699835794 {
 	keys: [Origin!]!
 	entry(key: Origin!): Entry_Origin_InboxStateView_c4db01d6!
 	entries(input: MapInput_Origin_742d451b): [Entry_Origin_InboxStateView_c4db01d6!]!
+}
+
+type ReentrantCollectionView_Owner_PendingBlobsView_3247061959 {
+	keys: [Owner!]!
+	entry(key: Owner!): Entry_Owner_PendingBlobsView_c4f6af6f!
+	entries(input: MapInput_Owner_6898ce22): [Entry_Owner_PendingBlobsView_c4f6af6f!]!
 }
 
 type ReentrantCollectionView_Target_OutboxStateView_2789119133 {
@@ -989,6 +1084,10 @@ input ResourceControlPolicy {
 	The maximum size of a blob.
 	"""
 	maximumBlobSize: Int!
+	"""
+	The maximum number of published blobs per block.
+	"""
+	maximumPublishedBlobs: Int!
 	"""
 	The maximum size of a block proposal.
 	"""

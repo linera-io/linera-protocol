@@ -16,6 +16,7 @@ use state::SocialState;
 
 pub struct SocialService {
     state: Arc<SocialState>,
+    runtime: Arc<ServiceRuntime<Self>>,
 }
 
 linera_sdk::service!(SocialService);
@@ -33,13 +34,14 @@ impl Service for SocialService {
             .expect("Failed to load state");
         SocialService {
             state: Arc::new(state),
+            runtime: Arc::new(runtime),
         }
     }
 
     async fn handle_query(&self, request: Request) -> Response {
         let schema = Schema::build(
             self.state.clone(),
-            Operation::mutation_root(),
+            Operation::mutation_root(self.runtime.clone()),
             EmptySubscription,
         )
         .finish();
