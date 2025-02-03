@@ -1,16 +1,14 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::HashMap, io::{self, Write}, sync::{Arc, Mutex}
-};
+use std::io::{self, Write};
 
 use anyhow::Result;
 use clap::Parser;
 use reqwest::Client;
 use rig::{
-    agent::AgentBuilder,
-    completion::{Chat, Message, ToolDefinition},
+    agent::{Agent, AgentBuilder},
+    completion::{Chat, CompletionModel, Message, ToolDefinition},
     providers::openai,
     tool::Tool,
 };
@@ -150,7 +148,11 @@ async fn main() {
 
     let openai = openai::Client::from_env();
     let model = openai.completion_model(&opt.model);
-    let node_service = LineraNodeService::new(opt.node_service_url.parse().unwrap()).unwrap();
+    let node_service = LineraNodeService::<openai::CompletionModel>::new(
+        opt.node_service_url.parse().unwrap(),
+        model.clone(),
+    )
+    .unwrap();
 
     let system_graphql_def = node_service.system_graphql_definition().await.unwrap();
     let graphql_context = format!(
@@ -159,7 +161,7 @@ async fn main() {
     );
 
     // Configure the agent
-    let agent = AgentBuilder::new(model)
+    let agent = AgentBuilder::new(model.clone())
         .preamble(PREAMBLE)
         .context(LINERA_CONTEXT)
         .context(&graphql_context)
@@ -170,8 +172,8 @@ async fn main() {
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(tag = "type")]
-enum NodeServiceArgs {
+#[serde(tag = "tag ")]
+enum LineraNodeServiceArgs {
     QuerySystem {
         query: String,
     },
@@ -185,30 +187,29 @@ enum NodeServiceArgs {
 }
 
 #[derive(Serialize, Deserialize)]
-struct NodeServiceOutput {
+struct LineraNodeServiceOutput {
     data: serde_json::Value,
     errors: Option<Vec<serde_json::Value>>,
 }
 
-struct LineraNodeService {
+struct LineraNodeService<M: CompletionModel> {
     url: Url,
     client: Client,
-    // A map from application id to GraphQL definition.
-    applications: Arc<Mutex<HashMap<String, String>>>,
+    model: M,
 }
 
-impl LineraNodeService {
-    fn new(url: Url) -> Result<Self> {
+impl<M: CompletionModel> LineraNodeService<M> {
+    fn new(url: Url, model: M) -> Result<Self> {
         Ok(Self {
             url,
             client: Client::new(),
-            applications: Arc::new(Mutex::new(HashMap::new())),
+            model,
         })
     }
 
     async fn system_graphql_definition(&self) -> Result<String> {
         self.get_graphql_definition(self.url.clone()).await
-    } 
+    }
 
     async fn get_graphql_definition(&self, url: Url) -> Result<String> {
         let response = self
@@ -224,24 +225,24 @@ impl LineraNodeService {
     }
 }
 
-impl Tool for LineraNodeService {
+impl<M: CompletionModel> Tool for LineraNodeService<M> {
     const NAME: &'static str = "Linera";
     type Error = reqwest::Error;
-    type Args = NodeServiceArgs; // GraphQL
-    type Output = NodeServiceOutput; // More GraphQL
+    type Args = LineraNodeServiceArgs;
+    type Output = LineraNodeServiceOutput;
 
     async fn definition(&self, _prompt: String) -> ToolDefinition {
         ToolDefinition {
             name: "Linera".to_string(),
             description: "Interact with a Linera wallet via GraphQL".to_string(),
             parameters: json!({
-                "type": "object",
-                "properties": {
-                    "input": {
-                        "type": "string",
-                        "description": "The GraphQL query to use. This *must* be valid GraphQL and not JSON. Do not escape quotes."
-                    }
-                }
+                
+                    "tag": { "type": "object", "oneOf": [
+                        { "properties": { "query": { "type": "string" } }, "required": ["query"] },
+                        { "properties": { "application_id": { "type": "string" } }, "required": ["application_id"] },
+                        { "properties": { "application_id": { "type": "string" }, "query": { "type": "string" } }, "required": ["application_id", "query"] }
+                    ]}
+                
             }),
         }
     }
@@ -249,7 +250,7 @@ impl Tool for LineraNodeService {
     async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
         eprintln!("Args: {:?}", args);
         match args {
-            NodeServiceArgs::QuerySystem { query } => {
+            LineraNodeServiceArgs::QuerySystem { query } => {
                 let response = self
                     .client
                     .post(self.url.clone())
@@ -258,34 +259,90 @@ impl Tool for LineraNodeService {
                     .await?;
                 response.json().await
             }
-            NodeServiceArgs::AddApplication { application_id } => {
-                let url = self.url.join(&application_id).unwrap();
-                let graphql_def = self.get_graphql_definition(url).await.unwrap();
-                {
-                    let mut applications = self.applications.lock().unwrap();
-                    applications.insert(application_id, graphql_def);
-                }
-                Ok(NodeServiceOutput {
-                    data: json!({ "success": true }),
-                    errors: None,
-                })
+            LineraNodeServiceArgs::AddApplication { application_id } => {
+                unimplemented!();
             }
-            NodeServiceArgs::QueryApplication {
+            LineraNodeServiceArgs::QueryApplication {
                 application_id,
                 query,
             } => {
-                unimplemented!();
-                // let applications = self.applications.lock().unwrap();
-                // let url = self.url.join(&application_id).unwrap();
-                // let response = self
-                //     .client
-                //     .post(url)
-                //     .json(&json!({ "query": query }))
-                //     .send()
-                //     .await?;
-                // response.json().await
+                let url = self.url.join(&application_id).unwrap();
+                let graphql_def = self.get_graphql_definition(url).await.unwrap();
+                let linera_app_service = LineraApplicationService::new(self.url.clone(), application_id, self.client.clone());  
+                println!("Got here.");
+                let agent = AgentBuilder::new(self.model.clone())
+                    .preamble(PREAMBLE)
+                    .context(LINERA_CONTEXT)
+                    .context(&graphql_def)
+                    .tool(linera_app_service)
+                    .build();
+                let runtime = tokio::runtime::Runtime::new().unwrap();
+                let response =
+                    runtime.block_on(async { agent.chat(query.as_str(), vec![]).await.unwrap() });
+                Ok(LineraNodeServiceOutput {
+                    data: json!(response),
+                    errors: None,
+                })
             }
         }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct LineraApplicationServiceArgs {
+    query: String,
+}
+
+struct LineraApplicationService {
+    url: Url,
+    client: Client,
+}
+
+impl LineraApplicationService {
+    fn new(node_url: Url, application_id: String, client: Client) -> Self {
+        Self {
+            url: node_url.join(&application_id).unwrap(),
+            client,
+        }
+    }
+}
+
+impl Tool for LineraApplicationService {
+    const NAME: &'static str = ""; // Don't need this.
+    type Error = reqwest::Error;
+    type Args = LineraApplicationServiceArgs; // GraphQL
+    type Output = LineraNodeServiceOutput;
+
+    fn definition(
+        &self,
+        _prompt: String,
+    ) -> impl std::future::Future<Output = ToolDefinition> + Send + Sync {
+        async move {
+            ToolDefinition {
+                name: Self::NAME.to_string(),
+                description: "Interact with Linera applications.".to_string(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "The query to send to the application. This *must* be valid GraphQL and not JSON. Do not escape quotes."
+                        }
+                    }
+                }),
+            }
+        }
+    }
+
+    async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
+      let query = args.query;
+      let response = self
+      .client
+      .post(self.url.clone())
+      .json(&json!({ "query": query }))
+      .send()
+      .await?;
+  response.json().await
     }
 }
 
