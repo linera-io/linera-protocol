@@ -1371,8 +1371,8 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
         &[
             ExecutionOutcome::System(
                 RawExecutionOutcome::default()
-                    .with_message(first_registration_message)
                     .with_message(second_registration_message)
+                    .with_message(first_registration_message)
             ),
             ExecutionOutcome::User(
                 silent_target_id,

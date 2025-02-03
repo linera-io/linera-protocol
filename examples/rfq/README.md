@@ -60,10 +60,10 @@ We use the test-only CLI option `--testing-prng-seed` to make keys deterministic
 explanation.
 
 ```bash
-export CHAIN_0=e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65
-export CHAIN_1=1db1936dad0717597a7743a8353c9c0191c14c3a129b258e9743aec2b4f05d03
-export OWNER_0=7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f
-export OWNER_1=b4f8586041a07323bd4f4ed2d758bf1b9a977eabfd4c00e2f12d08a0899485fd
+export CHAIN_0=aee928d4bf3880353b4a3cd9b6f88e6cc6e5ed050860abae439e7782e9b2dfe8
+export CHAIN_1=582843bc9322ed1928239ce3f6a855f6cd9ea94c8690907f113d6d7a8296a119
+export OWNER_0=513bb0b9fdf2d671fa3c44add540f383aada343b34260cff6220d390f2336c4b
+export OWNER_1=79539f482c1a7fefd5c1fe66572498fd343c0410e29bc83fc59939e6804fdf1b
 ```
 
 The `--extra-wallets 1` option creates an additional user chain and wallet - we will use it for the
