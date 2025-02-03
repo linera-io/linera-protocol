@@ -180,11 +180,13 @@ impl<UserData> MockInstance<UserData> {
 impl<UserData> Instance for MockInstance<UserData> {
     type Runtime = MockRuntime;
     type UserData = UserData;
-    type UserDataReference<'a> = MutexGuard<'a, UserData>
+    type UserDataReference<'a>
+        = MutexGuard<'a, UserData>
     where
         Self::UserData: 'a,
         Self: 'a;
-    type UserDataMutReference<'a> = MutexGuard<'a, UserData>
+    type UserDataMutReference<'a>
+        = MutexGuard<'a, UserData>
     where
         Self::UserData: 'a,
         Self: 'a;
