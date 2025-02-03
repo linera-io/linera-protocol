@@ -47,7 +47,7 @@ impl AttributeParameters {
             abort!(
                 TokenStream::from(attribute_parameters),
                 r#"Failed to parse attribute parameters, expected either `root = true` \
-                or `package = "namespace:package""#
+                or `package = "namespace:package"`"#
             )
         })
     }
