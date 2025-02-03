@@ -28,9 +28,8 @@ use wasmer::{WasmerContractInstance, WasmerServiceInstance};
 use wasmtime::{WasmtimeContractInstance, WasmtimeServiceInstance};
 #[cfg(with_metrics)]
 use {
-    linera_base::prometheus_util::{bucket_latencies, register_histogram_vec, MeasureLatency},
-    prometheus::HistogramVec,
-    std::sync::LazyLock,
+    crate::{CONTRACT_INSTANTIATION_LATENCY, SERVICE_INSTANTIATION_LATENCY},
+    linera_base::prometheus_util::MeasureLatency as _,
 };
 
 use self::sanitizer::sanitize;
@@ -42,26 +41,6 @@ use crate::{
     ContractSyncRuntimeHandle, ExecutionError, ServiceSyncRuntimeHandle, UserContractInstance,
     UserContractModule, UserServiceInstance, UserServiceModule, WasmRuntime,
 };
-
-#[cfg(with_metrics)]
-static CONTRACT_INSTANTIATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "contract_instantiation_latency",
-        "Contract instantiation latency",
-        &[],
-        bucket_latencies(1.0),
-    )
-});
-
-#[cfg(with_metrics)]
-static SERVICE_INSTANTIATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "service_instantiation_latency",
-        "Service instantiation latency",
-        &[],
-        bucket_latencies(1.0),
-    )
-});
 
 /// A user contract in a compiled WebAssembly module.
 #[derive(Clone)]
@@ -75,32 +54,38 @@ pub enum WasmContractModule {
     Wasmtime { module: ::wasmtime::Module },
 }
 
+fn get_wasm_contract(
+    contract_bytecode: Bytecode,
+    runtime: WasmRuntime,
+) -> Result<Bytecode, WasmExecutionError> {
+    if runtime.needs_sanitizer() {
+        // Ensure bytecode normalization whenever Wasmer and Wasmtime are possibly
+        // compared.
+        sanitize(contract_bytecode).map_err(WasmExecutionError::LoadContractModule)
+    } else {
+        Ok(contract_bytecode)
+    }
+}
+
 impl WasmContractModule {
-    /// Creates a new [`WasmContractModule`] using the WebAssembly module with the provided bytecodes.
+    /// Creates a new [`WasmContractModule`] using the WebAssembly module with the provided bytecode.
     pub async fn new(
         contract_bytecode: Bytecode,
         runtime: WasmRuntime,
     ) -> Result<Self, WasmExecutionError> {
-        let contract_bytecode = if runtime.needs_sanitizer() {
-            // Ensure bytecode normalization whenever wasmer and wasmtime are possibly
-            // compared.
-            sanitize(contract_bytecode).map_err(WasmExecutionError::LoadContractModule)?
-        } else {
-            contract_bytecode
-        };
         match runtime {
             #[cfg(with_wasmer)]
             WasmRuntime::Wasmer | WasmRuntime::WasmerWithSanitizer => {
-                Self::from_wasmer(contract_bytecode).await
+                Self::from_wasmer(get_wasm_contract(contract_bytecode, runtime)?).await
             }
             #[cfg(with_wasmtime)]
             WasmRuntime::Wasmtime | WasmRuntime::WasmtimeWithSanitizer => {
-                Self::from_wasmtime(contract_bytecode).await
+                Self::from_wasmtime(get_wasm_contract(contract_bytecode, runtime)?).await
             }
         }
     }
 
-    /// Creates a new [`WasmContractModule`] using the WebAssembly module in `bytecode_file`.
+    /// Creates a new [`WasmContractModule`] using the WebAssembly module in `contract_bytecode_file`.
     #[cfg(with_fs)]
     pub async fn from_file(
         contract_bytecode_file: impl AsRef<std::path::Path>,
@@ -150,7 +135,7 @@ pub enum WasmServiceModule {
 }
 
 impl WasmServiceModule {
-    /// Creates a new [`WasmServiceModule`] using the WebAssembly module with the provided bytecodes.
+    /// Creates a new [`WasmServiceModule`] using the WebAssembly module with the provided bytecode.
     pub async fn new(
         service_bytecode: Bytecode,
         runtime: WasmRuntime,
@@ -167,7 +152,7 @@ impl WasmServiceModule {
         }
     }
 
-    /// Creates a new [`WasmServiceModule`] using the WebAssembly module in `bytecode_file`.
+    /// Creates a new [`WasmServiceModule`] using the WebAssembly module in `service_bytecode_file`.
     #[cfg(with_fs)]
     pub async fn from_file(
         service_bytecode_file: impl AsRef<std::path::Path>,
@@ -269,7 +254,6 @@ const _: () = {
 };
 
 /// Errors that can occur when executing a user application in a WebAssembly module.
-#[cfg(any(with_wasmer, with_wasmtime))]
 #[derive(Debug, Error)]
 pub enum WasmExecutionError {
     #[error("Failed to load contract Wasm module: {_0}")]

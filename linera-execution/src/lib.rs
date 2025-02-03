@@ -14,6 +14,8 @@ mod execution_state_actor;
 mod graphql;
 mod policy;
 mod resources;
+#[cfg(with_revm)]
+pub mod revm;
 mod runtime;
 pub mod system;
 #[cfg(with_testing)]
@@ -51,9 +53,17 @@ use linera_views::{batch::Batch, views::ViewError};
 use serde::{Deserialize, Serialize};
 use system::OpenChainConfig;
 use thiserror::Error;
+#[cfg(all(with_metrics, any(with_wasm_runtime, with_revm)))]
+use {
+    linera_base::prometheus_util::{bucket_latencies, register_histogram_vec},
+    prometheus::HistogramVec,
+    std::sync::LazyLock,
+};
 
 #[cfg(with_testing)]
 pub use crate::applications::ApplicationRegistry;
+#[cfg(with_revm)]
+use crate::revm::EvmExecutionError;
 use crate::runtime::ContractSyncRuntime;
 #[cfg(all(with_testing, with_wasm_runtime))]
 pub use crate::wasm::test as wasm_test;
@@ -78,6 +88,26 @@ pub use crate::{
     },
     transaction_tracker::{TransactionOutcome, TransactionTracker},
 };
+
+#[cfg(all(with_metrics, any(with_wasm_runtime, with_revm)))]
+static CONTRACT_INSTANTIATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
+    register_histogram_vec(
+        "contract_instantiation_latency",
+        "Contract instantiation latency",
+        &[],
+        bucket_latencies(1.0),
+    )
+});
+
+#[cfg(all(with_metrics, any(with_wasm_runtime, with_revm)))]
+static SERVICE_INSTANTIATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
+    register_histogram_vec(
+        "service_instantiation_latency",
+        "Service instantiation latency",
+        &[],
+        bucket_latencies(1.0),
+    )
+});
 
 /// The maximum length of an event key in bytes.
 const MAX_EVENT_KEY_LEN: usize = 64;
@@ -197,9 +227,12 @@ pub enum ExecutionError {
     SystemError(SystemExecutionError),
     #[error("User application reported an error: {0}")]
     UserError(String),
-    #[cfg(any(with_wasmer, with_wasmtime))]
+    #[cfg(with_wasm_runtime)]
     #[error(transparent)]
     WasmError(#[from] WasmExecutionError),
+    #[cfg(with_revm)]
+    #[error(transparent)]
+    EvmError(#[from] EvmExecutionError),
     #[error(transparent)]
     DecompressionError(#[from] DecompressionError),
     #[error("The given promise is invalid or was polled once already")]
@@ -1317,6 +1350,15 @@ pub enum WasmRuntime {
     WasmerWithSanitizer,
     #[cfg(with_wasmtime)]
     WasmtimeWithSanitizer,
+}
+
+#[derive(Clone, Copy, Display)]
+#[cfg_attr(with_revm, derive(Debug, Default))]
+pub enum EvmRuntime {
+    #[cfg(with_revm)]
+    #[default]
+    #[display("revm")]
+    Revm,
 }
 
 /// Trait used to select a default `WasmRuntime`, if one is available.
