@@ -41,7 +41,7 @@ use crate::{
 const MAX_KEY_SIZE: usize = 1000000;
 
 // The shared store client.
-// * Interior mutability is required for client because
+// * Interior mutability is required for the client because
 // accessing requires mutability while the KeyValueStore
 // does not allow it.
 // * The semaphore and max_stream_queries work as other
