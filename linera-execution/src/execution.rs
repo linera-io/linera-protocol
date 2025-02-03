@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet},
     mem, vec,
 };
 
@@ -289,7 +289,6 @@ where
                     .registry
                     .describe_applications_with_dependencies(
                         applications_to_describe.into_iter().collect(),
-                        &HashMap::new(),
                     )
                     .await?;
 

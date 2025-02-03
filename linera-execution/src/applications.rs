@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use linera_base::{data_types::UserApplicationDescription, identifiers::UserApplicationId};
 use linera_views::{
@@ -104,7 +104,6 @@ where
     pub async fn find_dependencies(
         &self,
         mut stack: Vec<UserApplicationId>,
-        registered_apps: &HashMap<UserApplicationId, UserApplicationDescription>,
     ) -> Result<Vec<UserApplicationId>, SystemExecutionError> {
         // What we return at the end.
         let mut result = Vec::new();
@@ -129,11 +128,7 @@ where
             seen.insert(id);
             // 2. Schedule all the (yet unseen) dependencies, then this entry for a second visit.
             stack.push(id);
-            let app = if let Some(app) = registered_apps.get(&id) {
-                app.clone()
-            } else {
-                self.describe_application(id).await?
-            };
+            let app = self.describe_application(id).await?;
             for child in app.required_application_ids.iter().rev() {
                 if !seen.contains(child) {
                     stack.push(*child);
@@ -147,16 +142,11 @@ where
     pub async fn describe_applications_with_dependencies(
         &self,
         ids: Vec<UserApplicationId>,
-        extra_registered_apps: &HashMap<UserApplicationId, UserApplicationDescription>,
     ) -> Result<Vec<UserApplicationDescription>, SystemExecutionError> {
-        let ids_with_deps = self.find_dependencies(ids, extra_registered_apps).await?;
+        let ids_with_deps = self.find_dependencies(ids).await?;
         let mut result = Vec::new();
         for id in ids_with_deps {
-            let description = if let Some(description) = extra_registered_apps.get(&id) {
-                description.clone()
-            } else {
-                self.describe_application(id).await?
-            };
+            let description = self.describe_application(id).await?;
             result.push(description);
         }
         Ok(result)

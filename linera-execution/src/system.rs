@@ -880,10 +880,7 @@ where
             RequestApplication(application_id) => {
                 let applications = self
                     .registry
-                    .describe_applications_with_dependencies(
-                        vec![application_id],
-                        &Default::default(),
-                    )
+                    .describe_applications_with_dependencies(vec![application_id])
                     .await?;
                 let message = RawOutgoingMessage {
                     destination: Destination::Recipient(context.message_id.chain_id),
