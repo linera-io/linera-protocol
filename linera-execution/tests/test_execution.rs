@@ -1339,23 +1339,23 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
 
     // The registration message for the first destination chain
     let first_registration_message = RawOutgoingMessage {
-        destination: Destination::from(second_destination_chain),
-        authenticated: false,
-        grant: Amount::ZERO,
-        kind: MessageKind::Simple,
-        message: SystemMessage::RegisterApplications {
-            applications: vec![sending_target_description.clone()],
-        },
-    };
-
-    // The registration message for the second destination chain
-    let second_registration_message = RawOutgoingMessage {
         destination: Destination::from(first_destination_chain),
         authenticated: false,
         grant: Amount::ZERO,
         kind: MessageKind::Simple,
         message: SystemMessage::RegisterApplications {
-            applications: vec![sending_target_description, caller_description],
+            applications: vec![sending_target_description.clone(), caller_description],
+        },
+    };
+
+    // The registration message for the second destination chain
+    let second_registration_message = RawOutgoingMessage {
+        destination: Destination::from(second_destination_chain),
+        authenticated: false,
+        grant: Amount::ZERO,
+        kind: MessageKind::Simple,
+        message: SystemMessage::RegisterApplications {
+            applications: vec![sending_target_description],
         },
     };
 

@@ -1029,6 +1029,14 @@ mod tests {
             "aee928d4bf3880353b4a3cd9b6f88e6cc6e5ed050860abae439e7782e9b2dfe8"
         );
         assert_eq!(
+            &ChainId::root(1).to_string(),
+            "a3edc33d8e951a1139333be8a4b56646b5598a8f51216e86592d881808972b07"
+        );
+        assert_eq!(
+            &ChainId::root(2).to_string(),
+            "678e9f66507069d38955b593e93ddf192a23a4087225fd307eadad44e5544ae3"
+        );
+        assert_eq!(
             &ChainId::root(9).to_string(),
             "63620ea465af9e9e0e8e4dd8d21593cc3a719feac5f096df8440f90738f4dbd8"
         );

@@ -174,7 +174,7 @@ impl Serialize for CryptoHash {
         if serializer.is_human_readable() {
             serializer.serialize_str(&self.to_string())
         } else {
-            serializer.serialize_newtype_struct("CryptoHash", &self.0 .0)
+            serializer.serialize_newtype_struct("CryptoHash", &self.as_bytes().0)
         }
     }
 }
@@ -401,7 +401,7 @@ where
     }
 }
 
-// Temporary struct to extend `Keccak256` with `io::Write`.
+/// Temporary struct to extend `Keccak256` with `io::Write`.
 struct Keccak256Ext(Keccak256);
 
 impl io::Write for Keccak256Ext {
