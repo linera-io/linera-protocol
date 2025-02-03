@@ -149,6 +149,9 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 * `--grace-period <GRACE_PERIOD>` — An additional delay, after reaching a quorum, to wait for additional validator signatures, as a fraction of time taken to reach quorum
 
   Default value: `0.2`
+* `--blob-download-timeout-ms <BLOB_DOWNLOAD_TIMEOUT>` — The delay when downloading a blob, after which we try a second validator, in milliseconds
+
+  Default value: `1000`
 
 
 

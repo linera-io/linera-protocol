@@ -161,6 +161,14 @@ pub struct ClientOptions {
     /// as a fraction of time taken to reach quorum.
     #[arg(long, default_value_t = DEFAULT_GRACE_PERIOD)]
     pub grace_period: f64,
+
+    /// The delay when downloading a blob, after which we try a second validator, in milliseconds.
+    #[arg(
+        long = "blob-download-timeout-ms",
+        default_value = "1000",
+        value_parser = util::parse_millis
+    )]
+    pub blob_download_timeout: Duration,
 }
 
 impl ClientOptions {
