@@ -5,7 +5,14 @@
 #![recursion_limit = "256"]
 #![deny(clippy::large_futures)]
 
-use std::{borrow::Cow, collections::HashMap, env, path::PathBuf, sync::Arc, time::Instant};
+use std::{
+    borrow::Cow,
+    collections::HashMap,
+    env,
+    path::PathBuf,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use anyhow::{anyhow, bail, ensure, Context};
 use async_trait::async_trait;
@@ -1167,6 +1174,7 @@ impl Job {
             false,
             vec![message_id.chain_id, chain_id],
             "Temporary client for fetching the parent chain",
+            Duration::from_secs(1),
         );
 
         // Take the latest committee we know of.

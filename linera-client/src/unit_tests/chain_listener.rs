@@ -3,7 +3,7 @@
 
 #![allow(clippy::large_futures)]
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use futures::{lock::Mutex, FutureExt as _};
@@ -162,6 +162,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
             false,
             [chain_id0],
             format!("Client node for {:.8}", chain_id0),
+            Duration::from_secs(1),
         )),
     };
     let key_pair = KeyPair::generate_from(&mut rng);

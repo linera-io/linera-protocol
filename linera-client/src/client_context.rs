@@ -169,6 +169,7 @@ where
             options.long_lived_services,
             chain_ids,
             name,
+            options.blob_download_timeout,
         );
 
         ClientContext {
