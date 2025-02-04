@@ -2823,13 +2823,6 @@ where
         self.publish_data_blobs(vec![bytes]).await
     }
 
-    /// Adds pending blobs
-    pub async fn add_pending_blobs(&self, pending_blobs: impl IntoIterator<Item = Blob>) {
-        for blob in pending_blobs {
-            self.state_mut().insert_pending_blob(blob);
-        }
-    }
-
     /// Creates an application by instantiating some bytecode.
     #[instrument(
         level = "trace",
