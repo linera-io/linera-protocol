@@ -562,7 +562,7 @@ where
                 .take(num_new_chains)
                 .collect();
             let certificate = chain_client
-                .execute_without_prepare(operations)
+                .execute_without_prepare(operations, Vec::new())
                 .await?
                 .expect("should execute block with OpenChain operations");
             let executed_block = certificate
@@ -634,7 +634,7 @@ where
         // Put at most 1000 fungible token operations in each block.
         for operations in operations.chunks(1000) {
             chain_client
-                .execute_without_prepare(operations.to_vec())
+                .execute_without_prepare(operations.to_vec(), Vec::new())
                 .await?
                 .expect("should execute block with OpenChain operations");
         }
