@@ -146,6 +146,14 @@ pub struct ClientOptions {
     /// an empty string.
     #[arg(long, value_parser = util::parse_chain_set)]
     pub restrict_chain_ids_to: Option<HashSet<ChainId>>,
+
+    /// The delay when downloading a blob, after which we try a second validator, in milliseconds.
+    #[arg(
+        long = "blob-download-timeout-ms",
+        default_value = "1000",
+        value_parser = util::parse_millis
+    )]
+    pub blob_download_timeout: Duration,
 }
 
 impl ClientOptions {

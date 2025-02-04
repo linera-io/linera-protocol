@@ -9,6 +9,7 @@ use std::{
     num::NonZeroUsize,
     ops::{Deref, DerefMut},
     sync::{Arc, RwLock},
+    time::Duration,
 };
 
 use chain_state::ChainState;
@@ -195,11 +196,14 @@ where
     storage: Storage,
     /// Chain state for the managed chains.
     chains: DashMap<ChainId, ChainState>,
+    /// The delay when downloading a blob, after which we try a second validator.
+    blob_download_timeout: Duration,
 }
 
 impl<P, S: Storage + Clone> Client<P, S> {
     /// Creates a new `Client` with a new cache and notifiers.
     #[instrument(level = "trace", skip_all)]
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         validator_node_provider: P,
         storage: S,
@@ -208,6 +212,7 @@ impl<P, S: Storage + Clone> Client<P, S> {
         long_lived_services: bool,
         tracked_chains: impl IntoIterator<Item = ChainId>,
         name: impl Into<String>,
+        blob_download_timeout: Duration,
     ) -> Self {
         let tracked_chains = Arc::new(RwLock::new(tracked_chains.into_iter().collect()));
         let state = WorkerState::new_for_client(
@@ -231,6 +236,7 @@ impl<P, S: Storage + Clone> Client<P, S> {
             tracked_chains,
             notifier: Arc::new(ChannelNotifier::default()),
             storage,
+            blob_download_timeout,
         }
     }
 
@@ -290,6 +296,7 @@ impl<P, S: Storage + Clone> Client<P, S> {
                 max_pending_message_bundles: self.max_pending_message_bundles,
                 message_policy: self.message_policy.clone(),
                 cross_chain_message_delivery: self.cross_chain_message_delivery,
+                blob_download_timeout: self.blob_download_timeout,
             },
         }
     }
@@ -492,6 +499,8 @@ pub struct ChainClientOptions {
     pub message_policy: MessagePolicy,
     /// Whether to block on cross-chain message delivery.
     pub cross_chain_message_delivery: CrossChainMessageDelivery,
+    /// The delay when downloading a blob, after which we try a second validator.
+    pub blob_download_timeout: Duration,
 }
 
 /// Client to operate a chain by interacting with validators and the given local storage
@@ -1244,9 +1253,13 @@ where
         if let Err(err) = self.process_certificate(certificate.clone(), vec![]).await {
             match &err {
                 LocalNodeError::WorkerError(WorkerError::BlobsNotFound(blob_ids)) => {
-                    let blobs = RemoteNode::download_blobs(blob_ids, &nodes)
-                        .await
-                        .ok_or(err)?;
+                    let blobs = RemoteNode::download_blobs(
+                        blob_ids,
+                        &nodes,
+                        self.client.blob_download_timeout,
+                    )
+                    .await
+                    .ok_or(err)?;
                     self.process_certificate(certificate.clone(), blobs).await?;
                 }
                 _ => {

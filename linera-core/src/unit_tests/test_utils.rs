@@ -5,6 +5,7 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet},
     num::NonZeroUsize,
     sync::Arc,
+    time::Duration,
     vec,
 };
 
@@ -807,6 +808,7 @@ where
             false,
             [chain_id],
             format!("Client node for {:.8}", chain_id),
+            Duration::from_secs(1),
         ));
         Ok(builder.create_chain_client(
             chain_id,
