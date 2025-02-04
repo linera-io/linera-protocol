@@ -689,7 +689,7 @@ impl<P: 'static, S: Storage> ChainClient<P, S> {
 
     /// Gets a guarded reference to the set of pending blobs.
     #[instrument(level = "trace", skip(self))]
-    pub fn pending_blobs(&self) -> ChainGuardMapped<BTreeMap<BlobId, Blob>> {
+    pub fn pending_blobs(&self) -> ChainGuardMapped<Vec<Blob>> {
         Unsend::new(self.state().inner.map(|state| state.pending_blobs()))
     }
 }
@@ -1042,25 +1042,16 @@ where
     }
 
     /// Submits a block proposal to the validators.
-    #[instrument(level = "trace", skip(committee, proposal, blobs, value))]
+    #[instrument(level = "trace", skip(committee, proposal, value))]
     async fn submit_block_proposal<T: ProcessableCertificate>(
         &self,
         committee: &Committee,
         proposal: Box<BlockProposal>,
-        blobs: impl IntoIterator<Item = Blob>,
         value: Hashed<T>,
     ) -> Result<GenericCertificate<T>, ChainClientError> {
-        // Remember what we are trying to do before sending the proposal to the validators.
-        self.state_mut()
-            .set_pending_proposal(proposal.content.block.clone(), blobs);
-        let required_blob_ids = value.inner().required_blob_ids();
-        let published_blobs = self
-            .read_local_blobs(proposal.content.block.published_blob_ids())
-            .await?;
         let submit_action = CommunicateAction::SubmitBlock {
             proposal,
-            blob_ids: required_blob_ids,
-            published_blobs,
+            blob_ids: value.inner().required_blob_ids().into_iter().collect(),
         };
         let certificate = self
             .communicate_chain_action(committee, submit_action, value)
@@ -1994,49 +1985,6 @@ where
         }
     }
 
-    /// Tries to read blobs from either the pending blobs or the local node's cache, or
-    /// storage
-    #[instrument(level = "trace")]
-    async fn read_local_blobs(
-        &self,
-        blob_ids: impl IntoIterator<Item = BlobId> + std::fmt::Debug,
-    ) -> Result<Vec<Blob>, LocalNodeError> {
-        let mut blobs = Vec::new();
-        for blob_id in blob_ids {
-            let maybe_blob = self.pending_blobs().get(&blob_id).cloned();
-            if let Some(blob) = maybe_blob {
-                blobs.push(blob);
-                continue;
-            }
-
-            let maybe_blob = {
-                let chain_state_view = self.chain_state_view().await?;
-                chain_state_view.manager.locking_blobs.get(&blob_id).await?
-            };
-
-            if let Some(blob) = maybe_blob {
-                blobs.push(blob);
-                continue;
-            }
-
-            if let Some(blob) = self
-                .client
-                .local_node
-                .read_blobs_from_storage(&[blob_id])
-                .await?
-            {
-                blobs.extend(blob);
-                continue;
-            }
-
-            return Err(LocalNodeError::CannotReadLocalBlob {
-                chain_id: self.chain_id,
-                blob_id,
-            });
-        }
-        Ok(blobs)
-    }
-
     /// Executes a list of operations.
     #[instrument(level = "trace", skip(operations, blobs))]
     pub async fn execute_operations(
@@ -2523,54 +2471,54 @@ where
             .already_handled_proposal(round, &executed_block.block);
         let key_pair = self.key_pair().await?;
         // Create the final block proposal.
-        let proposal = if let Some(locking) = info.manager.requested_locking {
-            Box::new(match *locking {
+        let (proposal, is_locking) = if let Some(locking) = info.manager.requested_locking {
+            let proposal = Box::new(match *locking {
                 LockingBlock::Regular(cert) => BlockProposal::new_retry(round, cert, &key_pair),
                 LockingBlock::Fast(proposal) => {
                     BlockProposal::new_initial(round, proposal.content.block, &key_pair)
                 }
-            })
+            });
+            (proposal, true)
         } else {
             let block = executed_block.block.clone();
-            Box::new(BlockProposal::new_initial(round, block, &key_pair))
+            let proposal = Box::new(BlockProposal::new_initial(round, block, &key_pair));
+            (proposal, false)
         };
         if !already_handled_locally {
+            let local_node = &self.client.local_node;
             // Check the final block proposal. This will be cheaper after #1401.
-            if let Err(err) = self
-                .client
-                .local_node
-                .handle_block_proposal(*proposal.clone())
-                .await
-            {
-                match &err {
+            if let Err(err) = local_node.handle_block_proposal(*proposal.clone()).await {
+                match err {
                     LocalNodeError::BlobsNotFound(blob_ids) => {
-                        let blobs = self.read_local_blobs(blob_ids.iter().copied()).await?;
-                        self.client
-                            .local_node
+                        let blobs = if is_locking {
+                            local_node
+                                .get_locking_blobs(&blob_ids, self.chain_id)
+                                .await?
+                                .ok_or_else(|| {
+                                    ChainClientError::InternalError("Missing local locking blobs")
+                                })?
+                        } else {
+                            self.pending_blobs().iter().cloned().collect()
+                        };
+                        local_node
                             .handle_pending_blobs(self.chain_id, blobs)
                             .await?;
-                        self.client
-                            .local_node
-                            .handle_block_proposal(*proposal.clone())
-                            .await?;
+                        local_node.handle_block_proposal(*proposal.clone()).await?;
                     }
-                    _ => return Err(err.into()),
+                    err => return Err(err.into()),
                 }
             }
         }
         let committee = self.local_committee().await?;
         // Send the query to validators.
-        let blobs = self
-            .read_local_blobs(proposal.content.block.published_blob_ids())
-            .await?;
         let certificate = if round.is_fast() {
             let hashed_value = Hashed::new(ConfirmedBlock::new(executed_block));
-            self.submit_block_proposal(&committee, proposal, blobs, hashed_value)
+            self.submit_block_proposal(&committee, proposal, hashed_value)
                 .await?
         } else {
             let hashed_value = Hashed::new(ValidatedBlock::new(executed_block));
             let certificate = self
-                .submit_block_proposal(&committee, proposal, blobs, hashed_value.clone())
+                .submit_block_proposal(&committee, proposal, hashed_value.clone())
                 .await?;
             self.finalize_block(&committee, certificate).await?
         };

@@ -11,7 +11,7 @@ use linera_base::{
     crypto::{CryptoHash, KeyPair, PublicKey},
     data_types::{Blob, BlockHeight, Timestamp},
     ensure,
-    identifiers::{BlobId, Owner},
+    identifiers::Owner,
     ownership::ChainOwnership,
 };
 use linera_chain::data_types::ProposedBlock;
@@ -37,9 +37,9 @@ pub struct ChainClientState {
     /// Known key pairs from present and past identities.
     known_key_pairs: BTreeMap<Owner, KeyPair>,
 
-    /// This contains blobs belonging to our `pending_block` that may not even have
+    /// This contains blobs published by our `pending_block` that may not even have
     /// been processed by (i.e. been proposed to) our own local chain manager yet.
-    pending_blobs: BTreeMap<BlobId, Blob>,
+    pending_blobs: Vec<Blob>,
 
     /// A mutex that is held whilst we are performing operations that should not be
     /// attempted by multiple clients at the same time.
@@ -65,7 +65,7 @@ impl ChainClientState {
             timestamp,
             next_block_height,
             pending_proposal: None,
-            pending_blobs: BTreeMap::new(),
+            pending_blobs: Vec::new(),
             client_mutex: Arc::default(),
         };
         if let Some(block) = pending_block {
@@ -96,10 +96,13 @@ impl ChainClientState {
         blobs: impl IntoIterator<Item = Blob>,
     ) {
         if block.height == self.next_block_height {
-            self.pending_blobs = blobs.into_iter().map(|blob| (blob.id(), blob)).collect();
+            self.pending_blobs = blobs.into_iter().collect();
             assert_eq!(
                 block.published_blob_ids(),
-                self.pending_blobs.keys().copied().collect::<BTreeSet<_>>()
+                self.pending_blobs
+                    .iter()
+                    .map(Blob::id)
+                    .collect::<BTreeSet<_>>()
             );
             self.pending_proposal = Some(block);
         } else {
@@ -111,7 +114,7 @@ impl ChainClientState {
         }
     }
 
-    pub fn pending_blobs(&self) -> &BTreeMap<BlobId, Blob> {
+    pub fn pending_blobs(&self) -> &Vec<Blob> {
         &self.pending_blobs
     }
 

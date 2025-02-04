@@ -179,7 +179,7 @@ impl Wallet {
                 next_block_height: state.next_block_height(),
                 timestamp: state.timestamp(),
                 pending_block: state.pending_proposal().clone(),
-                pending_blobs: state.pending_blobs().values().cloned().collect(),
+                pending_blobs: state.pending_blobs().clone(),
             },
         );
     }

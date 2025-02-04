@@ -206,6 +206,24 @@ where
         Ok(Some(blobs))
     }
 
+    /// Looks for the specified blobs in the local chain manager's pending blobs.
+    /// Returns `Ok(None)` if any of the blobs is not found.
+    pub async fn get_pending_blobs(
+        &self,
+        blob_ids: &[BlobId],
+        chain_id: ChainId,
+    ) -> Result<Option<Vec<Blob>>, LocalNodeError> {
+        let chain = self.chain_state_view(chain_id).await?;
+        let mut blobs = Vec::new();
+        for blob_id in blob_ids {
+            match chain.manager.pending_blob(blob_id).await? {
+                None => return Ok(None),
+                Some(blob) => blobs.push(blob),
+            }
+        }
+        Ok(Some(blobs))
+    }
+
     /// Writes the given blobs to storage if there is an appropriate blob state.
     pub async fn store_blobs(&self, blobs: &[Blob]) -> Result<(), LocalNodeError> {
         let storage = self.storage_client();
