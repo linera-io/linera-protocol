@@ -44,14 +44,16 @@ where
         Ok(self.pending_blobs.get(blob_id).await?.flatten())
     }
 
-    pub async fn maybe_insert(&mut self, blob: &Blob) -> Result<(), ViewError> {
+    /// Inserts the blob. Returns whether the blob was required by the pending block.
+    pub async fn maybe_insert(&mut self, blob: &Blob) -> Result<bool, ViewError> {
         let blob_id = blob.id();
-        if let Some(maybe_blob) = self.pending_blobs.get_mut(&blob_id).await? {
-            if maybe_blob.is_none() {
-                *maybe_blob = Some(blob.clone());
-            }
+        let Some(maybe_blob) = self.pending_blobs.get_mut(&blob_id).await? else {
+            return Ok(false);
+        };
+        if maybe_blob.is_none() {
+            *maybe_blob = Some(blob.clone());
         }
-        Ok(())
+        Ok(true)
     }
 
     pub async fn update(
