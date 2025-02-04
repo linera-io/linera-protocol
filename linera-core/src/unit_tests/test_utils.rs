@@ -915,7 +915,7 @@ where
             Timestamp::from(0),
             block_height,
             None,
-            BTreeMap::new(),
+            vec![],
         ))
     }
 

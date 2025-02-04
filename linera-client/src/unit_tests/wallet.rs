@@ -1,8 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
-
 use anyhow::anyhow;
 use linera_base::{
     crypto::KeyPair,
@@ -45,14 +43,12 @@ async fn test_save_wallet_with_pending_blobs() -> anyhow::Result<()> {
         WalletState::create_from_file(&wallet_path, Wallet::new(genesis_config, Some(37)))?;
     let mut context = ClientContext::new_test_client_context(storage, wallet);
     let blob = Blob::new_data(b"blob".to_vec());
-    let mut pending_blobs = BTreeMap::new();
-    pending_blobs.insert(blob.id(), blob);
     context
         .update_wallet_for_new_chain_with_pending_blobs(
             chain_id,
             Some(key_pair),
             clock.current_time(),
-            pending_blobs,
+            vec![blob],
         )
         .await?;
     context.save_wallet().await?;

@@ -1014,7 +1014,10 @@ where
                 chain_id: chain_id.to_string(),
             })?;
         let hash = loop {
-            let timeout = match client.execute_operations(operations.clone()).await? {
+            let timeout = match client
+                .execute_operations(operations.clone(), vec![])
+                .await?
+            {
                 ClientOutcome::Committed(certificate) => break certificate.hash(),
                 ClientOutcome::WaitForTimeout(timeout) => timeout,
             };

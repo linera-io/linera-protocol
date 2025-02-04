@@ -256,7 +256,7 @@ impl<P, S: Storage + Clone> Client<P, S> {
         timestamp: Timestamp,
         next_block_height: BlockHeight,
         pending_block: Option<ProposedBlock>,
-        pending_blobs: BTreeMap<BlobId, Blob>,
+        pending_blobs: impl IntoIterator<Item = Blob>,
     ) -> ChainClient<P, S> {
         // If the entry already exists we assume that the entry is more up to date than
         // the arguments: If they were read from the wallet file, they might be stale.
@@ -1042,16 +1042,17 @@ where
     }
 
     /// Submits a block proposal to the validators.
-    #[instrument(level = "trace", skip(committee, proposal, value))]
+    #[instrument(level = "trace", skip(committee, proposal, blobs, value))]
     async fn submit_block_proposal<T: ProcessableCertificate>(
         &self,
         committee: &Committee,
         proposal: Box<BlockProposal>,
+        blobs: impl IntoIterator<Item = Blob>,
         value: Hashed<T>,
     ) -> Result<GenericCertificate<T>, ChainClientError> {
         // Remember what we are trying to do before sending the proposal to the validators.
         self.state_mut()
-            .set_pending_proposal(proposal.content.block.clone());
+            .set_pending_proposal(proposal.content.block.clone(), blobs);
         let required_blob_ids = value.inner().required_blob_ids();
         let published_blobs = self
             .read_local_blobs(proposal.content.block.published_blob_ids())
@@ -2037,14 +2038,15 @@ where
     }
 
     /// Executes a list of operations.
-    #[instrument(level = "trace", skip(operations))]
+    #[instrument(level = "trace", skip(operations, blobs))]
     pub async fn execute_operations(
         &self,
         operations: Vec<Operation>,
+        blobs: Vec<Blob>,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         loop {
             // TODO(#2066): Remove boxing once the call-stack is shallower
-            match Box::pin(self.execute_block(operations.clone())).await? {
+            match Box::pin(self.execute_block(operations.clone(), blobs.clone())).await? {
                 ExecuteBlockOutcome::Executed(certificate) => {
                     return Ok(ClientOutcome::Committed(certificate));
                 }
@@ -2067,16 +2069,17 @@ where
         &self,
         operation: Operation,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
-        self.execute_operations(vec![operation]).await
+        self.execute_operations(vec![operation], vec![]).await
     }
 
     /// Executes a new block.
     ///
     /// This must be preceded by a call to `prepare_chain()`.
-    #[instrument(level = "trace", skip(operations))]
+    #[instrument(level = "trace", skip(operations, blobs))]
     async fn execute_block(
         &self,
         operations: Vec<Operation>,
+        blobs: impl IntoIterator<Item = Blob>,
     ) -> Result<ExecuteBlockOutcome, ChainClientError> {
         #[cfg(with_metrics)]
         let _latency = metrics::EXECUTE_BLOCK_LATENCY.measure_latency();
@@ -2096,7 +2099,7 @@ where
         let incoming_bundles = self.pending_message_bundles().await?;
         let identity = self.identity().await?;
         let confirmed_value = self
-            .new_pending_block(incoming_bundles, operations, identity)
+            .new_pending_block(incoming_bundles, operations, blobs, identity)
             .await?;
 
         match self.process_pending_block_without_prepare().await? {
@@ -2121,11 +2124,12 @@ where
     /// Creates a new pending block and handles the proposal in the local node.
     /// Next time `process_pending_block_without_prepare` is called, this block will be proposed
     /// to the validators.
-    #[instrument(level = "trace", skip(incoming_bundles, operations))]
+    #[instrument(level = "trace", skip(incoming_bundles, operations, blobs))]
     async fn new_pending_block(
         &self,
         incoming_bundles: Vec<IncomingBundle>,
         operations: Vec<Operation>,
+        blobs: impl IntoIterator<Item = Blob>,
         identity: Owner,
     ) -> Result<Hashed<ConfirmedBlock>, ChainClientError> {
         let (previous_block_hash, height, timestamp) = {
@@ -2172,7 +2176,7 @@ where
         let committee = self.local_committee().await?;
         let max_size = committee.policy().maximum_block_proposal_size;
         block.check_proposal_size(max_size)?;
-        self.state_mut().set_pending_proposal(block.clone());
+        self.state_mut().set_pending_proposal(block.clone(), blobs);
         Ok(Hashed::new(ConfirmedBlock::new(executed_block)))
     }
 
@@ -2556,14 +2560,17 @@ where
         }
         let committee = self.local_committee().await?;
         // Send the query to validators.
+        let blobs = self
+            .read_local_blobs(proposal.content.block.published_blob_ids())
+            .await?;
         let certificate = if round.is_fast() {
             let hashed_value = Hashed::new(ConfirmedBlock::new(executed_block));
-            self.submit_block_proposal(&committee, proposal, hashed_value)
+            self.submit_block_proposal(&committee, proposal, blobs, hashed_value)
                 .await?
         } else {
             let hashed_value = Hashed::new(ValidatedBlock::new(executed_block));
             let certificate = self
-                .submit_block_proposal(&committee, proposal, hashed_value.clone())
+                .submit_block_proposal(&committee, proposal, blobs, hashed_value.clone())
                 .await?;
             self.finalize_block(&committee, certificate).await?
         };
@@ -2745,7 +2752,7 @@ where
                 open_multi_leader_rounds: ownership.open_multi_leader_rounds,
                 timeout_config: ownership.timeout_config,
             })];
-            match self.execute_block(operations).await? {
+            match self.execute_block(operations, vec![]).await? {
                 ExecuteBlockOutcome::Executed(certificate) => {
                     return Ok(ClientOutcome::Committed(certificate));
                 }
@@ -2809,7 +2816,7 @@ where
                 application_permissions: application_permissions.clone(),
             };
             let operation = Operation::System(SystemOperation::OpenChain(config));
-            let certificate = match self.execute_block(vec![operation]).await? {
+            let certificate = match self.execute_block(vec![operation], vec![]).await? {
                 ExecuteBlockOutcome::Executed(certificate) => certificate,
                 ExecuteBlockOutcome::Conflict(_) => continue,
                 ExecuteBlockOutcome::WaitForTimeout(timeout) => {
@@ -2872,10 +2879,12 @@ where
         service_blob: Blob,
         bytecode_id: BytecodeId,
     ) -> Result<ClientOutcome<(BytecodeId, ConfirmedBlockCertificate)>, ChainClientError> {
-        self.add_pending_blobs([contract_blob, service_blob]).await;
-        self.execute_operation(Operation::System(SystemOperation::PublishBytecode {
-            bytecode_id,
-        }))
+        self.execute_operations(
+            vec![Operation::System(SystemOperation::PublishBytecode {
+                bytecode_id,
+            })],
+            vec![contract_blob, service_blob],
+        )
         .await?
         .try_map(|certificate| Ok((bytecode_id, certificate)))
     }
@@ -2895,8 +2904,8 @@ where
                 })
             })
             .collect();
-        self.add_pending_blobs(blobs).await;
-        self.execute_operations(publish_blob_operations).await
+        self.execute_operations(publish_blob_operations, blobs.collect())
+            .await
     }
 
     /// Publishes some data blob.
@@ -2906,13 +2915,6 @@ where
         bytes: Vec<u8>,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         self.publish_data_blobs(vec![bytes]).await
-    }
-
-    /// Adds pending blobs
-    pub async fn add_pending_blobs(&self, pending_blobs: impl IntoIterator<Item = Blob>) {
-        for blob in pending_blobs {
-            self.state_mut().insert_pending_blob(blob);
-        }
     }
 
     /// Creates an application by instantiating some bytecode.
@@ -2994,12 +2996,15 @@ where
         loop {
             let epoch = self.epoch().await?;
             match self
-                .execute_block(vec![Operation::System(SystemOperation::Admin(
-                    AdminOperation::CreateCommittee {
-                        epoch: epoch.try_add_one()?,
-                        committee: committee.clone(),
-                    },
-                ))])
+                .execute_block(
+                    vec![Operation::System(SystemOperation::Admin(
+                        AdminOperation::CreateCommittee {
+                            epoch: epoch.try_add_one()?,
+                            committee: committee.clone(),
+                        },
+                    ))],
+                    vec![],
+                )
                 .await?
             {
                 ExecuteBlockOutcome::Executed(certificate) => {
@@ -3044,7 +3049,7 @@ where
             if incoming_bundles.is_empty() {
                 return Ok((certificates, None));
             }
-            match self.execute_block(vec![]).await {
+            match self.execute_block(vec![], vec![]).await {
                 Ok(ExecuteBlockOutcome::Executed(certificate))
                 | Ok(ExecuteBlockOutcome::Conflict(certificate)) => certificates.push(certificate),
                 Ok(ExecuteBlockOutcome::WaitForTimeout(timeout)) => {
@@ -3104,7 +3109,7 @@ where
                 }
             })
             .collect();
-        self.execute_operations(operations).await
+        self.execute_operations(operations, vec![]).await
     }
 
     /// Sends money to a chain.

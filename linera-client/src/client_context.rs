@@ -3,17 +3,14 @@
 
 #[cfg(with_testing)]
 use std::num::NonZeroUsize;
-use std::{
-    collections::{BTreeMap, HashSet},
-    sync::Arc,
-};
+use std::{collections::HashSet, sync::Arc};
 
 use async_trait::async_trait;
 use futures::Future;
 use linera_base::{
     crypto::KeyPair,
     data_types::{Blob, BlockHeight, Timestamp},
-    identifiers::{Account, BlobId, ChainId},
+    identifiers::{Account, ChainId},
     ownership::ChainOwnership,
     time::{Duration, Instant},
 };
@@ -273,7 +270,7 @@ where
             chain.timestamp,
             chain.next_block_height,
             chain.pending_block.clone(),
-            chain.pending_blobs.clone(),
+            chain.pending_blobs.iter().cloned(),
         );
         chain_client.options_mut().message_policy = MessagePolicy::new(
             self.blanket_message_policy,
@@ -326,7 +323,7 @@ where
         key_pair: Option<KeyPair>,
         timestamp: Timestamp,
     ) -> Result<(), Error> {
-        self.update_wallet_for_new_chain_internal(chain_id, key_pair, timestamp, BTreeMap::new())
+        self.update_wallet_for_new_chain_internal(chain_id, key_pair, timestamp, Vec::new())
             .await
     }
 
@@ -336,7 +333,7 @@ where
         chain_id: ChainId,
         key_pair: Option<KeyPair>,
         timestamp: Timestamp,
-        pending_blobs: BTreeMap<BlobId, Blob>,
+        pending_blobs: Vec<Blob>,
     ) -> Result<(), Error> {
         self.update_wallet_for_new_chain_internal(chain_id, key_pair, timestamp, pending_blobs)
             .await
@@ -347,7 +344,7 @@ where
         chain_id: ChainId,
         key_pair: Option<KeyPair>,
         timestamp: Timestamp,
-        pending_blobs: BTreeMap<BlobId, Blob>,
+        pending_blobs: Vec<Blob>,
     ) -> Result<(), Error> {
         if self.wallet.get(chain_id).is_none() {
             self.mutate_wallet(|w| {
@@ -644,7 +641,7 @@ where
                 .take(num_new_chains)
                 .collect();
             let certificate = chain_client
-                .execute_operations(operations)
+                .execute_operations(operations, vec![])
                 .await?
                 .expect("should execute block with OpenChain operations");
             let block = certificate.block();
@@ -713,7 +710,7 @@ where
         // Put at most 1000 fungible token operations in each block.
         for operations in operations.chunks(1000) {
             chain_client
-                .execute_operations(operations.to_vec())
+                .execute_operations(operations.to_vec(), vec![])
                 .await?
                 .expect("should execute block with OpenChain operations");
         }

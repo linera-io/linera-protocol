@@ -10,7 +10,7 @@ use linera_base::{
     crypto::{CryptoHash, CryptoRng, KeyPair},
     data_types::{Blob, BlockHeight, Timestamp},
     ensure,
-    identifiers::{BlobId, ChainDescription, ChainId, Owner},
+    identifiers::{ChainDescription, ChainId, Owner},
 };
 use linera_chain::data_types::ProposedBlock;
 use linera_core::{client::ChainClient, node::ValidatorNodeProvider};
@@ -148,7 +148,7 @@ impl Wallet {
             timestamp,
             next_block_height: BlockHeight(0),
             pending_block: None,
-            pending_blobs: BTreeMap::new(),
+            pending_blobs: Vec::new(),
         };
         self.insert(user_chain);
         Ok(())
@@ -179,7 +179,7 @@ impl Wallet {
                 next_block_height: state.next_block_height(),
                 timestamp: state.timestamp(),
                 pending_block: state.pending_proposal().clone(),
-                pending_blobs: state.pending_blobs().clone(),
+                pending_blobs: state.pending_blobs().values().cloned().collect(),
             },
         );
     }
@@ -211,7 +211,7 @@ pub struct UserChain {
     pub timestamp: Timestamp,
     pub next_block_height: BlockHeight,
     pub pending_block: Option<ProposedBlock>,
-    pub pending_blobs: BTreeMap<BlobId, Blob>,
+    pub pending_blobs: Vec<Blob>,
 }
 
 impl UserChain {
@@ -229,7 +229,7 @@ impl UserChain {
             timestamp,
             next_block_height: BlockHeight::ZERO,
             pending_block: None,
-            pending_blobs: BTreeMap::new(),
+            pending_blobs: Vec::new(),
         }
     }
 
@@ -243,7 +243,7 @@ impl UserChain {
             timestamp,
             next_block_height: BlockHeight::ZERO,
             pending_block: None,
-            pending_blobs: BTreeMap::new(),
+            pending_blobs: Vec::new(),
         }
     }
 }

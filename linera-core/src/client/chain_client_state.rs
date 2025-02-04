@@ -2,7 +2,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 
 use linera_base::{
     crypto::{CryptoHash, KeyPair, PublicKey},
@@ -50,7 +53,7 @@ impl ChainClientState {
         timestamp: Timestamp,
         next_block_height: BlockHeight,
         pending_block: Option<ProposedBlock>,
-        pending_blobs: BTreeMap<BlobId, Blob>,
+        pending_blobs: impl IntoIterator<Item = Blob>,
     ) -> ChainClientState {
         let known_key_pairs = known_key_pairs
             .into_iter()
@@ -62,11 +65,11 @@ impl ChainClientState {
             timestamp,
             next_block_height,
             pending_proposal: None,
-            pending_blobs,
+            pending_blobs: BTreeMap::new(),
             client_mutex: Arc::default(),
         };
         if let Some(block) = pending_block {
-            state.set_pending_proposal(block);
+            state.set_pending_proposal(block, pending_blobs);
         }
         state
     }
@@ -87,8 +90,17 @@ impl ChainClientState {
         &self.pending_proposal
     }
 
-    pub(super) fn set_pending_proposal(&mut self, block: ProposedBlock) {
+    pub(super) fn set_pending_proposal(
+        &mut self,
+        block: ProposedBlock,
+        blobs: impl IntoIterator<Item = Blob>,
+    ) {
         if block.height == self.next_block_height {
+            self.pending_blobs = blobs.into_iter().map(|blob| (blob.id(), blob)).collect();
+            assert_eq!(
+                block.published_blob_ids(),
+                self.pending_blobs.keys().copied().collect::<BTreeSet<_>>()
+            );
             self.pending_proposal = Some(block);
         } else {
             tracing::error!(
@@ -101,10 +113,6 @@ impl ChainClientState {
 
     pub fn pending_blobs(&self) -> &BTreeMap<BlobId, Blob> {
         &self.pending_blobs
-    }
-
-    pub(super) fn insert_pending_blob(&mut self, blob: Blob) {
-        self.pending_blobs.insert(blob.id(), blob);
     }
 
     pub fn known_key_pairs(&self) -> &BTreeMap<Owner, KeyPair> {

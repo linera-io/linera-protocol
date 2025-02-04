@@ -908,7 +908,10 @@ async fn test_memory_fuel_limit(wasm_runtime: WasmRuntime) -> anyhow::Result<()>
         .unwrap();
 
     assert!(publisher
-        .execute_operations(vec![Operation::user(application_id, &increment)?; 10])
+        .execute_operations(
+            vec![Operation::user(application_id, &increment)?; 10],
+            vec![]
+        )
         .await
         .is_err());
 
