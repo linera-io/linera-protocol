@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, HashMap, HashSet},
     sync::Arc,
 };
 
@@ -99,10 +99,15 @@ impl ChainState {
         blobs: impl IntoIterator<Item = Blob>,
     ) {
         if block.height == self.next_block_height {
-            self.pending_block = Some(block);
+            self.pending_blobs.clear();
             for blob in blobs {
                 self.insert_pending_blob(blob);
             }
+            assert_eq!(
+                block.published_blob_ids(),
+                self.pending_blobs.keys().copied().collect::<HashSet<_>>()
+            );
+            self.pending_block = Some(block);
         } else {
             tracing::error!(
                 "Not setting pending block at height {}, because next_block_height is {}.",
