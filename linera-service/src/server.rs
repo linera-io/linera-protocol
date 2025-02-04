@@ -59,6 +59,7 @@ impl ServerContext {
     {
         let shard = self.server_config.internal_network.shard(shard_id);
         info!("Shard booted on {}", shard.host);
+        info!("Public key: {}", self.server_config.key.public());
         let state = WorkerState::new(
             format!("Shard {} @ {}:{}", shard_id, local_ip_addr, shard.port),
             Some(self.server_config.key.copy()),
