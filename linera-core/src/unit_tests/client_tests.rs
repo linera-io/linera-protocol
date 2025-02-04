@@ -1926,8 +1926,10 @@ where
     builder.set_fault_type([0, 2, 3], FaultType::Honest).await;
 
     client3_c.synchronize_from_validators().await.unwrap();
+    let blob4_data = b"blob4".to_vec();
+    let blob4 = Blob::from(BlobContent::new_data(blob4_data.clone()));
     let bt_certificate = client3_c
-        .burn(None, Amount::from_tokens(1))
+        .publish_data_blob(blob4_data)
         .await
         .unwrap()
         .unwrap();
@@ -1943,10 +1945,8 @@ where
         .block()
         .unwrap()
         .operations
-        .contains(&Operation::System(SystemOperation::Transfer {
-            owner: None,
-            recipient: Recipient::Burn,
-            amount: Amount::from_tokens(1),
+        .contains(&Operation::System(SystemOperation::PublishDataBlob {
+            blob_hash: blob4.id().hash
         })));
 
     // Block before that should be b1
