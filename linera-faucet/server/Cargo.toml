@@ -21,11 +21,9 @@ tokio.workspace = true
 tower-http = { workspace = true, features = ["cors"] }
 tracing.workspace = true
 
-
 [dev-dependencies]
 async-trait.workspace = true
 linera-views.workspace = true
-
   [dev-dependencies.linera-core]
   workspace = true
   features = ["test"]
