@@ -70,6 +70,8 @@ impl ChainClientState {
         };
         if let Some(block) = pending_block {
             state.set_pending_proposal(block, pending_blobs);
+        } else {
+            assert!(pending_blobs.into_iter().next().is_none());
         }
         state
     }
