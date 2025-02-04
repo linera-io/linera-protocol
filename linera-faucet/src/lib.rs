@@ -1,3 +1,10 @@
+// Copyright (c) Zefchain Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+/*!
+Common definitions for the Linera faucet.
+*/
+
 use linera_base::{
     crypto::CryptoHash,
     identifiers::{ChainId, MessageId},

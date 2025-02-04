@@ -1,3 +1,8 @@
+// Copyright (c) Zefchain Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+//! The client component of the Linera faucet.
+
 use std::time::Duration;
 
 use anyhow::{bail, Context, Result};
