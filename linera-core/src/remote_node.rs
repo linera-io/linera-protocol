@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashSet;
+use std::{collections::HashSet, time::Duration};
 
 use custom_debug_derive::Debug;
 use futures::{future::try_join_all, stream::FuturesUnordered, StreamExt};
@@ -309,12 +309,24 @@ impl<N: ValidatorNode> RemoteNode<N> {
     }
 
     #[instrument(level = "trace", skip(validators))]
-    async fn download_blob(validators: &[Self], blob_id: BlobId) -> Option<Blob> {
+    async fn download_blob(
+        validators: &[Self],
+        blob_id: BlobId,
+        timeout: Duration,
+    ) -> Option<Blob> {
         // Sequentially try each validator in random order.
         let mut validators = validators.iter().collect::<Vec<_>>();
         validators.shuffle(&mut rand::thread_rng());
-        for remote_node in validators {
-            if let Some(blob) = remote_node.try_download_blob(blob_id).await {
+        let mut stream = validators
+            .into_iter()
+            .zip(0..)
+            .map(|(remote_node, i)| async move {
+                tokio::time::sleep(timeout * i * i).await;
+                remote_node.try_download_blob(blob_id).await
+            })
+            .collect::<FuturesUnordered<_>>();
+        while let Some(maybe_blob) = stream.next().await {
+            if let Some(blob) = maybe_blob {
                 return Some(blob);
             }
         }
@@ -325,10 +337,14 @@ impl<N: ValidatorNode> RemoteNode<N> {
     /// Each task goes through the validators sequentially in random order and tries to download
     /// it. Returns `None` if it couldn't find all blobs.
     #[instrument(level = "trace", skip(validators))]
-    pub async fn download_blobs(blob_ids: &[BlobId], validators: &[Self]) -> Option<Vec<Blob>> {
+    pub async fn download_blobs(
+        blob_ids: &[BlobId],
+        validators: &[Self],
+        timeout: Duration,
+    ) -> Option<Vec<Blob>> {
         let mut stream = blob_ids
             .iter()
-            .map(|blob_id| Self::download_blob(validators, *blob_id))
+            .map(|blob_id| Self::download_blob(validators, *blob_id, timeout))
             .collect::<FuturesUnordered<_>>();
         let mut blobs = Vec::new();
         while let Some(maybe_blob) = stream.next().await {

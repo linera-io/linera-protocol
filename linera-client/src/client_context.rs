@@ -177,6 +177,7 @@ where
             name,
             options.max_loaded_chains,
             options.grace_period,
+            options.blob_download_timeout,
         );
 
         ClientContext {
@@ -224,6 +225,7 @@ where
             name,
             NonZeroUsize::new(20).expect("Chain worker limit should not be zero"),
             DEFAULT_GRACE_PERIOD,
+            Duration::from_secs(1),
         );
 
         ClientContext {

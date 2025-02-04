@@ -9,6 +9,7 @@ use std::{
     num::NonZeroUsize,
     ops::{Deref, DerefMut},
     sync::{Arc, RwLock},
+    time::Duration,
 };
 
 use chain_client_state::ChainClientState;
@@ -174,6 +175,8 @@ where
     chains: DashMap<ChainId, ChainClientState>,
     /// The maximum active chain workers.
     max_loaded_chains: NonZeroUsize,
+    /// The delay when downloading a blob, after which we try a second validator.
+    blob_download_timeout: Duration,
 }
 
 impl<P, S: Storage + Clone> Client<P, S> {
@@ -190,6 +193,7 @@ impl<P, S: Storage + Clone> Client<P, S> {
         name: impl Into<String>,
         max_loaded_chains: NonZeroUsize,
         grace_period: f64,
+        blob_download_timeout: Duration,
     ) -> Self {
         let tracked_chains = Arc::new(RwLock::new(tracked_chains.into_iter().collect()));
         let state = WorkerState::new_for_client(
@@ -215,6 +219,7 @@ impl<P, S: Storage + Clone> Client<P, S> {
             notifier: Arc::new(ChannelNotifier::default()),
             storage,
             max_loaded_chains,
+            blob_download_timeout,
         }
     }
 
@@ -275,6 +280,7 @@ impl<P, S: Storage + Clone> Client<P, S> {
                 message_policy: self.message_policy.clone(),
                 cross_chain_message_delivery: self.cross_chain_message_delivery,
                 grace_period: self.grace_period,
+                blob_download_timeout: self.blob_download_timeout,
             },
         }
     }
@@ -476,6 +482,8 @@ pub struct ChainClientOptions {
     /// An additional delay, after reaching a quorum, to wait for additional validator signatures,
     /// as a fraction of time taken to reach quorum.
     pub grace_period: f64,
+    /// The delay when downloading a blob, after which we try a second validator.
+    pub blob_download_timeout: Duration,
 }
 
 /// Client to operate a chain by interacting with validators and the given local storage
@@ -1247,9 +1255,13 @@ where
         if let Err(err) = self.process_certificate(certificate.clone()).await {
             match &err {
                 LocalNodeError::BlobsNotFound(blob_ids) => {
-                    let blobs = RemoteNode::download_blobs(blob_ids, &nodes)
-                        .await
-                        .ok_or(err)?;
+                    let blobs = RemoteNode::download_blobs(
+                        blob_ids,
+                        &nodes,
+                        self.client.blob_download_timeout,
+                    )
+                    .await
+                    .ok_or(err)?;
                     self.client.local_node.store_blobs(&blobs).await?;
                     self.process_certificate(certificate).await?;
                 }
