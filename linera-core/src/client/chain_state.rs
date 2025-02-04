@@ -67,12 +67,12 @@ impl ChainState {
             timestamp,
             next_block_height,
             pending_block: None,
-            pending_blobs,
+            pending_blobs: BTreeMap::new(),
             received_certificate_trackers: HashMap::new(),
             client_mutex: Arc::default(),
         };
         if let Some(block) = pending_block {
-            state.set_pending_block(block);
+            state.set_pending_block(block, pending_blobs.into_values());
         }
         state
     }
@@ -93,9 +93,16 @@ impl ChainState {
         &self.pending_block
     }
 
-    pub(super) fn set_pending_block(&mut self, block: Block) {
+    pub(super) fn set_pending_block(
+        &mut self,
+        block: Block,
+        blobs: impl IntoIterator<Item = Blob>,
+    ) {
         if block.height == self.next_block_height {
             self.pending_block = Some(block);
+            for blob in blobs {
+                self.insert_pending_blob(blob);
+            }
         } else {
             tracing::error!(
                 "Not setting pending block at height {}, because next_block_height is {}.",

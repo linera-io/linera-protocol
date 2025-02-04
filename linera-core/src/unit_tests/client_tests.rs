@@ -881,7 +881,7 @@ where
 
     // Since blocks are free of charge on closed chains, empty blocks are not allowed.
     assert_matches!(
-        client1.execute_operations(vec![]).await,
+        client1.execute_operations(vec![], vec![]).await,
         Err(ChainClientError::LocalNodeError(
             LocalNodeError::WorkerError(WorkerError::ChainError(error))
         )) if matches!(*error, ChainError::ClosedChain)
@@ -1473,7 +1473,6 @@ where
     let blob1 = Blob::new_data(b"blob1".to_vec());
     let blob1_hash = blob1.id().hash;
 
-    client2_a.add_pending_blobs([blob1]).await;
     let blob_0_1_operations = vec![
         Operation::System(SystemOperation::ReadBlob { blob_id: blob0_id }),
         Operation::System(SystemOperation::PublishDataBlob {
@@ -1481,7 +1480,7 @@ where
         }),
     ];
     let b0_result = client2_a
-        .execute_operations(blob_0_1_operations.clone())
+        .execute_operations(blob_0_1_operations.clone(), vec![blob1])
         .await;
 
     assert!(b0_result.is_err());
@@ -1617,7 +1616,6 @@ where
     let blob1 = Blob::new_data(b"blob1".to_vec());
     let blob1_hash = blob1.id().hash;
 
-    client2_a.add_pending_blobs([blob1]).await;
     let blob_0_1_operations = vec![
         Operation::System(SystemOperation::ReadBlob { blob_id: blob0_id }),
         Operation::System(SystemOperation::PublishDataBlob {
@@ -1625,7 +1623,7 @@ where
         }),
     ];
     let b0_result = client2_a
-        .execute_operations(blob_0_1_operations.clone())
+        .execute_operations(blob_0_1_operations.clone(), vec![blob1])
         .await;
 
     assert!(b0_result.is_err());
@@ -1794,7 +1792,6 @@ where
     let blob1 = Blob::new_data(b"blob1".to_vec());
     let blob1_hash = blob1.id().hash;
 
-    client3_a.add_pending_blobs([blob1]).await;
     let blob_0_1_operations = vec![
         Operation::System(SystemOperation::ReadBlob { blob_id: blob0_id }),
         Operation::System(SystemOperation::PublishDataBlob {
@@ -1802,7 +1799,7 @@ where
         }),
     ];
     let b0_result = client3_a
-        .execute_operations(blob_0_1_operations.clone())
+        .execute_operations(blob_0_1_operations.clone(), vec![blob1])
         .await;
 
     assert!(b0_result.is_err());
@@ -1869,7 +1866,6 @@ where
     let blob3 = Blob::new_data(b"blob3".to_vec());
     let blob3_hash = blob3.id().hash;
 
-    client3_b.add_pending_blobs([blob3]).await;
     let blob_2_3_operations = vec![
         Operation::System(SystemOperation::ReadBlob { blob_id: blob2_id }),
         Operation::System(SystemOperation::PublishDataBlob {
@@ -1877,7 +1873,7 @@ where
         }),
     ];
     let b1_result = client3_b
-        .execute_operations(blob_2_3_operations.clone())
+        .execute_operations(blob_2_3_operations.clone(), vec![blob3])
         .await;
     assert!(b1_result.is_err());
 
