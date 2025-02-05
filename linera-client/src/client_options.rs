@@ -6,7 +6,6 @@ use std::{
     env, fmt, iter,
     num::{NonZeroU16, NonZeroUsize},
     path::PathBuf,
-    time::Duration,
 };
 
 use chrono::{DateTime, Utc};
@@ -17,6 +16,7 @@ use linera_base::{
         Account, ApplicationId, BytecodeId, ChainId, MessageId, Owner, UserApplicationId,
     },
     ownership::{ChainOwnership, TimeoutConfig},
+    time::Duration,
 };
 use linera_core::{client::BlanketMessagePolicy, DEFAULT_GRACE_PERIOD};
 use linera_execution::{
