@@ -1182,7 +1182,7 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
         .await?
         .contains(&nft2_id));
 
-    // Transferring to another chain, maitaining the owner
+    // Transferring to another chain, maintaining the owner
     app2.transfer(
         &account_owner2,
         &nft2_id,
