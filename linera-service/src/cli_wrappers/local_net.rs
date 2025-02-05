@@ -638,6 +638,14 @@ impl LocalNet {
         }
         Ok(())
     }
+
+    /// Returns the address to connect to a validator's proxy.
+    pub fn validator_address(&self, validator: usize) -> String {
+        let port = Self::proxy_port(validator);
+        let schema = self.network.external.schema();
+
+        format!("{schema}:localhost:{port}")
+    }
 }
 
 #[cfg(with_testing)]
