@@ -17,7 +17,7 @@ We provide an implementation of the trait `KeyValueStore` for the following key-
 The trait `KeyValueStore` was designed so that more storage solutions can be easily added in the future.
 
 The `KeyValueStore` trait is also implemented for several internal constructions of clients:
-* The `LruCachingStore<K>` client implements the Least Recently Used (LRU)
+* The `CachingStore<K>` client implements the Least Recently Used (LRU)
 caching of reads into the client.
 * The `ViewContainer<C>` client implements a key-value store client from a context.
 * The `ValueSplittingStore<K>` implements a client for which the
