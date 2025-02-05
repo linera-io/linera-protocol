@@ -2,19 +2,22 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 
 use linera_base::{
     crypto::{CryptoHash, KeyPair, PublicKey},
     data_types::{Blob, BlockHeight, Timestamp},
     ensure,
-    identifiers::{BlobId, Owner},
+    identifiers::Owner,
     ownership::ChainOwnership,
 };
 use linera_chain::data_types::ProposedBlock;
 use tokio::sync::Mutex;
 
-use super::ChainClientError;
+use super::{ChainClientError, PendingProposal};
 use crate::data_types::ChainInfo;
 
 /// The state of our interaction with a particular chain: how far we have synchronized it and
@@ -30,13 +33,9 @@ pub struct ChainClientState {
     /// The block we are currently trying to propose for the next height, if any.
     ///
     /// This is always at the same height as `next_block_height`.
-    pending_proposal: Option<ProposedBlock>,
+    pending_proposal: Option<PendingProposal>,
     /// Known key pairs from present and past identities.
     known_key_pairs: BTreeMap<Owner, KeyPair>,
-
-    /// This contains blobs belonging to our `pending_block` that may not even have
-    /// been processed by (i.e. been proposed to) our own local chain manager yet.
-    pending_blobs: BTreeMap<BlobId, Blob>,
 
     /// A mutex that is held whilst we are performing operations that should not be
     /// attempted by multiple clients at the same time.
@@ -49,26 +48,20 @@ impl ChainClientState {
         block_hash: Option<CryptoHash>,
         timestamp: Timestamp,
         next_block_height: BlockHeight,
-        pending_block: Option<ProposedBlock>,
-        pending_blobs: BTreeMap<BlobId, Blob>,
+        pending_proposal: Option<PendingProposal>,
     ) -> ChainClientState {
         let known_key_pairs = known_key_pairs
             .into_iter()
             .map(|kp| (Owner::from(kp.public()), kp))
             .collect();
-        let mut state = ChainClientState {
+        ChainClientState {
             known_key_pairs,
             block_hash,
             timestamp,
             next_block_height,
-            pending_proposal: None,
-            pending_blobs,
+            pending_proposal,
             client_mutex: Arc::default(),
-        };
-        if let Some(block) = pending_block {
-            state.set_pending_proposal(block);
         }
-        state
     }
 
     pub fn block_hash(&self) -> Option<CryptoHash> {
@@ -83,13 +76,18 @@ impl ChainClientState {
         self.next_block_height
     }
 
-    pub fn pending_proposal(&self) -> &Option<ProposedBlock> {
+    pub fn pending_proposal(&self) -> &Option<PendingProposal> {
         &self.pending_proposal
     }
 
-    pub(super) fn set_pending_proposal(&mut self, block: ProposedBlock) {
+    pub(super) fn set_pending_proposal(&mut self, block: ProposedBlock, blobs: Vec<Blob>) {
         if block.height == self.next_block_height {
-            self.pending_proposal = Some(block);
+            let blobs = Vec::from_iter(blobs);
+            assert_eq!(
+                block.published_blob_ids(),
+                BTreeSet::from_iter(blobs.iter().map(Blob::id))
+            );
+            self.pending_proposal = Some(PendingProposal { block, blobs });
         } else {
             tracing::error!(
                 "Not setting pending block at height {}, because next_block_height is {}.",
@@ -97,14 +95,6 @@ impl ChainClientState {
                 self.next_block_height
             );
         }
-    }
-
-    pub fn pending_blobs(&self) -> &BTreeMap<BlobId, Blob> {
-        &self.pending_blobs
-    }
-
-    pub(super) fn insert_pending_blob(&mut self, blob: Blob) {
-        self.pending_blobs.insert(blob.id(), blob);
     }
 
     pub fn known_key_pairs(&self) -> &BTreeMap<Owner, KeyPair> {
@@ -127,15 +117,14 @@ impl ChainClientState {
     pub(super) fn update_from_info(&mut self, info: &ChainInfo) {
         if info.next_block_height > self.next_block_height {
             self.next_block_height = info.next_block_height;
-            self.clear_pending_block();
+            self.clear_pending_proposal();
             self.block_hash = info.block_hash;
             self.timestamp = info.timestamp;
         }
     }
 
-    pub(super) fn clear_pending_block(&mut self) {
+    pub(super) fn clear_pending_proposal(&mut self) {
         self.pending_proposal = None;
-        self.pending_blobs.clear();
     }
 
     pub(super) fn client_mutex(&self) -> Arc<Mutex<()>> {

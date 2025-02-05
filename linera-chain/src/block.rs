@@ -2,10 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::{BTreeSet, HashSet},
-    fmt::Debug,
-};
+use std::{collections::BTreeSet, fmt::Debug};
 
 use async_graphql::SimpleObject;
 use linera_base::{
@@ -482,7 +479,7 @@ impl Block {
 
     /// Returns all the blob IDs required by this block.
     /// Either as oracle responses or as published blobs.
-    pub fn required_blob_ids(&self) -> HashSet<BlobId> {
+    pub fn required_blob_ids(&self) -> BTreeSet<BlobId> {
         let mut blob_ids = self.oracle_blob_ids();
         blob_ids.extend(self.published_blob_ids());
         blob_ids
@@ -512,8 +509,8 @@ impl Block {
     }
 
     /// Returns set of blob ids that were a result of an oracle call.
-    pub fn oracle_blob_ids(&self) -> HashSet<BlobId> {
-        let mut required_blob_ids = HashSet::new();
+    pub fn oracle_blob_ids(&self) -> BTreeSet<BlobId> {
+        let mut required_blob_ids = BTreeSet::new();
         for responses in &self.body.oracle_responses {
             for response in responses {
                 if let OracleResponse::Blob(blob_id) = response {

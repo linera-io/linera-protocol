@@ -6,8 +6,14 @@
 use std::fmt;
 
 use async_graphql::InputObject;
-use linera_base::data_types::{Amount, ArithmeticError, Resources};
+use linera_base::{
+    data_types::{Amount, ArithmeticError, BlobContent, CompressedBytecode, Resources},
+    ensure,
+    identifiers::BlobType,
+};
 use serde::{Deserialize, Serialize};
+
+use crate::ExecutionError;
 
 /// A collection of prices and limits associated with block execution.
 #[derive(Eq, PartialEq, Hash, Clone, Debug, Serialize, Deserialize, InputObject)]
@@ -187,6 +193,28 @@ impl ResourceControlPolicy {
     /// Returns how much fuel can be paid with the given balance.
     pub(crate) fn remaining_fuel(&self, balance: Amount) -> u64 {
         u64::try_from(balance.saturating_div(self.fuel_unit)).unwrap_or(u64::MAX)
+    }
+
+    pub fn check_blob_size(&self, content: &BlobContent) -> Result<(), ExecutionError> {
+        ensure!(
+            u64::try_from(content.bytes().len())
+                .ok()
+                .is_some_and(|size| size <= self.maximum_blob_size),
+            ExecutionError::BlobTooLarge
+        );
+        match content.blob_type() {
+            BlobType::ContractBytecode | BlobType::ServiceBytecode => {
+                ensure!(
+                    CompressedBytecode::decompressed_size_at_most(
+                        content.bytes(),
+                        self.maximum_bytecode_size
+                    )?,
+                    ExecutionError::BytecodeTooLarge
+                );
+            }
+            BlobType::Data => {}
+        }
+        Ok(())
     }
 }
 

@@ -8,12 +8,14 @@ use std::{
 
 use linera_base::{
     crypto::{CryptoHash, CryptoRng, KeyPair},
-    data_types::{Blob, BlockHeight, Timestamp},
+    data_types::{BlockHeight, Timestamp},
     ensure,
-    identifiers::{BlobId, ChainDescription, ChainId, Owner},
+    identifiers::{ChainDescription, ChainId, Owner},
 };
-use linera_chain::data_types::ProposedBlock;
-use linera_core::{client::ChainClient, node::ValidatorNodeProvider};
+use linera_core::{
+    client::{ChainClient, PendingProposal},
+    node::ValidatorNodeProvider,
+};
 use linera_storage::Storage;
 use rand::Rng as _;
 use serde::{Deserialize, Serialize};
@@ -147,8 +149,7 @@ impl Wallet {
             block_hash: None,
             timestamp,
             next_block_height: BlockHeight(0),
-            pending_block: None,
-            pending_blobs: BTreeMap::new(),
+            pending_proposal: None,
         };
         self.insert(user_chain);
         Ok(())
@@ -178,8 +179,7 @@ impl Wallet {
                 block_hash: state.block_hash(),
                 next_block_height: state.next_block_height(),
                 timestamp: state.timestamp(),
-                pending_block: state.pending_proposal().clone(),
-                pending_blobs: state.pending_blobs().clone(),
+                pending_proposal: state.pending_proposal().clone(),
             },
         );
     }
@@ -210,8 +210,7 @@ pub struct UserChain {
     pub block_hash: Option<CryptoHash>,
     pub timestamp: Timestamp,
     pub next_block_height: BlockHeight,
-    pub pending_block: Option<ProposedBlock>,
-    pub pending_blobs: BTreeMap<BlobId, Blob>,
+    pub pending_proposal: Option<PendingProposal>,
 }
 
 impl UserChain {
@@ -228,8 +227,7 @@ impl UserChain {
             block_hash: None,
             timestamp,
             next_block_height: BlockHeight::ZERO,
-            pending_block: None,
-            pending_blobs: BTreeMap::new(),
+            pending_proposal: None,
         }
     }
 
@@ -242,8 +240,7 @@ impl UserChain {
             block_hash: None,
             timestamp,
             next_block_height: BlockHeight::ZERO,
-            pending_block: None,
-            pending_blobs: BTreeMap::new(),
+            pending_proposal: None,
         }
     }
 }

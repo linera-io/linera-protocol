@@ -8,7 +8,7 @@ mod lite;
 mod timeout;
 mod validated;
 
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 
 pub use generic::GenericCertificate;
 use linera_base::{
@@ -102,7 +102,7 @@ pub trait CertificateValue: Clone {
 
     fn height(&self) -> BlockHeight;
 
-    fn required_blob_ids(&self) -> HashSet<BlobId>;
+    fn required_blob_ids(&self) -> BTreeSet<BlobId>;
 }
 
 impl CertificateValue for Timeout {
@@ -120,8 +120,8 @@ impl CertificateValue for Timeout {
         self.height
     }
 
-    fn required_blob_ids(&self) -> HashSet<BlobId> {
-        HashSet::new()
+    fn required_blob_ids(&self) -> BTreeSet<BlobId> {
+        BTreeSet::new()
     }
 }
 
@@ -140,7 +140,7 @@ impl CertificateValue for ValidatedBlock {
         self.block().header.height
     }
 
-    fn required_blob_ids(&self) -> HashSet<BlobId> {
+    fn required_blob_ids(&self) -> BTreeSet<BlobId> {
         self.block().required_blob_ids()
     }
 }
@@ -160,7 +160,7 @@ impl CertificateValue for ConfirmedBlock {
         self.block().header.height
     }
 
-    fn required_blob_ids(&self) -> HashSet<BlobId> {
+    fn required_blob_ids(&self) -> BTreeSet<BlobId> {
         self.block().required_blob_ids()
     }
 }

@@ -7,9 +7,9 @@ use std::{borrow::Cow, collections::BTreeMap};
 
 use futures::future::Either;
 use linera_base::{
-    data_types::{Blob, BlobContent, BlockHeight, CompressedBytecode, Timestamp},
+    data_types::{Blob, BlockHeight, Timestamp},
     ensure,
-    identifiers::{BlobType, ChainId, MessageId},
+    identifiers::{ChainId, MessageId},
 };
 use linera_chain::{
     data_types::{
@@ -18,11 +18,11 @@ use linera_chain::{
     },
     manager,
     types::{ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
-    ChainStateView,
+    ChainExecutionContext, ChainStateView, ExecutionResultExt as _,
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
-    BlobState, ResourceControlPolicy,
+    BlobState,
 };
 use linera_storage::{Clock as _, Storage};
 use linera_views::{
@@ -644,7 +644,9 @@ where
             if !pending_blobs.validated.get() {
                 let (_, committee) = self.state.chain.current_committee()?;
                 let policy = committee.policy();
-                Self::check_blob_size(blob.content(), policy)?;
+                policy
+                    .check_blob_size(blob.content())
+                    .with_execution_context(ChainExecutionContext::Block)?;
                 ensure!(
                     u64::try_from(pending_blobs.pending_blobs.count().await?)
                         .is_ok_and(|count| count < policy.maximum_published_blobs),
@@ -659,31 +661,6 @@ where
             &self.state.chain,
             self.state.config.key_pair(),
         ))
-    }
-
-    fn check_blob_size(
-        content: &BlobContent,
-        policy: &ResourceControlPolicy,
-    ) -> Result<(), WorkerError> {
-        ensure!(
-            u64::try_from(content.bytes().len())
-                .ok()
-                .is_some_and(|size| size <= policy.maximum_blob_size),
-            WorkerError::BlobTooLarge
-        );
-        match content.blob_type() {
-            BlobType::ContractBytecode | BlobType::ServiceBytecode => {
-                ensure!(
-                    CompressedBytecode::decompressed_size_at_most(
-                        content.bytes(),
-                        policy.maximum_bytecode_size
-                    )?,
-                    WorkerError::BytecodeTooLarge
-                );
-            }
-            BlobType::Data => {}
-        }
-        Ok(())
     }
 
     /// Stores the chain state in persistent storage.

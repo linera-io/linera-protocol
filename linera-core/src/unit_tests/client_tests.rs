@@ -426,14 +426,14 @@ where
         client.local_balance().await.unwrap(),
         Amount::from_tokens(2)
     );
-    client.clear_pending_block();
+    client.clear_pending_proposal();
     client.burn(None, Amount::ONE).await.unwrap().unwrap();
 
     // The other client doesn't know the new round number yet:
     sender.synchronize_from_validators().await.unwrap();
     sender.process_inbox().await.unwrap();
     assert_eq!(sender.local_balance().await.unwrap(), Amount::ONE);
-    sender.clear_pending_block();
+    sender.clear_pending_proposal();
     sender.burn(None, Amount::ONE).await.unwrap();
 
     // That's it, we spent all our money on this test!
@@ -797,7 +797,7 @@ where
 
     // Since blocks are free of charge on closed chains, empty blocks are not allowed.
     assert_matches!(
-        client1.execute_operations(vec![]).await,
+        client1.execute_operations(vec![], vec![]).await,
         Err(ChainClientError::LocalNodeError(
             LocalNodeError::WorkerError(WorkerError::ChainError(error))
         )) if matches!(*error, ChainError::ClosedChain)
@@ -1353,7 +1353,6 @@ where
     let blob1 = Blob::new_data(b"blob1".to_vec());
     let blob1_hash = blob1.id().hash;
 
-    client2_a.add_pending_blobs([blob1.clone()]).await;
     let blob_0_1_operations = vec![
         Operation::System(SystemOperation::ReadBlob { blob_id: blob0_id }),
         Operation::System(SystemOperation::PublishDataBlob {
@@ -1361,7 +1360,7 @@ where
         }),
     ];
     let b0_result = client2_a
-        .execute_operations(blob_0_1_operations.clone())
+        .execute_operations(blob_0_1_operations.clone(), vec![blob1.clone()])
         .await;
 
     assert!(b0_result.is_err());
@@ -1502,7 +1501,6 @@ where
     let blob1 = Blob::new_data(b"blob1".to_vec());
     let blob1_hash = blob1.id().hash;
 
-    client2_a.add_pending_blobs([blob1]).await;
     let blob_0_1_operations = vec![
         Operation::System(SystemOperation::ReadBlob { blob_id: blob0_id }),
         Operation::System(SystemOperation::PublishDataBlob {
@@ -1510,7 +1508,7 @@ where
         }),
     ];
     let b0_result = client2_a
-        .execute_operations(blob_0_1_operations.clone())
+        .execute_operations(blob_0_1_operations.clone(), vec![blob1])
         .await;
 
     assert!(b0_result.is_err());
@@ -1658,7 +1656,6 @@ where
     let blob1 = Blob::new_data(b"blob1".to_vec());
     let blob1_hash = blob1.id().hash;
 
-    client3_a.add_pending_blobs([blob1.clone()]).await;
     let blob_0_1_operations = vec![
         Operation::System(SystemOperation::ReadBlob { blob_id: blob0_id }),
         Operation::System(SystemOperation::PublishDataBlob {
@@ -1666,7 +1663,7 @@ where
         }),
     ];
     let b0_result = client3_a
-        .execute_operations(blob_0_1_operations.clone())
+        .execute_operations(blob_0_1_operations.clone(), vec![blob1.clone()])
         .await;
 
     assert!(b0_result.is_err());
@@ -1727,7 +1724,6 @@ where
     let blob3 = Blob::new_data(b"blob3".to_vec());
     let blob3_hash = blob3.id().hash;
 
-    client3_b.add_pending_blobs([blob3.clone()]).await;
     let blob_2_3_operations = vec![
         Operation::System(SystemOperation::ReadBlob { blob_id: blob2_id }),
         Operation::System(SystemOperation::PublishDataBlob {
@@ -1735,7 +1731,7 @@ where
         }),
     ];
     let b1_result = client3_b
-        .execute_operations(blob_2_3_operations.clone())
+        .execute_operations(blob_2_3_operations.clone(), vec![blob3.clone()])
         .await;
     assert!(b1_result.is_err());
 
@@ -1782,8 +1778,10 @@ where
     builder.set_fault_type([0, 2, 3], FaultType::Honest).await;
 
     client3_c.synchronize_from_validators().await.unwrap();
+    let blob4_data = b"blob4".to_vec();
+    let blob4 = Blob::new(BlobContent::new_data(blob4_data.clone()));
     let bt_certificate = client3_c
-        .burn(None, Amount::from_tokens(1))
+        .publish_data_blob(blob4_data)
         .await
         .unwrap()
         .unwrap();
@@ -1799,10 +1797,8 @@ where
         .block()
         .body
         .operations
-        .contains(&Operation::System(SystemOperation::Transfer {
-            owner: None,
-            recipient: Recipient::Burn,
-            amount: Amount::from_tokens(1),
+        .contains(&Operation::System(SystemOperation::PublishDataBlob {
+            blob_hash: blob4.id().hash
         })));
 
     // Block before that should be b1
@@ -1898,7 +1894,7 @@ where
         ClientOutcome::Committed(_) => panic!("Committed a block where we aren't the leader."),
         ClientOutcome::WaitForTimeout(timeout) => timeout,
     };
-    client.clear_pending_block();
+    client.clear_pending_proposal();
     assert!(client.request_leader_timeout().await.is_err());
     clock.set(timeout.timestamp);
     client.request_leader_timeout().await.unwrap();
@@ -1993,8 +1989,12 @@ where
     assert_eq!(manager.current_round, Round::MultiLeader(0));
     let result = client1.publish_data_blob(b"blob1".to_vec()).await;
     assert!(result.is_err());
-    assert!(client1.pending_proposal().is_some());
-    assert!(!client1.pending_blobs().is_empty());
+    assert!(!client1
+        .pending_proposal()
+        .as_ref()
+        .unwrap()
+        .blobs
+        .is_empty());
 
     // Finally, the validators are online and honest again.
     builder.set_fault_type([1, 2], FaultType::Honest).await;
@@ -2031,7 +2031,6 @@ where
         Amount::from_tokens(8)
     );
     assert!(client1.pending_proposal().is_none());
-    assert!(client1.pending_blobs().is_empty());
     Ok(())
 }
 
@@ -2315,12 +2314,11 @@ where
         ))
     );
 
-    let result = client1.publish_data_blob(large_blob_bytes).await;
     assert_matches!(
-        result,
-        Err(ChainClientError::LocalNodeError(
-            LocalNodeError::WorkerError(WorkerError::BlobTooLarge)
-        ))
+        client1.publish_data_blob(large_blob_bytes).await,
+        Err(ChainClientError::ChainError(ChainError::ExecutionError(
+            error, ChainExecutionContext::Block
+        ))) if matches!(*error, ExecutionError::BlobTooLarge)
     );
 
     Ok(())

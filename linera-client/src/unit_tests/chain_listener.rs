@@ -3,7 +3,7 @@
 
 #![allow(clippy::large_futures)]
 
-use std::{collections::BTreeMap, num::NonZeroUsize, sync::Arc, time::Duration};
+use std::{num::NonZeroUsize, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use futures::{lock::Mutex, FutureExt as _};
@@ -70,8 +70,7 @@ impl chain_listener::ClientContext for ClientContext {
             chain.block_hash,
             chain.timestamp,
             chain.next_block_height,
-            chain.pending_block.clone(),
-            chain.pending_blobs.clone(),
+            chain.pending_proposal.clone(),
         ))
     }
 
@@ -88,8 +87,7 @@ impl chain_listener::ClientContext for ClientContext {
                 block_hash: None,
                 timestamp,
                 next_block_height: BlockHeight::ZERO,
-                pending_block: None,
-                pending_blobs: BTreeMap::new(),
+                pending_proposal: None,
             });
         }
 

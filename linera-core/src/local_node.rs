@@ -192,13 +192,31 @@ where
     /// Returns `Ok(None)` if any of the blobs is not found.
     pub async fn get_locking_blobs(
         &self,
-        blob_ids: &[BlobId],
+        blob_ids: impl IntoIterator<Item = &BlobId>,
         chain_id: ChainId,
     ) -> Result<Option<Vec<Blob>>, LocalNodeError> {
         let chain = self.chain_state_view(chain_id).await?;
         let mut blobs = Vec::new();
         for blob_id in blob_ids {
             match chain.manager.locking_blobs.get(blob_id).await? {
+                None => return Ok(None),
+                Some(blob) => blobs.push(blob),
+            }
+        }
+        Ok(Some(blobs))
+    }
+
+    /// Looks for the specified blobs in the local chain manager's pending blobs.
+    /// Returns `Ok(None)` if any of the blobs is not found.
+    pub async fn get_pending_blobs(
+        &self,
+        blob_ids: &[BlobId],
+        chain_id: ChainId,
+    ) -> Result<Option<Vec<Blob>>, LocalNodeError> {
+        let chain = self.chain_state_view(chain_id).await?;
+        let mut blobs = Vec::new();
+        for blob_id in blob_ids {
+            match chain.manager.pending_blob(blob_id).await? {
                 None => return Ok(None),
                 Some(blob) => blobs.push(blob),
             }

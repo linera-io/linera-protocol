@@ -261,6 +261,10 @@ pub enum ExecutionError {
     EventKeyTooLong,
     #[error("Stream names can be at most {MAX_STREAM_NAME_LEN} bytes.")]
     StreamNameTooLong,
+    #[error("Blob exceeds size limit")]
+    BlobTooLarge,
+    #[error("Bytecode exceeds size limit")]
+    BytecodeTooLarge,
     // TODO(#2127): Remove this error and the unstable-oracles feature once there are fees
     // and enforced limits for all oracles.
     #[error("Unstable oracles are disabled on this network.")]

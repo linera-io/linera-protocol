@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap},
     fmt,
     hash::Hash,
     mem,
@@ -12,7 +12,7 @@ use std::{
 
 use futures::{stream, stream::TryStreamExt, Future, StreamExt};
 use linera_base::{
-    data_types::{Blob, BlockHeight, Round},
+    data_types::{BlockHeight, Round},
     identifiers::{BlobId, ChainId},
     time::{timer::timeout, Duration, Instant},
 };
@@ -43,8 +43,7 @@ const MAX_TIMEOUT: Duration = Duration::from_secs(60 * 60 * 24); // 1 day.
 pub enum CommunicateAction {
     SubmitBlock {
         proposal: Box<BlockProposal>,
-        blob_ids: HashSet<BlobId>,
-        published_blobs: Vec<Blob>,
+        blob_ids: Vec<BlobId>,
     },
     FinalizeBlock {
         certificate: ValidatedBlockCertificate,
@@ -274,8 +273,7 @@ where
     async fn send_block_proposal(
         &mut self,
         proposal: Box<BlockProposal>,
-        mut blob_ids: HashSet<BlobId>,
-        mut published_blobs: Vec<Blob>,
+        mut blob_ids: Vec<BlobId>,
     ) -> Result<Box<ChainInfo>, ChainClientError> {
         let chain_id = proposal.content.block.chain_id;
         let mut sent_cross_chain_updates = false;
@@ -300,15 +298,26 @@ where
                     // For `BlobsNotFound`, we assume that the local node should already be
                     // updated with the needed blobs, so sending the chain information about the
                     // certificates that last used the blobs to the validator node should be enough.
-                    let blob_ids = blob_ids
-                        .drain()
-                        .filter(|blob_id| !published_blobs.iter().any(|blob| blob.id() == *blob_id))
-                        .collect::<Vec<_>>();
-                    let missing_blob_ids = self.remote_node.node.missing_blob_ids(blob_ids).await?;
-                    let local_storage = self.local_node.storage_client();
+                    let published_blob_ids =
+                        BTreeSet::from_iter(proposal.content.block.published_blob_ids());
+                    blob_ids.retain(|blob_id| !published_blob_ids.contains(blob_id));
+                    let mut published_blobs = Vec::new();
+                    {
+                        let chain = self.local_node.chain_state_view(chain_id).await?;
+                        for blob_id in published_blob_ids {
+                            published_blobs
+                                .extend(chain.manager.proposed_blobs.get(&blob_id).await?);
+                        }
+                    }
                     self.remote_node
-                        .send_pending_blobs(chain_id, mem::take(&mut published_blobs))
+                        .send_pending_blobs(chain_id, published_blobs)
                         .await?;
+                    let missing_blob_ids = self
+                        .remote_node
+                        .node
+                        .missing_blob_ids(mem::take(&mut blob_ids))
+                        .await?;
+                    let local_storage = self.local_node.storage_client();
                     let blob_states = local_storage.read_blob_states(&missing_blob_ids).await?;
                     let mut chain_heights = BTreeMap::new();
                     for blob_state in blob_states {
@@ -434,14 +443,8 @@ where
             .await?;
         // Send the block proposal, certificate or timeout request and return a vote.
         let vote = match action {
-            CommunicateAction::SubmitBlock {
-                proposal,
-                blob_ids,
-                published_blobs,
-            } => {
-                let info = self
-                    .send_block_proposal(proposal, blob_ids, published_blobs)
-                    .await?;
+            CommunicateAction::SubmitBlock { proposal, blob_ids } => {
+                let info = self.send_block_proposal(proposal, blob_ids).await?;
                 info.manager.pending
             }
             CommunicateAction::FinalizeBlock {
