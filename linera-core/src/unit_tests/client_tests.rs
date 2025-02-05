@@ -1387,9 +1387,13 @@ where
     };
     {
         let node3 = builder.node(3);
+        let content1 = blob1.into_content();
+        assert_matches!(node3.handle_pending_blob(chain_id2, content1.clone()).await,
+            Err(NodeError::WorkerError { error })
+            if error.contains("Blob was not required by any pending block")
+        );
         let result = node3.handle_validated_certificate(validated.clone()).await;
         assert_matches!(result, Err(NodeError::BlobsNotFound(_)));
-        let content1 = blob1.into_content();
         node3.handle_pending_blob(chain_id2, content1).await?;
         let response = node3
             .handle_validated_certificate(validated.clone())
