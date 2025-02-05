@@ -45,14 +45,14 @@ impl<'input> FieldsInformation<'input> {
             .map(FieldInformation::wit_type_name)
     }
 
-    /// Returns the code with a pattern to match a heterogenous list using the `field_names` as
+    /// Returns the code with a pattern to match a heterogeneous list using the `field_names` as
     /// bindings.
     pub fn hlist_type(&self) -> TokenStream {
         let field_types = self.types();
         quote! { linera_witty::HList![#( #field_types ),*] }
     }
 
-    /// Returns the code with a pattern to match a heterogenous list using the `field_names` as
+    /// Returns the code with a pattern to match a heterogeneous list using the `field_names` as
     /// bindings.
     ///
     /// This function receives `field_names` instead of a `Fields` instance because some fields might
