@@ -426,14 +426,14 @@ where
         client.local_balance().await.unwrap(),
         Amount::from_tokens(2)
     );
-    client.clear_pending_block();
+    client.clear_pending_proposal();
     client.burn(None, Amount::ONE).await.unwrap().unwrap();
 
     // The other client doesn't know the new round number yet:
     sender.synchronize_from_validators().await.unwrap();
     sender.process_inbox().await.unwrap();
     assert_eq!(sender.local_balance().await.unwrap(), Amount::ONE);
-    sender.clear_pending_block();
+    sender.clear_pending_proposal();
     sender.burn(None, Amount::ONE).await.unwrap();
 
     // That's it, we spent all our money on this test!
@@ -1894,7 +1894,7 @@ where
         ClientOutcome::Committed(_) => panic!("Committed a block where we aren't the leader."),
         ClientOutcome::WaitForTimeout(timeout) => timeout,
     };
-    client.clear_pending_block();
+    client.clear_pending_proposal();
     assert!(client.request_leader_timeout().await.is_err());
     clock.set(timeout.timestamp);
     client.request_leader_timeout().await.unwrap();
@@ -1989,8 +1989,12 @@ where
     assert_eq!(manager.current_round, Round::MultiLeader(0));
     let result = client1.publish_data_blob(b"blob1".to_vec()).await;
     assert!(result.is_err());
-    assert!(client1.pending_proposal().is_some());
-    assert!(!client1.pending_blobs().is_empty());
+    assert!(!client1
+        .pending_proposal()
+        .as_ref()
+        .unwrap()
+        .blobs
+        .is_empty());
 
     // Finally, the validators are online and honest again.
     builder.set_fault_type([1, 2], FaultType::Honest).await;
@@ -2027,7 +2031,6 @@ where
         Amount::from_tokens(8)
     );
     assert!(client1.pending_proposal().is_none());
-    assert!(client1.pending_blobs().is_empty());
     Ok(())
 }
 

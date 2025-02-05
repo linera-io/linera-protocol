@@ -70,8 +70,7 @@ impl chain_listener::ClientContext for ClientContext {
             chain.block_hash,
             chain.timestamp,
             chain.next_block_height,
-            chain.pending_block.clone(),
-            chain.pending_blobs.iter().cloned(),
+            chain.pending_proposal.clone(),
         ))
     }
 
@@ -88,8 +87,7 @@ impl chain_listener::ClientContext for ClientContext {
                 block_hash: None,
                 timestamp,
                 next_block_height: BlockHeight::ZERO,
-                pending_block: None,
-                pending_blobs: Vec::new(),
+                pending_proposal: None,
             });
         }
 

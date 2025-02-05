@@ -9,7 +9,7 @@ use async_trait::async_trait;
 use futures::Future;
 use linera_base::{
     crypto::KeyPair,
-    data_types::{Blob, BlockHeight, Timestamp},
+    data_types::{BlockHeight, Timestamp},
     identifiers::{Account, ChainId},
     ownership::ChainOwnership,
     time::{Duration, Instant},
@@ -269,8 +269,7 @@ where
             chain.block_hash,
             chain.timestamp,
             chain.next_block_height,
-            chain.pending_block.clone(),
-            chain.pending_blobs.iter().cloned(),
+            chain.pending_proposal.clone(),
         );
         chain_client.options_mut().message_policy = MessagePolicy::new(
             self.blanket_message_policy,
@@ -323,19 +322,7 @@ where
         key_pair: Option<KeyPair>,
         timestamp: Timestamp,
     ) -> Result<(), Error> {
-        self.update_wallet_for_new_chain_internal(chain_id, key_pair, timestamp, Vec::new())
-            .await
-    }
-
-    #[cfg(test)]
-    pub async fn update_wallet_for_new_chain_with_pending_blobs(
-        &mut self,
-        chain_id: ChainId,
-        key_pair: Option<KeyPair>,
-        timestamp: Timestamp,
-        pending_blobs: Vec<Blob>,
-    ) -> Result<(), Error> {
-        self.update_wallet_for_new_chain_internal(chain_id, key_pair, timestamp, pending_blobs)
+        self.update_wallet_for_new_chain_internal(chain_id, key_pair, timestamp)
             .await
     }
 
@@ -344,7 +331,6 @@ where
         chain_id: ChainId,
         key_pair: Option<KeyPair>,
         timestamp: Timestamp,
-        pending_blobs: Vec<Blob>,
     ) -> Result<(), Error> {
         if self.wallet.get(chain_id).is_none() {
             self.mutate_wallet(|w| {
@@ -354,8 +340,7 @@ where
                     block_hash: None,
                     timestamp,
                     next_block_height: BlockHeight::ZERO,
-                    pending_block: None,
-                    pending_blobs,
+                    pending_proposal: None,
                 })
             })
             .await?;

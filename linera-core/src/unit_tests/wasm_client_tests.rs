@@ -23,10 +23,13 @@ use linera_base::{
     identifiers::{AccountOwner, ApplicationId, Destination, Owner, StreamId, StreamName},
     ownership::{ChainOwnership, TimeoutConfig},
 };
-use linera_chain::data_types::{EventRecord, MessageAction, OutgoingMessage};
+use linera_chain::{
+    data_types::{EventRecord, MessageAction, OutgoingMessage},
+    ChainError, ChainExecutionContext,
+};
 use linera_execution::{
-    Message, MessageKind, Operation, QueryOutcome, ResourceControlPolicy, SystemMessage,
-    WasmRuntime,
+    ExecutionError, Message, MessageKind, Operation, QueryOutcome, ResourceControlPolicy,
+    SystemMessage, WasmRuntime,
 };
 use serde_json::json;
 use test_case::test_case;
@@ -161,11 +164,21 @@ where
     let result = publisher
         .publish_bytecode(large_bytecode.clone(), small_bytecode.clone())
         .await;
-    assert_matches!(result, Err(ChainClientError::LocalNodeError(_)));
+    assert_matches!(
+        result,
+        Err(ChainClientError::ChainError(ChainError::ExecutionError(
+            error, ChainExecutionContext::Block
+        ))) if matches!(*error, ExecutionError::BytecodeTooLarge)
+    );
     let result = publisher
         .publish_bytecode(small_bytecode, large_bytecode)
         .await;
-    assert_matches!(result, Err(ChainClientError::LocalNodeError(_)));
+    assert_matches!(
+        result,
+        Err(ChainClientError::ChainError(ChainError::ExecutionError(
+            error, ChainExecutionContext::Block
+        ))) if matches!(*error, ExecutionError::BytecodeTooLarge)
+    );
 
     Ok(())
 }
@@ -643,7 +656,7 @@ where
         .execute_operation(Operation::user(application_id, &transfer)?)
         .await
         .is_err());
-    receiver.clear_pending_block();
+    receiver.clear_pending_proposal();
 
     // Try another transfer with the correct amount.
     let transfer = fungible::Operation::Transfer {

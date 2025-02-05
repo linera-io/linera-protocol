@@ -192,7 +192,7 @@ where
     /// Returns `Ok(None)` if any of the blobs is not found.
     pub async fn get_locking_blobs(
         &self,
-        blob_ids: &[BlobId],
+        blob_ids: impl IntoIterator<Item = &BlobId>,
         chain_id: ChainId,
     ) -> Result<Option<Vec<Blob>>, LocalNodeError> {
         let chain = self.chain_state_view(chain_id).await?;

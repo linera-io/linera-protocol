@@ -64,7 +64,7 @@ use linera_execution::{
 use linera_storage::{Clock as _, Storage};
 use linera_views::views::ViewError;
 use rand::prelude::SliceRandom as _;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::OwnedRwLockReadGuard;
 use tokio_stream::wrappers::UnboundedReceiverStream;
@@ -255,8 +255,7 @@ impl<P, S: Storage + Clone> Client<P, S> {
         block_hash: Option<CryptoHash>,
         timestamp: Timestamp,
         next_block_height: BlockHeight,
-        pending_block: Option<ProposedBlock>,
-        pending_blobs: impl IntoIterator<Item = Blob>,
+        pending_proposal: Option<PendingProposal>,
     ) -> ChainClient<P, S> {
         // If the entry already exists we assume that the entry is more up to date than
         // the arguments: If they were read from the wallet file, they might be stale.
@@ -266,8 +265,7 @@ impl<P, S: Storage + Clone> Client<P, S> {
                 block_hash,
                 timestamp,
                 next_block_height,
-                pending_block,
-                pending_blobs,
+                pending_proposal,
             ));
         }
 
@@ -683,14 +681,8 @@ impl<P: 'static, S: Storage> ChainClient<P, S> {
 
     /// Gets a guarded reference to the next pending block.
     #[instrument(level = "trace", skip(self))]
-    pub fn pending_proposal(&self) -> ChainGuardMapped<Option<ProposedBlock>> {
+    pub fn pending_proposal(&self) -> ChainGuardMapped<Option<PendingProposal>> {
         Unsend::new(self.state().inner.map(|state| state.pending_proposal()))
-    }
-
-    /// Gets a guarded reference to the set of pending blobs.
-    #[instrument(level = "trace", skip(self))]
-    pub fn pending_blobs(&self) -> ChainGuardMapped<Vec<Blob>> {
-        Unsend::new(self.state().inner.map(|state| state.pending_blobs()))
     }
 }
 
@@ -2442,25 +2434,37 @@ where
         }
         let identity = self.identity().await?;
 
+        let local_node = &self.client.local_node;
         // Otherwise we have to re-propose the highest validated block, if there is one.
-        let pending: Option<ProposedBlock> = self.state().pending_proposal().clone();
-        let executed_block = if let Some(locking) = &info.manager.requested_locking {
-            match &**locking {
-                LockingBlock::Regular(certificate) => certificate.block().clone().into(),
+        let pending_proposal = self.state().pending_proposal().clone();
+        let (executed_block, blobs) = if let Some(locking) = &info.manager.requested_locking {
+            let (executed_block, blob_ids) = match &**locking {
+                LockingBlock::Regular(certificate) => (
+                    certificate.block().clone().into(),
+                    certificate.block().required_blob_ids(),
+                ),
                 LockingBlock::Fast(proposal) => {
                     let block = proposal.content.block.clone();
-                    self.stage_block_execution(block, None).await?.0
+                    let blob_ids = block.published_blob_ids();
+                    (self.stage_block_execution(block, None).await?.0, blob_ids)
                 }
-            }
-        } else if let Some(block) = pending {
+            };
+            let blobs = local_node
+                .get_locking_blobs(&blob_ids, self.chain_id)
+                .await?
+                .ok_or_else(|| ChainClientError::InternalError("Missing local locking blobs"))?;
+            (executed_block, blobs)
+        } else if let Some(pending_proposal) = pending_proposal {
             // Otherwise we are free to propose our own pending block.
             // Use the round number assuming there are oracle responses.
             // Using the round number during execution counts as an oracle.
+            let block = pending_proposal.block;
             let round = match Self::round_for_new_proposal(&info, &identity, &block, true)? {
                 Either::Left(round) => round.multi_leader(),
                 Either::Right(_) => None,
             };
-            self.stage_block_execution(block, round).await?.0
+            let executed_block = self.stage_block_execution(block, round).await?.0;
+            (executed_block, pending_proposal.blobs)
         } else {
             return Ok(ClientOutcome::Committed(None)); // Nothing to do.
         };
@@ -2480,35 +2484,22 @@ where
             .already_handled_proposal(round, &executed_block.block);
         let key_pair = self.key_pair().await?;
         // Create the final block proposal.
-        let (proposal, is_locking) = if let Some(locking) = info.manager.requested_locking {
-            let proposal = Box::new(match *locking {
+        let proposal = if let Some(locking) = info.manager.requested_locking {
+            Box::new(match *locking {
                 LockingBlock::Regular(cert) => BlockProposal::new_retry(round, cert, &key_pair),
                 LockingBlock::Fast(proposal) => {
                     BlockProposal::new_initial(round, proposal.content.block, &key_pair)
                 }
-            });
-            (proposal, true)
+            })
         } else {
             let block = executed_block.block.clone();
-            let proposal = Box::new(BlockProposal::new_initial(round, block, &key_pair));
-            (proposal, false)
+            Box::new(BlockProposal::new_initial(round, block, &key_pair))
         };
         if !already_handled_locally {
-            let local_node = &self.client.local_node;
             // Check the final block proposal. This will be cheaper after #1401.
             if let Err(err) = local_node.handle_block_proposal(*proposal.clone()).await {
                 match err {
-                    LocalNodeError::BlobsNotFound(blob_ids) => {
-                        let blobs = if is_locking {
-                            local_node
-                                .get_locking_blobs(&blob_ids, self.chain_id)
-                                .await?
-                                .ok_or_else(|| {
-                                    ChainClientError::InternalError("Missing local locking blobs")
-                                })?
-                        } else {
-                            self.pending_blobs().iter().cloned().collect()
-                        };
+                    LocalNodeError::BlobsNotFound(_) => {
                         local_node
                             .handle_pending_blobs(self.chain_id, blobs)
                             .await?;
@@ -2625,8 +2616,8 @@ where
 
     /// Clears the information on any operation that previously failed.
     #[instrument(level = "trace")]
-    pub fn clear_pending_block(&self) {
-        self.state_mut().clear_pending_block();
+    pub fn clear_pending_proposal(&self) {
+        self.state_mut().clear_pending_proposal();
     }
 
     /// Processes a confirmed block for which this chain is a recipient and updates validators.
@@ -3438,4 +3429,11 @@ struct ReceivedCertificatesFromValidator {
     /// Sender chains that were already up to date locally. We need to ensure their messages
     /// are delivered.
     other_sender_chains: Vec<ChainId>,
+}
+
+/// A pending proposed block, together with its published blobs.
+#[derive(Clone, Serialize, Deserialize)]
+pub struct PendingProposal {
+    pub block: ProposedBlock,
+    pub blobs: Vec<Blob>,
 }
