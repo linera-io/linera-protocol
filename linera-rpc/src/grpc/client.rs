@@ -26,11 +26,6 @@ use linera_core::{
 use linera_version::VersionInfo;
 use tonic::{Code, IntoRequest, Request, Status};
 use tracing::{debug, error, info, instrument, warn};
-#[cfg(not(web))]
-use {
-    super::GrpcProtoConversionError,
-    crate::{mass_client, RpcMessage},
-};
 
 use super::{
     api::{self, validator_node_client::ValidatorNodeClient, SubscriptionRequest},
@@ -456,71 +451,5 @@ impl ValidatorNode for GrpcClient {
     #[instrument(target = "grpc_client", skip(self), err, fields(address = self.address))]
     async fn missing_blob_ids(&self, blob_ids: Vec<BlobId>) -> Result<Vec<BlobId>, NodeError> {
         Ok(client_delegate!(self, missing_blob_ids, blob_ids)?.try_into()?)
-    }
-}
-
-#[cfg(not(web))]
-#[async_trait::async_trait]
-impl mass_client::MassClient for GrpcClient {
-    #[instrument(skip_all, err)]
-    async fn send(
-        &self,
-        requests: Vec<RpcMessage>,
-    ) -> Result<Vec<RpcMessage>, mass_client::MassClientError> {
-        let client = self.client.clone();
-        let mut join_set: tokio::task::JoinSet<
-            Result<Option<RpcMessage>, mass_client::MassClientError>,
-        > = tokio::task::JoinSet::new();
-
-        // Spawn tasks for each request
-        for request in requests {
-            let mut client = client.clone();
-            join_set.spawn(async move {
-                let response = match request {
-                    RpcMessage::BlockProposal(proposal) => {
-                        let request = Request::new((*proposal).try_into()?);
-                        client.handle_block_proposal(request).await?
-                    }
-                    RpcMessage::TimeoutCertificate(request) => {
-                        let request = Request::new((*request).try_into()?);
-                        client.handle_timeout_certificate(request).await?
-                    }
-                    RpcMessage::ValidatedCertificate(request) => {
-                        let request = Request::new((*request).try_into()?);
-                        client.handle_validated_certificate(request).await?
-                    }
-                    RpcMessage::ConfirmedCertificate(request) => {
-                        let request = Request::new((*request).try_into()?);
-                        client.handle_confirmed_certificate(request).await?
-                    }
-                    msg => panic!("attempted to send msg: {:?}", msg),
-                };
-                match response
-                    .into_inner()
-                    .inner
-                    .ok_or(GrpcProtoConversionError::MissingField)?
-                {
-                    api::chain_info_result::Inner::ChainInfoResponse(chain_info_response) => {
-                        Ok(Some(RpcMessage::ChainInfoResponse(Box::new(
-                            chain_info_response.try_into()?,
-                        ))))
-                    }
-                    api::chain_info_result::Inner::Error(error) => {
-                        let error = bincode::deserialize::<NodeError>(&error)
-                            .map_err(GrpcProtoConversionError::BincodeError)?;
-                        tracing::error!(?error, "received error response");
-                        Ok(None)
-                    }
-                }
-            });
-        }
-
-        let responses = join_set
-            .join_all()
-            .await
-            .into_iter()
-            .filter_map(|result| result.transpose())
-            .collect::<Result<Vec<_>, _>>()?;
-        Ok(responses)
     }
 }
