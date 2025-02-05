@@ -48,12 +48,12 @@ We use the test-only CLI option `--testing-prng-seed` to make keys deterministic
 explanation.
 
 ```bash
-OWNER_1=d2115775b5b3c5c1ed3c1516319a7e850c75d0786a74b39f5250cf9decc88124
-OWNER_2=a477cb966190661c0dfbe50602616a78a48d2bef6cb5288d49deb3e05585d579
-CHAIN_1=673ce04da4b8ed773ee7cd5828a2083775bea4130498b847c5b34b2ed913b07f
-CHAIN_2=69705f85ac4c9fef6c02b4d83426aaaf05154c645ec1c61665f8e450f0468bc0
-CHAIN_AMM=e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65
-OWNER_AMM=7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f
+OWNER_1=7c99bdc355cbbe89d5e0aa512d60fe5c634f42d5445d7e3b58d3206e24babfe3
+OWNER_2=537d77c0dfdb9dfedefa8fef04c93013cbf2f4da9a179b1b3aa0fdb6da8244a2
+CHAIN_1=678e9f66507069d38955b593e93ddf192a23a4087225fd307eadad44e5544ae3
+CHAIN_2=a3edc33d8e951a1139333be8a4b56646b5598a8f51216e86592d881808972b07
+CHAIN_AMM=aee928d4bf3880353b4a3cd9b6f88e6cc6e5ed050860abae439e7782e9b2dfe8
+OWNER_AMM=513bb0b9fdf2d671fa3c44add540f383aada343b34260cff6220d390f2336c4b
 ```
 
 Now we have to publish and create the fungible applications. The flag `--wait-for-outgoing-messages` waits until a quorum of validators has confirmed that all sent cross-chain messages have been delivered.
@@ -257,13 +257,10 @@ In addition, we make an AMM operation per block mandatory, so owners cannot spam
 with empty blocks.
 
 ```bash
-PUB_KEY_AMM=fcf518d56455283ace2bbc11c71e684eb58af81bc98b96a18129e825ce24ea84
-PUB_KEY_2=ca909dcf60df014c166be17eb4a9f6e2f9383314a57510206a54cd841ade455e
-
 kill %% && sleep 1    # Kill the service so we can use CLI commands for chain 1.
 
 linera --wait-for-outgoing-messages change-ownership \
-    --owner-public-keys $PUB_KEY_AMM $PUB_KEY_2
+    --owners $OWNER_AMM $OWNER_2
 
 linera --wait-for-outgoing-messages change-application-permissions \
     --execute-operations $AMM_APPLICATION_ID \

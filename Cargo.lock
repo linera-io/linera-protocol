@@ -2054,7 +2054,6 @@ name = "counter"
 version = "0.1.0"
 dependencies = [
  "async-graphql",
- "bcs",
  "futures",
  "linera-sdk",
  "serde_json",
@@ -4353,6 +4352,7 @@ dependencies = [
 name = "linera-base"
 version = "0.14.0"
 dependencies = [
+ "alloy-primitives",
  "anyhow",
  "async-graphql",
  "async-graphql-derive",
@@ -4365,7 +4365,6 @@ dependencies = [
  "custom_debug_derive",
  "ed25519-dalek",
  "futures",
- "generic-array",
  "getrandom",
  "hex",
  "is-terminal",
@@ -4380,7 +4379,6 @@ dependencies = [
  "serde-name",
  "serde_bytes",
  "serde_json",
- "sha3",
  "test-case",
  "test-strategy",
  "thiserror 1.0.69",
@@ -4491,6 +4489,7 @@ dependencies = [
 name = "linera-core"
 version = "0.14.0"
 dependencies = [
+ "alloy-primitives",
  "anyhow",
  "assert_matches",
  "async-graphql",
@@ -4519,6 +4518,7 @@ dependencies = [
  "rand",
  "serde",
  "serde_json",
+ "sha3",
  "social",
  "test-case",
  "test-log",
@@ -4930,6 +4930,7 @@ dependencies = [
  "cfg_aliases",
  "clap",
  "criterion",
+ "futures",
  "linera-base",
  "linera-storage-service",
  "linera-version",

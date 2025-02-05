@@ -17,6 +17,7 @@ use self::state::AmmState;
 
 pub struct AmmService {
     state: Arc<AmmState>,
+    runtime: Arc<ServiceRuntime<Self>>,
 }
 
 linera_sdk::service!(AmmService);
@@ -34,13 +35,14 @@ impl Service for AmmService {
             .expect("Failed to load state");
         AmmService {
             state: Arc::new(state),
+            runtime: Arc::new(runtime),
         }
     }
 
     async fn handle_query(&self, request: Request) -> Response {
         let schema = Schema::build(
             self.state.clone(),
-            Operation::mutation_root(),
+            Operation::mutation_root(self.runtime.clone()),
             EmptySubscription,
         )
         .finish();

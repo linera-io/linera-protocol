@@ -289,6 +289,22 @@ where
                 }
             }
 
+            ChangeApplicationPermissions {
+                application_id,
+                application_permissions,
+                callback,
+            } => {
+                let app_permissions = self.system.application_permissions.get();
+                if !app_permissions.can_change_application_permissions(&application_id) {
+                    callback.respond(Err(ExecutionError::UnauthorizedApplication(application_id)));
+                } else {
+                    self.system
+                        .application_permissions
+                        .set(application_permissions);
+                    callback.respond(Ok(()));
+                }
+            }
+
             CreateApplication {
                 next_message_id,
                 bytecode_id,
@@ -483,7 +499,14 @@ pub enum ExecutionRequest {
     CloseChain {
         application_id: UserApplicationId,
         #[debug(skip)]
-        callback: oneshot::Sender<Result<(), ExecutionError>>,
+        callback: Sender<Result<(), ExecutionError>>,
+    },
+
+    ChangeApplicationPermissions {
+        application_id: UserApplicationId,
+        application_permissions: ApplicationPermissions,
+        #[debug(skip)]
+        callback: Sender<Result<(), ExecutionError>>,
     },
 
     CreateApplication {
@@ -492,7 +515,7 @@ pub enum ExecutionRequest {
         parameters: Vec<u8>,
         required_application_ids: Vec<UserApplicationId>,
         #[debug(skip)]
-        callback: oneshot::Sender<Result<CreateApplicationResult, ExecutionError>>,
+        callback: Sender<Result<CreateApplicationResult, ExecutionError>>,
     },
 
     FetchUrl {
@@ -507,7 +530,7 @@ pub enum ExecutionRequest {
         #[debug(with = hex_debug)]
         payload: Vec<u8>,
         #[debug(skip)]
-        callback: oneshot::Sender<Vec<u8>>,
+        callback: Sender<Vec<u8>>,
     },
 
     ReadBlobContent {

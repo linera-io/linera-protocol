@@ -8,12 +8,12 @@ test('Operation mounting', () => {
       props: {
         op: {
           key: {
-            chain_id: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65",
+            chain_id: "aee928d4bf3880353b4a3cd9b6f88e6cc6e5ed050860abae439e7782e9b2dfe8",
             height: 5,
             index: 0
           },
           previousOperation: {
-            chain_id: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65",
+            chain_id: "aee928d4bf3880353b4a3cd9b6f88e6cc6e5ed050860abae439e7782e9b2dfe8",
             height: 4, index: 0
           },
           index: 4,

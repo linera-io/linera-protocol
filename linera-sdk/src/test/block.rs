@@ -6,7 +6,6 @@
 //! Helps with the construction of blocks, adding operations and
 
 use linera_base::{
-    crypto::PublicKey,
     data_types::{Amount, ApplicationPermissions, Round, Timestamp},
     hashed::Hashed,
     identifiers::{ApplicationId, ChainId, GenericApplicationId, Owner},
@@ -14,8 +13,8 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, ChannelFullName, IncomingBundle, LiteValue, LiteVote, Medium, MessageAction, Origin,
-        SignatureAggregator,
+        ChannelFullName, IncomingBundle, LiteValue, LiteVote, Medium, MessageAction, Origin,
+        ProposedBlock, SignatureAggregator,
     },
     types::{ConfirmedBlock, ConfirmedBlockCertificate},
 };
@@ -27,10 +26,10 @@ use linera_execution::{
 use super::TestValidator;
 use crate::ToBcsBytes;
 
-/// A helper type to build [`Block`]s using the builder pattern, and then signing them into
+/// A helper type to build a block proposal using the builder pattern, and then signing them into
 /// [`ConfirmedBlockCertificate`]s using a [`TestValidator`].
 pub struct BlockBuilder {
-    block: Block,
+    block: ProposedBlock,
     validator: TestValidator,
 }
 
@@ -64,7 +63,7 @@ impl BlockBuilder {
             .unwrap_or_default();
 
         BlockBuilder {
-            block: Block {
+            block: ProposedBlock {
                 epoch: 0.into(),
                 chain_id,
                 incoming_bundles: vec![],
@@ -118,15 +117,17 @@ impl BlockBuilder {
     /// Adds an operation to change this chain's ownership.
     pub fn with_owner_change(
         &mut self,
-        super_owners: Vec<PublicKey>,
-        owners: Vec<(PublicKey, u64)>,
+        super_owners: Vec<Owner>,
+        owners: Vec<(Owner, u64)>,
         multi_leader_rounds: u32,
+        open_multi_leader_rounds: bool,
         timeout_config: TimeoutConfig,
     ) -> &mut Self {
         self.with_system_operation(SystemOperation::ChangeOwnership {
             super_owners,
             owners,
             multi_leader_rounds,
+            open_multi_leader_rounds,
             timeout_config,
         })
     }
@@ -208,13 +209,13 @@ impl BlockBuilder {
         self.with_incoming_bundles(bundles)
     }
 
-    /// Tries to sign the prepared [`Block`] with the [`TestValidator`]'s keys and return the
+    /// Tries to sign the prepared block with the [`TestValidator`]'s keys and return the
     /// resulting [`Certificate`]. Returns an error if block execution fails.
     pub(crate) async fn try_sign(self) -> anyhow::Result<ConfirmedBlockCertificate> {
         let (executed_block, _) = self
             .validator
             .worker()
-            .stage_block_execution(self.block)
+            .stage_block_execution(self.block, None)
             .await?;
 
         let value = Hashed::new(ConfirmedBlock::new(executed_block));

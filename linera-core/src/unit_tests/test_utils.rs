@@ -5,6 +5,7 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet},
     num::NonZeroUsize,
     sync::Arc,
+    time::Duration,
     vec,
 };
 
@@ -129,7 +130,7 @@ where
         certificate: GenericCertificate<Timeout>,
     ) -> Result<ChainInfoResponse, NodeError> {
         self.spawn_and_receive(move |validator, sender| {
-            validator.do_handle_certificate(certificate, vec![], sender)
+            validator.do_handle_certificate(certificate, sender)
         })
         .await
     }
@@ -137,10 +138,9 @@ where
     async fn handle_validated_certificate(
         &self,
         certificate: GenericCertificate<ValidatedBlock>,
-        blobs: Vec<Blob>,
     ) -> Result<ChainInfoResponse, NodeError> {
         self.spawn_and_receive(move |validator, sender| {
-            validator.do_handle_certificate(certificate, blobs, sender)
+            validator.do_handle_certificate(certificate, sender)
         })
         .await
     }
@@ -151,7 +151,7 @@ where
         _delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
         self.spawn_and_receive(move |validator, sender| {
-            validator.do_handle_certificate(certificate, vec![], sender)
+            validator.do_handle_certificate(certificate, sender)
         })
         .await
     }
@@ -196,6 +196,17 @@ where
     ) -> Result<BlobContent, NodeError> {
         self.spawn_and_receive(move |validator, sender| {
             validator.do_download_pending_blob(chain_id, blob_id, sender)
+        })
+        .await
+    }
+
+    async fn handle_pending_blob(
+        &self,
+        chain_id: ChainId,
+        blob: BlobContent,
+    ) -> Result<ChainInfoResponse, NodeError> {
+        self.spawn_and_receive(move |validator, sender| {
+            validator.do_handle_pending_blob(chain_id, blob, sender)
         })
         .await
     }
@@ -344,7 +355,6 @@ where
     async fn handle_certificate<T: ProcessableCertificate>(
         certificate: GenericCertificate<T>,
         validator: &mut MutexGuard<'_, LocalValidator<S>>,
-        blobs: Vec<Blob>,
     ) -> Option<Result<ChainInfoResponse, NodeError>> {
         match validator.fault_type {
             FaultType::DontProcessValidated if T::KIND == CertificateKind::Validated => None,
@@ -355,11 +365,7 @@ where
             | FaultType::DontSendValidateVote => Some(
                 validator
                     .state
-                    .fully_handle_certificate_with_notifications(
-                        certificate,
-                        blobs,
-                        &validator.notifier,
-                    )
+                    .fully_handle_certificate_with_notifications(certificate, &validator.notifier)
                     .await
                     .map_err(Into::into),
             ),
@@ -377,11 +383,11 @@ where
         let result = async move {
             match validator.state.full_certificate(certificate).await? {
                 Either::Left(confirmed) => {
-                    self.do_handle_certificate_internal(confirmed, &mut validator, vec![])
+                    self.do_handle_certificate_internal(confirmed, &mut validator)
                         .await
                 }
                 Either::Right(validated) => {
-                    self.do_handle_certificate_internal(validated, &mut validator, vec![])
+                    self.do_handle_certificate_internal(validated, &mut validator)
                         .await
                 }
             }
@@ -394,10 +400,8 @@ where
         &self,
         certificate: GenericCertificate<T>,
         validator: &mut MutexGuard<'_, LocalValidator<S>>,
-        blobs: Vec<Blob>,
     ) -> Result<ChainInfoResponse, NodeError> {
-        let handle_certificate_result =
-            Self::handle_certificate(certificate, validator, blobs).await;
+        let handle_certificate_result = Self::handle_certificate(certificate, validator).await;
         match handle_certificate_result {
             Some(Err(NodeError::BlobsNotFound(_))) => {
                 handle_certificate_result.expect("handle_certificate_result should be Some")
@@ -427,12 +431,11 @@ where
     async fn do_handle_certificate<T: ProcessableCertificate>(
         self,
         certificate: GenericCertificate<T>,
-        blobs: Vec<Blob>,
         sender: oneshot::Sender<Result<ChainInfoResponse, NodeError>>,
     ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
         let mut validator = self.client.lock().await;
         let result = self
-            .do_handle_certificate_internal(certificate, &mut validator, blobs)
+            .do_handle_certificate_internal(certificate, &mut validator)
             .await;
         sender.send(result)
     }
@@ -514,6 +517,21 @@ where
             .await
             .map_err(Into::into);
         sender.send(result.map(|blob| blob.into_content()))
+    }
+
+    async fn do_handle_pending_blob(
+        self,
+        chain_id: ChainId,
+        blob: BlobContent,
+        sender: oneshot::Sender<Result<ChainInfoResponse, NodeError>>,
+    ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
+        let validator = self.client.lock().await;
+        let result = validator
+            .state
+            .handle_pending_blob(chain_id, Blob::new(blob))
+            .await
+            .map_err(Into::into);
+        sender.send(result)
     }
 
     async fn do_download_certificate(
@@ -687,7 +705,7 @@ impl GenesisStorageBuilder {
                     initial_committee.clone(),
                     admin_id,
                     account.description,
-                    account.public_key,
+                    account.public_key.into(),
                     account.balance,
                     Timestamp::from(0),
                 )
@@ -793,7 +811,7 @@ where
                         self.initial_committee.clone(),
                         self.admin_id,
                         description,
-                        public_key,
+                        public_key.into(),
                         Amount::ZERO,
                         Timestamp::from(0),
                     )
@@ -805,7 +823,7 @@ where
                         self.initial_committee.clone(),
                         self.admin_id,
                         description,
-                        public_key,
+                        public_key.into(),
                         balance,
                         Timestamp::from(0),
                     )
@@ -819,7 +837,7 @@ where
                     self.initial_committee.clone(),
                     self.admin_id,
                     description,
-                    public_key,
+                    public_key.into(),
                     balance,
                     Timestamp::from(0),
                 )
@@ -887,6 +905,7 @@ where
             format!("Client node for {:.8}", chain_id),
             NonZeroUsize::new(20).expect("Chain worker limit should not be zero"),
             DEFAULT_GRACE_PERIOD,
+            Duration::from_secs(1),
         ));
         Ok(builder.create_chain_client(
             chain_id,
@@ -896,7 +915,6 @@ where
             Timestamp::from(0),
             block_height,
             None,
-            BTreeMap::new(),
         ))
     }
 
@@ -924,8 +942,8 @@ where
                     debug_assert!(requested_sent_certificate_hashes.len() <= 1);
                     if let Some(cert_hash) = requested_sent_certificate_hashes.pop() {
                         if let Ok(cert) = validator.download_certificate(cert_hash).await {
-                            if cert.inner().executed_block().block.chain_id == chain_id
-                                && cert.inner().executed_block().block.height == block_height
+                            if cert.inner().block().header.chain_id == chain_id
+                                && cert.inner().block().header.height == block_height
                             {
                                 cert.check(&self.initial_committee).unwrap();
                                 count += 1;

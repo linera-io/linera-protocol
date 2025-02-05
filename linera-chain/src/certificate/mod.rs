@@ -8,7 +8,7 @@ mod lite;
 mod timeout;
 mod validated;
 
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 
 pub use generic::GenericCertificate;
 use linera_base::{
@@ -62,16 +62,16 @@ impl Certificate {
 
     pub fn height(&self) -> BlockHeight {
         match self {
-            Certificate::Validated(cert) => cert.value().inner().executed_block().block.height,
-            Certificate::Confirmed(cert) => cert.value().inner().executed_block().block.height,
+            Certificate::Validated(cert) => cert.value().inner().block().header.height,
+            Certificate::Confirmed(cert) => cert.value().inner().block().header.height,
             Certificate::Timeout(cert) => cert.inner().height,
         }
     }
 
     pub fn chain_id(&self) -> ChainId {
         match self {
-            Certificate::Validated(cert) => cert.value().inner().executed_block().block.chain_id,
-            Certificate::Confirmed(cert) => cert.value().inner().executed_block().block.chain_id,
+            Certificate::Validated(cert) => cert.value().inner().block().header.chain_id,
+            Certificate::Confirmed(cert) => cert.value().inner().block().header.chain_id,
             Certificate::Timeout(cert) => cert.inner().chain_id,
         }
     }
@@ -102,7 +102,7 @@ pub trait CertificateValue: Clone {
 
     fn height(&self) -> BlockHeight;
 
-    fn required_blob_ids(&self) -> HashSet<BlobId>;
+    fn required_blob_ids(&self) -> BTreeSet<BlobId>;
 }
 
 impl CertificateValue for Timeout {
@@ -120,8 +120,8 @@ impl CertificateValue for Timeout {
         self.height
     }
 
-    fn required_blob_ids(&self) -> HashSet<BlobId> {
-        HashSet::new()
+    fn required_blob_ids(&self) -> BTreeSet<BlobId> {
+        BTreeSet::new()
     }
 }
 
@@ -129,19 +129,19 @@ impl CertificateValue for ValidatedBlock {
     const KIND: CertificateKind = CertificateKind::Validated;
 
     fn chain_id(&self) -> ChainId {
-        self.executed_block().block.chain_id
+        self.block().header.chain_id
     }
 
     fn epoch(&self) -> Epoch {
-        self.executed_block().block.epoch
+        self.block().header.epoch
     }
 
     fn height(&self) -> BlockHeight {
-        self.executed_block().block.height
+        self.block().header.height
     }
 
-    fn required_blob_ids(&self) -> HashSet<BlobId> {
-        self.executed_block().required_blob_ids()
+    fn required_blob_ids(&self) -> BTreeSet<BlobId> {
+        self.block().required_blob_ids()
     }
 }
 
@@ -149,18 +149,18 @@ impl CertificateValue for ConfirmedBlock {
     const KIND: CertificateKind = CertificateKind::Confirmed;
 
     fn chain_id(&self) -> ChainId {
-        self.executed_block().block.chain_id
+        self.block().header.chain_id
     }
 
     fn epoch(&self) -> Epoch {
-        self.executed_block().block.epoch
+        self.block().header.epoch
     }
 
     fn height(&self) -> BlockHeight {
-        self.executed_block().block.height
+        self.block().header.height
     }
 
-    fn required_blob_ids(&self) -> HashSet<BlobId> {
-        self.executed_block().required_blob_ids()
+    fn required_blob_ids(&self) -> BTreeSet<BlobId> {
+        self.block().required_blob_ids()
     }
 }

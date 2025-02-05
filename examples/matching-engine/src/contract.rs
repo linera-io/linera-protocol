@@ -471,7 +471,7 @@ impl MatchingEngineContract {
         match nature {
             OrderNature::Bid => {
                 // The order offers to buy token1 at price price_insert
-                // * When the old order was created fill of token1 were commited
+                // * When the old order was created fill of token1 were committed
                 //   by the seller.
                 // * When the new order is created price_insert * fill of token0
                 //   were committed by the buyer.
@@ -496,9 +496,9 @@ impl MatchingEngineContract {
             OrderNature::Ask => {
                 // The order offers to sell token1 at price price_insert
                 // * When the old order was created, price_level * fill of token0
-                //   had to be commited by the buyer.
+                //   had to be committed by the buyer.
                 // * When the new order is created, fill of token1 have to
-                //   be commited by the seller.
+                //   be committed by the seller.
                 // The result is that
                 // * price_insert * fill have to be sent to the seller
                 // * the buyer receives

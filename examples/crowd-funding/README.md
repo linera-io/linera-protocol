@@ -29,7 +29,7 @@ Optionally, contributors may also be able to create a block to accept a new epoc
 (i.e. a change of validators).
 
 <!--
-TODO: The following documentation involves `sleep`ing to avoid some race conditions. See:
+TODO: The following documentation involves sleep to avoid some race conditions. See:
   - https://github.com/linera-io/linera-protocol/issues/1176
   - https://github.com/linera-io/linera-protocol/issues/1177
 -->
@@ -39,7 +39,7 @@ TODO: The following documentation involves `sleep`ing to avoid some race conditi
 ### Setting Up
 
 The WebAssembly binaries for the bytecode can be built and published using [steps from the
-book](https://linera-io.github.io/linera-documentation/getting_started/first_app.html),
+book](https://linera.dev/developers/getting_started.html),
 summarized below.
 
 Set up the path and the helper function.
@@ -68,10 +68,10 @@ We use the `--testing-prng-seed` argument to ensure that the chain and owner IDs
 predictable.
 
 ```bash
-CHAIN_0=e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65
-OWNER_0=7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f
-CHAIN_1=1db1936dad0717597a7743a8353c9c0191c14c3a129b258e9743aec2b4f05d03
-OWNER_1=b4f8586041a07323bd4f4ed2d758bf1b9a977eabfd4c00e2f12d08a0899485fd
+CHAIN_0=aee928d4bf3880353b4a3cd9b6f88e6cc6e5ed050860abae439e7782e9b2dfe8
+OWNER_0=513bb0b9fdf2d671fa3c44add540f383aada343b34260cff6220d390f2336c4b
+CHAIN_1=582843bc9322ed1928239ce3f6a855f6cd9ea94c8690907f113d6d7a8296a119
+OWNER_1=79539f482c1a7fefd5c1fe66572498fd343c0410e29bc83fc59939e6804fdf1b
 ```
 
 Alternatively, the command below can be used to list the chains created for the test as
@@ -88,8 +88,8 @@ A table will be shown with the chains registered in the wallet and their meta-da
 ╭──────────────────────────────────────────────────────────────────┬──────────────────────────────────────────────────────────────────────────────────────╮
 │ Chain Id                                                         ┆ Latest Block                                                                         │
 ╞══════════════════════════════════════════════════════════════════╪══════════════════════════════════════════════════════════════════════════════════════╡
-│ 1db1936dad0717597a7743a8353c9c0191c14c3a129b258e9743aec2b4f05d03 ┆ Public Key:         84eddaaafce7fb923c3b2494b3d25e54e910490a726ad9b3a2228d3fb18f9874 │
-│                                                                  ┆ Owner:              b4f8586041a07323bd4f4ed2d758bf1b9a977eabfd4c00e2f12d08a0899485fd │
+│ 582843bc9322ed1928239ce3f6a855f6cd9ea94c8690907f113d6d7a8296a119 ┆ Public Key:         84eddaaafce7fb923c3b2494b3d25e54e910490a726ad9b3a2228d3fb18f9874 │
+│                                                                  ┆ Owner:              79539f482c1a7fefd5c1fe66572498fd343c0410e29bc83fc59939e6804fdf1b │
 │                                                                  ┆ Block Hash:         -                                                                │
 │                                                                  ┆ Timestamp:          2023-06-28 09:53:51.167301                                       │
 │                                                                  ┆ Next Block Height:  0                                                                │
@@ -190,7 +190,7 @@ On both http://localhost:8080 and http://localhost:8081, you recognize the crowd
 application by its ID. The entry also has a field `link`. If you open that in a new tab, you
 see the GraphQL API for that application on that chain.
 
-Let's pledge 30 tokens by the campaign creator themself.
+Let's pledge 30 tokens by the campaign creator themselves.
 For `$OWNER_0` on 8080, run `echo "http://localhost:8080/chains/$CHAIN_0/applications/$APP_ID_1"` to get the URL, open it
 and run the following query:
 

@@ -12,7 +12,7 @@ use linera_base::{
         Account, AccountOwner, ApplicationId, BytecodeId, ChainId, ChannelName, Destination,
         MessageId, Owner, StreamName,
     },
-    ownership::{ChainOwnership, CloseChainError},
+    ownership::{ChainOwnership, ChangeApplicationPermissionsError, CloseChainError},
 };
 use serde::Serialize;
 
@@ -225,17 +225,31 @@ where
         (message_id.into(), chain_id.into())
     }
 
+    /// Changes the application permissions for the current chain.
+    pub fn change_application_permissions(
+        &mut self,
+        application_permissions: ApplicationPermissions,
+    ) -> Result<(), ChangeApplicationPermissionsError> {
+        wit::change_application_permissions(&application_permissions.into())
+            .map_err(|error| error.into())
+    }
+
     /// Creates a new on-chain application, based on the supplied bytecode and parameters.
-    pub fn create_application<A: Contract>(
+    pub fn create_application<Abi, Parameters, InstantiationArgument>(
         &mut self,
         bytecode_id: BytecodeId,
-        parameters: &A::Parameters,
-        argument: &A::InstantiationArgument,
+        parameters: &Parameters,
+        argument: &InstantiationArgument,
         required_application_ids: Vec<ApplicationId>,
-    ) -> ApplicationId<A::Abi> {
-        let parameters = bcs::to_bytes(parameters)
+    ) -> ApplicationId<Abi>
+    where
+        Abi: ContractAbi,
+        Parameters: Serialize,
+        InstantiationArgument: Serialize,
+    {
+        let parameters = serde_json::to_vec(parameters)
             .expect("Failed to serialize `Parameters` type for a cross-application call");
-        let argument = bcs::to_bytes(argument).expect(
+        let argument = serde_json::to_vec(argument).expect(
             "Failed to serialize `InstantiationArgument` type for a cross-application call",
         );
         let converted_application_ids: Vec<_> = required_application_ids
@@ -248,7 +262,7 @@ where
             &argument,
             &converted_application_ids,
         );
-        ApplicationId::from(application_id).with_abi::<A::Abi>()
+        ApplicationId::from(application_id).with_abi::<Abi>()
     }
 
     /// Calls another application.
@@ -318,6 +332,11 @@ where
     /// Asserts that a data blob with the given hash exists in storage.
     pub fn assert_data_blob_exists(&mut self, hash: DataBlobHash) {
         wit::assert_data_blob_exists(hash.0.into())
+    }
+
+    /// Returns the round in which this block was validated.
+    pub fn validation_round(&mut self) -> Option<u32> {
+        wit::validation_round()
     }
 }
 

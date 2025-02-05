@@ -6,7 +6,7 @@ use std::collections::BTreeSet;
 use async_graphql::SimpleObject;
 use hex_game::{Board, Clock, Timeouts};
 use linera_sdk::{
-    base::{ChainId, MessageId, Owner, PublicKey},
+    base::{ChainId, MessageId, Owner},
     views::{linera_views, MapView, RegisterView, RootView, ViewStorageContext},
 };
 use serde::{Deserialize, Serialize};
@@ -27,8 +27,6 @@ pub struct GameChain {
 pub struct HexState {
     /// The `Owner`s controlling players `One` and `Two`.
     pub owners: RegisterView<Option<[Owner; 2]>>,
-    /// The players' public keys.
-    pub public_keys: RegisterView<Option<[PublicKey; 2]>>,
     /// The current game state.
     pub board: RegisterView<Board>,
     /// The game clock.
@@ -36,5 +34,5 @@ pub struct HexState {
     /// The timeouts.
     pub timeouts: RegisterView<Timeouts>,
     /// Temporary chains for individual games, by player.
-    pub game_chains: MapView<PublicKey, BTreeSet<GameChain>>,
+    pub game_chains: MapView<Owner, BTreeSet<GameChain>>,
 }

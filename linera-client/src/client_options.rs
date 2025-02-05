@@ -11,7 +11,7 @@ use std::{
 
 use chrono::{DateTime, Utc};
 use linera_base::{
-    crypto::{CryptoHash, PublicKey},
+    crypto::CryptoHash,
     data_types::{Amount, ApplicationPermissions, TimeDelta},
     identifiers::{
         Account, ApplicationId, BytecodeId, ChainId, MessageId, Owner, UserApplicationId,
@@ -161,6 +161,14 @@ pub struct ClientOptions {
     /// as a fraction of time taken to reach quorum.
     #[arg(long, default_value_t = DEFAULT_GRACE_PERIOD)]
     pub grace_period: f64,
+
+    /// The delay when downloading a blob, after which we try a second validator, in milliseconds.
+    #[arg(
+        long = "blob-download-timeout-ms",
+        default_value = "1000",
+        value_parser = util::parse_millis
+    )]
+    pub blob_download_timeout: Duration,
 }
 
 impl ClientOptions {
@@ -323,9 +331,9 @@ pub enum ClientCommand {
         #[arg(long = "from")]
         chain_id: Option<ChainId>,
 
-        /// Public key of the new owner (otherwise create a key pair and remember it)
-        #[arg(long = "to-public-key")]
-        public_key: Option<PublicKey>,
+        /// The new owner (otherwise create a key pair and remember it)
+        #[arg(long = "owner")]
+        owner: Option<Owner>,
 
         /// The initial balance of the new chain. This is subtracted from the parent chain's
         /// balance.
@@ -543,6 +551,10 @@ pub enum ClientCommand {
         #[arg(long)]
         maximum_blob_size: Option<u64>,
 
+        /// Set the maximum number of published blobs per block.
+        #[arg(long)]
+        maximum_published_blobs: Option<u64>,
+
         /// Set the maximum size of decompressed contract or service bytecode, in bytes.
         #[arg(long)]
         maximum_bytecode_size: Option<u64>,
@@ -673,6 +685,10 @@ pub enum ClientCommand {
         /// in bytes.
         #[arg(long)]
         maximum_blob_size: Option<u64>,
+
+        /// Set the maximum number of published blobs per block.
+        #[arg(long)]
+        maximum_published_blobs: Option<u64>,
 
         /// Set the maximum size of a block proposal, in bytes.
         #[arg(long)]
@@ -853,11 +869,11 @@ pub enum ClientCommand {
     /// Create an unassigned key-pair.
     Keygen,
 
-    /// Link a key owned by the wallet to a chain that was just created for that key.
+    /// Link an owner with a key pair in the wallet to a chain that was created for that owner.
     Assign {
-        /// The public key to assign.
+        /// The owner to assign.
         #[arg(long)]
-        key: PublicKey,
+        owner: Owner,
 
         /// The ID of the message that created the chain. (This uniquely describes the
         /// chain and where it was created.)
@@ -1216,13 +1232,13 @@ pub enum ProjectCommand {
 
 #[derive(Debug, Clone, clap::Args)]
 pub struct ChainOwnershipConfig {
-    /// Public keys of the new super owners.
+    /// The new super owners.
     #[arg(long, num_args(0..))]
-    super_owner_public_keys: Vec<PublicKey>,
+    super_owners: Vec<Owner>,
 
-    /// Public keys of the new regular owners.
+    /// The new regular owners.
     #[arg(long, num_args(0..))]
-    owner_public_keys: Vec<PublicKey>,
+    owners: Vec<Owner>,
 
     /// Weights for the new owners.
     ///
@@ -1235,6 +1251,12 @@ pub struct ChainOwnershipConfig {
     /// number in which only a single designated leader is allowed to propose blocks.
     #[arg(long)]
     multi_leader_rounds: Option<u32>,
+
+    /// Whether the multi-leader rounds are unrestricted, i.e. not limited to chain owners.
+    /// This should only be `true` on chains with restrictive application permissions and an
+    /// application-based mechanism to select block proposers.
+    #[arg(long)]
+    open_multi_leader_rounds: bool,
 
     /// The duration of the fast round, in milliseconds.
     #[arg(long = "fast-round-ms", value_parser = util::parse_millis_delta)]
@@ -1272,29 +1294,26 @@ impl TryFrom<ChainOwnershipConfig> for ChainOwnership {
 
     fn try_from(config: ChainOwnershipConfig) -> Result<ChainOwnership, Error> {
         let ChainOwnershipConfig {
-            super_owner_public_keys,
-            owner_public_keys,
+            super_owners,
+            owners,
             owner_weights,
             multi_leader_rounds,
             fast_round_duration,
+            open_multi_leader_rounds,
             base_timeout,
             timeout_increment,
             fallback_duration,
         } = config;
-        if !owner_weights.is_empty() && owner_weights.len() != owner_public_keys.len() {
+        if !owner_weights.is_empty() && owner_weights.len() != owners.len() {
             return Err(Error::MisalignedWeights {
-                public_keys: owner_public_keys.len(),
+                public_keys: owners.len(),
                 weights: owner_weights.len(),
             });
         }
-        let super_owners = super_owner_public_keys
-            .into_iter()
-            .map(|pub_key| (Owner::from(pub_key), pub_key))
-            .collect();
-        let owners = owner_public_keys
+        let super_owners = super_owners.into_iter().map(Into::into).collect();
+        let owners = owners
             .into_iter()
             .zip(owner_weights.into_iter().chain(iter::repeat(100)))
-            .map(|(pub_key, weight)| (Owner::from(pub_key), (pub_key, weight)))
             .collect();
         let multi_leader_rounds = multi_leader_rounds.unwrap_or(u32::MAX);
         let timeout_config = TimeoutConfig {
@@ -1307,6 +1326,7 @@ impl TryFrom<ChainOwnershipConfig> for ChainOwnership {
             super_owners,
             owners,
             multi_leader_rounds,
+            open_multi_leader_rounds,
             timeout_config,
         })
     }
@@ -1325,6 +1345,10 @@ pub struct ApplicationPermissionsConfig {
     /// These applications are allowed to close the current chain using the system API.
     #[arg(long)]
     pub close_chain: Option<Vec<ApplicationId>>,
+    /// These applications are allowed to change the application permissions on the current chain
+    /// using the system API.
+    #[arg(long)]
+    pub change_application_permissions: Option<Vec<ApplicationId>>,
 }
 
 impl From<ApplicationPermissionsConfig> for ApplicationPermissions {
@@ -1333,6 +1357,9 @@ impl From<ApplicationPermissionsConfig> for ApplicationPermissions {
             execute_operations: config.execute_operations,
             mandatory_applications: config.mandatory_applications.unwrap_or_default(),
             close_chain: config.close_chain.unwrap_or_default(),
+            change_application_permissions: config
+                .change_application_permissions
+                .unwrap_or_default(),
         }
     }
 }

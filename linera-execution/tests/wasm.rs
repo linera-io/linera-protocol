@@ -12,8 +12,8 @@ use linera_base::{
 use linera_execution::{
     test_utils::{create_dummy_user_application_description, SystemExecutionState},
     ExecutionOutcome, ExecutionRuntimeConfig, ExecutionRuntimeContext, Operation, OperationContext,
-    Query, QueryContext, RawExecutionOutcome, ResourceControlPolicy, ResourceController,
-    ResourceTracker, Response, TransactionTracker, WasmContractModule, WasmRuntime,
+    Query, QueryContext, QueryOutcome, QueryResponse, RawExecutionOutcome, ResourceControlPolicy,
+    ResourceController, ResourceTracker, TransactionTracker, WasmContractModule, WasmRuntime,
     WasmServiceModule,
 };
 use linera_views::{context::Context as _, views::View};
@@ -69,6 +69,7 @@ async fn test_fuel_for_counter_wasm_application(
     let context = OperationContext {
         chain_id: ChainId::root(0),
         height: BlockHeight(0),
+        round: Some(0),
         index: Some(0),
         authenticated_signer: None,
         authenticated_caller_id: None,
@@ -134,13 +135,17 @@ async fn test_fuel_for_counter_wasm_application(
             .unwrap(),
     );
     let request = async_graphql::Request::new("query { value }");
-    let Response::User(serialized_value) = view
+    let outcome = view
         .query_application(
             context,
             Query::user_without_abi(app_id, &request).unwrap(),
             Some(&mut service_runtime_endpoint),
         )
-        .await?
+        .await?;
+    let QueryOutcome {
+        response: QueryResponse::User(serialized_value),
+        operations,
+    } = outcome
     else {
         panic!("unexpected response")
     };
@@ -148,5 +153,6 @@ async fn test_fuel_for_counter_wasm_application(
         serde_json::from_slice::<async_graphql::Response>(&serialized_value).unwrap(),
         expected_value
     );
+    assert!(operations.is_empty());
     Ok(())
 }

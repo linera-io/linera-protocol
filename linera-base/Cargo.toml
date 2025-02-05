@@ -29,6 +29,7 @@ web = [
 ]
 
 [dependencies]
+alloy-primitives.workspace = true
 anyhow.workspace = true
 async-graphql.workspace = true
 async-graphql-derive.workspace = true
@@ -40,7 +41,6 @@ chrono.workspace = true
 custom_debug_derive.workspace = true
 ed25519-dalek.workspace = true
 futures.workspace = true
-generic-array.workspace = true
 getrandom = { workspace = true, optional = true }
 hex.workspace = true
 is-terminal.workspace = true
@@ -52,7 +52,6 @@ serde.workspace = true
 serde-name.workspace = true
 serde_bytes.workspace = true
 serde_json.workspace = true
-sha3.workspace = true
 test-strategy = { workspace = true, optional = true }
 thiserror.workspace = true
 tokio = { workspace = true, features = ["time"] }

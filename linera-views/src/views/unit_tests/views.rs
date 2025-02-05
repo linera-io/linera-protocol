@@ -22,7 +22,8 @@ use crate::{
     reentrant_collection_view::ReentrantCollectionView,
     register_view::{HashedRegisterView, RegisterView},
     test_utils::test_views::{
-        TestCollectionView, TestLogView, TestMapView, TestRegisterView, TestView,
+        TestBucketQueueView, TestCollectionView, TestLogView, TestMapView, TestQueueView,
+        TestRegisterView, TestSetView, TestView,
     },
     views::{HashableView, View, ViewError},
 };
@@ -262,6 +263,9 @@ impl TestContextFactory for ScyllaDbContextFactory {
 #[test_case(PhantomData::<TestCollectionView<_>>; "with CollectionView")]
 #[test_case(PhantomData::<TestLogView<_>>; "with LogView")]
 #[test_case(PhantomData::<TestMapView<_>>; "with MapView")]
+#[test_case(PhantomData::<TestSetView<_>>; "with SetView")]
+#[test_case(PhantomData::<TestQueueView<_>>; "with QueueView")]
+#[test_case(PhantomData::<TestBucketQueueView<_>>; "with BucketQueueView")]
 #[test_case(PhantomData::<TestRegisterView<_>>; "with RegisterView")]
 #[tokio::test]
 async fn test_clone_includes_staged_changes<V>(
@@ -286,6 +290,9 @@ where
 #[test_case(PhantomData::<TestCollectionView<_>>; "with CollectionView")]
 #[test_case(PhantomData::<TestLogView<_>>; "with LogView")]
 #[test_case(PhantomData::<TestMapView<_>>; "with MapView")]
+#[test_case(PhantomData::<TestSetView<_>>; "with SetView")]
+#[test_case(PhantomData::<TestQueueView<_>>; "with QueueView")]
+#[test_case(PhantomData::<TestBucketQueueView<_>>; "with BucketQueueView")]
 #[test_case(PhantomData::<TestRegisterView<_>>; "with RegisterView")]
 #[tokio::test]
 async fn test_original_and_clone_stage_changes_separately<V>(
@@ -480,11 +487,18 @@ async fn test_reentrant_collection_view_has_pending_changes_after_try_load_entri
     Ok(())
 }
 
-/// Checks if a cleared [`RegisterView`] has no pending changes after flushing.
+/// Checks if a cleared [`TestView`] has no pending changes after flushing.
+#[test_case(PhantomData::<TestCollectionView<_>>; "with CollectionView")]
+#[test_case(PhantomData::<TestLogView<_>>; "with LogView")]
+#[test_case(PhantomData::<TestMapView<_>>; "with MapView")]
+#[test_case(PhantomData::<TestSetView<_>>; "with SetView")]
+#[test_case(PhantomData::<TestQueueView<_>>; "with QueueView")]
+#[test_case(PhantomData::<TestBucketQueueView<_>>; "with BucketQueueView")]
+#[test_case(PhantomData::<TestRegisterView<_>>; "with RegisterView")]
 #[tokio::test]
-async fn test_flushing_cleared_register_view() -> anyhow::Result<()> {
+async fn test_flushing_cleared_view<V: TestView>(_view_type: PhantomData<V>) -> anyhow::Result<()> {
     let context = create_test_memory_context();
-    let mut view = RegisterView::<_, bool>::load(context.clone()).await?;
+    let mut view = V::load(context.clone()).await?;
 
     assert!(!view.has_pending_changes().await);
     view.clear();

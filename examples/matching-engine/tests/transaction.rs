@@ -8,7 +8,7 @@
 use async_graphql::InputType;
 use linera_sdk::{
     base::{AccountOwner, Amount, ApplicationId, ApplicationPermissions},
-    test::{ActiveChain, TestValidator},
+    test::{ActiveChain, QueryOutcome, TestValidator},
 };
 use matching_engine::{
     MatchingEngineAbi, Operation, Order, OrderId, OrderNature, Parameters, Price,
@@ -23,8 +23,8 @@ pub async fn get_orders(
         "query {{ accountInfo {{ entry(key: {}) {{ value {{ orders }} }} }} }}",
         account_owner.to_value()
     );
-    let value = chain.graphql_query(application_id, query).await;
-    let orders = &value["accountInfo"]["entry"]["value"]["orders"];
+    let QueryOutcome { response, .. } = chain.graphql_query(application_id, query).await;
+    let orders = &response["accountInfo"]["entry"]["value"]["orders"];
     let values = orders
         .as_array()?
         .iter()

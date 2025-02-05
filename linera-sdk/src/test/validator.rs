@@ -11,9 +11,9 @@ use std::{num::NonZeroUsize, sync::Arc};
 use dashmap::DashMap;
 use futures::FutureExt as _;
 use linera_base::{
-    crypto::{KeyPair, PublicKey},
+    crypto::KeyPair,
     data_types::{Amount, ApplicationPermissions, Timestamp},
-    identifiers::{ApplicationId, BytecodeId, ChainDescription, ChainId, MessageId},
+    identifiers::{ApplicationId, BytecodeId, ChainDescription, ChainId, MessageId, Owner},
     ownership::ChainOwnership,
 };
 use linera_core::worker::WorkerState;
@@ -171,7 +171,7 @@ impl TestValidator {
     pub async fn new_chain(&self) -> ActiveChain {
         let key_pair = KeyPair::generate();
         let description = self
-            .request_new_chain_from_admin_chain(key_pair.public())
+            .request_new_chain_from_admin_chain(key_pair.public().into())
             .await;
         let chain = ActiveChain::new(key_pair, description, self.clone());
 
@@ -185,7 +185,7 @@ impl TestValidator {
     /// Adds a block to the admin chain to create a new chain.
     ///
     /// Returns the [`ChainDescription`] of the new chain.
-    async fn request_new_chain_from_admin_chain(&self, public_key: PublicKey) -> ChainDescription {
+    async fn request_new_chain_from_admin_chain(&self, owner: Owner) -> ChainDescription {
         let admin_id = ChainId::root(0);
         let admin_chain = self
             .chains
@@ -193,7 +193,7 @@ impl TestValidator {
             .expect("Admin chain should be created when the `TestValidator` is constructed");
 
         let new_chain_config = OpenChainConfig {
-            ownership: ChainOwnership::single(public_key),
+            ownership: ChainOwnership::single(owner),
             committees: [(Epoch::ZERO, self.committee.clone())]
                 .into_iter()
                 .collect(),
@@ -208,11 +208,11 @@ impl TestValidator {
                 block.with_system_operation(SystemOperation::OpenChain(new_chain_config));
             })
             .await;
-        let executed_block = certificate.inner().executed_block();
+        let block = certificate.inner().block();
 
         ChainDescription::Child(MessageId {
-            chain_id: executed_block.block.chain_id,
-            height: executed_block.block.height,
+            chain_id: block.header.chain_id,
+            height: block.header.height,
             index: OPEN_CHAIN_MESSAGE_INDEX,
         })
     }
@@ -233,7 +233,7 @@ impl TestValidator {
                 self.committee.clone(),
                 ChainId::root(0),
                 description,
-                key_pair.public(),
+                key_pair.public().into(),
                 Amount::MAX,
                 Timestamp::from(0),
             )

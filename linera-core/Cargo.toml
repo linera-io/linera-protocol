@@ -87,6 +87,7 @@ linera-storage-service = { workspace = true, optional = true }
 cfg_aliases.workspace = true
 
 [dev-dependencies]
+alloy-primitives.workspace = true
 assert_matches.workspace = true
 counter.workspace = true
 criterion.workspace = true
@@ -95,6 +96,7 @@ linera-core = { path = ".", default-features = false, features = ["test"] }
 linera-views.workspace = true
 meta-counter.workspace = true
 serde_json.workspace = true
+sha3.workspace = true
 social.workspace = true
 test-case.workspace = true
 tracing-subscriber = { workspace = true, features = ["fmt"] }
@@ -109,3 +111,7 @@ ignored = ["async-graphql", "proptest"]
 name = "client_benchmarks"
 harness = false
 required-features = ["test"]
+
+[[bench]]
+name = "hashing_benchmarks"
+harness = false

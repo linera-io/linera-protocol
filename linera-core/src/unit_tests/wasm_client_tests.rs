@@ -23,9 +23,13 @@ use linera_base::{
     identifiers::{AccountOwner, ApplicationId, Destination, Owner, StreamId, StreamName},
     ownership::{ChainOwnership, TimeoutConfig},
 };
-use linera_chain::data_types::{EventRecord, MessageAction, OutgoingMessage};
+use linera_chain::{
+    data_types::{EventRecord, MessageAction, OutgoingMessage},
+    ChainError, ChainExecutionContext,
+};
 use linera_execution::{
-    Message, MessageKind, Operation, ResourceControlPolicy, SystemMessage, WasmRuntime,
+    ExecutionError, Message, MessageKind, Operation, QueryOutcome, ResourceControlPolicy,
+    SystemMessage, WasmRuntime,
 };
 use serde_json::json;
 use test_case::test_case;
@@ -137,16 +141,19 @@ where
         .unwrap();
 
     let query = Request::new("{ value }");
-    let response = creator
+    let outcome = creator
         .query_user_application(application_id, &query)
         .await
         .unwrap();
 
-    let expected = async_graphql::Response::new(
-        async_graphql::Value::from_json(json!({"value": 15})).unwrap(),
-    );
+    let expected = QueryOutcome {
+        response: async_graphql::Response::new(
+            async_graphql::Value::from_json(json!({"value": 15})).unwrap(),
+        ),
+        operations: vec![],
+    };
 
-    assert_eq!(expected, response);
+    assert_eq!(outcome, expected);
     // Creating the application used fuel because of the `instantiate` call.
     let balance_after_init = creator.local_balance().await?;
     assert!(balance_after_init < balance_after_messaging);
@@ -157,11 +164,21 @@ where
     let result = publisher
         .publish_bytecode(large_bytecode.clone(), small_bytecode.clone())
         .await;
-    assert_matches!(result, Err(ChainClientError::LocalNodeError(_)));
+    assert_matches!(
+        result,
+        Err(ChainClientError::ChainError(ChainError::ExecutionError(
+            error, ChainExecutionContext::Block
+        ))) if matches!(*error, ExecutionError::BytecodeTooLarge)
+    );
     let result = publisher
         .publish_bytecode(small_bytecode, large_bytecode)
         .await;
-    assert_matches!(result, Err(ChainClientError::LocalNodeError(_)));
+    assert_matches!(
+        result,
+        Err(ChainClientError::ChainError(ChainError::ExecutionError(
+            error, ChainExecutionContext::Block
+        ))) if matches!(*error, ExecutionError::BytecodeTooLarge)
+    );
 
     Ok(())
 }
@@ -252,7 +269,7 @@ where
     let receiver_key = receiver.public_key().await.unwrap();
     receiver
         .change_ownership(ChainOwnership::multiple(
-            [(receiver_key, 100)],
+            [(receiver_key.into(), 100)],
             100,
             TimeoutConfig::default(),
         ))
@@ -261,7 +278,7 @@ where
     let creator_key = creator.public_key().await.unwrap();
     creator
         .change_ownership(ChainOwnership::multiple(
-            [(creator_key, 100)],
+            [(creator_key.into(), 100)],
             100,
             TimeoutConfig::default(),
         ))
@@ -315,7 +332,7 @@ where
         .unwrap()
         .unwrap();
     assert_eq!(
-        certificate.executed_block().outcome.events,
+        certificate.block().body.events,
         vec![
             Vec::new(),
             vec![EventRecord {
@@ -337,8 +354,8 @@ where
         .await
         .unwrap()
         .unwrap();
-    let executed_block = cert.executed_block();
-    let responses = &executed_block.outcome.oracle_responses;
+    let executed_block = cert.block();
+    let responses = &executed_block.body.oracle_responses;
     let [_, responses] = &responses[..] else {
         panic!("Unexpected oracle responses: {:?}", responses);
     };
@@ -361,15 +378,19 @@ where
     receiver.process_inbox().await.unwrap();
 
     let query = Request::new("{ value }");
-    let response = receiver
+    let outcome = receiver
         .query_user_application(application_id2, &query)
         .await
         .unwrap();
 
-    let expected =
-        async_graphql::Response::new(async_graphql::Value::from_json(json!({"value": 5})).unwrap());
+    let expected = QueryOutcome {
+        response: async_graphql::Response::new(
+            async_graphql::Value::from_json(json!({"value": 5})).unwrap(),
+        ),
+        operations: vec![],
+    };
 
-    assert_eq!(expected, response);
+    assert_eq!(outcome, expected);
 
     // Try again with a value that will make the (untracked) message fail.
     let operation = meta_counter::Operation::fail(receiver_id);
@@ -386,14 +407,14 @@ where
     let mut certs = receiver.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
     let cert = certs.pop().unwrap();
-    let incoming_bundles = &cert.executed_block().block.incoming_bundles;
+    let incoming_bundles = &cert.block().body.incoming_bundles;
     assert_eq!(incoming_bundles.len(), 1);
     assert_eq!(incoming_bundles[0].action, MessageAction::Reject);
     assert_eq!(
         incoming_bundles[0].bundle.messages[0].kind,
         MessageKind::Simple
     );
-    let messages = cert.executed_block().messages();
+    let messages = cert.block().messages();
     assert_eq!(messages.len(), 1);
     assert_eq!(messages[0].len(), 0);
 
@@ -413,7 +434,7 @@ where
     let mut certs = receiver.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
     let cert = certs.pop().unwrap();
-    let incoming_bundles = &cert.executed_block().block.incoming_bundles;
+    let incoming_bundles = &cert.block().body.incoming_bundles;
     assert_eq!(incoming_bundles.len(), 1);
     assert_eq!(incoming_bundles[0].action, MessageAction::Reject);
     assert_eq!(
@@ -424,7 +445,7 @@ where
         incoming_bundles[0].bundle.messages[1].kind,
         MessageKind::Tracked
     );
-    let messages = cert.executed_block().messages();
+    let messages = cert.block().messages();
     assert_eq!(messages.len(), 1);
 
     // The bounced message is marked as "bouncing" in the Wasm context and succeeds.
@@ -435,7 +456,7 @@ where
     let mut certs = creator.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
     let cert = certs.pop().unwrap();
-    let incoming_bundles = &cert.executed_block().block.incoming_bundles;
+    let incoming_bundles = &cert.block().body.incoming_bundles;
     assert_eq!(incoming_bundles.len(), 2);
     // First message is the grant refund for the successful message sent before.
     assert_eq!(incoming_bundles[0].action, MessageAction::Accept);
@@ -560,7 +581,7 @@ where
         .unwrap()
         .unwrap();
 
-    let messages = cert.executed_block().messages();
+    let messages = cert.block().messages();
     {
         let OutgoingMessage {
             destination,
@@ -584,7 +605,7 @@ where
         .unwrap();
     let certs = receiver.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
-    let messages = &certs[0].executed_block().block.incoming_bundles;
+    let messages = &certs[0].block().body.incoming_bundles;
     assert!(messages.iter().any(|msg| matches!(
         &msg.bundle.messages[0].message,
         Message::System(SystemMessage::RegisterApplications { applications })
@@ -616,7 +637,7 @@ where
         .unwrap();
     let certs = receiver.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
-    let messages = &certs[0].executed_block().block.incoming_bundles;
+    let messages = &certs[0].block().body.incoming_bundles;
     assert!(messages
         .iter()
         .flat_map(|msg| &msg.bundle.messages)
@@ -635,7 +656,7 @@ where
         .execute_operation(Operation::user(application_id, &transfer)?)
         .await
         .is_err());
-    receiver.clear_pending_block();
+    receiver.clear_pending_proposal();
 
     // Try another transfer with the correct amount.
     let transfer = fungible::Operation::Transfer {
@@ -773,26 +794,29 @@ where
     assert_eq!(certs.len(), 1);
 
     // There should be a message receiving the new post.
-    let messages = &certs[0].executed_block().block.incoming_bundles;
+    let messages = &certs[0].block().body.incoming_bundles;
     assert!(messages
         .iter()
         .any(|msg| matches!(&msg.bundle.messages[0].message, Message::User { .. })));
 
     let query = async_graphql::Request::new("{ receivedPosts { keys { author, index } } }");
-    let posts = receiver
+    let outcome = receiver
         .query_user_application(application_id, &query)
         .await?;
-    let expected = async_graphql::Response::new(
-        async_graphql::Value::from_json(json!({
-            "receivedPosts": {
-                "keys": [
-                    { "author": sender.chain_id, "index": 0 }
-                ]
-            }
-        }))
-        .unwrap(),
-    );
-    assert_eq!(posts, expected);
+    let expected = QueryOutcome {
+        response: async_graphql::Response::new(
+            async_graphql::Value::from_json(json!({
+                "receivedPosts": {
+                    "keys": [
+                        { "author": sender.chain_id, "index": 0 }
+                    ]
+                }
+            }))
+            .unwrap(),
+        ),
+        operations: vec![],
+    };
+    assert_eq!(outcome, expected);
 
     // Request to unsubscribe from the sender.
     let request_unsubscribe = social::Operation::Unsubscribe {
@@ -833,19 +857,22 @@ where
 
     // There is still only one post it can see.
     let query = async_graphql::Request::new("{ receivedPosts { keys { author, index } } }");
-    let posts = receiver
+    let outcome = receiver
         .query_user_application(application_id, &query)
         .await
         .unwrap();
-    let expected = async_graphql::Response::new(
-        async_graphql::Value::from_json(json!({
-            "receivedPosts": {
-                "keys": [ { "author": sender.chain_id, "index": 0 } ]
-            }
-        }))
-        .unwrap(),
-    );
-    assert_eq!(posts, expected);
+    let expected = QueryOutcome {
+        response: async_graphql::Response::new(
+            async_graphql::Value::from_json(json!({
+                "receivedPosts": {
+                    "keys": [ { "author": sender.chain_id, "index": 0 } ]
+                }
+            }))
+            .unwrap(),
+        ),
+        operations: vec![],
+    };
+    assert_eq!(outcome, expected);
 
     Ok(())
 }
@@ -894,7 +921,10 @@ async fn test_memory_fuel_limit(wasm_runtime: WasmRuntime) -> anyhow::Result<()>
         .unwrap();
 
     assert!(publisher
-        .execute_operations(vec![Operation::user(application_id, &increment)?; 10])
+        .execute_operations(
+            vec![Operation::user(application_id, &increment)?; 10],
+            vec![]
+        )
         .await
         .is_err());
 

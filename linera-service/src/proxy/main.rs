@@ -346,6 +346,7 @@ where
             | DownloadBlobResponse(_)
             | DownloadPendingBlob(_)
             | DownloadPendingBlobResponse(_)
+            | HandlePendingBlob(_)
             | BlobLastUsedByResponse(_)
             | MissingBlobIdsResponse(_)
             | DownloadConfirmedBlockResponse(_)

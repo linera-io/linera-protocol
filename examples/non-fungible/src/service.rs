@@ -7,7 +7,7 @@ mod state;
 
 use std::{
     collections::{BTreeMap, BTreeSet},
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
 
 use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
@@ -24,7 +24,7 @@ use self::state::NonFungibleTokenState;
 
 pub struct NonFungibleTokenService {
     state: Arc<NonFungibleTokenState>,
-    runtime: Arc<Mutex<ServiceRuntime<Self>>>,
+    runtime: Arc<ServiceRuntime<Self>>,
 }
 
 linera_sdk::service!(NonFungibleTokenService);
@@ -42,7 +42,7 @@ impl Service for NonFungibleTokenService {
             .expect("Failed to load state");
         NonFungibleTokenService {
             state: Arc::new(state),
-            runtime: Arc::new(Mutex::new(runtime)),
+            runtime: Arc::new(runtime),
         }
     }
 
@@ -52,7 +52,9 @@ impl Service for NonFungibleTokenService {
                 non_fungible_token: self.state.clone(),
                 runtime: self.runtime.clone(),
             },
-            MutationRoot,
+            MutationRoot {
+                runtime: self.runtime.clone(),
+            },
             EmptySubscription,
         )
         .finish();
@@ -62,7 +64,7 @@ impl Service for NonFungibleTokenService {
 
 struct QueryRoot {
     non_fungible_token: Arc<NonFungibleTokenState>,
-    runtime: Arc<Mutex<ServiceRuntime<NonFungibleTokenService>>>,
+    runtime: Arc<ServiceRuntime<NonFungibleTokenService>>,
 }
 
 #[Object]
@@ -77,13 +79,7 @@ impl QueryRoot {
             .unwrap();
 
         if let Some(nft) = nft {
-            let payload = {
-                let mut runtime = self
-                    .runtime
-                    .try_lock()
-                    .expect("Services only run in a single thread");
-                runtime.read_data_blob(nft.blob_hash)
-            };
+            let payload = self.runtime.read_data_blob(nft.blob_hash);
             let nft_output = NftOutput::new_with_token_id(token_id, nft, payload);
             Some(nft_output)
         } else {
@@ -97,13 +93,7 @@ impl QueryRoot {
             .nfts
             .for_each_index_value(|_token_id, nft| {
                 let nft = nft.into_owned();
-                let payload = {
-                    let mut runtime = self
-                        .runtime
-                        .try_lock()
-                        .expect("Services only run in a single thread");
-                    runtime.read_data_blob(nft.blob_hash)
-                };
+                let payload = self.runtime.read_data_blob(nft.blob_hash);
                 let nft_output = NftOutput::new(nft, payload);
                 nfts.insert(nft_output.token_id.clone(), nft_output);
                 Ok(())
@@ -163,13 +153,7 @@ impl QueryRoot {
                 .await
                 .unwrap()
                 .unwrap();
-            let payload = {
-                let mut runtime = self
-                    .runtime
-                    .try_lock()
-                    .expect("Services only run in a single thread");
-                runtime.read_data_blob(nft.blob_hash)
-            };
+            let payload = self.runtime.read_data_blob(nft.blob_hash);
             let nft_output = NftOutput::new(nft, payload);
             result.insert(nft_output.token_id.clone(), nft_output);
         }
@@ -178,17 +162,20 @@ impl QueryRoot {
     }
 }
 
-struct MutationRoot;
+struct MutationRoot {
+    runtime: Arc<ServiceRuntime<NonFungibleTokenService>>,
+}
 
 #[Object]
 impl MutationRoot {
-    async fn mint(&self, minter: AccountOwner, name: String, blob_hash: DataBlobHash) -> Vec<u8> {
-        bcs::to_bytes(&Operation::Mint {
+    async fn mint(&self, minter: AccountOwner, name: String, blob_hash: DataBlobHash) -> [u8; 0] {
+        let operation = Operation::Mint {
             minter,
             name,
             blob_hash,
-        })
-        .unwrap()
+        };
+        self.runtime.schedule_operation(&operation);
+        []
     }
 
     async fn transfer(
@@ -196,15 +183,16 @@ impl MutationRoot {
         source_owner: AccountOwner,
         token_id: String,
         target_account: Account,
-    ) -> Vec<u8> {
-        bcs::to_bytes(&Operation::Transfer {
+    ) -> [u8; 0] {
+        let operation = Operation::Transfer {
             source_owner,
             token_id: TokenId {
                 id: STANDARD_NO_PAD.decode(token_id).unwrap(),
             },
             target_account,
-        })
-        .unwrap()
+        };
+        self.runtime.schedule_operation(&operation);
+        []
     }
 
     async fn claim(
@@ -212,14 +200,15 @@ impl MutationRoot {
         source_account: Account,
         token_id: String,
         target_account: Account,
-    ) -> Vec<u8> {
-        bcs::to_bytes(&Operation::Claim {
+    ) -> [u8; 0] {
+        let operation = Operation::Claim {
             source_account,
             token_id: TokenId {
                 id: STANDARD_NO_PAD.decode(token_id).unwrap(),
             },
             target_account,
-        })
-        .unwrap()
+        };
+        self.runtime.schedule_operation(&operation);
+        []
     }
 }

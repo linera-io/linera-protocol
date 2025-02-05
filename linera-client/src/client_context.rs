@@ -3,17 +3,14 @@
 
 #[cfg(with_testing)]
 use std::num::NonZeroUsize;
-use std::{
-    collections::{BTreeMap, HashSet},
-    sync::Arc,
-};
+use std::{collections::HashSet, sync::Arc};
 
 use async_trait::async_trait;
 use futures::Future;
 use linera_base::{
     crypto::KeyPair,
-    data_types::{Blob, BlockHeight, Timestamp},
-    identifiers::{Account, BlobId, ChainId},
+    data_types::{BlockHeight, Timestamp},
+    identifiers::{Account, ChainId},
     ownership::ChainOwnership,
     time::{Duration, Instant},
 };
@@ -36,7 +33,9 @@ use {
         data_types::Amount,
         identifiers::{AccountOwner, ApplicationId, Owner},
     },
-    linera_chain::data_types::{Block, BlockProposal, ExecutedBlock, SignatureAggregator, Vote},
+    linera_chain::data_types::{
+        BlockProposal, ExecutedBlock, ProposedBlock, SignatureAggregator, Vote,
+    },
     linera_chain::types::{CertificateValue, GenericCertificate},
     linera_core::data_types::ChainInfoQuery,
     linera_execution::{
@@ -175,6 +174,7 @@ where
             name,
             options.max_loaded_chains,
             options.grace_period,
+            options.blob_download_timeout,
         );
 
         ClientContext {
@@ -222,6 +222,7 @@ where
             name,
             NonZeroUsize::new(20).expect("Chain worker limit should not be zero"),
             DEFAULT_GRACE_PERIOD,
+            Duration::from_secs(1),
         );
 
         ClientContext {
@@ -268,8 +269,7 @@ where
             chain.block_hash,
             chain.timestamp,
             chain.next_block_height,
-            chain.pending_block.clone(),
-            chain.pending_blobs.clone(),
+            chain.pending_proposal.clone(),
         );
         chain_client.options_mut().message_policy = MessagePolicy::new(
             self.blanket_message_policy,
@@ -322,19 +322,7 @@ where
         key_pair: Option<KeyPair>,
         timestamp: Timestamp,
     ) -> Result<(), Error> {
-        self.update_wallet_for_new_chain_internal(chain_id, key_pair, timestamp, BTreeMap::new())
-            .await
-    }
-
-    #[cfg(test)]
-    pub async fn update_wallet_for_new_chain_with_pending_blobs(
-        &mut self,
-        chain_id: ChainId,
-        key_pair: Option<KeyPair>,
-        timestamp: Timestamp,
-        pending_blobs: BTreeMap<BlobId, Blob>,
-    ) -> Result<(), Error> {
-        self.update_wallet_for_new_chain_internal(chain_id, key_pair, timestamp, pending_blobs)
+        self.update_wallet_for_new_chain_internal(chain_id, key_pair, timestamp)
             .await
     }
 
@@ -343,7 +331,6 @@ where
         chain_id: ChainId,
         key_pair: Option<KeyPair>,
         timestamp: Timestamp,
-        pending_blobs: BTreeMap<BlobId, Blob>,
     ) -> Result<(), Error> {
         if self.wallet.get(chain_id).is_none() {
             self.mutate_wallet(|w| {
@@ -353,8 +340,7 @@ where
                     block_hash: None,
                     timestamp,
                     next_block_height: BlockHeight::ZERO,
-                    pending_block: None,
-                    pending_blobs,
+                    pending_proposal: None,
                 })
             })
             .await?;
@@ -624,13 +610,12 @@ where
         let chain_client = self.make_chain_client(default_chain_id)?;
         while key_pairs.len() < num_chains {
             let key_pair = self.wallet.generate_key_pair();
-            let public_key = key_pair.public();
             let (epoch, committees) = chain_client.epoch_and_committees(default_chain_id).await?;
             let epoch = epoch.expect("default chain should be active");
             // Put at most 1000 OpenChain operations in each block.
             let num_new_chains = (num_chains - key_pairs.len()).min(1000);
             let config = OpenChainConfig {
-                ownership: ChainOwnership::single_super(public_key),
+                ownership: ChainOwnership::single_super(key_pair.public().into()),
                 committees,
                 admin_id: self.wallet.genesis_admin_chain(),
                 epoch,
@@ -641,13 +626,13 @@ where
                 .take(num_new_chains)
                 .collect();
             let certificate = chain_client
-                .execute_operations(operations)
+                .execute_operations(operations, vec![])
                 .await?
                 .expect("should execute block with OpenChain operations");
-            let executed_block = certificate.executed_block();
-            let timestamp = executed_block.block.timestamp;
+            let block = certificate.block();
+            let timestamp = block.header.timestamp;
             for i in 0..num_new_chains {
-                let message_id = executed_block
+                let message_id = block
                     .message_id_for_operation(i, OPEN_CHAIN_MESSAGE_INDEX)
                     .expect("failed to create new chain");
                 let chain_id = ChainId::child(message_id);
@@ -710,7 +695,7 @@ where
         // Put at most 1000 fungible token operations in each block.
         for operations in operations.chunks(1000) {
             chain_client
-                .execute_operations(operations.to_vec())
+                .execute_operations(operations.to_vec(), vec![])
                 .await?
                 .expect("should execute block with OpenChain operations");
         }
@@ -784,7 +769,7 @@ where
                 .take(transactions_per_block)
                 .collect();
             let chain = self.wallet.get(chain_id).expect("should have chain");
-            let block = Block {
+            let block = ProposedBlock {
                 epoch: Epoch::ZERO,
                 chain_id,
                 incoming_bundles: Vec::new(),
@@ -799,7 +784,6 @@ where
                 linera_base::data_types::Round::Fast,
                 block.clone(),
                 key_pair,
-                vec![],
             );
             proposals.push(RpcMessage::BlockProposal(Box::new(proposal)));
             next_recipient = chain.chain_id;
@@ -930,9 +914,7 @@ where
         // Replay the certificates locally.
         for certificate in certificates {
             // No required certificates from other chains: This is only used with benchmark.
-            node.handle_certificate(certificate, vec![], &())
-                .await
-                .unwrap();
+            node.handle_certificate(certificate, &()).await.unwrap();
         }
         // Last update the wallet.
         for chain in self.wallet.as_mut().chains_mut() {
@@ -970,11 +952,15 @@ where
     }
 
     /// Stages the execution of a block proposal.
-    pub async fn stage_block_execution(&self, block: Block) -> Result<ExecutedBlock, Error> {
+    pub async fn stage_block_execution(
+        &self,
+        block: ProposedBlock,
+        round: Option<u32>,
+    ) -> Result<ExecutedBlock, Error> {
         Ok(self
             .client
             .local_node()
-            .stage_block_execution(block)
+            .stage_block_execution(block, round)
             .await?
             .0)
     }

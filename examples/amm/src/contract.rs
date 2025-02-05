@@ -70,7 +70,7 @@ impl Contract for AmmContract {
                 // It's assumed that the tokens have already been transferred here at this point
                 assert!(
                     input_amount > Amount::ZERO,
-                    "You can't add liquidity with zero tokens"
+                    "You can't swap with zero tokens"
                 );
 
                 assert!(input_token_idx < 2, "Invalid token index");

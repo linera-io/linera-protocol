@@ -3,7 +3,7 @@
 
 #![allow(clippy::large_futures)]
 
-use std::{collections::BTreeMap, num::NonZeroUsize, sync::Arc};
+use std::{num::NonZeroUsize, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use futures::{lock::Mutex, FutureExt as _};
@@ -70,8 +70,7 @@ impl chain_listener::ClientContext for ClientContext {
             chain.block_hash,
             chain.timestamp,
             chain.next_block_height,
-            chain.pending_block.clone(),
-            chain.pending_blobs.clone(),
+            chain.pending_proposal.clone(),
         ))
     }
 
@@ -88,8 +87,7 @@ impl chain_listener::ClientContext for ClientContext {
                 block_hash: None,
                 timestamp,
                 next_block_height: BlockHeight::ZERO,
-                pending_block: None,
-                pending_blobs: BTreeMap::new(),
+                pending_proposal: None,
             });
         }
 
@@ -135,10 +133,11 @@ async fn test_chain_listener() -> anyhow::Result<()> {
             format!("Client node for {:.8}", chain_id0),
             NonZeroUsize::new(20).expect("Chain worker LRU cache size must be non-zero"),
             DEFAULT_GRACE_PERIOD,
+            Duration::from_secs(1),
         )),
     };
     let key_pair = KeyPair::generate_from(&mut rng);
-    let public_key = key_pair.public();
+    let owner = key_pair.public().into();
     context
         .update_wallet_for_new_chain(chain_id0, Some(key_pair), clock.current_time())
         .await?;
@@ -148,7 +147,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
 
     // Transfer ownership of chain 0 to the chain listener and some other key. The listener will
     // be leader in ~10% of the rounds.
-    let owners = [(public_key, 1), (PublicKey::test_key(1), 9)];
+    let owners = [(owner, 1), (PublicKey::test_key(1).into(), 9)];
     let timeout_config = TimeoutConfig {
         base_timeout: TimeDelta::from_secs(1),
         timeout_increment: TimeDelta::ZERO,

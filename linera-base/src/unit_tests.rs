@@ -3,7 +3,7 @@
 
 //! Unit tests for `linera-base` types.
 
-use std::{collections::BTreeMap, fmt::Debug};
+use std::fmt::Debug;
 
 use linera_witty::{Layout, WitLoad, WitStore};
 use test_case::test_case;
@@ -134,33 +134,20 @@ fn timeout_config_test_case() -> TimeoutConfig {
 fn chain_ownership_test_case() -> ChainOwnership {
     let super_owners = ["Alice", "Bob"]
         .into_iter()
-        .enumerate()
-        .map(|(index, owner_name)| {
-            (
-                Owner(CryptoHash::test_hash(owner_name)),
-                PublicKey::test_key(index as u8),
-            )
-        })
-        .collect::<BTreeMap<_, _>>();
+        .map(|owner_name| Owner(CryptoHash::test_hash(owner_name)))
+        .collect();
 
     let owners = ["Carol", "Dennis", "Eve"]
         .into_iter()
         .enumerate()
-        .map(|(index, owner_name)| {
-            (
-                Owner(CryptoHash::test_hash(owner_name)),
-                (
-                    PublicKey::test_key((index + super_owners.len()) as u8),
-                    index as u64,
-                ),
-            )
-        })
+        .map(|(index, owner_name)| (Owner(CryptoHash::test_hash(owner_name)), index as u64))
         .collect();
 
     ChainOwnership {
         super_owners,
         owners,
         multi_leader_rounds: 5,
+        open_multi_leader_rounds: false,
         timeout_config: TimeoutConfig {
             fast_round_duration: None,
             base_timeout: TimeDelta::ZERO,

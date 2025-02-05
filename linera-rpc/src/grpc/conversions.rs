@@ -196,9 +196,9 @@ impl TryFrom<BlockProposal> for api::BlockProposal {
         Ok(Self {
             chain_id: Some(block_proposal.content.block.chain_id.into()),
             content: bincode::serialize(&block_proposal.content)?,
+            public_key: Some(block_proposal.public_key.into()),
             owner: Some(block_proposal.owner.into()),
             signature: Some(block_proposal.signature.into()),
-            blobs: bincode::serialize(&block_proposal.blobs)?,
             validated_block_certificate: block_proposal
                 .validated_block_certificate
                 .map(|cert| bincode::serialize(&cert))
@@ -218,9 +218,9 @@ impl TryFrom<api::BlockProposal> for BlockProposal {
         );
         Ok(Self {
             content,
+            public_key: try_proto_convert(block_proposal.public_key)?,
             owner: try_proto_convert(block_proposal.owner)?,
             signature: try_proto_convert(block_proposal.signature)?,
-            blobs: bincode::deserialize(&block_proposal.blobs)?,
             validated_block_certificate: block_proposal
                 .validated_block_certificate
                 .map(|bytes| bincode::deserialize(&bytes))
@@ -375,8 +375,7 @@ impl TryFrom<api::HandleValidatedCertificateRequest> for HandleValidatedCertific
             certificate.inner().chain_id() == req_chain_id,
             GrpcProtoConversionError::InconsistentChainId
         );
-        let blobs = bincode::deserialize(&cert_request.blobs)?;
-        Ok(HandleValidatedCertificateRequest { certificate, blobs })
+        Ok(HandleValidatedCertificateRequest { certificate })
     }
 }
 
@@ -424,7 +423,6 @@ impl TryFrom<HandleValidatedCertificateRequest> for api::HandleValidatedCertific
         Ok(Self {
             chain_id: Some(request.certificate.inner().chain_id().into()),
             certificate: Some(request.certificate.try_into()?),
-            blobs: bincode::serialize(&request.blobs)?,
         })
     }
 }
@@ -712,6 +710,28 @@ impl TryFrom<api::PendingBlobRequest> for (ChainId, BlobId) {
     }
 }
 
+impl TryFrom<(ChainId, BlobContent)> for api::HandlePendingBlobRequest {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from((chain_id, blob_content): (ChainId, BlobContent)) -> Result<Self, Self::Error> {
+        Ok(Self {
+            chain_id: Some(chain_id.into()),
+            blob: Some(blob_content.try_into()?),
+        })
+    }
+}
+
+impl TryFrom<api::HandlePendingBlobRequest> for (ChainId, BlobContent) {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(request: api::HandlePendingBlobRequest) -> Result<Self, Self::Error> {
+        Ok((
+            try_proto_convert(request.chain_id)?,
+            try_proto_convert(request.blob)?,
+        ))
+    }
+}
+
 impl TryFrom<BlobContent> for api::PendingBlobResult {
     type Error = GrpcProtoConversionError;
 
@@ -954,7 +974,7 @@ pub mod tests {
         data_types::{Amount, Blob, Round, Timestamp},
     };
     use linera_chain::{
-        data_types::{Block, BlockExecutionOutcome},
+        data_types::{BlockExecutionOutcome, ProposedBlock},
         test::make_first_block,
         types::CertificateKind,
     };
@@ -968,7 +988,7 @@ pub mod tests {
 
     impl<'de> BcsSignable<'de> for Foo {}
 
-    fn get_block() -> Block {
+    fn get_block() -> ProposedBlock {
         make_first_block(ChainId::root(0))
     }
 
@@ -1100,6 +1120,14 @@ pub mod tests {
     }
 
     #[test]
+    pub fn test_handle_pending_blob_request() {
+        let chain_id = ChainId::root(2);
+        let blob_content = BlobContent::new_data(*b"foo");
+        let pending_blob_request = (chain_id, blob_content);
+        round_trip_check::<_, api::HandlePendingBlobRequest>(pending_blob_request);
+    }
+
+    #[test]
     pub fn test_lite_certificate() {
         let key_pair = KeyPair::generate();
         let certificate = LiteCertificate {
@@ -1139,10 +1167,7 @@ pub mod tests {
                 Signature::new(&Foo("test".into()), &key_pair),
             )],
         );
-        let request = HandleValidatedCertificateRequest {
-            certificate,
-            blobs: vec![],
-        };
+        let request = HandleValidatedCertificateRequest { certificate };
 
         round_trip_check::<_, api::HandleValidatedCertificateRequest>(request);
     }
@@ -1187,15 +1212,16 @@ pub mod tests {
         )
         .lite_certificate()
         .cloned();
+        let public_key = KeyPair::generate().public();
         let block_proposal = BlockProposal {
             content: ProposalContent {
                 block: get_block(),
                 round: Round::SingleLeader(4),
                 outcome: Some(outcome),
             },
-            owner: Owner::from(KeyPair::generate().public()),
+            owner: Owner::from(public_key),
+            public_key,
             signature: Signature::new(&Foo("test".into()), &KeyPair::generate()),
-            blobs: vec![],
             validated_block_certificate: Some(cert),
         };
 

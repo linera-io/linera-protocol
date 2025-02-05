@@ -20,12 +20,15 @@ use linera_base::{
         ChainId, ChannelName, Destination, GenericApplicationId, MessageId, Owner, StreamId,
         UserApplicationId,
     },
+    ownership::ChainOwnership,
 };
 use linera_execution::{
-    committee::ValidatorName, system::OpenChainConfig, ExecutionOutcome, ExecutionRuntimeContext,
-    ExecutionStateView, Message, MessageContext, Operation, OperationContext, Query, QueryContext,
-    RawExecutionOutcome, RawOutgoingMessage, ResourceController, ResourceTracker, Response,
-    ServiceRuntimeEndpoint, TransactionTracker,
+    committee::{Committee, Epoch, ValidatorName},
+    system::OpenChainConfig,
+    ExecutionOutcome, ExecutionRuntimeContext, ExecutionStateView, Message, MessageContext,
+    Operation, OperationContext, Query, QueryContext, QueryOutcome, RawExecutionOutcome,
+    RawOutgoingMessage, ResourceController, ResourceTracker, ServiceRuntimeEndpoint,
+    TransactionTracker,
 };
 use linera_views::{
     context::Context,
@@ -40,12 +43,14 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     data_types::{
-        Block, BlockExecutionOutcome, ChainAndHeight, ChannelFullName, EventRecord, IncomingBundle,
-        MessageAction, MessageBundle, Origin, OutgoingMessage, PostedMessage, Target, Transaction,
+        BlockExecutionOutcome, ChainAndHeight, ChannelFullName, EventRecord, IncomingBundle,
+        MessageAction, MessageBundle, Origin, OutgoingMessage, PostedMessage, ProposedBlock,
+        Target, Transaction,
     },
     inbox::{Cursor, InboxError, InboxStateView},
     manager::ChainManager,
     outbox::OutboxStateView,
+    pending_blobs::PendingBlobsView,
     ChainError, ChainExecutionContext, ExecutionResultExt,
 };
 
@@ -147,8 +152,8 @@ static STATE_HASH_COMPUTATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(||
     )
 });
 
-/// The BCS-serialized size of an empty `ExecutedBlock`.
-const EMPTY_EXECUTED_BLOCK_SIZE: usize = 91;
+/// The BCS-serialized size of an empty [`Block`].
+const EMPTY_BLOCK_SIZE: usize = 91;
 
 /// An origin, cursor and timestamp of a unskippable bundle in our inbox.
 #[derive(Debug, Clone, Serialize, Deserialize, async_graphql::SimpleObject)]
@@ -196,6 +201,11 @@ where
 
     /// Consensus state.
     pub manager: ChainManager<C>,
+    /// Pending validated block that is still missing blobs.
+    /// The incomplete set of blobs for the pending validated block.
+    pub pending_validated_blobs: PendingBlobsView<C>,
+    /// The incomplete sets of blobs for upcoming proposals.
+    pub pending_proposed_blobs: ReentrantCollectionView<C, Owner, PendingBlobsView<C>>,
 
     /// Hashes of all certified blocks for this sender.
     /// This ends with `block_hash` and has length `usize::from(next_block_height)`.
@@ -238,7 +248,7 @@ pub struct ChainTipState {
 impl ChainTipState {
     /// Checks that the proposed block is suitable, i.e. at the expected height and with the
     /// expected parent.
-    pub fn verify_block_chaining(&self, new_block: &Block) -> Result<(), ChainError> {
+    pub fn verify_block_chaining(&self, new_block: &ProposedBlock) -> Result<(), ChainError> {
         ensure!(
             new_block.height == self.next_block_height,
             ChainError::UnexpectedBlockHeight {
@@ -273,7 +283,7 @@ impl ChainTipState {
     /// Checks if the measurement counters would be valid.
     pub fn verify_counters(
         &self,
-        new_block: &Block,
+        new_block: &ProposedBlock,
         outcome: &BlockExecutionOutcome,
     ) -> Result<(), ChainError> {
         let num_incoming_bundles = u32::try_from(new_block.incoming_bundles.len())
@@ -325,7 +335,7 @@ where
         local_time: Timestamp,
         query: Query,
         service_runtime_endpoint: Option<&mut ServiceRuntimeEndpoint>,
-    ) -> Result<Response, ChainError> {
+    ) -> Result<QueryOutcome, ChainError> {
         let context = QueryContext {
             chain_id: self.chain_id(),
             next_block_height: self.tip_state.get().next_block_height,
@@ -580,17 +590,32 @@ where
         Ok(true)
     }
 
+    pub fn current_committee(&self) -> Result<(Epoch, &Committee), ChainError> {
+        self.execution_state
+            .system
+            .current_committee()
+            .ok_or_else(|| ChainError::InactiveChain(self.chain_id()))
+    }
+
+    pub fn ownership(&self) -> &ChainOwnership {
+        self.execution_state.system.ownership.get()
+    }
+
     /// Removes the incoming message bundles in the block from the inboxes.
-    pub async fn remove_bundles_from_inboxes(&mut self, block: &Block) -> Result<(), ChainError> {
+    pub async fn remove_bundles_from_inboxes(
+        &mut self,
+        timestamp: Timestamp,
+        incoming_bundles: &[IncomingBundle],
+    ) -> Result<(), ChainError> {
         let chain_id = self.chain_id();
         let mut bundles_by_origin: BTreeMap<_, Vec<&MessageBundle>> = Default::default();
-        for IncomingBundle { bundle, origin, .. } in &block.incoming_bundles {
+        for IncomingBundle { bundle, origin, .. } in incoming_bundles {
             ensure!(
-                bundle.timestamp <= block.timestamp,
+                bundle.timestamp <= timestamp,
                 ChainError::IncorrectBundleTimestamp {
                     chain_id,
                     bundle_timestamp: bundle.timestamp,
-                    block_timestamp: block.timestamp,
+                    block_timestamp: timestamp,
                 }
             );
             let bundles = bundles_by_origin.entry(origin).or_default();
@@ -651,8 +676,9 @@ where
     /// * Returns the outcome of the execution.
     pub async fn execute_block(
         &mut self,
-        block: &Block,
+        block: &ProposedBlock,
         local_time: Timestamp,
+        round: Option<u32>,
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
     ) -> Result<BlockExecutionOutcome, ChainError> {
         #[cfg(with_metrics)]
@@ -689,16 +715,14 @@ where
             ChainError::InvalidBlockTimestamp
         );
         self.execution_state.system.timestamp.set(block.timestamp);
-        let Some((_, committee)) = self.execution_state.system.current_committee() else {
-            return Err(ChainError::InactiveChain(chain_id));
-        };
+        let (_, committee) = self.current_committee()?;
         let mut resource_controller = ResourceController {
             policy: Arc::new(committee.policy().clone()),
             tracker: ResourceTracker::default(),
             account: block.authenticated_signer,
         };
         resource_controller
-            .track_executed_block_size(EMPTY_EXECUTED_BLOCK_SIZE)
+            .track_block_size(EMPTY_BLOCK_SIZE)
             .and_then(|()| {
                 resource_controller
                     .track_executed_block_size_sequence_extension(0, block.incoming_bundles.len())
@@ -764,7 +788,7 @@ where
             match transaction {
                 Transaction::ReceiveMessages(incoming_bundle) => {
                     resource_controller
-                        .track_executed_block_size_of(&incoming_bundle)
+                        .track_block_size_of(&incoming_bundle)
                         .with_execution_context(chain_execution_context)?;
                     for (message_id, posted_message) in incoming_bundle.messages_and_ids() {
                         Box::pin(self.execute_message_in_block(
@@ -772,6 +796,7 @@ where
                             posted_message,
                             incoming_bundle,
                             block,
+                            round,
                             txn_index,
                             local_time,
                             &mut txn_tracker,
@@ -782,7 +807,7 @@ where
                 }
                 Transaction::ExecuteOperation(operation) => {
                     resource_controller
-                        .track_executed_block_size_of(&operation)
+                        .track_block_size_of(&operation)
                         .with_execution_context(chain_execution_context)?;
                     #[cfg(with_metrics)]
                     let _operation_latency = OPERATION_EXECUTION_LATENCY.measure_latency();
@@ -790,6 +815,7 @@ where
                         chain_id,
                         height: block.height,
                         index: Some(txn_index),
+                        round,
                         authenticated_signer: block.authenticated_signer,
                         authenticated_caller_id: None,
                     };
@@ -838,7 +864,7 @@ where
                 }
             }
             resource_controller
-                .track_executed_block_size_of(&(&txn_oracle_responses, &txn_messages, &txn_events))
+                .track_block_size_of(&(&txn_oracle_responses, &txn_messages, &txn_events))
                 .with_execution_context(chain_execution_context)?;
             resource_controller
                 .track_executed_block_size_sequence_extension(oracle_responses.len(), 1)
@@ -873,6 +899,9 @@ where
         self.execution_state_hash.set(Some(state_hash));
         // Last, reset the consensus state based on the current ownership.
         let maybe_committee = self.execution_state.system.current_committee().into_iter();
+
+        self.pending_validated_blobs.clear();
+        self.pending_proposed_blobs.clear();
         self.manager.reset(
             self.execution_state.system.ownership.get().clone(),
             block.height.try_add_one()?,
@@ -918,7 +947,8 @@ where
         message_id: MessageId,
         posted_message: &PostedMessage,
         incoming_bundle: &IncomingBundle,
-        block: &Block,
+        block: &ProposedBlock,
+        round: Option<u32>,
         txn_index: u32,
         local_time: Timestamp,
         txn_tracker: &mut TransactionTracker,
@@ -930,6 +960,7 @@ where
             chain_id: block.chain_id,
             is_bouncing: posted_message.is_bouncing(),
             height: block.height,
+            round,
             certificate_hash: incoming_bundle.bundle.certificate_hash,
             message_id,
             authenticated_signer: posted_message.authenticated_signer,
@@ -1229,11 +1260,15 @@ where
 }
 
 #[test]
-fn empty_executed_block_size() {
+fn empty_block_size() {
     let executed_block = crate::data_types::ExecutedBlock {
         block: crate::test::make_first_block(ChainId::root(0)),
         outcome: crate::data_types::BlockExecutionOutcome::default(),
     };
-    let size = bcs::serialized_size(&executed_block).unwrap();
-    assert_eq!(size, EMPTY_EXECUTED_BLOCK_SIZE);
+    let size = bcs::serialized_size(&crate::block::Block::new(
+        executed_block.block,
+        executed_block.outcome,
+    ))
+    .unwrap();
+    assert_eq!(size, EMPTY_BLOCK_SIZE);
 }

@@ -17,7 +17,7 @@ use std::{
 use async_graphql::Enum;
 use custom_debug_derive::Debug;
 use linera_base::{
-    crypto::{CryptoHash, PublicKey},
+    crypto::CryptoHash,
     data_types::{
         Amount, ApplicationPermissions, ArithmeticError, BlobContent, OracleResponse, Timestamp,
     },
@@ -46,8 +46,8 @@ use crate::{
     committee::{Committee, Epoch},
     ApplicationRegistryView, ChannelName, ChannelSubscription, Destination,
     ExecutionRuntimeContext, MessageContext, MessageKind, OperationContext, QueryContext,
-    RawExecutionOutcome, RawOutgoingMessage, TransactionTracker, UserApplicationDescription,
-    UserApplicationId,
+    QueryOutcome, RawExecutionOutcome, RawOutgoingMessage, TransactionTracker,
+    UserApplicationDescription, UserApplicationId,
 };
 
 /// The relative index of the `OpenChain` message created by the `OpenChain` operation.
@@ -140,12 +140,16 @@ pub enum SystemOperation {
     ChangeOwnership {
         /// Super owners can propose fast blocks in the first round, and regular blocks in any round.
         #[debug(skip_if = Vec::is_empty)]
-        super_owners: Vec<PublicKey>,
+        super_owners: Vec<Owner>,
         /// The regular owners, with their weights that determine how often they are round leader.
         #[debug(skip_if = Vec::is_empty)]
-        owners: Vec<(PublicKey, u64)>,
+        owners: Vec<(Owner, u64)>,
         /// The number of initial rounds after 0 in which all owners are allowed to propose blocks.
         multi_leader_rounds: u32,
+        /// Whether the multi-leader rounds are unrestricted, i.e. not limited to chain owners.
+        /// This should only be `true` on chains with restrictive application permissions and an
+        /// application-based mechanism to select block proposers.
+        open_multi_leader_rounds: bool,
         /// The timeout configuration: how long fast, multi-leader and single-leader rounds last.
         timeout_config: TimeoutConfig,
     },
@@ -472,18 +476,14 @@ where
                 super_owners,
                 owners,
                 multi_leader_rounds,
+                open_multi_leader_rounds,
                 timeout_config,
             } => {
                 self.ownership.set(ChainOwnership {
-                    super_owners: super_owners
-                        .into_iter()
-                        .map(|public_key| (Owner::from(public_key), public_key))
-                        .collect(),
-                    owners: owners
-                        .into_iter()
-                        .map(|(public_key, weight)| (Owner::from(public_key), (public_key, weight)))
-                        .collect(),
+                    super_owners: super_owners.into_iter().collect(),
+                    owners: owners.into_iter().collect(),
                     multi_leader_rounds,
+                    open_multi_leader_rounds,
                     timeout_config,
                 });
             }
@@ -657,7 +657,7 @@ where
                 self.record_bytecode_blobs(blobs_to_register, txn_tracker)
                     .await?;
                 outcome.messages.push(message);
-                new_application = Some((app_id, instantiation_argument.clone()));
+                new_application = Some((app_id, instantiation_argument));
             }
             RequestApplication {
                 chain_id,
@@ -707,7 +707,7 @@ where
                 SystemExecutionError::UnauthenticatedTransferOwner
             ),
             (None, Some(signer), _) => ensure!(
-                self.ownership.get().verify_owner(&signer).is_some(),
+                self.ownership.get().verify_owner(&signer),
                 SystemExecutionError::UnauthenticatedTransferOwner
             ),
             (_, _, _) => return Err(SystemExecutionError::UnauthenticatedTransferOwner),
@@ -861,7 +861,7 @@ where
                     SystemExecutionError::InvalidCommitteeCreation
                 );
                 if epoch == chain_next_epoch {
-                    self.committees.get_mut().insert(epoch, committee.clone());
+                    self.committees.get_mut().insert(epoch, committee);
                     self.epoch.set(Some(epoch));
                 }
             }
@@ -872,18 +872,13 @@ where
                 for application in applications {
                     self.check_and_record_bytecode_blobs(&application.bytecode_id, txn_tracker)
                         .await?;
-                    self.registry
-                        .register_application(application.clone())
-                        .await?;
+                    self.registry.register_application(application).await?;
                 }
             }
             RequestApplication(application_id) => {
                 let applications = self
                     .registry
-                    .describe_applications_with_dependencies(
-                        vec![application_id],
-                        &Default::default(),
-                    )
+                    .describe_applications_with_dependencies(vec![application_id])
                     .await?;
                 let message = RawOutgoingMessage {
                     destination: Destination::Recipient(context.message_id.chain_id),
@@ -942,12 +937,15 @@ where
         &mut self,
         context: QueryContext,
         _query: SystemQuery,
-    ) -> Result<SystemResponse, SystemExecutionError> {
+    ) -> Result<QueryOutcome<SystemResponse>, SystemExecutionError> {
         let response = SystemResponse {
             chain_id: context.chain_id,
             balance: *self.balance.get(),
         };
-        Ok(response)
+        Ok(QueryOutcome {
+            response,
+            operations: vec![],
+        })
     }
 
     /// Returns the messages to open a new chain, and subtracts the new chain's balance
@@ -1048,7 +1046,7 @@ where
             }
         }
         self.registry
-            .register_new_application(id, parameters.clone(), required_application_ids.clone())
+            .register_new_application(id, parameters, required_application_ids)
             .await?;
         // Send a message to ourself to increment the message ID.
         let message = RawOutgoingMessage {

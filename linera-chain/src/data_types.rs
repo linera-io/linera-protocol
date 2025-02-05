@@ -12,7 +12,7 @@ use custom_debug_derive::Debug;
 use linera_base::{
     bcs,
     crypto::{BcsHashable, BcsSignable, CryptoError, CryptoHash, KeyPair, PublicKey, Signature},
-    data_types::{Amount, Blob, BlockHeight, OracleResponse, Round, Timestamp},
+    data_types::{Amount, BlockHeight, OracleResponse, Round, Timestamp},
     doc_scalar, ensure,
     hashed::Hashed,
     hex_debug,
@@ -29,6 +29,7 @@ use linera_execution::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    block::ValidatedBlock,
     types::{
         CertificateKind, CertificateValue, GenericCertificate, LiteCertificate,
         ValidatedBlockCertificate,
@@ -48,7 +49,7 @@ mod data_types_tests;
 ///   received ahead of time in the inbox of the chain.
 /// * This constraint does not apply to the execution of confirmed blocks.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
-pub struct Block {
+pub struct ProposedBlock {
     /// The chain to which this block belongs.
     pub chain_id: ChainId,
     /// The number identifying the current configuration.
@@ -76,7 +77,7 @@ pub struct Block {
     pub previous_block_hash: Option<CryptoHash>,
 }
 
-impl Block {
+impl ProposedBlock {
     /// Returns all the published blob IDs in this block's operations.
     pub fn published_blob_ids(&self) -> BTreeSet<BlobId> {
         let mut blob_ids = BTreeSet::new();
@@ -144,12 +145,8 @@ impl Block {
         Some((in_bundle, posted_message, config))
     }
 
-    pub fn check_proposal_size(
-        &self,
-        maximum_block_proposal_size: u64,
-        blobs: &[Blob],
-    ) -> Result<(), ChainError> {
-        let size = bcs::serialized_size(&(self, blobs))?;
+    pub fn check_proposal_size(&self, maximum_block_proposal_size: u64) -> Result<(), ChainError> {
+        let size = bcs::serialized_size(self)?;
         ensure!(
             size <= usize::try_from(maximum_block_proposal_size).unwrap_or(usize::MAX),
             ChainError::BlockProposalTooLarge
@@ -230,6 +227,8 @@ impl IncomingBundle {
     }
 }
 
+impl<'de> BcsHashable<'de> for IncomingBundle {}
+
 /// What to do with a message picked from the inbox.
 #[derive(Copy, Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum MessageAction {
@@ -308,9 +307,8 @@ pub enum Medium {
 pub struct BlockProposal {
     pub content: ProposalContent,
     pub owner: Owner,
+    pub public_key: PublicKey,
     pub signature: Signature,
-    #[debug(skip_if = Vec::is_empty)]
-    pub blobs: Vec<Blob>,
     #[debug(skip_if = Option::is_none)]
     pub validated_block_certificate: Option<LiteCertificate<'static>>,
 }
@@ -334,6 +332,8 @@ pub struct OutgoingMessage {
     /// The message itself.
     pub message: Message,
 }
+
+impl<'de> BcsHashable<'de> for OutgoingMessage {}
 
 /// A message together with kind, authentication and grant information.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
@@ -395,16 +395,14 @@ impl OutgoingMessage {
     }
 }
 
-/// A [`Block`], together with the outcome from its execution.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
+/// A [`ProposedBlock`], together with the outcome from its execution.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, SimpleObject)]
 pub struct ExecutedBlock {
-    pub block: Block,
+    pub block: ProposedBlock,
     pub outcome: BlockExecutionOutcome,
 }
 
-impl<'de> BcsHashable<'de> for ExecutedBlock {}
-
-/// The messages and the state hash resulting from a [`Block`]'s execution.
+/// The messages and the state hash resulting from a [`ProposedBlock`]'s execution.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
 #[cfg_attr(with_testing, derive(Default))]
 pub struct BlockExecutionOutcome {
@@ -432,6 +430,8 @@ pub struct EventRecord {
     #[serde(with = "serde_bytes")]
     pub value: Vec<u8>,
 }
+
+impl<'de> BcsHashable<'de> for EventRecord {}
 
 /// The hash and chain ID of a `CertificateValue`.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -732,7 +732,7 @@ impl ExecutedBlock {
 }
 
 impl BlockExecutionOutcome {
-    pub fn with(self, block: Block) -> ExecutedBlock {
+    pub fn with(self, block: ProposedBlock) -> ExecutedBlock {
         ExecutedBlock {
             block,
             outcome: self,
@@ -763,7 +763,7 @@ impl BlockExecutionOutcome {
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ProposalContent {
     /// The proposed block.
-    pub block: Block,
+    pub block: ProposedBlock,
     /// The consensus round in which this proposal is made.
     pub round: Round,
     /// If this is a retry from an earlier round, the execution outcome.
@@ -772,7 +772,7 @@ pub struct ProposalContent {
 }
 
 impl BlockProposal {
-    pub fn new_initial(round: Round, block: Block, secret: &KeyPair, blobs: Vec<Blob>) -> Self {
+    pub fn new_initial(round: Round, block: ProposedBlock, secret: &KeyPair) -> Self {
         let content = ProposalContent {
             round,
             block,
@@ -781,9 +781,9 @@ impl BlockProposal {
         let signature = Signature::new(&content, secret);
         Self {
             content,
+            public_key: secret.public(),
             owner: secret.public().into(),
             signature,
-            blobs,
             validated_block_certificate: None,
         }
     }
@@ -792,10 +792,10 @@ impl BlockProposal {
         round: Round,
         validated_block_certificate: ValidatedBlockCertificate,
         secret: &KeyPair,
-        blobs: Vec<Blob>,
     ) -> Self {
         let lite_cert = validated_block_certificate.lite_certificate().cloned();
-        let executed_block = validated_block_certificate.into_inner().into_inner();
+        let block = validated_block_certificate.into_inner().into_inner();
+        let executed_block: ExecutedBlock = block.into();
         let content = ProposalContent {
             block: executed_block.block,
             round,
@@ -804,15 +804,49 @@ impl BlockProposal {
         let signature = Signature::new(&content, secret);
         Self {
             content,
+            public_key: secret.public(),
             owner: secret.public().into(),
             signature,
-            blobs,
             validated_block_certificate: Some(lite_cert),
         }
     }
 
-    pub fn check_signature(&self, public_key: PublicKey) -> Result<(), CryptoError> {
-        self.signature.check(&self.content, public_key)
+    pub fn check_signature(&self) -> Result<(), CryptoError> {
+        self.signature.check(&self.content, self.public_key)
+    }
+
+    pub fn required_blob_ids(&self) -> impl Iterator<Item = BlobId> + '_ {
+        self.content.block.published_blob_ids().into_iter().chain(
+            self.content
+                .outcome
+                .iter()
+                .flat_map(|outcome| outcome.oracle_blob_ids()),
+        )
+    }
+
+    /// Checks that the public key matches the owner and that the optional certificate matches
+    /// the outcome.
+    pub fn check_invariants(&self) -> Result<(), &'static str> {
+        ensure!(
+            self.owner == Owner::from(&self.public_key),
+            "Public key does not match owner"
+        );
+        match (&self.validated_block_certificate, &self.content.outcome) {
+            (None, None) => {}
+            (None, Some(_)) | (Some(_), None) => {
+                return Err("Must contain a validation certificate if and only if \
+                     it contains the execution outcome from a previous round");
+            }
+            (Some(lite_certificate), Some(outcome)) => {
+                let executed_block = outcome.clone().with(self.content.block.clone());
+                let value = Hashed::new(ValidatedBlock::new(executed_block));
+                ensure!(
+                    lite_certificate.check_value(&value),
+                    "Lite certificate must match the given block and execution outcome"
+                );
+            }
+        }
+        Ok(())
     }
 }
 

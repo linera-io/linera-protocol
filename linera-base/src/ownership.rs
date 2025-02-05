@@ -4,7 +4,10 @@
 //! Structures defining the set of owners and super owners, as well as the consensus
 //! round types and timeouts for chains.
 
-use std::{collections::BTreeMap, iter};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    iter,
+};
 
 use custom_debug_derive::Debug;
 use linera_witty::{WitLoad, WitStore, WitType};
@@ -12,7 +15,6 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
-    crypto::PublicKey,
     data_types::{Round, TimeDelta},
     doc_scalar,
     identifiers::Owner,
@@ -50,59 +52,62 @@ impl Default for TimeoutConfig {
 )]
 pub struct ChainOwnership {
     /// Super owners can propose fast blocks in the first round, and regular blocks in any round.
-    #[debug(skip_if = BTreeMap::is_empty)]
-    pub super_owners: BTreeMap<Owner, PublicKey>,
+    #[debug(skip_if = BTreeSet::is_empty)]
+    pub super_owners: BTreeSet<Owner>,
     /// The regular owners, with their weights that determine how often they are round leader.
     #[debug(skip_if = BTreeMap::is_empty)]
-    pub owners: BTreeMap<Owner, (PublicKey, u64)>,
-    /// The number of initial rounds after 0 in which all owners are allowed to propose blocks.
+    pub owners: BTreeMap<Owner, u64>,
+    /// The number of rounds in which all owners are allowed to propose blocks.
     pub multi_leader_rounds: u32,
+    /// Whether the multi-leader rounds are unrestricted, i.e. not limited to chain owners.
+    /// This should only be `true` on chains with restrictive application permissions and an
+    /// application-based mechanism to select block proposers.
+    pub open_multi_leader_rounds: bool,
     /// The timeout configuration: how long fast, multi-leader and single-leader rounds last.
     pub timeout_config: TimeoutConfig,
 }
 
 impl ChainOwnership {
     /// Creates a `ChainOwnership` with a single super owner.
-    pub fn single_super(public_key: PublicKey) -> Self {
+    pub fn single_super(owner: Owner) -> Self {
         ChainOwnership {
-            super_owners: iter::once((Owner::from(public_key), public_key)).collect(),
+            super_owners: iter::once(owner).collect(),
             owners: BTreeMap::new(),
             multi_leader_rounds: 2,
+            open_multi_leader_rounds: false,
             timeout_config: TimeoutConfig::default(),
         }
     }
 
     /// Creates a `ChainOwnership` with a single regular owner.
-    pub fn single(public_key: PublicKey) -> Self {
+    pub fn single(owner: Owner) -> Self {
         ChainOwnership {
-            super_owners: BTreeMap::new(),
-            owners: iter::once((Owner::from(public_key), (public_key, 100))).collect(),
+            super_owners: BTreeSet::new(),
+            owners: iter::once((owner, 100)).collect(),
             multi_leader_rounds: 2,
+            open_multi_leader_rounds: false,
             timeout_config: TimeoutConfig::default(),
         }
     }
 
     /// Creates a `ChainOwnership` with the specified regular owners.
     pub fn multiple(
-        keys_and_weights: impl IntoIterator<Item = (PublicKey, u64)>,
+        owners_and_weights: impl IntoIterator<Item = (Owner, u64)>,
         multi_leader_rounds: u32,
         timeout_config: TimeoutConfig,
     ) -> Self {
         ChainOwnership {
-            super_owners: BTreeMap::new(),
-            owners: keys_and_weights
-                .into_iter()
-                .map(|(public_key, weight)| (Owner::from(public_key), (public_key, weight)))
-                .collect(),
+            super_owners: BTreeSet::new(),
+            owners: owners_and_weights.into_iter().collect(),
             multi_leader_rounds,
+            open_multi_leader_rounds: false,
             timeout_config,
         }
     }
 
     /// Adds a regular owner.
-    pub fn with_regular_owner(mut self, public_key: PublicKey, weight: u64) -> Self {
-        self.owners
-            .insert(Owner::from(public_key), (public_key, weight));
+    pub fn with_regular_owner(mut self, owner: Owner, weight: u64) -> Self {
+        self.owners.insert(owner, weight);
         self
     }
 
@@ -113,13 +118,9 @@ impl ChainOwnership {
             || self.timeout_config.fallback_duration == TimeDelta::ZERO
     }
 
-    /// Returns the given owner's public key, if they are an owner or super owner.
-    pub fn verify_owner(&self, owner: &Owner) -> Option<PublicKey> {
-        if let Some(public_key) = self.super_owners.get(owner) {
-            Some(*public_key)
-        } else {
-            self.owners.get(owner).map(|(public_key, _)| *public_key)
-        }
+    /// Returns `true` if this is an owner or super owner.
+    pub fn verify_owner(&self, owner: &Owner) -> bool {
+        self.super_owners.contains(owner) || self.owners.contains_key(owner)
     }
 
     /// Returns the duration of the given round.
@@ -157,14 +158,7 @@ impl ChainOwnership {
 
     /// Returns an iterator over all super owners, followed by all owners.
     pub fn all_owners(&self) -> impl Iterator<Item = &Owner> {
-        self.super_owners.keys().chain(self.owners.keys())
-    }
-
-    /// Returns an iterator over all super owners' keys, followed by all owners'.
-    pub fn all_public_keys(&self) -> impl Iterator<Item = &PublicKey> {
-        self.super_owners
-            .values()
-            .chain(self.owners.values().map(|(public_key, _)| public_key))
+        self.super_owners.iter().chain(self.owners.keys())
     }
 
     /// Returns the round following the specified one, if any.
@@ -188,8 +182,16 @@ impl ChainOwnership {
 /// Errors that can happen when attempting to close a chain.
 #[derive(Clone, Copy, Debug, Error, WitStore, WitType)]
 pub enum CloseChainError {
-    /// Authenticated signer wasn't allowed to close the chain.
+    /// The application wasn't allowed to close the chain.
     #[error("Unauthorized attempt to close the chain")]
+    NotPermitted,
+}
+
+/// Errors that can happen when attempting to change the application permissions.
+#[derive(Clone, Copy, Debug, Error, WitStore, WitType)]
+pub enum ChangeApplicationPermissionsError {
+    /// The application wasn't allowed to change the application permissions.
+    #[error("Unauthorized attempt to change the application permissions")]
     NotPermitted,
 }
 
@@ -207,9 +209,10 @@ mod tests {
         let owner = Owner::from(pub_key);
 
         let ownership = ChainOwnership {
-            super_owners: BTreeMap::from_iter([(super_owner, super_pub_key)]),
-            owners: BTreeMap::from_iter([(owner, (pub_key, 100))]),
+            super_owners: BTreeSet::from_iter([super_owner]),
+            owners: BTreeMap::from_iter([(owner, 100)]),
             multi_leader_rounds: 10,
+            open_multi_leader_rounds: false,
             timeout_config: TimeoutConfig {
                 fast_round_duration: Some(TimeDelta::from_secs(5)),
                 base_timeout: TimeDelta::from_secs(10),

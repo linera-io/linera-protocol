@@ -17,29 +17,31 @@ use linera_execution::{
 
 use crate::{
     block::ConfirmedBlock,
-    data_types::{Block, BlockProposal, IncomingBundle, PostedMessage, SignatureAggregator, Vote},
+    data_types::{
+        BlockProposal, IncomingBundle, PostedMessage, ProposedBlock, SignatureAggregator, Vote,
+    },
     types::{CertificateValue, GenericCertificate},
 };
 
 /// Creates a new child of the given block, with the same timestamp.
-pub fn make_child_block(parent: &Hashed<ConfirmedBlock>) -> Block {
+pub fn make_child_block(parent: &Hashed<ConfirmedBlock>) -> ProposedBlock {
     let parent_value = parent.inner();
-    let parent_block = &parent_value.executed_block().block;
-    Block {
-        epoch: parent_block.epoch,
-        chain_id: parent_block.chain_id,
+    let parent_header = &parent_value.block().header;
+    ProposedBlock {
+        epoch: parent_header.epoch,
+        chain_id: parent_header.chain_id,
         incoming_bundles: vec![],
         operations: vec![],
         previous_block_hash: Some(parent.hash()),
-        height: parent_block.height.try_add_one().unwrap(),
-        authenticated_signer: parent_block.authenticated_signer,
-        timestamp: parent_block.timestamp,
+        height: parent_header.height.try_add_one().unwrap(),
+        authenticated_signer: parent_header.authenticated_signer,
+        timestamp: parent_header.timestamp,
     }
 }
 
 /// Creates a block at height 0 for a new chain.
-pub fn make_first_block(chain_id: ChainId) -> Block {
-    Block {
+pub fn make_first_block(chain_id: ChainId) -> ProposedBlock {
+    ProposedBlock {
         epoch: Epoch::ZERO,
         chain_id,
         incoming_bundles: vec![],
@@ -84,7 +86,7 @@ pub trait BlockTestExt: Sized {
     fn into_proposal_with_round(self, key_pair: &KeyPair, round: Round) -> BlockProposal;
 }
 
-impl BlockTestExt for Block {
+impl BlockTestExt for ProposedBlock {
     fn with_authenticated_signer(mut self, authenticated_signer: Option<Owner>) -> Self {
         self.authenticated_signer = authenticated_signer;
         self
@@ -123,7 +125,7 @@ impl BlockTestExt for Block {
     }
 
     fn into_proposal_with_round(self, key_pair: &KeyPair, round: Round) -> BlockProposal {
-        BlockProposal::new_initial(round, self, key_pair, vec![])
+        BlockProposal::new_initial(round, self, key_pair)
     }
 }
 

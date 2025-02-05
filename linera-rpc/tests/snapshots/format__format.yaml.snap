@@ -53,6 +53,9 @@ ApplicationPermissions:
     - close_chain:
         SEQ:
           TYPENAME: ApplicationId
+    - change_application_permissions:
+        SEQ:
+          TYPENAME: ApplicationId
 BlobContent:
   STRUCT:
     - blob_type:
@@ -74,26 +77,30 @@ BlobType:
       ServiceBytecode: UNIT
 Block:
   STRUCT:
-    - chain_id:
-        TYPENAME: ChainId
-    - epoch:
-        TYPENAME: Epoch
+    - header:
+        TYPENAME: BlockHeader
+    - body:
+        TYPENAME: BlockBody
+BlockBody:
+  STRUCT:
     - incoming_bundles:
         SEQ:
           TYPENAME: IncomingBundle
     - operations:
         SEQ:
           TYPENAME: Operation
-    - height:
-        TYPENAME: BlockHeight
-    - timestamp:
-        TYPENAME: Timestamp
-    - authenticated_signer:
-        OPTION:
-          TYPENAME: Owner
-    - previous_block_hash:
-        OPTION:
-          TYPENAME: CryptoHash
+    - messages:
+        SEQ:
+          SEQ:
+            TYPENAME: OutgoingMessage
+    - oracle_responses:
+        SEQ:
+          SEQ:
+            TYPENAME: OracleResponse
+    - events:
+        SEQ:
+          SEQ:
+            TYPENAME: EventRecord
 BlockExecutionOutcome:
   STRUCT:
     - messages:
@@ -110,6 +117,24 @@ BlockExecutionOutcome:
         SEQ:
           SEQ:
             TYPENAME: EventRecord
+BlockHeader:
+  STRUCT:
+    - chain_id:
+        TYPENAME: ChainId
+    - epoch:
+        TYPENAME: Epoch
+    - height:
+        TYPENAME: BlockHeight
+    - timestamp:
+        TYPENAME: Timestamp
+    - state_hash:
+        TYPENAME: CryptoHash
+    - previous_block_hash:
+        OPTION:
+          TYPENAME: CryptoHash
+    - authenticated_signer:
+        OPTION:
+          TYPENAME: Owner
 BlockHeight:
   NEWTYPESTRUCT: U64
 BlockHeightRange:
@@ -124,11 +149,10 @@ BlockProposal:
         TYPENAME: ProposalContent
     - owner:
         TYPENAME: Owner
+    - public_key:
+        TYPENAME: PublicKey
     - signature:
         TYPENAME: Signature
-    - blobs:
-        SEQ:
-          TYPENAME: BlobContent
     - validated_block_certificate:
         OPTION:
           TYPENAME: LiteCertificate
@@ -256,9 +280,9 @@ ChainManagerInfo:
     - requested_proposed:
         OPTION:
           TYPENAME: BlockProposal
-    - requested_locked:
+    - requested_locking:
         OPTION:
-          TYPENAME: LockedBlock
+          TYPENAME: LockingBlock
     - timeout:
         OPTION:
           TYPENAME: TimeoutCertificate
@@ -273,10 +297,10 @@ ChainManagerInfo:
           TYPENAME: LiteVote
     - requested_confirmed:
         OPTION:
-          TYPENAME: ExecutedBlock
+          TYPENAME: Block
     - requested_validated:
         OPTION:
-          TYPENAME: ExecutedBlock
+          TYPENAME: Block
     - current_round:
         TYPENAME: Round
     - leader:
@@ -288,20 +312,15 @@ ChainManagerInfo:
 ChainOwnership:
   STRUCT:
     - super_owners:
-        MAP:
-          KEY:
-            TYPENAME: Owner
-          VALUE:
-            TYPENAME: PublicKey
+        SEQ:
+          TYPENAME: Owner
     - owners:
         MAP:
           KEY:
             TYPENAME: Owner
-          VALUE:
-            TUPLE:
-              - TYPENAME: PublicKey
-              - U64
+          VALUE: U64
     - multi_leader_rounds: U32
+    - open_multi_leader_rounds: BOOL
     - timeout_config:
         TYPENAME: TimeoutConfig
 ChannelFullName:
@@ -331,7 +350,7 @@ Committee:
 ConfirmedBlockCertificate:
   STRUCT:
     - value:
-        TYPENAME: ExecutedBlock
+        TYPENAME: Block
     - round:
         TYPENAME: Round
     - signatures:
@@ -396,12 +415,6 @@ EventRecord:
         TYPENAME: StreamId
     - key: BYTES
     - value: BYTES
-ExecutedBlock:
-  STRUCT:
-    - block:
-        TYPENAME: Block
-    - outcome:
-        TYPENAME: BlockExecutionOutcome
 GenericApplicationId:
   ENUM:
     0:
@@ -428,9 +441,6 @@ HandleValidatedCertificateRequest:
   STRUCT:
     - certificate:
         TYPENAME: ValidatedBlockCertificate
-    - blobs:
-        SEQ:
-          TYPENAME: BlobContent
 IncomingBundle:
   STRUCT:
     - origin:
@@ -468,7 +478,7 @@ LiteVote:
         TYPENAME: ValidatorName
     - signature:
         TYPENAME: Signature
-LockedBlock:
+LockingBlock:
   ENUM:
     0:
       Fast:
@@ -672,6 +682,10 @@ OracleResponse:
           TYPENAME: BlobId
     3:
       Assert: UNIT
+    4:
+      Round:
+        NEWTYPE:
+          OPTION: U32
 Origin:
   STRUCT:
     - sender:
@@ -715,12 +729,34 @@ PostedMessage:
 ProposalContent:
   STRUCT:
     - block:
-        TYPENAME: Block
+        TYPENAME: ProposedBlock
     - round:
         TYPENAME: Round
     - outcome:
         OPTION:
           TYPENAME: BlockExecutionOutcome
+ProposedBlock:
+  STRUCT:
+    - chain_id:
+        TYPENAME: ChainId
+    - epoch:
+        TYPENAME: Epoch
+    - incoming_bundles:
+        SEQ:
+          TYPENAME: IncomingBundle
+    - operations:
+        SEQ:
+          TYPENAME: Operation
+    - height:
+        TYPENAME: BlockHeight
+    - timestamp:
+        TYPENAME: Timestamp
+    - authenticated_signer:
+        OPTION:
+          TYPENAME: Owner
+    - previous_block_hash:
+        OPTION:
+          TYPENAME: CryptoHash
 PublicKey:
   NEWTYPESTRUCT:
     TUPLEARRAY:
@@ -762,6 +798,7 @@ ResourceControlPolicy:
     - maximum_executed_block_size: U64
     - maximum_bytecode_size: U64
     - maximum_blob_size: U64
+    - maximum_published_blobs: U64
     - maximum_block_proposal_size: U64
     - maximum_bytes_read_per_block: U64
     - maximum_bytes_written_per_block: U64
@@ -819,78 +856,84 @@ RpcMessage:
             - TYPENAME: ChainId
             - TYPENAME: BlobId
     9:
+      HandlePendingBlob:
+        NEWTYPE:
+          TUPLE:
+            - TYPENAME: ChainId
+            - TYPENAME: BlobContent
+    10:
       DownloadConfirmedBlock:
         NEWTYPE:
           TYPENAME: CryptoHash
-    10:
+    11:
       DownloadCertificates:
         NEWTYPE:
           SEQ:
             TYPENAME: CryptoHash
-    11:
+    12:
       BlobLastUsedBy:
         NEWTYPE:
           TYPENAME: BlobId
-    12:
+    13:
       MissingBlobIds:
         NEWTYPE:
           SEQ:
             TYPENAME: BlobId
-    13:
-      VersionInfoQuery: UNIT
     14:
-      GenesisConfigHashQuery: UNIT
+      VersionInfoQuery: UNIT
     15:
+      GenesisConfigHashQuery: UNIT
+    16:
       Vote:
         NEWTYPE:
           TYPENAME: LiteVote
-    16:
+    17:
       ChainInfoResponse:
         NEWTYPE:
           TYPENAME: ChainInfoResponse
-    17:
+    18:
       Error:
         NEWTYPE:
           TYPENAME: NodeError
-    18:
+    19:
       VersionInfoResponse:
         NEWTYPE:
           TYPENAME: VersionInfo
-    19:
+    20:
       GenesisConfigHashResponse:
         NEWTYPE:
           TYPENAME: CryptoHash
-    20:
+    21:
       UploadBlobResponse:
         NEWTYPE:
           TYPENAME: BlobId
-    21:
+    22:
       DownloadBlobResponse:
         NEWTYPE:
           TYPENAME: BlobContent
-    22:
+    23:
       DownloadPendingBlobResponse:
         NEWTYPE:
           TYPENAME: BlobContent
-    23:
+    24:
       DownloadConfirmedBlockResponse:
         NEWTYPE:
-          TYPENAME: ExecutedBlock
-    24:
+          TYPENAME: Block
+    25:
       DownloadCertificatesResponse:
         NEWTYPE:
           SEQ:
             TYPENAME: ConfirmedBlockCertificate
-    25:
+    26:
       BlobLastUsedByResponse:
         NEWTYPE:
           TYPENAME: CryptoHash
-    26:
+    27:
       MissingBlobIdsResponse:
         NEWTYPE:
           SEQ:
             TYPENAME: BlobId
-    27:
+    28:
       CrossChainRequest:
         NEWTYPE:
           TYPENAME: CrossChainRequest
@@ -1009,13 +1052,14 @@ SystemOperation:
         STRUCT:
           - super_owners:
               SEQ:
-                TYPENAME: PublicKey
+                TYPENAME: Owner
           - owners:
               SEQ:
                 TUPLE:
-                  - TYPENAME: PublicKey
+                  - TYPENAME: Owner
                   - U64
           - multi_leader_rounds: U32
+          - open_multi_leader_rounds: BOOL
           - timeout_config:
               TYPENAME: TimeoutConfig
     5:
@@ -1119,7 +1163,7 @@ UserApplicationDescription:
 ValidatedBlockCertificate:
   STRUCT:
     - value:
-        TYPENAME: ExecutedBlock
+        TYPENAME: Block
     - round:
         TYPENAME: Round
     - signatures:

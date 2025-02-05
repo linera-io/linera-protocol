@@ -8,7 +8,7 @@
 use hex_game::{HexAbi, Operation, Timeouts};
 use linera_sdk::{
     base::{Amount, ChainDescription, KeyPair, TimeDelta},
-    test::{ActiveChain, TestValidator},
+    test::{ActiveChain, QueryOutcome, TestValidator},
 };
 
 #[test_log::test(tokio::test)]
@@ -23,7 +23,7 @@ async fn hex_game() {
         .add_block(|block| {
             let operation = Operation::Start {
                 board_size: 2,
-                players: [key_pair1.public(), key_pair2.public()],
+                players: [key_pair1.public().into(), key_pair2.public().into()],
                 fee_budget: Amount::ZERO,
                 timeouts: None,
             };
@@ -31,8 +31,8 @@ async fn hex_game() {
         })
         .await;
 
-    let executed_block = certificate.inner().executed_block();
-    let message_id = executed_block.message_id_for_operation(0, 0).unwrap();
+    let block = certificate.inner().block();
+    let message_id = block.message_id_for_operation(0, 0).unwrap();
     let description = ChainDescription::Child(message_id);
     let mut chain = ActiveChain::new(key_pair1.copy(), description, validator);
 
@@ -57,7 +57,7 @@ async fn hex_game() {
         })
         .await;
 
-    let response = chain.graphql_query(app_id, "query { winner }").await;
+    let QueryOutcome { response, .. } = chain.graphql_query(app_id, "query { winner }").await;
     assert!(response["winner"].is_null());
 
     chain.set_key_pair(key_pair2.copy());
@@ -67,7 +67,7 @@ async fn hex_game() {
         })
         .await;
 
-    let response = chain.graphql_query(app_id, "query { winner }").await;
+    let QueryOutcome { response, .. } = chain.graphql_query(app_id, "query { winner }").await;
     assert_eq!(Some("TWO"), response["winner"].as_str());
     assert!(chain.is_closed().await);
 }
@@ -97,7 +97,7 @@ async fn hex_game_clock() {
         .add_block(|block| {
             let operation = Operation::Start {
                 board_size: 2,
-                players: [key_pair1.public(), key_pair2.public()],
+                players: [key_pair1.public().into(), key_pair2.public().into()],
                 fee_budget: Amount::ZERO,
                 timeouts: None,
             };
@@ -105,8 +105,8 @@ async fn hex_game_clock() {
         })
         .await;
 
-    let executed_block = certificate.inner().executed_block();
-    let message_id = executed_block.message_id_for_operation(0, 0).unwrap();
+    let block = certificate.inner().block();
+    let message_id = block.message_id_for_operation(0, 0).unwrap();
     let description = ChainDescription::Child(message_id);
     let mut chain = ActiveChain::new(key_pair1.copy(), description, validator.clone());
 
@@ -154,6 +154,6 @@ async fn hex_game_clock() {
         })
         .await;
 
-    let response = chain.graphql_query(app_id, "query { winner }").await;
+    let QueryOutcome { response, .. } = chain.graphql_query(app_id, "query { winner }").await;
     assert_eq!(Some("ONE"), response["winner"].as_str());
 }

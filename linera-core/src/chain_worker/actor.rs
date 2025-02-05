@@ -17,13 +17,13 @@ use linera_base::{
     identifiers::{BlobId, ChainId, UserApplicationId},
 };
 use linera_chain::{
-    data_types::{Block, BlockProposal, ExecutedBlock, MessageBundle, Origin, Target},
-    types::{ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
+    data_types::{BlockProposal, ExecutedBlock, MessageBundle, Origin, ProposedBlock, Target},
+    types::{Block, ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
     ChainStateView,
 };
 use linera_execution::{
     committee::{Epoch, ValidatorName},
-    Query, QueryContext, Response, ServiceRuntimeEndpoint, ServiceSyncRuntime,
+    Query, QueryContext, QueryOutcome, ServiceRuntimeEndpoint, ServiceSyncRuntime,
 };
 use linera_storage::Storage;
 use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
@@ -72,7 +72,7 @@ where
     QueryApplication {
         query: Query,
         #[debug(skip)]
-        callback: oneshot::Sender<Result<Response, WorkerError>>,
+        callback: oneshot::Sender<Result<QueryOutcome, WorkerError>>,
     },
 
     /// Describe an application.
@@ -84,7 +84,8 @@ where
 
     /// Execute a block but discard any changes to the chain state.
     StageBlockExecution {
-        block: Block,
+        block: ProposedBlock,
+        round: Option<u32>,
         #[debug(skip)]
         callback: oneshot::Sender<Result<(ExecutedBlock, ChainInfoResponse), WorkerError>>,
     },
@@ -106,7 +107,6 @@ where
     /// Process a validated block issued for this multi-owner chain.
     ProcessValidatedBlock {
         certificate: ValidatedBlockCertificate,
-        blobs: Vec<Blob>,
         #[debug(skip)]
         callback: oneshot::Sender<Result<(ChainInfoResponse, NetworkActions, bool), WorkerError>>,
     },
@@ -142,11 +142,18 @@ where
         callback: oneshot::Sender<Result<(ChainInfoResponse, NetworkActions), WorkerError>>,
     },
 
-    /// Get a blob if it belongs to the current locked block or pending proposal.
+    /// Get a blob if it belongs to the current locking block or pending proposal.
     DownloadPendingBlob {
         blob_id: BlobId,
         #[debug(skip)]
         callback: oneshot::Sender<Result<Blob, WorkerError>>,
+    },
+
+    /// Handle a blob that belongs to a pending proposal or validated block certificate.
+    HandlePendingBlob {
+        blob: Blob,
+        #[debug(skip)]
+        callback: oneshot::Sender<Result<ChainInfoResponse, WorkerError>>,
     },
 
     /// Update the received certificate trackers to at least the given values.
@@ -174,7 +181,7 @@ where
     pub async fn load(
         config: ChainWorkerConfig,
         storage: StorageClient,
-        executed_block_cache: Arc<ValueCache<CryptoHash, Hashed<ExecutedBlock>>>,
+        executed_block_cache: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
         tracked_chains: Option<Arc<RwLock<HashSet<ChainId>>>>,
         delivery_notifier: DeliveryNotifier,
         chain_id: ChainId,
@@ -280,8 +287,12 @@ where
                 } => callback
                     .send(self.worker.describe_application(application_id).await)
                     .is_ok(),
-                ChainWorkerRequest::StageBlockExecution { block, callback } => callback
-                    .send(self.worker.stage_block_execution(block).await)
+                ChainWorkerRequest::StageBlockExecution {
+                    block,
+                    round,
+                    callback,
+                } => callback
+                    .send(self.worker.stage_block_execution(block, round).await)
                     .is_ok(),
                 ChainWorkerRequest::ProcessTimeout {
                     certificate,
@@ -294,14 +305,9 @@ where
                     .is_ok(),
                 ChainWorkerRequest::ProcessValidatedBlock {
                     certificate,
-                    blobs,
                     callback,
                 } => callback
-                    .send(
-                        self.worker
-                            .process_validated_block(certificate, &blobs)
-                            .await,
-                    )
+                    .send(self.worker.process_validated_block(certificate).await)
                     .is_ok(),
                 ChainWorkerRequest::ProcessConfirmedBlock {
                     certificate,
@@ -339,6 +345,9 @@ where
                     .is_ok(),
                 ChainWorkerRequest::DownloadPendingBlob { blob_id, callback } => callback
                     .send(self.worker.download_pending_blob(blob_id).await)
+                    .is_ok(),
+                ChainWorkerRequest::HandlePendingBlob { blob, callback } => callback
+                    .send(self.worker.handle_pending_blob(blob).await)
                     .is_ok(),
                 ChainWorkerRequest::UpdateReceivedCertificateTrackers {
                     new_trackers,
