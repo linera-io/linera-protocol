@@ -168,7 +168,7 @@ impl UnorderedBatch {
 /// That is, there should not be any two prefixes p1 and p2 such that p1 < p2 for
 /// the lexicographic ordering on `Vec<u8>` entries.
 /// Under this condition we have equivalence between the following two statements:
-/// * There is an key_prefix in `key_prefiw_set` that matches `key`.
+/// * There is an key_prefix in `key_prefix_set` that matches `key`.
 /// * The highest key_prefix in `key_prefix_set` is actually matching.
 fn is_prefix_matched(key_prefix_set: &BTreeSet<Vec<u8>>, key: &[u8]) -> bool {
     let range = (Bound::Unbounded, Bound::Included(key.to_vec()));
