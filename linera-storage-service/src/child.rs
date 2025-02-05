@@ -54,7 +54,7 @@ impl StorageService {
         let mut command = self.command().await;
         let _child = command.spawn_into()?;
         let guard = StorageServiceGuard { _child };
-        // We iterate until the child is spanned and can be accessed.
+        // We iterate until the child is spawned and can be accessed.
         // We add an additional waiting period to avoid problems.
         for i in 1..10 {
             let result = storage_service_check_validity(&self.endpoint).await;
