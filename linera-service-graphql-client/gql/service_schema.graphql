@@ -83,7 +83,7 @@ The body of a block containing all the data included in the block.
 """
 type BlockBody {
 	"""
-	A selection of incoming messages to be executed first. Successive messages of same
+	A selection of incoming messages to be executed first. Successive messages of the same
 	sender and height are grouped together for conciseness.
 	"""
 	incomingBundles: [IncomingBundle!]!
