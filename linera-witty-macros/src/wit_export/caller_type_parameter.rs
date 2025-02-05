@@ -16,7 +16,7 @@ use syn::{
 
 use crate::util::{Specialization, Specializations};
 
-/// Information on the  generic type parameter to use for the caller parameter, if present.
+/// Information on the generic type parameter to use for the caller parameter, if present.
 #[derive(Clone, Copy, Debug)]
 pub struct CallerTypeParameter<'input> {
     caller: &'input Ident,
