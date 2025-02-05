@@ -254,7 +254,7 @@ impl<'input> CallerTypeParameter<'input> {
             .apply_to_type(target_type);
     }
 
-    /// Builds the [`Specializatons`] instance to replace the [`CallerTypeParameter`] with the
+    /// Builds the [`Specializations`] instance to replace the [`CallerTypeParameter`] with the
     /// concrete `caller_type`.
     fn build_specializations(&self, caller_type: Type) -> Specializations {
         Specializations::from_iter(Some(Specialization::new(self.caller.clone(), caller_type)))
