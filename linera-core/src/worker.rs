@@ -221,6 +221,8 @@ pub enum WorkerError {
     JoinError,
     #[error("Blob exceeds size limit")]
     BlobTooLarge,
+    #[error("Blob was not required by any pending block")]
+    UnexpectedBlob,
     #[error("Bytecode exceeds size limit")]
     BytecodeTooLarge,
     #[error("Number of published blobs per block must not exceed {0}")]

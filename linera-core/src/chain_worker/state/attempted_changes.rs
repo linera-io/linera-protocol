@@ -628,7 +628,8 @@ where
         &mut self,
         blob: Blob,
     ) -> Result<ChainInfoResponse, WorkerError> {
-        self.state
+        let mut was_expected = self
+            .state
             .chain
             .pending_validated_blobs
             .maybe_insert(&blob)
@@ -650,8 +651,9 @@ where
                     WorkerError::TooManyPublishedBlobs(policy.maximum_published_blobs)
                 );
             }
-            pending_blobs.maybe_insert(&blob).await?;
+            was_expected = was_expected || pending_blobs.maybe_insert(&blob).await?;
         }
+        ensure!(was_expected, WorkerError::UnexpectedBlob);
         self.save().await?;
         Ok(ChainInfoResponse::new(
             &self.state.chain,
