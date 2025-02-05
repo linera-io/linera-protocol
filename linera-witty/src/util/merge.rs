@@ -6,7 +6,7 @@
 use either::Either;
 use frunk::{HCons, HNil};
 
-/// Merging of two heterogeneous lists, resulting in a new heterogenous list where every element is
+/// Merging of two heterogeneous lists, resulting in a new heterogeneous list where every element is
 /// of type `Either<Left, Right>`, where `Left` is an element from the current list and `Right` is
 /// an element from the `Other` list.
 pub trait Merge<Other>: Sized {
