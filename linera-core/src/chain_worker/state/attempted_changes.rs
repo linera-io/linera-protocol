@@ -628,14 +628,12 @@ where
         &mut self,
         blob: Blob,
     ) -> Result<ChainInfoResponse, WorkerError> {
-        let mut was_expected = false;
-        was_expected = was_expected
-            || self
-                .state
-                .chain
-                .pending_validated_blobs
-                .maybe_insert(&blob)
-                .await?;
+        let mut was_expected = self
+            .state
+            .chain
+            .pending_validated_blobs
+            .maybe_insert(&blob)
+            .await?;
         for (_, mut pending_blobs) in self
             .state
             .chain
