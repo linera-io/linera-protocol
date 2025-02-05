@@ -845,21 +845,25 @@ where
         fungible_application_id: Option<ApplicationId>,
     ) -> Vec<RpcMessage> {
         let mut proposals = Vec::new();
-        let mut next_recipient = self.wallet.last_chain().unwrap().chain_id;
+        let mut previous_chain_id = *key_pairs
+            .iter()
+            .last()
+            .expect("There should be a last element")
+            .0;
         let amount = Amount::from(1);
         for (&chain_id, key_pair) in key_pairs {
             let public_key = key_pair.public();
             let operation = match fungible_application_id {
                 Some(application_id) => Self::fungible_transfer(
                     application_id,
-                    next_recipient,
+                    previous_chain_id,
                     public_key,
                     public_key,
                     amount,
                 ),
                 None => Operation::System(SystemOperation::Transfer {
                     owner: None,
-                    recipient: Recipient::chain(next_recipient),
+                    recipient: Recipient::chain(previous_chain_id),
                     amount,
                 }),
             };
@@ -884,7 +888,7 @@ where
                 key_pair,
             );
             proposals.push(RpcMessage::BlockProposal(Box::new(proposal)));
-            next_recipient = chain.chain_id;
+            previous_chain_id = chain.chain_id;
         }
         proposals
     }
