@@ -2311,12 +2311,11 @@ where
         ))
     );
 
-    let result = client1.publish_data_blob(large_blob_bytes).await;
     assert_matches!(
-        result,
-        Err(ChainClientError::LocalNodeError(
-            LocalNodeError::WorkerError(WorkerError::BlobTooLarge)
-        ))
+        client1.publish_data_blob(large_blob_bytes).await,
+        Err(ChainClientError::ChainError(ChainError::ExecutionError(
+            error, ChainExecutionContext::Block
+        ))) if matches!(*error, ExecutionError::BlobTooLarge)
     );
 
     Ok(())

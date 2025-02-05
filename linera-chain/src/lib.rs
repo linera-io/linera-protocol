@@ -187,7 +187,7 @@ pub enum ChainExecutionContext {
     Block,
 }
 
-trait ExecutionResultExt<T> {
+pub trait ExecutionResultExt<T> {
     fn with_execution_context(self, context: ChainExecutionContext) -> Result<T, ChainError>;
 }
 

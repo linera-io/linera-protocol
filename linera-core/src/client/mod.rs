@@ -50,7 +50,7 @@ use linera_chain::{
         CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate,
         LiteCertificate, Timeout, TimeoutCertificate, ValidatedBlock, ValidatedBlockCertificate,
     },
-    ChainError, ChainExecutionContext, ChainStateView,
+    ChainError, ChainExecutionContext, ChainStateView, ExecutionResultExt as _,
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
@@ -2027,7 +2027,7 @@ where
     async fn execute_block(
         &self,
         operations: Vec<Operation>,
-        blobs: impl IntoIterator<Item = Blob>,
+        blobs: Vec<Blob>,
     ) -> Result<ExecuteBlockOutcome, ChainClientError> {
         #[cfg(with_metrics)]
         let _latency = metrics::EXECUTE_BLOCK_LATENCY.measure_latency();
@@ -2077,7 +2077,7 @@ where
         &self,
         incoming_bundles: Vec<IncomingBundle>,
         operations: Vec<Operation>,
-        blobs: impl IntoIterator<Item = Blob>,
+        blobs: Vec<Blob>,
         identity: Owner,
     ) -> Result<Hashed<ConfirmedBlock>, ChainClientError> {
         let (previous_block_hash, height, timestamp) = {
@@ -2113,6 +2113,7 @@ where
         // Using the round number during execution counts as an oracle.
         // Accessing the round number in single-leader rounds where we are not the leader
         // is not currently supported.
+        let published_blob_ids = block.published_blob_ids();
         let round = match Self::round_for_new_proposal(&info, &identity, &block, true)? {
             Either::Left(round) => round.multi_leader(),
             Either::Right(_) => None,
@@ -2124,6 +2125,14 @@ where
         let committee = self.local_committee().await?;
         let max_size = committee.policy().maximum_block_proposal_size;
         block.check_proposal_size(max_size)?;
+        for blob in &blobs {
+            if published_blob_ids.contains(&blob.id()) {
+                committee
+                    .policy()
+                    .check_blob_size(blob.content())
+                    .with_execution_context(ChainExecutionContext::Block)?;
+            }
+        }
         self.state_mut().set_pending_proposal(block.clone(), blobs);
         Ok(Hashed::new(ConfirmedBlock::new(executed_block)))
     }
