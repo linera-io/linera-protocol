@@ -3311,7 +3311,7 @@ where
                     .await
                     {
                         Ok(handler) => process_notifications.push(handler),
-                        Err(error) => error!("Failed to update comittee: {error}"),
+                        Err(error) => error!("Failed to update committee: {error}"),
                     }
                 }
             }
