@@ -446,7 +446,7 @@ impl LocalKubernetesNet {
                     base_dir.join(&server_config_filename),
                 )?;
 
-                HelmFile::sync(i, &github_root, num_shards, cluster_id).await?;
+                HelmFile::sync(i, &github_root, num_shards, cluster_id, docker_image_name).await?;
 
                 let mut kubectl_instance = kubectl_instance.lock().await;
                 let output = kubectl_instance.get_pods(cluster_id).await?;
