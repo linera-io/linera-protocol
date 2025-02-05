@@ -6,14 +6,7 @@
 #![deny(clippy::large_futures)]
 
 use std::{
-    borrow::Cow,
-    collections::HashMap,
-    env,
-    num::NonZeroUsize,
-    path::PathBuf,
-    process,
-    sync::Arc,
-    time::{Duration, Instant},
+    borrow::Cow, collections::HashMap, env, path::PathBuf, process, sync::Arc, time::Instant,
 };
 
 use anyhow::{anyhow, bail, ensure, Context};
@@ -40,12 +33,11 @@ use linera_client::{
     wallet::{UserChain, Wallet},
 };
 use linera_core::{
-    client,
     data_types::{ChainInfoQuery, ClientOutcome},
-    node::{CrossChainMessageDelivery, ValidatorNodeProvider},
+    node::ValidatorNodeProvider,
     remote_node::RemoteNode,
     worker::Reason,
-    JoinSetExt as _, DEFAULT_GRACE_PERIOD,
+    JoinSetExt as _,
 };
 use linera_execution::{
     committee::{Committee, ValidatorName, ValidatorState},
@@ -1078,15 +1070,8 @@ impl Runnable for Job {
                     "Linking chain {chain_id} to its corresponding key in the wallet, owned by \
                     {owner}",
                 );
-                Self::assign_new_chain_to_key(
-                    chain_id,
-                    message_id,
-                    storage,
-                    owner,
-                    None,
-                    &mut context,
-                )
-                .await?;
+                Self::assign_new_chain_to_key(chain_id, message_id, owner, None, &mut context)
+                    .await?;
                 println!("{}", chain_id);
                 context.save_wallet().await?;
                 info!(
@@ -1199,7 +1184,6 @@ impl Runnable for Job {
                 Self::assign_new_chain_to_key(
                     outcome.chain_id,
                     outcome.message_id,
-                    storage.clone(),
                     owner,
                     Some(validators),
                     &mut context,
@@ -1238,7 +1222,6 @@ impl Job {
     async fn assign_new_chain_to_key<S>(
         chain_id: ChainId,
         message_id: MessageId,
-        storage: S,
         owner: Owner,
         validators: Option<Vec<(ValidatorName, String)>>,
         context: &mut ClientContext<S, impl Persist<Target = Wallet>>,
@@ -1247,17 +1230,11 @@ impl Job {
         S: Storage + Clone + Send + Sync + 'static,
     {
         let node_provider = context.make_node_provider();
-        let client = client::Client::new(
+        let client = context.client.clone_with(
             node_provider.clone(),
-            storage,
-            100,
-            CrossChainMessageDelivery::Blocking,
-            false,
-            vec![message_id.chain_id, chain_id],
             "Temporary client for fetching the parent chain",
-            NonZeroUsize::new(20).expect("Chain worker limit should not be zero"),
-            DEFAULT_GRACE_PERIOD,
-            Duration::from_secs(1),
+            vec![message_id.chain_id, chain_id],
+            false,
         );
 
         // Take the latest committee we know of.
