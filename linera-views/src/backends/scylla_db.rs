@@ -84,7 +84,7 @@ const VISIBLE_MAX_VALUE_SIZE: usize = RAW_MAX_VALUE_SIZE
 /// correct.
 const MAX_BATCH_SIZE: usize = 5000;
 
-/// The client for ScyllaDbB:
+/// The client for ScyllaDB:
 /// * The session allows to pass queries
 /// * The namespace that is being assigned to the database
 /// * The prepared queries used for implementing the features of `KeyValueStore`.
