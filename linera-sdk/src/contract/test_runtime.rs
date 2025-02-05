@@ -639,7 +639,7 @@ where
     ) -> Result<(), ChangeApplicationPermissionsError> {
         let authorized = self.can_change_application_permissions.expect(
             "Authorization to change the application permissions has not been mocked, \
-            please call `MockContractRuntime::set_can_close_chain` first",
+            please call `MockContractRuntime::set_can_change_application_permissions` first",
         );
 
         if authorized {
