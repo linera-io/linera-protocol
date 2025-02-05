@@ -33,7 +33,6 @@ mod wallet;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use linera_execution::ResourceControlPolicy;
 pub use wallet::{
     ApplicationWrapper, ClientWrapper, Faucet, FaucetOption, FaucetService, NodeService,
     OnClientDrop,
@@ -45,8 +44,6 @@ pub trait LineraNetConfig {
     type Net: LineraNet + Sized + Send + Sync + 'static;
 
     async fn instantiate(self) -> Result<(Self::Net, ClientWrapper)>;
-
-    async fn policy(&self) -> ResourceControlPolicy;
 }
 
 /// A running Linera net.
