@@ -388,7 +388,7 @@ impl TestView for TestCollectionView<MemoryContext<()>> {
     }
 }
 
-/// Wrapper to test with a [`CollectionView`].
+/// Wrapper to test with a [`QueueView`].
 #[derive(RootView, ClonableView)]
 pub struct TestQueueView<C> {
     queue: QueueView<C, u16>,
@@ -441,7 +441,7 @@ impl TestView for TestQueueView<MemoryContext<()>> {
     }
 }
 
-/// Wrapper to test with a [`CollectionView`].
+/// Wrapper to test with a [`BucketQueueView`].
 #[derive(RootView, ClonableView)]
 pub struct TestBucketQueueView<C> {
     queue: BucketQueueView<C, u16, 2>,
