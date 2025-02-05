@@ -41,13 +41,17 @@ use {
     linera_base::{
         crypto::PublicKey,
         data_types::Amount,
+        hashed::Hashed,
         identifiers::{AccountOwner, ApplicationId, Owner},
     },
-    linera_chain::data_types::{
-        BlockProposal, ExecutedBlock, ProposedBlock, SignatureAggregator, Vote,
+    linera_chain::{
+        data_types::{BlockProposal, ExecutedBlock, ProposedBlock, SignatureAggregator, Vote},
+        types::{CertificateValue, ConfirmedBlock, GenericCertificate},
     },
-    linera_chain::types::{CertificateValue, GenericCertificate},
-    linera_core::data_types::ChainInfoQuery,
+    linera_core::{
+        data_types::{ChainInfoQuery, ChainInfoResponse},
+        node::{ValidatorNode, ValidatorNodeProvider},
+    },
     linera_execution::{
         committee::Epoch,
         system::{OpenChainConfig, Recipient, SystemOperation, OPEN_CHAIN_MESSAGE_INDEX},
@@ -55,12 +59,12 @@ use {
     },
     linera_rpc::{
         config::NetworkProtocol, grpc::GrpcClient, mass_client::MassClient,
-        simple::SimpleMassClient, RpcMessage,
+        simple::SimpleMassClient, HandleConfirmedCertificateRequest, RpcMessage,
     },
     linera_sdk::abis::fungible,
     std::{collections::HashMap, iter},
     tokio::task,
-    tracing::{error, trace},
+    tracing::{error, trace, warn},
 };
 
 #[cfg(web)]
@@ -566,6 +570,216 @@ where
     S: Storage + Clone + Send + Sync + 'static,
     W: Persist<Target = Wallet>,
 {
+    fn deserialize_response(response: RpcMessage) -> Option<ChainInfoResponse> {
+        match response {
+            RpcMessage::ChainInfoResponse(info) => Some(*info),
+            RpcMessage::Error(error) => {
+                error!("Received error value: {}", error);
+                None
+            }
+            _ => {
+                error!("Unexpected return value");
+                None
+            }
+        }
+    }
+
+    pub async fn run_benchmark(
+        &mut self,
+        key_pairs: HashMap<ChainId, KeyPair>,
+        transactions_per_block: usize,
+        fungible_application_id: Option<ApplicationId>,
+    ) -> Result<(), Error> {
+        // For this command, we create proposals and gather certificates without using
+        // the client library. We update the wallet storage at the end using a local node.
+        info!("Starting benchmark phase 1 (block proposals)");
+        let proposals = self.make_benchmark_block_proposals(
+            key_pairs,
+            transactions_per_block,
+            fungible_application_id,
+        );
+
+        let num_proposal = proposals.len();
+        let mut values = HashMap::new();
+
+        let start = Instant::now();
+        for proposal in &proposals {
+            let executed_block = self
+                .stage_block_execution(proposal.content.block.clone(), None)
+                .await?;
+            let value = Hashed::new(ConfirmedBlock::new(executed_block));
+            values.insert(value.hash(), value);
+        }
+        info!(
+            "Staged {} block proposals in {} ms",
+            num_proposal,
+            start.elapsed().as_millis()
+        );
+
+        let proposals = proposals
+            .into_iter()
+            .map(|proposal| RpcMessage::BlockProposal(Box::new(proposal)))
+            .collect::<Vec<_>>();
+        let responses = self.mass_broadcast("block proposals", proposals).await;
+        let votes = responses
+            .into_iter()
+            .filter_map(|message| {
+                let response = Self::deserialize_response(message)?;
+                let vote = response.info.manager.pending?;
+                let value = values.get(&vote.value.value_hash)?.clone();
+                vote.clone().with_value(value)
+            })
+            .collect::<Vec<_>>();
+        info!("Received {} valid votes.", votes.len());
+
+        info!("Starting benchmark phase 2 (certified blocks)");
+        let certificates = self.make_benchmark_certificates_from_votes(votes);
+        assert_eq!(
+            num_proposal,
+            certificates.len(),
+            "Unable to build all the expected certificates from received votes"
+        );
+        let messages = certificates
+            .iter()
+            .map(|certificate| {
+                RpcMessage::ConfirmedCertificate(Box::new(HandleConfirmedCertificateRequest {
+                    certificate: certificate.clone(),
+                    wait_for_outgoing_messages: true,
+                }))
+            })
+            .collect();
+        let responses = self.mass_broadcast("certificates", messages).await;
+        let mut confirmed = HashSet::new();
+        let num_valid = responses.into_iter().fold(0, |acc, message| {
+            match Self::deserialize_response(message) {
+                Some(response) => {
+                    confirmed.insert(response.info.chain_id);
+                    acc + 1
+                }
+                None => acc,
+            }
+        });
+        info!(
+            "Confirmed {} valid certificates for block proposals to {} chains.",
+            num_valid,
+            confirmed.len()
+        );
+
+        info!("Updating local state of user chains");
+        self.update_wallet_from_certificates(certificates).await;
+        self.save_wallet().await?;
+        Ok(())
+    }
+
+    pub async fn run_benchmark_long_running(
+        &mut self,
+        key_pairs: HashMap<ChainId, KeyPair>,
+        transactions_per_block: usize,
+        fungible_application_id: Option<ApplicationId>,
+        bps: usize,
+    ) -> Result<(), Error> {
+        let blocks_infos = self.make_benchmark_block_info(
+            key_pairs,
+            transactions_per_block,
+            fungible_application_id,
+        );
+        let committee = self.wallet.genesis_config().create_committee();
+        let clients = self
+            .make_node_provider()
+            .make_nodes(&committee)?
+            .map(|(_, node)| node)
+            .collect::<Vec<_>>();
+        let mut num_sent_proposals = 0;
+        let mut blocks_infos_iter = blocks_infos.iter().cycle();
+
+        let mut start = Instant::now();
+        loop {
+            let (chain_id, operations, key_pair) = blocks_infos_iter
+                .next()
+                .expect("Getting next proposal should not fail");
+            let chain = self.wallet.get(*chain_id).expect("should have chain");
+            let block = ProposedBlock {
+                epoch: Epoch::ZERO,
+                chain_id: *chain_id,
+                incoming_bundles: Vec::new(),
+                operations: operations.clone(),
+                previous_block_hash: chain.block_hash,
+                height: chain.next_block_height,
+                authenticated_signer: Some(Owner::from(key_pair.public())),
+                timestamp: chain.timestamp.max(Timestamp::now()),
+            };
+            let executed_block = self.stage_block_execution(block.clone(), None).await?;
+            let value = Hashed::new(ConfirmedBlock::new(executed_block));
+            let proposal =
+                BlockProposal::new_initial(linera_base::data_types::Round::Fast, block, key_pair);
+
+            let mut join_set = task::JoinSet::new();
+            for client in &clients {
+                let client = client.clone();
+                let proposal = proposal.clone();
+                join_set.spawn(async move { client.handle_block_proposal(proposal).await });
+            }
+            let votes = join_set
+                .join_all()
+                .await
+                .into_iter()
+                .collect::<Result<Vec<_>, _>>()?
+                .into_iter()
+                .filter_map(|response| {
+                    let vote = response.info.manager.pending?;
+                    vote.clone().with_value(value.clone())
+                })
+                .collect::<Vec<_>>();
+
+            let certificates = self.make_benchmark_certificates_from_votes(votes);
+            assert_eq!(
+                certificates.len(),
+                1,
+                "Unable to build all the expected certificates from received votes"
+            );
+
+            let certificate = &certificates[0];
+            let mut join_set = task::JoinSet::new();
+            for client in &clients {
+                let client = client.clone();
+                let certificate = certificate.clone();
+                join_set.spawn(async move {
+                    client
+                        .handle_confirmed_certificate(
+                            certificate,
+                            CrossChainMessageDelivery::NonBlocking,
+                        )
+                        .await
+                });
+            }
+
+            join_set
+                .join_all()
+                .await
+                .into_iter()
+                .collect::<Result<Vec<_>, _>>()?;
+            self.update_wallet_from_certificates(vec![certificate.clone()])
+                .await;
+            num_sent_proposals += 1;
+            if num_sent_proposals == bps {
+                let elapsed = start.elapsed();
+                if elapsed > Duration::from_secs(1) {
+                    warn!(
+                        "Failed to achieve {} BPS/{} TPS, took {} ms",
+                        bps,
+                        bps * transactions_per_block,
+                        elapsed.as_millis()
+                    );
+                } else {
+                    tokio::time::sleep(Duration::from_secs(1) - elapsed).await;
+                    info!("Achieved {} BPS/{} TPS", bps, bps * transactions_per_block);
+                }
+                start = Instant::now();
+                num_sent_proposals = 0;
+            }
+        }
+    }
+
     pub async fn process_inboxes_and_force_validator_updates(&mut self) {
         let chain_clients = self
             .wallet
@@ -837,21 +1051,21 @@ where
         Ok(())
     }
 
-    /// Makes one block proposal per chain, up to `num_chains` blocks.
-    pub fn make_benchmark_block_proposals(
+    /// Generates information related to one block per chain, up to `num_chains` blocks.
+    pub fn make_benchmark_block_info(
         &mut self,
-        key_pairs: &HashMap<ChainId, KeyPair>,
+        key_pairs: HashMap<ChainId, KeyPair>,
         transactions_per_block: usize,
         fungible_application_id: Option<ApplicationId>,
-    ) -> Vec<BlockProposal> {
-        let mut proposals = Vec::new();
+    ) -> Vec<(ChainId, Vec<Operation>, KeyPair)> {
+        let mut blocks_infos = Vec::new();
         let mut previous_chain_id = *key_pairs
             .iter()
             .last()
             .expect("There should be a last element")
             .0;
         let amount = Amount::from(1);
-        for (&chain_id, key_pair) in key_pairs {
+        for (chain_id, key_pair) in key_pairs {
             let public_key = key_pair.public();
             let operation = match fungible_application_id {
                 Some(application_id) => Self::fungible_transfer(
@@ -870,27 +1084,37 @@ where
             let operations = iter::repeat(operation)
                 .take(transactions_per_block)
                 .collect();
-            let chain = self.wallet.get(chain_id).expect("should have chain");
-            let block = ProposedBlock {
-                epoch: Epoch::ZERO,
-                chain_id,
-                incoming_bundles: Vec::new(),
-                operations,
-                previous_block_hash: chain.block_hash,
-                height: chain.next_block_height,
-                authenticated_signer: Some(Owner::from(public_key)),
-                timestamp: chain.timestamp.max(Timestamp::now()),
-            };
-            trace!("Preparing block proposal: {:?}", block);
-            let proposal = BlockProposal::new_initial(
-                linera_base::data_types::Round::Fast,
-                block.clone(),
-                key_pair,
-            );
-            proposals.push(proposal);
-            previous_chain_id = chain.chain_id;
+            blocks_infos.push((chain_id, operations, key_pair));
+            previous_chain_id = chain_id;
         }
-        proposals
+        blocks_infos
+    }
+
+    /// Makes one block proposal per chain, up to `num_chains` blocks.
+    pub fn make_benchmark_block_proposals(
+        &mut self,
+        key_pairs: HashMap<ChainId, KeyPair>,
+        transactions_per_block: usize,
+        fungible_application_id: Option<ApplicationId>,
+    ) -> Vec<BlockProposal> {
+        self.make_benchmark_block_info(key_pairs, transactions_per_block, fungible_application_id)
+            .into_iter()
+            .map(|(chain_id, operations, key_pair)| {
+                let chain = self.wallet.get(chain_id).expect("should have chain");
+                let block = ProposedBlock {
+                    epoch: Epoch::ZERO,
+                    chain_id,
+                    incoming_bundles: Vec::new(),
+                    operations,
+                    previous_block_hash: chain.block_hash,
+                    height: chain.next_block_height,
+                    authenticated_signer: Some(Owner::from(key_pair.public())),
+                    timestamp: chain.timestamp.max(Timestamp::now()),
+                };
+                trace!("Preparing block proposal: {:?}", block);
+                BlockProposal::new_initial(linera_base::data_types::Round::Fast, block, &key_pair)
+            })
+            .collect()
     }
 
     /// Tries to aggregate votes into certificates.
