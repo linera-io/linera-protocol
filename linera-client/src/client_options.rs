@@ -602,6 +602,11 @@ pub enum ClientCommand {
         /// If none is specified, the benchmark uses the native token.
         #[arg(long)]
         fungible_application_id: Option<linera_base::identifiers::ApplicationId>,
+
+        /// If provided, will be long running, and block proposals will be sent at the
+        /// provided fixed BPS rate.
+        #[arg(long)]
+        bps: Option<usize>,
     },
 
     /// Create genesis configuration for a Linera deployment.
