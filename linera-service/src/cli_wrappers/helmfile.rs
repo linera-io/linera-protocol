@@ -16,6 +16,7 @@ impl HelmFile {
         github_root: &Path,
         num_shards: usize,
         cluster_id: u32,
+        docker_image_name: String,
     ) -> Result<()> {
         let chart_dir = format!("{}/kubernetes/linera-validator", github_root.display());
 
@@ -29,6 +30,7 @@ impl HelmFile {
                 format!("working/server_{server_config_id}.json"),
             )
             .env("LINERA_HELMFILE_SET_NUM_SHARDS", num_shards.to_string())
+            .env("LINERA_HELMFILE_LINERA_IMAGE", docker_image_name)
             .arg("sync")
             .arg("--wait")
             .args(["--kube-context", &format!("kind-{}", cluster_id)])
