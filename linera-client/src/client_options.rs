@@ -585,10 +585,6 @@ pub enum ClientCommand {
     /// Send one transfer per chain in bulk mode
     #[cfg(feature = "benchmark")]
     Benchmark {
-        /// Maximum number of blocks in flight
-        #[arg(long, default_value = "200")]
-        max_in_flight: usize,
-
         /// How many chains to use for the benchmark
         #[arg(long, default_value = "10")]
         num_chains: usize,

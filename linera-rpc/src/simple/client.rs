@@ -259,7 +259,6 @@ impl mass_client::MassClient for SimpleMassClient {
     async fn send(
         &self,
         requests: Vec<RpcMessage>,
-        max_in_flight: usize,
     ) -> Result<Vec<RpcMessage>, mass_client::MassClientError> {
         let address = format!("{}:{}", self.network.host, self.network.port);
         let mut stream = self.network.protocol.connect(address).await?;
@@ -268,7 +267,7 @@ impl mass_client::MassClient for SimpleMassClient {
         let mut responses = Vec::new();
 
         loop {
-            while in_flight < max_in_flight {
+            loop {
                 let request = match requests.next() {
                     None => {
                         if in_flight == 0 {

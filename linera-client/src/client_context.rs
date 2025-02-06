@@ -25,9 +25,18 @@ use linera_rpc::node_provider::{NodeOptions, NodeProvider};
 use linera_storage::Storage;
 use thiserror_context::Context;
 use tracing::{debug, info};
+#[cfg(feature = "fs")]
+use {
+    linera_base::{
+        crypto::CryptoHash,
+        data_types::{BlobContent, Bytecode},
+        identifiers::BytecodeId,
+    },
+    linera_core::client::create_bytecode_blobs,
+    std::{fs, path::PathBuf},
+};
 #[cfg(feature = "benchmark")]
 use {
-    futures::{stream, StreamExt as _, TryStreamExt as _},
     linera_base::{
         crypto::PublicKey,
         data_types::Amount,
@@ -51,16 +60,6 @@ use {
     std::{collections::HashMap, iter},
     tokio::task,
     tracing::{error, trace},
-};
-#[cfg(feature = "fs")]
-use {
-    linera_base::{
-        crypto::CryptoHash,
-        data_types::{BlobContent, Bytecode},
-        identifiers::BytecodeId,
-    },
-    linera_core::client::create_bytecode_blobs,
-    std::{fs, path::PathBuf},
 };
 
 #[cfg(web)]
@@ -665,7 +664,6 @@ where
         &mut self,
         key_pairs: &HashMap<ChainId, KeyPair>,
         application_id: ApplicationId,
-        max_in_flight: usize,
     ) -> Result<(), Error> {
         let default_chain_id = self
             .wallet
@@ -702,38 +700,35 @@ where
         }
         self.update_wallet_from_client(&chain_client).await?;
         // Make sure all chains have registered the application now.
-        let futures = key_pairs
-            .keys()
-            .map(|&chain_id| {
-                let chain_client = self
-                    .make_chain_client(chain_id)
-                    .expect("chain should have been created");
-                async move {
-                    for i in 0..5 {
-                        linera_base::time::timer::sleep(Duration::from_secs(i)).await;
-                        chain_client.process_inbox().await?;
-                        let chain_state = chain_client.chain_state_view().await?;
-                        if chain_state
-                            .execution_state
-                            .system
-                            .registry
-                            .known_applications
-                            .contains_key(&application_id)
-                            .await?
-                        {
-                            return Ok::<_, Error>(chain_client);
-                        }
+        let mut join_set = task::JoinSet::new();
+        for &chain_id in key_pairs.keys() {
+            let chain_client = self
+                .make_chain_client(chain_id)
+                .expect("chain should have been created");
+            join_set.spawn(async move {
+                for i in 0..5 {
+                    linera_base::time::timer::sleep(Duration::from_secs(i)).await;
+                    chain_client.process_inbox().await?;
+                    let chain_state = chain_client.chain_state_view().await?;
+                    if chain_state
+                        .execution_state
+                        .system
+                        .registry
+                        .known_applications
+                        .contains_key(&application_id)
+                        .await?
+                    {
+                        return Ok::<_, Error>(chain_client);
                     }
-                    panic!("Could not instantiate application on chain {chain_id:?}");
                 }
-            })
-            .collect::<Vec<_>>();
-        // We have to collect the futures to avoid a higher-ranked lifetime error:
-        // https://github.com/rust-lang/rust/issues/102211#issuecomment-1673201352
-        let clients = stream::iter(futures)
-            .buffer_unordered(max_in_flight)
-            .try_collect::<Vec<_>>()
-            .await?;
+                panic!("Could not instantiate application on chain {chain_id:?}");
+            });
+        }
+        let clients = join_set
+            .join_all()
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()?;
         for client in clients {
             self.update_wallet_from_client(&client).await?;
         }
@@ -843,7 +838,6 @@ where
     pub async fn mass_broadcast(
         &self,
         phase: &'static str,
-        max_in_flight: usize,
         proposals: Vec<RpcMessage>,
     ) -> Vec<RpcMessage> {
         let time_start = Instant::now();
@@ -853,10 +847,7 @@ where
             let proposals = proposals.clone();
             join_set.spawn(async move {
                 debug!("Sending {} requests", proposals.len());
-                let responses = client
-                    .send(proposals, max_in_flight)
-                    .await
-                    .unwrap_or_default();
+                let responses = client.send(proposals).await.unwrap_or_default();
                 debug!("Done sending requests");
                 responses
             });
