@@ -49,6 +49,7 @@ use {
     },
     linera_sdk::abis::fungible,
     std::{collections::HashMap, iter},
+    tokio::task,
     tracing::{error, trace},
 };
 #[cfg(feature = "fs")]
@@ -847,11 +848,10 @@ where
     ) -> Vec<RpcMessage> {
         let time_start = Instant::now();
         info!("Broadcasting {} {}", proposals.len(), phase);
-        let mut join_set = JoinSet::new();
-        let mut handles = Vec::new();
+        let mut join_set = task::JoinSet::new();
         for client in self.make_validator_mass_clients() {
             let proposals = proposals.clone();
-            let handle = join_set.spawn_task(async move {
+            join_set.spawn(async move {
                 debug!("Sending {} requests", proposals.len());
                 let responses = client
                     .send(proposals, max_in_flight)
@@ -860,14 +860,13 @@ where
                 debug!("Done sending requests");
                 responses
             });
-            handles.push(handle);
         }
-        let responses = futures::future::join_all(handles)
+        let responses = join_set
+            .join_all()
             .await
             .into_iter()
             .flatten()
-            .flatten()
-            .collect::<Vec<RpcMessage>>();
+            .collect::<Vec<_>>();
         let time_elapsed = time_start.elapsed();
         info!(
             "Received {} responses in {} ms.",
