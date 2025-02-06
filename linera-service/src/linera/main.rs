@@ -764,6 +764,11 @@ impl Runnable for Job {
                 transactions_per_block,
                 fungible_application_id,
             } => {
+                assert!(num_chains > 0, "Number of chains must be greater than 0");
+                assert!(
+                    transactions_per_block > 0,
+                    "Number of transactions per block must be greater than 0"
+                );
                 let start = Instant::now();
                 // Below all block proposals are supposed to succeed without retries, we
                 // must make sure that all incoming payments have been accepted on-chain
