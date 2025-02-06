@@ -607,14 +607,21 @@ fn generate_specific_state_batch(key_prefix: &[u8], option: usize) -> StateBatch
         key_values.push((key1, vec![33]));
         batch.delete_key_prefix(key2);
     }
+    if option == 7 {
+        let key1 = get_key(key_prefix, vec![255, 255]);
+        let key2 = get_key(key_prefix, vec![255, 255, 1]);
+        key_values.push((key2.clone(), vec![]));
+        batch.delete_key_prefix(key1);
+        batch.put_key_value_bytes(key2, vec![]);
+    }
     (key_values, batch)
 }
 
 /// Run some deterministic and random batches operation and check their
 /// correctness
 pub async fn run_writes_from_state<C: LocalRestrictedKeyValueStore>(key_value_store: &C) {
-    for option in 0..7 {
-        let key_prefix = if option == 6 {
+    for option in 0..8 {
+        let key_prefix = if option >= 6 {
             vec![255, 255, 255]
         } else {
             get_random_key_prefix()
