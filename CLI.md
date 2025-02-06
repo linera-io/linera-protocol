@@ -56,6 +56,7 @@ This document contains the help content for the `linera` command-line program.
 * [`linera storage check_absence`↴](#linera-storage-check_absence)
 * [`linera storage initialize`↴](#linera-storage-initialize)
 * [`linera storage list_namespaces`↴](#linera-storage-list_namespaces)
+* [`linera storage list_blob_ids`↴](#linera-storage-list_blob_ids)
 
 ## `linera`
 
@@ -962,6 +963,7 @@ Operation on the storage
 * `check_absence` — Check absence of a namespace in the database
 * `initialize` — Initialize a namespace in the database
 * `list_namespaces` — List the namespaces of the database
+* `list_blob_ids` — List the blobs of the database
 
 
 
@@ -1030,6 +1032,18 @@ Initialize a namespace in the database
 List the namespaces of the database
 
 **Usage:** `linera storage list_namespaces --storage <STORAGE_CONFIG>`
+
+###### **Options:**
+
+* `--storage <STORAGE_CONFIG>` — Storage configuration for the blockchain history
+
+
+
+## `linera storage list_blob_ids`
+
+List the blobs of the database
+
+**Usage:** `linera storage list_blob_ids --storage <STORAGE_CONFIG>`
 
 ###### **Options:**
 

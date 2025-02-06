@@ -25,7 +25,7 @@ use linera_views::{
     backends::dual::{DualStoreRootKeyAssignment, StoreInUse},
     batch::Batch,
     context::ViewContext,
-    store::KeyValueStore,
+    store::{KeyIterable as _, KeyValueStore},
     views::{View, ViewError},
 };
 use serde::{Deserialize, Serialize};
@@ -242,6 +242,43 @@ enum BaseKey {
     ConfirmedBlock(CryptoHash),
     Blob(BlobId),
     BlobState(BlobId),
+}
+
+const INDEX_BLOB: u8 = 3;
+const BLOB_LENGTH: usize = std::mem::size_of::<BlobId>();
+
+#[cfg(test)]
+mod tests {
+    use linera_base::{
+        crypto::CryptoHash,
+        identifiers::{BlobId, BlobType},
+    };
+
+    use crate::db_storage::{BaseKey, INDEX_BLOB};
+
+    #[test]
+    fn test_base_key_serialization() {
+        let hash = CryptoHash::default();
+        let blob_type = BlobType::default();
+        let blob_id = BlobId::new(hash, blob_type);
+        let base_key = BaseKey::Blob(blob_id);
+        let key = bcs::to_bytes(&base_key).expect("a key");
+        assert_eq!(key[0], INDEX_BLOB);
+    }
+}
+
+/// Lists the blobs of the storage.
+pub async fn list_all_blob_ids<S: KeyValueStore>(store: &S) -> Result<Vec<BlobId>, ViewError> {
+    let prefix = &[INDEX_BLOB];
+    let keys = store.find_keys_by_prefix(prefix).await?;
+    let mut blob_ids = Vec::new();
+    for key in keys.iterator() {
+        let key = key?;
+        let key_red = &key[..BLOB_LENGTH];
+        let blob_id = bcs::from_bytes(key_red)?;
+        blob_ids.push(blob_id);
+    }
+    Ok(blob_ids)
 }
 
 /// An implementation of [`DualStoreRootKeyAssignment`] that stores the
