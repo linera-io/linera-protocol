@@ -36,7 +36,7 @@ pub trait TestInstanceFactory {
     /// The type received by host functions to use for reentrant calls.
     type Caller<'caller>;
 
-    /// Loads a test module with the provided `module_name` from the named `group`_
+    /// Loads a test module with the provided `module_name` from the named `group`
     fn load_test_module<ExportedFunctions>(
         &mut self,
         group: &str,
