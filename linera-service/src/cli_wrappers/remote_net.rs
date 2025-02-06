@@ -7,7 +7,6 @@ use anyhow::Result;
 use async_trait::async_trait;
 use linera_base::data_types::Amount;
 use linera_client::persistent::{self, Persist};
-use linera_execution::ResourceControlPolicy;
 use tempfile::{tempdir, TempDir};
 
 use super::{
@@ -65,14 +64,6 @@ impl LineraNetConfig for RemoteNetTestingConfig {
         }
 
         Ok((net, client))
-    }
-
-    async fn policy(&self) -> ResourceControlPolicy {
-        self.faucet
-            .genesis_config()
-            .await
-            .expect("should get genesis config from faucet")
-            .policy
     }
 }
 

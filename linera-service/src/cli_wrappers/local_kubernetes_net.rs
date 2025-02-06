@@ -150,10 +150,6 @@ impl LineraNetConfig for LocalKubernetesNetConfig {
 
         Ok((net, client))
     }
-
-    async fn policy(&self) -> ResourceControlPolicy {
-        self.policy.clone()
-    }
 }
 
 #[cfg(with_testing)]
@@ -186,10 +182,6 @@ impl LineraNetConfig for SharedLocalKubernetesNetTestingConfig {
         }
 
         Ok((net, client))
-    }
-
-    async fn policy(&self) -> ResourceControlPolicy {
-        self.0.policy().await
     }
 }
 
