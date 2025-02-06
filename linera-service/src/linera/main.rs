@@ -809,16 +809,24 @@ impl Runnable for Job {
                 let num_proposal = proposals.len();
                 let mut values = HashMap::new();
 
-                for rpc_msg in &proposals {
-                    if let RpcMessage::BlockProposal(proposal) = rpc_msg {
-                        let executed_block = context
-                            .stage_block_execution(proposal.content.block.clone(), None)
-                            .await?;
-                        let value = Hashed::new(ConfirmedBlock::new(executed_block));
-                        values.insert(value.hash(), value);
-                    }
+                let start = Instant::now();
+                for proposal in &proposals {
+                    let executed_block = context
+                        .stage_block_execution(proposal.content.block.clone(), None)
+                        .await?;
+                    let value = Hashed::new(ConfirmedBlock::new(executed_block));
+                    values.insert(value.hash(), value);
                 }
+                info!(
+                    "Staged {} block proposals in {} ms",
+                    num_proposal,
+                    start.elapsed().as_millis()
+                );
 
+                let proposals = proposals
+                    .into_iter()
+                    .map(|proposal| RpcMessage::BlockProposal(Box::new(proposal)))
+                    .collect::<Vec<_>>();
                 let responses = context.mass_broadcast("block proposals", proposals).await;
                 let votes = responses
                     .into_iter()
