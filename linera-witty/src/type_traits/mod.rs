@@ -68,7 +68,7 @@ pub trait WitStore: WitType {
 
     /// Lowers the type into its flat layout representation.
     ///
-    /// May write to the `memory` if the type has references to heap data or if it doesn't fix in
+    /// May write to the `memory` if the type has references to heap data or if it doesn't fit in
     /// the maximum flat layout size.
     fn lower<Instance>(
         &self,
