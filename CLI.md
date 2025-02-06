@@ -1047,6 +1047,10 @@ List the blobs of the database
 
 **Usage:** `linera storage list_blob_ids --storage <STORAGE_CONFIG>`
 
+###### **Options:**
+
+* `--storage <STORAGE_CONFIG>` — Storage configuration for the blockchain history
+
 
 
 ## `linera storage list_root_keys`
