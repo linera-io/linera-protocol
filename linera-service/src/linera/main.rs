@@ -774,9 +774,15 @@ impl Runnable for Job {
                     start.elapsed().as_millis()
                 );
 
+                let start = Instant::now();
                 let key_pairs = context
                     .make_benchmark_chains(num_chains, tokens_per_chain)
                     .await?;
+                info!(
+                    "Got {} chains in {} ms",
+                    key_pairs.len(),
+                    start.elapsed().as_millis()
+                );
 
                 if let Some(id) = fungible_application_id {
                     context.supply_fungible_tokens(&key_pairs, id).await?;
