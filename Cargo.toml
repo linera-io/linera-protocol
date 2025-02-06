@@ -123,6 +123,7 @@ rand_chacha = { version = "0.3.1", default-features = false }
 rand_distr = { version = "0.4.3", default-features = false }
 ruzstd = "0.7.1"
 k8s-openapi = { version = "0.21.1", features = ["v1_28"] }
+k256 = { version = "0.13.4", default-features = false, features = ["ecdsa"] }
 pathdiff = "0.2.1"
 kube = "0.88.1"
 rcgen = "0.12.1"
