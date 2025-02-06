@@ -9,7 +9,7 @@ use linera_witty::{
     wit_generation::WitInterface,
 };
 
-/// Expected snippets for the `entryoint` interface.
+/// Expected snippets for the `entrypoint` interface.
 // The `wit_import` integration test does not use an `Entrypoint` interface
 #[allow(dead_code)]
 pub const ENTRYPOINT: (&str, &[&str], &[(&str, &str)]) =
