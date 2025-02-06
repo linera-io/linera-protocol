@@ -12,7 +12,6 @@ use std::fmt;
 
 #[doc(hidden)]
 pub use async_trait::async_trait;
-
 pub mod abi;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod command;
