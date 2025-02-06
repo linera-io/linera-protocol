@@ -115,7 +115,7 @@ prettyplease = "0.2.16"
 prometheus = "0.13.3"
 proc-macro-error = "1.0.4"
 proc-macro2 = "1.0"
-proptest = { version = "1.4.0", default-features = false, features = ["alloc"] }
+proptest = { version = "1.6.0", default-features = false, features = ["alloc"] }
 prost = "0.13.2"
 quote = "1.0"
 rand = { version = "0.8.5", default-features = false }
