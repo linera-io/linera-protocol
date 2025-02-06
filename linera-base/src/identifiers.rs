@@ -1046,3 +1046,39 @@ mod tests {
         );
     }
 }
+impl Display for BlobType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            BlobType::Data => write!(f, "Data"),
+            BlobType::ContractBytecode => write!(f, "ContractBytecode"),
+            BlobType::ServiceBytecode => write!(f, "ServiceBytecode"),
+        }
+    }
+}
+
+impl FromStr for BlobType {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "Data" => Ok(BlobType::Data),
+            "ContractBytecode" => Ok(BlobType::ContractBytecode),
+            "ServiceBytecode" => Ok(BlobType::ServiceBytecode),
+            _ => Err(anyhow!("Invalid BlobType: {}", s)),
+        }
+    }
+}
+impl FromStr for Account {
+    type Err = anyhow::Error;
+
+    fn from_str(string: &str) -> Result<Self, Self::Err> {
+        let mut parts = string.splitn(2, ':');
+
+        let chain_id = parts
+            .next()
+            .context("Expecting an account formatted as `chain-id` or `chain-id:owner`")?
+            .parse()?;
+
+        // ... rest remains the same
+    }
+}
