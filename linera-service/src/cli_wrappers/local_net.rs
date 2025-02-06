@@ -20,6 +20,7 @@ use linera_base::{
     data_types::Amount,
 };
 use linera_client::storage::{StorageConfig, StorageConfigNamespace};
+use linera_core::node::ValidatorNodeProvider;
 use linera_execution::ResourceControlPolicy;
 #[cfg(all(feature = "storage-service", with_testing))]
 use linera_storage_service::common::storage_service_test_endpoint;
@@ -31,7 +32,7 @@ use tonic::transport::{channel::ClientTlsConfig, Endpoint};
 use tonic_health::pb::{
     health_check_response::ServingStatus, health_client::HealthClient, HealthCheckRequest,
 };
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 
 use crate::{
     cli_wrappers::{
@@ -626,6 +627,37 @@ impl LocalNet {
         }
         self.running_validators.insert(validator, validator_proxy);
         Ok(())
+    }
+
+    /// Terminates all the processes of a given validator.
+    pub async fn stop_validator(&mut self, validator_index: usize) -> Result<()> {
+        if let Some(mut validator) = self.running_validators.remove(&validator_index) {
+            if let Err(error) = validator.terminate().await {
+                error!("Failed to stop validator {validator_index}: {error}");
+                return Err(error);
+            }
+        }
+        Ok(())
+    }
+
+    /// Returns a [`linera_rpc::Client`] to interact directly with a `validator`.
+    pub async fn validator_client(&mut self, validator: usize) -> Result<linera_rpc::Client> {
+        let node_provider = linera_rpc::NodeProvider::new(linera_rpc::NodeOptions {
+            send_timeout: Duration::from_secs(1),
+            recv_timeout: Duration::from_secs(1),
+            retry_delay: Duration::ZERO,
+            max_retries: 0,
+        });
+
+        Ok(node_provider.make_node(&self.validator_address(validator))?)
+    }
+
+    /// Returns the address to connect to a validator's proxy.
+    pub fn validator_address(&self, validator: usize) -> String {
+        let port = Self::proxy_port(validator);
+        let schema = self.network.external.schema();
+
+        format!("{schema}:localhost:{port}")
     }
 }
 

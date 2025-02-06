@@ -111,4 +111,13 @@ impl Network {
             Network::Tcp | Network::Udp => "127.0.0.1",
         }
     }
+
+    /// Returns the protocol schema to use in the node address tuple.
+    pub fn schema(&self) -> &'static str {
+        match self {
+            Network::Grpc | Network::Grpcs => "grpc",
+            Network::Tcp => "tcp",
+            Network::Udp => "udp",
+        }
+    }
 }

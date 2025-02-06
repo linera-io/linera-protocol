@@ -517,6 +517,23 @@ impl Runnable for Job {
                 println!("{}/{} OK.", num_ok_validators, committee.validators().len());
             }
 
+            SyncValidator {
+                address,
+                mut chains,
+            } => {
+                if chains.is_empty() {
+                    chains.push(context.default_chain());
+                }
+
+                let validator = context.make_node_provider().make_node(&address)?;
+
+                for chain_id in chains {
+                    let chain = context.make_chain_client(chain_id)?;
+
+                    chain.sync_validator(validator.clone()).await?;
+                }
+            }
+
             command @ (SetValidator { .. }
             | RemoveValidator { .. }
             | ResourceControlPolicy { .. }) => {
@@ -1408,6 +1425,7 @@ fn log_file_name_for(command: &ClientCommand) -> Cow<'static, str> {
         | ClientCommand::ProcessInbox { .. }
         | ClientCommand::QueryValidator { .. }
         | ClientCommand::QueryValidators { .. }
+        | ClientCommand::SyncValidator { .. }
         | ClientCommand::SetValidator { .. }
         | ClientCommand::RemoveValidator { .. }
         | ClientCommand::ResourceControlPolicy { .. }
