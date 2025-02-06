@@ -998,6 +998,14 @@ pub enum DatabaseToolCommand {
         #[arg(long = "storage")]
         storage_config: String,
     },
+
+    /// List the root keys of the database
+    #[command(name = "list_root_keys")]
+    ListRootKeys {
+        /// Storage configuration for the blockchain history.
+        #[arg(long = "storage")]
+        storage_config: String,
+    },
 }
 
 impl DatabaseToolCommand {
@@ -1010,6 +1018,7 @@ impl DatabaseToolCommand {
             DatabaseToolCommand::Initialize { storage_config } => storage_config,
             DatabaseToolCommand::ListNamespaces { storage_config } => storage_config,
             DatabaseToolCommand::ListBlobIds { storage_config } => storage_config,
+            DatabaseToolCommand::ListRootKeys { storage_config } => storage_config,
         };
         Ok(storage_config.parse::<StorageConfigNamespace>()?)
     }

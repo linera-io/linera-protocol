@@ -5,9 +5,11 @@
 
 use std::{
     ffi::OsString,
-    ops::{Bound, Bound::Excluded},
     path::PathBuf,
-    sync::Arc,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
 };
 
 use linera_base::ensure;
@@ -20,7 +22,7 @@ use crate::metering::MeteredStore;
 use crate::store::TestKeyValueStore;
 use crate::{
     batch::{Batch, WriteOperation},
-    common::get_upper_bound,
+    common::get_upper_bound_option,
     lru_caching::{LruCachingConfig, LruCachingStore},
     store::{
         AdminKeyValueStore, CommonStoreInternalConfig, KeyValueStoreError, ReadableKeyValueStore,
@@ -28,6 +30,10 @@ use crate::{
     },
     value_splitting::{ValueSplittingError, ValueSplittingStore},
 };
+
+/// The prefixes being used in the system
+static ROOT_KEY_DOMAIN: [u8; 1] = [0];
+static STORED_ROOT_KEYS_PREFIX: u8 = 1;
 
 /// The number of streams for the test
 #[cfg(with_testing)]
@@ -96,7 +102,7 @@ fn check_key_size(key: &[u8]) -> Result<(), RocksDbStoreInternalError> {
 #[derive(Clone)]
 struct RocksDbStoreExecutor {
     db: Arc<DB>,
-    root_key: Vec<u8>,
+    start_key: Vec<u8>,
 }
 
 impl RocksDbStoreExecutor {
@@ -110,7 +116,7 @@ impl RocksDbStoreExecutor {
         let mut keys_red = Vec::new();
         for (i, key) in keys.into_iter().enumerate() {
             check_key_size(&key)?;
-            let mut full_key = self.root_key.to_vec();
+            let mut full_key = self.start_key.to_vec();
             full_key.extend(key);
             if self.db.key_may_exist(&full_key) {
                 indices.push(i);
@@ -134,7 +140,7 @@ impl RocksDbStoreExecutor {
         let full_keys = keys
             .into_iter()
             .map(|key| {
-                let mut full_key = self.root_key.to_vec();
+                let mut full_key = self.start_key.to_vec();
                 full_key.extend(key);
                 full_key
             })
@@ -148,7 +154,7 @@ impl RocksDbStoreExecutor {
         key_prefix: Vec<u8>,
     ) -> Result<Vec<Vec<u8>>, RocksDbStoreInternalError> {
         check_key_size(&key_prefix)?;
-        let mut prefix = self.root_key.clone();
+        let mut prefix = self.start_key.clone();
         prefix.extend(key_prefix);
         let len = prefix.len();
         let mut iter = self.db.raw_iterator();
@@ -172,7 +178,7 @@ impl RocksDbStoreExecutor {
         key_prefix: Vec<u8>,
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, RocksDbStoreInternalError> {
         check_key_size(&key_prefix)?;
-        let mut prefix = self.root_key.clone();
+        let mut prefix = self.start_key.clone();
         prefix.extend(key_prefix);
         let len = prefix.len();
         let mut iter = self.db.raw_iterator();
@@ -193,54 +199,40 @@ impl RocksDbStoreExecutor {
         Ok(key_values)
     }
 
-    fn write_batch_internal(&self, mut batch: Batch) -> Result<(), RocksDbStoreInternalError> {
-        // NOTE: The delete_range functionality of RocksDB needs to have an upper bound in order to work.
-        // Thus in order to have the system working, we need to handle the unlikely case of having to
-        // delete a key starting with [255, ...., 255]
-        let len = batch.operations.len();
-        let mut keys = Vec::new();
-        for i in 0..len {
-            let op = batch.operations.get(i).unwrap();
-            if let WriteOperation::DeletePrefix { key_prefix } = op {
-                if get_upper_bound(key_prefix) == Bound::Unbounded {
-                    for short_key in self.find_keys_by_prefix_internal(key_prefix.to_vec())? {
-                        let mut full_key = self.root_key.clone();
-                        full_key.extend(key_prefix);
-                        full_key.extend(short_key);
-                        keys.push(full_key);
-                    }
-                }
-            }
-        }
-        for key in keys {
-            batch.operations.push(WriteOperation::Delete { key });
-        }
+    fn write_batch_internal(
+        &self,
+        batch: Batch,
+        write_root_key: bool,
+    ) -> Result<(), RocksDbStoreInternalError> {
         let mut inner_batch = rocksdb::WriteBatchWithTransaction::default();
         for operation in batch.operations {
             match operation {
                 WriteOperation::Delete { key } => {
                     check_key_size(&key)?;
-                    let mut full_key = self.root_key.to_vec();
+                    let mut full_key = self.start_key.to_vec();
                     full_key.extend(key);
                     inner_batch.delete(&full_key)
                 }
                 WriteOperation::Put { key, value } => {
                     check_key_size(&key)?;
-                    let mut full_key = self.root_key.to_vec();
+                    let mut full_key = self.start_key.to_vec();
                     full_key.extend(key);
                     inner_batch.put(&full_key, value)
                 }
                 WriteOperation::DeletePrefix { key_prefix } => {
                     check_key_size(&key_prefix)?;
-                    if let Excluded(upper_bound) = get_upper_bound(&key_prefix) {
-                        let mut full_key1 = self.root_key.to_vec();
-                        full_key1.extend(key_prefix);
-                        let mut full_key2 = self.root_key.to_vec();
-                        full_key2.extend(upper_bound);
-                        inner_batch.delete_range(&full_key1, &full_key2);
-                    }
+                    let mut full_key1 = self.start_key.to_vec();
+                    full_key1.extend(&key_prefix);
+                    let full_key2 =
+                        get_upper_bound_option(&full_key1).expect("the first entry cannot be 255");
+                    inner_batch.delete_range(&full_key1, &full_key2);
                 }
             }
+        }
+        if write_root_key {
+            let mut full_key = self.start_key.to_vec();
+            full_key[0] = STORED_ROOT_KEYS_PREFIX;
+            inner_batch.put(&full_key, vec![]);
         }
         self.db.write(inner_batch)?;
         Ok(())
@@ -254,6 +246,7 @@ pub struct RocksDbStoreInternal {
     _path_with_guard: PathWithGuard,
     max_stream_queries: usize,
     spawn_mode: RocksDbSpawnMode,
+    root_key_written: Arc<AtomicBool>,
 }
 
 /// The initial configuration of the system
@@ -279,28 +272,33 @@ impl RocksDbStoreInternal {
     }
 
     fn build(
-        path_with_guard: PathWithGuard,
-        spawn_mode: RocksDbSpawnMode,
-        max_stream_queries: usize,
-        root_key: &[u8],
+        config: &RocksDbStoreInternalConfig,
+        namespace: &str,
+        start_key: Vec<u8>,
     ) -> Result<RocksDbStoreInternal, RocksDbStoreInternalError> {
-        let path = path_with_guard.path_buf.clone();
-        if !std::path::Path::exists(&path) {
-            std::fs::create_dir(path.clone())?;
+        Self::check_namespace(namespace)?;
+        let mut path_buf = config.path_with_guard.path_buf.clone();
+        let mut path_with_guard = config.path_with_guard.clone();
+        path_buf.push(namespace);
+        path_with_guard.path_buf = path_buf.clone();
+        let max_stream_queries = config.common_config.max_stream_queries;
+        let spawn_mode = config.spawn_mode;
+        if !std::path::Path::exists(&path_buf) {
+            std::fs::create_dir(path_buf.clone())?;
         }
         let mut options = rocksdb::Options::default();
         options.create_if_missing(true);
-        let db = DB::open(&options, path)?;
-        let root_key = root_key.to_vec();
+        let db = DB::open(&options, path_buf)?;
         let executor = RocksDbStoreExecutor {
             db: Arc::new(db),
-            root_key,
+            start_key,
         };
         Ok(RocksDbStoreInternal {
             executor,
             _path_with_guard: path_with_guard,
             max_stream_queries,
             spawn_mode,
+            root_key_written: Arc::new(AtomicBool::new(false)),
         })
     }
 }
@@ -324,7 +322,7 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
     ) -> Result<Option<Vec<u8>>, RocksDbStoreInternalError> {
         check_key_size(key)?;
         let db = self.executor.db.clone();
-        let mut full_key = self.executor.root_key.to_vec();
+        let mut full_key = self.executor.start_key.to_vec();
         full_key.extend(key);
         self.spawn_mode
             .spawn(move |x| Ok(db.get(&x)?), full_key)
@@ -334,7 +332,7 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
     async fn contains_key(&self, key: &[u8]) -> Result<bool, RocksDbStoreInternalError> {
         check_key_size(key)?;
         let db = self.executor.db.clone();
-        let mut full_key = self.executor.root_key.to_vec();
+        let mut full_key = self.executor.start_key.to_vec();
         full_key.extend(key);
         self.spawn_mode
             .spawn(
@@ -402,9 +400,13 @@ impl WritableKeyValueStore for RocksDbStoreInternal {
     const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
 
     async fn write_batch(&self, batch: Batch) -> Result<(), RocksDbStoreInternalError> {
+        let write_root_key = !self.root_key_written.fetch_or(true, Ordering::SeqCst);
         let executor = self.executor.clone();
         self.spawn_mode
-            .spawn(move |x| executor.write_batch_internal(x), batch)
+            .spawn(
+                move |x| executor.write_batch_internal(x, write_root_key),
+                batch,
+            )
             .await
     }
 
@@ -425,19 +427,17 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
         namespace: &str,
         root_key: &[u8],
     ) -> Result<Self, RocksDbStoreInternalError> {
-        Self::check_namespace(namespace)?;
-        let mut path_buf = config.path_with_guard.path_buf.clone();
-        let mut path_with_guard = config.path_with_guard.clone();
-        path_buf.push(namespace);
-        path_with_guard.path_buf = path_buf;
-        let max_stream_queries = config.common_config.max_stream_queries;
-        let spawn_mode = config.spawn_mode;
-        RocksDbStoreInternal::build(path_with_guard, spawn_mode, max_stream_queries, root_key)
+        let mut start_key = ROOT_KEY_DOMAIN.to_vec();
+        start_key.extend(root_key);
+        RocksDbStoreInternal::build(config, namespace, start_key)
     }
 
     fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, RocksDbStoreInternalError> {
         let mut store = self.clone();
-        store.executor.root_key = root_key.to_vec();
+        let mut start_key = ROOT_KEY_DOMAIN.to_vec();
+        start_key.extend(root_key);
+        store.executor.start_key = start_key;
+        store.root_key_written = Arc::new(AtomicBool::new(false));
         Ok(store)
     }
 
@@ -458,6 +458,15 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
             namespaces.push(namespace);
         }
         Ok(namespaces)
+    }
+
+    async fn list_root_keys(
+        config: &Self::Config,
+        namespace: &str,
+    ) -> Result<Vec<Vec<u8>>, RocksDbStoreInternalError> {
+        let start_key = vec![STORED_ROOT_KEYS_PREFIX];
+        let store = RocksDbStoreInternal::build(config, namespace, start_key)?;
+        store.find_keys_by_prefix(&[]).await
     }
 
     async fn delete_all(config: &Self::Config) -> Result<(), RocksDbStoreInternalError> {

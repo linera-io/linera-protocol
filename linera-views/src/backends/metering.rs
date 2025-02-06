@@ -38,6 +38,7 @@ pub struct KeyValueStoreMetrics {
     connect_latency: HistogramVec,
     clone_with_root_key_latency: HistogramVec,
     list_all_latency: HistogramVec,
+    list_root_keys_latency: HistogramVec,
     delete_all_latency: HistogramVec,
     exists_latency: HistogramVec,
     create_latency: HistogramVec,
@@ -136,6 +137,10 @@ impl KeyValueStoreMetrics {
         let entry1 = format!("{}_list_all_latency", var_name);
         let entry2 = format!("{} list all latency", title_name);
         let list_all_latency = register_histogram_vec(&entry1, &entry2, &[], None);
+
+        let entry1 = format!("{}_list_root_keys_latency", var_name);
+        let entry2 = format!("{} list root keys latency", title_name);
+        let list_root_keys_latency = register_histogram_vec(&entry1, &entry2, &[], None);
 
         let entry1 = format!("{}_delete_all_latency", var_name);
         let entry2 = format!("{} delete all latency", title_name);
@@ -236,6 +241,7 @@ impl KeyValueStoreMetrics {
             connect_latency,
             clone_with_root_key_latency,
             list_all_latency,
+            list_root_keys_latency,
             delete_all_latency,
             exists_latency,
             create_latency,
@@ -471,6 +477,16 @@ where
             .with_label_values(&[])
             .observe(namespaces.len() as f64);
         Ok(namespaces)
+    }
+
+    async fn list_root_keys(
+        config: &Self::Config,
+        namespace: &str,
+    ) -> Result<Vec<Vec<u8>>, Self::Error> {
+        let name = K::get_name();
+        let counter = get_counter(&name);
+        let _latency = counter.list_root_keys_latency.measure_latency();
+        K::list_root_keys(config, namespace).await
     }
 
     async fn delete_all(config: &Self::Config) -> Result<(), Self::Error> {

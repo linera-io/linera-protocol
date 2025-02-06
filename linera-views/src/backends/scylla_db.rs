@@ -8,7 +8,7 @@
 //! `max_concurrent_queries`.
 
 use std::{
-    collections::{hash_map::Entry, HashMap},
+    collections::{hash_map::Entry, BTreeSet, HashMap},
     ops::Deref,
     sync::Arc,
 };
@@ -713,6 +713,30 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
             }
         }
         Ok(namespaces)
+    }
+
+    async fn list_root_keys(
+        config: &Self::Config,
+        namespace: &str,
+    ) -> Result<Vec<Vec<u8>>, ScyllaDbStoreInternalError> {
+        Self::check_namespace(namespace)?;
+        let session = SessionBuilder::new()
+            .known_node(config.uri.as_str())
+            .build()
+            .boxed()
+            .await?;
+        let query = format!("SELECT root_key FROM kv.{} ALLOW FILTERING", namespace);
+
+        // Execute the query
+        let rows = session.query_iter(query, &[]).await?;
+        let mut rows = rows.rows_stream::<(Vec<u8>,)>()?;
+        let mut root_keys = BTreeSet::new();
+        while let Some(row) = rows.next().await {
+            let (root_key,) = row?;
+            let root_key = root_key[1..].to_vec();
+            root_keys.insert(root_key);
+        }
+        Ok(root_keys.into_iter().collect::<Vec<_>>())
     }
 
     async fn delete_all(store_config: &Self::Config) -> Result<(), ScyllaDbStoreInternalError> {

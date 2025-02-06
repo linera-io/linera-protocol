@@ -86,6 +86,13 @@ impl MemoryStores {
         self.stores.keys().cloned().collect::<Vec<_>>()
     }
 
+    fn sync_list_root_keys(&self, namespace: &str) -> Vec<Vec<u8>> {
+        match self.stores.get(namespace) {
+            None => Vec::new(),
+            Some(map) => map.keys().cloned().collect::<Vec<_>>(),
+        }
+    }
+
     fn sync_exists(&self, namespace: &str) -> bool {
         self.stores.contains_key(namespace)
     }
@@ -340,6 +347,16 @@ impl AdminKeyValueStore for MemoryStore {
             .lock()
             .expect("MEMORY_STORES lock should not be poisoned");
         Ok(memory_stores.sync_list_all())
+    }
+
+    async fn list_root_keys(
+        _config: &Self::Config,
+        namespace: &str,
+    ) -> Result<Vec<Vec<u8>>, MemoryStoreError> {
+        let memory_stores = MEMORY_STORES
+            .lock()
+            .expect("MEMORY_STORES lock should not be poisoned");
+        Ok(memory_stores.sync_list_root_keys(namespace))
     }
 
     async fn exists(_config: &Self::Config, namespace: &str) -> Result<bool, MemoryStoreError> {

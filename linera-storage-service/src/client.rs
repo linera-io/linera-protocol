@@ -1,7 +1,13 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{mem, sync::Arc};
+use std::{
+    mem,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+};
 
 use async_lock::{Semaphore, SemaphoreGuard};
 use futures::future::join_all;
@@ -24,16 +30,16 @@ use tonic::transport::{Channel, Endpoint};
 #[cfg(with_testing)]
 use crate::common::storage_service_test_endpoint;
 use crate::{
-    common::{KeyTag, ServiceStoreError, ServiceStoreInternalConfig, MAX_PAYLOAD_SIZE},
+    common::{KeyPrefix, ServiceStoreError, ServiceStoreInternalConfig, MAX_PAYLOAD_SIZE},
     key_value_store::{
         statement::Operation, store_processor_client::StoreProcessorClient, KeyValue,
         KeyValueAppend, ReplyContainsKey, ReplyContainsKeys, ReplyExistsNamespace,
-        ReplyFindKeyValuesByPrefix, ReplyFindKeysByPrefix, ReplyListAll, ReplyReadMultiValues,
-        ReplyReadValue, ReplySpecificChunk, RequestContainsKey, RequestContainsKeys,
-        RequestCreateNamespace, RequestDeleteAll, RequestDeleteNamespace, RequestExistsNamespace,
-        RequestFindKeyValuesByPrefix, RequestFindKeysByPrefix, RequestListAll,
-        RequestReadMultiValues, RequestReadValue, RequestSpecificChunk, RequestWriteBatchExtended,
-        Statement,
+        ReplyFindKeyValuesByPrefix, ReplyFindKeysByPrefix, ReplyListAll, ReplyListRootKeys,
+        ReplyReadMultiValues, ReplyReadValue, ReplySpecificChunk, RequestContainsKey,
+        RequestContainsKeys, RequestCreateNamespace, RequestDeleteNamespace,
+        RequestExistsNamespace, RequestFindKeyValuesByPrefix, RequestFindKeysByPrefix,
+        RequestListRootKeys, RequestReadMultiValues, RequestReadValue, RequestSpecificChunk,
+        RequestWriteBatchExtended, Statement,
     },
 };
 
@@ -52,17 +58,21 @@ const MAX_KEY_SIZE: usize = 1000000;
 // of strings is prefix free.
 // The data is stored in the following way.
 // * A `key` in a `namespace` is stored as
-//   [KeyTag::Key] + [namespace] + [key]
+//   [`KeyPrefix::Key`] + namespace + key
 // * An additional key with empty value is stored at
-//   [KeyTag::Namespace] + [namespace]
-// is stored to indicate the existence of a namespace.
+//   [`KeyPrefix::Namespace`] + namespace
+//   is stored to indicate the existence of a namespace.
+// * A key with empty value is stored at
+//   [`KeyPrefix::RootKey`] + namespace + root_key
+//   to indicate the existence of a root key.
 #[derive(Clone)]
 pub struct ServiceStoreClientInternal {
     channel: Channel,
     semaphore: Option<Arc<Semaphore>>,
     max_stream_queries: usize,
-    namespace: Vec<u8>,
+    prefix_len: usize,
     start_key: Vec<u8>,
+    root_key_written: Arc<AtomicBool>,
 }
 
 impl WithError for ServiceStoreClientInternal {
@@ -242,7 +252,22 @@ impl WritableKeyValueStore for ServiceStoreClientInternal {
         }
         let mut statements = Vec::new();
         let mut chunk_size = 0;
-        let root_key_len = self.start_key.len() - self.namespace.len();
+
+        if !self.root_key_written.fetch_or(true, Ordering::SeqCst) {
+            let mut full_key = self.start_key.clone();
+            full_key[0] = KeyPrefix::RootKey as u8;
+            let operation = Operation::Put(KeyValue {
+                key: full_key,
+                value: vec![],
+            });
+            let statement = Statement {
+                operation: Some(operation),
+            };
+            statements.push(statement);
+            chunk_size += self.start_key.len();
+        }
+
+        let root_key_len = self.start_key.len() - self.prefix_len;
         for operation in batch.operations {
             let (key_len, value_len) = match &operation {
                 WriteOperation::Delete { key } => (key.len(), 0),
@@ -306,12 +331,6 @@ impl ServiceStoreClientInternal {
             None => None,
             Some(count) => Some(count.acquire().await),
         }
-    }
-
-    fn namespace_as_vec(namespace: &str) -> Result<Vec<u8>, ServiceStoreError> {
-        let mut key = vec![KeyTag::Key as u8];
-        bcs::serialize_into(&mut key, namespace)?;
-        Ok(key)
     }
 
     async fn submit_statements(&self, statements: Vec<Statement>) -> Result<(), ServiceStoreError> {
@@ -401,49 +420,51 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
         namespace: &str,
         root_key: &[u8],
     ) -> Result<Self, ServiceStoreError> {
-        let endpoint = config.http_address();
-        let endpoint = Endpoint::from_shared(endpoint)?;
-        let channel = endpoint.connect_lazy();
         let semaphore = config
             .common_config
             .max_concurrent_queries
             .map(|n| Arc::new(Semaphore::new(n)));
+        let namespace = bcs::to_bytes(namespace)?;
         let max_stream_queries = config.common_config.max_stream_queries;
-        let namespace = Self::namespace_as_vec(namespace)?;
-        let mut start_key = namespace.clone();
+        let mut start_key = vec![KeyPrefix::Key as u8];
+        start_key.extend(&namespace);
         start_key.extend(root_key);
+        let prefix_len = namespace.len() + 1;
+        let endpoint = config.http_address();
+        let endpoint = Endpoint::from_shared(endpoint)?;
+        let channel = endpoint.connect_lazy();
         Ok(Self {
             channel,
             semaphore,
             max_stream_queries,
-            namespace,
+            prefix_len,
             start_key,
+            root_key_written: Arc::new(AtomicBool::new(false)),
         })
     }
 
     fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, ServiceStoreError> {
         let channel = self.channel.clone();
+        let prefix_len = self.prefix_len;
         let semaphore = self.semaphore.clone();
         let max_stream_queries = self.max_stream_queries;
-        let namespace = self.namespace.clone();
-        let mut start_key = namespace.clone();
+        let mut start_key = self.start_key[..prefix_len].to_vec();
         start_key.extend(root_key);
         Ok(Self {
             channel,
             semaphore,
             max_stream_queries,
-            namespace,
+            prefix_len,
             start_key,
+            root_key_written: Arc::new(AtomicBool::new(false)),
         })
     }
 
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, ServiceStoreError> {
-        let query = RequestListAll {};
-        let request = tonic::Request::new(query);
         let endpoint = config.http_address();
         let endpoint = Endpoint::from_shared(endpoint)?;
         let mut client = StoreProcessorClient::connect(endpoint).await?;
-        let response = client.process_list_all(request).await?;
+        let response = client.process_list_all(()).await?;
         let response = response.into_inner();
         let ReplyListAll { namespaces } = response;
         let namespaces = namespaces
@@ -453,13 +474,27 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
         Ok(namespaces)
     }
 
-    async fn delete_all(config: &Self::Config) -> Result<(), ServiceStoreError> {
-        let query = RequestDeleteAll {};
+    async fn list_root_keys(
+        config: &Self::Config,
+        namespace: &str,
+    ) -> Result<Vec<Vec<u8>>, ServiceStoreError> {
+        let namespace = bcs::to_bytes(namespace)?;
+        let query = RequestListRootKeys { namespace };
         let request = tonic::Request::new(query);
         let endpoint = config.http_address();
         let endpoint = Endpoint::from_shared(endpoint)?;
         let mut client = StoreProcessorClient::connect(endpoint).await?;
-        let _response = client.process_delete_all(request).await?;
+        let response = client.process_list_root_keys(request).await?;
+        let response = response.into_inner();
+        let ReplyListRootKeys { root_keys } = response;
+        Ok(root_keys)
+    }
+
+    async fn delete_all(config: &Self::Config) -> Result<(), ServiceStoreError> {
+        let endpoint = config.http_address();
+        let endpoint = Endpoint::from_shared(endpoint)?;
+        let mut client = StoreProcessorClient::connect(endpoint).await?;
+        let _response = client.process_delete_all(()).await?;
         Ok(())
     }
 
