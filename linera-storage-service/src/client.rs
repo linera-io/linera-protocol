@@ -58,12 +58,12 @@ const MAX_KEY_SIZE: usize = 1000000;
 // of strings is prefix free.
 // The data is stored in the following way.
 // * A `key` in a `namespace` is stored as
-//   [KeyPrefix::Key] + [namespace] + [key]
+//   [`KeyPrefix::Key`] + namespace + key
 // * An additional key with empty value is stored at
-//   [KeyPrefix::Namespace] + [namespace]
+//   [`KeyPrefix::Namespace`] + namespace
 //   is stored to indicate the existence of a namespace.
 // * A key with empty value is stored at
-//   [KeyPrefix::RootKey] + [namespace] + [root_key]
+//   [`KeyPrefix::RootKey`] + namespace + root_key
 //   to indicate the existence of a root key.
 #[derive(Clone)]
 pub struct ServiceStoreClientInternal {
