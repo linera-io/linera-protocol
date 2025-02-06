@@ -129,7 +129,7 @@ impl<'input> FunctionInformation<'input> {
         path.is_ident(caller_type)
     }
 
-    /// Parses a function's parameters and returns the generated code with a list ofbindings to the
+    /// Parses a function's parameters and returns the generated code with a list of bindings to the
     /// parameters and a list of the parameters types.
     fn parse_parameters(
         is_reentrant: bool,
