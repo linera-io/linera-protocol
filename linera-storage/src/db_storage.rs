@@ -619,7 +619,7 @@ where
             .store
             .read_multi_values::<BlobState>(blob_state_keys)
             .await?;
-        let mut latest_epoches = Vec::new();
+        let mut latest_epochs = Vec::new();
         let mut batch = Batch::new();
         let mut need_write = false;
         for (maybe_blob_state, blob_id) in maybe_blob_states.iter().zip(blob_ids) {
@@ -634,12 +634,12 @@ where
                 batch.add_blob_state(*blob_id, &blob_state)?;
                 need_write = true;
             }
-            latest_epoches.push(latest_epoch);
+            latest_epochs.push(latest_epoch);
         }
         if need_write {
             self.write_batch(batch).await?;
         }
-        Ok(latest_epoches)
+        Ok(latest_epochs)
     }
 
     async fn write_blob_state(
