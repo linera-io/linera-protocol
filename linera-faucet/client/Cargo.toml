@@ -1,7 +1,11 @@
 [package]
 name = "linera-faucet-client"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [dependencies]
 anyhow.workspace = true

@@ -4635,7 +4635,7 @@ dependencies = [
 
 [[package]]
 name = "linera-faucet-client"
-version = "0.1.0"
+version = "0.14.0"
 dependencies = [
  "anyhow",
  "linera-base",
@@ -4649,7 +4649,7 @@ dependencies = [
 
 [[package]]
 name = "linera-faucet-server"
-version = "0.1.0"
+version = "0.14.0"
 dependencies = [
  "anyhow",
  "async-graphql",
