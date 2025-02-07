@@ -3,8 +3,6 @@
 
 //! The client component of the Linera faucet.
 
-use std::time::Duration;
-
 use anyhow::{bail, Context, Result};
 use linera_base::identifiers::Owner;
 use linera_client::config::GenesisConfig;
@@ -23,8 +21,13 @@ fn truncate_query_output(input: &str) -> String {
 }
 
 fn reqwest_client() -> reqwest::Client {
-    reqwest::ClientBuilder::new()
-        .timeout(Duration::from_secs(30))
+    let mut builder = reqwest::ClientBuilder::new();
+
+    #[cfg(not(target_arch = "wasm32"))] {
+        builder = builder.timeout(std::time::Duration::from_secs(30));
+    }
+
+    builder
         .build()
         .unwrap()
 }
