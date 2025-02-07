@@ -33,7 +33,6 @@ mod wallet;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use linera_execution::ResourceControlPolicy;
 pub use linera_faucet_client::Faucet;
 pub use wallet::{
     ApplicationWrapper, ClientWrapper, FaucetOption, FaucetService, NodeService, OnClientDrop,

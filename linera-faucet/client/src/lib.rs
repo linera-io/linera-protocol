@@ -23,13 +23,12 @@ fn truncate_query_output(input: &str) -> String {
 fn reqwest_client() -> reqwest::Client {
     let mut builder = reqwest::ClientBuilder::new();
 
-    #[cfg(not(target_arch = "wasm32"))] {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
         builder = builder.timeout(std::time::Duration::from_secs(30));
     }
 
-    builder
-        .build()
-        .unwrap()
+    builder.build().unwrap()
 }
 
 /// A faucet instance that can be queried.
