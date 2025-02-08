@@ -53,7 +53,7 @@ pub async fn get_orders(
 ///     a quantity of 3 token B.
 ///     User_a thus commits 3 * 1 + 3 * 2 = 9 token A to the matching engine chain and is
 ///     left with 1 token A on chain A
-///   * User_b: Offer to sell token B in exchange of token A for a pice of 2 (or 4) with
+///   * User_b: Offer to sell token B in exchange of token A for a piece of 2 (or 4) with
 ///     a quantity of 4 token B
 ///     User_b thus commits 4 + 4 = 8 token B on the matching engine chain and is left
 ///     with 1 token B.
