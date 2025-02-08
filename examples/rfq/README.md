@@ -18,7 +18,7 @@ possible that multiple requests could have been received: the user specifies whi
 responding to using a request ID, consisting of the other party's chain ID and a sequence number.
 
 User A, after receiving the quote, has the option to either cancel the whole request using the
-`CancelRequest` operation, or accept it using the `AcceptQuote` operation. Cancelling the request
+`CancelRequest` operation, or accept it using the `AcceptQuote` operation. Canceling the request
 removes it from the application state and notifies the other party. Accepting the request launches
 the exchange process.
 
@@ -160,7 +160,7 @@ mutation {
 }
 ```
 
-Now we are ready to submit a request for quote. In this scenario, user B wants a quote from user A
+Now we are ready to submit a quote request. In this scenario, user B wants a quote from user A
 for 50 FUN2 tokens.
 
 First, it will be convenient to open GraphiQL interfaces for both users in two browser tabs.
