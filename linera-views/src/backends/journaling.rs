@@ -272,7 +272,7 @@ where
     /// (2) the total size of the all operations in a block doesn't exceed:
     /// `K::MAX_BATCH_TOTAL_SIZE - sizeof(block_key) - sizeof(header_key) - sizeof(bcs_header)`
     ///
-    /// (3) every operation in a block satisfies the contraints on individual database
+    /// (3) every operation in a block satisfies the constraints on individual database
     /// operations represented by `K::MAX_KEY_SIZE` and `K::MAX_VALUE_SIZE`.
     ///
     /// (4) `block_key` and `header_key` don't exceed `K::MAX_KEY_SIZE` and `bcs_header`
