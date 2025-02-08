@@ -7224,7 +7224,7 @@
             "dashLength": 10,
             "dashes": false,
             "datasource": "prometheus",
-            "description": "Number of Paxos-repairs of INSERT, UPDATE, or DELETE with conditions.\n\nA repair is necessary when a previous Paxos statement was partialy successful. A subsequent statement then may not proceed before completing the work of its predecessor. A repair is not guaranteed to succeed, the metric indicates the number of repair attempts made",
+            "description": "Number of Paxos-repairs of INSERT, UPDATE, or DELETE with conditions.\n\nA repair is necessary when a previous Paxos statement was partially successful. A subsequent statement then may not proceed before completing the work of its predecessor. A repair is not guaranteed to succeed, the metric indicates the number of repair attempts made",
             "editable": true,
             "error": false,
             "fieldConfig": {
@@ -7327,7 +7327,7 @@
             "dashLength": 10,
             "dashes": false,
             "datasource": "prometheus",
-            "description": "Number of Paxos-repairs of SELECT statement with SERIAL consistency.\n\nA repair is necessary when a previous Paxos statement was partialy successful. A subsequent statement then may not proceed before completing the work of its predecessor. A repair is not guaranteed to succeed, the metric indicates the number of repair attempts made",
+            "description": "Number of Paxos-repairs of SELECT statement with SERIAL consistency.\n\nA repair is necessary when a previous Paxos statement was partially successful. A subsequent statement then may not proceed before completing the work of its predecessor. A repair is not guaranteed to succeed, the metric indicates the number of repair attempts made",
             "editable": true,
             "error": false,
             "fieldConfig": {
