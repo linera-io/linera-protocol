@@ -1,6 +1,6 @@
 [package]
 name = "linera-sdk"
-description = "Library to support developping Linera applications in Rust."
+description = "Library to support developing Linera applications in Rust."
 readme = "README.md"
 documentation = "https://docs.rs/linera-sdk/latest/linera_sdk/"
 
