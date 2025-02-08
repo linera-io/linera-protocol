@@ -6474,7 +6474,7 @@
             "dashLength": 10,
             "dashes": false,
             "datasource": "prometheus",
-            "description": "How many paxos operations are still running after a result was alredy returned",
+            "description": "How many paxos operations are still running after a result was already returned",
             "editable": true,
             "error": false,
             "fieldConfig": {
