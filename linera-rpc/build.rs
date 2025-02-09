@@ -17,14 +17,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Write the certificate to a file (PEM format)
     let mut cert_file = out_dir.clone();
     cert_file.push("self_signed_cert.pem");
-    let cert_file = format!("{}", cert_file.display());
+    let cert_file = cert_file.display().to_string();
     let mut cert_file = std::fs::File::create(cert_file)?;
     cert_file.write_all(cert.serialize_pem()?.as_bytes())?;
 
     // Write the private key to a file (PEM format)
     let mut key_file = out_dir.clone();
     key_file.push("private_key.pem");
-    let key_file = format!("{}", key_file.display());
+    let key_file = key_file.display().to_string();
     let mut key_file = std::fs::File::create(key_file)?;
     key_file.write_all(cert.serialize_private_key_pem().as_bytes())?;
 
