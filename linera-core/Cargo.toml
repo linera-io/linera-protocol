@@ -91,6 +91,7 @@ alloy-primitives.workspace = true
 assert_matches.workspace = true
 counter.workspace = true
 criterion.workspace = true
+k256.workspace = true
 fungible.workspace = true
 linera-core = { path = ".", default-features = false, features = ["test"] }
 linera-views.workspace = true
@@ -100,6 +101,7 @@ sha3.workspace = true
 social.workspace = true
 test-case.workspace = true
 tracing-subscriber = { workspace = true, features = ["fmt"] }
+rand_core = { version = "0.6.4", features = [ "getrandom" ] } # old version to be compatible with one in k256
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 criterion = { workspace = true, default-features = true, features = ["async_tokio"] }
@@ -114,4 +116,8 @@ required-features = ["test"]
 
 [[bench]]
 name = "hashing_benchmarks"
+harness = false
+
+[[bench]]
+name = "signing_benchmarks"
 harness = false
