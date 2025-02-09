@@ -22,7 +22,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::types::{ConfirmedBlock, Timeout, ValidatedBlock};
 
-/// Certificate for a [`ValidatedBlock`]` instance.
+/// Certificate for a [`ValidatedBlock`] instance.
 /// A validated block certificate means the block is valid (but not necessarily finalized yet).
 /// Since only one block per round is validated,
 /// there can be at most one such certificate in every round.
