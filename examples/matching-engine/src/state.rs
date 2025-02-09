@@ -66,11 +66,11 @@ pub struct MatchingEngineState {
     pub next_order_number: RegisterView<OrderId>,
     /// The map of the outstanding bids, by the bitwise complement of
     /// the revert of the price. The order is from the best price
-    /// level (highest proposed by buyer) to the worse
+    /// level (highest proposed by buyer) to the worst
     pub bids: CustomCollectionView<PriceBid, LevelView>,
     /// The map of the outstanding asks, by the bitwise complement of
     /// the price. The order is from the best one (smallest asked price
-    /// by seller) to the worse.
+    /// by seller) to the worst.
     pub asks: CustomCollectionView<PriceAsk, LevelView>,
     /// The map with the list of orders giving for each order_id the
     /// fundamental information on the order (nature, owner, amount)
