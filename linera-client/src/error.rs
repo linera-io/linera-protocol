@@ -24,6 +24,8 @@ pub(crate) enum Inner {
     NonexistentKeypair(linera_base::identifiers::ChainId),
     #[error("error on the local node: {0}")]
     LocalNode(#[from] linera_core::local_node::LocalNodeError),
+    #[error("remote node operation failed: {0}")]
+    RemoteNode(#[from] linera_core::node::NodeError),
 }
 
 thiserror_context::impl_context!(Error(Inner));

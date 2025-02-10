@@ -58,31 +58,7 @@ use tracing::{debug, error, info, warn, Instrument as _};
 
 mod net_up_utils;
 
-#[cfg(feature = "benchmark")]
-use {
-    linera_base::hashed::Hashed,
-    linera_chain::types::ConfirmedBlock,
-    linera_core::data_types::ChainInfoResponse,
-    linera_rpc::{HandleConfirmedCertificateRequest, RpcMessage},
-    std::collections::HashSet,
-};
-
 use crate::persistent::PersistExt as _;
-
-#[cfg(feature = "benchmark")]
-fn deserialize_response(response: RpcMessage) -> Option<ChainInfoResponse> {
-    match response {
-        RpcMessage::ChainInfoResponse(info) => Some(*info),
-        RpcMessage::Error(error) => {
-            error!("Received error value: {}", error);
-            None
-        }
-        _ => {
-            error!("Unexpected return value");
-            None
-        }
-    }
-}
 
 struct Job(ClientOptions);
 
@@ -763,12 +739,16 @@ impl Runnable for Job {
                 tokens_per_chain,
                 transactions_per_block,
                 fungible_application_id,
+                bps,
             } => {
                 assert!(num_chains > 0, "Number of chains must be greater than 0");
                 assert!(
                     transactions_per_block > 0,
                     "Number of transactions per block must be greater than 0"
                 );
+                if let Some(bps) = bps {
+                    assert!(bps > 0, "BPS must be greater than 0");
+                }
                 let start = Instant::now();
                 // Below all block proposals are supposed to succeed without retries, we
                 // must make sure that all incoming payments have been accepted on-chain
@@ -798,85 +778,20 @@ impl Runnable for Job {
                     );
                 }
 
-                // For this command, we create proposals and gather certificates without using
-                // the client library. We update the wallet storage at the end using a local node.
-                info!("Starting benchmark phase 1 (block proposals)");
-                let proposals = context.make_benchmark_block_proposals(
-                    &key_pairs,
-                    transactions_per_block,
-                    fungible_application_id,
-                );
-                let num_proposal = proposals.len();
-                let mut values = HashMap::new();
-
-                let start = Instant::now();
-                for proposal in &proposals {
-                    let executed_block = context
-                        .stage_block_execution(proposal.content.block.clone(), None)
+                if let Some(bps) = bps {
+                    context
+                        .run_benchmark_long_running(
+                            key_pairs,
+                            transactions_per_block,
+                            fungible_application_id,
+                            bps,
+                        )
                         .await?;
-                    let value = Hashed::new(ConfirmedBlock::new(executed_block));
-                    values.insert(value.hash(), value);
+                } else {
+                    context
+                        .run_benchmark(key_pairs, transactions_per_block, fungible_application_id)
+                        .await?;
                 }
-                info!(
-                    "Staged {} block proposals in {} ms",
-                    num_proposal,
-                    start.elapsed().as_millis()
-                );
-
-                let proposals = proposals
-                    .into_iter()
-                    .map(|proposal| RpcMessage::BlockProposal(Box::new(proposal)))
-                    .collect::<Vec<_>>();
-                let responses = context.mass_broadcast("block proposals", proposals).await;
-                let votes = responses
-                    .into_iter()
-                    .filter_map(|message| {
-                        let response = deserialize_response(message)?;
-                        let vote = response.info.manager.pending?;
-                        let value = values.get(&vote.value.value_hash)?.clone();
-                        vote.clone().with_value(value)
-                    })
-                    .collect::<Vec<_>>();
-                info!("Received {} valid votes.", votes.len());
-
-                info!("Starting benchmark phase 2 (certified blocks)");
-                let certificates = context.make_benchmark_certificates_from_votes(votes);
-                assert_eq!(
-                    num_proposal,
-                    certificates.len(),
-                    "Unable to build all the expected certificates from received votes"
-                );
-                let messages = certificates
-                    .iter()
-                    .map(|certificate| {
-                        RpcMessage::ConfirmedCertificate(Box::new(
-                            HandleConfirmedCertificateRequest {
-                                certificate: certificate.clone(),
-                                wait_for_outgoing_messages: true,
-                            },
-                        ))
-                    })
-                    .collect();
-                let responses = context.mass_broadcast("certificates", messages).await;
-                let mut confirmed = HashSet::new();
-                let num_valid = responses.into_iter().fold(0, |acc, message| {
-                    match deserialize_response(message) {
-                        Some(response) => {
-                            confirmed.insert(response.info.chain_id);
-                            acc + 1
-                        }
-                        None => acc,
-                    }
-                });
-                info!(
-                    "Confirmed {} valid certificates for block proposals to {} chains.",
-                    num_valid,
-                    confirmed.len()
-                );
-
-                info!("Updating local state of user chains");
-                context.update_wallet_from_certificates(certificates).await;
-                context.save_wallet().await?;
             }
 
             Watch { chain_id, raw } => {
