@@ -13,6 +13,7 @@ use std::{
 };
 
 use linera_base::ensure;
+use rocksdb::ReadOptions;
 use tempfile::TempDir;
 use thiserror::Error;
 
@@ -157,7 +158,9 @@ impl RocksDbStoreExecutor {
         let mut prefix = self.start_key.clone();
         prefix.extend(key_prefix);
         let len = prefix.len();
-        let mut iter = self.db.raw_iterator();
+        let mut read_options = ReadOptions::default();
+        read_options.set_ignore_range_deletions(true);
+        let mut iter = self.db.raw_iterator_opt(read_options);
         let mut keys = Vec::new();
         iter.seek(&prefix);
         let mut next_key = iter.key();
@@ -181,7 +184,9 @@ impl RocksDbStoreExecutor {
         let mut prefix = self.start_key.clone();
         prefix.extend(key_prefix);
         let len = prefix.len();
-        let mut iter = self.db.raw_iterator();
+        let mut read_options = ReadOptions::default();
+        read_options.set_ignore_range_deletions(true);
+        let mut iter = self.db.raw_iterator_opt(read_options);
         let mut key_values = Vec::new();
         iter.seek(&prefix);
         let mut next_key = iter.key();
@@ -205,6 +210,7 @@ impl RocksDbStoreExecutor {
         write_root_key: bool,
     ) -> Result<(), RocksDbStoreInternalError> {
         let mut inner_batch = rocksdb::WriteBatchWithTransaction::default();
+        let mut should_flush = false;
         for operation in batch.operations {
             match operation {
                 WriteOperation::Delete { key } => {
@@ -226,6 +232,7 @@ impl RocksDbStoreExecutor {
                     let full_key2 =
                         get_upper_bound_option(&full_key1).expect("the first entry cannot be 255");
                     inner_batch.delete_range(&full_key1, &full_key2);
+                    should_flush = true;
                 }
             }
         }
@@ -235,6 +242,9 @@ impl RocksDbStoreExecutor {
             inner_batch.put(&full_key, vec![]);
         }
         self.db.write(inner_batch)?;
+        if should_flush {
+            self.db.flush()?;
+        }
         Ok(())
     }
 }
