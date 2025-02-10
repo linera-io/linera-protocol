@@ -1,0 +1,18 @@
+[package]
+name = "linera-faucet-client"
+version.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+license.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+linera-base.workspace = true
+linera-client.workspace = true
+linera-execution.workspace = true
+linera-faucet = { version = "0.14.0", path = ".." }
+linera-version.workspace = true
+reqwest.workspace = true
+serde_json.workspace = true

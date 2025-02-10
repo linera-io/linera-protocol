@@ -1,0 +1,33 @@
+[package]
+name = "linera-faucet-server"
+version.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+license.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+async-graphql.workspace = true
+async-graphql-axum.workspace = true
+axum.workspace = true
+futures.workspace = true
+linera-base.workspace = true
+linera-client.workspace = true
+linera-core.workspace = true
+linera-execution.workspace = true
+linera-storage.workspace = true
+linera-version.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tower-http = { workspace = true, features = ["cors"] }
+tracing.workspace = true
+
+[dev-dependencies]
+async-trait.workspace = true
+linera-views.workspace = true
+  [dev-dependencies.linera-core]
+  workspace = true
+  features = ["test"]

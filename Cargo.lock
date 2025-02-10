@@ -4626,6 +4626,52 @@ dependencies = [
 ]
 
 [[package]]
+name = "linera-faucet"
+version = "0.14.0"
+dependencies = [
+ "async-graphql",
+ "linera-base",
+]
+
+[[package]]
+name = "linera-faucet-client"
+version = "0.14.0"
+dependencies = [
+ "anyhow",
+ "linera-base",
+ "linera-client",
+ "linera-execution",
+ "linera-faucet",
+ "linera-version",
+ "reqwest 0.11.27",
+ "serde_json",
+]
+
+[[package]]
+name = "linera-faucet-server"
+version = "0.14.0"
+dependencies = [
+ "anyhow",
+ "async-graphql",
+ "async-graphql-axum",
+ "async-trait",
+ "axum",
+ "futures",
+ "linera-base",
+ "linera-client",
+ "linera-core",
+ "linera-execution",
+ "linera-storage",
+ "linera-version",
+ "linera-views",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tower-http 0.5.2",
+ "tracing",
+]
+
+[[package]]
 name = "linera-indexer"
 version = "0.14.0"
 dependencies = [
@@ -4839,6 +4885,9 @@ dependencies = [
  "linera-core",
  "linera-ethereum",
  "linera-execution",
+ "linera-faucet",
+ "linera-faucet-client",
+ "linera-faucet-server",
  "linera-rpc",
  "linera-sdk",
  "linera-service",

@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! The server component of the Linera faucet.
+
 use std::{net::SocketAddr, num::NonZeroU16, sync::Arc};
 
 use async_graphql::{EmptySubscription, Error, Schema, SimpleObject};
@@ -24,10 +26,17 @@ use serde::Deserialize;
 use tower_http::cors::CorsLayer;
 use tracing::info;
 
-use crate::util;
+/// Returns an HTML response constructing the GraphiQL web page for the given URI.
+pub(crate) async fn graphiql(uri: axum::http::Uri) -> impl axum::response::IntoResponse {
+    axum::response::Html(
+        async_graphql::http::GraphiQLSource::build()
+            .endpoint(uri.path())
+            .subscription_endpoint("/ws")
+            .finish(),
+    )
+}
 
 #[cfg(test)]
-#[path = "unit_tests/faucet.rs"]
 mod tests;
 
 /// The root GraphQL query type.
@@ -264,7 +273,7 @@ where
     /// Runs the faucet.
     pub async fn run(self) -> anyhow::Result<()> {
         let port = self.port.get();
-        let index_handler = axum::routing::get(util::graphiql).post(Self::index_handler);
+        let index_handler = axum::routing::get(graphiql).post(Self::index_handler);
 
         let app = Router::new()
             .route("/", index_handler)

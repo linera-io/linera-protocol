@@ -7,7 +7,6 @@
 #![deny(clippy::large_futures)]
 
 pub mod cli_wrappers;
-pub mod faucet;
 pub mod node_service;
 pub mod project;
 #[cfg(with_metrics)]

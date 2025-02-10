@@ -24,10 +24,11 @@ use linera_base::{
     data_types::{Amount, Bytecode},
     identifiers::{Account, ApplicationId, BytecodeId, ChainId, MessageId, Owner},
 };
-use linera_client::{config::GenesisConfig, wallet::Wallet};
+use linera_client::wallet::Wallet;
 use linera_core::worker::Notification;
-use linera_execution::{committee::ValidatorName, system::SystemChannel, ResourceControlPolicy};
-use linera_version::VersionInfo;
+use linera_execution::{system::SystemChannel, ResourceControlPolicy};
+use linera_faucet::ClaimOutcome;
+use linera_faucet_client::Faucet;
 use serde::{de::DeserializeOwned, ser::Serialize};
 use serde_json::{json, Value};
 use tempfile::TempDir;
@@ -39,7 +40,6 @@ use crate::{
         local_net::{PathProvider, ProcessInbox},
         Network,
     },
-    faucet::ClaimOutcome,
     util::{self, ChildExt},
 };
 
@@ -1404,188 +1404,6 @@ impl FaucetService {
 
     pub fn instance(&self) -> Faucet {
         Faucet::new(format!("http://localhost:{}/", self.port))
-    }
-}
-
-/// A faucet instance that can be queried.
-#[derive(Debug, Clone)]
-pub struct Faucet {
-    url: String,
-}
-
-impl Faucet {
-    pub fn new(url: String) -> Self {
-        Self { url }
-    }
-
-    pub fn url(&self) -> &str {
-        &self.url
-    }
-
-    pub async fn genesis_config(&self) -> Result<GenesisConfig> {
-        let query = "query { genesisConfig }";
-        let client = reqwest_client();
-        let response = client
-            .post(&self.url)
-            .json(&json!({ "query": query }))
-            .send()
-            .await
-            .context("genesis_config: failed to post query")?;
-        anyhow::ensure!(
-            response.status().is_success(),
-            "Query \"{}\" failed: {}",
-            query,
-            response
-                .text()
-                .await
-                .unwrap_or_else(|error| format!("Could not get response text: {error}"))
-        );
-        let mut value: Value = response.json().await.context("invalid JSON")?;
-        if let Some(errors) = value.get("errors") {
-            bail!("Query \"{}\" failed: {}", query, errors);
-        }
-        serde_json::from_value(value["data"]["genesisConfig"].take())
-            .context("could not parse genesis config")
-    }
-
-    pub async fn version_info(&self) -> Result<VersionInfo> {
-        let query =
-            "query { version { crateVersion gitCommit gitDirty rpcHash graphqlHash witHash } }";
-        let client = reqwest_client();
-        let response = client
-            .post(&self.url)
-            .json(&json!({ "query": query }))
-            .send()
-            .await
-            .context("version_info: failed to post query")?;
-        anyhow::ensure!(
-            response.status().is_success(),
-            "Query \"{}\" failed: {}",
-            query,
-            response
-                .text()
-                .await
-                .unwrap_or_else(|error| format!("Could not get response text: {error}"))
-        );
-        let mut value: Value = response.json().await.context("invalid JSON")?;
-        if let Some(errors) = value.get("errors") {
-            bail!("Query \"{}\" failed: {}", query, errors);
-        }
-        let crate_version = serde_json::from_value(value["data"]["version"]["crateVersion"].take())
-            .context("could not parse crate version")?;
-        let git_commit = serde_json::from_value(value["data"]["version"]["gitCommit"].take())
-            .context("could not parse git commit")?;
-        let git_dirty = serde_json::from_value(value["data"]["version"]["gitDirty"].take())
-            .context("could not parse git dirty")?;
-        let rpc_hash = serde_json::from_value(value["data"]["version"]["rpcHash"].take())
-            .context("could not parse rpc hash")?;
-        let graphql_hash = serde_json::from_value(value["data"]["version"]["graphqlHash"].take())
-            .context("could not parse graphql hash")?;
-        let wit_hash = serde_json::from_value(value["data"]["version"]["witHash"].take())
-            .context("could not parse wit hash")?;
-        Ok(VersionInfo {
-            crate_version,
-            git_commit,
-            git_dirty,
-            rpc_hash,
-            graphql_hash,
-            wit_hash,
-        })
-    }
-
-    pub async fn claim(&self, owner: &Owner) -> Result<ClaimOutcome> {
-        let query = format!(
-            "mutation {{ claim(owner: \"{owner}\") {{ \
-                messageId chainId certificateHash \
-            }} }}"
-        );
-        let client = reqwest_client();
-        let response = client
-            .post(&self.url)
-            .json(&json!({ "query": &query }))
-            .send()
-            .await
-            .with_context(|| {
-                format!(
-                    "claim: failed to post query={}",
-                    truncate_query_output(&query)
-                )
-            })?;
-        anyhow::ensure!(
-            response.status().is_success(),
-            "Query \"{}\" failed: {}",
-            query,
-            response
-                .text()
-                .await
-                .unwrap_or_else(|error| format!("Could not get response text: {error}"))
-        );
-        let value: Value = response.json().await.context("invalid JSON")?;
-        if let Some(errors) = value.get("errors") {
-            bail!("Query \"{}\" failed: {}", query, errors);
-        }
-        let data = &value["data"]["claim"];
-        let message_id = data["messageId"]
-            .as_str()
-            .context("message ID not found")?
-            .parse()
-            .context("could not parse message ID")?;
-        let chain_id = data["chainId"]
-            .as_str()
-            .context("chain ID not found")?
-            .parse()
-            .context("could not parse chain ID")?;
-        let certificate_hash = data["certificateHash"]
-            .as_str()
-            .context("Certificate hash not found")?
-            .parse()
-            .context("could not parse certificate hash")?;
-        let outcome = ClaimOutcome {
-            message_id,
-            chain_id,
-            certificate_hash,
-        };
-        Ok(outcome)
-    }
-
-    pub async fn current_validators(&self) -> Result<Vec<(ValidatorName, String)>> {
-        let query = "query { currentValidators { name networkAddress } }";
-        let client = reqwest_client();
-        let response = client
-            .post(&self.url)
-            .json(&json!({ "query": query }))
-            .send()
-            .await
-            .context("current_validators: failed to post query")?;
-        anyhow::ensure!(
-            response.status().is_success(),
-            "Query \"{}\" failed: {}",
-            query,
-            response
-                .text()
-                .await
-                .unwrap_or_else(|error| format!("Could not get response text: {error}"))
-        );
-        let mut value: Value = response.json().await.context("invalid JSON")?;
-        if let Some(errors) = value.get("errors") {
-            bail!("Query \"{}\" failed: {}", query, errors);
-        }
-        let validators = match value["data"]["currentValidators"].take() {
-            serde_json::Value::Array(validators) => validators,
-            validators => bail!("{validators} is not an array"),
-        };
-        validators
-            .into_iter()
-            .map(|mut validator| {
-                let name = serde_json::from_value::<ValidatorName>(validator["name"].take())
-                    .context("could not parse current validators: invalid name")?;
-                let addr = validator["networkAddress"]
-                    .as_str()
-                    .context("could not parse current validators: invalid address")?
-                    .to_string();
-                Ok((name, addr))
-            })
-            .collect()
     }
 }
 

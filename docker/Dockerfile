@@ -38,6 +38,7 @@ COPY linera-core linera-core
 COPY linera-ethereum linera-ethereum
 COPY linera-execution linera-execution
 COPY linera-explorer linera-explorer
+COPY linera-faucet linera-faucet
 COPY linera-indexer linera-indexer
 COPY linera-rpc linera-rpc
 COPY linera-sdk linera-sdk

@@ -19,6 +19,7 @@ use linera_base::{
     identifiers::{Account, AccountOwner, ChainId},
 };
 use linera_core::{data_types::ChainInfoQuery, node::ValidatorNode};
+use linera_faucet::ClaimOutcome;
 use linera_service::{
     cli_wrappers::{
         local_net::{
@@ -26,7 +27,6 @@ use linera_service::{
         },
         ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network, OnClientDrop,
     },
-    faucet::ClaimOutcome,
     test_name,
 };
 use test_case::test_case;

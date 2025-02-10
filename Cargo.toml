@@ -7,6 +7,9 @@ members = [
     "linera-ethereum",
     "linera-execution",
     "linera-explorer",
+    "linera-faucet",
+    "linera-faucet/client",
+    "linera-faucet/server",
     "linera-indexer/example",
     "linera-indexer/graphql-client",
     "linera-indexer/lib",
@@ -204,6 +207,9 @@ linera-client = { version = "0.14.0", path = "./linera-client" }
 linera-core = { version = "0.14.0", path = "./linera-core", default-features = false }
 linera-ethereum = { version = "0.14.0", path = "./linera-ethereum", default-features = false }
 linera-execution = { version = "0.14.0", path = "./linera-execution", default-features = false }
+linera-faucet = { version = "0.14.0", path = "linera-faucet" }
+linera-faucet-client = { version = "0.14.0", path = "linera-faucet/client" }
+linera-faucet-server = { version = "0.14.0", path = "linera-faucet/server" }
 linera-indexer = { version = "0.14.0", path = "./linera-indexer/lib" }
 linera-indexer-graphql-client = { version = "0.14.0", path = "./linera-indexer/graphql-client" }
 linera-indexer-plugins = { version = "0.14.0", path = "./linera-indexer/plugins" }

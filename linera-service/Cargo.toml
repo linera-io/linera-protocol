@@ -89,6 +89,9 @@ linera-chain.workspace = true
 linera-client = { workspace = true, features = ["fs"] }
 linera-core.workspace = true
 linera-execution = { workspace = true, features = ["fs"] }
+linera-faucet = { workspace = true, features = ["async-graphql"] }
+linera-faucet-client.workspace = true
+linera-faucet-server.workspace = true
 linera-rpc = { workspace = true, features = ["server", "simple-network"] }
 linera-sdk = { workspace = true }
 linera-storage.workspace = true

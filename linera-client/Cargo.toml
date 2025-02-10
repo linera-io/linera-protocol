@@ -12,7 +12,6 @@ repository.workspace = true
 version.workspace = true
 
 [features]
-default = ["fs"]
 test = ["linera-views/test", "linera-execution/test"]
 benchmark = ["linera-base/test", "dep:linera-sdk"]
 wasmer = [
