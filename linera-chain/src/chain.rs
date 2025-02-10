@@ -590,7 +590,7 @@ where
     }
 
     /// Initializes the chain using the given configuration.
-    pub async fn execute_init_message(
+    async fn execute_init_message(
         &mut self,
         message_id: MessageId,
         config: &OpenChainConfig,
@@ -709,11 +709,6 @@ where
         let _execution_latency = BLOCK_EXECUTION_LATENCY.measure_latency();
 
         assert_eq!(block.chain_id, self.chain_id());
-
-        // If this is the first block of a child chain, initialize the chain.
-        if block.height == BlockHeight::ZERO && self.is_child() {
-            self.execute_init_message_from(block, local_time).await?;
-        }
 
         ensure!(
             *self.execution_state.system.timestamp.get() <= block.timestamp,
