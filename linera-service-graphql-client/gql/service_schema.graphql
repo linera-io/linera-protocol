@@ -287,7 +287,7 @@ type ChainStateExtendedView {
 	Hashes of all certified blocks for this sender.
 	This ends with `block_hash` and has length `usize::from(next_block_height)`.
 	"""
-	confirmedLog: LogView_CryptoHash_5f6ab77f!
+	confirmedLog: LogView_CryptoHash_87fbb60c!
 	"""
 	Sender chain and height of all certified blocks known as a receiver (local ordering).
 	"""
@@ -604,7 +604,7 @@ type LogView_ChainAndHeight_7af83576 {
 	entries(start: Int, end: Int): [ChainAndHeight!]!
 }
 
-type LogView_CryptoHash_5f6ab77f {
+type LogView_CryptoHash_87fbb60c {
 	entries(start: Int, end: Int): [CryptoHash!]!
 }
 
