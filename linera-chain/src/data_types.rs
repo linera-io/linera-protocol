@@ -11,7 +11,9 @@ use async_graphql::SimpleObject;
 use custom_debug_derive::Debug;
 use linera_base::{
     bcs,
-    crypto::{BcsHashable, BcsSignable, CryptoError, CryptoHash, KeyPair, PublicKey, Signature},
+    crypto::{
+        BcsHashable, BcsSignable, CryptoError, CryptoHash, Ed25519Signature, KeyPair, PublicKey,
+    },
     data_types::{Amount, BlockHeight, Event, OracleResponse, Round, Timestamp},
     doc_scalar, ensure,
     hashed::Hashed,
@@ -287,7 +289,7 @@ pub struct BlockProposal {
     pub content: ProposalContent,
     pub owner: Owner,
     pub public_key: PublicKey,
-    pub signature: Signature,
+    pub signature: Ed25519Signature,
     #[debug(skip_if = Option::is_none)]
     pub validated_block_certificate: Option<LiteCertificate<'static>>,
 }
@@ -423,7 +425,7 @@ pub struct Vote<T> {
     pub value: Hashed<T>,
     pub round: Round,
     pub validator: ValidatorName,
-    pub signature: Signature,
+    pub signature: Ed25519Signature,
 }
 
 impl<T> Vote<T> {
@@ -433,7 +435,7 @@ impl<T> Vote<T> {
         T: CertificateValue,
     {
         let hash_and_round = VoteValue(value.hash(), round, T::KIND);
-        let signature = Signature::new(&hash_and_round, key_pair);
+        let signature = Ed25519Signature::new(&hash_and_round, key_pair);
         Self {
             value,
             round,
@@ -468,7 +470,7 @@ pub struct LiteVote {
     pub value: LiteValue,
     pub round: Round,
     pub validator: ValidatorName,
-    pub signature: Signature,
+    pub signature: Ed25519Signature,
 }
 
 impl LiteVote {
@@ -740,7 +742,7 @@ impl BlockProposal {
             block,
             outcome: None,
         };
-        let signature = Signature::new(&content, secret);
+        let signature = Ed25519Signature::new(&content, secret);
         Self {
             content,
             public_key: secret.public(),
@@ -763,7 +765,7 @@ impl BlockProposal {
             round,
             outcome: Some(executed_block.outcome),
         };
-        let signature = Signature::new(&content, secret);
+        let signature = Ed25519Signature::new(&content, secret);
         Self {
             content,
             public_key: secret.public(),
@@ -816,7 +818,7 @@ impl LiteVote {
     /// Uses the signing key to create a signed object.
     pub fn new(value: LiteValue, round: Round, key_pair: &KeyPair) -> Self {
         let hash_and_round = VoteValue(value.value_hash, round, value.kind);
-        let signature = Signature::new(&hash_and_round, key_pair);
+        let signature = Ed25519Signature::new(&hash_and_round, key_pair);
         Self {
             value,
             round,
@@ -856,7 +858,7 @@ impl<'a, T> SignatureAggregator<'a, T> {
     pub fn append(
         &mut self,
         validator: ValidatorName,
-        signature: Signature,
+        signature: Ed25519Signature,
     ) -> Result<Option<GenericCertificate<T>>, ChainError>
     where
         T: CertificateValue,
@@ -887,7 +889,7 @@ impl<'a, T> SignatureAggregator<'a, T> {
 
 // Checks if the array slice is strictly ordered. That means that if the array
 // has duplicates, this will return False, even if the array is sorted
-pub(crate) fn is_strictly_ordered(values: &[(ValidatorName, Signature)]) -> bool {
+pub(crate) fn is_strictly_ordered(values: &[(ValidatorName, Ed25519Signature)]) -> bool {
     values.windows(2).all(|pair| pair[0].0 < pair[1].0)
 }
 
@@ -896,7 +898,7 @@ pub(crate) fn check_signatures(
     value_hash: CryptoHash,
     certificate_kind: CertificateKind,
     round: Round,
-    signatures: &[(ValidatorName, Signature)],
+    signatures: &[(ValidatorName, Ed25519Signature)],
     committee: &Committee,
 ) -> Result<(), ChainError> {
     // Check the quorum.
@@ -920,7 +922,7 @@ pub(crate) fn check_signatures(
     );
     // All that is left is checking signatures!
     let hash_and_round = VoteValue(value_hash, round, certificate_kind);
-    Signature::verify_batch(&hash_and_round, signatures.iter().map(|(v, s)| (&v.0, s)))?;
+    Ed25519Signature::verify_batch(&hash_and_round, signatures.iter().map(|(v, s)| (&v.0, s)))?;
     Ok(())
 }
 

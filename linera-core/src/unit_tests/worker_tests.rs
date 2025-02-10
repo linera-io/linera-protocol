@@ -446,7 +446,7 @@ where
     let unknown_key_pair = KeyPair::generate();
     let mut bad_signature_block_proposal = block_proposal.clone();
     bad_signature_block_proposal.signature =
-        Signature::new(&block_proposal.content, &unknown_key_pair);
+        Ed25519Signature::new(&block_proposal.content, &unknown_key_pair);
     assert_matches!(
         worker
             .handle_block_proposal(bad_signature_block_proposal)

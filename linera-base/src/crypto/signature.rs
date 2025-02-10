@@ -10,11 +10,11 @@ use serde::{Deserialize, Serialize};
 use super::{BcsSignable, CryptoError, HasTypeName, Hashable, KeyPair, PublicKey};
 use crate::doc_scalar;
 
-/// A signature value.
+/// A Ed25519 signature.
 #[derive(Eq, PartialEq, Copy, Clone)]
-pub struct Signature(pub dalek::Signature);
+pub struct Ed25519Signature(pub dalek::Signature);
 
-impl Signature {
+impl Ed25519Signature {
     /// Computes a signature.
     pub fn new<'de, T>(value: &T, secret: &KeyPair) -> Self
     where
@@ -23,7 +23,7 @@ impl Signature {
         let mut message = Vec::new();
         value.write(&mut message);
         let signature = secret.0.sign(&message);
-        Signature(signature)
+        Ed25519Signature(signature)
     }
 
     fn check_internal<'de, T>(
@@ -75,7 +75,7 @@ impl Signature {
     ) -> Result<(), dalek::SignatureError>
     where
         T: BcsSignable<'de>,
-        I: IntoIterator<Item = (&'a PublicKey, &'a Signature)>,
+        I: IntoIterator<Item = (&'a PublicKey, &'a Ed25519Signature)>,
     {
         let mut msg = Vec::new();
         value.write(&mut msg);
@@ -94,9 +94,9 @@ impl Signature {
     pub fn verify_batch<'a, 'de, T, I>(value: &'a T, votes: I) -> Result<(), CryptoError>
     where
         T: BcsSignable<'de>,
-        I: IntoIterator<Item = (&'a PublicKey, &'a Signature)>,
+        I: IntoIterator<Item = (&'a PublicKey, &'a Ed25519Signature)>,
     {
-        Signature::verify_batch_internal(value, votes).map_err(|error| {
+        Ed25519Signature::verify_batch_internal(value, votes).map_err(|error| {
             CryptoError::InvalidSignature {
                 error: format!("batched {}", error),
                 type_name: T::type_name().to_string(),
@@ -105,7 +105,7 @@ impl Signature {
     }
 }
 
-impl Serialize for Signature {
+impl Serialize for Ed25519Signature {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::ser::Serializer,
@@ -118,7 +118,7 @@ impl Serialize for Signature {
     }
 }
 
-impl<'de> Deserialize<'de> for Signature {
+impl<'de> Deserialize<'de> for Ed25519Signature {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::de::Deserializer<'de>,
@@ -128,7 +128,7 @@ impl<'de> Deserialize<'de> for Signature {
             let value = hex::decode(s).map_err(serde::de::Error::custom)?;
             let sig =
                 dalek::Signature::try_from(value.as_slice()).map_err(serde::de::Error::custom)?;
-            Ok(Signature(sig))
+            Ok(Ed25519Signature(sig))
         } else {
             #[derive(Deserialize)]
             #[serde(rename = "Signature")]
@@ -140,20 +140,20 @@ impl<'de> Deserialize<'de> for Signature {
     }
 }
 
-impl fmt::Display for Signature {
+impl fmt::Display for Ed25519Signature {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = hex::encode(self.0.to_bytes());
         write!(f, "{}", s)
     }
 }
 
-impl fmt::Debug for Signature {
+impl fmt::Debug for Ed25519Signature {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", hex::encode(&self.0.to_bytes()[0..8]))
     }
 }
 
-doc_scalar!(Signature, "A signature value");
+doc_scalar!(Ed25519Signature, "A signature value");
 
 /// A BCS-signable struct for testing.
 #[cfg(with_testing)]
@@ -187,7 +187,7 @@ fn test_signatures() {
     let tsx = TestString("hellox".into());
     let foo = Foo("hello".into());
 
-    let s = Signature::new(&ts, &key1);
+    let s = Ed25519Signature::new(&ts, &key1);
     assert!(s.check(&ts, addr1).is_ok());
     assert!(s.check(&ts, addr2).is_err());
     assert!(s.check(&tsx, addr1).is_err());
