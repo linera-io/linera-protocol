@@ -180,8 +180,8 @@ where
         // Check if the counters of tip_state would be valid.
         chain
             .tip_state
-            .get()
-            .verify_counters(block, &executed_block.outcome)?;
+            .get_mut()
+            .update_counters(block, &executed_block.outcome)?;
         // Verify that the resulting chain would have no unconfirmed incoming messages.
         chain.validate_incoming_bundles().await?;
         Ok(Some((executed_block.outcome, local_time)))
