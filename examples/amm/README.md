@@ -1,7 +1,7 @@
 # Automated Market Maker (AMM) Example Application
 
-This example implements an Automated Market Maker (AMM) which demonstrates DeFi capabilities of the
-Linera protocol. Prerequisite for the AMM application is the `fungible` application, as we will
+This example implements an Automated Market Maker (AMM) which demonstrates the DeFi capabilities of the
+Linera protocol. The prerequisite for the AMM application is the `fungible` application, as we will
 be adding/removing liquidity and also performing a swap.
 
 ## How it works
@@ -18,7 +18,7 @@ It supports the following operations. All operations need to be executed remotel
   adding liquidity, which currently can only be a chain owner.
 
 - Remove Liquidity: This withdraws tokens from the AMM. Given the index of the token you'd
-  like to remove (can be 0 or 1), and an amount of that token that you'd like to remove, it calculates
+  like to remove (can be 0 or 1), and the amount of that token that you'd like to remove, it calculates
   how much of the other token will also be removed based on the current AMM ratio. Then it removes
   the amounts from both tokens as a removal of liquidity. The owner, in this context, is the user
   removing liquidity, which currently can only be a chain owner.

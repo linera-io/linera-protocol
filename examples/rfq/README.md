@@ -18,7 +18,7 @@ possible that multiple requests could have been received: the user specifies whi
 responding to using a request ID, consisting of the other party's chain ID and a sequence number.
 
 User A, after receiving the quote, has the option to either cancel the whole request using the
-`CancelRequest` operation, or accept it using the `AcceptQuote` operation. Cancelling the request
+`CancelRequest` operation, or accept it using the `AcceptQuote` operation. Canceling the request
 removes it from the application state and notifies the other party. Accepting the request launches
 the exchange process.
 

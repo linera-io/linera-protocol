@@ -52,8 +52,8 @@ also need to accommodate other features:
 The rules for constructing keys are the following:
 * For the construction of `struct` objects of associated base key `base_key` we do the
 following: If the corresponding type has entries `entry_0`, ..., `entry_k` then the
-base key of the object associated with the `k`-th entry is `[base_key * * * *]` with `[* * * *]`
-the serialization of the number `k` considered as a `u32`.
+base key of the object associated with the `k`-th entry is `[base_key * * * *]` where
+`[* * * *]` are the four bytes of `k` as a `u32`.
 * For each view type, we have some associated data. Some are the hash, others the counts
 (e.g. for `LogView` and `QueueView`) and some the index. The corresponding enum is
 named `KeyTag` for each of those containers. For the index, the values are serialized.

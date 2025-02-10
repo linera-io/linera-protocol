@@ -89,7 +89,7 @@ sleep 2
 Type each of these in the GraphiQL interface and substitute the env variables with their actual values that we've defined above.
 
 Point your browser to http://localhost:8081. This is the wallet that didn't create the
-application, so we have to request it from the creator chain. As the chain ID specify the
+application, so we have to request it from the creator chain. As the chain ID specifies the
 one of the chain where it isn't registered yet:
 
 ```gql,uri=http://localhost:8081
@@ -144,7 +144,7 @@ Since 8081 is a subscriber. Let's see if it received any posts: # You can see th
 query { receivedPosts { keys { timestamp author index } } }
 ```
 
-This should now list one entry, with timestamp, author and an index. If we view that
+This should now list one entry, with a timestamp, author and an index. If we view that
 entry, we can see the posted text as well as other values:
 
 ```gql
