@@ -1400,6 +1400,6 @@ pub struct InvalidWasmRuntime(String);
 doc_scalar!(Operation, "An operation to be executed in a block");
 doc_scalar!(
     Message,
-    "An message to be sent and possibly executed in the receiver's block."
+    "A message to be sent and possibly executed in the receiver's block."
 );
 doc_scalar!(MessageKind, "The kind of outgoing message being sent");
