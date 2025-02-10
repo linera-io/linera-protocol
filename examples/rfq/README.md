@@ -160,7 +160,7 @@ mutation {
 }
 ```
 
-Now we are ready to submit a quote request. In this scenario, user B wants a quote from user A
+Now we are ready to submit a request for quote. In this scenario, user B wants a quote from user A
 for 50 FUN2 tokens.
 
 First, it will be convenient to open GraphiQL interfaces for both users in two browser tabs.
