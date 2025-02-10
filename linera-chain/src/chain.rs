@@ -565,13 +565,35 @@ where
         }
     }
 
+    /// Verifies that the block's first message is `OpenChain`. Initializes the chain if necessary.
+    async fn execute_init_message_from(
+        &mut self,
+        block: &ProposedBlock,
+        local_time: Timestamp,
+    ) -> Result<(), ChainError> {
+        let (in_bundle, posted_message, config) = block
+            .starts_with_open_chain_message()
+            .ok_or_else(|| ChainError::InactiveChain(block.chain_id))?;
+        if self.is_active() {
+            return Ok(()); // Already initialized.
+        }
+        let message_id = MessageId {
+            chain_id: in_bundle.origin.sender,
+            height: in_bundle.bundle.height,
+            index: posted_message.index,
+        };
+        self.execute_init_message(message_id, config, block.timestamp, local_time)
+            .await
+    }
+
+    /// Initializes the chain using the given configuration.
     pub async fn execute_init_message(
         &mut self,
         message_id: MessageId,
         config: &OpenChainConfig,
         timestamp: Timestamp,
         local_time: Timestamp,
-    ) -> Result<bool, ChainError> {
+    ) -> Result<(), ChainError> {
         // Initialize ourself.
         self.execution_state
             .system
@@ -586,8 +608,7 @@ where
             BlockHeight(0),
             local_time,
             maybe_committee.flat_map(|(_, committee)| committee.keys_and_weights()),
-        )?;
-        Ok(true)
+        )
     }
 
     pub fn current_committee(&self) -> Result<(Epoch, &Committee), ChainError> {
@@ -684,30 +705,11 @@ where
         #[cfg(with_metrics)]
         let _execution_latency = BLOCK_EXECUTION_LATENCY.measure_latency();
 
-        let chain_id = self.chain_id();
-        assert_eq!(block.chain_id, chain_id);
-        // The first incoming message of any child chain must be `OpenChain`. A root chain must
-        // already be initialized
-        if block.height == BlockHeight::ZERO
-            && self
-                .execution_state
-                .system
-                .description
-                .get()
-                .map_or(true, |description| description.is_child())
-        {
-            let (in_bundle, posted_message, config) = block
-                .starts_with_open_chain_message()
-                .ok_or_else(|| ChainError::InactiveChain(chain_id))?;
-            if !self.is_active() {
-                let message_id = MessageId {
-                    chain_id: in_bundle.origin.sender,
-                    height: in_bundle.bundle.height,
-                    index: posted_message.index,
-                };
-                self.execute_init_message(message_id, config, block.timestamp, local_time)
-                    .await?;
-            }
+        assert_eq!(block.chain_id, self.chain_id());
+
+        // If this is the first block of a child chain, initialize the chain.
+        if block.height == BlockHeight::ZERO && self.is_child() {
+            self.execute_init_message_from(block, local_time).await?;
         }
 
         ensure!(
@@ -723,14 +725,12 @@ where
         };
         resource_controller
             .track_block_size(EMPTY_BLOCK_SIZE)
-            .and_then(|()| {
-                resource_controller
-                    .track_executed_block_size_sequence_extension(0, block.incoming_bundles.len())
-            })
-            .and_then(|()| {
-                resource_controller
-                    .track_executed_block_size_sequence_extension(0, block.operations.len())
-            })
+            .with_execution_context(ChainExecutionContext::Block)?;
+        resource_controller
+            .track_executed_block_size_sequence_extension(0, block.incoming_bundles.len())
+            .with_execution_context(ChainExecutionContext::Block)?;
+        resource_controller
+            .track_executed_block_size_sequence_extension(0, block.operations.len())
             .with_execution_context(ChainExecutionContext::Block)?;
 
         if self.is_closed() {
@@ -739,33 +739,7 @@ where
                 ChainError::ClosedChain
             );
         }
-        let app_permissions = self.execution_state.system.application_permissions.get();
-        let mut mandatory = HashSet::<UserApplicationId>::from_iter(
-            app_permissions.mandatory_applications.iter().cloned(),
-        );
-        for operation in &block.operations {
-            ensure!(
-                app_permissions.can_execute_operations(&operation.application_id()),
-                ChainError::AuthorizedApplications(
-                    app_permissions.execute_operations.clone().unwrap()
-                )
-            );
-            if let Operation::User { application_id, .. } = operation {
-                mandatory.remove(application_id);
-            }
-        }
-        for pending in block.incoming_messages() {
-            if mandatory.is_empty() {
-                break;
-            }
-            if let Message::User { application_id, .. } = &pending.message {
-                mandatory.remove(application_id);
-            }
-        }
-        ensure!(
-            mandatory.is_empty(),
-            ChainError::MissingMandatoryApplications(mandatory.into_iter().collect())
-        );
+        self.check_app_permissions(block)?;
 
         // Execute each incoming bundle as a transaction, then each operation.
         // Collect messages, events and oracle responses, each as one list per transaction.
@@ -812,7 +786,7 @@ where
                     #[cfg(with_metrics)]
                     let _operation_latency = OPERATION_EXECUTION_LATENCY.measure_latency();
                     let context = OperationContext {
-                        chain_id,
+                        chain_id: block.chain_id,
                         height: block.height,
                         index: Some(txn_index),
                         round,
@@ -891,41 +865,12 @@ where
         }
 
         // Recompute the state hash.
-        let state_hash = {
-            #[cfg(with_metrics)]
-            let _hash_latency = STATE_HASH_COMPUTATION_LATENCY.measure_latency();
-            self.execution_state.crypto_hash().await?
-        };
-        self.execution_state_hash.set(Some(state_hash));
+        let state_hash = self.update_execution_state_hash().await?;
         // Last, reset the consensus state based on the current ownership.
-        let maybe_committee = self.execution_state.system.current_committee().into_iter();
-
-        self.pending_validated_blobs.clear();
-        self.pending_proposed_blobs.clear();
-        self.manager.reset(
-            self.execution_state.system.ownership.get().clone(),
-            block.height.try_add_one()?,
-            local_time,
-            maybe_committee.flat_map(|(_, committee)| committee.keys_and_weights()),
-        )?;
+        self.reset_chain_manager(block.height.try_add_one()?, local_time)?;
 
         #[cfg(with_metrics)]
-        {
-            // Log Prometheus metrics
-            NUM_BLOCKS_EXECUTED.with_label_values(&[]).inc();
-            WASM_FUEL_USED_PER_BLOCK
-                .with_label_values(&[])
-                .observe(resource_controller.tracker.fuel as f64);
-            WASM_NUM_READS_PER_BLOCK
-                .with_label_values(&[])
-                .observe(resource_controller.tracker.read_operations as f64);
-            WASM_BYTES_READ_PER_BLOCK
-                .with_label_values(&[])
-                .observe(resource_controller.tracker.bytes_read as f64);
-            WASM_BYTES_WRITTEN_PER_BLOCK
-                .with_label_values(&[])
-                .observe(resource_controller.tracker.bytes_written as f64);
-        }
+        Self::track_block_metrics(&resource_controller.tracker);
 
         assert_eq!(
             messages.len(),
@@ -1027,6 +972,92 @@ where
             }
         }
         Ok(())
+    }
+
+    /// Returns whether this is a child chain.
+    fn is_child(&self) -> bool {
+        let Some(description) = self.execution_state.system.description.get() else {
+            // Root chains are always initialized, so this must be a child chain.
+            return true;
+        };
+        description.is_child()
+    }
+
+    /// Verifies that the block is valid according to the chain's application permission settings.
+    fn check_app_permissions(&self, block: &ProposedBlock) -> Result<(), ChainError> {
+        let app_permissions = self.execution_state.system.application_permissions.get();
+        let mut mandatory = HashSet::<UserApplicationId>::from_iter(
+            app_permissions.mandatory_applications.iter().cloned(),
+        );
+        for operation in &block.operations {
+            ensure!(
+                app_permissions.can_execute_operations(&operation.application_id()),
+                ChainError::AuthorizedApplications(
+                    app_permissions.execute_operations.clone().unwrap()
+                )
+            );
+            if let Operation::User { application_id, .. } = operation {
+                mandatory.remove(application_id);
+            }
+        }
+        for pending in block.incoming_messages() {
+            if mandatory.is_empty() {
+                break;
+            }
+            if let Message::User { application_id, .. } = &pending.message {
+                mandatory.remove(application_id);
+            }
+        }
+        ensure!(
+            mandatory.is_empty(),
+            ChainError::MissingMandatoryApplications(mandatory.into_iter().collect())
+        );
+        Ok(())
+    }
+
+    /// Computes, sets and returns the hash of the current execution state.
+    async fn update_execution_state_hash(&mut self) -> Result<CryptoHash, ChainError> {
+        let state_hash = {
+            #[cfg(with_metrics)]
+            let _hash_latency = STATE_HASH_COMPUTATION_LATENCY.measure_latency();
+            self.execution_state.crypto_hash().await?
+        };
+        self.execution_state_hash.set(Some(state_hash));
+        Ok(state_hash)
+    }
+
+    /// Resets the chain manager for the next block height.
+    fn reset_chain_manager(
+        &mut self,
+        next_height: BlockHeight,
+        local_time: Timestamp,
+    ) -> Result<(), ChainError> {
+        let maybe_committee = self.execution_state.system.current_committee().into_iter();
+        let ownership = self.execution_state.system.ownership.get().clone();
+        let fallback_owners =
+            maybe_committee.flat_map(|(_, committee)| committee.keys_and_weights());
+        self.pending_validated_blobs.clear();
+        self.pending_proposed_blobs.clear();
+        self.manager
+            .reset(ownership, next_height, local_time, fallback_owners)
+    }
+
+    /// Tracks block execution metrics in Prometheus.
+    #[cfg(with_metrics)]
+    fn track_block_metrics(tracker: &ResourceTracker) {
+        NUM_BLOCKS_EXECUTED.with_label_values(&[]).inc();
+        WASM_FUEL_USED_PER_BLOCK
+            .with_label_values(&[])
+            .observe(tracker.fuel as f64);
+        WASM_NUM_READS_PER_BLOCK
+            .with_label_values(&[])
+            .observe(tracker.read_operations as f64);
+        WASM_BYTES_READ_PER_BLOCK
+            .with_label_values(&[])
+            .observe(tracker.bytes_read as f64);
+        WASM_BYTES_WRITTEN_PER_BLOCK
+            .with_label_values(&[])
+            .observe(tracker.bytes_written as f64);
     }
 
     async fn process_execution_outcomes(
