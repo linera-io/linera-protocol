@@ -1,0 +1,59 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Overwrites a memory location with the given value without reading or dropping the old value."><title>write_unaligned in wasmer_types::lib::std::ptr - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="wasmer_types" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../../wasmer_types/index.html">wasmer_types</a><span class="version">4.4.0</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In wasmer_types::lib::std::ptr</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../../../index.html">wasmer_types</a>::<wbr><a href="../../index.html">lib</a>::<wbr><a href="../index.html">std</a>::<wbr><a href="index.html">ptr</a>::<wbr><a class="fn" href="#">write_unaligned</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><span class="since" title="Stable since Rust version 1.17.0, const unstable">1.17.0 (const: <a href="https://github.com/rust-lang/rust/issues/86302" title="Tracking issue for const_ptr_write">unstable</a>)</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/ptr/mod.rs.html#1620">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub unsafe fn write_unaligned&lt;T&gt;(dst: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.pointer.html">*mut T</a>, src: T)</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Overwrites a memory location with the given value without reading or
+dropping the old value.</p>
+<p>Unlike <a href="fn.write.html" title="fn wasmer_types::lib::std::ptr::write"><code>write()</code></a>, the pointer may be unaligned.</p>
+<p><code>write_unaligned</code> does not drop the contents of <code>dst</code>. This is safe, but it
+could leak allocations or resources, so care should be taken not to overwrite
+an object that should be dropped.</p>
+<p>Additionally, it does not drop <code>src</code>. Semantically, <code>src</code> is moved into the
+location pointed to by <code>dst</code>.</p>
+<p>This is appropriate for initializing uninitialized memory, or overwriting
+memory that has previously been read with <a href="fn.read_unaligned.html" title="fn wasmer_types::lib::std::ptr::read_unaligned"><code>read_unaligned</code></a>.</p>
+<h2 id="safety"><a class="doc-anchor" href="#safety">§</a>Safety</h2>
+<p>Behavior is undefined if any of the following conditions are violated:</p>
+<ul>
+<li><code>dst</code> must be <a href="index.html#safety" title="mod wasmer_types::lib::std::ptr">valid</a> for writes.</li>
+</ul>
+<p>Note that even if <code>T</code> has size <code>0</code>, the pointer must be non-null.</p>
+<h3 id="on-packed-structs"><a class="doc-anchor" href="#on-packed-structs">§</a>On <code>packed</code> structs</h3>
+<p>Attempting to create a raw pointer to an <code>unaligned</code> struct field with
+an expression such as <code>&amp;packed.unaligned as *const FieldType</code> creates an
+intermediate unaligned reference before converting that to a raw pointer.
+That this reference is temporary and immediately cast is inconsequential
+as the compiler always expects references to be properly aligned.
+As a result, using <code>&amp;packed.unaligned as *const FieldType</code> causes immediate
+<em>undefined behavior</em> in your program.</p>
+<p>Instead, you must use the <a href="macro.addr_of_mut.html" title="macro wasmer_types::lib::std::ptr::addr_of_mut"><code>ptr::addr_of_mut!</code></a>
+macro to create the pointer. You may use that returned pointer together with
+this function.</p>
+<p>An example of how to do it and how this relates to <code>write_unaligned</code> is:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[repr(packed, C)]
+</span><span class="kw">struct </span>Packed {
+    _padding: u8,
+    unaligned: u32,
+}
+
+<span class="kw">let </span><span class="kw-2">mut </span>packed: Packed = <span class="kw">unsafe </span>{ std::mem::zeroed() };
+
+<span class="comment">// Take the address of a 32-bit integer which is not aligned.
+// In contrast to `&amp;packed.unaligned as *mut _`, this has no undefined behavior.
+</span><span class="kw">let </span>unaligned = <span class="macro">std::ptr::addr_of_mut!</span>(packed.unaligned);
+
+<span class="kw">unsafe </span>{ std::ptr::write_unaligned(unaligned, <span class="number">42</span>) };
+
+<span class="macro">assert_eq!</span>({packed.unaligned}, <span class="number">42</span>); <span class="comment">// `{...}` forces copying the field instead of creating a reference.</span></code></pre></div>
+<p>Accessing unaligned fields directly with e.g. <code>packed.unaligned</code> is safe however
+(as can be seen in the <code>assert_eq!</code> above).</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Write a usize value to a byte buffer:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::mem;
+
+<span class="kw">fn </span>write_usize(x: <span class="kw-2">&amp;mut </span>[u8], val: usize) {
+    <span class="macro">assert!</span>(x.len() &gt;= mem::size_of::&lt;usize&gt;());
+
+    <span class="kw">let </span>ptr = x.as_mut_ptr() <span class="kw">as </span><span class="kw-2">*mut </span>usize;
+
+    <span class="kw">unsafe </span>{ ptr.write_unaligned(val) }
+}</code></pre></div>
+</div></details></section></div></main></body></html>

@@ -1,0 +1,636 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Generate bindings for an input WIT document."><title>generate in wit_bindgen - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="wit_bindgen" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../wit_bindgen/index.html">wit_bindgen</a><span class="version">0.24.0</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="index.html">wit_bindgen</a>::<wbr><a class="macro" href="#">generate</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>generate!() { <span class="comment">/* proc-macro */</span> }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Generate bindings for an input WIT document.</p>
+<p>This macro is the bread-and-butter of the <code>wit-bindgen</code> crate. The macro
+here will parse <a href="https://component-model.bytecodealliance.org/design/wit.html">WIT</a> as input and generate Rust bindings to work with the
+<code>world</code> that’s specified in the <a href="https://component-model.bytecodealliance.org/design/wit.html">WIT</a>. For a primer on WIT see <a href="https://component-model.bytecodealliance.org/design/wit.html">this
+documentation</a> and for a primer on worlds see <a href="https://component-model.bytecodealliance.org/design/worlds.html">here</a>.</p>
+<p>This macro takes as input a <a href="https://component-model.bytecodealliance.org/design/packages.html">WIT package</a> as well as a <a href="https://component-model.bytecodealliance.org/design/worlds.html"><code>world</code></a>
+within that package. It will then generate a Rust function for all <code>import</code>s
+into the world. If there are any <code>export</code>s then a Rust <code>trait</code> will be
+generated for you to implement. The macro additionally takes a number of
+configuration parameters documented below as well.</p>
+<p>Basic invocation of the macro can look like:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>wit_bindgen::generate;
+
+<span class="macro">generate!</span>();</code></pre></div>
+<p>This will parse a WIT package in the <code>wit</code> folder adjacent to your project’s
+<code>Cargo.toml</code> file. Within this WIT package there must be precisely one
+<code>world</code> and that world will be the one that has bindings generated for it.
+All other options remain at their default values (more on this below).</p>
+<p>If your WIT package has more than one <code>world</code>, or if you want to select a
+world from the dependencies, you can specify a world explicitly:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>wit_bindgen::generate;
+
+<span class="macro">generate!</span>(<span class="string">"my-world"</span>);
+<span class="macro">generate!</span>(<span class="string">"wasi:cli/imports"</span>);</code></pre></div>
+<p>This form of the macro takes a single string as an argument which is a
+“world specifier” to select which world is being generated. As a single
+string, such as <code>"my-world"</code>, this selects the world named <code>my-world</code> in the
+package being parsed in the <code>wit</code> folder. The longer form specification
+<code>"wasi:cli/imports"</code> indicates that the <code>wasi:cli</code> package, located in the
+<code>wit/deps</code> folder, will have a world named <code>imports</code> and those bindings will
+be generated.</p>
+<p>If your WIT package is located in a different directory than one called
+<code>wit</code> then it can be specified with the <code>in</code> keyword:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>wit_bindgen::generate;
+
+<span class="macro">generate!</span>(<span class="kw">in </span><span class="string">"./my/other/path/to/wit"</span>);
+<span class="macro">generate!</span>(<span class="string">"a-world" </span><span class="kw">in </span><span class="string">"../path/to/wit"</span>);</code></pre></div>
+<p>The full-form of the macro, however, takes a braced structure which is a
+“bag of options”:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>wit_bindgen::generate;
+
+<span class="macro">generate!</span>({
+    world: <span class="string">"my-world"</span>,
+    path: <span class="string">"../path/to/wit"</span>,
+    <span class="comment">// ...
+</span>});</code></pre></div>
+<p>For documentation on each option, see below.</p>
+<h3 id="exploring-generated-bindings"><a class="doc-anchor" href="#exploring-generated-bindings">§</a>Exploring generated bindings</h3>
+<p>Once bindings have been generated they can be explored via a number of means
+to see what was generated:</p>
+<ul>
+<li>Using <code>cargo doc</code> should render all of the generated bindings in addition
+to the original comments in the WIT format itself.</li>
+<li>If your IDE supports <code>rust-analyzer</code> code completion should be available
+to explore and see types.</li>
+<li>The <code>wit-bindgen</code> CLI tool, packaged as <code>wit-bindgen-cli</code> on crates.io,
+can be executed the same as the <code>generate!</code> macro and the output can be
+read.</li>
+<li>If you’re seeing an error, <code>WIT_BINDGEN_DEBUG=1</code> can help debug what’s
+happening (more on this below) by emitting macro output to a file.</li>
+<li>This documentation can be consulted for various constructs as well.</li>
+</ul>
+<p>Currently browsing generated code may have road bumps on the way. If you run
+into issues or have idea of how to improve the situation please <a href="https://github.com/bytecodealliance/wit-bindgen/issues/new">file an
+issue</a>.</p>
+<h3 id="namespacing"><a class="doc-anchor" href="#namespacing">§</a>Namespacing</h3>
+<p>In WIT, worlds can import and export <code>interface</code>s, functions, and types. Each
+<code>interface</code> can either be “anonymous” and only named within the context of a
+<code>world</code> or it can have a “package ID” associated with it. Names in Rust take
+into account all the names associated with a WIT <code>interface</code>. For example
+the package ID <code>foo:bar/baz</code> would create a <code>mod foo</code> which contains a <code>mod bar</code> which contains a <code>mod baz</code>.</p>
+<p>WIT imports and exports are additionally separated into their own
+namespaces. Imports are generated at the level of the <code>generate!</code> macro
+where exports are generated under an <code>exports</code> namespace.</p>
+<h3 id="imports"><a class="doc-anchor" href="#imports">§</a>Imports</h3>
+<p>Imports into a <code>world</code> can be types, resources, functions, and interfaces.
+Each of these is bound as a Rust type, function, or module. The intent is
+that the WIT interfaces map to what is roughly idiomatic Rust for the given
+interface.</p>
+<h4 id="imports-top-level-functions-and-types"><a class="doc-anchor" href="#imports-top-level-functions-and-types">§</a>Imports: Top-level functions and types</h4>
+<p>Imports at the top-level of a world are generated directly where the
+<code>generate!</code> macro is invoked.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>wit_bindgen::generate;
+
+<span class="macro">generate!</span>({
+    inline: <span class="string">r"
+        package a:b;
+
+        world the-world {
+            record fahrenheit {
+                degrees: f32,
+            }
+
+            import what-temperature-is-it: func() -&gt; fahrenheit;
+
+            record celsius {
+                degrees: f32,
+            }
+
+            import convert-to-celsius: func(a: fahrenheit) -&gt; celsius;
+        }
+    "</span>,
+});
+
+<span class="kw">fn </span>test() {
+    <span class="kw">let </span>current_temp = what_temperature_is_it();
+    <span class="macro">println!</span>(<span class="string">"current temp in fahrenheit is {}"</span>, current_temp.degrees);
+    <span class="kw">let </span>in_celsius: Celsius = convert_to_celsius(current_temp);
+    <span class="macro">println!</span>(<span class="string">"current temp in celsius is {}"</span>, in_celsius.degrees);
+}</code></pre></div>
+<h4 id="imports-interfaces"><a class="doc-anchor" href="#imports-interfaces">§</a>Imports: Interfaces</h4>
+<p>Interfaces are placed into submodules where the <code>generate!</code> macro is
+invoked and are namespaced based on their identifiers.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>wit_bindgen::generate;
+
+<span class="macro">generate!</span>({
+    inline: <span class="string">r"
+        package my:test;
+
+        interface logging {
+            enum level {
+                debug,
+                info,
+                error,
+            }
+            log: func(level: level, msg: string);
+        }
+
+        world the-world {
+            import logging;
+            import global-logger: interface {
+                use logging.{level};
+
+                set-current-level: func(level: level);
+                get-current-level: func() -&gt; level;
+            }
+        }
+    "</span>,
+});
+
+<span class="comment">// `my` and `test` are from `package my:test;` and `logging` is for the
+// interfac name.
+</span><span class="kw">use </span>my::test::logging::Level;
+
+<span class="kw">fn </span>test() {
+    <span class="kw">let </span>current_level = global_logger::get_current_level();
+    <span class="macro">println!</span>(<span class="string">"current logging level is {current_level:?}"</span>);
+    global_logger::set_current_level(Level::Error);
+
+    my::test::logging::log(Level::Info, <span class="string">"Hello there!"</span>);
+}</code></pre></div>
+<h4 id="imports-resources"><a class="doc-anchor" href="#imports-resources">§</a>Imports: Resources</h4>
+<p>Imported resources generate a type named after the name of the resource.
+This type is then used both for borrows as <code>&amp;T</code> as well as via ownership as
+<code>T</code>. Resource methods are bound as methods on the type <code>T</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>wit_bindgen::generate;
+
+<span class="macro">generate!</span>({
+    inline: <span class="string">r#"
+        package my:test;
+
+        interface logger {
+            enum level {
+                debug,
+                info,
+                error,
+            }
+
+            resource logger {
+                constructor(destination: string);
+                log: func(level: level, msg: string);
+            }
+        }
+
+        // Note that while this world does not textually import the above
+        // `logger` interface it is a transitive dependency via the `use`
+        // statement so the "elaborated world" imports the logger.
+        world the-world {
+            use logger.{logger};
+
+            import get-global-logger: func() -&gt; logger;
+        }
+    "#</span>,
+});
+
+<span class="kw">use </span>my::test::logger::Level;
+
+<span class="kw">fn </span>test() {
+    <span class="kw">let </span>logger = get_global_logger();
+    logger.log(Level::Debug, <span class="string">"This is a global message"</span>);
+
+    <span class="kw">let </span>logger2 = Logger::new(<span class="string">"/tmp/other.log"</span>);
+    logger2.log(Level::Info, <span class="string">"This is not a global message"</span>);
+}</code></pre></div>
+<p>Note in the above example the lack of import of <code>Logger</code>. The <code>use</code>
+statement imported the <code>Logger</code> type, an alias of it, from the <code>logger</code>
+interface into <code>the-world</code>. This generated a Rust <code>type</code> alias so <code>Logger</code>
+was available at the top-level.</p>
+<h3 id="exports-basic-usage"><a class="doc-anchor" href="#exports-basic-usage">§</a>Exports: Basic Usage</h3>
+<p>A WIT world can not only <code>import</code> functionality but can additionally
+<code>export</code> functionality as well. An <code>export</code> represents a contract that the
+Rust program must implement to be able to work correctly. The <code>generate!</code>
+macro’s goal is to take care of all the low-level and ABI details for you,
+so the end result is that <code>generate!</code>, for exports, will generate Rust
+<code>trait</code>s that you must implement.</p>
+<p>A minimal example of this is:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>wit_bindgen::generate;
+
+<span class="macro">generate!</span>({
+    inline: <span class="string">r#"
+        package my:test;
+
+        world my-world {
+            export hello: func();
+        }
+    "#</span>,
+});
+
+<span class="kw">struct </span>MyComponent;
+
+<span class="kw">impl </span>Guest <span class="kw">for </span>MyComponent {
+    <span class="kw">fn </span>hello() {}
+}
+
+<span class="macro">export!</span>(MyComponent);</code></pre></div>
+<p>Here the <code>Guest</code> trait was generated by the <code>generate!</code> macro and represents
+the functions at the top-level of <code>my-world</code>, in this case the function
+<code>hello</code>. A custom type, here called <code>MyComponent</code>, is created and the trait
+is implemented for that type.</p>
+<p>Additionally a macro is generated by <code>generate!</code> (macros generating macros)
+called <code>export!</code>. The <code>export!</code> macro is given a component that implements
+the export <code>trait</code>s and then it will itself generate all necessary
+<code>#[no_mangle]</code> functions to implement the ABI required.</p>
+<h3 id="exports-multiple-interfaces"><a class="doc-anchor" href="#exports-multiple-interfaces">§</a>Exports: Multiple Interfaces</h3>
+<p>Each <code>interface</code> in WIT will generate a <code>trait</code> that must be implemented in
+addition to the top-level <code>trait</code> for the world. All traits are named
+<code>Guest</code> here and are namespaced appropriately in modules:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>wit_bindgen::generate;
+
+<span class="macro">generate!</span>({
+    inline: <span class="string">r#"
+        package my:test;
+
+        interface a {
+            func-in-a: func();
+            second-func-in-a: func();
+        }
+
+        world my-world {
+            export a;
+            export b: interface {
+                func-in-b: func();
+            }
+            export c: func();
+        }
+    "#</span>,
+});
+
+<span class="kw">struct </span>MyComponent;
+
+<span class="kw">impl </span>Guest <span class="kw">for </span>MyComponent {
+    <span class="kw">fn </span>c() {}
+}
+
+<span class="kw">impl </span>exports::my::test::a::Guest <span class="kw">for </span>MyComponent {
+    <span class="kw">fn </span>func_in_a() {}
+    <span class="kw">fn </span>second_func_in_a() {}
+}
+
+<span class="kw">impl </span>exports::b::Guest <span class="kw">for </span>MyComponent {
+    <span class="kw">fn </span>func_in_b() {}
+}
+
+<span class="macro">export!</span>(MyComponent);</code></pre></div>
+<p>Here note that there were three <code>Guest</code> traits generated for each of the
+three groups: two interfaces and one <code>world</code>. Also note that traits (and
+types) for exports are namespaced in an <code>exports</code> module.</p>
+<p>Note that when the top-level <code>world</code> does not have any exported functions,
+or if an interface does not have any functions, then no <code>trait</code> is
+generated:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>wit_bindgen::generate;
+
+<span class="macro">generate!</span>({
+    inline: <span class="string">r#"
+        package my:test;
+
+        interface a {
+            type my-type = u32;
+        }
+
+        world my-world {
+            export b: interface {
+                use a.{my-type};
+
+                foo: func() -&gt; my-type;
+            }
+        }
+    "#</span>,
+});
+
+<span class="kw">struct </span>MyComponent;
+
+<span class="kw">impl </span>exports::b::Guest <span class="kw">for </span>MyComponent {
+    <span class="kw">fn </span>foo() -&gt; u32 {
+        <span class="number">42
+    </span>}
+}
+
+<span class="macro">export!</span>(MyComponent);</code></pre></div>
+<h3 id="exports-resources"><a class="doc-anchor" href="#exports-resources">§</a>Exports: Resources</h3>
+<p>Exporting a resource is significantly different than importing a resource.
+A component defining a resource can create new resources of that type at any
+time, for example. Additionally resources can be “dereferenced” into their
+underlying values within the component.</p>
+<p>Owned resources have a custom type generated and borrowed resources are
+generated with a type of the same name suffixed with <code>Borrow&lt;'_&gt;</code>, such as
+<code>MyResource</code> and <code>MyResourceBorrow&lt;'_&gt;</code>.</p>
+<p>Like <code>interface</code>s the methods and functions used with a <code>resource</code> are
+packaged up into a <code>trait</code>.</p>
+<p>Specifying a custom resource type is done with an associated type on the
+corresponding trait for the resource’s containing interface/world:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>wit_bindgen::generate;
+<span class="kw">use </span>std::cell::{RefCell, Cell};
+
+<span class="macro">generate!</span>({
+    inline: <span class="string">r#"
+        package my:test;
+
+        interface logging {
+            enum level {
+                debug,
+                info,
+                error,
+            }
+
+            resource logger {
+                constructor(level: level);
+                log: func(level: level, msg: string);
+                level: func() -&gt; level;
+                set-level: func(level: level);
+            }
+        }
+
+        world my-world {
+            export logging;
+        }
+    "#</span>,
+});
+
+<span class="kw">use </span>exports::my::test::logging::{Guest, GuestLogger, Level};
+
+<span class="kw">struct </span>MyComponent;
+
+<span class="comment">// Note that the `logging` interface has no methods of its own but a trait
+// is required to be implemented here to specify the type of `Logger`.
+</span><span class="kw">impl </span>Guest <span class="kw">for </span>MyComponent {
+    <span class="kw">type </span>Logger = MyLogger;
+}
+
+<span class="kw">struct </span>MyLogger {
+    level: Cell&lt;Level&gt;,
+    contents: RefCell&lt;String&gt;,
+}
+
+<span class="kw">impl </span>GuestLogger <span class="kw">for </span>MyLogger {
+    <span class="kw">fn </span>new(level: Level) -&gt; MyLogger {
+        MyLogger {
+            level: Cell::new(level),
+            contents: RefCell::new(String::new()),
+        }
+    }
+
+    <span class="kw">fn </span>log(<span class="kw-2">&amp;</span><span class="self">self</span>, level: Level, msg: String) {
+        <span class="kw">if </span>level <span class="kw">as </span>u32 &lt;= <span class="self">self</span>.level.get() <span class="kw">as </span>u32 {
+            <span class="self">self</span>.contents.borrow_mut().push_str(<span class="kw-2">&amp;</span>msg);
+            <span class="self">self</span>.contents.borrow_mut().push_str(<span class="string">"\n"</span>);
+        }
+    }
+
+    <span class="kw">fn </span>level(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Level {
+        <span class="self">self</span>.level.get()
+    }
+
+    <span class="kw">fn </span>set_level(<span class="kw-2">&amp;</span><span class="self">self</span>, level: Level) {
+        <span class="self">self</span>.level.set(level);
+    }
+}
+
+<span class="macro">export!</span>(MyComponent);</code></pre></div>
+<p>It’s important to note that resources in Rust do not get <code>&amp;mut self</code> as
+methods, but instead are required to be defined with <code>&amp;self</code>. This requires
+the use of interior mutability such as <code>Cell</code> and <code>RefCell</code> above from the
+<code>std::cell</code> module.</p>
+<h3 id="exports-the-export-macro"><a class="doc-anchor" href="#exports-the-export-macro">§</a>Exports: The <code>export!</code> macro</h3>
+<p>Components are created by having exported WebAssembly functions with
+specific names, and these functions are not created when <code>generate!</code> is
+invoked. Instead these functions are created afterwards once you’ve defined
+your own type an implemented the various <code>trait</code>s for it. The <code>#[no_mangle]</code>
+functions that will become the component are created with the generated
+<code>export!</code> macro.</p>
+<p>Each call to <code>generate!</code> will itself generate a macro called <code>export!</code>.
+The macro’s first argument is the name of a type that implements the traits
+generated:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>wit_bindgen::generate;
+
+<span class="macro">generate!</span>({
+    inline: <span class="string">r#"
+        package my:test;
+
+        world my-world {
+            // ...
+        }
+    "#</span>,
+});
+
+<span class="kw">struct </span>MyComponent;
+
+<span class="kw">impl </span>Guest <span class="kw">for </span>MyComponent {
+    <span class="comment">// ...
+</span>}
+
+<span class="macro">export!</span>(MyComponent);</code></pre></div>
+<p>This argument is a Rust type which implements the <code>Guest</code> traits generated
+by <code>generate!</code>. Note that all <code>Guest</code> traits must be implemented for the
+type provided or an error will be generated.</p>
+<p>This macro additionally accepts a second argument. The macro itself needs to
+be able to find the module where the <code>generate!</code> macro itself was originally
+invoked. Currently that can’t be done automatically so a path to where
+<code>generate!</code> was provided can also be passed to the macro. By default, the
+argument is set to <code>self</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>wit_bindgen::generate;
+
+<span class="macro">generate!</span>({
+    <span class="comment">// ...
+</span>});
+<span class="macro">export!</span>(MyComponent with_types_in <span class="self">self</span>);</code></pre></div>
+<p>This indicates that the current module, referred to with <code>self</code>, is the one
+which had the <code>generate!</code> macro expanded.</p>
+<p>If, however, the <code>generate!</code> macro was run in a different module then that
+must be configured:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">mod </span>bindings {
+    <span class="macro">wit_bindgen::generate!</span>({
+        <span class="comment">// ...
+    </span>});
+}
+<span class="macro">bindings::export!</span>(MyComponent with_types_in bindings);</code></pre></div>
+<h3 id="debugging-output-to-generate"><a class="doc-anchor" href="#debugging-output-to-generate">§</a>Debugging output to <code>generate!</code></h3>
+<p>While <code>wit-bindgen</code> is tested to the best of our ability there are
+inevitably bugs and issues that arise. These can range from bad error
+messages to misconfigured invocations to bugs in the macro itself. To assist
+with debugging these situations the macro recognizes an environment
+variable:</p>
+<div class="example-wrap"><pre class="language-shell"><code>export WIT_BINDGEN_DEBUG=1
+</code></pre></div>
+<p>When set the macro will emit the result of expansion to a file and then
+<code>include!</code> that file. Any error messages generated by <code>rustc</code> should then
+point to the generated file and allow you to open it up, read it, and
+inspect it. This can often provide better context to the error than rustc
+provides by default with macros.</p>
+<p>It is not recommended to set this environment variable by default as it will
+cause excessive rebuilds of Cargo projects. It’s recommended to only use it
+as necessary to debug issues.</p>
+<h3 id="options-to-generate"><a class="doc-anchor" href="#options-to-generate">§</a>Options to <code>generate!</code></h3>
+<p>The full list of options that can be passed to the <code>generate!</code> macro are as
+follows. Note that there are no required options, they all have default
+values.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>wit_bindgen::generate;
+
+<span class="macro">generate!</span>({
+    <span class="comment">// The name of the world that bindings are being generated for. If this
+    // is not specified then it's required that the package selected
+    // below has a single `world` in it.
+    </span>world: <span class="string">"my-world"</span>,
+
+    <span class="comment">// Path to parse WIT and its dependencies from. Defaults to the `wit`
+    // folder adjacent to your `Cargo.toml`.
+    </span>path: <span class="string">"../path/to/wit"</span>,
+
+    <span class="comment">// Enables passing "inline WIT". If specified this is the default
+    // package that a world is selected from. Any dependencies that this
+    // inline WIT refers to must be defined in the `path` option above.
+    //
+    // By default this is not specified.
+    </span>inline: <span class="string">"
+        world my-world {
+            import wasi:cli/imports;
+
+            export my-run: func()
+        }
+    "</span>,
+
+    <span class="comment">// Additional traits to derive for all defined types. Note that not all
+    // types may be able to implement these traits, such as resources.
+    //
+    // By default this set is empty.
+    </span>additional_derives: [PartialEq, Eq, Hash, Clone],
+
+    <span class="comment">// When generating bindings for imports it might be the case that
+    // bindings were already generated in a different crate. For example
+    // if your world refers to WASI types then the `wasi` crate already
+    // has generated bindings for all WASI types and structures. In this
+    // situation the key `with` here can be used to use those types
+    // elsewhere rather than regenerating types.
+    //
+    // The `with` key here only works for interfaces referred to by imported
+    // functions. Additionally it only supports replacing types at the
+    // interface level at this time.
+    //
+    // When an interface is specified here no bindings will be generated at
+    // all. It's assumed bindings are fully generated upstream. This is an
+    // indicator that any further references to types defined in these
+    // interfaces should use the upstream paths specified here instead.
+    //
+    // Any unused keys in this map are considered an error.
+    </span>with: {
+        <span class="string">"wasi:io/poll"</span>: wasi::io::poll,
+    },
+
+    <span class="comment">// An optional list of function names to skip generating bindings for.
+    // This is only applicable to imports and the name specified is the name
+    // of the function.
+    </span>skip: [<span class="string">"foo"</span>, <span class="string">"bar"</span>, <span class="string">"baz"</span>],
+
+    <span class="comment">// Configuration of how Rust types are generated.
+    //
+    // This option will change how WIT types are mapped to Rust types. There
+    // are a number of ways this can be done depending on the context. For
+    // example a Rust `&amp;str` is suitable to pass to an imported function but
+    // an exported function receives a `String`. These both represent the
+    // WIT type `string`, however.
+    //
+    // Type generation becomes extra-significant when aggregates come into
+    // play (such as a WIT `record` or `variant`), especially when the
+    // aggregate is used both in an imported function and exported one.
+    //
+    // There are three modes of ownership, documented here, but only one
+    // can be specified.
+    //
+    // The default mode is "Owning" meaning that all Rust types will by
+    // default contain their owned containers. For example a `record` with
+    // a `string` will map to a Rust `struct` containing a `String`. This
+    // maximizes the chance that types can be shared between imports and
+    // exports but can come at a cost where calling an import may require
+    // more allocations than necessary.
+    </span>ownership: Owning,
+
+    <span class="comment">// Specifies an alternative name for the `export!` macro generated for
+    // any exports this world has.
+    //
+    // Defaults to "export"
+    </span>export_macro_name: <span class="string">"export"</span>,
+
+    <span class="comment">// Indicates whether the `export!` macro is `pub` or just `pub(crate)`.
+    //
+    // This defaults to `false`.
+    </span>pub_export_macro: <span class="bool-val">false</span>,
+
+    <span class="comment">// The second mode of ownership is "Borrowing". This mode then
+    // additionally has a boolean flag indicating whether duplicate types
+    // should be generated if necessary.
+    //
+    // This mode will prefer using borrowed values in Rust to represent WIT
+    // values where possible. For example if the argument to an imported
+    // function is a record-with-a-string then in Rust that will generate a
+    // `struct` with a lifetime parameter storing `&amp;'a str`.
+    //
+    // The `duplicate_if_necessary` flag will cause duplicate types to be
+    // generated when a WIT type is used both in an import and export. In
+    // this situation one will be called `FooParam` and one will be called
+    // `FooResult` (where `foo` is the WIT name).
+    //
+    // It's generally recommended to not turn this on unless performance
+    // requires it. Even if so, please feel free to open an issue on the
+    // `wit-bindgen` repository to help improve the default "Owning" use
+    // case above if possible.
+    </span>ownership: Borrowing { duplicate_if_necessary: <span class="bool-val">false </span>},
+
+    <span class="comment">// The generated `export!` macro, if any, will by default look for
+    // generated types adjacent to where the `export!` macro is invoked
+    // through the `self` module. This option can be used to change the
+    // defaults to look somewhere else instead.
+    </span>default_bindings_module: <span class="string">"path::to::bindings"</span>,
+
+    <span class="comment">// This will suffix the custom section containing component type
+    // information with the specified string. This is not required by
+    // default but if the same world is generated in two different locations
+    // in the crate then one bindings generation location will need this
+    // suffix to avoid having the custom sections corrupt each other.
+    </span>type_section_suffix: <span class="string">"suffix"</span>,
+
+    <span class="comment">// Configures the path to the `wit-bindgen` crate itself. By default
+    // this is `wit_bindgen` assuming that your crate depends on the
+    // `wit-bindgen` crate itself.
+    </span>runtime_path: <span class="string">"path::to::wit_bindgen"</span>,
+
+    <span class="comment">// Configure where the `bitflags` crate is located. By default this
+    // is `wit_bindgen::bitflags` which already reexports `bitflags` for
+    // you.
+    </span>bitflags_path: <span class="string">"path::to::bitflags"</span>,
+
+    <span class="comment">// Indicates that instead of `&amp;str` and `String` the `&amp;[u8]` and
+    // `Vec&lt;u8&gt;` types should be used. Only intended for cases where
+    // compiled size is of the utmost concern as this can avoid pulling in
+    // UTF-8 validation.
+    </span>raw_strings,
+
+    <span class="comment">// Emits `#[cfg(feature = "std")]` around `impl Error for ... {}` blocks
+    // for generated types. This is a niche option that is only here to
+    // support the standard library itself depending on this crate one day.
+    </span>std_feature,
+
+    <span class="comment">// Disable a workaround to force wasm constructors to be run only once
+    // when exported functions are called.
+    </span>disable_run_ctors_once_workaround: <span class="bool-val">false</span>,
+
+    <span class="comment">// Whether to generate unused `record`, `enum`, `variant` types.
+    // By default, they will not be generated unless they are used as input
+    // or return value of a function.
+    </span>generate_unused_types: <span class="bool-val">false</span>,
+});</code></pre></div>
+</div></details></section></div></main></body></html>

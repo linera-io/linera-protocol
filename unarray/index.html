@@ -1,0 +1,85 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Unarray"><title>unarray - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="unarray" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../unarray/index.html">unarray</a><span class="version">0.1.4</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#traits">Traits</a></li><li><a href="#functions">Functions</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">unarray</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/unarray/lib.rs.html#1-195">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="unarray"><a class="doc-anchor" href="#unarray">§</a>Unarray</h2>
+<p>Helper utilities for working with arrays of uninitialized memory.</p>
+<h3 id="current-stable-rust"><a class="doc-anchor" href="#current-stable-rust">§</a>Current stable Rust</h3>
+<p>Creating arrays in Rust can be somewhat painful. Currently, your best option in the general
+case is to allocate your elements in a <code>Vec</code>, then convert to an array:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">const </span>LEN: usize = <span class="number">1000</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>elements = Vec::with_capacity(LEN);  <span class="comment">// heap allocation here
+
+</span><span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..LEN {
+  elements.push(<span class="number">123</span>);
+}
+
+<span class="kw">let </span>result: [i32; LEN] = elements.try_into().unwrap();</code></pre></div>
+<p>This needlessly allocates space on the heap, which is then immediately freed. If your type
+implements <code>Copy</code>, and has a sensible default value, you can avoid this allocation by creating
+an array literal (e.g. <code>[0; 1000]</code>), then iterating over each element and setting it, but this
+also incurrs an unnecessary initialization cost. Why set each element to <code>0</code>, then set it
+again, when you could just set it once?</p>
+<h3 id="uninit_buf-and-mark_initialized"><a class="doc-anchor" href="#uninit_buf-and-mark_initialized">§</a><code>uninit_buf</code> and <code>mark_initialized</code></h3>
+<p>The lowest-level tools provided by this library are the pair of functions: <a href="fn.uninit_buf.html" title="fn unarray::uninit_buf"><code>uninit_buf</code></a> and
+<a href="fn.mark_initialized.html" title="fn unarray::mark_initialized"><code>mark_initialized</code></a>. These are ergonomic wrappers around the <a href="https://doc.rust-lang.org/1.81.0/core/mem/maybe_uninit/union.MaybeUninit.html" title="union core::mem::maybe_uninit::MaybeUninit"><code>core::mem::MaybeUninit</code></a> type.
+Roughly speaking, most uses of these functions will follow the following steps:</p>
+<ul>
+<li>Stack-allocate a region of uninitialized memory with <a href="fn.uninit_buf.html" title="fn unarray::uninit_buf"><code>uninit_buf</code></a></li>
+<li>Initialize each element</li>
+<li>Unsafely declare that all elements are initialized using <a href="fn.mark_initialized.html" title="fn unarray::mark_initialized"><code>mark_initialized</code></a></li>
+</ul>
+<p>For example:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span><span class="kw-2">mut </span>buffer = uninit_buf();  
+
+<span class="kw">for </span>elem <span class="kw">in </span><span class="kw-2">&amp;mut </span>buffer {
+  elem.write(<span class="number">123</span>);  
+}
+
+<span class="kw">let </span>result = <span class="kw">unsafe </span>{ mark_initialized(buffer) };
+<span class="macro">assert_eq!</span>(result, [<span class="number">123</span>; <span class="number">1000</span>]);</code></pre></div>
+<p>These functions closely map onto tools provided by <a href="https://doc.rust-lang.org/1.81.0/core/mem/maybe_uninit/union.MaybeUninit.html" title="union core::mem::maybe_uninit::MaybeUninit"><code>core::mem::MaybeUninit</code></a>, so should feel
+familiar. However, <a href="fn.mark_initialized.html" title="fn unarray::mark_initialized"><code>mark_initialized</code></a> is an unsafe function, since it’s possible to create
+uninitialized values that aren’t wrapped in <code>MaybeUninit</code>. It’s up to the programmer to make
+sure every element has been initialized before calling <a href="fn.mark_initialized.html" title="fn unarray::mark_initialized"><code>mark_initialized</code></a>, otherwise it’s UB.</p>
+<p>For this, there are also fully safe APIs that cover some of the common patterns via an
+extension trait on <code>[T; N]</code>:</p>
+<h3 id="unarrayarrayext-extension-trait"><a class="doc-anchor" href="#unarrayarrayext-extension-trait">§</a><code>UnarrayArrayExt</code> extension trait</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// mapping an array via a `Result`
+</span><span class="kw">let </span>strings = [<span class="string">"123"</span>, <span class="string">"234"</span>];
+<span class="kw">let </span>numbers = strings.map_result(|s| s.parse());
+<span class="macro">assert_eq!</span>(numbers, <span class="prelude-val">Ok</span>([<span class="number">123</span>, <span class="number">234</span>]));
+
+<span class="kw">let </span>bad_strings = [<span class="string">"123"</span>, <span class="string">"uh oh"</span>];
+<span class="kw">let </span>result = bad_strings.map_result(|s| s.parse::&lt;i32&gt;());
+<span class="macro">assert!</span>(result.is_err());  <span class="comment">// since one of the element fails, the whole operation fails</span></code></pre></div>
+<p>There is also <code>map_option</code> for functions which return an <code>Option</code></p>
+<h3 id="collecting-iterators"><a class="doc-anchor" href="#collecting-iterators">§</a>Collecting iterators</h3>
+<p>Iterators generally don’t know their length at compile time. But it’s often the case that the
+programmer knows the length ahead of time. In cases like this, it’s common to want to collect
+these elements into an array, without heap allocation or initializing default elements.</p>
+<p>Arrays don’t implement <code>FromIterator</code> for this very reason. So this library provides
+<code>ArrayFromIter</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>iter = [<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>].into_iter().map(|i| i * <span class="number">2</span>);
+<span class="kw">let </span>ArrayFromIter(array) = iter.collect();  <span class="comment">// inferred to be `ArrayFromIter::&lt;i32, 3&gt;`
+</span><span class="macro">assert_eq!</span>(array, <span class="prelude-val">Some</span>([<span class="number">2</span>, <span class="number">4</span>, <span class="number">6</span>]));</code></pre></div>
+<p>However, this can fail, since the iterator may not actually yield the right number of elements.
+In these cases, the inner option is <code>None</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>iter = [<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>].into_iter();
+<span class="kw">match </span>iter.collect() {
+  ArrayFromIter(<span class="prelude-val">Some</span>([a, b, c])) =&gt; <span class="macro">println!</span>(<span class="string">"3 elements, {a}, {b}, {c}"</span>),
+  ArrayFromIter(<span class="prelude-val">None</span>) =&gt; <span class="macro">println!</span>(<span class="string">"not 3 elements"</span>),
+}</code></pre></div>
+<h3 id="build_array--functions"><a class="doc-anchor" href="#build_array--functions">§</a><code>build_array-*</code> functions</h3>
+<p>Finally, it’s often the case that you want to initialize each array element based on its index.
+For that, <a href="fn.build_array.html" title="fn unarray::build_array"><code>build_array</code></a> takes a const generic length, and a function that takes an index and
+returns an element, and builds the array for you:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>unarray::<span class="kw-2">*</span>;
+<span class="kw">let </span>array: [usize; <span class="number">5</span>] = build_array(|i| i * <span class="number">2</span>);
+<span class="macro">assert_eq!</span>(array, [<span class="number">0</span>, <span class="number">2</span>, <span class="number">4</span>, <span class="number">6</span>, <span class="number">8</span>]);</code></pre></div>
+<p>There are also variants that allow fallibly constructing an array, via <a href="fn.build_array_result.html" title="fn unarray::build_array_result"><code>build_array_result</code></a>
+or <a href="fn.build_array_option.html" title="fn unarray::build_array_option"><code>build_array_option</code></a>, similar to <a href="trait.UnarrayArrayExt.html#tymethod.map_result" title="method unarray::UnarrayArrayExt::map_result"><code>UnarrayArrayExt::map_result</code></a> and <a href="trait.UnarrayArrayExt.html#tymethod.map_option" title="method unarray::UnarrayArrayExt::map_option"><code>UnarrayArrayExt::map_option</code></a>.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.ArrayFromIter.html" title="struct unarray::ArrayFromIter">ArrayFromIter</a></div><div class="desc docblock-short">A wrapper type to collect an <a href="https://doc.rust-lang.org/1.81.0/core/iter/traits/iterator/trait.Iterator.html" title="trait core::iter::traits::iterator::Iterator"><code>Iterator</code></a> into an array</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.UnarrayArrayExt.html" title="trait unarray::UnarrayArrayExt">UnarrayArrayExt</a></div><div class="desc docblock-short">An extension trait that adds methods to <code>[T; N]</code></div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.build_array.html" title="fn unarray::build_array">build_array</a></div><div class="desc docblock-short">Build an array with a function that creates elements based on their index</div></li><li><div class="item-name"><a class="fn" href="fn.build_array_option.html" title="fn unarray::build_array_option">build_array_option</a></div><div class="desc docblock-short">Build an array with a function that creates elements based on their value, short-circuiting if
+any index returns a <code>None</code></div></li><li><div class="item-name"><a class="fn" href="fn.build_array_result.html" title="fn unarray::build_array_result">build_array_result</a></div><div class="desc docblock-short">Build an array with a function that creates elements based on their value, short-circuiting if
+any index returns an <code>Err</code></div></li><li><div class="item-name"><a class="fn" href="fn.mark_initialized.html" title="fn unarray::mark_initialized">mark_initialized</a><sup title="unsafe function">⚠</sup></div><div class="desc docblock-short">Convert a <code>[MaybeUninit&lt;T&gt;; N]</code> to a <code>[T; N]</code></div></li><li><div class="item-name"><a class="fn" href="fn.uninit_buf.html" title="fn unarray::uninit_buf">uninit_buf</a></div><div class="desc docblock-short">Create an array of unintialized memory</div></li></ul></section></div></main></body></html>

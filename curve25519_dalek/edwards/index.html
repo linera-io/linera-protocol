@@ -1,0 +1,75 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Group operations for Curve25519, in Edwards form."><title>curve25519_dalek::edwards - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="curve25519_dalek" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../../curve25519_dalek/index.html"><img src="https://cdn.jsdelivr.net/gh/dalek-cryptography/curve25519-dalek/docs/assets/dalek-logo-clear.png" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../../curve25519_dalek/index.html"><img src="https://cdn.jsdelivr.net/gh/dalek-cryptography/curve25519-dalek/docs/assets/dalek-logo-clear.png" alt="logo"></a><h2><a href="../../curve25519_dalek/index.html">curve25519_dalek</a><span class="version">4.1.3</span></h2></div><h2 class="location"><a href="#">Module edwards</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#types">Type Aliases</a></li></ul></section><h2><a href="../index.html">In crate curve25519_dalek</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">curve25519_dalek</a>::<wbr><a class="mod" href="#">edwards</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/curve25519_dalek/edwards.rs.html#12-2271">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Group operations for Curve25519, in Edwards form.</p>
+<h3 id="encoding-and-decoding"><a class="doc-anchor" href="#encoding-and-decoding">§</a>Encoding and Decoding</h3>
+<p>Encoding is done by converting to and from a <code>CompressedEdwardsY</code>
+struct, which is a typed wrapper around <code>[u8; 32]</code>.</p>
+<h3 id="equality-testing"><a class="doc-anchor" href="#equality-testing">§</a>Equality Testing</h3>
+<p>The <code>EdwardsPoint</code> struct implements the <a href="../../subtle/trait.ConstantTimeEq.html" title="trait subtle::ConstantTimeEq"><code>subtle::ConstantTimeEq</code></a>
+trait for constant-time equality checking, and the Rust <code>Eq</code> trait
+for variable-time equality checking.</p>
+<h3 id="cofactor-related-functions"><a class="doc-anchor" href="#cofactor-related-functions">§</a>Cofactor-related functions</h3>
+<p>The order of the group of points on the curve \(\mathcal E\)
+is \(|\mathcal E| = 8\ell \), so its structure is \( \mathcal
+E = \mathcal E[8] \times \mathcal E[\ell]\).  The torsion
+subgroup \( \mathcal E[8] \) consists of eight points of small
+order.  Technically, all of \(\mathcal E\) is torsion, but we
+use the word only to refer to the small \(\mathcal E[8]\) part, not
+the large prime-order \(\mathcal E[\ell]\) part.</p>
+<p>To test if a point is in \( \mathcal E[8] \), use
+<a href="struct.EdwardsPoint.html#method.is_small_order" title="method curve25519_dalek::edwards::EdwardsPoint::is_small_order"><code>EdwardsPoint::is_small_order</code></a>.</p>
+<p>To test if a point is in \( \mathcal E[\ell] \), use
+<a href="struct.EdwardsPoint.html#method.is_torsion_free" title="method curve25519_dalek::edwards::EdwardsPoint::is_torsion_free"><code>EdwardsPoint::is_torsion_free</code></a>.</p>
+<p>To multiply by the cofactor, use <a href="struct.EdwardsPoint.html#method.mul_by_cofactor" title="method curve25519_dalek::edwards::EdwardsPoint::mul_by_cofactor"><code>EdwardsPoint::mul_by_cofactor</code></a>.</p>
+<p>To avoid dealing with cofactors entirely, consider using Ristretto.</p>
+<h3 id="scalars"><a class="doc-anchor" href="#scalars">§</a>Scalars</h3>
+<p>Scalars are represented by the <a href="../scalar/struct.Scalar.html" title="struct curve25519_dalek::scalar::Scalar"><code>Scalar</code></a> struct. To construct a scalar, see
+<a href="../scalar/struct.Scalar.html#method.from_canonical_bytes" title="associated function curve25519_dalek::scalar::Scalar::from_canonical_bytes"><code>Scalar::from_canonical_bytes</code></a> or <a href="../scalar/struct.Scalar.html#method.from_bytes_mod_order_wide" title="associated function curve25519_dalek::scalar::Scalar::from_bytes_mod_order_wide"><code>Scalar::from_bytes_mod_order_wide</code></a>.</p>
+<h3 id="scalar-multiplication"><a class="doc-anchor" href="#scalar-multiplication">§</a>Scalar Multiplication</h3>
+<p>Scalar multiplication on Edwards points is provided by:</p>
+<ul>
+<li>
+<p>the <code>*</code> operator between a <code>Scalar</code> and a <code>EdwardsPoint</code>, which
+performs constant-time variable-base scalar multiplication;</p>
+</li>
+<li>
+<p>the <code>*</code> operator between a <code>Scalar</code> and a
+<code>EdwardsBasepointTable</code>, which performs constant-time fixed-base
+scalar multiplication;</p>
+</li>
+<li>
+<p>an implementation of the
+<a href="../traits/trait.MultiscalarMul.html"><code>MultiscalarMul</code></a> trait for
+constant-time variable-base multiscalar multiplication;</p>
+</li>
+<li>
+<p>an implementation of the
+<a href="../traits/trait.VartimeMultiscalarMul.html"><code>VartimeMultiscalarMul</code></a>
+trait for variable-time variable-base multiscalar multiplication;</p>
+</li>
+</ul>
+<h3 id="implementation"><a class="doc-anchor" href="#implementation">§</a>Implementation</h3>
+<p>The Edwards arithmetic is implemented using the “extended twisted
+coordinates” of Hisil, Wong, Carter, and Dawson, and the
+corresponding complete formulas.  For more details,
+see the <a href="https://docs.rs/curve25519-dalek/latest/curve25519-dalek/backend/serial/curve_models/index.html"><code>curve_models</code> submodule</a>
+of the internal documentation.</p>
+<h3 id="validity-checking"><a class="doc-anchor" href="#validity-checking">§</a>Validity Checking</h3>
+<p>There is no function for checking whether a point is valid.
+Instead, the <code>EdwardsPoint</code> struct is guaranteed to hold a valid
+point on the curve.</p>
+<p>We use the Rust type system to make invalid points
+unrepresentable: <code>EdwardsPoint</code> objects can only be created via
+successful decompression of a compressed point, or else by
+operations on other (valid) <code>EdwardsPoint</code>s.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.CompressedEdwardsY.html" title="struct curve25519_dalek::edwards::CompressedEdwardsY">CompressedEdwardsY</a></div><div class="desc docblock-short">In “Edwards y” / “Ed25519” format, the curve point \((x,y)\) is
+determined by the \(y\)-coordinate and the sign of \(x\).</div></li><li><div class="item-name"><a class="struct" href="struct.EdwardsBasepointTable.html" title="struct curve25519_dalek::edwards::EdwardsBasepointTable">EdwardsBasepointTable</a></div><div class="desc docblock-short">A precomputed table of multiples of a basepoint, for accelerating
+fixed-base scalar multiplication.  One table, for the Ed25519
+basepoint, is provided in the <a href="../constants/index.html" title="mod curve25519_dalek::constants"><code>constants</code></a> module.</div></li><li><div class="item-name"><a class="struct" href="struct.EdwardsBasepointTableRadix32.html" title="struct curve25519_dalek::edwards::EdwardsBasepointTableRadix32">EdwardsBasepointTableRadix32</a></div><div class="desc docblock-short">A precomputed table of multiples of a basepoint, for accelerating
+fixed-base scalar multiplication.  One table, for the Ed25519
+basepoint, is provided in the <a href="../constants/index.html" title="mod curve25519_dalek::constants"><code>constants</code></a> module.</div></li><li><div class="item-name"><a class="struct" href="struct.EdwardsBasepointTableRadix64.html" title="struct curve25519_dalek::edwards::EdwardsBasepointTableRadix64">EdwardsBasepointTableRadix64</a></div><div class="desc docblock-short">A precomputed table of multiples of a basepoint, for accelerating
+fixed-base scalar multiplication.  One table, for the Ed25519
+basepoint, is provided in the <a href="../constants/index.html" title="mod curve25519_dalek::constants"><code>constants</code></a> module.</div></li><li><div class="item-name"><a class="struct" href="struct.EdwardsBasepointTableRadix128.html" title="struct curve25519_dalek::edwards::EdwardsBasepointTableRadix128">EdwardsBasepointTableRadix128</a></div><div class="desc docblock-short">A precomputed table of multiples of a basepoint, for accelerating
+fixed-base scalar multiplication.  One table, for the Ed25519
+basepoint, is provided in the <a href="../constants/index.html" title="mod curve25519_dalek::constants"><code>constants</code></a> module.</div></li><li><div class="item-name"><a class="struct" href="struct.EdwardsBasepointTableRadix256.html" title="struct curve25519_dalek::edwards::EdwardsBasepointTableRadix256">EdwardsBasepointTableRadix256</a></div><div class="desc docblock-short">A precomputed table of multiples of a basepoint, for accelerating
+fixed-base scalar multiplication.  One table, for the Ed25519
+basepoint, is provided in the <a href="../constants/index.html" title="mod curve25519_dalek::constants"><code>constants</code></a> module.</div></li><li><div class="item-name"><a class="struct" href="struct.EdwardsPoint.html" title="struct curve25519_dalek::edwards::EdwardsPoint">EdwardsPoint</a></div><div class="desc docblock-short">An <code>EdwardsPoint</code> represents a point on the Edwards form of Curve25519.</div></li><li><div class="item-name"><a class="struct" href="struct.VartimeEdwardsPrecomputation.html" title="struct curve25519_dalek::edwards::VartimeEdwardsPrecomputation">VartimeEdwardsPrecomputation</a></div><div class="desc docblock-short">Precomputation for variable-time multiscalar multiplication with <code>EdwardsPoint</code>s.</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.EdwardsBasepointTableRadix16.html" title="type curve25519_dalek::edwards::EdwardsBasepointTableRadix16">EdwardsBasepointTableRadix16</a></div><div class="desc docblock-short">A type-alias for <a href="struct.EdwardsBasepointTable.html" title="struct curve25519_dalek::edwards::EdwardsBasepointTable"><code>EdwardsBasepointTable</code></a> because the latter is
+used as a constructor in the <a href="../constants/index.html" title="mod curve25519_dalek::constants"><code>constants</code></a> module.</div></li></ul></section></div></main></body></html>

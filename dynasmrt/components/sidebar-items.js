@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["LabelRegistry","LitPool","ManagedRelocs","MemoryManager","PatchLoc","RelocRegistry"]};

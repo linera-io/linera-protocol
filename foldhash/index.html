@@ -1,0 +1,73 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="This crate provides foldhash, a fast, non-cryptographic, minimally DoS-resistant hashing algorithm designed for computational uses such as hashmaps, bloom filters, count sketching, etc."><title>foldhash - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="foldhash" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../foldhash/index.html">foldhash</a><span class="version">0.1.4</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#modules">Modules</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">foldhash</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/foldhash/lib.rs.html#1-398">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>This crate provides foldhash, a fast, non-cryptographic, minimally
+DoS-resistant hashing algorithm designed for computational uses such as
+hashmaps, bloom filters, count sketching, etc.</p>
+<p>When should you <strong>not</strong> use foldhash:</p>
+<ul>
+<li>
+<p>You are afraid of people studying your long-running program’s behavior
+to reverse engineer its internal random state and using this knowledge to
+create many colliding inputs for computational complexity attacks.</p>
+</li>
+<li>
+<p>You expect foldhash to have a consistent output across versions or
+platforms, such as for persistent file formats or communication protocols.</p>
+</li>
+<li>
+<p>You are relying on foldhash’s properties for any kind of security.
+Foldhash is <strong>not appropriate for any cryptographic purpose</strong>.</p>
+</li>
+</ul>
+<p>Foldhash has two variants, one optimized for speed which is ideal for data
+structures such as hash maps and bloom filters, and one optimized for
+statistical quality which is ideal for algorithms such as
+<a href="https://en.wikipedia.org/wiki/HyperLogLog">HyperLogLog</a> and
+<a href="https://en.wikipedia.org/wiki/MinHash">MinHash</a>.</p>
+<p>Foldhash can be used in a <code>#![no_std]</code> environment by disabling its default
+<code>"std"</code> feature.</p>
+<h2 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h2>
+<p>The easiest way to use this crate with the standard library [<code>HashMap</code>] or
+[<code>HashSet</code>] is to import them from <code>foldhash</code> instead, along with the
+extension traits to make [<code>HashMap::new</code>] and [<code>HashMap::with_capacity</code>]
+work out-of-the-box:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>foldhash::{HashMap, HashMapExt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>hm = HashMap::new();
+hm.insert(<span class="number">42</span>, <span class="string">"hello"</span>);</code></pre></div>
+<p>You can also avoid the convenience types and do it manually by initializing
+a <a href="fast/struct.RandomState.html" title="struct foldhash::fast::RandomState"><code>RandomState</code></a>, for example if you are using a different hash map
+implementation like <a href="https://docs.rs/hashbrown/"><code>hashbrown</code></a>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>hashbrown::HashMap;
+<span class="kw">use </span>foldhash::fast::RandomState;
+
+<span class="kw">let </span><span class="kw-2">mut </span>hm = HashMap::with_hasher(RandomState::default());
+hm.insert(<span class="string">"foo"</span>, <span class="string">"bar"</span>);</code></pre></div>
+<p>The above methods are the recommended way to use foldhash, which will
+automatically generate a randomly generated hasher instance for you. If you
+absolutely must have determinism you can use <a href="fast/struct.FixedState.html" title="struct foldhash::fast::FixedState"><code>FixedState</code></a>
+instead, but note that this makes you trivially vulnerable to HashDoS
+attacks and might lead to quadratic runtime when moving data from one
+hashmap/set into another:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::collections::HashSet;
+<span class="kw">use </span>foldhash::fast::FixedState;
+
+<span class="kw">let </span><span class="kw-2">mut </span>hm = HashSet::with_hasher(FixedState::with_seed(<span class="number">42</span>));
+hm.insert([<span class="number">1</span>, <span class="number">10</span>, <span class="number">100</span>]);</code></pre></div>
+<p>If you rely on statistical properties of the hash for the correctness of
+your algorithm, such as in <a href="https://en.wikipedia.org/wiki/HyperLogLog">HyperLogLog</a>,
+it is suggested to use the <a href="quality/struct.RandomState.html" title="struct foldhash::quality::RandomState"><code>RandomState</code></a>
+or <a href="quality/struct.FixedState.html" title="struct foldhash::quality::FixedState"><code>FixedState</code></a> from the <a href="quality/index.html" title="mod foldhash::quality"><code>quality</code></a> module instead
+of the <a href="fast/index.html" title="mod foldhash::fast"><code>fast</code></a> module. The latter is optimized purely for speed in hash
+tables and has known statistical imperfections.</p>
+<p>Finally, you can also directly use the <a href="quality/struct.RandomState.html" title="struct foldhash::quality::RandomState"><code>RandomState</code></a>
+or <a href="quality/struct.FixedState.html" title="struct foldhash::quality::FixedState"><code>FixedState</code></a> to manually hash items using the
+<a href="std::hash::BuildHasher"><code>BuildHasher</code></a> trait:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::hash::BuildHasher;
+<span class="kw">use </span>foldhash::quality::RandomState;
+
+<span class="kw">let </span>random_state = RandomState::default();
+<span class="kw">let </span>hash = random_state.hash_one(<span class="string">"hello world"</span>);</code></pre></div>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="fast/index.html" title="mod foldhash::fast">fast</a></div><div class="desc docblock-short">The foldhash implementation optimized for speed.</div></li><li><div class="item-name"><a class="mod" href="quality/index.html" title="mod foldhash::quality">quality</a></div><div class="desc docblock-short">The foldhash implementation optimized for quality.</div></li></ul></section></div></main></body></html>

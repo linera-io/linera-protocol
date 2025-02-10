@@ -1,0 +1,68 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Determines if a `&amp;str` is `ClassCase` `bool`"><title>is_class_case in inflector::cases::classcase - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="inflector" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../inflector/index.html">inflector</a><span class="version">0.11.4</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In inflector::cases::classcase</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../../index.html">inflector</a>::<wbr><a href="../index.html">cases</a>::<wbr><a href="index.html">classcase</a>::<wbr><a class="fn" href="#">is_class_case</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/inflector/cases/classcase/mod.rs.html#195-197">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn is_class_case(test_string: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Determines if a <code>&amp;str</code> is <code>ClassCase</code> <code>bool</code></p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code>    <span class="kw">use </span>inflector::cases::classcase::is_class_case;
+    <span class="kw">let </span>mock_string: <span class="kw-2">&amp;</span>str = <span class="string">"Foo"</span>;
+    <span class="kw">let </span>asserted_bool: bool = is_class_case(mock_string);
+    <span class="macro">assert!</span>(asserted_bool == <span class="bool-val">true</span>);
+</code></pre></div>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code>    <span class="kw">use </span>inflector::cases::classcase::is_class_case;
+    <span class="kw">let </span>mock_string: <span class="kw-2">&amp;</span>str = <span class="string">"foo"</span>;
+    <span class="kw">let </span>asserted_bool: bool = is_class_case(mock_string);
+    <span class="macro">assert!</span>(asserted_bool == <span class="bool-val">false</span>);
+</code></pre></div>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code>    <span class="kw">use </span>inflector::cases::classcase::is_class_case;
+    <span class="kw">let </span>mock_string: <span class="kw-2">&amp;</span>str = <span class="string">"FooBarIsAReallyReallyLongStrings"</span>;
+    <span class="kw">let </span>asserted_bool: bool = is_class_case(mock_string);
+    <span class="macro">assert!</span>(asserted_bool == <span class="bool-val">false</span>);
+</code></pre></div>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code>    <span class="kw">use </span>inflector::cases::classcase::is_class_case;
+    <span class="kw">let </span>mock_string: <span class="kw-2">&amp;</span>str = <span class="string">"FooBarIsAReallyReallyLongString"</span>;
+    <span class="kw">let </span>asserted_bool: bool = is_class_case(mock_string);
+    <span class="macro">assert!</span>(asserted_bool == <span class="bool-val">true</span>);
+</code></pre></div>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code>    <span class="kw">use </span>inflector::cases::classcase::is_class_case;
+    <span class="kw">let </span>mock_string: <span class="kw-2">&amp;</span>str = <span class="string">"foo-bar-string-that-is-really-really-long"</span>;
+    <span class="kw">let </span>asserted_bool: bool = is_class_case(mock_string);
+    <span class="macro">assert!</span>(asserted_bool == <span class="bool-val">false</span>);
+</code></pre></div>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code>    <span class="kw">use </span>inflector::cases::classcase::is_class_case;
+    <span class="kw">let </span>mock_string: <span class="kw-2">&amp;</span>str = <span class="string">"foo_bar_is_a_really_really_long_strings"</span>;
+    <span class="kw">let </span>asserted_bool: bool = is_class_case(mock_string);
+    <span class="macro">assert!</span>(asserted_bool == <span class="bool-val">false</span>);
+</code></pre></div>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code>    <span class="kw">use </span>inflector::cases::classcase::is_class_case;
+    <span class="kw">let </span>mock_string: <span class="kw-2">&amp;</span>str = <span class="string">"fooBarIsAReallyReallyLongString"</span>;
+    <span class="kw">let </span>asserted_bool: bool = is_class_case(mock_string);
+    <span class="macro">assert!</span>(asserted_bool == <span class="bool-val">false</span>);
+</code></pre></div>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code>    <span class="kw">use </span>inflector::cases::classcase::is_class_case;
+    <span class="kw">let </span>mock_string: <span class="kw-2">&amp;</span>str = <span class="string">"FOO_BAR_STRING_THAT_IS_REALLY_REALLY_LONG"</span>;
+    <span class="kw">let </span>asserted_bool: bool = is_class_case(mock_string);
+    <span class="macro">assert!</span>(asserted_bool == <span class="bool-val">false</span>);
+</code></pre></div>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code>    <span class="kw">use </span>inflector::cases::classcase::is_class_case;
+    <span class="kw">let </span>mock_string: <span class="kw-2">&amp;</span>str = <span class="string">"foo_bar_string_that_is_really_really_long"</span>;
+    <span class="kw">let </span>asserted_bool: bool = is_class_case(mock_string);
+    <span class="macro">assert!</span>(asserted_bool == <span class="bool-val">false</span>);
+</code></pre></div>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code>    <span class="kw">use </span>inflector::cases::classcase::is_class_case;
+    <span class="kw">let </span>mock_string: <span class="kw-2">&amp;</span>str = <span class="string">"Foo bar string that is really really long"</span>;
+    <span class="kw">let </span>asserted_bool: bool = is_class_case(mock_string);
+    <span class="macro">assert!</span>(asserted_bool == <span class="bool-val">false</span>);
+</code></pre></div>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code>    <span class="kw">use </span>inflector::cases::classcase::is_class_case;
+    <span class="kw">let </span>mock_string: <span class="kw-2">&amp;</span>str = <span class="string">"Foo Bar Is A Really Really Long String"</span>;
+    <span class="kw">let </span>asserted_bool: bool = is_class_case(mock_string);
+    <span class="macro">assert!</span>(asserted_bool == <span class="bool-val">false</span>);
+</code></pre></div>
+</div></details></section></div></main></body></html>

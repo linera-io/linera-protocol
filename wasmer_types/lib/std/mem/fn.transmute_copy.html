@@ -1,0 +1,33 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Interprets `src` as having type `&amp;Dst`, and then reads `src` without moving the contained value."><title>transmute_copy in wasmer_types::lib::std::mem - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="wasmer_types" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../../wasmer_types/index.html">wasmer_types</a><span class="version">4.4.0</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In wasmer_types::lib::std::mem</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../../../index.html">wasmer_types</a>::<wbr><a href="../../index.html">lib</a>::<wbr><a href="../index.html">std</a>::<wbr><a href="index.html">mem</a>::<wbr><a class="fn" href="#">transmute_copy</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><span class="since" title="Stable since Rust version 1.0.0, const since 1.74.0">1.0.0 (const: 1.74.0)</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/mem/mod.rs.html#1007">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub const unsafe fn transmute_copy&lt;Src, Dst&gt;(src: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;Src</a>) -&gt; Dst</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Interprets <code>src</code> as having type <code>&amp;Dst</code>, and then reads <code>src</code> without moving
+the contained value.</p>
+<p>This function will unsafely assume the pointer <code>src</code> is valid for <a href="fn.size_of.html" title="fn wasmer_types::lib::std::mem::size_of"><code>size_of::&lt;Dst&gt;</code></a>
+bytes by transmuting <code>&amp;Src</code> to <code>&amp;Dst</code> and then reading the <code>&amp;Dst</code> (except that this is done
+in a way that is correct even when <code>&amp;Dst</code> has stricter alignment requirements than <code>&amp;Src</code>).
+It will also unsafely create a copy of the contained value instead of moving out of <code>src</code>.</p>
+<p>It is not a compile-time error if <code>Src</code> and <code>Dst</code> have different sizes, but it
+is highly encouraged to only invoke this function where <code>Src</code> and <code>Dst</code> have the
+same size. This function triggers <a href="../../reference/behavior-considered-undefined.html">undefined behavior</a> if <code>Dst</code> is larger than
+<code>Src</code>.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::mem;
+
+<span class="attr">#[repr(packed)]
+</span><span class="kw">struct </span>Foo {
+    bar: u8,
+}
+
+<span class="kw">let </span>foo_array = [<span class="number">10u8</span>];
+
+<span class="kw">unsafe </span>{
+    <span class="comment">// Copy the data from 'foo_array' and treat it as a 'Foo'
+    </span><span class="kw">let </span><span class="kw-2">mut </span>foo_struct: Foo = mem::transmute_copy(<span class="kw-2">&amp;</span>foo_array);
+    <span class="macro">assert_eq!</span>(foo_struct.bar, <span class="number">10</span>);
+
+    <span class="comment">// Modify the copied data
+    </span>foo_struct.bar = <span class="number">20</span>;
+    <span class="macro">assert_eq!</span>(foo_struct.bar, <span class="number">20</span>);
+}
+
+<span class="comment">// The contents of 'foo_array' should not have changed
+</span><span class="macro">assert_eq!</span>(foo_array, [<span class="number">10</span>]);</code></pre></div>
+</div></details></section></div></main></body></html>

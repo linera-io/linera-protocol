@@ -1,0 +1,554 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Types for which any bit pattern is valid."><title>FromBytes in zerocopy - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="zerocopy" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../zerocopy/index.html">zerocopy</a><span class="version">0.7.35</span></h2></div><h2 class="location"><a href="#">FromBytes</a></h2><div class="sidebar-elems"><section><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.mut_from">mut_from</a></li><li><a href="#method.mut_from_prefix">mut_from_prefix</a></li><li><a href="#method.mut_from_suffix">mut_from_suffix</a></li><li><a href="#method.mut_slice_from">mut_slice_from</a></li><li><a href="#method.mut_slice_from_prefix">mut_slice_from_prefix</a></li><li><a href="#method.mut_slice_from_suffix">mut_slice_from_suffix</a></li><li><a href="#method.read_from">read_from</a></li><li><a href="#method.read_from_prefix">read_from_prefix</a></li><li><a href="#method.read_from_suffix">read_from_suffix</a></li><li><a href="#method.ref_from">ref_from</a></li><li><a href="#method.ref_from_prefix">ref_from_prefix</a></li><li><a href="#method.ref_from_suffix">ref_from_suffix</a></li><li><a href="#method.slice_from">slice_from</a></li><li><a href="#method.slice_from_prefix">slice_from_prefix</a></li><li><a href="#method.slice_from_suffix">slice_from_suffix</a></li></ul><h3><a href="#foreign-impls">Implementations on Foreign Types</a></h3><ul class="block"><li><a href="#impl-FromBytes-for-()">()</a></li><li><a href="#impl-FromBytes-for-ManuallyDrop%3CT%3E">ManuallyDrop&lt;T&gt;</a></li><li><a href="#impl-FromBytes-for-MaybeUninit%3CT%3E">MaybeUninit&lt;T&gt;</a></li><li><a href="#impl-FromBytes-for-Option%3CNonZero%3Ci128%3E%3E">Option&lt;NonZeroI128&gt;</a></li><li><a href="#impl-FromBytes-for-Option%3CNonZero%3Ci16%3E%3E">Option&lt;NonZeroI16&gt;</a></li><li><a href="#impl-FromBytes-for-Option%3CNonZero%3Ci32%3E%3E">Option&lt;NonZeroI32&gt;</a></li><li><a href="#impl-FromBytes-for-Option%3CNonZero%3Ci64%3E%3E">Option&lt;NonZeroI64&gt;</a></li><li><a href="#impl-FromBytes-for-Option%3CNonZero%3Ci8%3E%3E">Option&lt;NonZeroI8&gt;</a></li><li><a href="#impl-FromBytes-for-Option%3CNonZero%3Cisize%3E%3E">Option&lt;NonZeroIsize&gt;</a></li><li><a href="#impl-FromBytes-for-Option%3CNonZero%3Cu128%3E%3E">Option&lt;NonZeroU128&gt;</a></li><li><a href="#impl-FromBytes-for-Option%3CNonZero%3Cu16%3E%3E">Option&lt;NonZeroU16&gt;</a></li><li><a href="#impl-FromBytes-for-Option%3CNonZero%3Cu32%3E%3E">Option&lt;NonZeroU32&gt;</a></li><li><a href="#impl-FromBytes-for-Option%3CNonZero%3Cu64%3E%3E">Option&lt;NonZeroU64&gt;</a></li><li><a href="#impl-FromBytes-for-Option%3CNonZero%3Cu8%3E%3E">Option&lt;NonZeroU8&gt;</a></li><li><a href="#impl-FromBytes-for-Option%3CNonZero%3Cusize%3E%3E">Option&lt;NonZeroUsize&gt;</a></li><li><a href="#impl-FromBytes-for-PhantomData%3CT%3E">PhantomData&lt;T&gt;</a></li><li><a href="#impl-FromBytes-for-Wrapping%3CT%3E">Wrapping&lt;T&gt;</a></li><li><a href="#impl-FromBytes-for-%5BT;+N%5D">[T; N]</a></li><li><a href="#impl-FromBytes-for-%5BT%5D">[T]</a></li><li><a href="#impl-FromBytes-for-__m128">__m128</a></li><li><a href="#impl-FromBytes-for-__m128d">__m128d</a></li><li><a href="#impl-FromBytes-for-__m128i">__m128i</a></li><li><a href="#impl-FromBytes-for-__m256">__m256</a></li><li><a href="#impl-FromBytes-for-__m256d">__m256d</a></li><li><a href="#impl-FromBytes-for-__m256i">__m256i</a></li><li><a href="#impl-FromBytes-for-f32">f32</a></li><li><a href="#impl-FromBytes-for-f64">f64</a></li><li><a href="#impl-FromBytes-for-i128">i128</a></li><li><a href="#impl-FromBytes-for-i16">i16</a></li><li><a href="#impl-FromBytes-for-i32">i32</a></li><li><a href="#impl-FromBytes-for-i64">i64</a></li><li><a href="#impl-FromBytes-for-i8">i8</a></li><li><a href="#impl-FromBytes-for-isize">isize</a></li><li><a href="#impl-FromBytes-for-u128">u128</a></li><li><a href="#impl-FromBytes-for-u16">u16</a></li><li><a href="#impl-FromBytes-for-u32">u32</a></li><li><a href="#impl-FromBytes-for-u64">u64</a></li><li><a href="#impl-FromBytes-for-u8">u8</a></li><li><a href="#impl-FromBytes-for-usize">usize</a></li></ul><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In crate zerocopy</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="index.html">zerocopy</a>::<wbr><a class="trait" href="#">FromBytes</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/zerocopy/lib.rs.html#1824-2497">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub unsafe trait FromBytes: <a class="trait" href="trait.FromZeroes.html" title="trait zerocopy::FromZeroes">FromZeroes</a> {
+<details class="toggle type-contents-toggle"><summary class="hideme"><span>Show 15 methods</span></summary>    // Provided methods
+    fn <a href="#method.ref_from" class="fn">ref_from</a>(bytes: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;Self</a>&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.ref_from_prefix" class="fn">ref_from_prefix</a>(bytes: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;Self</a>&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.ref_from_suffix" class="fn">ref_from_suffix</a>(bytes: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;Self</a>&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.mut_from" class="fn">mut_from</a>(bytes: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a>&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a> + <a class="trait" href="trait.AsBytes.html" title="trait zerocopy::AsBytes">AsBytes</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.mut_from_prefix" class="fn">mut_from_prefix</a>(bytes: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a>&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a> + <a class="trait" href="trait.AsBytes.html" title="trait zerocopy::AsBytes">AsBytes</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.mut_from_suffix" class="fn">mut_from_suffix</a>(bytes: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a>&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a> + <a class="trait" href="trait.AsBytes.html" title="trait zerocopy::AsBytes">AsBytes</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.slice_from" class="fn">slice_from</a>(bytes: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.slice.html">[Self]</a>&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.slice_from_prefix" class="fn">slice_from_prefix</a>(bytes: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], count: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;(&amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.slice.html">[Self]</a>, &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>])&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.slice_from_suffix" class="fn">slice_from_suffix</a>(bytes: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], count: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;(&amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.slice.html">[Self]</a>)&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.mut_slice_from" class="fn">mut_slice_from</a>(bytes: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;mut <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.slice.html">[Self]</a>&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a> + <a class="trait" href="trait.AsBytes.html" title="trait zerocopy::AsBytes">AsBytes</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.mut_slice_from_prefix" class="fn">mut_slice_from_prefix</a>(
+        bytes: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>],
+        count: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;(&amp;mut <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.slice.html">[Self]</a>, &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>])&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a> + <a class="trait" href="trait.AsBytes.html" title="trait zerocopy::AsBytes">AsBytes</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.mut_slice_from_suffix" class="fn">mut_slice_from_suffix</a>(
+        bytes: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>],
+        count: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;(&amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], &amp;mut <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.slice.html">[Self]</a>)&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a> + <a class="trait" href="trait.AsBytes.html" title="trait zerocopy::AsBytes">AsBytes</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_from" class="fn">read_from</a>(bytes: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;Self&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_from_prefix" class="fn">read_from_prefix</a>(bytes: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;Self&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_from_suffix" class="fn">read_from_suffix</a>(bytes: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;Self&gt;
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+</details>}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Types for which any bit pattern is valid.</p>
+<p>Any memory region of the appropriate length which contains initialized bytes
+can be viewed as any <code>FromBytes</code> type with no runtime overhead. This is
+useful for efficiently parsing bytes as structured data.</p>
+<h2 id="implementation"><a class="doc-anchor" href="#implementation">§</a>Implementation</h2>
+<p><strong>Do not implement this trait yourself!</strong> Instead, use
+<a href="derive.FromBytes.html" title="derive zerocopy::FromBytes"><code>#[derive(FromBytes)]</code></a> (requires the <code>derive</code> Cargo feature);
+e.g.:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(FromZeroes, FromBytes)]
+</span><span class="kw">struct </span>MyStruct {
+    ...
+}
+
+<span class="attr">#[derive(FromZeroes, FromBytes)]
+#[repr(u8)]
+</span><span class="kw">enum </span>MyEnum {
+    ...
+}
+
+<span class="attr">#[derive(FromZeroes, FromBytes)]
+</span><span class="kw">union </span>MyUnion {
+    ...
+}</code></pre></div>
+<p>This derive performs a sophisticated, compile-time safety analysis to
+determine whether a type is <code>FromBytes</code>.</p>
+<h2 id="safety"><a class="doc-anchor" href="#safety">§</a>Safety</h2>
+<p><em>This section describes what is required in order for <code>T: FromBytes</code>, and
+what unsafe code may assume of such types. If you don’t plan on implementing
+<code>FromBytes</code> manually, and you don’t plan on writing unsafe code that
+operates on <code>FromBytes</code> types, then you don’t need to read this section.</em></p>
+<p>If <code>T: FromBytes</code>, then unsafe code may assume that:</p>
+<ul>
+<li>It is sound to treat any initialized sequence of bytes of length
+<code>size_of::&lt;T&gt;()</code> as a <code>T</code>.</li>
+<li>Given <code>b: &amp;[u8]</code> where <code>b.len() == size_of::&lt;T&gt;()</code>, <code>b</code> is aligned to
+<code>align_of::&lt;T&gt;()</code> it is sound to construct a <code>t: &amp;T</code> at the same address
+as <code>b</code>, and it is sound for both <code>b</code> and <code>t</code> to be live at the same time.</li>
+</ul>
+<p>If a type is marked as <code>FromBytes</code> which violates this contract, it may
+cause undefined behavior.</p>
+<p><code>#[derive(FromBytes)]</code> only permits <a href="derive.FromBytes.html#analysis" title="derive zerocopy::FromBytes">types which satisfy these
+requirements</a>.</p>
+</div></details><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.ref_from" class="method"><a class="src rightside" href="../src/zerocopy/lib.rs.html#1863-1868">source</a><h4 class="code-header">fn <a href="#method.ref_from" class="fn">ref_from</a>(bytes: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;Self</a>&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Interprets the given <code>bytes</code> as a <code>&amp;Self</code> without copying.</p>
+<p>If <code>bytes.len() != size_of::&lt;Self&gt;()</code> or <code>bytes</code> is not aligned to
+<code>align_of::&lt;Self&gt;()</code>, this returns <code>None</code>.</p>
+<h5 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>zerocopy::FromBytes;
+
+<span class="attr">#[derive(FromZeroes, FromBytes)]
+#[repr(C)]
+</span><span class="kw">struct </span>PacketHeader {
+    src_port: [u8; <span class="number">2</span>],
+    dst_port: [u8; <span class="number">2</span>],
+    length: [u8; <span class="number">2</span>],
+    checksum: [u8; <span class="number">2</span>],
+}
+
+<span class="comment">// These bytes encode a `PacketHeader`.
+</span><span class="kw">let </span>bytes = [<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>, <span class="number">7</span>].as_slice();
+
+<span class="kw">let </span>header = PacketHeader::ref_from(bytes).unwrap();
+
+<span class="macro">assert_eq!</span>(header.src_port, [<span class="number">0</span>, <span class="number">1</span>]);
+<span class="macro">assert_eq!</span>(header.dst_port, [<span class="number">2</span>, <span class="number">3</span>]);
+<span class="macro">assert_eq!</span>(header.length, [<span class="number">4</span>, <span class="number">5</span>]);
+<span class="macro">assert_eq!</span>(header.checksum, [<span class="number">6</span>, <span class="number">7</span>]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.ref_from_prefix" class="method"><a class="src rightside" href="../src/zerocopy/lib.rs.html#1905-1910">source</a><h4 class="code-header">fn <a href="#method.ref_from_prefix" class="fn">ref_from_prefix</a>(bytes: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;Self</a>&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Interprets the prefix of the given <code>bytes</code> as a <code>&amp;Self</code> without copying.</p>
+<p><code>ref_from_prefix</code> returns a reference to the first <code>size_of::&lt;Self&gt;()</code>
+bytes of <code>bytes</code>. If <code>bytes.len() &lt; size_of::&lt;Self&gt;()</code> or <code>bytes</code> is not
+aligned to <code>align_of::&lt;Self&gt;()</code>, this returns <code>None</code>.</p>
+<p>To also access the prefix bytes, use <a href="struct.Ref.html#method.new_from_prefix" title="associated function zerocopy::Ref::new_from_prefix"><code>Ref::new_from_prefix</code></a>. Then, use
+<a href="struct.Ref.html#method.into_ref" title="method zerocopy::Ref::into_ref"><code>Ref::into_ref</code></a> to get a <code>&amp;Self</code> with the same lifetime.</p>
+<h5 id="examples-1"><a class="doc-anchor" href="#examples-1">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>zerocopy::FromBytes;
+
+<span class="attr">#[derive(FromZeroes, FromBytes)]
+#[repr(C)]
+</span><span class="kw">struct </span>PacketHeader {
+    src_port: [u8; <span class="number">2</span>],
+    dst_port: [u8; <span class="number">2</span>],
+    length: [u8; <span class="number">2</span>],
+    checksum: [u8; <span class="number">2</span>],
+}
+
+<span class="comment">// These are more bytes than are needed to encode a `PacketHeader`.
+</span><span class="kw">let </span>bytes = [<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>, <span class="number">7</span>, <span class="number">8</span>, <span class="number">9</span>].as_slice();
+
+<span class="kw">let </span>header = PacketHeader::ref_from_prefix(bytes).unwrap();
+
+<span class="macro">assert_eq!</span>(header.src_port, [<span class="number">0</span>, <span class="number">1</span>]);
+<span class="macro">assert_eq!</span>(header.dst_port, [<span class="number">2</span>, <span class="number">3</span>]);
+<span class="macro">assert_eq!</span>(header.length, [<span class="number">4</span>, <span class="number">5</span>]);
+<span class="macro">assert_eq!</span>(header.checksum, [<span class="number">6</span>, <span class="number">7</span>]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.ref_from_suffix" class="method"><a class="src rightside" href="../src/zerocopy/lib.rs.html#1941-1946">source</a><h4 class="code-header">fn <a href="#method.ref_from_suffix" class="fn">ref_from_suffix</a>(bytes: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;Self</a>&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Interprets the suffix of the given <code>bytes</code> as a <code>&amp;Self</code> without copying.</p>
+<p><code>ref_from_suffix</code> returns a reference to the last <code>size_of::&lt;Self&gt;()</code>
+bytes of <code>bytes</code>. If <code>bytes.len() &lt; size_of::&lt;Self&gt;()</code> or the suffix of
+<code>bytes</code> is not aligned to <code>align_of::&lt;Self&gt;()</code>, this returns <code>None</code>.</p>
+<p>To also access the suffix bytes, use <a href="struct.Ref.html#method.new_from_suffix" title="associated function zerocopy::Ref::new_from_suffix"><code>Ref::new_from_suffix</code></a>. Then, use
+<a href="struct.Ref.html#method.into_ref" title="method zerocopy::Ref::into_ref"><code>Ref::into_ref</code></a> to get a <code>&amp;Self</code> with the same lifetime.</p>
+<h5 id="examples-2"><a class="doc-anchor" href="#examples-2">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>zerocopy::FromBytes;
+
+<span class="attr">#[derive(FromZeroes, FromBytes)]
+#[repr(C)]
+</span><span class="kw">struct </span>PacketTrailer {
+    frame_check_sequence: [u8; <span class="number">4</span>],
+}
+
+<span class="comment">// These are more bytes than are needed to encode a `PacketTrailer`.
+</span><span class="kw">let </span>bytes = [<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>, <span class="number">7</span>, <span class="number">8</span>, <span class="number">9</span>].as_slice();
+
+<span class="kw">let </span>trailer = PacketTrailer::ref_from_suffix(bytes).unwrap();
+
+<span class="macro">assert_eq!</span>(trailer.frame_check_sequence, [<span class="number">6</span>, <span class="number">7</span>, <span class="number">8</span>, <span class="number">9</span>]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.mut_from" class="method"><a class="src rightside" href="../src/zerocopy/lib.rs.html#1983-1988">source</a><h4 class="code-header">fn <a href="#method.mut_from" class="fn">mut_from</a>(bytes: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a>&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a> + <a class="trait" href="trait.AsBytes.html" title="trait zerocopy::AsBytes">AsBytes</a>,</div></h4></section></summary><div class="docblock"><p>Interprets the given <code>bytes</code> as a <code>&amp;mut Self</code> without copying.</p>
+<p>If <code>bytes.len() != size_of::&lt;Self&gt;()</code> or <code>bytes</code> is not aligned to
+<code>align_of::&lt;Self&gt;()</code>, this returns <code>None</code>.</p>
+<h5 id="examples-3"><a class="doc-anchor" href="#examples-3">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>zerocopy::FromBytes;
+
+<span class="attr">#[derive(AsBytes, FromZeroes, FromBytes)]
+#[repr(C)]
+</span><span class="kw">struct </span>PacketHeader {
+    src_port: [u8; <span class="number">2</span>],
+    dst_port: [u8; <span class="number">2</span>],
+    length: [u8; <span class="number">2</span>],
+    checksum: [u8; <span class="number">2</span>],
+}
+
+<span class="comment">// These bytes encode a `PacketHeader`.
+</span><span class="kw">let </span>bytes = <span class="kw-2">&amp;mut </span>[<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>, <span class="number">7</span>][..];
+
+<span class="kw">let </span>header = PacketHeader::mut_from(bytes).unwrap();
+
+<span class="macro">assert_eq!</span>(header.src_port, [<span class="number">0</span>, <span class="number">1</span>]);
+<span class="macro">assert_eq!</span>(header.dst_port, [<span class="number">2</span>, <span class="number">3</span>]);
+<span class="macro">assert_eq!</span>(header.length, [<span class="number">4</span>, <span class="number">5</span>]);
+<span class="macro">assert_eq!</span>(header.checksum, [<span class="number">6</span>, <span class="number">7</span>]);
+
+header.checksum = [<span class="number">0</span>, <span class="number">0</span>];
+
+<span class="macro">assert_eq!</span>(bytes, [<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">0</span>, <span class="number">0</span>]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.mut_from_prefix" class="method"><a class="src rightside" href="../src/zerocopy/lib.rs.html#2030-2035">source</a><h4 class="code-header">fn <a href="#method.mut_from_prefix" class="fn">mut_from_prefix</a>(bytes: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a>&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a> + <a class="trait" href="trait.AsBytes.html" title="trait zerocopy::AsBytes">AsBytes</a>,</div></h4></section></summary><div class="docblock"><p>Interprets the prefix of the given <code>bytes</code> as a <code>&amp;mut Self</code> without
+copying.</p>
+<p><code>mut_from_prefix</code> returns a reference to the first <code>size_of::&lt;Self&gt;()</code>
+bytes of <code>bytes</code>. If <code>bytes.len() &lt; size_of::&lt;Self&gt;()</code> or <code>bytes</code> is not
+aligned to <code>align_of::&lt;Self&gt;()</code>, this returns <code>None</code>.</p>
+<p>To also access the prefix bytes, use <a href="struct.Ref.html#method.new_from_prefix" title="associated function zerocopy::Ref::new_from_prefix"><code>Ref::new_from_prefix</code></a>. Then, use
+<a href="struct.Ref.html#method.into_mut" title="method zerocopy::Ref::into_mut"><code>Ref::into_mut</code></a> to get a <code>&amp;mut Self</code> with the same lifetime.</p>
+<h5 id="examples-4"><a class="doc-anchor" href="#examples-4">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>zerocopy::FromBytes;
+
+<span class="attr">#[derive(AsBytes, FromZeroes, FromBytes)]
+#[repr(C)]
+</span><span class="kw">struct </span>PacketHeader {
+    src_port: [u8; <span class="number">2</span>],
+    dst_port: [u8; <span class="number">2</span>],
+    length: [u8; <span class="number">2</span>],
+    checksum: [u8; <span class="number">2</span>],
+}
+
+<span class="comment">// These are more bytes than are needed to encode a `PacketHeader`.
+</span><span class="kw">let </span>bytes = <span class="kw-2">&amp;mut </span>[<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>, <span class="number">7</span>, <span class="number">8</span>, <span class="number">9</span>][..];
+
+<span class="kw">let </span>header = PacketHeader::mut_from_prefix(bytes).unwrap();
+
+<span class="macro">assert_eq!</span>(header.src_port, [<span class="number">0</span>, <span class="number">1</span>]);
+<span class="macro">assert_eq!</span>(header.dst_port, [<span class="number">2</span>, <span class="number">3</span>]);
+<span class="macro">assert_eq!</span>(header.length, [<span class="number">4</span>, <span class="number">5</span>]);
+<span class="macro">assert_eq!</span>(header.checksum, [<span class="number">6</span>, <span class="number">7</span>]);
+
+header.checksum = [<span class="number">0</span>, <span class="number">0</span>];
+
+<span class="macro">assert_eq!</span>(bytes, [<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">8</span>, <span class="number">9</span>]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.mut_from_suffix" class="method"><a class="src rightside" href="../src/zerocopy/lib.rs.html#2070-2075">source</a><h4 class="code-header">fn <a href="#method.mut_from_suffix" class="fn">mut_from_suffix</a>(bytes: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a>&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a> + <a class="trait" href="trait.AsBytes.html" title="trait zerocopy::AsBytes">AsBytes</a>,</div></h4></section></summary><div class="docblock"><p>Interprets the suffix of the given <code>bytes</code> as a <code>&amp;mut Self</code> without copying.</p>
+<p><code>mut_from_suffix</code> returns a reference to the last <code>size_of::&lt;Self&gt;()</code>
+bytes of <code>bytes</code>. If <code>bytes.len() &lt; size_of::&lt;Self&gt;()</code> or the suffix of
+<code>bytes</code> is not aligned to <code>align_of::&lt;Self&gt;()</code>, this returns <code>None</code>.</p>
+<p>To also access the suffix bytes, use <a href="struct.Ref.html#method.new_from_suffix" title="associated function zerocopy::Ref::new_from_suffix"><code>Ref::new_from_suffix</code></a>. Then,
+use <a href="struct.Ref.html#method.into_mut" title="method zerocopy::Ref::into_mut"><code>Ref::into_mut</code></a> to get a <code>&amp;mut Self</code> with the same lifetime.</p>
+<h5 id="examples-5"><a class="doc-anchor" href="#examples-5">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>zerocopy::FromBytes;
+
+<span class="attr">#[derive(AsBytes, FromZeroes, FromBytes)]
+#[repr(C)]
+</span><span class="kw">struct </span>PacketTrailer {
+    frame_check_sequence: [u8; <span class="number">4</span>],
+}
+
+<span class="comment">// These are more bytes than are needed to encode a `PacketTrailer`.
+</span><span class="kw">let </span>bytes = <span class="kw-2">&amp;mut </span>[<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>, <span class="number">7</span>, <span class="number">8</span>, <span class="number">9</span>][..];
+
+<span class="kw">let </span>trailer = PacketTrailer::mut_from_suffix(bytes).unwrap();
+
+<span class="macro">assert_eq!</span>(trailer.frame_check_sequence, [<span class="number">6</span>, <span class="number">7</span>, <span class="number">8</span>, <span class="number">9</span>]);
+
+trailer.frame_check_sequence = [<span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>];
+
+<span class="macro">assert_eq!</span>(bytes, [<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.slice_from" class="method"><a class="src rightside" href="../src/zerocopy/lib.rs.html#2117-2122">source</a><h4 class="code-header">fn <a href="#method.slice_from" class="fn">slice_from</a>(bytes: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.slice.html">[Self]</a>&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Interprets the given <code>bytes</code> as a <code>&amp;[Self]</code> without copying.</p>
+<p>If <code>bytes.len() % size_of::&lt;Self&gt;() != 0</code> or <code>bytes</code> is not aligned to
+<code>align_of::&lt;Self&gt;()</code>, this returns <code>None</code>.</p>
+<p>If you need to convert a specific number of slice elements, see
+<a href="trait.FromBytes.html#method.slice_from_prefix" title="associated function zerocopy::FromBytes::slice_from_prefix"><code>slice_from_prefix</code></a> or
+<a href="trait.FromBytes.html#method.slice_from_suffix" title="associated function zerocopy::FromBytes::slice_from_suffix"><code>slice_from_suffix</code></a>.</p>
+<h5 id="panics"><a class="doc-anchor" href="#panics">§</a>Panics</h5>
+<p>If <code>Self</code> is a zero-sized type.</p>
+<h5 id="examples-6"><a class="doc-anchor" href="#examples-6">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>zerocopy::FromBytes;
+
+<span class="attr">#[derive(FromZeroes, FromBytes)]
+#[repr(C)]
+</span><span class="kw">struct </span>Pixel {
+    r: u8,
+    g: u8,
+    b: u8,
+    a: u8,
+}
+
+<span class="comment">// These bytes encode two `Pixel`s.
+</span><span class="kw">let </span>bytes = [<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>, <span class="number">7</span>].as_slice();
+
+<span class="kw">let </span>pixels = Pixel::slice_from(bytes).unwrap();
+
+<span class="macro">assert_eq!</span>(pixels, <span class="kw-2">&amp;</span>[
+    Pixel { r: <span class="number">0</span>, g: <span class="number">1</span>, b: <span class="number">2</span>, a: <span class="number">3 </span>},
+    Pixel { r: <span class="number">4</span>, g: <span class="number">5</span>, b: <span class="number">6</span>, a: <span class="number">7 </span>},
+]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.slice_from_prefix" class="method"><a class="src rightside" href="../src/zerocopy/lib.rs.html#2168-2173">source</a><h4 class="code-header">fn <a href="#method.slice_from_prefix" class="fn">slice_from_prefix</a>(bytes: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], count: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;(&amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.slice.html">[Self]</a>, &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>])&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Interprets the prefix of the given <code>bytes</code> as a <code>&amp;[Self]</code> with length
+equal to <code>count</code> without copying.</p>
+<p>This method verifies that <code>bytes.len() &gt;= size_of::&lt;T&gt;() * count</code>
+and that <code>bytes</code> is aligned to <code>align_of::&lt;T&gt;()</code>. It consumes the
+first <code>size_of::&lt;T&gt;() * count</code> bytes from <code>bytes</code> to construct a
+<code>&amp;[Self]</code>, and returns the remaining bytes to the caller. It also
+ensures that <code>sizeof::&lt;T&gt;() * count</code> does not overflow a <code>usize</code>.
+If any of the length, alignment, or overflow checks fail, it returns
+<code>None</code>.</p>
+<h5 id="panics-1"><a class="doc-anchor" href="#panics-1">§</a>Panics</h5>
+<p>If <code>T</code> is a zero-sized type.</p>
+<h5 id="examples-7"><a class="doc-anchor" href="#examples-7">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>zerocopy::FromBytes;
+
+<span class="attr">#[derive(FromZeroes, FromBytes)]
+#[repr(C)]
+</span><span class="kw">struct </span>Pixel {
+    r: u8,
+    g: u8,
+    b: u8,
+    a: u8,
+}
+
+<span class="comment">// These are more bytes than are needed to encode two `Pixel`s.
+</span><span class="kw">let </span>bytes = [<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>, <span class="number">7</span>, <span class="number">8</span>, <span class="number">9</span>].as_slice();
+
+<span class="kw">let </span>(pixels, rest) = Pixel::slice_from_prefix(bytes, <span class="number">2</span>).unwrap();
+
+<span class="macro">assert_eq!</span>(pixels, <span class="kw-2">&amp;</span>[
+    Pixel { r: <span class="number">0</span>, g: <span class="number">1</span>, b: <span class="number">2</span>, a: <span class="number">3 </span>},
+    Pixel { r: <span class="number">4</span>, g: <span class="number">5</span>, b: <span class="number">6</span>, a: <span class="number">7 </span>},
+]);
+
+<span class="macro">assert_eq!</span>(rest, <span class="kw-2">&amp;</span>[<span class="number">8</span>, <span class="number">9</span>]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.slice_from_suffix" class="method"><a class="src rightside" href="../src/zerocopy/lib.rs.html#2219-2224">source</a><h4 class="code-header">fn <a href="#method.slice_from_suffix" class="fn">slice_from_suffix</a>(bytes: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], count: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;(&amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.slice.html">[Self]</a>)&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Interprets the suffix of the given <code>bytes</code> as a <code>&amp;[Self]</code> with length
+equal to <code>count</code> without copying.</p>
+<p>This method verifies that <code>bytes.len() &gt;= size_of::&lt;T&gt;() * count</code>
+and that <code>bytes</code> is aligned to <code>align_of::&lt;T&gt;()</code>. It consumes the
+last <code>size_of::&lt;T&gt;() * count</code> bytes from <code>bytes</code> to construct a
+<code>&amp;[Self]</code>, and returns the preceding bytes to the caller. It also
+ensures that <code>sizeof::&lt;T&gt;() * count</code> does not overflow a <code>usize</code>.
+If any of the length, alignment, or overflow checks fail, it returns
+<code>None</code>.</p>
+<h5 id="panics-2"><a class="doc-anchor" href="#panics-2">§</a>Panics</h5>
+<p>If <code>T</code> is a zero-sized type.</p>
+<h5 id="examples-8"><a class="doc-anchor" href="#examples-8">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>zerocopy::FromBytes;
+
+<span class="attr">#[derive(FromZeroes, FromBytes)]
+#[repr(C)]
+</span><span class="kw">struct </span>Pixel {
+    r: u8,
+    g: u8,
+    b: u8,
+    a: u8,
+}
+
+<span class="comment">// These are more bytes than are needed to encode two `Pixel`s.
+</span><span class="kw">let </span>bytes = [<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>, <span class="number">7</span>, <span class="number">8</span>, <span class="number">9</span>].as_slice();
+
+<span class="kw">let </span>(rest, pixels) = Pixel::slice_from_suffix(bytes, <span class="number">2</span>).unwrap();
+
+<span class="macro">assert_eq!</span>(rest, <span class="kw-2">&amp;</span>[<span class="number">0</span>, <span class="number">1</span>]);
+
+<span class="macro">assert_eq!</span>(pixels, <span class="kw-2">&amp;</span>[
+    Pixel { r: <span class="number">2</span>, g: <span class="number">3</span>, b: <span class="number">4</span>, a: <span class="number">5 </span>},
+    Pixel { r: <span class="number">6</span>, g: <span class="number">7</span>, b: <span class="number">8</span>, a: <span class="number">9 </span>},
+]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.mut_slice_from" class="method"><a class="src rightside" href="../src/zerocopy/lib.rs.html#2270-2275">source</a><h4 class="code-header">fn <a href="#method.mut_slice_from" class="fn">mut_slice_from</a>(bytes: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;mut <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.slice.html">[Self]</a>&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a> + <a class="trait" href="trait.AsBytes.html" title="trait zerocopy::AsBytes">AsBytes</a>,</div></h4></section></summary><div class="docblock"><p>Interprets the given <code>bytes</code> as a <code>&amp;mut [Self]</code> without copying.</p>
+<p>If <code>bytes.len() % size_of::&lt;T&gt;() != 0</code> or <code>bytes</code> is not aligned to
+<code>align_of::&lt;T&gt;()</code>, this returns <code>None</code>.</p>
+<p>If you need to convert a specific number of slice elements, see
+<a href="trait.FromBytes.html#method.mut_slice_from_prefix" title="associated function zerocopy::FromBytes::mut_slice_from_prefix"><code>mut_slice_from_prefix</code></a> or
+<a href="trait.FromBytes.html#method.mut_slice_from_suffix" title="associated function zerocopy::FromBytes::mut_slice_from_suffix"><code>mut_slice_from_suffix</code></a>.</p>
+<h5 id="panics-3"><a class="doc-anchor" href="#panics-3">§</a>Panics</h5>
+<p>If <code>T</code> is a zero-sized type.</p>
+<h5 id="examples-9"><a class="doc-anchor" href="#examples-9">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>zerocopy::FromBytes;
+
+<span class="attr">#[derive(AsBytes, FromZeroes, FromBytes)]
+#[repr(C)]
+</span><span class="kw">struct </span>Pixel {
+    r: u8,
+    g: u8,
+    b: u8,
+    a: u8,
+}
+
+<span class="comment">// These bytes encode two `Pixel`s.
+</span><span class="kw">let </span>bytes = <span class="kw-2">&amp;mut </span>[<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>, <span class="number">7</span>][..];
+
+<span class="kw">let </span>pixels = Pixel::mut_slice_from(bytes).unwrap();
+
+<span class="macro">assert_eq!</span>(pixels, <span class="kw-2">&amp;</span>[
+    Pixel { r: <span class="number">0</span>, g: <span class="number">1</span>, b: <span class="number">2</span>, a: <span class="number">3 </span>},
+    Pixel { r: <span class="number">4</span>, g: <span class="number">5</span>, b: <span class="number">6</span>, a: <span class="number">7 </span>},
+]);
+
+pixels[<span class="number">1</span>] = Pixel { r: <span class="number">0</span>, g: <span class="number">0</span>, b: <span class="number">0</span>, a: <span class="number">0 </span>};
+
+<span class="macro">assert_eq!</span>(bytes, [<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.mut_slice_from_prefix" class="method"><a class="src rightside" href="../src/zerocopy/lib.rs.html#2325-2330">source</a><h4 class="code-header">fn <a href="#method.mut_slice_from_prefix" class="fn">mut_slice_from_prefix</a>(
+    bytes: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>],
+    count: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;(&amp;mut <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.slice.html">[Self]</a>, &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>])&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a> + <a class="trait" href="trait.AsBytes.html" title="trait zerocopy::AsBytes">AsBytes</a>,</div></h4></section></summary><div class="docblock"><p>Interprets the prefix of the given <code>bytes</code> as a <code>&amp;mut [Self]</code> with length
+equal to <code>count</code> without copying.</p>
+<p>This method verifies that <code>bytes.len() &gt;= size_of::&lt;T&gt;() * count</code>
+and that <code>bytes</code> is aligned to <code>align_of::&lt;T&gt;()</code>. It consumes the
+first <code>size_of::&lt;T&gt;() * count</code> bytes from <code>bytes</code> to construct a
+<code>&amp;[Self]</code>, and returns the remaining bytes to the caller. It also
+ensures that <code>sizeof::&lt;T&gt;() * count</code> does not overflow a <code>usize</code>.
+If any of the length, alignment, or overflow checks fail, it returns
+<code>None</code>.</p>
+<h5 id="panics-4"><a class="doc-anchor" href="#panics-4">§</a>Panics</h5>
+<p>If <code>T</code> is a zero-sized type.</p>
+<h5 id="examples-10"><a class="doc-anchor" href="#examples-10">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>zerocopy::FromBytes;
+
+<span class="attr">#[derive(AsBytes, FromZeroes, FromBytes)]
+#[repr(C)]
+</span><span class="kw">struct </span>Pixel {
+    r: u8,
+    g: u8,
+    b: u8,
+    a: u8,
+}
+
+<span class="comment">// These are more bytes than are needed to encode two `Pixel`s.
+</span><span class="kw">let </span>bytes = <span class="kw-2">&amp;mut </span>[<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>, <span class="number">7</span>, <span class="number">8</span>, <span class="number">9</span>][..];
+
+<span class="kw">let </span>(pixels, rest) = Pixel::mut_slice_from_prefix(bytes, <span class="number">2</span>).unwrap();
+
+<span class="macro">assert_eq!</span>(pixels, <span class="kw-2">&amp;</span>[
+    Pixel { r: <span class="number">0</span>, g: <span class="number">1</span>, b: <span class="number">2</span>, a: <span class="number">3 </span>},
+    Pixel { r: <span class="number">4</span>, g: <span class="number">5</span>, b: <span class="number">6</span>, a: <span class="number">7 </span>},
+]);
+
+<span class="macro">assert_eq!</span>(rest, <span class="kw-2">&amp;</span>[<span class="number">8</span>, <span class="number">9</span>]);
+
+pixels[<span class="number">1</span>] = Pixel { r: <span class="number">0</span>, g: <span class="number">0</span>, b: <span class="number">0</span>, a: <span class="number">0 </span>};
+
+<span class="macro">assert_eq!</span>(bytes, [<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">8</span>, <span class="number">9</span>]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.mut_slice_from_suffix" class="method"><a class="src rightside" href="../src/zerocopy/lib.rs.html#2380-2385">source</a><h4 class="code-header">fn <a href="#method.mut_slice_from_suffix" class="fn">mut_slice_from_suffix</a>(
+    bytes: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>],
+    count: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;(&amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], &amp;mut <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.slice.html">[Self]</a>)&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a> + <a class="trait" href="trait.AsBytes.html" title="trait zerocopy::AsBytes">AsBytes</a>,</div></h4></section></summary><div class="docblock"><p>Interprets the suffix of the given <code>bytes</code> as a <code>&amp;mut [Self]</code> with length
+equal to <code>count</code> without copying.</p>
+<p>This method verifies that <code>bytes.len() &gt;= size_of::&lt;T&gt;() * count</code>
+and that <code>bytes</code> is aligned to <code>align_of::&lt;T&gt;()</code>. It consumes the
+last <code>size_of::&lt;T&gt;() * count</code> bytes from <code>bytes</code> to construct a
+<code>&amp;[Self]</code>, and returns the preceding bytes to the caller. It also
+ensures that <code>sizeof::&lt;T&gt;() * count</code> does not overflow a <code>usize</code>.
+If any of the length, alignment, or overflow checks fail, it returns
+<code>None</code>.</p>
+<h5 id="panics-5"><a class="doc-anchor" href="#panics-5">§</a>Panics</h5>
+<p>If <code>T</code> is a zero-sized type.</p>
+<h5 id="examples-11"><a class="doc-anchor" href="#examples-11">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>zerocopy::FromBytes;
+
+<span class="attr">#[derive(AsBytes, FromZeroes, FromBytes)]
+#[repr(C)]
+</span><span class="kw">struct </span>Pixel {
+    r: u8,
+    g: u8,
+    b: u8,
+    a: u8,
+}
+
+<span class="comment">// These are more bytes than are needed to encode two `Pixel`s.
+</span><span class="kw">let </span>bytes = <span class="kw-2">&amp;mut </span>[<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>, <span class="number">7</span>, <span class="number">8</span>, <span class="number">9</span>][..];
+
+<span class="kw">let </span>(rest, pixels) = Pixel::mut_slice_from_suffix(bytes, <span class="number">2</span>).unwrap();
+
+<span class="macro">assert_eq!</span>(rest, <span class="kw-2">&amp;</span>[<span class="number">0</span>, <span class="number">1</span>]);
+
+<span class="macro">assert_eq!</span>(pixels, <span class="kw-2">&amp;</span>[
+    Pixel { r: <span class="number">2</span>, g: <span class="number">3</span>, b: <span class="number">4</span>, a: <span class="number">5 </span>},
+    Pixel { r: <span class="number">6</span>, g: <span class="number">7</span>, b: <span class="number">8</span>, a: <span class="number">9 </span>},
+]);
+
+pixels[<span class="number">1</span>] = Pixel { r: <span class="number">0</span>, g: <span class="number">0</span>, b: <span class="number">0</span>, a: <span class="number">0 </span>};
+
+<span class="macro">assert_eq!</span>(bytes, [<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_from" class="method"><a class="src rightside" href="../src/zerocopy/lib.rs.html#2417-2422">source</a><h4 class="code-header">fn <a href="#method.read_from" class="fn">read_from</a>(bytes: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;Self&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Reads a copy of <code>Self</code> from <code>bytes</code>.</p>
+<p>If <code>bytes.len() != size_of::&lt;Self&gt;()</code>, <code>read_from</code> returns <code>None</code>.</p>
+<h5 id="examples-12"><a class="doc-anchor" href="#examples-12">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>zerocopy::FromBytes;
+
+<span class="attr">#[derive(FromZeroes, FromBytes)]
+#[repr(C)]
+</span><span class="kw">struct </span>PacketHeader {
+    src_port: [u8; <span class="number">2</span>],
+    dst_port: [u8; <span class="number">2</span>],
+    length: [u8; <span class="number">2</span>],
+    checksum: [u8; <span class="number">2</span>],
+}
+
+<span class="comment">// These bytes encode a `PacketHeader`.
+</span><span class="kw">let </span>bytes = [<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>, <span class="number">7</span>].as_slice();
+
+<span class="kw">let </span>header = PacketHeader::read_from(bytes).unwrap();
+
+<span class="macro">assert_eq!</span>(header.src_port, [<span class="number">0</span>, <span class="number">1</span>]);
+<span class="macro">assert_eq!</span>(header.dst_port, [<span class="number">2</span>, <span class="number">3</span>]);
+<span class="macro">assert_eq!</span>(header.length, [<span class="number">4</span>, <span class="number">5</span>]);
+<span class="macro">assert_eq!</span>(header.checksum, [<span class="number">6</span>, <span class="number">7</span>]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_from_prefix" class="method"><a class="src rightside" href="../src/zerocopy/lib.rs.html#2456-2462">source</a><h4 class="code-header">fn <a href="#method.read_from_prefix" class="fn">read_from_prefix</a>(bytes: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;Self&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Reads a copy of <code>Self</code> from the prefix of <code>bytes</code>.</p>
+<p><code>read_from_prefix</code> reads a <code>Self</code> from the first <code>size_of::&lt;Self&gt;()</code>
+bytes of <code>bytes</code>. If <code>bytes.len() &lt; size_of::&lt;Self&gt;()</code>, it returns
+<code>None</code>.</p>
+<h5 id="examples-13"><a class="doc-anchor" href="#examples-13">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>zerocopy::FromBytes;
+
+<span class="attr">#[derive(FromZeroes, FromBytes)]
+#[repr(C)]
+</span><span class="kw">struct </span>PacketHeader {
+    src_port: [u8; <span class="number">2</span>],
+    dst_port: [u8; <span class="number">2</span>],
+    length: [u8; <span class="number">2</span>],
+    checksum: [u8; <span class="number">2</span>],
+}
+
+<span class="comment">// These are more bytes than are needed to encode a `PacketHeader`.
+</span><span class="kw">let </span>bytes = [<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>, <span class="number">7</span>, <span class="number">8</span>, <span class="number">9</span>].as_slice();
+
+<span class="kw">let </span>header = PacketHeader::read_from_prefix(bytes).unwrap();
+
+<span class="macro">assert_eq!</span>(header.src_port, [<span class="number">0</span>, <span class="number">1</span>]);
+<span class="macro">assert_eq!</span>(header.dst_port, [<span class="number">2</span>, <span class="number">3</span>]);
+<span class="macro">assert_eq!</span>(header.length, [<span class="number">4</span>, <span class="number">5</span>]);
+<span class="macro">assert_eq!</span>(header.checksum, [<span class="number">6</span>, <span class="number">7</span>]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_from_suffix" class="method"><a class="src rightside" href="../src/zerocopy/lib.rs.html#2490-2496">source</a><h4 class="code-header">fn <a href="#method.read_from_suffix" class="fn">read_from_suffix</a>(bytes: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;Self&gt;<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Reads a copy of <code>Self</code> from the suffix of <code>bytes</code>.</p>
+<p><code>read_from_suffix</code> reads a <code>Self</code> from the last <code>size_of::&lt;Self&gt;()</code>
+bytes of <code>bytes</code>. If <code>bytes.len() &lt; size_of::&lt;Self&gt;()</code>, it returns
+<code>None</code>.</p>
+<h5 id="examples-14"><a class="doc-anchor" href="#examples-14">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>zerocopy::FromBytes;
+
+<span class="attr">#[derive(FromZeroes, FromBytes)]
+#[repr(C)]
+</span><span class="kw">struct </span>PacketTrailer {
+    frame_check_sequence: [u8; <span class="number">4</span>],
+}
+
+<span class="comment">// These are more bytes than are needed to encode a `PacketTrailer`.
+</span><span class="kw">let </span>bytes = [<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>, <span class="number">7</span>, <span class="number">8</span>, <span class="number">9</span>].as_slice();
+
+<span class="kw">let </span>trailer = PacketTrailer::read_from_suffix(bytes).unwrap();
+
+<span class="macro">assert_eq!</span>(trailer.frame_check_sequence, [<span class="number">6</span>, <span class="number">7</span>, <span class="number">8</span>, <span class="number">9</span>]);</code></pre></div>
+</div></details></div><h2 id="foreign-impls" class="section-header">Implementations on Foreign Types<a href="#foreign-impls" class="anchor">§</a></h2><section id="impl-FromBytes-for-Option%3CNonZero%3Ci8%3E%3E" class="impl"><a class="src rightside" href="../src/zerocopy/lib.rs.html#3309-3342">source</a><a href="#impl-FromBytes-for-Option%3CNonZero%3Ci8%3E%3E" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a> for <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="type" href="https://doc.rust-lang.org/1.81.0/core/num/nonzero/type.NonZeroI8.html" title="type core::num::nonzero::NonZeroI8">NonZeroI8</a>&gt;</h3></section><section id="impl-FromBytes-for-Option%3CNonZero%3Ci16%3E%3E" class="impl"><a class="src rightside" href="../src/zerocopy/lib.rs.html#3309-3342">source</a><a href="#impl-FromBytes-for-Option%3CNonZero%3Ci16%3E%3E" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a> for <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="type" href="https://doc.rust-lang.org/1.81.0/core/num/nonzero/type.NonZeroI16.html" title="type core::num::nonzero::NonZeroI16">NonZeroI16</a>&gt;</h3></section><section id="impl-FromBytes-for-Option%3CNonZero%3Ci32%3E%3E" class="impl"><a class="src rightside" href="../src/zerocopy/lib.rs.html#3309-3342">source</a><a href="#impl-FromBytes-for-Option%3CNonZero%3Ci32%3E%3E" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a> for <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="type" href="https://doc.rust-lang.org/1.81.0/core/num/nonzero/type.NonZeroI32.html" title="type core::num::nonzero::NonZeroI32">NonZeroI32</a>&gt;</h3></section><section id="impl-FromBytes-for-Option%3CNonZero%3Ci64%3E%3E" class="impl"><a class="src rightside" href="../src/zerocopy/lib.rs.html#3309-3342">source</a><a href="#impl-FromBytes-for-Option%3CNonZero%3Ci64%3E%3E" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a> for <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="type" href="https://doc.rust-lang.org/1.81.0/core/num/nonzero/type.NonZeroI64.html" title="type core::num::nonzero::NonZeroI64">NonZeroI64</a>&gt;</h3></section><section id="impl-FromBytes-for-Option%3CNonZero%3Ci128%3E%3E" class="impl"><a class="src rightside" href="../src/zerocopy/lib.rs.html#3309-3342">source</a><a href="#impl-FromBytes-for-Option%3CNonZero%3Ci128%3E%3E" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a> for <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="type" href="https://doc.rust-lang.org/1.81.0/core/num/nonzero/type.NonZeroI128.html" title="type core::num::nonzero::NonZeroI128">NonZeroI128</a>&gt;</h3></section><section id="impl-FromBytes-for-Option%3CNonZero%3Cisize%3E%3E" class="impl"><a class="src rightside" href="../src/zerocopy/lib.rs.html#3309-3342">source</a><a href="#impl-FromBytes-for-Option%3CNonZero%3Cisize%3E%3E" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a> for <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="type" href="https://doc.rust-lang.org/1.81.0/core/num/nonzero/type.NonZeroIsize.html" title="type core::num::nonzero::NonZeroIsize">NonZeroIsize</a>&gt;</h3></section><section id="impl-FromBytes-for-Option%3CNonZero%3Cu8%3E%3E" class="impl"><a class="src rightside" href="../src/zerocopy/lib.rs.html#3309-3342">source</a><a href="#impl-FromBytes-for-Option%3CNonZero%3Cu8%3E%3E" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a> for <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="type" href="https://doc.rust-lang.org/1.81.0/core/num/nonzero/type.NonZeroU8.html" title="type core::num::nonzero::NonZeroU8">NonZeroU8</a>&gt;</h3></section><section id="impl-FromBytes-for-Option%3CNonZero%3Cu16%3E%3E" class="impl"><a class="src rightside" href="../src/zerocopy/lib.rs.html#3309-3342">source</a><a href="#impl-FromBytes-for-Option%3CNonZero%3Cu16%3E%3E" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a> for <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="type" href="https://doc.rust-lang.org/1.81.0/core/num/nonzero/type.NonZeroU16.html" title="type core::num::nonzero::NonZeroU16">NonZeroU16</a>&gt;</h3></section><section id="impl-FromBytes-for-Option%3CNonZero%3Cu32%3E%3E" class="impl"><a class="src rightside" href="../src/zerocopy/lib.rs.html#3309-3342">source</a><a href="#impl-FromBytes-for-Option%3CNonZero%3Cu32%3E%3E" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a> for <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="type" href="https://doc.rust-lang.org/1.81.0/core/num/nonzero/type.NonZeroU32.html" title="type core::num::nonzero::NonZeroU32">NonZeroU32</a>&gt;</h3></section><section id="impl-FromBytes-for-Option%3CNonZero%3Cu64%3E%3E" class="impl"><a class="src rightside" href="../src/zerocopy/lib.rs.html#3309-3342">source</a><a href="#impl-FromBytes-for-Option%3CNonZero%3Cu64%3E%3E" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a> for <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="type" href="https://doc.rust-lang.org/1.81.0/core/num/nonzero/type.NonZeroU64.html" title="type core::num::nonzero::NonZeroU64">NonZeroU64</a>&gt;</h3></section><section id="impl-FromBytes-for-Option%3CNonZero%3Cu128%3E%3E" class="impl"><a class="src rightside" href="../src/zerocopy/lib.rs.html#3309-3342">source</a><a href="#impl-FromBytes-for-Option%3CNonZero%3Cu128%3E%3E" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a> for <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="type" href="https://doc.rust-lang.org/1.81.0/core/num/nonzero/type.NonZeroU128.html" title="type core::num::nonzero::NonZeroU128">NonZeroU128</a>&gt;</h3></section><section id="impl-FromBytes-for-Option%3CNonZero%3Cusize%3E%3E" class="impl"><a class="src rightside" href="../src/zerocopy/lib.rs.html#3309-3342">source</a><a href="#impl-FromBytes-for-Option%3CNonZero%3Cusize%3E%3E" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a> for <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="type" href="https://doc.rust-lang.org/1.81.0/core/num/nonzero/type.NonZeroUsize.html" title="type core::num::nonzero::NonZeroUsize">NonZeroUsize</a>&gt;</h3></section><section id="impl-FromBytes-for-f32" class="impl"><a class="src rightside" href="../src/zerocopy/lib.rs.html#3042-3091">source</a><a href="#impl-FromBytes-for-f32" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a> for <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.f32.html">f32</a></h3></section><section id="impl-FromBytes-for-f64" class="impl"><a class="src rightside" href="../src/zerocopy/lib.rs.html#3042-3091">source</a><a href="#impl-FromBytes-for-f64" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a> for <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.f64.html">f64</a></h3></section><section id="impl-FromBytes-for-i8" class="impl"><a class="src rightside" href="../src/zerocopy/lib.rs.html#3042-3091">source</a><a href="#impl-FromBytes-for-i8" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a> for <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i8.html">i8</a></h3></section><section id="impl-FromBytes-for-i16" class="impl"><a class="src rightside" href="../src/zerocopy/lib.rs.html#3042-3091">source</a><a href="#impl-FromBytes-for-i16" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a> for <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i16.html">i16</a></h3></section><section id="impl-FromBytes-for-i32" class="impl"><a class="src rightside" href="../src/zerocopy/lib.rs.html#3042-3091">source</a><a href="#impl-FromBytes-for-i32" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a> for <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i32.html">i32</a></h3></section><section id="impl-FromBytes-for-i64" class="impl"><a class="src rightside" href="../src/zerocopy/lib.rs.html#3042-3091">source</a><a href="#impl-FromBytes-for-i64" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a> for <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i64.html">i64</a></h3></section><section id="impl-FromBytes-for-i128" class="impl"><a class="src rightside" href="../src/zerocopy/lib.rs.html#3042-3091">source</a><a href="#impl-FromBytes-for-i128" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a> for <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i128.html">i128</a></h3></section><section id="impl-FromBytes-for-isize" class="impl"><a class="src rightside" href="../src/zerocopy/lib.rs.html#3042-3091">source</a><a href="#impl-FromBytes-for-isize" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a> for <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.isize.html">isize</a></h3></section><section id="impl-FromBytes-for-u8" class="impl"><a class="src rightside" href="../src/zerocopy/lib.rs.html#3042-3091">source</a><a href="#impl-FromBytes-for-u8" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a> for <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a></h3></section><section id="impl-FromBytes-for-u16" class="impl"><a class="src rightside" href="../src/zerocopy/lib.rs.html#3042-3091">source</a><a href="#impl-FromBytes-for-u16" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a> for <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u16.html">u16</a></h3></section><section id="impl-FromBytes-for-u32" class="impl"><a class="src rightside" href="../src/zerocopy/lib.rs.html#3042-3091">source</a><a href="#impl-FromBytes-for-u32" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a> for <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a></h3></section><section id="impl-FromBytes-for-u64" class="impl"><a class="src rightside" href="../src/zerocopy/lib.rs.html#3042-3091">source</a><a href="#impl-FromBytes-for-u64" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a> for <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a></h3></section><section id="impl-FromBytes-for-u128" class="impl"><a class="src rightside" href="../src/zerocopy/lib.rs.html#3042-3091">source</a><a href="#impl-FromBytes-for-u128" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a> for <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u128.html">u128</a></h3></section><section id="impl-FromBytes-for-()" class="impl"><a class="src rightside" href="../src/zerocopy/lib.rs.html#3028-3040">source</a><a href="#impl-FromBytes-for-()" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a> for <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a></h3></section><section id="impl-FromBytes-for-usize" class="impl"><a class="src rightside" href="../src/zerocopy/lib.rs.html#3042-3091">source</a><a href="#impl-FromBytes-for-usize" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a> for <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a></h3></section><section id="impl-FromBytes-for-__m128" class="impl"><a class="src rightside" href="../src/zerocopy/lib.rs.html#3718-3721">source</a><a href="#impl-FromBytes-for-__m128" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a> for <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/core_arch/x86/struct.__m128.html" title="struct core::core_arch::x86::__m128">__m128</a></h3></section><section id="impl-FromBytes-for-__m128d" class="impl"><a class="src rightside" href="../src/zerocopy/lib.rs.html#3718-3721">source</a><a href="#impl-FromBytes-for-__m128d" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a> for <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/core_arch/x86/struct.__m128d.html" title="struct core::core_arch::x86::__m128d">__m128d</a></h3></section><section id="impl-FromBytes-for-__m128i" class="impl"><a class="src rightside" href="../src/zerocopy/lib.rs.html#3718-3721">source</a><a href="#impl-FromBytes-for-__m128i" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a> for <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/core_arch/x86/struct.__m128i.html" title="struct core::core_arch::x86::__m128i">__m128i</a></h3></section><section id="impl-FromBytes-for-__m256" class="impl"><a class="src rightside" href="../src/zerocopy/lib.rs.html#3718-3721">source</a><a href="#impl-FromBytes-for-__m256" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a> for <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/core_arch/x86/struct.__m256.html" title="struct core::core_arch::x86::__m256">__m256</a></h3></section><section id="impl-FromBytes-for-__m256d" class="impl"><a class="src rightside" href="../src/zerocopy/lib.rs.html#3718-3721">source</a><a href="#impl-FromBytes-for-__m256d" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a> for <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/core_arch/x86/struct.__m256d.html" title="struct core::core_arch::x86::__m256d">__m256d</a></h3></section><section id="impl-FromBytes-for-__m256i" class="impl"><a class="src rightside" href="../src/zerocopy/lib.rs.html#3718-3721">source</a><a href="#impl-FromBytes-for-__m256i" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a> for <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/core_arch/x86/struct.__m256i.html" title="struct core::core_arch::x86::__m256i">__m256i</a></h3></section><section id="impl-FromBytes-for-%5BT%5D" class="impl"><a class="src rightside" href="../src/zerocopy/lib.rs.html#3527-3595">source</a><a href="#impl-FromBytes-for-%5BT%5D" class="anchor">§</a><h3 class="code-header">impl&lt;T: <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a>&gt; <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a> for <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.slice.html">[T]</a></h3></section><section id="impl-FromBytes-for-Wrapping%3CT%3E" class="impl"><a class="src rightside" href="../src/zerocopy/lib.rs.html#3404-3464">source</a><a href="#impl-FromBytes-for-Wrapping%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T: <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a>&gt; <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a> for <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/num/wrapping/struct.Wrapping.html" title="struct core::num::wrapping::Wrapping">Wrapping</a>&lt;T&gt;</h3></section><section id="impl-FromBytes-for-MaybeUninit%3CT%3E" class="impl"><a class="src rightside" href="../src/zerocopy/lib.rs.html#3465-3491">source</a><a href="#impl-FromBytes-for-MaybeUninit%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T: <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a>&gt; <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a> for <a class="union" href="https://doc.rust-lang.org/1.81.0/core/mem/maybe_uninit/union.MaybeUninit.html" title="union core::mem::maybe_uninit::MaybeUninit">MaybeUninit</a>&lt;T&gt;</h3></section><section id="impl-FromBytes-for-ManuallyDrop%3CT%3E" class="impl"><a class="src rightside" href="../src/zerocopy/lib.rs.html#3492-3526">source</a><a href="#impl-FromBytes-for-ManuallyDrop%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a> + <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a>&gt; <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a> for <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/mem/manually_drop/struct.ManuallyDrop.html" title="struct core::mem::manually_drop::ManuallyDrop">ManuallyDrop</a>&lt;T&gt;</h3></section><section id="impl-FromBytes-for-PhantomData%3CT%3E" class="impl"><a class="src rightside" href="../src/zerocopy/lib.rs.html#3381-3403">source</a><a href="#impl-FromBytes-for-PhantomData%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>&gt; <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a> for <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/marker/struct.PhantomData.html" title="struct core::marker::PhantomData">PhantomData</a>&lt;T&gt;</h3></section><section id="impl-FromBytes-for-%5BT;+N%5D" class="impl"><a class="src rightside" href="../src/zerocopy/lib.rs.html#3527-3595">source</a><a href="#impl-FromBytes-for-%5BT;+N%5D" class="anchor">§</a><h3 class="code-header">impl&lt;const N: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>, T: <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a>&gt; <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a> for <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.array.html">[T; N]</a></h3></section><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><section id="impl-FromBytes-for-F32%3CO%3E" class="impl"><a class="src rightside" href="../src/zerocopy/byteorder.rs.html#551-564">source</a><a href="#impl-FromBytes-for-F32%3CO%3E" class="anchor">§</a><h3 class="code-header">impl&lt;O&gt; <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a> for <a class="struct" href="byteorder/struct.F32.html" title="struct zerocopy::byteorder::F32">F32</a>&lt;O&gt;<div class="where">where
+    [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.array.html">4</a>]: <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a>,
+    <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/marker/struct.PhantomData.html" title="struct core::marker::PhantomData">PhantomData</a>&lt;O&gt;: <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a>,</div></h3></section><section id="impl-FromBytes-for-F64%3CO%3E" class="impl"><a class="src rightside" href="../src/zerocopy/byteorder.rs.html#565">source</a><a href="#impl-FromBytes-for-F64%3CO%3E" class="anchor">§</a><h3 class="code-header">impl&lt;O&gt; <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a> for <a class="struct" href="byteorder/struct.F64.html" title="struct zerocopy::byteorder::F64">F64</a>&lt;O&gt;<div class="where">where
+    [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.array.html">8</a>]: <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a>,
+    <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/marker/struct.PhantomData.html" title="struct core::marker::PhantomData">PhantomData</a>&lt;O&gt;: <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a>,</div></h3></section><section id="impl-FromBytes-for-I16%3CO%3E" class="impl"><a class="src rightside" href="../src/zerocopy/byteorder.rs.html#508-521">source</a><a href="#impl-FromBytes-for-I16%3CO%3E" class="anchor">§</a><h3 class="code-header">impl&lt;O&gt; <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a> for <a class="struct" href="byteorder/struct.I16.html" title="struct zerocopy::byteorder::I16">I16</a>&lt;O&gt;<div class="where">where
+    [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.array.html">2</a>]: <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a>,
+    <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/marker/struct.PhantomData.html" title="struct core::marker::PhantomData">PhantomData</a>&lt;O&gt;: <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a>,</div></h3></section><section id="impl-FromBytes-for-I32%3CO%3E" class="impl"><a class="src rightside" href="../src/zerocopy/byteorder.rs.html#522-535">source</a><a href="#impl-FromBytes-for-I32%3CO%3E" class="anchor">§</a><h3 class="code-header">impl&lt;O&gt; <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a> for <a class="struct" href="byteorder/struct.I32.html" title="struct zerocopy::byteorder::I32">I32</a>&lt;O&gt;<div class="where">where
+    [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.array.html">4</a>]: <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a>,
+    <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/marker/struct.PhantomData.html" title="struct core::marker::PhantomData">PhantomData</a>&lt;O&gt;: <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a>,</div></h3></section><section id="impl-FromBytes-for-I64%3CO%3E" class="impl"><a class="src rightside" href="../src/zerocopy/byteorder.rs.html#536-549">source</a><a href="#impl-FromBytes-for-I64%3CO%3E" class="anchor">§</a><h3 class="code-header">impl&lt;O&gt; <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a> for <a class="struct" href="byteorder/struct.I64.html" title="struct zerocopy::byteorder::I64">I64</a>&lt;O&gt;<div class="where">where
+    [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.array.html">8</a>]: <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a>,
+    <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/marker/struct.PhantomData.html" title="struct core::marker::PhantomData">PhantomData</a>&lt;O&gt;: <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a>,</div></h3></section><section id="impl-FromBytes-for-I128%3CO%3E" class="impl"><a class="src rightside" href="../src/zerocopy/byteorder.rs.html#550">source</a><a href="#impl-FromBytes-for-I128%3CO%3E" class="anchor">§</a><h3 class="code-header">impl&lt;O&gt; <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a> for <a class="struct" href="byteorder/struct.I128.html" title="struct zerocopy::byteorder::I128">I128</a>&lt;O&gt;<div class="where">where
+    [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.array.html">16</a>]: <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a>,
+    <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/marker/struct.PhantomData.html" title="struct core::marker::PhantomData">PhantomData</a>&lt;O&gt;: <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a>,</div></h3></section><section id="impl-FromBytes-for-U16%3CO%3E" class="impl"><a class="src rightside" href="../src/zerocopy/byteorder.rs.html#465-478">source</a><a href="#impl-FromBytes-for-U16%3CO%3E" class="anchor">§</a><h3 class="code-header">impl&lt;O&gt; <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a> for <a class="struct" href="byteorder/struct.U16.html" title="struct zerocopy::byteorder::U16">U16</a>&lt;O&gt;<div class="where">where
+    [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.array.html">2</a>]: <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a>,
+    <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/marker/struct.PhantomData.html" title="struct core::marker::PhantomData">PhantomData</a>&lt;O&gt;: <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a>,</div></h3></section><section id="impl-FromBytes-for-U32%3CO%3E" class="impl"><a class="src rightside" href="../src/zerocopy/byteorder.rs.html#479-492">source</a><a href="#impl-FromBytes-for-U32%3CO%3E" class="anchor">§</a><h3 class="code-header">impl&lt;O&gt; <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a> for <a class="struct" href="byteorder/struct.U32.html" title="struct zerocopy::byteorder::U32">U32</a>&lt;O&gt;<div class="where">where
+    [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.array.html">4</a>]: <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a>,
+    <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/marker/struct.PhantomData.html" title="struct core::marker::PhantomData">PhantomData</a>&lt;O&gt;: <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a>,</div></h3></section><section id="impl-FromBytes-for-U64%3CO%3E" class="impl"><a class="src rightside" href="../src/zerocopy/byteorder.rs.html#493-506">source</a><a href="#impl-FromBytes-for-U64%3CO%3E" class="anchor">§</a><h3 class="code-header">impl&lt;O&gt; <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a> for <a class="struct" href="byteorder/struct.U64.html" title="struct zerocopy::byteorder::U64">U64</a>&lt;O&gt;<div class="where">where
+    [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.array.html">8</a>]: <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a>,
+    <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/marker/struct.PhantomData.html" title="struct core::marker::PhantomData">PhantomData</a>&lt;O&gt;: <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a>,</div></h3></section><section id="impl-FromBytes-for-U128%3CO%3E" class="impl"><a class="src rightside" href="../src/zerocopy/byteorder.rs.html#507">source</a><a href="#impl-FromBytes-for-U128%3CO%3E" class="anchor">§</a><h3 class="code-header">impl&lt;O&gt; <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a> for <a class="struct" href="byteorder/struct.U128.html" title="struct zerocopy::byteorder::U128">U128</a>&lt;O&gt;<div class="where">where
+    [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.array.html">16</a>]: <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a>,
+    <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/marker/struct.PhantomData.html" title="struct core::marker::PhantomData">PhantomData</a>&lt;O&gt;: <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a>,</div></h3></section><section id="impl-FromBytes-for-Unalign%3CT%3E" class="impl"><a class="src rightside" href="../src/zerocopy/wrappers.rs.html#63">source</a><a href="#impl-FromBytes-for-Unalign%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a> for <a class="struct" href="struct.Unalign.html" title="struct zerocopy::Unalign">Unalign</a>&lt;T&gt;<div class="where">where
+    T: <a class="trait" href="trait.FromBytes.html" title="trait zerocopy::FromBytes">FromBytes</a>,</div></h3></section></div><script src="../trait.impl/zerocopy/trait.FromBytes.js" data-ignore-extern-crates="core,std" async></script></section></div></main></body></html>

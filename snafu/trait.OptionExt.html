@@ -1,0 +1,137 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Additions to `Option`."><title>OptionExt in snafu - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="snafu" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../snafu/index.html">snafu</a><span class="version">0.8.5</span></h2></div><h2 class="location"><a href="#">OptionExt</a></h2><div class="sidebar-elems"><section><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.context">context</a></li><li><a href="#tymethod.whatever_context">whatever_context</a></li><li><a href="#tymethod.with_context">with_context</a></li><li><a href="#tymethod.with_whatever_context">with_whatever_context</a></li></ul><h3><a href="#foreign-impls">Implementations on Foreign Types</a></h3><ul class="block"><li><a href="#impl-OptionExt%3CT%3E-for-Option%3CT%3E">Option&lt;T&gt;</a></li></ul><h3><a href="#object-safety">Object Safety</a></h3><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In crate snafu</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="index.html">snafu</a>::<wbr><a class="trait" href="#">OptionExt</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/snafu/lib.rs.html#908-1055">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub trait OptionExt&lt;T&gt;: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a> {
+    // Required methods
+    fn <a href="#tymethod.context" class="fn">context</a>&lt;C, E&gt;(self, context: C) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, E&gt;
+       <span class="where">where C: <a class="trait" href="trait.IntoError.html" title="trait snafu::IntoError">IntoError</a>&lt;E, Source = <a class="struct" href="struct.NoneError.html" title="struct snafu::NoneError">NoneError</a>&gt;,
+             E: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/error/trait.Error.html" title="trait core::error::Error">Error</a> + <a class="trait" href="trait.ErrorCompat.html" title="trait snafu::ErrorCompat">ErrorCompat</a></span>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.with_context" class="fn">with_context</a>&lt;F, C, E&gt;(self, context: F) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, E&gt;
+       <span class="where">where F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnOnce.html" title="trait core::ops::function::FnOnce">FnOnce</a>() -&gt; C,
+             C: <a class="trait" href="trait.IntoError.html" title="trait snafu::IntoError">IntoError</a>&lt;E, Source = <a class="struct" href="struct.NoneError.html" title="struct snafu::NoneError">NoneError</a>&gt;,
+             E: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/error/trait.Error.html" title="trait core::error::Error">Error</a> + <a class="trait" href="trait.ErrorCompat.html" title="trait snafu::ErrorCompat">ErrorCompat</a></span>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.whatever_context" class="fn">whatever_context</a>&lt;S, E&gt;(self, context: S) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, E&gt;
+       <span class="where">where S: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>&gt;,
+             E: <a class="trait" href="trait.FromString.html" title="trait snafu::FromString">FromString</a></span>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.with_whatever_context" class="fn">with_whatever_context</a>&lt;F, S, E&gt;(self, context: F) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, E&gt;
+       <span class="where">where F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnOnce.html" title="trait core::ops::function::FnOnce">FnOnce</a>() -&gt; S,
+             S: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>&gt;,
+             E: <a class="trait" href="trait.FromString.html" title="trait snafu::FromString">FromString</a></span>;
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Additions to <a href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option"><code>Option</code></a>.</p>
+</div></details><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.context" class="method"><a class="src rightside" href="../src/snafu/lib.rs.html#937-940">source</a><h4 class="code-header">fn <a href="#tymethod.context" class="fn">context</a>&lt;C, E&gt;(self, context: C) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, E&gt;<div class="where">where
+    C: <a class="trait" href="trait.IntoError.html" title="trait snafu::IntoError">IntoError</a>&lt;E, Source = <a class="struct" href="struct.NoneError.html" title="struct snafu::NoneError">NoneError</a>&gt;,
+    E: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/error/trait.Error.html" title="trait core::error::Error">Error</a> + <a class="trait" href="trait.ErrorCompat.html" title="trait snafu::ErrorCompat">ErrorCompat</a>,</div></h4></section></summary><div class="docblock"><p>Convert an <a href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option"><code>Option</code></a> into a <a href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result"><code>Result</code></a> with additional
+context-sensitive information.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>snafu::prelude::<span class="kw-2">*</span>;
+
+<span class="attr">#[derive(Debug, Snafu)]
+</span><span class="kw">enum </span>Error {
+    UserLookup { user_id: i32 },
+}
+
+<span class="kw">fn </span>example(user_id: i32) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
+    <span class="kw">let </span>name = username(user_id).context(UserLookupSnafu { user_id })<span class="question-mark">?</span>;
+    <span class="macro">println!</span>(<span class="string">"Username was {name}"</span>);
+    <span class="prelude-val">Ok</span>(())
+}
+
+<span class="kw">fn </span>username(user_id: i32) -&gt; <span class="prelude-ty">Option</span>&lt;String&gt; {
+    <span class="comment">/* ... */
+</span>}</code></pre></div>
+<p>Note that the context selector will call <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html#tymethod.into" title="method core::convert::Into::into"><code>Into::into</code></a> on each field,
+so the types are not required to exactly match.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.with_context" class="method"><a class="src rightside" href="../src/snafu/lib.rs.html#976-980">source</a><h4 class="code-header">fn <a href="#tymethod.with_context" class="fn">with_context</a>&lt;F, C, E&gt;(self, context: F) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, E&gt;<div class="where">where
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnOnce.html" title="trait core::ops::function::FnOnce">FnOnce</a>() -&gt; C,
+    C: <a class="trait" href="trait.IntoError.html" title="trait snafu::IntoError">IntoError</a>&lt;E, Source = <a class="struct" href="struct.NoneError.html" title="struct snafu::NoneError">NoneError</a>&gt;,
+    E: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/error/trait.Error.html" title="trait core::error::Error">Error</a> + <a class="trait" href="trait.ErrorCompat.html" title="trait snafu::ErrorCompat">ErrorCompat</a>,</div></h4></section></summary><div class="docblock"><p>Convert an <a href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option"><code>Option</code></a> into a <a href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result"><code>Result</code></a> with
+lazily-generated context-sensitive information.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>snafu::prelude::<span class="kw-2">*</span>;
+
+<span class="attr">#[derive(Debug, Snafu)]
+</span><span class="kw">enum </span>Error {
+    UserLookup {
+        user_id: i32,
+        previous_ids: Vec&lt;i32&gt;,
+    },
+}
+
+<span class="kw">fn </span>example(user_id: i32) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
+    <span class="kw">let </span>name = username(user_id).with_context(|| UserLookupSnafu {
+        user_id,
+        previous_ids: Vec::new(),
+    })<span class="question-mark">?</span>;
+    <span class="macro">println!</span>(<span class="string">"Username was {name}"</span>);
+    <span class="prelude-val">Ok</span>(())
+}
+
+<span class="kw">fn </span>username(user_id: i32) -&gt; <span class="prelude-ty">Option</span>&lt;String&gt; {
+    <span class="comment">/* ... */
+</span>}</code></pre></div>
+<p>Note that this <em>may not</em> be needed in many cases because the context
+selector will call <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html#tymethod.into" title="method core::convert::Into::into"><code>Into::into</code></a> on each field.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.whatever_context" class="method"><a class="src rightside" href="../src/snafu/lib.rs.html#1007-1010">source</a><h4 class="code-header">fn <a href="#tymethod.whatever_context" class="fn">whatever_context</a>&lt;S, E&gt;(self, context: S) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, E&gt;<div class="where">where
+    S: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>&gt;,
+    E: <a class="trait" href="trait.FromString.html" title="trait snafu::FromString">FromString</a>,</div></h4></section></summary><div class="docblock"><p>Convert an <a href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option"><code>Option</code></a> into a <a href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result"><code>Result</code></a> with information
+from a string.</p>
+<p>The target error type must implement <a href="trait.FromString.html" title="trait snafu::FromString"><code>FromString</code></a> by using
+the
+<a href="derive.Snafu.html#controlling-stringly-typed-errors" title="derive snafu::Snafu"><code>#[snafu(whatever)]</code></a>
+attribute. The premade <a href="struct.Whatever.html" title="struct snafu::Whatever"><code>Whatever</code></a> type is also available.</p>
+<p>In many cases, you will want to use
+<a href="trait.OptionExt.html#tymethod.with_whatever_context"><code>with_whatever_context</code></a> instead
+as it is only called in case of error. This method is best
+suited for when you have a string literal.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>snafu::{prelude::<span class="kw-2">*</span>, Whatever};
+
+<span class="kw">fn </span>example(env_var_name: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;(), Whatever&gt; {
+    std::env::var_os(env_var_name).whatever_context(<span class="string">"couldn't get the environment variable"</span>)<span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(())
+}
+
+<span class="kw">let </span>err = example(<span class="string">"UNDEFINED_ENVIRONMENT_VARIABLE"</span>).unwrap_err();
+<span class="macro">assert_eq!</span>(<span class="string">"couldn't get the environment variable"</span>, err.to_string());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.with_whatever_context" class="method"><a class="src rightside" href="../src/snafu/lib.rs.html#1050-1054">source</a><h4 class="code-header">fn <a href="#tymethod.with_whatever_context" class="fn">with_whatever_context</a>&lt;F, S, E&gt;(self, context: F) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, E&gt;<div class="where">where
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnOnce.html" title="trait core::ops::function::FnOnce">FnOnce</a>() -&gt; S,
+    S: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>&gt;,
+    E: <a class="trait" href="trait.FromString.html" title="trait snafu::FromString">FromString</a>,</div></h4></section></summary><div class="docblock"><p>Convert an <a href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option"><code>Option</code></a> into a <a href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result"><code>Result</code></a> with information from a
+lazily-generated string.</p>
+<p>The target error type must implement <a href="trait.FromString.html" title="trait snafu::FromString"><code>FromString</code></a> by using
+the
+<a href="derive.Snafu.html#controlling-stringly-typed-errors" title="derive snafu::Snafu"><code>#[snafu(whatever)]</code></a>
+attribute. The premade <a href="struct.Whatever.html" title="struct snafu::Whatever"><code>Whatever</code></a> type is also available.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>snafu::{prelude::<span class="kw-2">*</span>, Whatever};
+
+<span class="kw">fn </span>example(env_var_name: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;(), Whatever&gt; {
+    std::env::var_os(env_var_name).with_whatever_context(|| {
+        <span class="macro">format!</span>(<span class="string">"couldn't get the environment variable {env_var_name}"</span>)
+    })<span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(())
+}
+
+<span class="kw">let </span>err = example(<span class="string">"UNDEFINED_ENVIRONMENT_VARIABLE"</span>).unwrap_err();
+<span class="macro">assert_eq!</span>(
+    <span class="string">"couldn't get the environment variable UNDEFINED_ENVIRONMENT_VARIABLE"</span>,
+    err.to_string()
+);</code></pre></div>
+<p>The closure is not called when the <code>Option</code> is <code>Some</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>snafu::{prelude::<span class="kw-2">*</span>, Whatever};
+
+<span class="kw">let </span>value = <span class="prelude-val">Some</span>(<span class="number">42</span>);
+<span class="kw">let </span>result = value.with_whatever_context::&lt;<span class="kw">_</span>, String, Whatever&gt;(|| {
+    <span class="macro">panic!</span>(<span class="string">"This block will not be evaluated"</span>);
+});
+
+<span class="macro">assert!</span>(result.is_ok());</code></pre></div>
+</div></details></div><h2 id="object-safety" class="section-header">Object Safety<a href="#object-safety" class="anchor">§</a></h2><div class="object-safety-info">This trait is <b>not</b> <a href="https://doc.rust-lang.org/1.81.0/reference/items/traits.html#object-safety">object safe</a>.</div><h2 id="foreign-impls" class="section-header">Implementations on Foreign Types<a href="#foreign-impls" class="anchor">§</a></h2><details class="toggle implementors-toggle"><summary><section id="impl-OptionExt%3CT%3E-for-Option%3CT%3E" class="impl"><a class="src rightside" href="../src/snafu/lib.rs.html#1057-1114">source</a><a href="#impl-OptionExt%3CT%3E-for-Option%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="trait.OptionExt.html" title="trait snafu::OptionExt">OptionExt</a>&lt;T&gt; for <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;T&gt;</h3></section></summary><div class="impl-items"><section id="method.context" class="method trait-impl"><a class="src rightside" href="../src/snafu/lib.rs.html#1059-1069">source</a><a href="#method.context" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.context" class="fn">context</a>&lt;C, E&gt;(self, context: C) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, E&gt;<div class="where">where
+    C: <a class="trait" href="trait.IntoError.html" title="trait snafu::IntoError">IntoError</a>&lt;E, Source = <a class="struct" href="struct.NoneError.html" title="struct snafu::NoneError">NoneError</a>&gt;,
+    E: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/error/trait.Error.html" title="trait core::error::Error">Error</a> + <a class="trait" href="trait.ErrorCompat.html" title="trait snafu::ErrorCompat">ErrorCompat</a>,</div></h4></section><section id="method.with_context" class="method trait-impl"><a class="src rightside" href="../src/snafu/lib.rs.html#1072-1083">source</a><a href="#method.with_context" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.with_context" class="fn">with_context</a>&lt;F, C, E&gt;(self, context: F) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, E&gt;<div class="where">where
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnOnce.html" title="trait core::ops::function::FnOnce">FnOnce</a>() -&gt; C,
+    C: <a class="trait" href="trait.IntoError.html" title="trait snafu::IntoError">IntoError</a>&lt;E, Source = <a class="struct" href="struct.NoneError.html" title="struct snafu::NoneError">NoneError</a>&gt;,
+    E: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/error/trait.Error.html" title="trait core::error::Error">Error</a> + <a class="trait" href="trait.ErrorCompat.html" title="trait snafu::ErrorCompat">ErrorCompat</a>,</div></h4></section><section id="method.whatever_context" class="method trait-impl"><a class="src rightside" href="../src/snafu/lib.rs.html#1087-1096">source</a><a href="#method.whatever_context" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.whatever_context" class="fn">whatever_context</a>&lt;S, E&gt;(self, context: S) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, E&gt;<div class="where">where
+    S: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>&gt;,
+    E: <a class="trait" href="trait.FromString.html" title="trait snafu::FromString">FromString</a>,</div></h4></section><section id="method.with_whatever_context" class="method trait-impl"><a class="src rightside" href="../src/snafu/lib.rs.html#1100-1113">source</a><a href="#method.with_whatever_context" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.with_whatever_context" class="fn">with_whatever_context</a>&lt;F, S, E&gt;(self, context: F) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, E&gt;<div class="where">where
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnOnce.html" title="trait core::ops::function::FnOnce">FnOnce</a>() -&gt; S,
+    S: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>&gt;,
+    E: <a class="trait" href="trait.FromString.html" title="trait snafu::FromString">FromString</a>,</div></h4></section></div></details><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"></div><script src="../trait.impl/snafu/trait.OptionExt.js" data-ignore-extern-crates="core" async></script></section></div></main></body></html>

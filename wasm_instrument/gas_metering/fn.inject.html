@@ -1,0 +1,38 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Transforms a given module into one that tracks the gas charged during its execution."><title>inject in wasm_instrument::gas_metering - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="wasm_instrument" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../wasm_instrument/index.html">wasm_instrument</a><span class="version">0.4.0</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In wasm_instrument::gas_metering</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../index.html">wasm_instrument</a>::<wbr><a href="index.html">gas_metering</a>::<wbr><a class="fn" href="#">inject</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/wasm_instrument/gas_metering/mod.rs.html#157-337">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn inject&lt;R: <a class="trait" href="trait.Rules.html" title="trait wasm_instrument::gas_metering::Rules">Rules</a>, B: <a class="trait" href="trait.Backend.html" title="trait wasm_instrument::gas_metering::Backend">Backend</a>&gt;(
+    module: <a class="struct" href="../../parity_wasm/elements/module/struct.Module.html" title="struct parity_wasm::elements::module::Module">Module</a>,
+    backend: B,
+    rules: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;R</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="../../parity_wasm/elements/module/struct.Module.html" title="struct parity_wasm::elements::module::Module">Module</a>, <a class="struct" href="../../parity_wasm/elements/module/struct.Module.html" title="struct parity_wasm::elements::module::Module">Module</a>&gt;</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Transforms a given module into one that tracks the gas charged during its execution.</p>
+<p>The output module uses the <code>gas</code> function to track the gas spent. The function could be either
+an imported or a local one modifying a mutable global. The argument is the amount of gas
+required to continue execution. The execution engine is meant to keep track of the total amount
+of gas used and trap or otherwise halt execution of the runtime if the gas usage exceeds some
+allowed limit.</p>
+<p>The body of each function of the original module is divided into metered blocks, and the calls
+to charge gas are inserted at the beginning of every such block of code. A metered block is
+defined so that, unless there is a trap, either all of the instructions are executed or none
+are. These are similar to basic blocks in a control flow graph, except that in some cases
+multiple basic blocks can be merged into a single metered block. This is the case if any path
+through the control flow graph containing one basic block also contains another.</p>
+<p>Charging gas at the beginning of each metered block ensures that 1) all instructions
+executed are already paid for, 2) instructions that will not be executed are not charged for
+unless execution traps, and 3) the number of calls to <code>gas</code> is minimized. The corollary is
+that modules instrumented with this metering code may charge gas for instructions not
+executed in the event of a trap.</p>
+<p>Additionally, each <code>memory.grow</code> instruction found in the module is instrumented to first
+make a call to charge gas for the additional pages requested. This cannot be done as part of
+the block level gas charges as the gas cost is not static and depends on the stack argument
+to <code>memory.grow</code>.</p>
+<p>The above transformations are performed for every function body defined in the module. This
+function also rewrites all function indices references by code, table elements, etc., since
+the addition of an imported functions changes the indices of module-defined functions. If
+the module has a <code>NameSection</code>, added by calling <code>parse_names</code>, the indices will also be
+updated.</p>
+<p>Syncronizing the amount of gas charged with the execution engine can be done in two ways. The
+first way is by calling the imported <code>gas</code> host function, see <a href="host_function/index.html" title="mod wasm_instrument::gas_metering::host_function"><code>host_function</code></a> for details. The
+second way is by using a local <code>gas</code> function together with a mutable global, see
+<a href="mutable_global/index.html" title="mod wasm_instrument::gas_metering::mutable_global"><code>mutable_global</code></a> for details.</p>
+<p>This routine runs in time linear in the size of the input module.</p>
+<p>The function fails if the module contains any operation forbidden by gas rule set, returning
+the original module as an <code>Err</code>.</p>
+</div></details></section></div></main></body></html>

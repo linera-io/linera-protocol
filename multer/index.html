@@ -1,0 +1,89 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="An async parser for `multipart/form-data` content-type in Rust."><title>multer - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="multer" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../multer/index.html">multer</a><span class="version">3.1.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#functions">Functions</a></li><li><a href="#types">Type Aliases</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">multer</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/multer/lib.rs.html#1-204">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>An async parser for <code>multipart/form-data</code> content-type in Rust.</p>
+<p>It accepts a <a href="../futures_core/stream/trait.Stream.html" title="trait futures_core::stream::Stream"><code>Stream</code></a> of
+<a href="../bytes/bytes/struct.Bytes.html" title="struct bytes::bytes::Bytes"><code>Bytes</code></a>, or with the <code>tokio-io</code> feature enabled, an
+<code>AsyncRead</code> reader as a source, so that it can be plugged into any async
+Rust environment e.g. any async server.</p>
+<p>To enable trace logging via the <code>log</code> crate, enable the <code>log</code> feature.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::convert::Infallible;
+
+<span class="kw">use </span>bytes::Bytes;
+<span class="comment">// Import multer types.
+</span><span class="kw">use </span>futures_util::stream::once;
+<span class="kw">use </span>futures_util::stream::Stream;
+<span class="kw">use </span>multer::Multipart;
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() -&gt; <span class="prelude-ty">Result</span>&lt;(), Box&lt;<span class="kw">dyn </span>std::error::Error&gt;&gt; {
+    <span class="comment">// Generate a byte stream and the boundary from somewhere e.g. server request body.
+    </span><span class="kw">let </span>(stream, boundary) = get_byte_stream_from_somewhere().<span class="kw">await</span>;
+
+    <span class="comment">// Create a `Multipart` instance from that byte stream and the boundary.
+    </span><span class="kw">let </span><span class="kw-2">mut </span>multipart = Multipart::new(stream, boundary);
+
+    <span class="comment">// Iterate over the fields, use `next_field()` to get the next field.
+    </span><span class="kw">while let </span><span class="prelude-val">Some</span>(<span class="kw-2">mut </span>field) = multipart.next_field().<span class="kw">await</span><span class="question-mark">? </span>{
+        <span class="comment">// Get field name.
+        </span><span class="kw">let </span>name = field.name();
+        <span class="comment">// Get the field's filename if provided in "Content-Disposition" header.
+        </span><span class="kw">let </span>file_name = field.file_name();
+
+        <span class="macro">println!</span>(<span class="string">"Name: {:?}, File Name: {:?}"</span>, name, file_name);
+
+        <span class="comment">// Process the field data chunks e.g. store them in a file.
+        </span><span class="kw">while let </span><span class="prelude-val">Some</span>(chunk) = field.chunk().<span class="kw">await</span><span class="question-mark">? </span>{
+            <span class="comment">// Do something with field chunk.
+            </span><span class="macro">println!</span>(<span class="string">"Chunk: {:?}"</span>, chunk);
+        }
+    }
+
+    <span class="prelude-val">Ok</span>(())
+}
+
+<span class="comment">// Generate a byte stream and the boundary from somewhere e.g. server request body.
+</span><span class="kw">async fn </span>get_byte_stream_from_somewhere(
+) -&gt; (<span class="kw">impl </span>Stream&lt;Item = <span class="prelude-ty">Result</span>&lt;Bytes, Infallible&gt;&gt;, <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str) {
+    <span class="kw">let </span>data = <span class="string">"--X-BOUNDARY\r\nContent-Disposition: form-data; \
+        name=\"my_text_field\"\r\n\r\nabcd\r\n--X-BOUNDARY--\r\n"</span>;
+
+    <span class="kw">let </span>stream = once(<span class="kw">async move </span>{ <span class="prelude-ty">Result</span>::&lt;Bytes, Infallible&gt;::Ok(Bytes::from(data)) });
+    (stream, <span class="string">"X-BOUNDARY"</span>)
+}</code></pre></div>
+<h3 id="prevent-denial-of-service-dos-attack"><a class="doc-anchor" href="#prevent-denial-of-service-dos-attack">§</a>Prevent Denial of Service (DoS) Attack</h3>
+<p>This crate also provides some APIs to prevent potential DoS attacks with
+fine grained control. It’s recommended to add some constraints
+on field (specially text field) size to avoid potential DoS attacks from
+attackers running the server out of memory.</p>
+<p>An example:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>multer::{Constraints, Multipart, SizeLimit};
+
+<span class="comment">// Create some constraints to be applied to the fields to prevent DoS attack.
+</span><span class="kw">let </span>constraints = Constraints::new()
+    <span class="comment">// We only accept `my_text_field` and `my_file_field` fields,
+    // For any unknown field, we will throw an error.
+    </span>.allowed_fields(<span class="macro">vec!</span>[<span class="string">"my_text_field"</span>, <span class="string">"my_file_field"</span>])
+    .size_limit(
+        SizeLimit::new()
+            <span class="comment">// Set 15mb as size limit for the whole stream body.
+            </span>.whole_stream(<span class="number">15 </span>* <span class="number">1024 </span>* <span class="number">1024</span>)
+            <span class="comment">// Set 10mb as size limit for all fields.
+            </span>.per_field(<span class="number">10 </span>* <span class="number">1024 </span>* <span class="number">1024</span>)
+            <span class="comment">// Set 30kb as size limit for our text field only.
+            </span>.for_field(<span class="string">"my_text_field"</span>, <span class="number">30 </span>* <span class="number">1024</span>),
+    );
+
+<span class="comment">// Create a `Multipart` instance from a stream and the constraints.
+</span><span class="kw">let </span><span class="kw-2">mut </span>multipart = Multipart::with_constraints(some_stream, <span class="string">"X-BOUNDARY"</span>, constraints);
+
+<span class="kw">while let </span><span class="prelude-val">Some</span>(field) = multipart.next_field().<span class="kw">await</span>.unwrap() {
+    <span class="kw">let </span>content = field.text().<span class="kw">await</span>.unwrap();
+    <span class="macro">assert_eq!</span>(content, <span class="string">"abcd"</span>);
+}</code></pre></div>
+<p>Please refer <a href="struct.Constraints.html" title="struct multer::Constraints"><code>Constraints</code></a> for more info.</p>
+<h3 id="usage-with-hyperrs-server"><a class="doc-anchor" href="#usage-with-hyperrs-server">§</a>Usage with <a href="https://hyper.rs/">hyper.rs</a> server</h3>
+<p>An <a href="https://github.com/rousan/multer-rs/blob/master/examples/hyper_server_example.rs">example</a> showing usage with <a href="https://hyper.rs/">hyper.rs</a>.</p>
+<p>For more examples, please visit <a href="https://github.com/rousan/multer-rs/tree/master/examples">examples</a>.</p>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.bytes"><code>pub use <a class="mod" href="../bytes/index.html" title="mod bytes">bytes</a>;</code></div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Constraints.html" title="struct multer::Constraints">Constraints</a></div><div class="desc docblock-short">Represents some rules to be applied on the stream and field’s content size
+to prevent DoS attacks.</div></li><li><div class="item-name"><a class="struct" href="struct.Field.html" title="struct multer::Field">Field</a></div><div class="desc docblock-short">A single field in a multipart stream.</div></li><li><div class="item-name"><a class="struct" href="struct.Multipart.html" title="struct multer::Multipart">Multipart</a></div><div class="desc docblock-short">Represents the implementation of <code>multipart/form-data</code> formatted data.</div></li><li><div class="item-name"><a class="struct" href="struct.SizeLimit.html" title="struct multer::SizeLimit">SizeLimit</a></div><div class="desc docblock-short">Represents size limit of the stream to prevent DoS attacks.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.Error.html" title="enum multer::Error">Error</a></div><div class="desc docblock-short">A set of errors that can occur during parsing multipart stream and in other
+operations.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.parse_boundary.html" title="fn multer::parse_boundary">parse_boundary</a></div><div class="desc docblock-short">Parses the <code>Content-Type</code> header to extract the boundary value.</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.Result.html" title="type multer::Result">Result</a></div><div class="desc docblock-short">A Result type often returned from methods that can have <code>multer</code> errors.</div></li></ul></section></div></main></body></html>

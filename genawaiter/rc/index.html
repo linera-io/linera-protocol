@@ -1,0 +1,151 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="This module implements a generator which stores its state on the heap."><title>genawaiter::rc - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="genawaiter" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../genawaiter/index.html">genawaiter</a><span class="version">0.99.1</span></h2></div><h2 class="location"><a href="#">Module rc</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#macros">Macros</a></li><li><a href="#structs">Structs</a></li><li><a href="#types">Type Aliases</a></li><li><a href="#attributes">Attribute Macros</a></li></ul></section><h2><a href="../index.html">In crate genawaiter</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">genawaiter</a>::<wbr><a class="mod" href="#">rc</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/genawaiter/rc/mod.rs.html#1-470">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>This module implements a generator which stores its state on the heap.</p>
+<p>You can create a basic generator with <a href="macro.gen.html"><code>gen!</code></a> and <a href="../macro.yield_.html" title="macro genawaiter::yield_"><code>yield_!</code></a>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span><span class="kw-2">mut </span>my_generator = <span class="macro">gen!</span>({
+    <span class="macro">yield_!</span>(<span class="number">10</span>);
+});</code></pre></div>
+<p>If you need to reuse logic between multiple generators, you can define the logic with
+<a href="../macro.rc_producer.html" title="macro genawaiter::rc_producer"><code>rc_producer!</code></a> and <a href="../macro.yield_.html" title="macro genawaiter::yield_"><code>yield_!</code></a>, and instantiate generators with <a href="struct.Gen.html#method.new" title="associated function genawaiter::rc::Gen::new"><code>Gen::new</code></a>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>my_producer = <span class="macro">producer!</span>({
+    <span class="macro">yield_!</span>(<span class="number">10</span>);
+});
+<span class="kw">let </span><span class="kw-2">mut </span>my_generator = Gen::new(my_producer);</code></pre></div>
+<p>If you don’t like macros, you can use the low-level API directly.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">async fn </span>my_producer(co: Co&lt;u8&gt;) {
+    co.yield_(<span class="number">10</span>).<span class="kw">await</span>;
+}
+<span class="kw">let </span><span class="kw-2">mut </span>my_generator = Gen::new(my_producer);</code></pre></div>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2><h3 id="using-iterator"><a class="doc-anchor" href="#using-iterator">§</a>Using <code>Iterator</code></h3>
+<p>Generators implement <code>Iterator</code>, so you can use them in a for loop:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>genawaiter::{rc::gen, yield_};
+
+<span class="kw">let </span>odds_under_ten = <span class="macro">gen!</span>({
+    <span class="kw">let </span><span class="kw-2">mut </span>n = <span class="number">1</span>;
+    <span class="kw">while </span>n &lt; <span class="number">10 </span>{
+        <span class="macro">yield_!</span>(n);
+        n += <span class="number">2</span>;
+    }
+});
+
+<span class="kw">for </span>num <span class="kw">in </span>odds_under_ten {
+    <span class="macro">println!</span>(<span class="string">"{}"</span>, num);
+}</code></pre></div>
+<h3 id="collecting-into-a-vec"><a class="doc-anchor" href="#collecting-into-a-vec">§</a>Collecting into a <code>Vec</code></h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>xs: Vec&lt;<span class="kw">_</span>&gt; = odds_under_ten.into_iter().collect();
+<span class="macro">assert_eq!</span>(xs, [<span class="number">1</span>, <span class="number">3</span>, <span class="number">5</span>, <span class="number">7</span>, <span class="number">9</span>]);</code></pre></div>
+<h3 id="a-generator-is-a-closure"><a class="doc-anchor" href="#a-generator-is-a-closure">§</a>A generator is a closure</h3>
+<p>Like any closure, you can capture values from outer scopes.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>two = <span class="number">2</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>multiply = <span class="macro">gen!</span>({
+    <span class="macro">yield_!</span>(<span class="number">10 </span>* two);
+});
+<span class="macro">assert_eq!</span>(multiply.resume(), GeneratorState::Yielded(<span class="number">20</span>));</code></pre></div>
+<h3 id="using-resume"><a class="doc-anchor" href="#using-resume">§</a>Using <code>resume()</code></h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">assert_eq!</span>(odds_under_ten.resume(), GeneratorState::Yielded(<span class="number">1</span>));
+<span class="macro">assert_eq!</span>(odds_under_ten.resume(), GeneratorState::Yielded(<span class="number">3</span>));
+<span class="macro">assert_eq!</span>(odds_under_ten.resume(), GeneratorState::Yielded(<span class="number">5</span>));
+<span class="macro">assert_eq!</span>(odds_under_ten.resume(), GeneratorState::Yielded(<span class="number">7</span>));
+<span class="macro">assert_eq!</span>(odds_under_ten.resume(), GeneratorState::Yielded(<span class="number">9</span>));
+<span class="macro">assert_eq!</span>(odds_under_ten.resume(), GeneratorState::Complete(()));</code></pre></div>
+<h3 id="passing-resume-arguments"><a class="doc-anchor" href="#passing-resume-arguments">§</a>Passing resume arguments</h3>
+<p>You can pass values into the generator.</p>
+<p>Note that the first resume argument will be lost. This is because at the time the first
+value is sent, there is no future being awaited inside the generator, so there is no
+place the value could go where the generator could observe it.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span><span class="kw-2">mut </span>check_numbers = <span class="macro">gen!</span>({
+    <span class="kw">let </span>num = <span class="macro">yield_!</span>(());
+    <span class="macro">assert_eq!</span>(num, <span class="number">1</span>);
+
+    <span class="kw">let </span>num = <span class="macro">yield_!</span>(());
+    <span class="macro">assert_eq!</span>(num, <span class="number">2</span>);
+});
+
+check_numbers.resume_with(<span class="number">0</span>);
+check_numbers.resume_with(<span class="number">1</span>);
+check_numbers.resume_with(<span class="number">2</span>);</code></pre></div>
+<h3 id="returning-a-completion-value"><a class="doc-anchor" href="#returning-a-completion-value">§</a>Returning a completion value</h3>
+<p>You can return a completion value with a different type than the values that are
+yielded.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span><span class="kw-2">mut </span>numbers_then_string = <span class="macro">gen!</span>({
+    <span class="macro">yield_!</span>(<span class="number">10</span>);
+    <span class="macro">yield_!</span>(<span class="number">20</span>);
+    <span class="string">"done!"
+</span>});
+
+<span class="macro">assert_eq!</span>(numbers_then_string.resume(), GeneratorState::Yielded(<span class="number">10</span>));
+<span class="macro">assert_eq!</span>(numbers_then_string.resume(), GeneratorState::Yielded(<span class="number">20</span>));
+<span class="macro">assert_eq!</span>(numbers_then_string.resume(), GeneratorState::Complete(<span class="string">"done!"</span>));</code></pre></div>
+<h3 id="defining-a-reusable-producer-function"><a class="doc-anchor" href="#defining-a-reusable-producer-function">§</a>Defining a reusable producer function</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[producer_fn(u8)]
+</span><span class="kw">async fn </span>produce() {
+    <span class="macro">yield_!</span>(<span class="number">10</span>);
+}
+
+<span class="kw">let </span><span class="kw-2">mut </span>gen = Gen::new(produce);
+<span class="macro">assert_eq!</span>(gen.resume(), GeneratorState::Yielded(<span class="number">10</span>));</code></pre></div>
+<h3 id="defining-a-reusable-producer-closure"><a class="doc-anchor" href="#defining-a-reusable-producer-closure">§</a>Defining a reusable producer closure</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>genawaiter::rc_producer <span class="kw">as </span>producer;
+
+<span class="kw">let </span>produce = <span class="macro">producer!</span>({
+    <span class="macro">yield_!</span>(<span class="number">10</span>);
+});
+
+<span class="kw">let </span><span class="kw-2">mut </span>gen = Gen::new(produce);
+<span class="macro">assert_eq!</span>(gen.resume(), GeneratorState::Yielded(<span class="number">10</span>));</code></pre></div>
+<h3 id="using-the-low-level-api"><a class="doc-anchor" href="#using-the-low-level-api">§</a>Using the low-level API</h3>
+<p>You can define an <code>async fn</code> directly, instead of relying on the <code>gen!</code> or <code>producer!</code>
+macros.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>genawaiter::rc::{Co, Gen};
+
+<span class="kw">async fn </span>producer(co: Co&lt;i32&gt;) {
+    <span class="kw">let </span><span class="kw-2">mut </span>n = <span class="number">1</span>;
+    <span class="kw">while </span>n &lt; <span class="number">10 </span>{
+        co.yield_(n).<span class="kw">await</span>;
+        n += <span class="number">2</span>;
+    }
+}
+
+<span class="kw">let </span>odds_under_ten = Gen::new(producer);
+<span class="kw">let </span>result: Vec&lt;<span class="kw">_</span>&gt; = odds_under_ten.into_iter().collect();
+<span class="macro">assert_eq!</span>(result, [<span class="number">1</span>, <span class="number">3</span>, <span class="number">5</span>, <span class="number">7</span>, <span class="number">9</span>]);</code></pre></div>
+<h3 id="using-the-low-level-api-with-an-async-closure-nightly-rust-only"><a class="doc-anchor" href="#using-the-low-level-api-with-an-async-closure-nightly-rust-only">§</a>Using the low-level API with an async closure (nightly Rust only)</h3>
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">let </span>gen = Gen::new(<span class="kw">async move </span>|co| {
+    co.yield_(<span class="number">10</span>).<span class="kw">await</span>;
+    co.yield_(<span class="number">20</span>).<span class="kw">await</span>;
+});
+<span class="macro">assert_eq!</span>(gen.resume(), GeneratorState::Yielded(<span class="number">10</span>));
+<span class="macro">assert_eq!</span>(gen.resume(), GeneratorState::Yielded(<span class="number">20</span>));
+<span class="macro">assert_eq!</span>(gen.resume(), GeneratorState::Complete(()));</code></pre></div>
+<h3 id="using-the-low-level-api-with-an-async-closure-fauxsure-for-stable-rust"><a class="doc-anchor" href="#using-the-low-level-api-with-an-async-closure-fauxsure-for-stable-rust">§</a>Using the low-level API with an async <del>closure</del> faux·sure (for stable Rust)</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span><span class="kw-2">mut </span>gen = Gen::new(|co| <span class="kw">async move </span>{
+    co.yield_(<span class="number">10</span>).<span class="kw">await</span>;
+    co.yield_(<span class="number">20</span>).<span class="kw">await</span>;
+});
+<span class="macro">assert_eq!</span>(gen.resume(), GeneratorState::Yielded(<span class="number">10</span>));
+<span class="macro">assert_eq!</span>(gen.resume(), GeneratorState::Yielded(<span class="number">20</span>));
+<span class="macro">assert_eq!</span>(gen.resume(), GeneratorState::Complete(()));</code></pre></div>
+<h3 id="using-the-low-level-api-with-function-arguments"><a class="doc-anchor" href="#using-the-low-level-api-with-function-arguments">§</a>Using the low-level API with function arguments</h3>
+<p>This is just ordinary Rust, nothing special.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">async fn </span>multiples_of(num: i32, co: Co&lt;i32&gt;) {
+    <span class="kw">let </span><span class="kw-2">mut </span>cur = num;
+    <span class="kw">loop </span>{
+        co.yield_(cur).<span class="kw">await</span>;
+        cur += num;
+    }
+}
+
+<span class="kw">let </span><span class="kw-2">mut </span>gen = Gen::new(|co| multiples_of(<span class="number">10</span>, co));
+<span class="macro">assert_eq!</span>(gen.resume(), GeneratorState::Yielded(<span class="number">10</span>));
+<span class="macro">assert_eq!</span>(gen.resume(), GeneratorState::Yielded(<span class="number">20</span>));
+<span class="macro">assert_eq!</span>(gen.resume(), GeneratorState::Yielded(<span class="number">30</span>));</code></pre></div>
+</div></details><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="macro" href="macro.gen.html" title="macro genawaiter::rc::gen">gen</a></div><div class="desc docblock-short">Creates a generator.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Gen.html" title="struct genawaiter::rc::Gen">Gen</a></div><div class="desc docblock-short">This is a generator which stores its state on the heap.</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.Co.html" title="type genawaiter::rc::Co">Co</a></div><div class="desc docblock-short">This object lets you yield values from the generator by calling the <code>yield_</code>
+method.</div></li></ul><h2 id="attributes" class="section-header">Attribute Macros<a href="#attributes" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="attr" href="attr.producer_fn.html" title="attr genawaiter::rc::producer_fn">producer_fn</a></div><div class="desc docblock-short">Turns a function into a producer, which can then be used to create a
+generator.</div></li></ul></section></div></main></body></html>

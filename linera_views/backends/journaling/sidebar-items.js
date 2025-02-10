@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["JournalConsistencyError"],"struct":["JournalingKeyValueStore"],"trait":["DirectKeyValueStore","DirectWritableKeyValueStore"]};

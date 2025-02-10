@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ImdsError"],"struct":["BuildError","ErrorResponse","FailedToLoadToken","InvalidEndpointMode","IoError","TokenError","Unexpected"]};

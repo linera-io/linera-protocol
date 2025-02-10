@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["UpdateTableReplicaAutoScalingError"],"mod":["builders"],"struct":["UpdateTableReplicaAutoScaling","UpdateTableReplicaAutoScalingInput","UpdateTableReplicaAutoScalingOutput"]};
