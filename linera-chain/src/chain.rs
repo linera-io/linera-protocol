@@ -281,26 +281,29 @@ impl ChainTipState {
     }
 
     /// Checks if the measurement counters would be valid.
-    pub fn verify_counters(
-        &self,
+    pub fn update_counters(
+        &mut self,
         new_block: &ProposedBlock,
         outcome: &BlockExecutionOutcome,
     ) -> Result<(), ChainError> {
         let num_incoming_bundles = u32::try_from(new_block.incoming_bundles.len())
             .map_err(|_| ArithmeticError::Overflow)?;
-        self.num_incoming_bundles
+        self.num_incoming_bundles = self
+            .num_incoming_bundles
             .checked_add(num_incoming_bundles)
             .ok_or(ArithmeticError::Overflow)?;
 
         let num_operations =
             u32::try_from(new_block.operations.len()).map_err(|_| ArithmeticError::Overflow)?;
-        self.num_operations
+        self.num_operations = self
+            .num_operations
             .checked_add(num_operations)
             .ok_or(ArithmeticError::Overflow)?;
 
         let num_outgoing_messages =
             u32::try_from(outcome.messages.len()).map_err(|_| ArithmeticError::Overflow)?;
-        self.num_outgoing_messages
+        self.num_outgoing_messages = self
+            .num_outgoing_messages
             .checked_add(num_outgoing_messages)
             .ok_or(ArithmeticError::Overflow)?;
 
@@ -566,7 +569,7 @@ where
     }
 
     /// Verifies that the block's first message is `OpenChain`. Initializes the chain if necessary.
-    async fn execute_init_message_from(
+    pub async fn execute_init_message_from(
         &mut self,
         block: &ProposedBlock,
         local_time: Timestamp,
@@ -975,7 +978,7 @@ where
     }
 
     /// Returns whether this is a child chain.
-    fn is_child(&self) -> bool {
+    pub fn is_child(&self) -> bool {
         let Some(description) = self.execution_state.system.description.get() else {
             // Root chains are always initialized, so this must be a child chain.
             return true;
