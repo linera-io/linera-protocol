@@ -241,7 +241,7 @@ impl GenNftContract {
         self.state
             .nfts
             .remove(&nft.token_id)
-            .expect("Failure removing NFT");
+            .expect("Failed to remove NFT");
         let owned_token_ids = self
             .state
             .owned_token_ids
