@@ -150,7 +150,7 @@ tokio-util = "0.7.10"
 toml = "0.8.10"
 tower-http = "0.5.2"
 tower = "0.4.13"
-tracing = { version = "0.1.40", features = ["release_max_level_debug"] }
+tracing = { version = "0.1.40" } # , features = ["release_max_level_debug"] }
 tracing-subscriber = { version = "0.3.18", default-features = false, features = ["env-filter"] }
 tracing-web = "0.1.3"
 trait-variant = "0.1.1"
