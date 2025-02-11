@@ -10,7 +10,6 @@
 #![allow(clippy::blocks_in_conditions)]
 
 pub mod config;
-pub mod mass_client;
 pub mod node_provider;
 
 pub mod client;

@@ -48,18 +48,11 @@ use {
         data_types::{BlockProposal, ExecutedBlock, ProposedBlock, SignatureAggregator, Vote},
         types::{CertificateValue, ConfirmedBlock, GenericCertificate},
     },
-    linera_core::{
-        data_types::{ChainInfoQuery, ChainInfoResponse},
-        node::{ValidatorNode, ValidatorNodeProvider},
-    },
+    linera_core::{data_types::ChainInfoQuery, node::ValidatorNode},
     linera_execution::{
         committee::Epoch,
         system::{OpenChainConfig, Recipient, SystemOperation, OPEN_CHAIN_MESSAGE_INDEX},
         Operation,
-    },
-    linera_rpc::{
-        config::NetworkProtocol, grpc::GrpcClient, mass_client::MassClient,
-        simple::SimpleMassClient, HandleConfirmedCertificateRequest, RpcMessage,
     },
     linera_sdk::abis::fungible,
     std::{collections::HashMap, iter},
@@ -570,133 +563,16 @@ where
     S: Storage + Clone + Send + Sync + 'static,
     W: Persist<Target = Wallet>,
 {
-    fn deserialize_response(response: RpcMessage) -> Option<ChainInfoResponse> {
-        match response {
-            RpcMessage::ChainInfoResponse(info) => Some(*info),
-            RpcMessage::Error(error) => {
-                error!("Received error value: {}", error);
-                None
-            }
-            _ => {
-                error!("Unexpected return value");
-                None
-            }
-        }
-    }
-
     pub async fn run_benchmark(
         &mut self,
-        key_pairs: HashMap<ChainId, KeyPair>,
+        bps: Option<usize>,
+        blocks_infos_iter: impl Iterator<Item = &(ChainId, Vec<Operation>, KeyPair)>,
+        clients: Vec<linera_rpc::Client>,
         transactions_per_block: usize,
-        fungible_application_id: Option<ApplicationId>,
     ) -> Result<(), Error> {
-        // For this command, we create proposals and gather certificates without using
-        // the client library. We update the wallet storage at the end using a local node.
-        info!("Starting benchmark phase 1 (block proposals)");
-        let proposals = self.make_benchmark_block_proposals(
-            key_pairs,
-            transactions_per_block,
-            fungible_application_id,
-        );
-
-        let num_proposal = proposals.len();
-        let mut values = HashMap::new();
-
-        let start = Instant::now();
-        for proposal in &proposals {
-            let executed_block = self
-                .stage_block_execution(proposal.content.block.clone(), None)
-                .await?;
-            let value = Hashed::new(ConfirmedBlock::new(executed_block));
-            values.insert(value.hash(), value);
-        }
-        info!(
-            "Staged {} block proposals in {} ms",
-            num_proposal,
-            start.elapsed().as_millis()
-        );
-
-        let proposals = proposals
-            .into_iter()
-            .map(|proposal| RpcMessage::BlockProposal(Box::new(proposal)))
-            .collect::<Vec<_>>();
-        let responses = self.mass_broadcast("block proposals", proposals).await;
-        let votes = responses
-            .into_iter()
-            .filter_map(|message| {
-                let response = Self::deserialize_response(message)?;
-                let vote = response.info.manager.pending?;
-                let value = values.get(&vote.value.value_hash)?.clone();
-                vote.clone().with_value(value)
-            })
-            .collect::<Vec<_>>();
-        info!("Received {} valid votes.", votes.len());
-
-        info!("Starting benchmark phase 2 (certified blocks)");
-        let certificates = self.make_benchmark_certificates_from_votes(votes);
-        assert_eq!(
-            num_proposal,
-            certificates.len(),
-            "Unable to build all the expected certificates from received votes"
-        );
-        let messages = certificates
-            .iter()
-            .map(|certificate| {
-                RpcMessage::ConfirmedCertificate(Box::new(HandleConfirmedCertificateRequest {
-                    certificate: certificate.clone(),
-                    wait_for_outgoing_messages: true,
-                }))
-            })
-            .collect();
-        let responses = self.mass_broadcast("certificates", messages).await;
-        let mut confirmed = HashSet::new();
-        let num_valid = responses.into_iter().fold(0, |acc, message| {
-            match Self::deserialize_response(message) {
-                Some(response) => {
-                    confirmed.insert(response.info.chain_id);
-                    acc + 1
-                }
-                None => acc,
-            }
-        });
-        info!(
-            "Confirmed {} valid certificates for block proposals to {} chains.",
-            num_valid,
-            confirmed.len()
-        );
-
-        info!("Updating local state of user chains");
-        self.update_wallet_from_certificates(certificates).await;
-        self.save_wallet().await?;
-        Ok(())
-    }
-
-    pub async fn run_benchmark_long_running(
-        &mut self,
-        key_pairs: HashMap<ChainId, KeyPair>,
-        transactions_per_block: usize,
-        fungible_application_id: Option<ApplicationId>,
-        bps: usize,
-    ) -> Result<(), Error> {
-        let blocks_infos = self.make_benchmark_block_info(
-            key_pairs,
-            transactions_per_block,
-            fungible_application_id,
-        );
-        let committee = self.wallet.genesis_config().create_committee();
-        let clients = self
-            .make_node_provider()
-            .make_nodes(&committee)?
-            .map(|(_, node)| node)
-            .collect::<Vec<_>>();
         let mut num_sent_proposals = 0;
-        let mut blocks_infos_iter = blocks_infos.iter().cycle();
-
         let mut start = Instant::now();
-        loop {
-            let (chain_id, operations, key_pair) = blocks_infos_iter
-                .next()
-                .expect("Getting next proposal should not fail");
+        for (chain_id, operations, key_pair) in blocks_infos_iter {
             let chain = self.wallet.get(*chain_id).expect("should have chain");
             let block = ProposedBlock {
                 epoch: Epoch::ZERO,
@@ -761,23 +637,37 @@ where
             self.update_wallet_from_certificates(vec![certificate.clone()])
                 .await;
             num_sent_proposals += 1;
-            if num_sent_proposals == bps {
-                let elapsed = start.elapsed();
-                if elapsed > Duration::from_secs(1) {
-                    warn!(
-                        "Failed to achieve {} BPS/{} TPS, took {} ms",
-                        bps,
-                        bps * transactions_per_block,
-                        elapsed.as_millis()
-                    );
-                } else {
-                    tokio::time::sleep(Duration::from_secs(1) - elapsed).await;
-                    info!("Achieved {} BPS/{} TPS", bps, bps * transactions_per_block);
+            if let Some(bps) = bps {
+                if num_sent_proposals == bps {
+                    let elapsed = start.elapsed();
+                    if elapsed > Duration::from_secs(1) {
+                        warn!(
+                            "Failed to achieve {} BPS/{} TPS, took {} ms",
+                            bps,
+                            bps * transactions_per_block,
+                            elapsed.as_millis()
+                        );
+                    } else {
+                        tokio::time::sleep(Duration::from_secs(1) - elapsed).await;
+                        info!("Achieved {} BPS/{} TPS", bps, bps * transactions_per_block);
+                    }
+                    start = Instant::now();
+                    num_sent_proposals = 0;
                 }
-                start = Instant::now();
-                num_sent_proposals = 0;
             }
         }
+
+        if bps.is_none() {
+            let elapsed = start.elapsed();
+            let bps = num_sent_proposals as f64 / elapsed.as_secs_f64();
+            info!(
+                "Achieved {} BPS/{} TPS",
+                bps,
+                bps * transactions_per_block as f64
+            );
+        }
+
+        Ok(())
     }
 
     pub async fn process_inboxes_and_force_validator_updates(&mut self) {
@@ -1162,68 +1052,6 @@ where
             }
         }
         certificates
-    }
-
-    /// Broadcasts a bulk of blocks to each validator.
-    pub async fn mass_broadcast(
-        &self,
-        phase: &'static str,
-        proposals: Vec<RpcMessage>,
-    ) -> Vec<RpcMessage> {
-        let time_start = Instant::now();
-        info!("Broadcasting {} {}", proposals.len(), phase);
-        let mut join_set = task::JoinSet::new();
-        for client in self.make_validator_mass_clients() {
-            let proposals = proposals.clone();
-            join_set.spawn(async move {
-                debug!("Sending {} requests", proposals.len());
-                let responses = client.send(proposals).await.unwrap_or_default();
-                debug!("Done sending requests");
-                responses
-            });
-        }
-        let responses = join_set
-            .join_all()
-            .await
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>();
-        let time_elapsed = time_start.elapsed();
-        info!(
-            "Received {} responses in {} ms.",
-            responses.len(),
-            time_elapsed.as_millis()
-        );
-        info!(
-            "Estimated server throughput: {} {} per sec",
-            (proposals.len() as u128) * 1_000_000 / time_elapsed.as_micros(),
-            phase
-        );
-        responses
-    }
-
-    fn make_validator_mass_clients(&self) -> Vec<Box<dyn MassClient + Send>> {
-        let mut validator_clients = Vec::new();
-        for config in &self.wallet.genesis_config().committee.validators {
-            let client: Box<dyn MassClient + Send> = match config.network.protocol {
-                NetworkProtocol::Simple(protocol) => {
-                    let network = config.network.clone_with_protocol(protocol);
-                    Box::new(SimpleMassClient::new(
-                        network,
-                        self.send_timeout,
-                        self.recv_timeout,
-                    ))
-                }
-                NetworkProtocol::Grpc { .. } => {
-                    let node_options = self.make_node_options();
-                    let address = config.network.http_address();
-                    Box::new(GrpcClient::create(address, node_options))
-                }
-            };
-
-            validator_clients.push(client);
-        }
-        validator_clients
     }
 
     pub async fn update_wallet_from_certificates(

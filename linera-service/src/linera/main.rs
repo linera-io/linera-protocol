@@ -778,18 +778,26 @@ impl Runnable for Job {
                     );
                 }
 
-                if let Some(bps) = bps {
+                let blocks_infos = context.make_benchmark_block_info(
+                    key_pairs,
+                    transactions_per_block,
+                    fungible_application_id,
+                );
+                let committee = context.wallet.genesis_config().create_committee();
+                let clients = context
+                    .make_node_provider()
+                    .make_nodes(&committee)?
+                    .map(|(_, node)| node)
+                    .collect::<Vec<_>>();
+                let blocks_infos_iter = blocks_infos.iter();
+                if bps.is_some() {
+                    let blocks_infos_iter = blocks_infos_iter.cycle();
                     context
-                        .run_benchmark_long_running(
-                            key_pairs,
-                            transactions_per_block,
-                            fungible_application_id,
-                            bps,
-                        )
+                        .run_benchmark(bps, blocks_infos_iter, clients, transactions_per_block)
                         .await?;
                 } else {
                     context
-                        .run_benchmark(key_pairs, transactions_per_block, fungible_application_id)
+                        .run_benchmark(bps, blocks_infos_iter, clients, transactions_per_block)
                         .await?;
                 }
             }
