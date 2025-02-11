@@ -102,6 +102,7 @@ social.workspace = true
 test-case.workspace = true
 tracing-subscriber = { workspace = true, features = ["fmt"] }
 rand_core = { version = "0.6.4", features = [ "getrandom" ] } # old version to be compatible with one in k256
+secp256k1 = { version = "0.30.0", features = [ "rand" ] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 criterion = { workspace = true, default-features = true, features = ["async_tokio"] }
@@ -120,4 +121,8 @@ harness = false
 
 [[bench]]
 name = "signing_benchmarks"
+harness = false
+
+[[bench]]
+name = "rust_secp256k1"
 harness = false
