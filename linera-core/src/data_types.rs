@@ -73,7 +73,7 @@ pub struct ChainInfoQuery {
     /// Query the current committees.
     #[debug(skip_if = Not::not)]
     pub request_committees: bool,
-    /// Query the received messages that are waiting be picked in the next block.
+    /// Query the received messages that are waiting to be picked in the next block.
     #[debug(skip_if = Not::not)]
     pub request_pending_message_bundles: bool,
     /// Query a range of certificate hashes sent from the chain.
@@ -322,7 +322,7 @@ impl<'de> BcsSignable<'de> for ChainInfo {}
 pub enum ClientOutcome<T> {
     /// The operations were committed successfully.
     Committed(T),
-    /// We are not the round leader and cannot do anything. Try again at the specified time or
+    /// We are not the round leader and cannot do anything. Try again at the specified time
     /// or whenever the round or block height changes.
     WaitForTimeout(RoundTimeout),
 }
