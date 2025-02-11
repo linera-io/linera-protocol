@@ -569,13 +569,14 @@ where
         blocks_infos_iter: impl Iterator<Item = &(ChainId, Vec<Operation>, KeyPair)>,
         clients: Vec<linera_rpc::Client>,
         transactions_per_block: usize,
+        epoch: Epoch,
     ) -> Result<(), Error> {
         let mut num_sent_proposals = 0;
         let mut start = Instant::now();
         for (chain_id, operations, key_pair) in blocks_infos_iter {
             let chain = self.wallet.get(*chain_id).expect("should have chain");
             let block = ProposedBlock {
-                epoch: Epoch::ZERO,
+                epoch,
                 chain_id: *chain_id,
                 incoming_bundles: Vec::new(),
                 operations: operations.clone(),
@@ -986,13 +987,14 @@ where
         key_pairs: HashMap<ChainId, KeyPair>,
         transactions_per_block: usize,
         fungible_application_id: Option<ApplicationId>,
+        epoch: Epoch,
     ) -> Vec<BlockProposal> {
         self.make_benchmark_block_info(key_pairs, transactions_per_block, fungible_application_id)
             .into_iter()
             .map(|(chain_id, operations, key_pair)| {
                 let chain = self.wallet.get(chain_id).expect("should have chain");
                 let block = ProposedBlock {
-                    epoch: Epoch::ZERO,
+                    epoch,
                     chain_id,
                     incoming_bundles: Vec::new(),
                     operations,

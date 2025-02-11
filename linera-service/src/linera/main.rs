@@ -778,26 +778,49 @@ impl Runnable for Job {
                     );
                 }
 
+                let default_chain_id = context
+                    .wallet
+                    .default_chain()
+                    .expect("should have default chain");
+                let chain_client = context.make_chain_client(default_chain_id)?;
+                let (epoch, committees) =
+                    chain_client.epoch_and_committees(default_chain_id).await?;
+                let epoch = epoch.expect("default chain should have an epoch");
+                let committee = committees
+                    .get(&epoch)
+                    .expect("current epoch should have a committee");
                 let blocks_infos = context.make_benchmark_block_info(
                     key_pairs,
                     transactions_per_block,
                     fungible_application_id,
                 );
-                let committee = context.wallet.genesis_config().create_committee();
+
                 let clients = context
                     .make_node_provider()
-                    .make_nodes(&committee)?
+                    .make_nodes(committee)?
                     .map(|(_, node)| node)
                     .collect::<Vec<_>>();
                 let blocks_infos_iter = blocks_infos.iter();
                 if bps.is_some() {
                     let blocks_infos_iter = blocks_infos_iter.cycle();
                     context
-                        .run_benchmark(bps, blocks_infos_iter, clients, transactions_per_block)
+                        .run_benchmark(
+                            bps,
+                            blocks_infos_iter,
+                            clients,
+                            transactions_per_block,
+                            epoch,
+                        )
                         .await?;
                 } else {
                     context
-                        .run_benchmark(bps, blocks_infos_iter, clients, transactions_per_block)
+                        .run_benchmark(
+                            bps,
+                            blocks_infos_iter,
+                            clients,
+                            transactions_per_block,
+                            epoch,
+                        )
                         .await?;
                 }
             }
