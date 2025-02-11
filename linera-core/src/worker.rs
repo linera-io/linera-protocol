@@ -148,7 +148,7 @@ pub enum Reason {
     },
 }
 
-/// Error type for worker operations..
+/// Error type for worker operations.
 #[derive(Debug, Error)]
 pub enum WorkerError {
     #[error(transparent)]
@@ -190,7 +190,7 @@ pub enum WorkerError {
     // Other server-side errors
     #[error("Invalid cross-chain request")]
     InvalidCrossChainRequest,
-    #[error("The block does contain the hash that we expected for the previous block")]
+    #[error("The block does not contain the hash that we expected for the previous block")]
     InvalidBlockChaining,
     #[error(
         "
