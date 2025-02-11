@@ -143,6 +143,7 @@ where
 {
     /// Spawns a new task to run the [`ChainWorkerActor`], returning an endpoint for sending
     /// requests to the worker.
+    #[tracing::instrument(level = "debug", skip_all, fields(?chain_id))]
     pub async fn load(
         config: ChainWorkerConfig,
         storage: StorageClient,
@@ -169,10 +170,14 @@ where
             chain_id,
             service_runtime_endpoint,
         )
-        .await?;
+        .await;
+
+        if let Err(e) = &worker {
+            tracing::warn!("error loading chain state: {e:?}");
+        }
 
         Ok(ChainWorkerActor {
-            worker,
+            worker: worker?,
             service_runtime_thread,
         })
     }
@@ -319,6 +324,8 @@ where
                 warn!("Callback for `ChainWorkerActor` was dropped before a response was sent");
             }
         }
+
+        tracing::debug!("chain worker receiver closed: beginning cleanup");
 
         if let Some(thread) = self.service_runtime_thread {
             drop(self.worker);
