@@ -569,13 +569,14 @@ where
         blocks_infos_iter: impl Iterator<Item = &(ChainId, Vec<Operation>, KeyPair)>,
         clients: Vec<linera_rpc::Client>,
         transactions_per_block: usize,
+        epoch: Epoch,
     ) -> Result<(), Error> {
         let mut num_sent_proposals = 0;
         let mut start = Instant::now();
         for (chain_id, operations, key_pair) in blocks_infos_iter {
             let chain = self.wallet.get(*chain_id).expect("should have chain");
             let block = ProposedBlock {
-                epoch: Epoch::ZERO,
+                epoch,
                 chain_id: *chain_id,
                 incoming_bundles: Vec::new(),
                 operations: operations.clone(),
