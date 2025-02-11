@@ -10,7 +10,7 @@
     feature = "remote-net"
 ))]
 
-mod common;
+mod guard;
 
 use std::{
     env,
@@ -19,12 +19,12 @@ use std::{
 
 use anyhow::Result;
 use async_graphql::InputType;
-use common::INTEGRATION_TEST_GUARD;
 use futures::{
     channel::mpsc,
     future::{self, Either},
     SinkExt, StreamExt,
 };
+use guard::INTEGRATION_TEST_GUARD;
 use linera_base::{
     command::resolve_binary,
     crypto::CryptoHash,
