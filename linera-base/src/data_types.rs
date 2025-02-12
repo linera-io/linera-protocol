@@ -1158,7 +1158,7 @@ impl<'a> Deserialize<'a> for Blob {
 
 /// An event recorded in an executed block.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
-pub struct EventRecord {
+pub struct Event {
     /// The ID of the stream this event belongs to.
     pub stream_id: StreamId,
     /// The event key.
@@ -1171,7 +1171,7 @@ pub struct EventRecord {
     pub value: Vec<u8>,
 }
 
-impl EventRecord {
+impl Event {
     /// Returns the ID of this event record, given the publisher chain ID.
     pub fn id(&self, chain_id: ChainId) -> EventId {
         EventId {
@@ -1182,7 +1182,7 @@ impl EventRecord {
     }
 }
 
-impl<'de> BcsHashable<'de> for EventRecord {}
+impl<'de> BcsHashable<'de> for Event {}
 
 doc_scalar!(Bytecode, "A WebAssembly module's bytecode");
 doc_scalar!(Amount, "A non-negative amount of tokens.");

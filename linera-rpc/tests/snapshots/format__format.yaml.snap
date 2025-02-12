@@ -100,7 +100,7 @@ BlockBody:
     - events:
         SEQ:
           SEQ:
-            TYPENAME: EventRecord
+            TYPENAME: Event
 BlockExecutionOutcome:
   STRUCT:
     - messages:
@@ -116,7 +116,7 @@ BlockExecutionOutcome:
     - events:
         SEQ:
           SEQ:
-            TYPENAME: EventRecord
+            TYPENAME: Event
 BlockHeader:
   STRUCT:
     - chain_id:
@@ -409,7 +409,7 @@ Destination:
           TYPENAME: ChannelName
 Epoch:
   NEWTYPESTRUCT: U32
-EventRecord:
+Event:
   STRUCT:
     - stream_id:
         TYPENAME: StreamId

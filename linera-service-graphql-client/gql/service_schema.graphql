@@ -102,7 +102,7 @@ type BlockBody {
 	"""
 	The list of events produced by each transaction.
 	"""
-	events: [[EventRecord!]!]!
+	events: [[Event!]!]!
 }
 
 """
@@ -507,7 +507,7 @@ scalar Epoch
 """
 An event recorded in an executed block.
 """
-type EventRecord {
+type Event {
 	"""
 	The ID of the stream this event belongs to.
 	"""
