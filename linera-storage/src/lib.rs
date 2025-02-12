@@ -16,7 +16,7 @@ use linera_base::{
     data_types::{Amount, Blob, BlockHeight, TimeDelta, Timestamp, UserApplicationDescription},
     hashed::Hashed,
     identifiers::{
-        BlobId, ChainDescription, ChainId, GenericApplicationId, Owner, UserApplicationId,
+        BlobId, ChainDescription, ChainId, EventId, GenericApplicationId, Owner, UserApplicationId,
     },
     ownership::ChainOwnership,
 };
@@ -162,6 +162,15 @@ pub trait Storage: Sized {
         &self,
         hashes: I,
     ) -> Result<Vec<ConfirmedBlockCertificate>, ViewError>;
+
+    /// Reads the event with the given ID.
+    async fn read_event(&self, id: EventId) -> Result<Vec<u8>, ViewError>;
+
+    /// Writes a vector of events.
+    async fn write_events(
+        &self,
+        events: impl IntoIterator<Item = (EventId, &[u8])> + Send,
+    ) -> Result<(), ViewError>;
 
     /// Loads the view of a chain state and checks that it is active.
     ///

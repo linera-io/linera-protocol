@@ -347,6 +347,13 @@ where
                 .storage
                 .write_blobs_and_certificate(blobs, &certificate)
                 .await?;
+            let events = executed_block
+                .outcome
+                .events
+                .iter()
+                .flatten()
+                .map(|event| (event.id(chain_id), &event.value[..]));
+            self.state.storage.write_events(events).await?;
         }
 
         // Update the blob state with last used certificate hash.

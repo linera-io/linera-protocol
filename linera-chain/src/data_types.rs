@@ -17,8 +17,8 @@ use linera_base::{
     hashed::Hashed,
     hex_debug,
     identifiers::{
-        Account, BlobId, BlobType, ChainId, ChannelName, Destination, GenericApplicationId,
-        MessageId, Owner, StreamId,
+        Account, BlobId, BlobType, ChainId, ChannelName, Destination, EventId,
+        GenericApplicationId, MessageId, Owner, StreamId,
     },
 };
 use linera_execution::{
@@ -429,6 +429,17 @@ pub struct EventRecord {
     #[debug(with = "hex_debug")]
     #[serde(with = "serde_bytes")]
     pub value: Vec<u8>,
+}
+
+impl EventRecord {
+    /// Returns the ID of this event record, given the publisher chain ID.
+    pub fn id(&self, chain_id: ChainId) -> EventId {
+        EventId {
+            chain_id,
+            stream_id: self.stream_id.clone(),
+            key: self.key.clone(),
+        }
+    }
 }
 
 impl<'de> BcsHashable<'de> for EventRecord {}
