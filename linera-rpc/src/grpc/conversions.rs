@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_base::{
-    crypto::{ed25519::Ed25519Signature, CryptoError, CryptoHash, PublicKey},
+    crypto::{
+        ed25519::{Ed25519PublicKey, Ed25519Signature},
+        CryptoError, CryptoHash,
+    },
     data_types::{BlobContent, BlockHeight},
     ensure,
     hashed::Hashed,
@@ -616,19 +619,19 @@ impl TryFrom<api::ChainId> for ChainId {
     }
 }
 
-impl From<PublicKey> for api::PublicKey {
-    fn from(public_key: PublicKey) -> Self {
+impl From<Ed25519PublicKey> for api::PublicKey {
+    fn from(public_key: Ed25519PublicKey) -> Self {
         Self {
             bytes: public_key.0.to_vec(),
         }
     }
 }
 
-impl TryFrom<api::PublicKey> for PublicKey {
+impl TryFrom<api::PublicKey> for Ed25519PublicKey {
     type Error = GrpcProtoConversionError;
 
     fn try_from(public_key: api::PublicKey) -> Result<Self, Self::Error> {
-        Ok(PublicKey::try_from(public_key.bytes.as_slice())?)
+        Ok(Ed25519PublicKey::try_from(public_key.bytes.as_slice())?)
     }
 }
 
@@ -970,7 +973,7 @@ pub mod tests {
     use std::{borrow::Cow, fmt::Debug};
 
     use linera_base::{
-        crypto::{BcsSignable, CryptoHash, KeyPair},
+        crypto::{ed25519::Ed25519SecretKey, BcsSignable, CryptoHash},
         data_types::{Amount, Blob, Round, Timestamp},
     };
     use linera_chain::{
@@ -1007,20 +1010,20 @@ pub mod tests {
 
     #[test]
     pub fn test_public_key() {
-        let public_key = KeyPair::generate().public();
+        let public_key = Ed25519SecretKey::generate().public();
         round_trip_check::<_, api::PublicKey>(public_key);
     }
 
     #[test]
     pub fn test_signature() {
-        let key_pair = KeyPair::generate();
+        let key_pair = Ed25519SecretKey::generate();
         let signature = Ed25519Signature::new(&Foo("test".into()), &key_pair);
         round_trip_check::<_, api::Signature>(signature);
     }
 
     #[test]
     pub fn test_owner() {
-        let key_pair = KeyPair::generate();
+        let key_pair = Ed25519SecretKey::generate();
         let owner = Owner::from(key_pair.public());
         round_trip_check::<_, api::Owner>(owner);
     }
@@ -1033,7 +1036,7 @@ pub mod tests {
 
     #[test]
     pub fn validator_name() {
-        let validator_name = ValidatorName::from(KeyPair::generate().public());
+        let validator_name = ValidatorName::from(Ed25519SecretKey::generate().public());
         // This is a correct comparison - `ValidatorNameRpc` does not exist in our
         // proto definitions.
         round_trip_check::<_, api::PublicKey>(validator_name);
@@ -1077,7 +1080,7 @@ pub mod tests {
             info: chain_info,
             signature: Some(Ed25519Signature::new(
                 &Foo("test".into()),
-                &KeyPair::generate(),
+                &Ed25519SecretKey::generate(),
             )),
         };
         round_trip_check::<_, api::ChainInfoResponse>(chain_info_response_some);
@@ -1132,7 +1135,7 @@ pub mod tests {
 
     #[test]
     pub fn test_lite_certificate() {
-        let key_pair = KeyPair::generate();
+        let key_pair = Ed25519SecretKey::generate();
         let certificate = LiteCertificate {
             value: LiteValue {
                 value_hash: CryptoHash::new(&Foo("value".into())),
@@ -1155,7 +1158,7 @@ pub mod tests {
 
     #[test]
     pub fn test_certificate() {
-        let key_pair = KeyPair::generate();
+        let key_pair = Ed25519SecretKey::generate();
         let certificate = ValidatedBlockCertificate::new(
             Hashed::new(ValidatedBlock::new(
                 BlockExecutionOutcome {
@@ -1200,7 +1203,7 @@ pub mod tests {
 
     #[test]
     pub fn test_block_proposal() {
-        let key_pair = KeyPair::generate();
+        let key_pair = Ed25519SecretKey::generate();
         let outcome = BlockExecutionOutcome {
             state_hash: CryptoHash::new(&Foo("validated".into())),
             ..BlockExecutionOutcome::default()
@@ -1215,7 +1218,7 @@ pub mod tests {
         )
         .lite_certificate()
         .cloned();
-        let public_key = KeyPair::generate().public();
+        let public_key = Ed25519SecretKey::generate().public();
         let block_proposal = BlockProposal {
             content: ProposalContent {
                 block: get_block(),
@@ -1224,7 +1227,7 @@ pub mod tests {
             },
             owner: Owner::from(public_key),
             public_key,
-            signature: Ed25519Signature::new(&Foo("test".into()), &KeyPair::generate()),
+            signature: Ed25519Signature::new(&Foo("test".into()), &Ed25519SecretKey::generate()),
             validated_block_certificate: Some(cert),
         };
 

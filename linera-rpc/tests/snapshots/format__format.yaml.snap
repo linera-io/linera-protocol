@@ -152,7 +152,7 @@ BlockProposal:
     - public_key:
         TYPENAME: PublicKey
     - signature:
-        TYPENAME: Signature
+        TYPENAME: Ed25119Signature
     - validated_block_certificate:
         OPTION:
           TYPENAME: LiteCertificate
@@ -272,7 +272,7 @@ ChainInfoResponse:
         TYPENAME: ChainInfo
     - signature:
         OPTION:
-          TYPENAME: Signature
+          TYPENAME: Ed25119Signature
 ChainManagerInfo:
   STRUCT:
     - ownership:
@@ -357,7 +357,7 @@ ConfirmedBlockCertificate:
         SEQ:
           TUPLE:
             - TYPENAME: ValidatorName
-            - TYPENAME: Signature
+            - TYPENAME: Ed25119Signature
 CrateVersion:
   STRUCT:
     - major: U32
@@ -407,6 +407,11 @@ Destination:
       Subscribers:
         NEWTYPE:
           TYPENAME: ChannelName
+Ed25119Signature:
+  NEWTYPESTRUCT:
+    TUPLEARRAY:
+      CONTENT: U8
+      SIZE: 64
 Epoch:
   NEWTYPESTRUCT: U32
 EventRecord:
@@ -459,7 +464,7 @@ LiteCertificate:
         SEQ:
           TUPLE:
             - TYPENAME: ValidatorName
-            - TYPENAME: Signature
+            - TYPENAME: Ed25119Signature
 LiteValue:
   STRUCT:
     - value_hash:
@@ -477,7 +482,7 @@ LiteVote:
     - validator:
         TYPENAME: ValidatorName
     - signature:
-        TYPENAME: Signature
+        TYPENAME: Ed25119Signature
 LockingBlock:
   ENUM:
     0:
@@ -937,11 +942,6 @@ RpcMessage:
       CrossChainRequest:
         NEWTYPE:
           TYPENAME: CrossChainRequest
-Signature:
-  NEWTYPESTRUCT:
-    TUPLEARRAY:
-      CONTENT: U8
-      SIZE: 64
 StreamId:
   STRUCT:
     - application_id:
@@ -1136,7 +1136,7 @@ TimeoutCertificate:
         SEQ:
           TUPLE:
             - TYPENAME: ValidatorName
-            - TYPENAME: Signature
+            - TYPENAME: Ed25119Signature
 TimeoutConfig:
   STRUCT:
     - fast_round_duration:
@@ -1170,7 +1170,7 @@ ValidatedBlockCertificate:
         SEQ:
           TUPLE:
             - TYPENAME: ValidatorName
-            - TYPENAME: Signature
+            - TYPENAME: Ed25119Signature
 ValidatorName:
   NEWTYPESTRUCT:
     TYPENAME: PublicKey

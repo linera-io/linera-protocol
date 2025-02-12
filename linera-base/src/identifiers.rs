@@ -18,7 +18,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::{
     bcs_scalar,
-    crypto::{BcsHashable, CryptoError, CryptoHash, PublicKey},
+    crypto::{ed25519::Ed25519PublicKey, BcsHashable, CryptoError, CryptoHash},
     data_types::BlockHeight,
     doc_scalar, hex_debug,
 };
@@ -793,14 +793,14 @@ impl Display for Owner {
     }
 }
 
-impl From<PublicKey> for Owner {
-    fn from(value: PublicKey) -> Self {
+impl From<Ed25519PublicKey> for Owner {
+    fn from(value: Ed25519PublicKey) -> Self {
         Self(CryptoHash::new(&value))
     }
 }
 
-impl From<&PublicKey> for Owner {
-    fn from(value: &PublicKey) -> Self {
+impl From<&Ed25519PublicKey> for Owner {
+    fn from(value: &Ed25519PublicKey) -> Self {
         Self(CryptoHash::new(value))
     }
 }
