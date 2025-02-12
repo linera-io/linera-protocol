@@ -246,7 +246,7 @@ where
         skip_all,
         fields(chain_id = format!("{:.8}", self.worker.chain_id())),
     )]
-    pub async fn run(
+    pub async fn handle_requests(
         mut self,
         mut incoming_requests: mpsc::UnboundedReceiver<ChainWorkerRequest<StorageClient::Context>>,
     ) {
