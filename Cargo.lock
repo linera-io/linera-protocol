@@ -4408,7 +4408,6 @@ dependencies = [
  "cfg_aliases",
  "custom_debug_derive",
  "futures",
- "hex",
  "linera-base",
  "linera-chain",
  "linera-execution",

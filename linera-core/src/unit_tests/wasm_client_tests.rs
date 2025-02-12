@@ -19,12 +19,12 @@ use assert_matches::assert_matches;
 use async_graphql::Request;
 use counter::CounterAbi;
 use linera_base::{
-    data_types::{Amount, Bytecode, OracleResponse, UserApplicationDescription},
+    data_types::{Amount, Bytecode, EventRecord, OracleResponse, UserApplicationDescription},
     identifiers::{AccountOwner, ApplicationId, Destination, Owner, StreamId, StreamName},
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_chain::{
-    data_types::{EventRecord, MessageAction, OutgoingMessage},
+    data_types::{MessageAction, OutgoingMessage},
     ChainError, ChainExecutionContext,
 };
 use linera_execution::{

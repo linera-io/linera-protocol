@@ -59,9 +59,9 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
         chain_id: ChainId::root(0),
         owner: Some(AccountOwner::User(owner)),
     };
-    let (outcomes, _, _) = txn_tracker.destructure().unwrap();
+    let txn_outcome = txn_tracker.into_outcome().unwrap();
     assert_eq!(
-        outcomes,
+        txn_outcome.outcomes,
         vec![ExecutionOutcome::System(
             RawExecutionOutcome::default()
                 .with_authenticated_signer(Some(owner))
@@ -108,9 +108,9 @@ async fn test_simple_system_message() -> anyhow::Result<()> {
     .await
     .unwrap();
     assert_eq!(view.system.balance.get(), &Amount::from_tokens(4));
-    let (outcomes, _, _) = txn_tracker.destructure().unwrap();
+    let txn_outcome = txn_tracker.into_outcome().unwrap();
     assert_eq!(
-        outcomes,
+        txn_outcome.outcomes,
         vec![ExecutionOutcome::System(RawExecutionOutcome::default())]
     );
     Ok(())

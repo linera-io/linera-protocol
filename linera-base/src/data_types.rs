@@ -19,7 +19,7 @@ use std::{
 };
 
 use anyhow::Context as _;
-use async_graphql::InputObject;
+use async_graphql::{InputObject, SimpleObject};
 use base64::engine::{general_purpose::STANDARD_NO_PAD, Engine as _};
 use custom_debug_derive::Debug;
 use linera_witty::{WitLoad, WitStore, WitType};
@@ -34,8 +34,8 @@ use crate::{
     crypto::{BcsHashable, CryptoHash},
     doc_scalar, hex_debug,
     identifiers::{
-        ApplicationId, BlobId, BlobType, BytecodeId, Destination, GenericApplicationId, MessageId,
-        UserApplicationId,
+        ApplicationId, BlobId, BlobType, BytecodeId, ChainId, Destination, EventId,
+        GenericApplicationId, MessageId, StreamId, UserApplicationId,
     },
     limited_writer::{LimitedWriter, LimitedWriterError},
     time::{Duration, SystemTime},
@@ -1155,6 +1155,34 @@ impl<'a> Deserialize<'a> for Blob {
         }
     }
 }
+
+/// An event recorded in an executed block.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
+pub struct EventRecord {
+    /// The ID of the stream this event belongs to.
+    pub stream_id: StreamId,
+    /// The event key.
+    #[debug(with = "hex_debug")]
+    #[serde(with = "serde_bytes")]
+    pub key: Vec<u8>,
+    /// The payload data.
+    #[debug(with = "hex_debug")]
+    #[serde(with = "serde_bytes")]
+    pub value: Vec<u8>,
+}
+
+impl EventRecord {
+    /// Returns the ID of this event record, given the publisher chain ID.
+    pub fn id(&self, chain_id: ChainId) -> EventId {
+        EventId {
+            chain_id,
+            stream_id: self.stream_id.clone(),
+            key: self.key.clone(),
+        }
+    }
+}
+
+impl<'de> BcsHashable<'de> for EventRecord {}
 
 doc_scalar!(Bytecode, "A WebAssembly module's bytecode");
 doc_scalar!(Amount, "A non-negative amount of tokens.");

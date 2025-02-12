@@ -12,13 +12,11 @@ use custom_debug_derive::Debug;
 use linera_base::{
     bcs,
     crypto::{BcsHashable, BcsSignable, CryptoError, CryptoHash, KeyPair, PublicKey, Signature},
-    data_types::{Amount, BlockHeight, OracleResponse, Round, Timestamp},
+    data_types::{Amount, BlockHeight, EventRecord, OracleResponse, Round, Timestamp},
     doc_scalar, ensure,
     hashed::Hashed,
-    hex_debug,
     identifiers::{
-        Account, BlobId, BlobType, ChainId, ChannelName, Destination, EventId,
-        GenericApplicationId, MessageId, Owner, StreamId,
+        Account, BlobId, BlobType, ChainId, ChannelFullName, Destination, MessageId, Owner,
     },
 };
 use linera_execution::{
@@ -271,25 +269,6 @@ pub struct MessageBundle {
     pub messages: Vec<PostedMessage>,
 }
 
-#[derive(Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
-/// A channel name together with its application ID.
-pub struct ChannelFullName {
-    /// The application owning the channel.
-    pub application_id: GenericApplicationId,
-    /// The name of the channel.
-    pub name: ChannelName,
-}
-
-impl fmt::Display for ChannelFullName {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let name = hex::encode(&self.name);
-        match self.application_id {
-            GenericApplicationId::System => write!(f, "system channel {name}"),
-            GenericApplicationId::User(app_id) => write!(f, "user channel {name} for app {app_id}"),
-        }
-    }
-}
-
 /// The origin of a message coming from a particular chain. Used to identify each inbox.
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Serialize, Deserialize)]
 pub enum Medium {
@@ -415,34 +394,6 @@ pub struct BlockExecutionOutcome {
     /// The list of events produced by each transaction.
     pub events: Vec<Vec<EventRecord>>,
 }
-
-/// An event recorded in an executed block.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
-pub struct EventRecord {
-    /// The ID of the stream this event belongs to.
-    pub stream_id: StreamId,
-    /// The event key.
-    #[debug(with = "hex_debug")]
-    #[serde(with = "serde_bytes")]
-    pub key: Vec<u8>,
-    /// The payload data.
-    #[debug(with = "hex_debug")]
-    #[serde(with = "serde_bytes")]
-    pub value: Vec<u8>,
-}
-
-impl EventRecord {
-    /// Returns the ID of this event record, given the publisher chain ID.
-    pub fn id(&self, chain_id: ChainId) -> EventId {
-        EventId {
-            chain_id,
-            stream_id: self.stream_id.clone(),
-            key: self.key.clone(),
-        }
-    }
-}
-
-impl<'de> BcsHashable<'de> for EventRecord {}
 
 /// The hash and chain ID of a `CertificateValue`.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -980,10 +931,6 @@ impl<'de> BcsSignable<'de> for VoteValue {}
 doc_scalar!(
     MessageAction,
     "Whether an incoming message is accepted or rejected."
-);
-doc_scalar!(
-    ChannelFullName,
-    "A channel name together with its application ID."
 );
 doc_scalar!(
     Medium,

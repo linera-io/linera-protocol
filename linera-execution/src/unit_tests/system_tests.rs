@@ -60,7 +60,8 @@ async fn application_message_index() -> anyhow::Result<()> {
         .system
         .execute_operation(context, operation, &mut txn_tracker)
         .await?;
-    let [ExecutionOutcome::System(result)] = &txn_tracker.destructure()?.0[..] else {
+    let [ExecutionOutcome::System(result)] = &txn_tracker.into_outcome().unwrap().outcomes[..]
+    else {
         panic!("Unexpected outcome");
     };
     assert_eq!(
@@ -105,7 +106,8 @@ async fn open_chain_message_index() {
         .await
         .unwrap();
     assert_eq!(new_application, None);
-    let [ExecutionOutcome::System(result)] = &txn_tracker.destructure().unwrap().0[..] else {
+    let [ExecutionOutcome::System(result)] = &txn_tracker.into_outcome().unwrap().outcomes[..]
+    else {
         panic!("Unexpected outcome");
     };
     assert_eq!(

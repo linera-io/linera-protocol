@@ -7,7 +7,7 @@ use std::{collections::BTreeSet, fmt::Debug};
 use async_graphql::SimpleObject;
 use linera_base::{
     crypto::{BcsHashable, CryptoHash},
-    data_types::{BlockHeight, OracleResponse, Timestamp},
+    data_types::{BlockHeight, EventRecord, OracleResponse, Timestamp},
     hashed::Hashed,
     identifiers::{BlobId, BlobType, ChainId, MessageId, Owner},
 };
@@ -17,7 +17,7 @@ use thiserror::Error;
 
 use crate::{
     data_types::{
-        BlockExecutionOutcome, EventRecord, ExecutedBlock, IncomingBundle, Medium, MessageBundle,
+        BlockExecutionOutcome, ExecutedBlock, IncomingBundle, Medium, MessageBundle,
         OutgoingMessage, ProposedBlock,
     },
     types::CertificateValue,

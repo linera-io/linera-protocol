@@ -21,16 +21,16 @@ use linera_base::{
     data_types::*,
     hashed::Hashed,
     identifiers::{
-        Account, AccountOwner, ChainDescription, ChainId, ChannelName, Destination,
-        GenericApplicationId, MessageId, Owner,
+        Account, AccountOwner, ChainDescription, ChainId, ChannelFullName, ChannelName,
+        Destination, GenericApplicationId, MessageId, Owner,
     },
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_chain::{
     data_types::{
-        BlockExecutionOutcome, BlockProposal, ChainAndHeight, ChannelFullName, ExecutedBlock,
-        IncomingBundle, LiteValue, LiteVote, Medium, MessageAction, MessageBundle, Origin,
-        OutgoingMessage, PostedMessage, ProposedBlock, SignatureAggregator,
+        BlockExecutionOutcome, BlockProposal, ChainAndHeight, ExecutedBlock, IncomingBundle,
+        LiteValue, LiteVote, Medium, MessageAction, MessageBundle, Origin, OutgoingMessage,
+        PostedMessage, ProposedBlock, SignatureAggregator,
     },
     manager::LockingBlock,
     test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt, VoteTestExt},
