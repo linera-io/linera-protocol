@@ -24,7 +24,6 @@ name = "linera-storage-server"
 path = "src/server.rs"
 
 [dependencies]
-rand = { workspace = true, optional = true, features = ["small_rng"] }
 anyhow.workspace = true
 async-lock.workspace = true
 bcs.workspace = true
@@ -34,6 +33,7 @@ linera-base.workspace = true
 linera-version.workspace = true
 linera-views.workspace = true
 prost.workspace = true
+rand = { workspace = true, optional = true, features = ["small_rng"] }
 serde.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
