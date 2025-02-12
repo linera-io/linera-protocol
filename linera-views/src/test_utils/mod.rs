@@ -7,10 +7,7 @@ pub mod test_views;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod performance;
 
-use std::{
-    collections::{BTreeMap, BTreeSet, HashSet},
-    fmt::Debug,
-};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use rand::{seq::SliceRandom, Rng};
 
@@ -683,10 +680,7 @@ pub async fn run_writes_from_state<C: LocalRestrictedKeyValueStore>(key_value_st
 async fn namespaces_with_prefix<S: LocalKeyValueStore>(
     config: &S::Config,
     prefix: &str,
-) -> BTreeSet<String>
-where
-    S::Error: Debug,
-{
+) -> BTreeSet<String> {
     let namespaces = S::list_all(config).await.expect("namespaces");
     namespaces
         .into_iter()
@@ -697,10 +691,7 @@ where
 /// Exercises the namespace functionalities of the `AdminKeyValueStore`.
 /// This tests everything except the `delete_all` which would
 /// interact with other namespaces.
-pub async fn namespace_admin_test<S: TestKeyValueStore>()
-where
-    S::Error: Debug,
-{
+pub async fn namespace_admin_test<S: TestKeyValueStore>() {
     let config = S::new_test_config().await.expect("config");
     let prefix = generate_test_namespace();
     let namespaces = namespaces_with_prefix::<S>(&config, &prefix).await;
@@ -761,10 +752,7 @@ where
 }
 
 /// Tests listing the root keys.
-pub async fn root_key_admin_test<S: TestKeyValueStore>()
-where
-    S::Error: Debug,
-{
+pub async fn root_key_admin_test<S: TestKeyValueStore>() {
     let config = S::new_test_config().await.expect("config");
     let namespace = generate_test_namespace();
     let mut root_keys = Vec::new();

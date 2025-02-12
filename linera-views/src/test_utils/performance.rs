@@ -1,10 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    fmt::Debug,
-    time::{Duration, Instant},
-};
+use std::time::{Duration, Instant};
 
 use crate::{
     batch::Batch,
@@ -42,7 +39,6 @@ async fn clear_store<S: LocalKeyValueStore>(store: &S) {
 /// Benchmarks the `contains_key` operation.
 pub async fn contains_key<S: TestKeyValueStore, F>(iterations: u64, f: F) -> Duration
 where
-    S::Error: Debug,
     F: Fn(bool) -> bool,
 {
     let store = S::new_test_store().await.unwrap();
@@ -73,7 +69,6 @@ where
 /// Benchmarks the `contains_keys` operation.
 pub async fn contains_keys<S: TestKeyValueStore, F>(iterations: u64, f: F) -> Duration
 where
-    S::Error: Debug,
     F: Fn(Vec<bool>) -> Vec<bool>,
 {
     let store = S::new_test_store().await.unwrap();
@@ -106,7 +101,6 @@ where
 /// Benchmarks the `find_keys_by_prefix` operation.
 pub async fn find_keys_by_prefix<S: TestKeyValueStore, F>(iterations: u64, f: F) -> Duration
 where
-    S::Error: Debug,
     F: Fn(S::Keys) -> S::Keys,
 {
     let store = S::new_test_store().await.unwrap();
@@ -135,7 +129,6 @@ where
 /// Benchmarks the `find_keys_by_prefix` operation.
 pub async fn find_key_values_by_prefix<S: TestKeyValueStore, F>(iterations: u64, f: F) -> Duration
 where
-    S::Error: Debug,
     F: Fn(S::KeyValues) -> S::KeyValues,
 {
     let store = S::new_test_store().await.unwrap();
@@ -167,7 +160,6 @@ where
 /// Benchmarks the `read_value_bytes` operation.
 pub async fn read_value_bytes<S: TestKeyValueStore, F>(iterations: u64, f: F) -> Duration
 where
-    S::Error: Debug,
     F: Fn(Option<Vec<u8>>) -> Option<Vec<u8>>,
 {
     let store = S::new_test_store().await.unwrap();
@@ -198,7 +190,6 @@ where
 /// Benchmarks the `read_multi_values_bytes` operation.
 pub async fn read_multi_values_bytes<S: TestKeyValueStore, F>(iterations: u64, f: F) -> Duration
 where
-    S::Error: Debug,
     F: Fn(Vec<Option<Vec<u8>>>) -> Vec<Option<Vec<u8>>>,
 {
     let store = S::new_test_store().await.unwrap();
@@ -229,10 +220,7 @@ where
 }
 
 /// Benchmarks the `write_batch` operation.
-pub async fn write_batch<S: TestKeyValueStore>(iterations: u64) -> Duration
-where
-    S::Error: Debug,
-{
+pub async fn write_batch<S: TestKeyValueStore>(iterations: u64) -> Duration {
     let store = S::new_test_store().await.unwrap();
     let mut total_time = Duration::ZERO;
     for _ in 0..iterations {
