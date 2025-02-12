@@ -5,10 +5,93 @@
 use std::fmt;
 
 use ed25519_dalek::{self as dalek, Signer, Verifier};
+use secp256k1::{self, Message};
 use serde::{Deserialize, Serialize};
 
-use super::{BcsSignable, CryptoError, HasTypeName, Hashable, KeyPair, PublicKey};
+use super::{BcsSignable, CryptoError, CryptoHash, HasTypeName, Hashable, KeyPair, PublicKey};
 use crate::doc_scalar;
+
+/// A Secp256k1 signature.
+#[derive(Eq, PartialEq, Copy, Clone)]
+pub struct Secp256k1Signature(pub secp256k1::ecdsa::Signature);
+
+impl Secp256k1Signature {
+    /// Computes a secp256k1 signature for [`value`] using the given [`secret`].
+    /// It first serializes the `T` type and then creates the `CryptoHash` from the serialized bytes.
+    pub fn new<'de, T>(value: &T, secret: &secp256k1::SecretKey) -> Self
+    where
+        T: BcsSignable<'de>,
+    {
+        let secp = secp256k1::Secp256k1::new();
+        let message = Message::from_digest(CryptoHash::new(value).as_bytes().0);
+        let signature = secp.sign_ecdsa(&message, &secret);
+        Secp256k1Signature(signature)
+    }
+
+    /// Checks a signature.
+    pub fn check<'de, T>(&self, value: &T, author: &secp256k1::PublicKey) -> Result<(), CryptoError>
+    where
+        T: BcsSignable<'de> + fmt::Debug,
+    {
+        let secp = secp256k1::Secp256k1::new();
+        let message = Message::from_digest(CryptoHash::new(value).as_bytes().0);
+        secp.verify_ecdsa(&message, &self.0, author)
+            .map_err(|error| CryptoError::InvalidSignature {
+                error: error.to_string(),
+                type_name: T::type_name().to_string(),
+            })
+    }
+}
+
+impl Serialize for Secp256k1Signature {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::ser::Serializer,
+    {
+        if serializer.is_human_readable() {
+            serializer.serialize_str(&hex::encode(self.0.serialize_der()))
+        } else {
+            serializer.serialize_newtype_struct("Signature", &self.0)
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for Secp256k1Signature {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::de::Deserializer<'de>,
+    {
+        if deserializer.is_human_readable() {
+            let s = String::deserialize(deserializer)?;
+            let value = hex::decode(s).map_err(serde::de::Error::custom)?;
+            let sig =
+                secp256k1::ecdsa::Signature::from_der(&value).map_err(serde::de::Error::custom)?;
+            Ok(Secp256k1Signature(sig))
+        } else {
+            #[derive(Deserialize)]
+            #[serde(rename = "Signature")]
+            struct Foo(secp256k1::ecdsa::Signature);
+
+            let value = Foo::deserialize(deserializer)?;
+            Ok(Self(value.0))
+        }
+    }
+}
+
+impl fmt::Display for Secp256k1Signature {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = hex::encode(self.0.serialize_der());
+        write!(f, "{}", s)
+    }
+}
+
+impl fmt::Debug for Secp256k1Signature {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", hex::encode(&self.0.serialize_der()[0..8]))
+    }
+}
+
+doc_scalar!(Secp256k1Signature, "A Secp256k1 signature value");
 
 /// A Ed25519 signature.
 #[derive(Eq, PartialEq, Copy, Clone)]
@@ -153,7 +236,7 @@ impl fmt::Debug for Ed25519Signature {
     }
 }
 
-doc_scalar!(Ed25519Signature, "A signature value");
+doc_scalar!(Ed25519Signature, "An Ed25519 signature value");
 
 /// A BCS-signable struct for testing.
 #[cfg(with_testing)]
@@ -171,25 +254,60 @@ impl TestString {
 #[cfg(with_testing)]
 impl<'de> BcsSignable<'de> for TestString {}
 
-#[test]
-fn test_signatures() {
-    #[derive(Debug, Serialize, Deserialize)]
-    struct Foo(String);
+#[cfg(with_testing)]
+mod ed25519_tests {
+    #[test]
+    fn test_signatures() {
+        use serde::{Deserialize, Serialize};
 
-    impl<'de> BcsSignable<'de> for Foo {}
+        use crate::crypto::{BcsSignable, Ed25519Signature, KeyPair, TestString};
 
-    let key1 = KeyPair::generate();
-    let addr1 = key1.public();
-    let key2 = KeyPair::generate();
-    let addr2 = key2.public();
+        #[derive(Debug, Serialize, Deserialize)]
+        struct Foo(String);
 
-    let ts = TestString("hello".into());
-    let tsx = TestString("hellox".into());
-    let foo = Foo("hello".into());
+        impl<'de> BcsSignable<'de> for Foo {}
 
-    let s = Ed25519Signature::new(&ts, &key1);
-    assert!(s.check(&ts, addr1).is_ok());
-    assert!(s.check(&ts, addr2).is_err());
-    assert!(s.check(&tsx, addr1).is_err());
-    assert!(s.check(&foo, addr1).is_err());
+        let key1 = KeyPair::generate();
+        let addr1 = key1.public();
+        let key2 = KeyPair::generate();
+        let addr2 = key2.public();
+
+        let ts = TestString("hello".into());
+        let tsx = TestString("hellox".into());
+        let foo = Foo("hello".into());
+
+        let s = Ed25519Signature::new(&ts, &key1);
+        assert!(s.check(&ts, addr1).is_ok());
+        assert!(s.check(&ts, addr2).is_err());
+        assert!(s.check(&tsx, addr1).is_err());
+        assert!(s.check(&foo, addr1).is_err());
+    }
+}
+
+#[cfg(with_testing)]
+mod secp256k1_tests {
+    #[test]
+    fn test_signatures() {
+        use serde::{Deserialize, Serialize};
+
+        use crate::crypto::{BcsSignable, Secp256k1Signature, TestString};
+
+        #[derive(Debug, Serialize, Deserialize)]
+        struct Foo(String);
+
+        impl<'de> BcsSignable<'de> for Foo {}
+
+        let (sk1, pk1) = secp256k1::Secp256k1::new().generate_keypair(&mut rand::thread_rng());
+        let (_sk2, pk2) = secp256k1::Secp256k1::new().generate_keypair(&mut rand::thread_rng());
+
+        let ts = TestString("hello".into());
+        let tsx = TestString("hellox".into());
+        let foo = Foo("hello".into());
+
+        let s = Secp256k1Signature::new(&ts, &sk1);
+        assert!(s.check(&ts, &pk1).is_ok());
+        assert!(s.check(&ts, &pk2).is_err());
+        assert!(s.check(&tsx, &pk1).is_err());
+        assert!(s.check(&foo, &pk1).is_err());
+    }
 }
