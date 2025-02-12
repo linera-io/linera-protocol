@@ -495,8 +495,7 @@ pub async fn tombstone_triggering_test<C: LocalRestrictedKeyValueStore>(key_valu
         batch_insert.put_key_value_bytes(key.clone(), value.clone());
         let to_delete = rng.gen::<bool>();
         if to_delete {
-            batch_delete.delete_key_prefix(key);
-        //            batch_delete.delete_key(key);
+            batch_delete.delete_key(key);
         } else {
             remaining_keys.insert(key.clone());
             remaining_key_values.insert(key, value);
