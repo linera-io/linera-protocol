@@ -176,8 +176,8 @@ impl<StorageClient> ChainWorkerActor<StorageClient>
 where
     StorageClient: Storage + Clone + Send + Sync + 'static,
 {
-    /// Spawns a new task to run the [`ChainWorkerActor`], returning an endpoint for sending
-    /// requests to the worker.
+    /// Creates a [`ChainWorkerActor`], loading it with the chain state for the requested
+    /// [`ChainId`].
     pub async fn load(
         config: ChainWorkerConfig,
         storage: StorageClient,
