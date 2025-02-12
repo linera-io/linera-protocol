@@ -12,6 +12,8 @@ repository.workspace = true
 version.workspace = true
 
 [features]
+artificial_random_read_error = []
+artificial_random_write_error = []
 metrics = ["linera-views/metrics"]
 rocksdb = ["linera-views/rocksdb"]
 storage-service = []

@@ -9,6 +9,12 @@ use std::{
     },
 };
 
+#[cfg(any(feature = "artificial_random_read_error", feature = "artificial_random_write_error"))]
+use {
+    linera_views::random::{make_deterministic_rng, DeterministicRng},
+    std::sync::Mutex,
+};
+
 use async_lock::{Semaphore, SemaphoreGuard};
 use futures::future::join_all;
 use linera_base::ensure;
@@ -73,6 +79,8 @@ pub struct ServiceStoreClientInternal {
     prefix_len: usize,
     start_key: Vec<u8>,
     root_key_written: Arc<AtomicBool>,
+    #[cfg(any(feature = "artificial_random_read_error", feature = "artificial_random_write_error"))]
+    rng: Arc<Mutex<DeterministicRng>>,
 }
 
 impl WithError for ServiceStoreClientInternal {
@@ -406,6 +414,47 @@ impl ServiceStoreClientInternal {
         }
         Ok(bcs::from_bytes(&value)?)
     }
+
+    #[cfg(any(feature = "artificial_random_read_error", feature = "artificial_random_write_error"))]
+    fn build(
+        channel: Channel,
+        semaphore: Option<Arc<Semaphore>>,
+        max_stream_queries: usize,
+        prefix_len: usize,
+        start_key: Vec<u8>,
+    ) -> Self {
+        let root_key_written = Arc::new(AtomicBool::new(false));
+        let rng = make_deterministic_rng();
+        let rng = Arc::new(Mutex::new(rng));
+        Self {
+            channel,
+            semaphore,
+            max_stream_queries,
+            prefix_len,
+            start_key,
+            root_key_written,
+            rng,
+        }
+    }
+
+    #[cfg(not(any(feature = "artificial_random_read_error", feature = "artificial_random_write_error")))]
+    fn build(
+        channel: Channel,
+        semaphore: Option<Arc<Semaphore>>,
+        max_stream_queries: usize,
+        prefix_len: usize,
+        start_key: Vec<u8>,
+    ) -> Self {
+        let root_key_written = Arc::new(AtomicBool::new(false));
+        Self {
+            channel,
+            semaphore,
+            max_stream_queries,
+            prefix_len,
+            start_key,
+            root_key_written,
+        }
+    }
 }
 
 impl AdminKeyValueStore for ServiceStoreClientInternal {
@@ -433,14 +482,13 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
         let endpoint = config.http_address();
         let endpoint = Endpoint::from_shared(endpoint)?;
         let channel = endpoint.connect_lazy();
-        Ok(Self {
+        Ok(Self::build(
             channel,
             semaphore,
             max_stream_queries,
             prefix_len,
             start_key,
-            root_key_written: Arc::new(AtomicBool::new(false)),
-        })
+        ))
     }
 
     fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, ServiceStoreError> {
@@ -450,14 +498,13 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
         let max_stream_queries = self.max_stream_queries;
         let mut start_key = self.start_key[..prefix_len].to_vec();
         start_key.extend(root_key);
-        Ok(Self {
+        Ok(Self::build(
             channel,
             semaphore,
             max_stream_queries,
             prefix_len,
             start_key,
-            root_key_written: Arc::new(AtomicBool::new(false)),
-        })
+        ))
     }
 
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, ServiceStoreError> {
