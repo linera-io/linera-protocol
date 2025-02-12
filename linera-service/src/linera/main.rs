@@ -530,7 +530,7 @@ impl Runnable for Job {
                 for chain_id in chains {
                     let chain = context.make_chain_client(chain_id)?;
 
-                    chain.sync_validator(validator.clone()).await?;
+                    Box::pin(chain.sync_validator(validator.clone())).await?;
                 }
             }
 
