@@ -4,7 +4,7 @@
 
 //! Defines secp256k1 signature primitives used by the Linera protocol.
 
-use std::fmt;
+use std::{fmt, str::FromStr};
 
 use secp256k1::{self, Message};
 use serde::{Deserialize, Serialize};
@@ -12,9 +12,90 @@ use serde::{Deserialize, Serialize};
 use super::{BcsSignable, CryptoError, CryptoHash, HasTypeName};
 use crate::doc_scalar;
 
+/// A secp256k1 secret key.
+pub struct Secp256k1SecretKey(pub secp256k1::SecretKey);
+
+/// A secp256k1 public key.
+#[derive(Eq, PartialEq, Copy, Clone)]
+pub struct Secp256k1PublicKey(pub secp256k1::PublicKey);
+
 /// A secp256k1 signature.
 #[derive(Eq, PartialEq, Copy, Clone)]
 pub struct Secp256k1Signature(pub secp256k1::ecdsa::Signature);
+
+impl Serialize for Secp256k1PublicKey {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::ser::Serializer,
+    {
+        if serializer.is_human_readable() {
+            serializer.serialize_str(&hex::encode(self.0.serialize()))
+        } else {
+            serializer.serialize_newtype_struct("Secp256k1PublicKey", &self.0)
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for Secp256k1PublicKey {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::de::Deserializer<'de>,
+    {
+        if deserializer.is_human_readable() {
+            let s = String::deserialize(deserializer)?;
+            let value = hex::decode(s).map_err(serde::de::Error::custom)?;
+            let pk = secp256k1::PublicKey::from_slice(&value).map_err(serde::de::Error::custom)?;
+            Ok(Secp256k1PublicKey(pk))
+        } else {
+            #[derive(Deserialize)]
+            #[serde(rename = "Secp256k1PublicKey")]
+            struct Foo(secp256k1::PublicKey);
+
+            let value = Foo::deserialize(deserializer)?;
+            Ok(Self(value.0))
+        }
+    }
+}
+
+impl FromStr for Secp256k1PublicKey {
+    type Err = CryptoError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let pk = secp256k1::PublicKey::from_str(s)
+            .map_err(|_| CryptoError::IncorrectPublicKeySize(0))?;
+        Ok(Secp256k1PublicKey(pk))
+    }
+}
+
+impl From<[u8; 33]> for Secp256k1PublicKey {
+    fn from(value: [u8; 33]) -> Self {
+        let pk = secp256k1::PublicKey::from_slice(&value).expect("Invalid public key");
+        Secp256k1PublicKey(pk)
+    }
+}
+
+impl TryFrom<&[u8]> for Secp256k1PublicKey {
+    type Error = CryptoError;
+
+    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+        let pk = secp256k1::PublicKey::from_slice(value)
+            .map_err(|_| CryptoError::IncorrectPublicKeySize(value.len()))?;
+        Ok(Secp256k1PublicKey(pk))
+    }
+}
+
+impl fmt::Display for Secp256k1PublicKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = hex::encode(self.0.serialize());
+        write!(f, "{}", s)
+    }
+}
+
+impl fmt::Debug for Secp256k1PublicKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", hex::encode(&self.0.serialize()[0..9]))
+    }
+}
 
 impl Secp256k1Signature {
     /// Computes a secp256k1 signature for `value` using the given `secret`.
