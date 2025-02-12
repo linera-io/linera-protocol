@@ -675,7 +675,7 @@ type MapView_BlobId_Blob_9f0b41f3 {
 }
 
 """
-An message to be sent and possibly executed in the receiver's block.
+A message to be sent and possibly executed in the receiver's block.
 """
 scalar Message
 
