@@ -12,8 +12,8 @@ repository.workspace = true
 version.workspace = true
 
 [features]
-artificial_random_read_error = []
-artificial_random_write_error = []
+artificial_random_read_error = ["dep:rand"]
+artificial_random_write_error = ["dep:rand"]
 metrics = ["linera-views/metrics"]
 rocksdb = ["linera-views/rocksdb"]
 storage-service = []
@@ -24,6 +24,7 @@ name = "linera-storage-server"
 path = "src/server.rs"
 
 [dependencies]
+rand = { workspace = true, optional = true, features = ["small_rng"] }
 anyhow.workspace = true
 async-lock.workspace = true
 bcs.workspace = true

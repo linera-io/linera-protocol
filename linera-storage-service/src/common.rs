@@ -11,14 +11,6 @@ use linera_views::{
 use thiserror::Error;
 use tonic::Status;
 
-#[cfg(feature = "artificial_random_read_error")]
-const READ_ERROR_FREQUENCY: usize = 10;
-
-#[cfg(feature = "artificial_random_write_error")]
-const WRITE_ERROR_FREQUENCY: usize = 100;
-
-
-
 // The maximal block size on GRPC is 4M.
 //
 // That size occurs in almost every use of GRPC and in particular the

@@ -9,11 +9,21 @@ use std::{
     },
 };
 
-#[cfg(any(feature = "artificial_random_read_error", feature = "artificial_random_write_error"))]
+#[cfg(any(
+    feature = "artificial_random_read_error",
+    feature = "artificial_random_write_error"
+))]
 use {
     linera_views::random::{make_deterministic_rng, DeterministicRng},
-    std::sync::Mutex,
+    rand::Rng,
+    std::{ops::DerefMut, sync::Mutex},
 };
+
+#[cfg(feature = "artificial_random_read_error")]
+const READ_ERROR_FREQUENCY: usize = 10;
+
+#[cfg(feature = "artificial_random_write_error")]
+const WRITE_ERROR_FREQUENCY: usize = 100;
 
 use async_lock::{Semaphore, SemaphoreGuard};
 use futures::future::join_all;
@@ -79,7 +89,10 @@ pub struct ServiceStoreClientInternal {
     prefix_len: usize,
     start_key: Vec<u8>,
     root_key_written: Arc<AtomicBool>,
-    #[cfg(any(feature = "artificial_random_read_error", feature = "artificial_random_write_error"))]
+    #[cfg(any(
+        feature = "artificial_random_read_error",
+        feature = "artificial_random_write_error"
+    ))]
     rng: Arc<Mutex<DeterministicRng>>,
 }
 
@@ -97,6 +110,9 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
     }
 
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, ServiceStoreError> {
+        #[cfg(feature = "artificial_random_read_error")]
+        self.trigger_read_error()?;
+
         ensure!(key.len() <= MAX_KEY_SIZE, ServiceStoreError::KeyTooLong);
         let mut full_key = self.start_key.clone();
         full_key.extend(key);
@@ -120,6 +136,9 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
     }
 
     async fn contains_key(&self, key: &[u8]) -> Result<bool, ServiceStoreError> {
+        #[cfg(feature = "artificial_random_read_error")]
+        self.trigger_read_error()?;
+
         ensure!(key.len() <= MAX_KEY_SIZE, ServiceStoreError::KeyTooLong);
         let mut full_key = self.start_key.clone();
         full_key.extend(key);
@@ -135,6 +154,9 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
     }
 
     async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, ServiceStoreError> {
+        #[cfg(feature = "artificial_random_read_error")]
+        self.trigger_read_error()?;
+
         let mut full_keys = Vec::new();
         for key in keys {
             ensure!(key.len() <= MAX_KEY_SIZE, ServiceStoreError::KeyTooLong);
@@ -157,6 +179,9 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, ServiceStoreError> {
+        #[cfg(feature = "artificial_random_read_error")]
+        self.trigger_read_error()?;
+
         let mut full_keys = Vec::new();
         for key in keys {
             ensure!(key.len() <= MAX_KEY_SIZE, ServiceStoreError::KeyTooLong);
@@ -188,6 +213,9 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
         &self,
         key_prefix: &[u8],
     ) -> Result<Vec<Vec<u8>>, ServiceStoreError> {
+        #[cfg(feature = "artificial_random_read_error")]
+        self.trigger_read_error()?;
+
         ensure!(
             key_prefix.len() <= MAX_KEY_SIZE,
             ServiceStoreError::KeyTooLong
@@ -219,6 +247,9 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
         &self,
         key_prefix: &[u8],
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ServiceStoreError> {
+        #[cfg(feature = "artificial_random_read_error")]
+        self.trigger_read_error()?;
+
         ensure!(
             key_prefix.len() <= MAX_KEY_SIZE,
             ServiceStoreError::KeyTooLong
@@ -255,6 +286,9 @@ impl WritableKeyValueStore for ServiceStoreClientInternal {
     const MAX_VALUE_SIZE: usize = usize::MAX;
 
     async fn write_batch(&self, batch: Batch) -> Result<(), ServiceStoreError> {
+        #[cfg(feature = "artificial_random_write_error")]
+        self.trigger_write_error()?;
+
         if batch.operations.is_empty() {
             return Ok(());
         }
@@ -415,7 +449,10 @@ impl ServiceStoreClientInternal {
         Ok(bcs::from_bytes(&value)?)
     }
 
-    #[cfg(any(feature = "artificial_random_read_error", feature = "artificial_random_write_error"))]
+    #[cfg(any(
+        feature = "artificial_random_read_error",
+        feature = "artificial_random_write_error"
+    ))]
     fn build(
         channel: Channel,
         semaphore: Option<Arc<Semaphore>>,
@@ -437,7 +474,10 @@ impl ServiceStoreClientInternal {
         }
     }
 
-    #[cfg(not(any(feature = "artificial_random_read_error", feature = "artificial_random_write_error")))]
+    #[cfg(not(any(
+        feature = "artificial_random_read_error",
+        feature = "artificial_random_write_error"
+    )))]
     fn build(
         channel: Channel,
         semaphore: Option<Arc<Semaphore>>,
@@ -453,6 +493,26 @@ impl ServiceStoreClientInternal {
             prefix_len,
             start_key,
             root_key_written,
+        }
+    }
+
+    #[cfg(feature = "artificial_random_read_error")]
+    fn trigger_read_error(&self) -> Result<(), ServiceStoreError> {
+        let mut rng = self.rng.lock().expect("The rng");
+        let rng = rng.deref_mut();
+        match rng.gen_range(0..READ_ERROR_FREQUENCY) {
+            0 => Err(ServiceStoreError::ArtificialReadError),
+            _ => Ok(()),
+        }
+    }
+
+    #[cfg(feature = "artificial_random_write_error")]
+    fn trigger_write_error(&self) -> Result<(), ServiceStoreError> {
+        let mut rng = self.rng.lock().expect("The rng");
+        let rng = rng.deref_mut();
+        match rng.gen_range(0..WRITE_ERROR_FREQUENCY) {
+            0 => Err(ServiceStoreError::ArtificialWriteBatchError),
+            _ => Ok(()),
         }
     }
 }
