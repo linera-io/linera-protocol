@@ -8,7 +8,10 @@ use std::{
 };
 
 use linera_base::{
-    crypto::{BcsSignable, CryptoHash, CryptoRng, Ed25519PublicKey, Ed25519SecretKey},
+    crypto::{
+        ed25519::{Ed25519PublicKey, Ed25519SecretKey},
+        BcsSignable, CryptoHash, CryptoRng,
+    },
     data_types::{Amount, Timestamp},
     identifiers::{ChainDescription, ChainId},
 };

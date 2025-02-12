@@ -9,7 +9,7 @@ use anyhow::Context as _;
 use assert_matches::assert_matches;
 use futures::{stream, StreamExt, TryStreamExt};
 use linera_base::{
-    crypto::Ed25519PublicKey,
+    crypto::ed25519::Ed25519PublicKey,
     data_types::{
         Amount, ApplicationPermissions, BlockHeight, Resources, SendMessageRequest, Timestamp,
     },

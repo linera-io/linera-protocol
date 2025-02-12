@@ -7,7 +7,7 @@ use std::{
 };
 
 use linera_base::{
-    crypto::{CryptoHash, CryptoRng, Ed25519SecretKey},
+    crypto::{ed25519::Ed25519SecretKey, CryptoHash, CryptoRng},
     data_types::{BlockHeight, Timestamp},
     ensure,
     identifiers::{ChainDescription, ChainId, Owner},

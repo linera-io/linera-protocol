@@ -4,7 +4,7 @@
 #![allow(clippy::field_reassign_with_default)]
 
 use linera_base::{
-    crypto::{CryptoHash, Ed25519SecretKey},
+    crypto::{ed25519::Ed25519SecretKey, CryptoHash},
     data_types::{Amount, BlockHeight, Timestamp},
     identifiers::{Account, AccountOwner, ChainDescription, ChainId, MessageId, Owner},
     ownership::ChainOwnership,

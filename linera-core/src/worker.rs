@@ -11,9 +11,9 @@ use std::{
 
 use futures::future::Either;
 #[cfg(with_testing)]
-use linera_base::crypto::Ed25519PublicKey;
+use linera_base::crypto::ed25519::Ed25519PublicKey;
 use linera_base::{
-    crypto::{CryptoError, CryptoHash, Ed25519SecretKey},
+    crypto::{ed25519::Ed25519SecretKey, CryptoError, CryptoHash},
     data_types::{
         ArithmeticError, Blob, BlockHeight, DecompressionError, Round, UserApplicationDescription,
     },

@@ -6,7 +6,7 @@ use std::{borrow::Cow, collections::BTreeMap, str::FromStr};
 
 use async_graphql::InputObject;
 use linera_base::{
-    crypto::{CryptoError, Ed25519PublicKey},
+    crypto::{ed25519::Ed25519PublicKey, CryptoError},
     data_types::ArithmeticError,
 };
 use serde::{Deserialize, Serialize};

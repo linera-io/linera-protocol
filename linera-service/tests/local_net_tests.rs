@@ -50,7 +50,7 @@ fn get_fungible_account_owner(client: &ClientWrapper) -> AccountOwner {
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Udp) ; "aws_udp"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
-    use linera_base::{crypto::Ed25519SecretKey, identifiers::Owner};
+    use linera_base::{crypto::ed25519::Ed25519SecretKey, identifiers::Owner};
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 

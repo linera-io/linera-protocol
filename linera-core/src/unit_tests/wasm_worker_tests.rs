@@ -14,7 +14,7 @@ use std::collections::BTreeSet;
 
 use assert_matches::assert_matches;
 use linera_base::{
-    crypto::Ed25519SecretKey,
+    crypto::ed25519::Ed25519SecretKey,
     data_types::{
         Amount, Blob, BlockHeight, Bytecode, OracleResponse, Timestamp, UserApplicationDescription,
     },

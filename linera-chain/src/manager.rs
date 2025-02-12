@@ -74,7 +74,7 @@ use async_graphql::{ComplexObject, SimpleObject};
 use custom_debug_derive::Debug;
 use futures::future::Either;
 use linera_base::{
-    crypto::{Ed25519PublicKey, Ed25519SecretKey},
+    crypto::ed25519::{Ed25519PublicKey, Ed25519SecretKey},
     data_types::{Blob, BlockHeight, Round, Timestamp},
     ensure,
     hashed::Hashed,

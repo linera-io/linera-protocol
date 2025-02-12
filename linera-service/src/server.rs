@@ -15,7 +15,7 @@ use anyhow::{bail, Context};
 use async_trait::async_trait;
 use futures::{stream::FuturesUnordered, FutureExt as _, StreamExt, TryFutureExt as _};
 use linera_base::{
-    crypto::{CryptoRng, Ed25519SecretKey},
+    crypto::{ed25519::Ed25519SecretKey, CryptoRng},
     listen_for_shutdown_signals,
 };
 use linera_client::{

@@ -694,7 +694,7 @@ impl<T> GrpcMessageLimiter<T> {
 #[cfg(test)]
 mod proto_message_cap {
     use linera_base::{
-        crypto::{ed25519::Ed25519Signature, Ed25519SecretKey},
+        crypto::ed25519::{Ed25519SecretKey, Ed25519Signature},
         hashed::Hashed,
     };
     use linera_chain::{

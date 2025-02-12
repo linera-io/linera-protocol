@@ -8,7 +8,10 @@ use std::{
 };
 
 use linera_base::{
-    crypto::{CryptoHash, Ed25519PublicKey, Ed25519SecretKey},
+    crypto::{
+        ed25519::{Ed25519PublicKey, Ed25519SecretKey},
+        CryptoHash,
+    },
     data_types::{Blob, BlockHeight, Timestamp},
     ensure,
     identifiers::Owner,

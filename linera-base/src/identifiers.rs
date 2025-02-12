@@ -18,7 +18,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::{
     bcs_scalar,
-    crypto::{BcsHashable, CryptoError, CryptoHash, Ed25519PublicKey},
+    crypto::{ed25519::Ed25519PublicKey, BcsHashable, CryptoError, CryptoHash},
     data_types::BlockHeight,
     doc_scalar, hex_debug,
 };

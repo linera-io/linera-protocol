@@ -28,7 +28,10 @@ use linera_base::data_types::Bytecode;
 use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     abi::Abi,
-    crypto::{CryptoHash, Ed25519PublicKey, Ed25519SecretKey},
+    crypto::{
+        ed25519::{Ed25519PublicKey, Ed25519SecretKey},
+        CryptoHash,
+    },
     data_types::{
         Amount, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, Round, Timestamp,
     },

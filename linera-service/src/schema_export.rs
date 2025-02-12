@@ -3,7 +3,7 @@
 
 use async_trait::async_trait;
 use linera_base::{
-    crypto::{CryptoHash, Ed25519SecretKey},
+    crypto::{ed25519::Ed25519SecretKey, CryptoHash},
     data_types::{BlobContent, Timestamp},
     identifiers::{BlobId, ChainId},
 };

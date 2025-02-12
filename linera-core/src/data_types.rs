@@ -6,7 +6,10 @@ use std::{collections::BTreeMap, ops::Not};
 
 use custom_debug_derive::Debug;
 use linera_base::{
-    crypto::{ed25519::Ed25519Signature, BcsSignable, CryptoError, CryptoHash, Ed25519SecretKey},
+    crypto::{
+        ed25519::{Ed25519SecretKey, Ed25519Signature},
+        BcsSignable, CryptoError, CryptoHash,
+    },
     data_types::{Amount, BlockHeight, Round, Timestamp},
     identifiers::{AccountOwner, ChainDescription, ChainId},
 };

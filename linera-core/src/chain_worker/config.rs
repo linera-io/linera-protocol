@@ -5,7 +5,7 @@
 
 use std::sync::Arc;
 
-use linera_base::{crypto::Ed25519SecretKey, time::Duration};
+use linera_base::{crypto::ed25519::Ed25519SecretKey, time::Duration};
 
 /// Configuration parameters for the [`ChainWorkerState`][`super::state::ChainWorkerState`].
 #[derive(Clone, Default)]

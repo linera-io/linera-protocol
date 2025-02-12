@@ -7,7 +7,7 @@ use std::{collections::BTreeMap, iter};
 
 use assert_matches::assert_matches;
 use linera_base::{
-    crypto::{CryptoHash, Ed25519PublicKey},
+    crypto::{ed25519::Ed25519PublicKey, CryptoHash},
     data_types::{
         Amount, ApplicationPermissions, Blob, BlockHeight, Bytecode, Timestamp,
         UserApplicationDescription,

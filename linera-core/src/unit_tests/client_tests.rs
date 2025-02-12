@@ -8,7 +8,7 @@ mod wasm;
 use assert_matches::assert_matches;
 use futures::StreamExt;
 use linera_base::{
-    crypto::*,
+    crypto::ed25519::Ed25519SecretKey,
     data_types::*,
     identifiers::{Account, AccountOwner, ChainId, MessageId, Owner},
     ownership::{ChainOwnership, TimeoutConfig},

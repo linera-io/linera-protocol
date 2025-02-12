@@ -9,7 +9,7 @@ use linera_witty::{Layout, WitLoad, WitStore};
 use test_case::test_case;
 
 use crate::{
-    crypto::{CryptoHash, Ed25519PublicKey},
+    crypto::{ed25519::Ed25519PublicKey, CryptoHash},
     data_types::{Amount, BlockHeight, Resources, SendMessageRequest, TimeDelta, Timestamp},
     identifiers::{
         Account, AccountOwner, ApplicationId, BytecodeId, ChainId, ChannelName, Destination,
@@ -20,7 +20,7 @@ use crate::{
 
 /// Test roundtrip of types used in the WIT interface.
 #[test_case(CryptoHash::test_hash("hash"); "of_crypto_hash")]
-#[test_case(PublicKey::test_key(255); "of_public_key")]
+#[test_case(Ed25519PublicKey::test_key(255); "of_public_key")]
 #[test_case(Amount::from_tokens(500); "of_amount")]
 #[test_case(BlockHeight(1095); "of_block_height")]
 #[test_case(Timestamp::from(6_400_003); "of_timestamp")]

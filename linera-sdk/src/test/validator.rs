@@ -11,7 +11,7 @@ use std::{num::NonZeroUsize, sync::Arc};
 use dashmap::DashMap;
 use futures::FutureExt as _;
 use linera_base::{
-    crypto::Ed25519SecretKey,
+    crypto::ed25519::Ed25519SecretKey,
     data_types::{Amount, ApplicationPermissions, Timestamp},
     identifiers::{ApplicationId, BytecodeId, ChainDescription, ChainId, MessageId, Owner},
     ownership::ChainOwnership,

@@ -17,7 +17,10 @@ use std::{
 
 use assert_matches::assert_matches;
 use linera_base::{
-    crypto::{CryptoHash, *},
+    crypto::{
+        ed25519::{Ed25519PublicKey, Ed25519SecretKey},
+        CryptoHash,
+    },
     data_types::*,
     hashed::Hashed,
     identifiers::{
@@ -445,13 +448,15 @@ where
         .into_first_proposal(&sender_key_pair);
     let unknown_key_pair = Ed25519SecretKey::generate();
     let mut bad_signature_block_proposal = block_proposal.clone();
-    bad_signature_block_proposal.signature =
-        ed25519::Ed25519Signature::new(&block_proposal.content, &unknown_key_pair);
+    bad_signature_block_proposal.signature = linera_base::crypto::ed25519::Ed25519Signature::new(
+        &block_proposal.content,
+        &unknown_key_pair,
+    );
     assert_matches!(
         worker
             .handle_block_proposal(bad_signature_block_proposal)
             .await,
-            Err(WorkerError::CryptoError(error)) if matches!(error, CryptoError::InvalidSignature {..})
+            Err(WorkerError::CryptoError(error)) if matches!(error, linera_base::crypto::CryptoError::InvalidSignature {..})
     );
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());

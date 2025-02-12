@@ -8,7 +8,7 @@
 use std::{sync::Arc, vec};
 
 use linera_base::{
-    crypto::{CryptoHash, Ed25519PublicKey},
+    crypto::{ed25519::Ed25519PublicKey, CryptoHash},
     data_types::{Amount, BlockHeight, Timestamp},
     identifiers::{Account, AccountOwner, ChainDescription, ChainId, MessageId, Owner},
 };

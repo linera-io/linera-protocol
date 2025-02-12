@@ -4,8 +4,6 @@
 
 //! Define the cryptographic primitives used by the Linera protocol.
 
-mod keypair;
-pub use keypair::*;
 pub mod ed25519;
 mod hash;
 pub mod secp256k1;

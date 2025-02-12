@@ -13,7 +13,7 @@ use std::{
 
 use cargo_toml::Manifest;
 use linera_base::{
-    crypto::{Ed25519PublicKey, Ed25519SecretKey},
+    crypto::ed25519::{Ed25519PublicKey, Ed25519SecretKey},
     data_types::{Blob, BlockHeight, Bytecode, CompressedBytecode},
     identifiers::{ApplicationId, BytecodeId, ChainDescription, ChainId, MessageId},
 };

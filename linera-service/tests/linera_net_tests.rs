@@ -2667,7 +2667,7 @@ async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) ->
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_change_ownership(config: impl LineraNetConfig) -> Result<()> {
-    use linera_base::crypto::Ed25519PublicKey;
+    use linera_base::crypto::ed25519::Ed25519PublicKey;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 

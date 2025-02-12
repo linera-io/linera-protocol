@@ -201,7 +201,7 @@ mod tests {
 
     #[test]
     fn test_ownership_round_timeouts() {
-        use crate::crypto::Ed25519SecretKey;
+        use crate::crypto::ed25519::Ed25519SecretKey;
 
         let super_pub_key = Ed25519SecretKey::generate().public();
         let super_owner = Owner::from(super_pub_key);

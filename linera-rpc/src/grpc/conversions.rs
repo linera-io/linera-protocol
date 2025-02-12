@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_base::{
-    crypto::{ed25519::Ed25519Signature, CryptoError, CryptoHash, Ed25519PublicKey},
+    crypto::{
+        ed25519::{Ed25519PublicKey, Ed25519Signature},
+        CryptoError, CryptoHash,
+    },
     data_types::{BlobContent, BlockHeight},
     ensure,
     hashed::Hashed,
@@ -970,7 +973,7 @@ pub mod tests {
     use std::{borrow::Cow, fmt::Debug};
 
     use linera_base::{
-        crypto::{BcsSignable, CryptoHash, Ed25519SecretKey},
+        crypto::{ed25519::Ed25519SecretKey, BcsSignable, CryptoHash},
         data_types::{Amount, Blob, Round, Timestamp},
     };
     use linera_chain::{

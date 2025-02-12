@@ -8,7 +8,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use futures::lock::Mutex;
 use linera_base::{
-    crypto::{Ed25519PublicKey, Ed25519SecretKey},
+    crypto::ed25519::{Ed25519PublicKey, Ed25519SecretKey},
     data_types::{Amount, Timestamp},
     identifiers::ChainId,
 };

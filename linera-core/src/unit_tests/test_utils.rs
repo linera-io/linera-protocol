@@ -16,7 +16,10 @@ use futures::{
     Future,
 };
 use linera_base::{
-    crypto::*,
+    crypto::{
+        ed25519::{Ed25519PublicKey, Ed25519SecretKey},
+        *,
+    },
     data_types::*,
     identifiers::{BlobId, ChainDescription, ChainId},
 };
