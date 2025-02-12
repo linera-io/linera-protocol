@@ -316,6 +316,7 @@ impl ValidatorNode for GrpcClient {
         })
         .flatten();
 
+        let span = tracing::info_span!("notification stream");
         // The stream of `Notification`s that inserts increasing delays after retriable errors, and
         // terminates after unexpected or fatal errors.
         let notification_stream = endlessly_retrying_notification_stream
@@ -330,9 +331,11 @@ impl ValidatorNode for GrpcClient {
                     retry_count = 0;
                     return future::Either::Left(future::ready(true));
                 };
+                let _enter_span = span.enter();
                 if !Self::is_retryable(status) || retry_count >= max_retries {
                     return future::Either::Left(future::ready(false));
                 }
+                drop(_enter_span);
                 let delay = retry_delay.saturating_mul(retry_count);
                 retry_count += 1;
                 future::Either::Right(async move {
