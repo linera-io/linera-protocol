@@ -25,8 +25,6 @@ use linera_execution::{
 };
 use linera_views::{
     context::{Context as _, MemoryContext},
-    memory::TEST_MEMORY_MAX_STREAM_QUERIES,
-    random::generate_test_namespace,
     views::{View, ViewError},
 };
 
@@ -47,14 +45,7 @@ where
     pub async fn new(chain_id: ChainId) -> Self {
         let exec_runtime_context =
             TestExecutionRuntimeContext::new(chain_id, ExecutionRuntimeConfig::default());
-        let namespace = generate_test_namespace();
-        let root_key = &[];
-        let context = MemoryContext::new_for_testing(
-            TEST_MEMORY_MAX_STREAM_QUERIES,
-            &namespace,
-            root_key,
-            exec_runtime_context,
-        );
+        let context = MemoryContext::new_for_testing(exec_runtime_context);
         Self::load(context)
             .await
             .expect("Loading from memory should work")

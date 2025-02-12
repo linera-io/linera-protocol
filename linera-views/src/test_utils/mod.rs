@@ -522,12 +522,12 @@ pub async fn tombstone_triggering_test<C: LocalRestrictedKeyValueStore>(key_valu
         let t1 = Instant::now();
         let key_values = read_key_values_prefix(&key_value_store, &key_prefix).await;
         assert_eq!(key_values, remaining_key_values);
-        println!("iter={} read_key_values_prefix in {} ms", t1.elapsed().as_millis());
+        println!("iter={} read_key_values_prefix in {} ms", iter, t1.elapsed().as_millis());
 
         let t1 = Instant::now();
         let keys = read_keys_prefix(&key_value_store, &key_prefix).await;
         assert_eq!(keys, remaining_keys);
-        println!("iter={} read_keys_prefix after {} ms", t1.elapsed().as_millis());
+        println!("iter={} read_keys_prefix after {} ms", iter, t1.elapsed().as_millis());
     }
 }
 
