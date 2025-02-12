@@ -9,7 +9,7 @@ use std::fmt;
 use ed25519_dalek::{self as dalek, Signer, Verifier};
 use serde::{Deserialize, Serialize};
 
-use super::{BcsSignable, CryptoError, HasTypeName, Hashable, KeyPair, PublicKey};
+use super::{BcsSignable, CryptoError, Ed25519SecretKey, HasTypeName, Hashable, PublicKey};
 use crate::doc_scalar;
 
 /// An Ed25519 signature.
@@ -18,7 +18,7 @@ pub struct Ed25519Signature(pub dalek::Signature);
 
 impl Ed25519Signature {
     /// Computes a signature.
-    pub fn new<'de, T>(value: &T, secret: &KeyPair) -> Self
+    pub fn new<'de, T>(value: &T, secret: &Ed25519SecretKey) -> Self
     where
         T: BcsSignable<'de>,
     {
@@ -163,16 +163,16 @@ mod tests {
     fn test_signatures() {
         use serde::{Deserialize, Serialize};
 
-        use crate::crypto::{ed25519::Ed25519Signature, BcsSignable, KeyPair, TestString};
+        use crate::crypto::{ed25519::Ed25519Signature, BcsSignable, Ed25519SecretKey, TestString};
 
         #[derive(Debug, Serialize, Deserialize)]
         struct Foo(String);
 
         impl<'de> BcsSignable<'de> for Foo {}
 
-        let key1 = KeyPair::generate();
+        let key1 = Ed25519SecretKey::generate();
         let addr1 = key1.public();
-        let key2 = KeyPair::generate();
+        let key2 = Ed25519SecretKey::generate();
         let addr2 = key2.public();
 
         let ts = TestString("hello".into());

@@ -13,7 +13,7 @@ use std::{
 
 use cargo_toml::Manifest;
 use linera_base::{
-    crypto::{KeyPair, PublicKey},
+    crypto::{Ed25519SecretKey, PublicKey},
     data_types::{Blob, BlockHeight, Bytecode, CompressedBytecode},
     identifiers::{ApplicationId, BytecodeId, ChainDescription, ChainId, MessageId},
 };
@@ -32,7 +32,7 @@ use crate::{ContractAbi, ServiceAbi};
 
 /// A reference to a single microchain inside a [`TestValidator`].
 pub struct ActiveChain {
-    key_pair: KeyPair,
+    key_pair: Ed25519SecretKey,
     description: ChainDescription,
     tip: Arc<Mutex<Option<ConfirmedBlockCertificate>>>,
     validator: TestValidator,
@@ -55,7 +55,11 @@ impl ActiveChain {
     ///
     /// The microchain has a single owner that uses the `key_pair` to produce blocks. The
     /// `description` is used as the identifier of the microchain.
-    pub fn new(key_pair: KeyPair, description: ChainDescription, validator: TestValidator) -> Self {
+    pub fn new(
+        key_pair: Ed25519SecretKey,
+        description: ChainDescription,
+        validator: TestValidator,
+    ) -> Self {
         ActiveChain {
             key_pair,
             description,
@@ -75,12 +79,12 @@ impl ActiveChain {
     }
 
     /// Returns the [`KeyPair`] of the active owner of this microchain.
-    pub fn key_pair(&self) -> &KeyPair {
+    pub fn key_pair(&self) -> &Ed25519SecretKey {
         &self.key_pair
     }
 
     /// Sets the [`KeyPair`] to use for signing new blocks.
-    pub fn set_key_pair(&mut self, key_pair: KeyPair) {
+    pub fn set_key_pair(&mut self, key_pair: Ed25519SecretKey) {
         self.key_pair = key_pair
     }
 

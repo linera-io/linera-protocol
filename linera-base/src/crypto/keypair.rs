@@ -15,13 +15,13 @@ use super::{le_bytes_to_u64_array, u64_array_to_le_bytes, BcsHashable, CryptoErr
 use crate::doc_scalar;
 
 /// A signature key-pair.
-pub struct KeyPair(pub(crate) dalek::SigningKey);
+pub struct Ed25519SecretKey(pub(crate) dalek::SigningKey);
 
 /// A signature public key.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash)]
 pub struct PublicKey(pub [u8; dalek::PUBLIC_KEY_LENGTH]);
 
-impl KeyPair {
+impl Ed25519SecretKey {
     #[cfg(all(with_getrandom, with_testing))]
     /// Generates a new key-pair.
     pub fn generate() -> Self {
@@ -33,7 +33,7 @@ impl KeyPair {
     /// Generates a new key-pair from the given RNG. Use with care.
     pub fn generate_from<R: super::CryptoRng>(rng: &mut R) -> Self {
         let keypair = dalek::SigningKey::generate(rng);
-        KeyPair(keypair)
+        Ed25519SecretKey(keypair)
     }
 
     /// Obtains the public key of a key-pair.
@@ -45,8 +45,8 @@ impl KeyPair {
     ///
     /// The `Clone` and `Copy` traits are deliberately not implemented for `KeyPair` to prevent
     /// accidental copies of secret keys.
-    pub fn copy(&self) -> KeyPair {
-        KeyPair(self.0.clone())
+    pub fn copy(&self) -> Ed25519SecretKey {
+        Ed25519SecretKey(self.0.clone())
     }
 }
 
@@ -92,7 +92,7 @@ impl<'de> Deserialize<'de> for PublicKey {
     }
 }
 
-impl Serialize for KeyPair {
+impl Serialize for Ed25519SecretKey {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::ser::Serializer,
@@ -103,7 +103,7 @@ impl Serialize for KeyPair {
     }
 }
 
-impl<'de> Deserialize<'de> for KeyPair {
+impl<'de> Deserialize<'de> for Ed25519SecretKey {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::de::Deserializer<'de>,
@@ -114,7 +114,7 @@ impl<'de> Deserialize<'de> for KeyPair {
         let value = hex::decode(s).map_err(serde::de::Error::custom)?;
         let key =
             dalek::SigningKey::from_bytes(value[..].try_into().map_err(serde::de::Error::custom)?);
-        Ok(KeyPair(key))
+        Ok(Ed25519SecretKey(key))
     }
 }
 

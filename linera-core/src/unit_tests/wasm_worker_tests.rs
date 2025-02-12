@@ -14,7 +14,7 @@ use std::collections::BTreeSet;
 
 use assert_matches::assert_matches;
 use linera_base::{
-    crypto::KeyPair,
+    crypto::Ed25519SecretKey,
     data_types::{
         Amount, Blob, BlockHeight, Bytecode, OracleResponse, Timestamp, UserApplicationDescription,
     },
@@ -100,9 +100,9 @@ where
     S: Storage + Clone + Send + Sync + 'static,
 {
     let admin_id = ChainDescription::Root(0);
-    let publisher_owner = KeyPair::generate().public().into();
+    let publisher_owner = Ed25519SecretKey::generate().public().into();
     let publisher_chain = ChainDescription::Root(1);
-    let creator_owner = KeyPair::generate().public().into();
+    let creator_owner = Ed25519SecretKey::generate().public().into();
     let creator_chain = ChainDescription::Root(2);
     let (committee, worker) = init_worker_with_chains(
         storage.clone(),

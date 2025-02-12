@@ -6,7 +6,7 @@ use std::{collections::BTreeMap, ops::Not};
 
 use custom_debug_derive::Debug;
 use linera_base::{
-    crypto::{ed25519::Ed25519Signature, BcsSignable, CryptoError, CryptoHash, KeyPair},
+    crypto::{ed25519::Ed25519Signature, BcsSignable, CryptoError, CryptoHash, Ed25519SecretKey},
     data_types::{Amount, BlockHeight, Round, Timestamp},
     identifiers::{AccountOwner, ChainDescription, ChainId},
 };
@@ -292,7 +292,7 @@ where
 }
 
 impl ChainInfoResponse {
-    pub fn new(info: impl Into<ChainInfo>, key_pair: Option<&KeyPair>) -> Self {
+    pub fn new(info: impl Into<ChainInfo>, key_pair: Option<&Ed25519SecretKey>) -> Self {
         let info = Box::new(info.into());
         let signature = key_pair.map(|kp| Ed25519Signature::new(&*info, kp));
         Self { info, signature }
@@ -300,7 +300,7 @@ impl ChainInfoResponse {
 
     /// Signs the [`ChainInfo`] stored inside this [`ChainInfoResponse`] with the provided
     /// [`KeyPair`].
-    pub fn sign(&mut self, key_pair: &KeyPair) {
+    pub fn sign(&mut self, key_pair: &Ed25519SecretKey) {
         self.signature = Some(Ed25519Signature::new(&*self.info, key_pair));
     }
 

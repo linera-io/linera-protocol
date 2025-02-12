@@ -3,7 +3,7 @@
 
 use async_trait::async_trait;
 use linera_base::{
-    crypto::{CryptoHash, KeyPair},
+    crypto::{CryptoHash, Ed25519SecretKey},
     data_types::{BlobContent, Timestamp},
     identifiers::{BlobId, ChainId},
 };
@@ -185,7 +185,7 @@ impl<P: ValidatorNodeProvider + Send, S: Storage + Clone + Send + Sync + 'static
     async fn update_wallet_for_new_chain(
         &mut self,
         _: ChainId,
-        _: Option<KeyPair>,
+        _: Option<Ed25519SecretKey>,
         _: Timestamp,
     ) -> Result<(), Error> {
         Ok(())

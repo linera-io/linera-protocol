@@ -201,11 +201,11 @@ mod tests {
 
     #[test]
     fn test_ownership_round_timeouts() {
-        use crate::crypto::KeyPair;
+        use crate::crypto::Ed25519SecretKey;
 
-        let super_pub_key = KeyPair::generate().public();
+        let super_pub_key = Ed25519SecretKey::generate().public();
         let super_owner = Owner::from(super_pub_key);
-        let pub_key = KeyPair::generate().public();
+        let pub_key = Ed25519SecretKey::generate().public();
         let owner = Owner::from(pub_key);
 
         let ownership = ChainOwnership {
