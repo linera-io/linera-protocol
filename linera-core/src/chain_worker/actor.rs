@@ -176,6 +176,44 @@ impl<StorageClient> ChainWorkerActor<StorageClient>
 where
     StorageClient: Storage + Clone + Send + Sync + 'static,
 {
+    /// Runs the [`ChainWorkerActor`], first by loading the chain state from `storage` then
+    /// handling all `incoming_requests` as they arrive.
+    ///
+    /// If loading the chain state fails the next request will receive the error reported by the
+    /// `storage`, and the actor will then try again to load the state.
+    pub async fn run(
+        config: ChainWorkerConfig,
+        storage: StorageClient,
+        executed_block_cache: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
+        tracked_chains: Option<Arc<RwLock<HashSet<ChainId>>>>,
+        delivery_notifier: DeliveryNotifier,
+        chain_id: ChainId,
+        mut incoming_requests: mpsc::UnboundedReceiver<ChainWorkerRequest<StorageClient::Context>>,
+    ) {
+        let actor = loop {
+            let load_result = Self::load(
+                config.clone(),
+                storage.clone(),
+                executed_block_cache.clone(),
+                tracked_chains.clone(),
+                delivery_notifier.clone(),
+                chain_id,
+            )
+            .await
+            .inspect_err(|error| warn!("Failed to load chain state: {error:?}"));
+
+            match load_result {
+                Ok(actor) => break actor,
+                Err(error) => match incoming_requests.recv().await {
+                    Some(request) => request.send_error(error),
+                    None => return,
+                },
+            }
+        };
+
+        actor.handle_requests(incoming_requests).await;
+    }
+
     /// Creates a [`ChainWorkerActor`], loading it with the chain state for the requested
     /// [`ChainId`].
     pub async fn load(
