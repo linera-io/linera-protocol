@@ -14,12 +14,12 @@ use serde::{Deserialize, Serialize};
 use super::{le_bytes_to_u64_array, u64_array_to_le_bytes, BcsHashable, CryptoError};
 use crate::doc_scalar;
 
-/// A signature key-pair.
+/// A Ed25519 secret key.
 pub struct Ed25519SecretKey(pub(crate) dalek::SigningKey);
 
-/// A signature public key.
+/// A Ed25519 signature public key.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash)]
-pub struct PublicKey(pub [u8; dalek::PUBLIC_KEY_LENGTH]);
+pub struct Ed25519PublicKey(pub [u8; dalek::PUBLIC_KEY_LENGTH]);
 
 impl Ed25519SecretKey {
     #[cfg(all(with_getrandom, with_testing))]
@@ -37,8 +37,8 @@ impl Ed25519SecretKey {
     }
 
     /// Obtains the public key of a key-pair.
-    pub fn public(&self) -> PublicKey {
-        PublicKey(self.0.verifying_key().to_bytes())
+    pub fn public(&self) -> Ed25519PublicKey {
+        Ed25519PublicKey(self.0.verifying_key().to_bytes())
     }
 
     /// Copies the key-pair, **including the secret key**.
@@ -50,16 +50,16 @@ impl Ed25519SecretKey {
     }
 }
 
-impl PublicKey {
+impl Ed25519PublicKey {
     /// A fake public key used for testing.
     #[cfg(with_testing)]
-    pub fn test_key(name: u8) -> PublicKey {
+    pub fn test_key(name: u8) -> Ed25519PublicKey {
         let addr = [name; dalek::PUBLIC_KEY_LENGTH];
-        PublicKey(addr)
+        Ed25519PublicKey(addr)
     }
 }
 
-impl Serialize for PublicKey {
+impl Serialize for Ed25519PublicKey {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::ser::Serializer,
@@ -72,7 +72,7 @@ impl Serialize for PublicKey {
     }
 }
 
-impl<'de> Deserialize<'de> for PublicKey {
+impl<'de> Deserialize<'de> for Ed25519PublicKey {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::de::Deserializer<'de>,
@@ -118,7 +118,7 @@ impl<'de> Deserialize<'de> for Ed25519SecretKey {
     }
 }
 
-impl FromStr for PublicKey {
+impl FromStr for Ed25519PublicKey {
     type Err = CryptoError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -127,7 +127,7 @@ impl FromStr for PublicKey {
     }
 }
 
-impl TryFrom<&[u8]> for PublicKey {
+impl TryFrom<&[u8]> for Ed25519PublicKey {
     type Error = CryptoError;
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
@@ -136,35 +136,35 @@ impl TryFrom<&[u8]> for PublicKey {
         }
         let mut pubkey = [0u8; dalek::PUBLIC_KEY_LENGTH];
         pubkey.copy_from_slice(value);
-        Ok(PublicKey(pubkey))
+        Ok(Ed25519PublicKey(pubkey))
     }
 }
 
-impl From<[u64; 4]> for PublicKey {
+impl From<[u64; 4]> for Ed25519PublicKey {
     fn from(integers: [u64; 4]) -> Self {
-        PublicKey(u64_array_to_le_bytes(integers))
+        Ed25519PublicKey(u64_array_to_le_bytes(integers))
     }
 }
 
-impl From<PublicKey> for [u64; 4] {
-    fn from(pub_key: PublicKey) -> Self {
+impl From<Ed25519PublicKey> for [u64; 4] {
+    fn from(pub_key: Ed25519PublicKey) -> Self {
         le_bytes_to_u64_array(&pub_key.0)
     }
 }
 
-impl fmt::Display for PublicKey {
+impl fmt::Display for Ed25519PublicKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", hex::encode(&self.0[..]))
     }
 }
 
-impl fmt::Debug for PublicKey {
+impl fmt::Debug for Ed25519PublicKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", hex::encode(&self.0[..8]))
     }
 }
 
-impl WitType for PublicKey {
+impl WitType for Ed25519PublicKey {
     const SIZE: u32 = <(u64, u64, u64, u64) as WitType>::SIZE;
     type Layout = <(u64, u64, u64, u64) as WitType>::Layout;
     type Dependencies = HList![];
@@ -186,7 +186,7 @@ impl WitType for PublicKey {
     }
 }
 
-impl WitLoad for PublicKey {
+impl WitLoad for Ed25519PublicKey {
     fn load<Instance>(
         memory: &Memory<'_, Instance>,
         location: GuestPointer,
@@ -196,7 +196,7 @@ impl WitLoad for PublicKey {
         <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
     {
         let (part1, part2, part3, part4) = WitLoad::load(memory, location)?;
-        Ok(PublicKey::from([part1, part2, part3, part4]))
+        Ok(Ed25519PublicKey::from([part1, part2, part3, part4]))
     }
 
     fn lift_from<Instance>(
@@ -208,11 +208,11 @@ impl WitLoad for PublicKey {
         <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
     {
         let (part1, part2, part3, part4) = WitLoad::lift_from(flat_layout, memory)?;
-        Ok(PublicKey::from([part1, part2, part3, part4]))
+        Ok(Ed25519PublicKey::from([part1, part2, part3, part4]))
     }
 }
 
-impl WitStore for PublicKey {
+impl WitStore for Ed25519PublicKey {
     fn store<Instance>(
         &self,
         memory: &mut Memory<'_, Instance>,
@@ -239,6 +239,6 @@ impl WitStore for PublicKey {
     }
 }
 
-impl<'de> BcsHashable<'de> for PublicKey {}
+impl<'de> BcsHashable<'de> for Ed25519PublicKey {}
 
-doc_scalar!(PublicKey, "A signature public key");
+doc_scalar!(Ed25519PublicKey, "A Ed25519 signature public key");

@@ -9,7 +9,7 @@ use linera_witty::{Layout, WitLoad, WitStore};
 use test_case::test_case;
 
 use crate::{
-    crypto::{CryptoHash, PublicKey},
+    crypto::{CryptoHash, Ed25519PublicKey},
     data_types::{Amount, BlockHeight, Resources, SendMessageRequest, TimeDelta, Timestamp},
     identifiers::{
         Account, AccountOwner, ApplicationId, BytecodeId, ChainId, ChannelName, Destination,

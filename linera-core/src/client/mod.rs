@@ -28,7 +28,7 @@ use linera_base::data_types::Bytecode;
 use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     abi::Abi,
-    crypto::{CryptoHash, Ed25519SecretKey, PublicKey},
+    crypto::{CryptoHash, Ed25519PublicKey, Ed25519SecretKey},
     data_types::{
         Amount, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, Round, Timestamp,
     },
@@ -988,7 +988,7 @@ where
 
     /// Obtains the public key associated to the current identity.
     #[instrument(level = "trace")]
-    pub async fn public_key(&self) -> Result<PublicKey, ChainClientError> {
+    pub async fn public_key(&self) -> Result<Ed25519PublicKey, ChainClientError> {
         Ok(self.key_pair().await?.public())
     }
 

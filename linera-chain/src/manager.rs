@@ -74,7 +74,7 @@ use async_graphql::{ComplexObject, SimpleObject};
 use custom_debug_derive::Debug;
 use futures::future::Either;
 use linera_base::{
-    crypto::{Ed25519SecretKey, PublicKey},
+    crypto::{Ed25519PublicKey, Ed25519SecretKey},
     data_types::{Blob, BlockHeight, Round, Timestamp},
     ensure,
     hashed::Hashed,
@@ -223,7 +223,7 @@ where
         ownership: ChainOwnership,
         height: BlockHeight,
         local_time: Timestamp,
-        fallback_owners: impl Iterator<Item = (PublicKey, u64)> + 'a,
+        fallback_owners: impl Iterator<Item = (Ed25519PublicKey, u64)> + 'a,
     ) -> Result<(), ChainError> {
         let distribution = if !ownership.owners.is_empty() {
             let weights = ownership.owners.values().copied().collect();

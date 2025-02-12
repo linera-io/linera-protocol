@@ -11,7 +11,7 @@ use std::{
 
 use futures::future::Either;
 #[cfg(with_testing)]
-use linera_base::crypto::PublicKey;
+use linera_base::crypto::Ed25519PublicKey;
 use linera_base::{
     crypto::{CryptoError, CryptoHash, Ed25519SecretKey},
     data_types::{
@@ -1061,7 +1061,7 @@ where
     ///
     /// If the validator doesn't have a key pair assigned to it.
     #[instrument(level = "trace", skip(self))]
-    pub fn public_key(&self) -> PublicKey {
+    pub fn public_key(&self) -> Ed25519PublicKey {
         self.chain_worker_config
             .key_pair()
             .expect(

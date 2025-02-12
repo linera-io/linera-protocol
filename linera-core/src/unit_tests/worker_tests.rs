@@ -434,7 +434,7 @@ where
             ),
             (
                 ChainDescription::Root(2),
-                PublicKey::test_key(2).into(),
+                Ed25519PublicKey::test_key(2).into(),
                 Amount::ZERO,
             ),
         ],
@@ -480,7 +480,7 @@ where
             ),
             (
                 ChainDescription::Root(2),
-                PublicKey::test_key(2).into(),
+                Ed25519PublicKey::test_key(2).into(),
                 Amount::ZERO,
             ),
         ],
@@ -600,7 +600,7 @@ where
             ),
             (
                 ChainDescription::Root(2),
-                PublicKey::test_key(2).into(),
+                Ed25519PublicKey::test_key(2).into(),
                 Amount::ZERO,
             ),
         ],
@@ -1134,7 +1134,7 @@ where
             ),
             (
                 ChainDescription::Root(2),
-                PublicKey::test_key(2).into(),
+                Ed25519PublicKey::test_key(2).into(),
                 Amount::ZERO,
             ),
         ],
@@ -1233,7 +1233,7 @@ where
             ),
             (
                 ChainDescription::Root(2),
-                PublicKey::test_key(2).into(),
+                Ed25519PublicKey::test_key(2).into(),
                 Amount::ZERO,
             ),
         ],
@@ -1269,7 +1269,7 @@ where
         storage_builder.build().await?,
         vec![(
             ChainDescription::Root(2),
-            PublicKey::test_key(2).into(),
+            Ed25519PublicKey::test_key(2).into(),
             Amount::ZERO,
         )],
     )
@@ -1309,7 +1309,7 @@ where
         storage_builder.build().await?,
         vec![(
             ChainDescription::Root(2),
-            PublicKey::test_key(2).into(),
+            Ed25519PublicKey::test_key(2).into(),
             Amount::ZERO,
         )],
     )
@@ -1440,7 +1440,7 @@ where
             ),
             (
                 ChainDescription::Root(2),
-                PublicKey::test_key(2).into(),
+                Ed25519PublicKey::test_key(2).into(),
                 Amount::ZERO,
             ),
         ],
@@ -1490,7 +1490,7 @@ where
             ),
             (
                 ChainDescription::Root(2),
-                PublicKey::test_key(2).into(),
+                Ed25519PublicKey::test_key(2).into(),
                 Amount::ZERO,
             ),
         ],
@@ -1591,7 +1591,7 @@ where
             ),
             (
                 ChainDescription::Root(2),
-                PublicKey::test_key(2).into(),
+                Ed25519PublicKey::test_key(2).into(),
                 Amount::MAX,
             ),
         ],
@@ -1721,7 +1721,7 @@ where
     let (committee, worker) = init_worker_with_chain(
         storage_builder.build().await?,
         ChainDescription::Root(2),
-        PublicKey::test_key(2).into(),
+        Ed25519PublicKey::test_key(2).into(),
         Amount::ONE,
     )
     .await;

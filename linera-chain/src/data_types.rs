@@ -13,7 +13,7 @@ use linera_base::{
     bcs,
     crypto::{
         ed25519::Ed25519Signature, BcsHashable, BcsSignable, CryptoError, CryptoHash,
-        Ed25519SecretKey, PublicKey,
+        Ed25519PublicKey, Ed25519SecretKey,
     },
     data_types::{Amount, BlockHeight, Event, OracleResponse, Round, Timestamp},
     doc_scalar, ensure,
@@ -289,7 +289,7 @@ pub enum Medium {
 pub struct BlockProposal {
     pub content: ProposalContent,
     pub owner: Owner,
-    pub public_key: PublicKey,
+    pub public_key: Ed25519PublicKey,
     pub signature: Ed25519Signature,
     #[debug(skip_if = Option::is_none)]
     pub validated_block_certificate: Option<LiteCertificate<'static>>,

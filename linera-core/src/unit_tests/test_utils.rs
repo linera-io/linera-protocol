@@ -682,12 +682,17 @@ struct GenesisStorageBuilder {
 
 struct GenesisAccount {
     description: ChainDescription,
-    public_key: PublicKey,
+    public_key: Ed25519PublicKey,
     balance: Amount,
 }
 
 impl GenesisStorageBuilder {
-    fn add(&mut self, description: ChainDescription, public_key: PublicKey, balance: Amount) {
+    fn add(
+        &mut self,
+        description: ChainDescription,
+        public_key: Ed25519PublicKey,
+        balance: Amount,
+    ) {
         self.accounts.push(GenesisAccount {
             description,
             public_key,
@@ -848,7 +853,7 @@ where
             .await
     }
 
-    pub fn genesis_chains(&self) -> Vec<(PublicKey, Amount)> {
+    pub fn genesis_chains(&self) -> Vec<(Ed25519PublicKey, Amount)> {
         let mut result = Vec::new();
         for (i, genesis_account) in self.genesis_storage_builder.accounts.iter().enumerate() {
             assert_eq!(

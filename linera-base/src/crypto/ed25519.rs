@@ -9,7 +9,7 @@ use std::fmt;
 use ed25519_dalek::{self as dalek, Signer, Verifier};
 use serde::{Deserialize, Serialize};
 
-use super::{BcsSignable, CryptoError, Ed25519SecretKey, HasTypeName, Hashable, PublicKey};
+use super::{BcsSignable, CryptoError, Ed25519PublicKey, Ed25519SecretKey, HasTypeName, Hashable};
 use crate::doc_scalar;
 
 /// An Ed25519 signature.
@@ -31,7 +31,7 @@ impl Ed25519Signature {
     fn check_internal<'de, T>(
         &self,
         value: &T,
-        author: PublicKey,
+        author: Ed25519PublicKey,
     ) -> Result<(), dalek::SignatureError>
     where
         T: BcsSignable<'de>,
@@ -43,7 +43,7 @@ impl Ed25519Signature {
     }
 
     /// Checks a signature.
-    pub fn check<'de, T>(&self, value: &T, author: PublicKey) -> Result<(), CryptoError>
+    pub fn check<'de, T>(&self, value: &T, author: Ed25519PublicKey) -> Result<(), CryptoError>
     where
         T: BcsSignable<'de> + fmt::Debug,
     {
@@ -58,7 +58,7 @@ impl Ed25519Signature {
     pub fn check_optional_signature<'de, T>(
         signature: Option<&Self>,
         value: &T,
-        author: &PublicKey,
+        author: &Ed25519PublicKey,
     ) -> Result<(), CryptoError>
     where
         T: BcsSignable<'de> + fmt::Debug,
@@ -77,7 +77,7 @@ impl Ed25519Signature {
     ) -> Result<(), dalek::SignatureError>
     where
         T: BcsSignable<'de>,
-        I: IntoIterator<Item = (&'a PublicKey, &'a Ed25519Signature)>,
+        I: IntoIterator<Item = (&'a Ed25519PublicKey, &'a Ed25519Signature)>,
     {
         let mut msg = Vec::new();
         value.write(&mut msg);
@@ -96,7 +96,7 @@ impl Ed25519Signature {
     pub fn verify_batch<'a, 'de, T, I>(value: &'a T, votes: I) -> Result<(), CryptoError>
     where
         T: BcsSignable<'de>,
-        I: IntoIterator<Item = (&'a PublicKey, &'a Ed25519Signature)>,
+        I: IntoIterator<Item = (&'a Ed25519PublicKey, &'a Ed25519Signature)>,
     {
         Ed25519Signature::verify_batch_internal(value, votes).map_err(|error| {
             CryptoError::InvalidSignature {

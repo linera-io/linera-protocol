@@ -8,7 +8,7 @@ use std::{
 };
 
 use linera_base::{
-    crypto::{CryptoHash, Ed25519SecretKey, PublicKey},
+    crypto::{CryptoHash, Ed25519PublicKey, Ed25519SecretKey},
     data_types::{Blob, BlockHeight, Timestamp},
     ensure,
     identifiers::Owner,
@@ -108,7 +108,7 @@ impl ChainClientState {
             .any(|owner| !self.known_key_pairs.contains_key(owner))
     }
 
-    pub(super) fn insert_known_key_pair(&mut self, key_pair: Ed25519SecretKey) -> PublicKey {
+    pub(super) fn insert_known_key_pair(&mut self, key_pair: Ed25519SecretKey) -> Ed25519PublicKey {
         let new_public_key = key_pair.public();
         self.known_key_pairs.insert(new_public_key.into(), key_pair);
         new_public_key

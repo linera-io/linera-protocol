@@ -8,7 +8,7 @@ use std::{
 };
 
 use linera_base::{
-    crypto::{BcsSignable, CryptoHash, CryptoRng, Ed25519SecretKey, PublicKey},
+    crypto::{BcsSignable, CryptoHash, CryptoRng, Ed25519PublicKey, Ed25519SecretKey},
     data_types::{Amount, Timestamp},
     identifiers::{ChainDescription, ChainId},
 };
@@ -184,7 +184,7 @@ pub struct GenesisConfig {
     pub committee: CommitteeConfig,
     pub admin_id: ChainId,
     pub timestamp: Timestamp,
-    pub chains: Vec<(PublicKey, Amount)>,
+    pub chains: Vec<(Ed25519PublicKey, Amount)>,
     pub policy: ResourceControlPolicy,
     pub network_name: String,
 }

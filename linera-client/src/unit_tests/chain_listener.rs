@@ -8,7 +8,7 @@ use std::{num::NonZeroUsize, sync::Arc, time::Duration};
 use async_trait::async_trait;
 use futures::{lock::Mutex, FutureExt as _};
 use linera_base::{
-    crypto::{Ed25519SecretKey, PublicKey},
+    crypto::{Ed25519PublicKey, Ed25519SecretKey},
     data_types::{Amount, BlockHeight, TimeDelta, Timestamp},
     identifiers::ChainId,
     ownership::{ChainOwnership, TimeoutConfig},
@@ -147,7 +147,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
 
     // Transfer ownership of chain 0 to the chain listener and some other key. The listener will
     // be leader in ~10% of the rounds.
-    let owners = [(owner, 1), (PublicKey::test_key(1).into(), 9)];
+    let owners = [(owner, 1), (Ed25519PublicKey::test_key(1).into(), 9)];
     let timeout_config = TimeoutConfig {
         base_timeout: TimeDelta::from_secs(1),
         timeout_increment: TimeDelta::ZERO,

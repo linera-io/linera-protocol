@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_base::{
-    crypto::{ed25519::Ed25519Signature, CryptoError, CryptoHash, PublicKey},
+    crypto::{ed25519::Ed25519Signature, CryptoError, CryptoHash, Ed25519PublicKey},
     data_types::{BlobContent, BlockHeight},
     ensure,
     hashed::Hashed,
@@ -616,19 +616,19 @@ impl TryFrom<api::ChainId> for ChainId {
     }
 }
 
-impl From<PublicKey> for api::PublicKey {
-    fn from(public_key: PublicKey) -> Self {
+impl From<Ed25519PublicKey> for api::PublicKey {
+    fn from(public_key: Ed25519PublicKey) -> Self {
         Self {
             bytes: public_key.0.to_vec(),
         }
     }
 }
 
-impl TryFrom<api::PublicKey> for PublicKey {
+impl TryFrom<api::PublicKey> for Ed25519PublicKey {
     type Error = GrpcProtoConversionError;
 
     fn try_from(public_key: api::PublicKey) -> Result<Self, Self::Error> {
-        Ok(PublicKey::try_from(public_key.bytes.as_slice())?)
+        Ok(Ed25519PublicKey::try_from(public_key.bytes.as_slice())?)
     }
 }
 
