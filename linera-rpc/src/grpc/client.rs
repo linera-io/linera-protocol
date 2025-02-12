@@ -67,14 +67,14 @@ impl GrpcClient {
 
     /// Returns whether this gRPC status means the server stream should be reconnected to, or not.
     /// Logs a warning on unexpected status codes.
-    fn is_retryable(status: &Status) -> bool {
+    fn is_retryable(status: &Status, address: &str) -> bool {
         match status.code() {
             Code::DeadlineExceeded | Code::Aborted | Code::Unavailable | Code::Unknown => {
-                info!("gRPC request interrupted: {}; retrying", status);
+                info!(address, "gRPC request interrupted: {}; retrying", status);
                 true
             }
             Code::Ok | Code::Cancelled | Code::ResourceExhausted => {
-                error!("Unexpected gRPC status: {}; retrying", status);
+                error!(address, "Unexpected gRPC status: {}; retrying", status);
                 true
             }
             Code::InvalidArgument
@@ -87,7 +87,7 @@ impl GrpcClient {
             | Code::Internal
             | Code::DataLoss
             | Code::Unauthenticated => {
-                error!("Unexpected gRPC status: {}", status);
+                error!(address, "Unexpected gRPC status: {}", status);
                 false
             }
         }
@@ -111,7 +111,9 @@ impl GrpcClient {
         })?;
         loop {
             match f(self.client.clone(), Request::new(request_inner.clone())).await {
-                Err(s) if Self::is_retryable(&s) && retry_count < self.max_retries => {
+                Err(s)
+                    if Self::is_retryable(&s, &self.address) && retry_count < self.max_retries =>
+                {
                     let delay = self.retry_delay.saturating_mul(retry_count);
                     retry_count += 1;
                     linera_base::time::timer::sleep(delay).await;
@@ -253,6 +255,8 @@ impl ValidatorNode for GrpcClient {
         })
         .flatten();
 
+        let address = self.address.clone();
+
         // The stream of `Notification`s that inserts increasing delays after retriable errors, and
         // terminates after unexpected or fatal errors.
         let notification_stream = endlessly_retrying_notification_stream
@@ -267,7 +271,7 @@ impl ValidatorNode for GrpcClient {
                     retry_count = 0;
                     return future::Either::Left(future::ready(true));
                 };
-                if !Self::is_retryable(status) || retry_count >= max_retries {
+                if !Self::is_retryable(status, &address) || retry_count >= max_retries {
                     return future::Either::Left(future::ready(false));
                 }
                 let delay = retry_delay.saturating_mul(retry_count);
