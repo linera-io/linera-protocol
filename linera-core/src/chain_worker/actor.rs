@@ -27,7 +27,7 @@ use linera_execution::{
 };
 use linera_storage::Storage;
 use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
-use tracing::{instrument, trace, warn};
+use tracing::{debug, instrument, trace, warn};
 
 use super::{config::ChainWorkerConfig, state::ChainWorkerState, DeliveryNotifier};
 use crate::{
@@ -372,6 +372,71 @@ where
         }
 
         trace!("`ChainWorkerActor` finished");
+    }
+}
+
+impl<Context> ChainWorkerRequest<Context>
+where
+    Context: linera_views::context::Context + Clone + Send + Sync + 'static,
+{
+    /// Responds to this request with an `error`.
+    pub fn send_error(self, error: WorkerError) {
+        debug!("Immediately sending error to chain worker request {self:?}");
+
+        let responded = match self {
+            #[cfg(with_testing)]
+            ChainWorkerRequest::ReadCertificate { callback, .. } => {
+                callback.send(Err(error)).is_ok()
+            }
+            #[cfg(with_testing)]
+            ChainWorkerRequest::FindBundleInInbox { callback, .. } => {
+                callback.send(Err(error)).is_ok()
+            }
+            ChainWorkerRequest::GetChainStateView { callback } => callback.send(Err(error)).is_ok(),
+            ChainWorkerRequest::QueryApplication { callback, .. } => {
+                callback.send(Err(error)).is_ok()
+            }
+            ChainWorkerRequest::DescribeApplication { callback, .. } => {
+                callback.send(Err(error)).is_ok()
+            }
+            ChainWorkerRequest::StageBlockExecution { callback, .. } => {
+                callback.send(Err(error)).is_ok()
+            }
+            ChainWorkerRequest::ProcessTimeout { callback, .. } => {
+                callback.send(Err(error)).is_ok()
+            }
+            ChainWorkerRequest::HandleBlockProposal { callback, .. } => {
+                callback.send(Err(error)).is_ok()
+            }
+            ChainWorkerRequest::ProcessValidatedBlock { callback, .. } => {
+                callback.send(Err(error)).is_ok()
+            }
+            ChainWorkerRequest::ProcessConfirmedBlock { callback, .. } => {
+                callback.send(Err(error)).is_ok()
+            }
+            ChainWorkerRequest::ProcessCrossChainUpdate { callback, .. } => {
+                callback.send(Err(error)).is_ok()
+            }
+            ChainWorkerRequest::ConfirmUpdatedRecipient { callback, .. } => {
+                callback.send(Err(error)).is_ok()
+            }
+            ChainWorkerRequest::HandleChainInfoQuery { callback, .. } => {
+                callback.send(Err(error)).is_ok()
+            }
+            ChainWorkerRequest::DownloadPendingBlob { callback, .. } => {
+                callback.send(Err(error)).is_ok()
+            }
+            ChainWorkerRequest::HandlePendingBlob { callback, .. } => {
+                callback.send(Err(error)).is_ok()
+            }
+            ChainWorkerRequest::UpdateReceivedCertificateTrackers { callback, .. } => {
+                callback.send(Err(error)).is_ok()
+            }
+        };
+
+        if !responded {
+            warn!("Callback for `ChainWorkerActor` was dropped before a response was sent");
+        }
     }
 }
 
