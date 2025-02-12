@@ -282,9 +282,7 @@ pub fn create_test_memory_context() -> MemoryContext<()> {
 impl<E> MemoryContext<E> {
     /// Creates a [`Context`] instance in memory for testing.
     #[cfg(with_testing)]
-    pub fn new_for_testing(
-        extra: E,
-    ) -> Self {
+    pub fn new_for_testing(extra: E) -> Self {
         let max_stream_queries = crate::memory::TEST_MEMORY_MAX_STREAM_QUERIES;
         let namespace = crate::random::generate_test_namespace();
         let root_key = &[];

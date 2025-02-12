@@ -104,10 +104,7 @@ where
 }
 
 /// Benchmarks the `find_keys_by_prefix` operation.
-pub async fn find_keys_by_prefix<S: TestKeyValueStore, F>(
-    iterations: u64,
-    f: F,
-) -> Duration
+pub async fn find_keys_by_prefix<S: TestKeyValueStore, F>(iterations: u64, f: F) -> Duration
 where
     S::Error: Debug,
     F: Fn(S::Keys) -> S::Keys,
@@ -136,10 +133,7 @@ where
 }
 
 /// Benchmarks the `find_keys_by_prefix` operation.
-pub async fn find_key_values_by_prefix<S: TestKeyValueStore, F>(
-    iterations: u64,
-    f: F,
-) -> Duration
+pub async fn find_key_values_by_prefix<S: TestKeyValueStore, F>(iterations: u64, f: F) -> Duration
 where
     S::Error: Debug,
     F: Fn(S::KeyValues) -> S::KeyValues,
@@ -202,10 +196,7 @@ where
 }
 
 /// Benchmarks the `read_multi_values_bytes` operation.
-pub async fn read_multi_values_bytes<S: TestKeyValueStore, F>(
-    iterations: u64,
-    f: F,
-) -> Duration
+pub async fn read_multi_values_bytes<S: TestKeyValueStore, F>(iterations: u64, f: F) -> Duration
 where
     S::Error: Debug,
     F: Fn(Vec<Option<Vec<u8>>>) -> Vec<Option<Vec<u8>>>,

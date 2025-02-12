@@ -499,7 +499,7 @@ pub async fn tombstone_triggering_test<C: LocalRestrictedKeyValueStore>(key_valu
         let to_delete = rng.gen::<bool>();
         if to_delete {
             batch_delete.delete_key_prefix(key);
-//            batch_delete.delete_key(key);
+        //            batch_delete.delete_key(key);
         } else {
             remaining_keys.insert(key.clone());
             remaining_key_values.insert(key, value);
@@ -511,7 +511,6 @@ pub async fn tombstone_triggering_test<C: LocalRestrictedKeyValueStore>(key_valu
     run_test_batch_from_blank(&key_value_store, key_prefix.clone(), batch_insert).await;
     println!("run_test_batch in {} ms", t1.elapsed().as_millis());
 
-
     // Deleting them all
     let t1 = Instant::now();
     key_value_store.write_batch(batch_delete).await.unwrap();
@@ -522,12 +521,20 @@ pub async fn tombstone_triggering_test<C: LocalRestrictedKeyValueStore>(key_valu
         let t1 = Instant::now();
         let key_values = read_key_values_prefix(&key_value_store, &key_prefix).await;
         assert_eq!(key_values, remaining_key_values);
-        println!("iter={} read_key_values_prefix in {} ms", iter, t1.elapsed().as_millis());
+        println!(
+            "iter={} read_key_values_prefix in {} ms",
+            iter,
+            t1.elapsed().as_millis()
+        );
 
         let t1 = Instant::now();
         let keys = read_keys_prefix(&key_value_store, &key_prefix).await;
         assert_eq!(keys, remaining_keys);
-        println!("iter={} read_keys_prefix after {} ms", iter, t1.elapsed().as_millis());
+        println!(
+            "iter={} read_keys_prefix after {} ms",
+            iter,
+            t1.elapsed().as_millis()
+        );
     }
 }
 

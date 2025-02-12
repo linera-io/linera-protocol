@@ -127,7 +127,8 @@ fn bench_find_key_values_by_prefix(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                performance::find_key_values_by_prefix::<MemoryStore, _>(iterations, black_box).await
+                performance::find_key_values_by_prefix::<MemoryStore, _>(iterations, black_box)
+                    .await
             })
     });
 
@@ -136,7 +137,8 @@ fn bench_find_key_values_by_prefix(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                performance::find_key_values_by_prefix::<RocksDbStore, _>(iterations, black_box).await
+                performance::find_key_values_by_prefix::<RocksDbStore, _>(iterations, black_box)
+                    .await
             })
     });
 
@@ -145,7 +147,8 @@ fn bench_find_key_values_by_prefix(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                performance::find_key_values_by_prefix::<DynamoDbStore, _>(iterations, black_box).await
+                performance::find_key_values_by_prefix::<DynamoDbStore, _>(iterations, black_box)
+                    .await
             })
     });
 
@@ -154,7 +157,8 @@ fn bench_find_key_values_by_prefix(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                performance::find_key_values_by_prefix::<ScyllaDbStore, _>(iterations, black_box).await
+                performance::find_key_values_by_prefix::<ScyllaDbStore, _>(iterations, black_box)
+                    .await
             })
     });
 }
@@ -219,7 +223,8 @@ fn bench_read_multi_values_bytes(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                performance::read_multi_values_bytes::<DynamoDbStore, _>(iterations, black_box).await
+                performance::read_multi_values_bytes::<DynamoDbStore, _>(iterations, black_box)
+                    .await
             })
     });
 
@@ -228,7 +233,8 @@ fn bench_read_multi_values_bytes(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                performance::read_multi_values_bytes::<ScyllaDbStore,_>(iterations, black_box).await
+                performance::read_multi_values_bytes::<ScyllaDbStore, _>(iterations, black_box)
+                    .await
             })
     });
 }

@@ -27,7 +27,8 @@ fn bench_storage_service(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                performance::find_keys_by_prefix::<ServiceStoreClient, _>(iterations, black_box).await
+                performance::find_keys_by_prefix::<ServiceStoreClient, _>(iterations, black_box)
+                    .await
             })
     });
 
@@ -37,7 +38,10 @@ fn bench_storage_service(criterion: &mut Criterion) {
             bencher
                 .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
                 .iter_custom(|iterations| async move {
-                    performance::find_key_values_by_prefix::<ServiceStoreClient, _>(iterations, black_box).await
+                    performance::find_key_values_by_prefix::<ServiceStoreClient, _>(
+                        iterations, black_box,
+                    )
+                    .await
                 })
         },
     );
@@ -54,7 +58,8 @@ fn bench_storage_service(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                performance::read_multi_values_bytes::<ServiceStoreClient, _>(iterations, black_box).await
+                performance::read_multi_values_bytes::<ServiceStoreClient, _>(iterations, black_box)
+                    .await
             })
     });
 
