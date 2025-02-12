@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_base::{
-    crypto::{CryptoError, CryptoHash, Ed25519Signature, PublicKey},
+    crypto::{ed25519::Ed25519Signature, CryptoError, CryptoHash, PublicKey},
     data_types::{BlobContent, BlockHeight},
     ensure,
     hashed::Hashed,

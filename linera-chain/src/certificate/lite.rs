@@ -4,7 +4,7 @@
 
 use std::borrow::Cow;
 
-use linera_base::{crypto::Ed25519Signature, data_types::Round, hashed::Hashed};
+use linera_base::{crypto::ed25519::Ed25519Signature, data_types::Round, hashed::Hashed};
 use linera_execution::committee::{Committee, ValidatorName};
 use serde::{Deserialize, Serialize};
 

@@ -12,7 +12,7 @@ use std::collections::BTreeSet;
 
 pub use generic::GenericCertificate;
 use linera_base::{
-    crypto::Ed25519Signature,
+    crypto::ed25519::Ed25519Signature,
     data_types::{BlockHeight, Round},
     identifiers::{BlobId, ChainId},
 };

@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_base::{
-    crypto::Ed25519Signature, data_types::Round, hashed::Hashed, identifiers::BlobId,
+    crypto::ed25519::Ed25519Signature, data_types::Round, hashed::Hashed, identifiers::BlobId,
 };
 use linera_execution::committee::ValidatorName;
 use serde::{

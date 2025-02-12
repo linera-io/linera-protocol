@@ -12,7 +12,8 @@ use custom_debug_derive::Debug;
 use linera_base::{
     bcs,
     crypto::{
-        BcsHashable, BcsSignable, CryptoError, CryptoHash, Ed25519Signature, KeyPair, PublicKey,
+        ed25519::Ed25519Signature, BcsHashable, BcsSignable, CryptoError, CryptoHash, KeyPair,
+        PublicKey,
     },
     data_types::{Amount, BlockHeight, Event, OracleResponse, Round, Timestamp},
     doc_scalar, ensure,

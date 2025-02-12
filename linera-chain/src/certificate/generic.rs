@@ -4,7 +4,7 @@
 
 use custom_debug_derive::Debug;
 use linera_base::{
-    crypto::{CryptoHash, Ed25519Signature},
+    crypto::{ed25519::Ed25519Signature, CryptoHash},
     data_types::Round,
     hashed::Hashed,
 };
