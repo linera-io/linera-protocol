@@ -157,9 +157,9 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
         chain_id: ChainId::root(0),
         owner: Some(AccountOwner::User(owner)),
     };
-    let (outcomes, _, _) = txn_tracker.destructure().unwrap();
+    let txn_outcome = txn_tracker.into_outcome().unwrap();
     assert_eq!(
-        outcomes,
+        txn_outcome.outcomes,
         vec![
             ExecutionOutcome::User(
                 target_id,
@@ -336,9 +336,9 @@ async fn test_simulated_session() -> anyhow::Result<()> {
         chain_id: ChainId::root(0),
         owner: None,
     };
-    let (outcomes, _, _) = txn_tracker.destructure().unwrap();
+    let txn_outcome = txn_tracker.into_outcome().unwrap();
     assert_eq!(
-        outcomes,
+        txn_outcome.outcomes,
         vec![
             ExecutionOutcome::User(
                 target_id,
@@ -656,9 +656,9 @@ async fn test_sending_message_from_finalize() -> anyhow::Result<()> {
         owner: None,
     };
 
-    let (outcomes, _, _) = txn_tracker.destructure().unwrap();
+    let txn_outcome = txn_tracker.into_outcome().unwrap();
     assert_eq!(
-        outcomes,
+        txn_outcome.outcomes,
         vec![
             ExecutionOutcome::System(
                 RawExecutionOutcome::default().with_message(registration_message)
@@ -978,9 +978,9 @@ async fn test_simple_message() -> anyhow::Result<()> {
         owner: None,
     };
 
-    let (outcomes, _, _) = txn_tracker.destructure().unwrap();
+    let txn_outcome = txn_tracker.into_outcome().unwrap();
     assert_eq!(
-        outcomes,
+        txn_outcome.outcomes,
         &[
             ExecutionOutcome::System(
                 RawExecutionOutcome::default().with_message(registration_message)
@@ -1074,9 +1074,9 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
         owner: None,
     };
 
-    let (outcomes, _, _) = txn_tracker.destructure().unwrap();
+    let txn_outcome = txn_tracker.into_outcome().unwrap();
     assert_eq!(
-        outcomes,
+        txn_outcome.outcomes,
         &[
             ExecutionOutcome::System(
                 RawExecutionOutcome::default().with_message(registration_message)
@@ -1185,9 +1185,9 @@ async fn test_message_from_deeper_call() -> anyhow::Result<()> {
         chain_id: ChainId::root(0),
         owner: None,
     };
-    let (outcomes, _, _) = txn_tracker.destructure().unwrap();
+    let txn_outcome = txn_tracker.into_outcome().unwrap();
     assert_eq!(
-        outcomes,
+        txn_outcome.outcomes,
         &[
             ExecutionOutcome::System(
                 RawExecutionOutcome::default().with_message(registration_message)
@@ -1365,9 +1365,9 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
     };
 
     // Return to checking the user application outcomes
-    let (outcomes, _, _) = txn_tracker.destructure().unwrap();
+    let txn_outcome = txn_tracker.into_outcome().unwrap();
     assert_eq!(
-        outcomes,
+        txn_outcome.outcomes,
         &[
             ExecutionOutcome::System(
                 RawExecutionOutcome::default()
@@ -1473,8 +1473,9 @@ async fn test_open_chain() -> anyhow::Result<()> {
     .await?;
 
     assert_eq!(*view.system.balance.get(), Amount::from_tokens(3));
-    let (outcomes, _, _) = txn_tracker.destructure()?;
-    let message = outcomes
+    let txn_outcome = txn_tracker.into_outcome().unwrap();
+    let message = txn_outcome
+        .outcomes
         .iter()
         .flat_map(|outcome| match outcome {
             ExecutionOutcome::System(outcome) => &outcome.messages,

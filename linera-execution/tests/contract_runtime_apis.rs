@@ -28,7 +28,7 @@ use linera_execution::{
     },
     BaseRuntime, ContractRuntime, ExecutionError, ExecutionOutcome, Message, MessageContext,
     Operation, OperationContext, ResourceController, SystemExecutionError,
-    SystemExecutionStateView, TestExecutionRuntimeContext, TransactionTracker,
+    SystemExecutionStateView, TestExecutionRuntimeContext, TransactionOutcome, TransactionTracker,
 };
 use linera_views::context::MemoryContext;
 use test_case::test_matrix;
@@ -90,7 +90,12 @@ async fn test_transfer_system_api(
     )
     .await?;
 
-    let (outcomes, oracle_responses, next_message_index) = tracker.destructure()?;
+    let TransactionOutcome {
+        outcomes,
+        oracle_responses,
+        next_message_index,
+        ..
+    } = tracker.into_outcome()?;
     assert_eq!(outcomes.len(), 3);
     assert!(oracle_responses.is_empty());
     assert_eq!(next_message_index, 1);
@@ -259,7 +264,12 @@ async fn test_claim_system_api(
         )
         .await?;
 
-    let (outcomes, oracle_responses, next_message_index) = tracker.destructure()?;
+    let TransactionOutcome {
+        outcomes,
+        oracle_responses,
+        next_message_index,
+        ..
+    } = tracker.into_outcome()?;
     assert_eq!(outcomes.len(), 3);
     assert!(oracle_responses.is_empty());
     assert_eq!(next_message_index, 1);
@@ -294,7 +304,12 @@ async fn test_claim_system_api(
         })
         .await?;
 
-    let (outcomes, oracle_responses, next_message_index) = tracker.destructure()?;
+    let TransactionOutcome {
+        outcomes,
+        oracle_responses,
+        next_message_index,
+        ..
+    } = tracker.into_outcome()?;
     assert_eq!(outcomes.len(), 1);
     assert!(oracle_responses.is_empty());
     assert_eq!(next_message_index, 1);

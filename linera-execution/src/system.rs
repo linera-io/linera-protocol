@@ -23,8 +23,8 @@ use linera_base::{
     },
     ensure, hex_debug,
     identifiers::{
-        Account, AccountOwner, BlobId, BlobType, BytecodeId, ChainDescription, ChainId, MessageId,
-        Owner,
+        Account, AccountOwner, BlobId, BlobType, BytecodeId, ChainDescription, ChainId,
+        ChannelFullName, MessageId, Owner,
     },
     ownership::{ChainOwnership, TimeoutConfig},
 };
@@ -280,6 +280,11 @@ impl SystemChannel {
         bcs::to_bytes(self)
             .expect("`SystemChannel` can be serialized")
             .into()
+    }
+
+    /// The [`ChannelFullName`] of this [`SystemChannel`].
+    pub fn full_name(&self) -> ChannelFullName {
+        ChannelFullName::system(self.name())
     }
 }
 

@@ -8,13 +8,13 @@
 use linera_base::{
     data_types::{Amount, ApplicationPermissions, Round, Timestamp},
     hashed::Hashed,
-    identifiers::{ApplicationId, ChainId, GenericApplicationId, Owner},
+    identifiers::{ApplicationId, ChainId, ChannelFullName, GenericApplicationId, Owner},
     ownership::TimeoutConfig,
 };
 use linera_chain::{
     data_types::{
-        ChannelFullName, IncomingBundle, LiteValue, LiteVote, Medium, MessageAction, Origin,
-        ProposedBlock, SignatureAggregator,
+        IncomingBundle, LiteValue, LiteVote, Medium, MessageAction, Origin, ProposedBlock,
+        SignatureAggregator,
     },
     types::{ConfirmedBlock, ConfirmedBlockCertificate},
 };

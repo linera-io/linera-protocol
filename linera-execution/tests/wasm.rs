@@ -101,9 +101,9 @@ async fn test_fuel_for_counter_wasm_application(
             &mut controller,
         )
         .await?;
-        let (outcomes, _, _) = txn_tracker.destructure().unwrap();
+        let txn_outcome = txn_tracker.into_outcome().unwrap();
         assert_eq!(
-            outcomes,
+            txn_outcome.outcomes,
             vec![
                 ExecutionOutcome::User(
                     app_id.forget_abi(),

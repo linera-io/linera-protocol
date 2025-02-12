@@ -214,9 +214,9 @@ async fn test_fee_consumption(
     )
     .await?;
 
-    let (outcomes, _, _) = txn_tracker.destructure()?;
+    let txn_outcome = txn_tracker.into_outcome()?;
     assert_eq!(
-        outcomes,
+        txn_outcome.outcomes,
         vec![
             ExecutionOutcome::User(
                 application_id,

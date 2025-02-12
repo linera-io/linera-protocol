@@ -320,7 +320,7 @@ type ChainStateExtendedView {
 	"""
 	Channels able to multicast messages to subscribers.
 	"""
-	channels: ReentrantCollectionView_ChannelFullName_ChannelStateView_629706216!
+	channels: ReentrantCollectionView_ChannelFullName_ChannelStateView_3660287053!
 }
 
 """
@@ -470,7 +470,7 @@ type Entry_BlobId_Blob_9f0b41f3 {
 """
 A GraphQL-visible map item, complete with key.
 """
-type Entry_ChannelFullName_ChannelStateView_ef52a064 {
+type Entry_ChannelFullName_ChannelStateView_bd1de7ae {
 	key: ChannelFullName!
 	value: ChannelStateView!
 }
@@ -616,7 +616,7 @@ input MapFilters_BlobId_4d2a0555 {
 	keys: [BlobId!]
 }
 
-input MapFilters_ChannelFullName_3b59bf69 {
+input MapFilters_ChannelFullName_7b67e184 {
 	keys: [ChannelFullName!]
 }
 
@@ -640,8 +640,8 @@ input MapInput_BlobId_4d2a0555 {
 	filters: MapFilters_BlobId_4d2a0555
 }
 
-input MapInput_ChannelFullName_3b59bf69 {
-	filters: MapFilters_ChannelFullName_3b59bf69
+input MapInput_ChannelFullName_7b67e184 {
+	filters: MapFilters_ChannelFullName_7b67e184
 }
 
 input MapInput_Origin_742d451b {
@@ -995,10 +995,10 @@ The recipient of a transfer
 """
 scalar Recipient
 
-type ReentrantCollectionView_ChannelFullName_ChannelStateView_629706216 {
+type ReentrantCollectionView_ChannelFullName_ChannelStateView_3660287053 {
 	keys: [ChannelFullName!]!
-	entry(key: ChannelFullName!): Entry_ChannelFullName_ChannelStateView_ef52a064!
-	entries(input: MapInput_ChannelFullName_3b59bf69): [Entry_ChannelFullName_ChannelStateView_ef52a064!]!
+	entry(key: ChannelFullName!): Entry_ChannelFullName_ChannelStateView_bd1de7ae!
+	entries(input: MapInput_ChannelFullName_7b67e184): [Entry_ChannelFullName_ChannelStateView_bd1de7ae!]!
 }
 
 type ReentrantCollectionView_Origin_InboxStateView_3699835794 {

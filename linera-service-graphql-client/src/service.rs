@@ -60,9 +60,12 @@ mod types {
 
 #[cfg(not(target_arch = "wasm32"))]
 mod types {
-    pub use linera_base::{data_types::UserApplicationDescription, ownership::ChainOwnership};
+    pub use linera_base::{
+        data_types::UserApplicationDescription, identifiers::ChannelFullName,
+        ownership::ChainOwnership,
+    };
     pub use linera_chain::{
-        data_types::{ChannelFullName, MessageAction, MessageBundle, Origin, Target},
+        data_types::{MessageAction, MessageBundle, Origin, Target},
         manager::ChainManager,
     };
     pub use linera_core::worker::{Notification, Reason};
@@ -130,12 +133,11 @@ pub struct Transfer;
 
 #[cfg(not(target_arch = "wasm32"))]
 mod from {
-    use linera_base::{hashed::Hashed, identifiers::StreamId};
+    use linera_base::{data_types::EventRecord, hashed::Hashed, identifiers::StreamId};
     use linera_chain::{
         block::{Block, BlockBody, BlockHeader},
         data_types::{
-            EventRecord, ExecutedBlock, IncomingBundle, MessageBundle, OutgoingMessage,
-            PostedMessage,
+            ExecutedBlock, IncomingBundle, MessageBundle, OutgoingMessage, PostedMessage,
         },
         types::ConfirmedBlock,
     };

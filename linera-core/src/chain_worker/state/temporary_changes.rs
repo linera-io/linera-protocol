@@ -6,11 +6,11 @@
 use linera_base::{
     data_types::{ArithmeticError, Timestamp, UserApplicationDescription},
     ensure,
-    identifiers::{AccountOwner, GenericApplicationId, UserApplicationId},
+    identifiers::{AccountOwner, ChannelFullName, GenericApplicationId, UserApplicationId},
 };
 use linera_chain::data_types::{
-    BlockExecutionOutcome, ChannelFullName, ExecutedBlock, IncomingBundle, Medium, MessageAction,
-    ProposalContent, ProposedBlock,
+    BlockExecutionOutcome, ExecutedBlock, IncomingBundle, Medium, MessageAction, ProposalContent,
+    ProposedBlock,
 };
 use linera_execution::{ChannelSubscription, Query, QueryOutcome};
 use linera_storage::{Clock as _, Storage};

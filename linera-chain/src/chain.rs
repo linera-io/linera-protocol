@@ -17,7 +17,7 @@ use linera_base::{
     },
     ensure,
     identifiers::{
-        ChainId, ChannelName, Destination, GenericApplicationId, MessageId, Owner, StreamId,
+        ChainId, ChannelFullName, Destination, GenericApplicationId, MessageId, Owner,
         UserApplicationId,
     },
     ownership::ChainOwnership,
@@ -43,9 +43,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     data_types::{
-        BlockExecutionOutcome, ChainAndHeight, ChannelFullName, EventRecord, IncomingBundle,
-        MessageAction, MessageBundle, Origin, OutgoingMessage, PostedMessage, ProposedBlock,
-        Target, Transaction,
+        BlockExecutionOutcome, ChainAndHeight, IncomingBundle, MessageAction, MessageBundle,
+        Origin, OutgoingMessage, PostedMessage, ProposedBlock, Target, Transaction,
     },
     inbox::{Cursor, InboxError, InboxStateView},
     manager::ChainManager,
@@ -508,17 +507,16 @@ where
                         .await?;
                 }
             } else if let Some((id, subscription)) = posted_message.message.matches_subscribe() {
-                subscribe_names_and_ids.push((subscription.name.clone(), *id));
+                let name = ChannelFullName::system(subscription.name.clone());
+                subscribe_names_and_ids.push((name, *id));
             }
             if let Some((id, subscription)) = posted_message.message.matches_unsubscribe() {
-                unsubscribe_names_and_ids.push((subscription.name.clone(), *id));
+                let name = ChannelFullName::system(subscription.name.clone());
+                unsubscribe_names_and_ids.push((name, *id));
             }
         }
-        self.process_unsubscribes(unsubscribe_names_and_ids, GenericApplicationId::System)
-            .await?;
-        let new_outbox_entries = self
-            .process_subscribes(subscribe_names_and_ids, GenericApplicationId::System)
-            .await?;
+        self.process_unsubscribes(unsubscribe_names_and_ids).await?;
+        let new_outbox_entries = self.process_subscribes(subscribe_names_and_ids).await?;
 
         if bundle.goes_to_inbox() {
             // Process the inbox bundle and update the inbox state.
@@ -812,13 +810,17 @@ where
                 .update_execution_outcomes_with_app_registrations(&mut txn_tracker)
                 .await
                 .with_execution_context(chain_execution_context)?;
-            let (txn_outcomes, txn_oracle_responses, new_next_message_index) = txn_tracker
-                .destructure()
+            let txn_outcome = txn_tracker
+                .into_outcome()
                 .with_execution_context(chain_execution_context)?;
-            next_message_index = new_next_message_index;
-            let (txn_messages, txn_events) = self
-                .process_execution_outcomes(block.height, txn_outcomes)
+            next_message_index = txn_outcome.next_message_index;
+
+            // Update the channels.
+            self.process_unsubscribes(txn_outcome.unsubscribe).await?;
+            let txn_messages = self
+                .process_execution_outcomes(block.height, txn_outcome.outcomes)
                 .await?;
+            self.process_subscribes(txn_outcome.subscribe).await?;
             if matches!(
                 transaction,
                 Transaction::ExecuteOperation(_)
@@ -835,8 +837,13 @@ where
                         .with_execution_context(chain_execution_context)?;
                 }
             }
+
             resource_controller
-                .track_block_size_of(&(&txn_oracle_responses, &txn_messages, &txn_events))
+                .track_block_size_of(&(
+                    &txn_outcome.oracle_responses,
+                    &txn_messages,
+                    &txn_outcome.events,
+                ))
                 .with_execution_context(chain_execution_context)?;
             resource_controller
                 .track_executed_block_size_sequence_extension(oracle_responses.len(), 1)
@@ -847,9 +854,9 @@ where
             resource_controller
                 .track_executed_block_size_sequence_extension(events.len(), 1)
                 .with_execution_context(chain_execution_context)?;
-            oracle_responses.push(txn_oracle_responses);
+            oracle_responses.push(txn_outcome.oracle_responses);
             messages.push(txn_messages);
-            events.push(txn_events);
+            events.push(txn_outcome.events);
         }
 
         // Finally, charge for the block fee, except if the chain is closed. Closed chains should
@@ -1062,9 +1069,8 @@ where
         &mut self,
         height: BlockHeight,
         results: Vec<ExecutionOutcome>,
-    ) -> Result<(Vec<OutgoingMessage>, Vec<EventRecord>), ChainError> {
+    ) -> Result<Vec<OutgoingMessage>, ChainError> {
         let mut messages = Vec::new();
-        let mut events = Vec::new();
         for result in results {
             match result {
                 ExecutionOutcome::System(result) => {
@@ -1072,7 +1078,6 @@ where
                         GenericApplicationId::System,
                         Message::System,
                         &mut messages,
-                        &mut events,
                         height,
                         result,
                     )
@@ -1086,7 +1091,6 @@ where
                             bytes,
                         },
                         &mut messages,
-                        &mut events,
                         height,
                         result,
                     )
@@ -1094,7 +1098,7 @@ where
                 }
             }
         }
-        Ok((messages, events))
+        Ok(messages)
     }
 
     async fn process_raw_execution_outcome<E, F>(
@@ -1102,26 +1106,12 @@ where
         application_id: GenericApplicationId,
         lift: F,
         messages: &mut Vec<OutgoingMessage>,
-        events: &mut Vec<EventRecord>,
         height: BlockHeight,
         raw_outcome: RawExecutionOutcome<E, Amount>,
     ) -> Result<(), ChainError>
     where
         F: Fn(E) -> Message,
     {
-        events.extend(
-            raw_outcome
-                .events
-                .into_iter()
-                .map(|(stream_name, key, value)| EventRecord {
-                    stream_id: StreamId {
-                        application_id,
-                        stream_name,
-                    },
-                    key,
-                    value,
-                }),
-        );
         let max_stream_queries = self.context().max_stream_queries();
         // Record the messages of the execution. Messages are understood within an
         // application.
@@ -1169,10 +1159,6 @@ where
             }
         }
 
-        // Update the channels.
-        self.process_unsubscribes(raw_outcome.unsubscribe, application_id)
-            .await?;
-
         let full_names = channel_broadcasts
             .into_iter()
             .map(|name| ChannelFullName {
@@ -1202,9 +1188,6 @@ where
                 *outbox_counters.entry(height).or_default() += 1;
             }
         }
-
-        self.process_subscribes(raw_outcome.subscribe, application_id)
-            .await?;
         Ok(())
     }
 
@@ -1212,18 +1195,14 @@ where
     /// which we have outgoing messages.
     async fn process_subscribes(
         &mut self,
-        names_and_ids: Vec<(ChannelName, ChainId)>,
-        application_id: GenericApplicationId,
+        names_and_ids: Vec<(ChannelFullName, ChainId)>,
     ) -> Result<bool, ChainError> {
         if names_and_ids.is_empty() {
             return Ok(false);
         }
         let full_names = names_and_ids
             .iter()
-            .map(|(name, _)| ChannelFullName {
-                application_id,
-                name: name.clone(),
-            })
+            .map(|(name, _)| name.clone())
             .collect::<Vec<_>>();
         let channels = self.channels.try_load_entries_mut(&full_names).await?;
         let subscribe_channels = names_and_ids.into_iter().zip(channels);
@@ -1233,18 +1212,14 @@ where
                 if channel.subscribers.contains(&id).await? {
                     return Ok(None); // Was already a subscriber.
                 }
-                let full_name = ChannelFullName {
-                    application_id,
-                    name,
-                };
-                tracing::trace!("Adding subscriber {id:.8} for {full_name:}");
+                tracing::trace!("Adding subscriber {id:.8} for {name:}");
                 channel.subscribers.insert(&id)?;
                 // Send all messages.
                 let heights = channel.block_heights.read(..).await?;
                 if heights.is_empty() {
                     return Ok(None); // No messages on this channel yet.
                 }
-                let target = Target::channel(id, full_name.clone());
+                let target = Target::channel(id, name.clone());
                 Ok::<_, ChainError>(Some((target, heights)))
             })
             .buffer_unordered(max_stream_queries);
@@ -1266,18 +1241,14 @@ where
 
     async fn process_unsubscribes(
         &mut self,
-        names_and_ids: Vec<(ChannelName, ChainId)>,
-        application_id: GenericApplicationId,
+        names_and_ids: Vec<(ChannelFullName, ChainId)>,
     ) -> Result<(), ChainError> {
         if names_and_ids.is_empty() {
             return Ok(());
         }
         let full_names = names_and_ids
             .iter()
-            .map(|(name, _)| ChannelFullName {
-                application_id,
-                name: name.clone(),
-            })
+            .map(|(name, _)| name.clone())
             .collect::<Vec<_>>();
         let channels = self.channels.try_load_entries_mut(&full_names).await?;
         for ((_name, id), mut channel) in names_and_ids.into_iter().zip(channels) {
