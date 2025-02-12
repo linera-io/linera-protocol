@@ -133,7 +133,7 @@ pub struct Transfer;
 
 #[cfg(not(target_arch = "wasm32"))]
 mod from {
-    use linera_base::{data_types::EventRecord, hashed::Hashed, identifiers::StreamId};
+    use linera_base::{data_types::Event, hashed::Hashed, identifiers::StreamId};
     use linera_chain::{
         block::{Block, BlockBody, BlockHeader},
         data_types::{
@@ -285,9 +285,9 @@ mod from {
         }
     }
 
-    impl From<block::BlockBlockValueBlockBodyEvents> for EventRecord {
+    impl From<block::BlockBlockValueBlockBodyEvents> for Event {
         fn from(event: block::BlockBlockValueBlockBodyEvents) -> Self {
-            EventRecord {
+            Event {
                 stream_id: event.stream_id.into(),
                 key: event.key.into_iter().map(|byte| byte as u8).collect(),
                 value: event.value.into_iter().map(|byte| byte as u8).collect(),

@@ -19,7 +19,7 @@ use assert_matches::assert_matches;
 use async_graphql::Request;
 use counter::CounterAbi;
 use linera_base::{
-    data_types::{Amount, Bytecode, EventRecord, OracleResponse, UserApplicationDescription},
+    data_types::{Amount, Bytecode, Event, OracleResponse, UserApplicationDescription},
     identifiers::{AccountOwner, ApplicationId, Destination, Owner, StreamId, StreamName},
     ownership::{ChainOwnership, TimeoutConfig},
 };
@@ -335,7 +335,7 @@ where
         certificate.block().body.events,
         vec![
             Vec::new(),
-            vec![EventRecord {
+            vec![Event {
                 stream_id: StreamId {
                     application_id: application_id2.forget_abi().into(),
                     stream_name: StreamName(b"announcements".to_vec()),

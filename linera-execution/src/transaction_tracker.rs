@@ -5,7 +5,7 @@ use std::vec;
 
 use custom_debug_derive::Debug;
 use linera_base::{
-    data_types::{Amount, ArithmeticError, EventRecord, OracleResponse},
+    data_types::{Amount, ArithmeticError, Event, OracleResponse},
     ensure,
     identifiers::{ApplicationId, ChainId, ChannelFullName, StreamId},
 };
@@ -26,7 +26,7 @@ pub struct TransactionTracker {
     outcomes: Vec<ExecutionOutcome>,
     next_message_index: u32,
     /// Events recorded by contracts' `emit` calls.
-    events: Vec<EventRecord>,
+    events: Vec<Event>,
     /// Subscribe chains to channels.
     subscribe: Vec<(ChannelFullName, ChainId)>,
     /// Unsubscribe chains from channels.
@@ -42,7 +42,7 @@ pub struct TransactionOutcome {
     pub outcomes: Vec<ExecutionOutcome>,
     pub next_message_index: u32,
     /// Events recorded by contracts' `emit` calls.
-    pub events: Vec<EventRecord>,
+    pub events: Vec<Event>,
     /// Subscribe chains to channels.
     pub subscribe: Vec<(ChannelFullName, ChainId)>,
     /// Unsubscribe chains from channels.
@@ -99,7 +99,7 @@ impl TransactionTracker {
     }
 
     pub fn add_event(&mut self, stream_id: StreamId, key: Vec<u8>, value: Vec<u8>) {
-        self.events.push(EventRecord {
+        self.events.push(Event {
             stream_id,
             key,
             value,

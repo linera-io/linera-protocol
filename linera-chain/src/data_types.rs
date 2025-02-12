@@ -12,7 +12,7 @@ use custom_debug_derive::Debug;
 use linera_base::{
     bcs,
     crypto::{BcsHashable, BcsSignable, CryptoError, CryptoHash, KeyPair, PublicKey, Signature},
-    data_types::{Amount, BlockHeight, EventRecord, OracleResponse, Round, Timestamp},
+    data_types::{Amount, BlockHeight, Event, OracleResponse, Round, Timestamp},
     doc_scalar, ensure,
     hashed::Hashed,
     identifiers::{
@@ -392,7 +392,7 @@ pub struct BlockExecutionOutcome {
     /// The record of oracle responses for each transaction.
     pub oracle_responses: Vec<Vec<OracleResponse>>,
     /// The list of events produced by each transaction.
-    pub events: Vec<Vec<EventRecord>>,
+    pub events: Vec<Vec<Event>>,
 }
 
 /// The hash and chain ID of a `CertificateValue`.
