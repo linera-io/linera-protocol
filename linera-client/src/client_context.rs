@@ -295,7 +295,7 @@ where
         // Try processing the inbox optimistically without waiting for validator notifications.
         let (new_certificates, maybe_timeout) = {
             chain_client.synchronize_from_validators().await?;
-            let result = chain_client.process_inbox_without_prepare().await;
+            let result = Box::pin(chain_client.process_inbox_without_prepare()).await;
             self.update_wallet_from_client(chain_client).await?;
             if result.is_err() {
                 self.save_wallet().await?;
@@ -314,7 +314,7 @@ where
 
         loop {
             let (new_certificates, maybe_timeout) = {
-                let result = chain_client.process_inbox().await;
+                let result = Box::pin(chain_client.process_inbox()).await;
                 self.update_wallet_from_client(chain_client).await?;
                 if result.is_err() {
                     self.save_wallet().await?;
@@ -591,7 +591,7 @@ where
 
         for chain_id in key_pairs.keys() {
             let child_client = self.make_chain_client(*chain_id)?;
-            child_client.process_inbox().await?;
+            Box::pin(child_client.process_inbox()).await?;
             self.wallet.as_mut().update_from_state(&child_client).await;
             self.save_wallet().await?;
         }
@@ -650,7 +650,7 @@ where
                 async move {
                     for i in 0..5 {
                         linera_base::time::timer::sleep(Duration::from_secs(i)).await;
-                        chain_client.process_inbox().await?;
+                        Box::pin(chain_client.process_inbox()).await?;
                         let chain_state = chain_client.chain_state_view().await?;
                         if chain_state
                             .execution_state

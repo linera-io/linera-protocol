@@ -26,7 +26,7 @@ use linera_execution::{
 };
 use linera_storage::Storage;
 use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
-use tracing::{instrument, trace, warn};
+use tracing::{debug, instrument, trace, warn};
 
 use super::{config::ChainWorkerConfig, state::ChainWorkerState, DeliveryNotifier};
 use crate::{
@@ -141,9 +141,46 @@ impl<StorageClient> ChainWorkerActor<StorageClient>
 where
     StorageClient: Storage + Clone + Send + Sync + 'static,
 {
-    /// Spawns a new task to run the [`ChainWorkerActor`], returning an endpoint for sending
-    /// requests to the worker.
-    #[tracing::instrument(level = "debug", skip_all, fields(?chain_id))]
+    /// Runs the [`ChainWorkerActor`], first by loading the chain state from `storage` then
+    /// handling all `incoming_requests` as they arrive.
+    ///
+    /// If loading the chain state fails the next request will receive the error reported by the
+    /// `storage`, and the actor will then try again to load the state.
+    pub async fn run(
+        config: ChainWorkerConfig,
+        storage: StorageClient,
+        certificate_value_cache: Arc<ValueCache<CryptoHash, HashedCertificateValue>>,
+        tracked_chains: Option<Arc<RwLock<HashSet<ChainId>>>>,
+        delivery_notifier: DeliveryNotifier,
+        chain_id: ChainId,
+        mut incoming_requests: mpsc::UnboundedReceiver<ChainWorkerRequest<StorageClient::Context>>,
+    ) {
+        let actor = loop {
+            let load_result = Self::load(
+                config.clone(),
+                storage.clone(),
+                certificate_value_cache.clone(),
+                tracked_chains.clone(),
+                delivery_notifier.clone(),
+                chain_id,
+            )
+            .await
+            .inspect_err(|error| warn!("Failed to load chain state: {error:?}"));
+
+            match load_result {
+                Ok(actor) => break actor,
+                Err(error) => match incoming_requests.recv().await {
+                    Some(request) => request.send_error(error),
+                    None => return,
+                },
+            }
+        };
+
+        actor.handle_requests(incoming_requests).await;
+    }
+
+    /// Creates a [`ChainWorkerActor`], loading it with the chain state for the requested
+    /// [`ChainId`].
     pub async fn load(
         config: ChainWorkerConfig,
         storage: StorageClient,
@@ -218,7 +255,7 @@ where
         skip_all,
         fields(chain_id = format!("{:.8}", self.worker.chain_id())),
     )]
-    pub async fn run(
+    pub async fn handle_requests(
         mut self,
         mut incoming_requests: mpsc::UnboundedReceiver<ChainWorkerRequest<StorageClient::Context>>,
     ) {
@@ -452,6 +489,62 @@ where
                 .debug_struct("ChainWorkerRequest::HandleChainInfoQuery")
                 .field("query", &query)
                 .finish_non_exhaustive(),
+        }
+    }
+}
+
+impl<Context> ChainWorkerRequest<Context>
+where
+    Context: linera_views::context::Context + Clone + Send + Sync + 'static,
+{
+    /// Responds to this request with an `error`.
+    pub fn send_error(self, error: WorkerError) {
+        debug!("Immediately sending error to chain worker request {self:?}");
+
+        let responded = match self {
+            #[cfg(with_testing)]
+            ChainWorkerRequest::ReadCertificate { callback, .. } => {
+                callback.send(Err(error)).is_ok()
+            }
+            #[cfg(with_testing)]
+            ChainWorkerRequest::FindBundleInInbox { callback, .. } => {
+                callback.send(Err(error)).is_ok()
+            }
+            ChainWorkerRequest::GetChainStateView { callback } => callback.send(Err(error)).is_ok(),
+            ChainWorkerRequest::QueryApplication { callback, .. } => {
+                callback.send(Err(error)).is_ok()
+            }
+            ChainWorkerRequest::DescribeApplication { callback, .. } => {
+                callback.send(Err(error)).is_ok()
+            }
+            ChainWorkerRequest::StageBlockExecution { callback, .. } => {
+                callback.send(Err(error)).is_ok()
+            }
+            ChainWorkerRequest::ProcessTimeout { callback, .. } => {
+                callback.send(Err(error)).is_ok()
+            }
+            ChainWorkerRequest::HandleBlockProposal { callback, .. } => {
+                callback.send(Err(error)).is_ok()
+            }
+            ChainWorkerRequest::ProcessValidatedBlock { callback, .. } => {
+                callback.send(Err(error)).is_ok()
+            }
+            ChainWorkerRequest::ProcessConfirmedBlock { callback, .. } => {
+                callback.send(Err(error)).is_ok()
+            }
+            ChainWorkerRequest::ProcessCrossChainUpdate { callback, .. } => {
+                callback.send(Err(error)).is_ok()
+            }
+            ChainWorkerRequest::ConfirmUpdatedRecipient { callback, .. } => {
+                callback.send(Err(error)).is_ok()
+            }
+            ChainWorkerRequest::HandleChainInfoQuery { callback, .. } => {
+                callback.send(Err(error)).is_ok()
+            }
+        };
+
+        if !responded {
+            warn!("Callback for `ChainWorkerActor` was dropped before a response was sent");
         }
     }
 }

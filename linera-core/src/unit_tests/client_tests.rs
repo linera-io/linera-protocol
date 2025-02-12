@@ -179,7 +179,7 @@ where
     receiver
         .receive_certificate_and_update_validators(cert)
         .await?;
-    assert_eq!(receiver.process_inbox().await?.0.len(), 1);
+    assert_eq!(Box::pin(receiver.process_inbox()).await?.0.len(), 1);
     // The friend paid to receive the message.
     assert_eq!(
         receiver.local_owner_balance(friend).await.unwrap(),
@@ -236,7 +236,7 @@ where
     receiver
         .receive_certificate_and_update_validators(cert)
         .await?;
-    let cert = receiver.process_inbox().await?.0.pop().unwrap();
+    let cert = Box::pin(receiver.process_inbox()).await?.0.pop().unwrap();
     {
         let messages = &cert.value().block().unwrap().incoming_bundles;
         // Both `Claim` messages were included in the block.
@@ -252,7 +252,7 @@ where
     sender
         .receive_certificate_and_update_validators(cert)
         .await?;
-    sender.process_inbox().await?;
+    Box::pin(sender.process_inbox()).await?;
     assert_eq!(
         sender.local_balance().await.unwrap(),
         Amount::from_millis(2895)
@@ -379,8 +379,7 @@ where
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
         .await?;
     let new_key_pair = KeyPair::generate();
-    let certificate = sender
-        .share_ownership(new_key_pair.public(), 100)
+    let certificate = Box::pin(sender.share_ownership(new_key_pair.public(), 100))
         .await
         .unwrap()
         .unwrap();
@@ -459,7 +458,7 @@ where
         .set_fault_type([0, 1, 2, 3], FaultType::Honest)
         .await;
     client.synchronize_from_validators().await.unwrap();
-    client.process_inbox().await.unwrap();
+    Box::pin(client.process_inbox()).await.unwrap();
     assert_eq!(
         client.local_balance().await.unwrap(),
         Amount::from_tokens(2)
@@ -473,7 +472,7 @@ where
 
     // The other client doesn't know the new round number yet:
     sender.synchronize_from_validators().await.unwrap();
-    sender.process_inbox().await.unwrap();
+    Box::pin(sender.process_inbox()).await.unwrap();
     assert_eq!(sender.local_balance().await.unwrap(), Amount::ONE);
     sender.clear_pending_block();
     sender
@@ -484,7 +483,7 @@ where
     // That's it, we spent all our money on this test!
     assert_eq!(sender.local_balance().await.unwrap(), Amount::ZERO);
     client.synchronize_from_validators().await.unwrap();
-    client.process_inbox().await.unwrap();
+    Box::pin(client.process_inbox()).await.unwrap();
     assert_eq!(client.local_balance().await.unwrap(), Amount::ZERO);
     Ok(())
 }
@@ -509,15 +508,14 @@ where
         .await?;
     let new_key_pair = KeyPair::generate();
     // Open the new chain.
-    let (message_id, certificate) = sender
-        .open_chain(
-            ChainOwnership::single(new_key_pair.public()),
-            ApplicationPermissions::default(),
-            Amount::ZERO,
-        )
-        .await
-        .unwrap()
-        .unwrap();
+    let (message_id, certificate) = Box::pin(sender.open_chain(
+        ChainOwnership::single(new_key_pair.public()),
+        ApplicationPermissions::default(),
+        Amount::ZERO,
+    ))
+    .await
+    .unwrap()
+    .unwrap();
     assert_eq!(sender.next_block_height(), BlockHeight::from(1));
     assert!(sender.pending_block().is_none());
     assert!(sender.key_pair().await.is_ok());
@@ -568,15 +566,14 @@ where
         .await
         .unwrap();
     // Open the new chain.
-    let (open_chain_message_id, certificate) = parent
-        .open_chain(
-            ChainOwnership::single(new_key_pair.public()),
-            ApplicationPermissions::default(),
-            Amount::ZERO,
-        )
-        .await
-        .unwrap()
-        .unwrap();
+    let (open_chain_message_id, certificate) = Box::pin(parent.open_chain(
+        ChainOwnership::single(new_key_pair.public()),
+        ApplicationPermissions::default(),
+        Amount::ZERO,
+    ))
+    .await
+    .unwrap()
+    .unwrap();
     let new_id2 = ChainId::child(open_chain_message_id);
     assert_eq!(new_id, new_id2);
     assert_eq!(sender.next_block_height(), BlockHeight::from(1));
@@ -663,15 +660,14 @@ where
         .await
         .unwrap();
     // Open the new chain.
-    let (open_chain_message_id, certificate) = sender
-        .open_chain(
-            ChainOwnership::single(new_key_pair.public()),
-            ApplicationPermissions::default(),
-            Amount::ZERO,
-        )
-        .await
-        .unwrap()
-        .unwrap();
+    let (open_chain_message_id, certificate) = Box::pin(sender.open_chain(
+        ChainOwnership::single(new_key_pair.public()),
+        ApplicationPermissions::default(),
+        Amount::ZERO,
+    ))
+    .await
+    .unwrap()
+    .unwrap();
     let new_id2 = ChainId::child(open_chain_message_id);
     assert_eq!(new_id, new_id2);
     assert_eq!(sender.next_block_height(), BlockHeight::from(2));
@@ -743,11 +739,11 @@ where
     // Open the new chain. We are both regular and super owner.
     let ownership = ChainOwnership::single(new_key_pair.public())
         .with_regular_owner(new_key_pair.public(), 100);
-    let (message_id, creation_certificate) = sender
-        .open_chain(ownership, ApplicationPermissions::default(), Amount::ZERO)
-        .await
-        .unwrap()
-        .unwrap();
+    let (message_id, creation_certificate) =
+        Box::pin(sender.open_chain(ownership, ApplicationPermissions::default(), Amount::ZERO))
+            .await
+            .unwrap()
+            .unwrap();
     let new_id = ChainId::child(message_id);
     // Transfer after creating the chain.
     let transfer_certificate = sender
@@ -857,7 +853,7 @@ where
         .unwrap()
         .unwrap();
     client1.synchronize_from_validators().await.unwrap();
-    let (certificates, _) = client1.process_inbox().await.unwrap();
+    let (certificates, _) = Box::pin(client1.process_inbox()).await.unwrap();
     let block = certificates[0].value().block().unwrap();
     assert!(block.operations.is_empty());
     assert_eq!(block.incoming_bundles.len(), 1);
@@ -1009,7 +1005,7 @@ where
         Amount::from_tokens(2)
     );
     client1.synchronize_from_validators().await.unwrap();
-    client1.process_inbox().await.unwrap();
+    Box::pin(client1.process_inbox()).await.unwrap();
     assert_eq!(client1.local_balance().await.unwrap(), Amount::ONE);
     // Local balance from client2 is now consolidated.
     assert_eq!(
@@ -1058,7 +1054,7 @@ where
     assert_eq!(client1.next_block_height(), BlockHeight::from(1));
     assert!(client1.pending_block().is_none());
     // The receiver doesn't know about the transfer.
-    client2.process_inbox().await.unwrap();
+    Box::pin(client2.process_inbox()).await.unwrap();
     assert_eq!(client2.local_balance().await.unwrap(), Amount::ZERO);
     // Let the receiver confirm in last resort.
     client2
@@ -1134,8 +1130,7 @@ where
         )))
     );
     // There is no pending block, since the proposal wasn't valid at the time.
-    assert!(client2
-        .process_pending_block()
+    assert!(Box::pin(client2.process_pending_block())
         .await
         .unwrap()
         .unwrap()
@@ -1192,12 +1187,14 @@ where
     let validators = builder.initial_committee.validators().clone();
 
     let committee = Committee::new(validators.clone(), ResourceControlPolicy::only_fuel());
-    admin.stage_new_committee(committee).await.unwrap();
+    Box::pin(admin.stage_new_committee(committee))
+        .await
+        .unwrap();
     admin.finalize_committee().await.unwrap();
 
     // Root chain 1 receives the notification about the new epoch.
     user.synchronize_from_validators().await.unwrap();
-    user.process_inbox().await.unwrap();
+    Box::pin(user.process_inbox()).await.unwrap();
     assert_eq!(user.epoch().await.unwrap(), Epoch::from(1));
 
     // Stop listening for new committees.
@@ -1210,11 +1207,13 @@ where
         .receive_certificate_and_update_validators(cert)
         .await
         .unwrap();
-    admin.process_inbox().await.unwrap();
+    Box::pin(admin.process_inbox()).await.unwrap();
 
     // Create a new committee.
     let committee = Committee::new(validators, ResourceControlPolicy::only_fuel());
-    admin.stage_new_committee(committee).await.unwrap();
+    Box::pin(admin.stage_new_committee(committee))
+        .await
+        .unwrap();
     assert_eq!(admin.next_block_height(), BlockHeight::from(3));
     assert!(admin.pending_block().is_none());
     assert!(admin.key_pair().await.is_ok());
@@ -1246,7 +1245,7 @@ where
     user.synchronize_from_validators().await.unwrap();
 
     // User is unsubscribed, so the migration message is not even in the inbox yet.
-    user.process_inbox().await.unwrap();
+    Box::pin(user.process_inbox()).await.unwrap();
     assert_eq!(user.epoch().await.unwrap(), Epoch::from(1));
 
     // Now subscribe explicitly to migrations.
@@ -1258,7 +1257,7 @@ where
     builder
         .check_that_validators_have_empty_outboxes(ChainId::root(0))
         .await;
-    admin.process_inbox().await.unwrap();
+    Box::pin(admin.process_inbox()).await.unwrap();
 
     // Have the admin chain deprecate the previous epoch.
     admin.finalize_committee().await.unwrap();
@@ -1279,12 +1278,12 @@ where
     );
     // Transfer is blocked because the epoch #0 has been retired by admin.
     admin.synchronize_from_validators().await.unwrap();
-    admin.process_inbox().await.unwrap();
+    Box::pin(admin.process_inbox()).await.unwrap();
     assert_eq!(admin.local_balance().await.unwrap(), Amount::ZERO);
 
     // Have the user receive the notification to migrate to epoch #2.
     user.synchronize_from_validators().await.unwrap();
-    user.process_inbox().await.unwrap();
+    Box::pin(user.process_inbox()).await.unwrap();
     assert_eq!(user.epoch().await.unwrap(), Epoch::from(2));
 
     // Try again to make a transfer back to the admin chain.
@@ -1297,7 +1296,7 @@ where
         .receive_certificate_and_update_validators(cert)
         .await
         .unwrap();
-    admin.process_inbox().await.unwrap();
+    Box::pin(admin.process_inbox()).await.unwrap();
     // Transfer goes through and the previous one as well thanks to block chaining.
     assert_eq!(admin.local_balance().await.unwrap(), Amount::from_tokens(3));
     Ok(())
@@ -2178,7 +2177,7 @@ where
     // pending block, which publishes the blob, leaving 10 - 1 = 9.
     client0.burn(None, Amount::from_tokens(1)).await.unwrap();
     client0.synchronize_from_validators().await.unwrap();
-    client0.process_inbox().await.unwrap();
+    Box::pin(client0.process_inbox()).await.unwrap();
     assert_eq!(
         client0.local_balance().await.unwrap(),
         Amount::from_tokens(9)
@@ -2188,7 +2187,7 @@ where
     // Burn another token so Client 1 sees that the blob is already published
     client1.burn(None, Amount::from_tokens(1)).await.unwrap();
     client1.synchronize_from_validators().await.unwrap();
-    client1.process_inbox().await.unwrap();
+    Box::pin(client1.process_inbox()).await.unwrap();
     assert_eq!(
         client1.local_balance().await.unwrap(),
         Amount::from_tokens(8)
@@ -2229,7 +2228,7 @@ where
     // pending block, which burns 3 tokens, leaving 10 - 3 - 1 = 6.
     client.burn(None, Amount::ONE).await.unwrap();
     client.synchronize_from_validators().await.unwrap();
-    client.process_inbox().await.unwrap();
+    Box::pin(client.process_inbox()).await.unwrap();
     assert_eq!(
         client.local_balance().await.unwrap(),
         Amount::from_tokens(6)
@@ -2381,23 +2380,23 @@ where
     receiver
         .receive_certificate_and_update_validators(cert)
         .await?;
-    assert!(receiver.process_inbox().await?.0.is_empty());
+    assert!(Box::pin(receiver.process_inbox()).await?.0.is_empty());
     // The message was ignored.
     assert_eq!(receiver.local_balance().await.unwrap(), Amount::ZERO);
-    assert!(sender.process_inbox().await?.0.is_empty());
+    assert!(Box::pin(sender.process_inbox()).await?.0.is_empty());
     assert_eq!(
         sender.local_balance().await.unwrap(),
         Amount::from_tokens(3)
     );
 
     receiver.options_mut().message_policy = MessagePolicy::new(BlanketMessagePolicy::Reject, None);
-    let certs = receiver.process_inbox().await?.0;
+    let certs = Box::pin(receiver.process_inbox()).await?.0;
     assert_eq!(certs.len(), 1);
     sender
         .receive_certificate_and_update_validators(certs.into_iter().next().unwrap())
         .await?;
     // The message bounces.
-    assert_eq!(sender.process_inbox().await?.0.len(), 1);
+    assert_eq!(Box::pin(sender.process_inbox()).await?.0.len(), 1);
     assert_eq!(receiver.local_balance().await.unwrap(), Amount::ZERO);
     assert_eq!(
         sender.local_balance().await.unwrap(),

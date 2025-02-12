@@ -127,15 +127,15 @@ impl Runnable for Job {
                     amount, sender, recipient
                 );
                 let time_start = Instant::now();
-                let certificate = context
-                    .apply_client_command(&chain_client, |chain_client| {
+                let certificate =
+                    Box::pin(context.apply_client_command(&chain_client, |chain_client| {
                         let chain_client = chain_client.clone();
                         async move {
                             chain_client
                                 .transfer_to_account(sender.owner, amount, recipient)
                                 .await
                         }
-                    })
+                    }))
                     .await
                     .context("Failed to make transfer")?;
                 let time_total = time_start.elapsed();
@@ -159,16 +159,19 @@ impl Runnable for Job {
                 };
                 info!("Opening a new chain from existing chain {}", chain_id);
                 let time_start = Instant::now();
-                let (message_id, certificate) = context
-                    .apply_client_command(&chain_client, |chain_client| {
+                let (message_id, certificate) =
+                    Box::pin(context.apply_client_command(&chain_client, |chain_client| {
                         let ownership = ChainOwnership::single(new_public_key);
                         let chain_client = chain_client.clone();
                         async move {
-                            chain_client
-                                .open_chain(ownership, ApplicationPermissions::default(), balance)
-                                .await
+                            Box::pin(chain_client.open_chain(
+                                ownership,
+                                ApplicationPermissions::default(),
+                                balance,
+                            ))
+                            .await
                         }
-                    })
+                    }))
                     .await
                     .context("Failed to open chain")?;
                 let id = ChainId::child(message_id);
@@ -206,17 +209,20 @@ impl Runnable for Job {
                 let ownership = ChainOwnership::try_from(ownership_config)?;
                 let application_permissions =
                     ApplicationPermissions::from(application_permissions_config);
-                let (message_id, certificate) = context
-                    .apply_client_command(&chain_client, |chain_client| {
+                let (message_id, certificate) =
+                    Box::pin(context.apply_client_command(&chain_client, |chain_client| {
                         let ownership = ownership.clone();
                         let application_permissions = application_permissions.clone();
                         let chain_client = chain_client.clone();
                         async move {
-                            chain_client
-                                .open_chain(ownership, application_permissions, balance)
-                                .await
+                            Box::pin(chain_client.open_chain(
+                                ownership,
+                                application_permissions,
+                                balance,
+                            ))
+                            .await
                         }
-                    })
+                    }))
                     .await
                     .context("Failed to open chain")?;
                 // No key pair. This chain can be assigned explicitly using the assign command.
@@ -243,7 +249,7 @@ impl Runnable for Job {
             ChangeOwnership {
                 chain_id,
                 ownership_config,
-            } => context.change_ownership(chain_id, ownership_config).await?,
+            } => Box::pin(context.change_ownership(chain_id, ownership_config)).await?,
 
             ChangeApplicationPermissions {
                 chain_id,
@@ -311,8 +317,8 @@ impl Runnable for Job {
                 );
                 let time_start = Instant::now();
                 let balance = match account.owner {
-                    Some(owner) => chain_client.query_owner_balance(owner).await?,
-                    None => chain_client.query_balance().await?,
+                    Some(owner) => Box::pin(chain_client.query_owner_balance(owner)).await?,
+                    None => Box::pin(chain_client.query_balance()).await?,
                 };
                 let time_total = time_start.elapsed();
                 info!("Balance obtained after {} ms", time_total.as_millis());
@@ -327,8 +333,8 @@ impl Runnable for Job {
                 let time_start = Instant::now();
                 chain_client.synchronize_from_validators().await?;
                 let result = match account.owner {
-                    Some(owner) => chain_client.query_owner_balance(owner).await,
-                    None => chain_client.query_balance().await,
+                    Some(owner) => Box::pin(chain_client.query_owner_balance(owner)).await,
+                    None => Box::pin(chain_client.query_balance()).await,
                 };
                 context.update_and_save_wallet(&chain_client).await?;
                 let balance = result.context("Failed to synchronize from validators")?;
@@ -555,8 +561,8 @@ impl Runnable for Job {
                     .filter_map(|c| c.value().executed_block().map(|e| e.messages().len()))
                     .sum::<usize>();
                 info!("Subscribed {} chains to new committees", n);
-                let maybe_certificate = context
-                    .apply_client_command(&chain_client, |chain_client| {
+                let maybe_certificate =
+                    Box::pin(context.apply_client_command(&chain_client, |chain_client| {
                         let chain_client = chain_client.clone();
                         let command = command.clone();
                         async move {
@@ -664,12 +670,11 @@ impl Runnable for Job {
                                 _ => unreachable!(),
                             }
                             committee = Committee::new(validators, policy);
-                            chain_client
-                                .stage_new_committee(committee)
+                            Box::pin(chain_client.stage_new_committee(committee))
                                 .await
                                 .map(|outcome| outcome.map(Some))
                         }
-                    })
+                    }))
                     .await
                     .context("Failed to stage committee")?;
                 let Some(certificate) = maybe_certificate else {
@@ -870,9 +875,8 @@ impl Runnable for Job {
                 let publisher = publisher.unwrap_or_else(|| context.default_chain());
                 info!("Publishing bytecode on chain {}", publisher);
                 let chain_client = context.make_chain_client(publisher)?;
-                let bytecode_id = context
-                    .publish_bytecode(&chain_client, contract, service)
-                    .await?;
+                let bytecode_id =
+                    Box::pin(context.publish_bytecode(&chain_client, contract, service)).await?;
                 println!("{}", bytecode_id);
                 info!("Time elapsed: {} ms", start_time.elapsed().as_millis());
             }
@@ -920,8 +924,9 @@ impl Runnable for Job {
                 let chain_client = chain_client;
                 context.process_inbox(&chain_client).await?;
 
-                let (application_id, _) = context
-                    .apply_client_command(&chain_client, move |chain_client| {
+                let (application_id, _) = Box::pin(context.apply_client_command(
+                    &chain_client,
+                    move |chain_client| {
                         let parameters = parameters.clone();
                         let argument = argument.clone();
                         let chain_client = chain_client.clone();
@@ -936,9 +941,10 @@ impl Runnable for Job {
                                 )
                                 .await
                         }
-                    })
-                    .await
-                    .context("Failed to create application")?;
+                    },
+                ))
+                .await
+                .context("Failed to create application")?;
                 info!("{}", "Application created successfully!".green().bold());
                 info!("Time elapsed: {} ms", start_time.elapsed().as_millis());
                 println!("{}", application_id);
@@ -961,12 +967,12 @@ impl Runnable for Job {
                 let parameters = read_json(json_parameters, json_parameters_path)?;
                 let argument = read_json(json_argument, json_argument_path)?;
 
-                let bytecode_id = context
-                    .publish_bytecode(&chain_client, contract, service)
-                    .await?;
+                let bytecode_id =
+                    Box::pin(context.publish_bytecode(&chain_client, contract, service)).await?;
 
-                let (application_id, _) = context
-                    .apply_client_command(&chain_client, move |chain_client| {
+                let (application_id, _) = Box::pin(context.apply_client_command(
+                    &chain_client,
+                    move |chain_client| {
                         let parameters = parameters.clone();
                         let argument = argument.clone();
                         let chain_client = chain_client.clone();
@@ -981,9 +987,10 @@ impl Runnable for Job {
                                 )
                                 .await
                         }
-                    })
-                    .await
-                    .context("Failed to create application")?;
+                    },
+                ))
+                .await
+                .context("Failed to create application")?;
                 info!("{}", "Application published successfully!".green().bold());
                 info!("Time elapsed: {} ms", start_time.elapsed().as_millis());
                 println!("{}", application_id);
@@ -998,15 +1005,15 @@ impl Runnable for Job {
                     requester_chain_id.unwrap_or_else(|| context.default_chain());
                 info!("Requesting application for chain {}", requester_chain_id);
                 let chain_client = context.make_chain_client(requester_chain_id)?;
-                let certificate = context
-                    .apply_client_command(&chain_client, |chain_client| {
+                let certificate =
+                    Box::pin(context.apply_client_command(&chain_client, |chain_client| {
                         let chain_client = chain_client.clone();
                         async move {
                             chain_client
                                 .request_application(application_id, target_chain_id)
                                 .await
                         }
-                    })
+                    }))
                     .await
                     .context("Failed to request application")?;
                 debug!("{:?}", certificate);
@@ -1055,12 +1062,16 @@ impl Runnable for Job {
                     let project = project::Project::from_existing_project(project_path)?;
                     let (contract_path, service_path) = project.build(name)?;
 
-                    let bytecode_id = context
-                        .publish_bytecode(&chain_client, contract_path, service_path)
-                        .await?;
+                    let bytecode_id = Box::pin(context.publish_bytecode(
+                        &chain_client,
+                        contract_path,
+                        service_path,
+                    ))
+                    .await?;
 
-                    let (application_id, _) = context
-                        .apply_client_command(&chain_client, move |chain_client| {
+                    let (application_id, _) = Box::pin(context.apply_client_command(
+                        &chain_client,
+                        move |chain_client| {
                             let parameters = parameters.clone();
                             let argument = argument.clone();
                             let chain_client = chain_client.clone();
@@ -1075,9 +1086,10 @@ impl Runnable for Job {
                                     )
                                     .await
                             }
-                        })
-                        .await
-                        .context("Failed to create application")?;
+                        },
+                    ))
+                    .await
+                    .context("Failed to create application")?;
                     info!("{}", "Application published successfully!".green().bold());
                     info!("Time elapsed: {} ms", start_time.elapsed().as_millis());
                     println!("{}", application_id);
@@ -1089,7 +1101,7 @@ impl Runnable for Job {
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 info!("Committing pending block for chain {}", chain_id);
                 let chain_client = context.make_chain_client(chain_id)?;
-                match chain_client.process_pending_block().await? {
+                match Box::pin(chain_client.process_pending_block()).await? {
                     ClientOutcome::Committed(Some(certificate)) => {
                         info!("Pending block committed successfully.");
                         println!("{}", certificate.hash());
