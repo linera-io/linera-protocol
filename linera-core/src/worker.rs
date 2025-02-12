@@ -697,20 +697,20 @@ where
                 .or_default()
                 .clone();
 
-            let actor = ChainWorkerActor::load(
+            let actor_task = ChainWorkerActor::run(
                 self.chain_worker_config.clone(),
                 self.storage.clone(),
                 self.executed_block_cache.clone(),
                 self.tracked_chains.clone(),
                 delivery_notifier,
                 chain_id,
-            )
-            .await?;
+                receiver,
+            );
 
             self.chain_worker_tasks
                 .lock()
                 .unwrap()
-                .spawn_task(actor.run(receiver).in_current_span());
+                .spawn_task(actor_task.in_current_span());
         }
 
         Ok(sender)
