@@ -134,7 +134,7 @@ a view, we do a delete by prefix, which thus deletes the old segments if present
 * In order to delete all the unused segments when overwriting a value, every write
 would need to have a read just before which is expensive.
 
-A key difficulty of this modelization is that we are using prefixes extensively
+A key difficulty of this modellization is that we are using prefixes extensively
 and so by adding the index of the form `[* * * *]` we are potentially creating
 some collisions. That is if we delete a key of the form `[key 0 0]` we would
 also delete segments of the key of the form `key`. However, this cannot happen
