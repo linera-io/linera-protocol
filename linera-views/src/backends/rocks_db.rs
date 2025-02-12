@@ -47,6 +47,9 @@ const MAX_VALUE_SIZE: usize = 3221225072;
 // 8388608 and so for offset reason we decrease by 400
 const MAX_KEY_SIZE: usize = 8388208;
 
+const DB_CACHE_SIZE: usize = 8 * 1024 * 1024; // 8 MiB
+const DB_MAX_WRITE_BUFFER_NUMBER: i32 = 16;
+
 /// The RocksDB client that we use.
 type DB = rocksdb::DBWithThreadMode<rocksdb::MultiThreaded>;
 
@@ -288,6 +291,12 @@ impl RocksDbStoreInternal {
         }
         let mut options = rocksdb::Options::default();
         options.create_if_missing(true);
+        options.create_missing_column_families(true);
+        // Flush in-memory buffer to disk more often
+        options.set_write_buffer_size(DB_CACHE_SIZE);
+        options.set_max_write_buffer_number(DB_MAX_WRITE_BUFFER_NUMBER);
+        options.set_compression_type(rocksdb::DBCompressionType::Lz4);
+
         let db = DB::open(&options, path_buf)?;
         let executor = RocksDbStoreExecutor {
             db: Arc::new(db),
