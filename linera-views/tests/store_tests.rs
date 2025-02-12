@@ -229,6 +229,15 @@ async fn scylla_db_tombstone_triggering_test() {
     linera_views::test_utils::tombstone_triggering_test(store).await;
 }
 
+#[cfg(with_rocksdb)]
+#[tokio::test]
+async fn rocks_db_tombstone_triggering_test() {
+    let store = linera_views::rocks_db::RocksDbStore::new_test_store()
+        .await
+        .unwrap();
+    linera_views::test_utils::tombstone_triggering_test(store).await;
+}
+
 #[cfg(with_scylladb)]
 #[tokio::test]
 async fn test_scylla_db_big_write_read() {
