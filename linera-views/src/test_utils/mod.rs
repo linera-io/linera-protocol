@@ -367,6 +367,25 @@ fn realize_batch(batch: &Batch) -> BTreeMap<Vec<u8>, Vec<u8>> {
     kv_state
 }
 
+async fn read_keys_prefix<C: LocalRestrictedKeyValueStore>(
+    key_value_store: &C,
+    key_prefix: &[u8],
+) -> BTreeSet<Vec<u8>> {
+    let mut keys = BTreeSet::new();
+    for key in key_value_store
+        .find_keys_by_prefix(key_prefix)
+        .await
+        .unwrap()
+        .iterator()
+    {
+        let key_suffix = key.unwrap();
+        let mut key = key_prefix.to_vec();
+        key.extend(key_suffix);
+        keys.insert(key);
+    }
+    keys
+}
+
 async fn read_key_values_prefix<C: LocalRestrictedKeyValueStore>(
     key_value_store: &C,
     key_prefix: &[u8],
@@ -461,6 +480,8 @@ pub async fn big_read_multi_values<C: LocalKeyValueStore>(
 /// selection, Scylla is forced to introduce around 100000 tombstones
 /// which triggers the crash with the default settings.
 pub async fn tombstone_triggering_test<C: LocalRestrictedKeyValueStore>(key_value_store: C) {
+    use std::time::Instant;
+    let t1 = Instant::now();
     let mut rng = make_deterministic_rng();
     let value_size = 100;
     let n_entry = 200000;
@@ -469,6 +490,7 @@ pub async fn tombstone_triggering_test<C: LocalRestrictedKeyValueStore>(key_valu
     let key_prefix = vec![0];
     let mut batch_delete = Batch::new();
     let mut remaining_key_values = BTreeMap::new();
+    let mut remaining_keys = BTreeSet::new();
     for i in 0..n_entry {
         let mut key = key_prefix.clone();
         bcs::serialize_into(&mut key, &i).unwrap();
@@ -476,17 +498,37 @@ pub async fn tombstone_triggering_test<C: LocalRestrictedKeyValueStore>(key_valu
         batch_insert.put_key_value_bytes(key.clone(), value.clone());
         let to_delete = rng.gen::<bool>();
         if to_delete {
-            batch_delete.delete_key(key);
+            batch_delete.delete_key_prefix(key);
+//            batch_delete.delete_key(key);
         } else {
+            remaining_keys.insert(key.clone());
             remaining_key_values.insert(key, value);
         }
     }
+    println!("Set up in {} ms", t1.elapsed().as_millis());
+
+    let t1 = Instant::now();
     run_test_batch_from_blank(&key_value_store, key_prefix.clone(), batch_insert).await;
+    println!("run_test_batch in {} ms", t1.elapsed().as_millis());
+
+
     // Deleting them all
+    let t1 = Instant::now();
     key_value_store.write_batch(batch_delete).await.unwrap();
-    // Reading everything and seeing that it is now cleaned.
-    let key_values = read_key_values_prefix(&key_value_store, &key_prefix).await;
-    assert_eq!(key_values, remaining_key_values);
+    println!("batch_delete in {} ms", t1.elapsed().as_millis());
+
+    for iter in 0..5 {
+        // Reading everything and seeing that it is now cleaned.
+        let t1 = Instant::now();
+        let key_values = read_key_values_prefix(&key_value_store, &key_prefix).await;
+        assert_eq!(key_values, remaining_key_values);
+        println!("iter={} read_key_values_prefix in {} ms", t1.elapsed().as_millis());
+
+        let t1 = Instant::now();
+        let keys = read_keys_prefix(&key_value_store, &key_prefix).await;
+        assert_eq!(keys, remaining_keys);
+        println!("iter={} read_keys_prefix after {} ms", t1.elapsed().as_millis());
+    }
 }
 
 /// DynamoDb has limits at 1M (for pagination), 4M (for write)
