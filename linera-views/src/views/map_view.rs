@@ -1436,7 +1436,7 @@ where
     }
 }
 
-/// A Custom MapView that uses the custom serialization
+/// A map view that uses custom serialization
 #[derive(Debug)]
 pub struct CustomMapView<C, I, V> {
     map: ByteMapView<C, V>,

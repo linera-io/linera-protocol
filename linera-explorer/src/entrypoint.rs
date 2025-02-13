@@ -9,7 +9,7 @@ use wasm_bindgen::prelude::*;
 use super::js_utils::{getf, js_to_json, setf, SER};
 use crate::reqwest_client;
 
-/// Auxiliary recursive function for forge_arg.
+/// Auxiliary recursive function for `forge_arg`.
 fn forge_arg_type(arg: &Value, non_null: bool) -> Option<String> {
     let deprecated = matches!(arg.get("isDeprecated"), Some(Value::Bool(true)));
     if deprecated {
@@ -71,7 +71,7 @@ fn forge_args(args: Vec<Value>) -> String {
     }
 }
 
-/// Auxiliary recursive function for forge_response.
+/// Auxiliary recursive function for `forge_response`.
 fn forge_response_type(output: &Value, name: Option<&str>, root: bool) -> Option<String> {
     let is_non_null_or_list = matches!(output["kind"].as_str(), Some("NON_NULL") | Some("LIST"));
     let incl = matches!(output.get("_include"), Some(Value::Bool(true)));
@@ -161,7 +161,7 @@ pub fn empty_response(output: JsValue) -> bool {
     empty_response_aux(&output)
 }
 
-/// Auxiliary recursive function for empty_response
+/// Auxiliary recursive function for `empty_response`
 fn empty_response_aux(output: &Value) -> bool {
     match output.get("kind") {
         None => true,

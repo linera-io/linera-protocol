@@ -1,6 +1,18 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! We implement two types:
+//! 1) The first type `KeyValueStoreView` implements View and the function of `KeyValueStore`.
+//!
+//! 2) The second type `ViewContainer` encapsulates `KeyValueStoreView` and provides the following functionalities:
+//!    * The `Clone` trait
+//!    * a `write_batch` that takes a `&self` instead of a `&mut self`
+//!    * a `write_batch` that writes in the context instead of writing of the view.
+//!
+//! Currently, that second type is only used for tests.
+//!
+//! Key tags to create the sub-keys of a `KeyValueStoreView` on top of the base key.
+
 #[cfg(with_metrics)]
 use std::sync::LazyLock;
 use std::{collections::BTreeMap, fmt::Debug, mem, ops::Bound::Included, sync::Mutex};
@@ -124,18 +136,6 @@ use {
     thiserror::Error,
 };
 
-/// We implement two types:
-/// 1) The first type KeyValueStoreView implements View and the function of KeyValueStore
-///    (though not KeyValueStore).
-///
-/// 2) The second type ViewContainer encapsulates KeyValueStoreView and provides the following functionalities:
-///    * The Clone trait
-///    * a write_batch that takes a &self instead of a "&mut self"
-///    * a write_batch that writes in the context instead of writing of the view.
-///
-/// Currently, that second type is only used for tests.
-///
-/// Key tags to create the sub-keys of a KeyValueStoreView on top of the base key.
 #[repr(u8)]
 enum KeyTag {
     /// Prefix for the indices of the view.
@@ -172,7 +172,7 @@ impl SizeData {
         Ok(i32::try_from(sum).map_err(|_| ArithmeticError::Overflow)?)
     }
 
-    /// Add a size to the existing SizeData
+    /// Adds a size to `self`
     pub fn add_assign(&mut self, size: SizeData) -> Result<(), ViewError> {
         self.key = self
             .key
@@ -185,27 +185,27 @@ impl SizeData {
         Ok(())
     }
 
-    /// Subtract a size to the existing SizeData
+    /// Subtracts a size from `self`
     pub fn sub_assign(&mut self, size: SizeData) {
         self.key -= size.key;
         self.value -= size.value;
     }
 }
 
-/// A view that represents the functions of KeyValueStore (though not KeyValueStore).
+/// A view that represents the functions of `KeyValueStore`.
 ///
 /// Comment on the data set:
-/// In order to work, the view needs to store the updates and deleted_prefixes.
-/// The updates and deleted_prefixes have to be coherent. This means:
-/// * If an index is deleted by one in deleted_prefixes then it should not be present
-///   in updates at al.
+/// In order to work, the view needs to store the updates and deleted prefixes.
+/// The updates and deleted prefixes have to be coherent. This means:
+/// * If an index is deleted by one in deleted prefixes then it should not be present
+///   in the updates at all.
 /// * [`DeletePrefix::key_prefix`][entry1] should not dominate anyone. That is if we have `[0,2]`
 ///   then we should not have `[0,2,3]` since it would be dominated by the preceding.
 ///
 /// With that we have:
-/// * in order to test if an index is deleted by a prefix we compute the highest deleted prefix `prefix`
-///   such that prefix <= index.
-///   If dp is indeed a prefix then we conclude from that.index is deleted, otherwise not.
+/// * in order to test if an `index` is deleted by a prefix we compute the highest deleted prefix `dp`
+///   such that `dp <= index`.
+///   If `dp` is indeed a prefix then we conclude that `index` is deleted, otherwise not.
 ///   The no domination is essential here.
 ///
 /// [entry1]: crate::batch::WriteOperation::DeletePrefix
@@ -953,7 +953,7 @@ where
         self.write_batch(batch).await
     }
 
-    /// Deletes a key_prefix.
+    /// Deletes a key prefix.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::context::create_test_memory_context;

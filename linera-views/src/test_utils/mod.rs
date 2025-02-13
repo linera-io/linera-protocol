@@ -26,7 +26,7 @@ use crate::{
     },
 };
 
-/// Returns a random key_prefix used for tests
+/// Returns a random key prefix used for tests
 pub fn get_random_key_prefix() -> Vec<u8> {
     let mut key_prefix = vec![0];
     let value: usize = make_nondeterministic_rng().rng_mut().gen();
@@ -34,7 +34,7 @@ pub fn get_random_key_prefix() -> Vec<u8> {
     key_prefix
 }
 
-/// Takes a random number generator, a key_prefix and extends it by n random bytes.
+/// Takes a random number generator, a `key_prefix` and extends it by n random bytes.
 pub fn get_random_byte_vector<R: Rng>(rng: &mut R, key_prefix: &[u8], n: usize) -> Vec<u8> {
     let mut v = key_prefix.to_vec();
     for _ in 0..n {
@@ -64,8 +64,8 @@ pub fn get_random_kset<R: Rng>(rng: &mut R, n: usize, k: usize) -> Vec<usize> {
     values[..k].to_vec()
 }
 
-/// Takes a random number generator, a key_prefix and generates
-/// pairs `(key, value)` with key obtained by appending 8 bytes at random to key_prefix
+/// Takes a random number generator, a `key_prefix` and generates
+/// pairs `(key, value)` with key obtained by appending 8 bytes at random to `key_prefix`
 /// and value obtained by appending 8 bytes to the trivial vector.
 /// We return n such `(key, value)` pairs which are all distinct
 pub fn get_random_key_values_prefix<R: Rng>(
@@ -91,7 +91,7 @@ pub fn get_random_key_values_prefix<R: Rng>(
     }
 }
 
-/// Takes a random number generator rng, a number n and returns n random `(key, value)`
+/// Takes a random number generator `rng`, a number n and returns n random `(key, value)`
 /// which are all distinct with key and value being of length 8.
 pub fn get_random_key_values<R: Rng>(rng: &mut R, num_entries: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
     get_random_key_values_prefix(rng, Vec::new(), 8, 8, num_entries)
@@ -110,7 +110,7 @@ pub fn get_random_key_value_operations<R: Rng>(
 }
 
 /// A random reordering of the puts and deletes.
-/// For something like MapView it should get us the same result whatever way we are calling.
+/// For something like `MapView` it should get us the same result whatever way we are calling.
 pub fn span_random_reordering_put_delete<R: Rng>(
     rng: &mut R,
     info_op: VectorPutDelete,
@@ -489,9 +489,9 @@ pub async fn tombstone_triggering_test<C: LocalRestrictedKeyValueStore>(key_valu
     assert_eq!(key_values, remaining_key_values);
 }
 
-/// DynamoDb has limits at 1M (for pagination), 4M (for write)
-/// Let us go right past them at 20M of data with writing and then
-/// reading it. And 20M is not huge by any mean. All KeyValueStore
+/// DynamoDB has limits at 1 MB (for pagination), 4 MB (for write)
+/// Let us go right past them at 20 MB of data with writing and then
+/// reading it. And 20 MB is not huge by any mean. All `KeyValueStore`
 /// must handle that.
 ///
 /// The size of the value vary as each size has its own issues.

@@ -1319,7 +1319,7 @@ pub enum WasmRuntime {
     WasmtimeWithSanitizer,
 }
 
-/// Trait used to select a default WasmRuntime, if one is available.
+/// Trait used to select a default `WasmRuntime`, if one is available.
 pub trait WithWasmDefault {
     fn with_wasm_default(self) -> Self;
 }

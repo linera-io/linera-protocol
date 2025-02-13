@@ -74,7 +74,7 @@ pub trait Context: Clone {
     /// Getter for the address of the base key.
     fn base_key(&self) -> Vec<u8>;
 
-    /// Concatenates the base_key and tag.
+    /// Concatenates the base key and tag.
     fn base_tag(&self, tag: u8) -> Vec<u8> {
         assert!(tag >= MIN_VIEW_TAG, "tag should be at least MIN_VIEW_TAG");
         let mut key = self.base_key();
@@ -82,7 +82,7 @@ pub trait Context: Clone {
         key
     }
 
-    /// Concatenates the base_key, tag and index.
+    /// Concatenates the base key, tag and index.
     fn base_tag_index(&self, tag: u8, index: &[u8]) -> Vec<u8> {
         assert!(tag >= MIN_VIEW_TAG, "tag should be at least MIN_VIEW_TAG");
         let mut key = self.base_key();
@@ -91,14 +91,14 @@ pub trait Context: Clone {
         key
     }
 
-    /// Concatenates the base_key and index.
+    /// Concatenates the base key and index.
     fn base_index(&self, index: &[u8]) -> Vec<u8> {
         let mut key = self.base_key();
         key.extend_from_slice(index);
         key
     }
 
-    /// Obtains the `Vec<u8>` key from the key by serialization and using the base_key.
+    /// Obtains the `Vec<u8>` key from the key by serialization and using the base key.
     fn derive_key<I: Serialize>(&self, index: &I) -> Result<Vec<u8>, Self::Error> {
         let mut key = self.base_key();
         bcs::serialize_into(&mut key, index)?;

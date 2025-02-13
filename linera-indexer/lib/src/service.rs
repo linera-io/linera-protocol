@@ -123,7 +123,7 @@ pub struct Listener {
 }
 
 impl Listener {
-    /// Connects to the websocket of the service node for a particular chain
+    /// Connects to the WebSocket of the service node for a particular chain
     pub async fn listen<S>(
         &self,
         indexer: &Indexer<S>,

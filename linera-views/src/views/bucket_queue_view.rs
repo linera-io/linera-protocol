@@ -66,7 +66,7 @@ impl StoredIndices {
 
 /// The `Cursor` is the current position of the front in the queue.
 /// If position is None, then all the stored entries have been deleted
-/// and the new_back_values are the ones accessed by the front operation.
+/// and the `new_back_values` are the ones accessed by the front operation.
 /// If position is not trivial, then the first index is the relevant
 /// bucket for the front and the second index is the position in the index.
 #[derive(Clone, Debug)]
@@ -122,7 +122,7 @@ fn stored_indices<T>(stored_data: &VecDeque<(usize, Bucket<T>)>, position: usize
 
 /// A view that supports a FIFO queue for values of type `T`.
 /// The size `N` has to be chosen by taking into account the size of the type `T`
-/// and the basic size of a block. For example a total size of 100bytes to 10KB
+/// and the basic size of a block. For example a total size of 100 bytes to 10 KB
 /// seems adequate.
 pub struct BucketQueueView<C, T, const N: usize> {
     context: C,
@@ -132,7 +132,7 @@ pub struct BucketQueueView<C, T, const N: usize> {
     new_back_values: VecDeque<T>,
     /// The stored position for the data
     stored_position: usize,
-    /// The current position in the stored_data.
+    /// The current position in the `stored_data`.
     cursor: Cursor,
     /// Whether the storage is deleted or not.
     delete_storage_first: bool,

@@ -317,7 +317,7 @@ where
     /// following conditions are met while a "transaction" batch is being built:
     ///
     /// (1) The number of blocks per transaction doesn't exceed `K::MAX_BATCH_SIZE`.
-    /// But it is perfectly possible to have K::MAX_BATCH_SIZE = usize::MAX.
+    /// But it is perfectly possible to have `K::MAX_BATCH_SIZE = usize::MAX`.
     ///
     /// (2) The total size of BCS-serialized blocks together with their corresponding keys
     /// does not exceed `K::MAX_BATCH_TOTAL_SIZE`.
@@ -329,12 +329,12 @@ where
     ///   (b) updating or removing the journal. The cost is `key_len + header_value_len`
     ///       or `key_len`. An upper bound is thus
     ///       `journal_len_upper_bound = key_len + header_value_len`.
-    ///   Thus the following has to be taken as upper bound on block_size:
+    ///   Thus the following has to be taken as upper bound on the block size:
     ///   `K::MAX_BATCH_TOTAL_SIZE - key_len - journal_len_upper_bound`.
     ///
     /// NOTE:
     /// * Since a block must contain at least one operation and M bytes of the
-    ///   serialization overhead (typically M = 2 or 3 bytes of vector sizes), condition (3)
+    ///   serialization overhead (typically M is 2 or 3 bytes of vector sizes), condition (3)
     ///   requires that each operation in the original batch satisfies:
     ///     `sizeof(key) + sizeof(value) + M <= K::MAX_VALUE_SIZE`
     ///

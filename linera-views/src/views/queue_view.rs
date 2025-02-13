@@ -35,10 +35,10 @@ static QUEUE_VIEW_HASH_RUNTIME: LazyLock<HistogramVec> = LazyLock::new(|| {
     )
 });
 
-/// Key tags to create the sub-keys of a QueueView on top of the base key.
+/// Key tags to create the sub-keys of a `QueueView` on top of the base key.
 #[repr(u8)]
 enum KeyTag {
-    /// Prefix for the storing of the variable stored_indices.
+    /// Prefix for the storing of the variable `stored_indices`.
     Store = MIN_VIEW_TAG,
     /// Prefix for the indices of the log.
     Index,

@@ -58,12 +58,12 @@ type DB = rocksdb::DBWithThreadMode<rocksdb::MultiThreaded>;
 /// `BlockInPlace` can only be used in multi-threaded environment.
 /// One way to select that is to select BlockInPlace when
 /// `tokio::runtime::Handle::current().metrics().num_workers() > 1`
-/// The BlockInPlace is documented in <https://docs.rs/tokio/latest/tokio/task/fn.block_in_place.html>
+/// `BlockInPlace` is documented in <https://docs.rs/tokio/latest/tokio/task/fn.block_in_place.html>
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RocksDbSpawnMode {
-    /// This uses the `spawn_blocking` function of tokio.
+    /// This uses the `spawn_blocking` function of Tokio.
     SpawnBlocking,
-    /// This uses the `block_in_place` function of tokio.
+    /// This uses the `block_in_place` function of Tokio.
     BlockInPlace,
 }
 
@@ -257,7 +257,7 @@ pub struct RocksDbStoreInternal {
 pub struct RocksDbStoreInternalConfig {
     /// The path to the storage containing the namespaces
     path_with_guard: PathWithGuard,
-    /// The spawn_mode that is chosen
+    /// The chosen spawn mode
     spawn_mode: RocksDbSpawnMode,
     /// The common configuration of the key value store
     common_config: CommonStoreInternalConfig,
@@ -543,7 +543,7 @@ impl TestKeyValueStore for RocksDbStoreInternal {
 /// The error type for [`RocksDbStoreInternal`]
 #[derive(Error, Debug)]
 pub enum RocksDbStoreInternalError {
-    /// Tokio join error in RocksDb.
+    /// Tokio join error in RocksDB.
     #[error("tokio join error: {0}")]
     TokioJoinError(#[from] tokio::task::JoinError),
 
@@ -559,8 +559,8 @@ pub enum RocksDbStoreInternalError {
     #[error("error in the conversion from OsString: {0:?}")]
     IntoStringError(OsString),
 
-    /// The key must have at most 8M
-    #[error("The key must have at most 8M")]
+    /// The key must have at most 8 MB
+    #[error("The key must have at most 8 MB")]
     KeyTooLong,
 
     /// Namespace contains forbidden characters
@@ -586,7 +586,7 @@ pub struct PathWithGuard {
 }
 
 impl PathWithGuard {
-    /// Create a PathWithGuard from an existing path.
+    /// Creates a `PathWithGuard` from an existing path.
     pub fn new(path_buf: PathBuf) -> Self {
         Self {
             path_buf,

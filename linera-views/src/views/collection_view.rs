@@ -66,8 +66,8 @@ impl<'a, W> std::ops::Deref for ReadGuardedView<'a, W> {
     }
 }
 
-/// We need to find new base keys in order to implement the collection_view.
-/// We do this by appending a value to the base_key.
+/// We need to find new base keys in order to implement `CollectionView`.
+/// We do this by appending a value to the base key.
 ///
 /// Sub-views in a collection share a common key prefix, like in other view types. However,
 /// just concatenating the shared prefix with sub-view keys makes it impossible to distinguish if a
@@ -873,7 +873,7 @@ where
         self.collection.reset_entry_to_default(&short_key)
     }
 
-    /// Removes an entry from the CollectionView. If absent nothing happens.
+    /// Removes an entry from the `CollectionView`. If absent nothing happens.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::context::{create_test_memory_context, MemoryContext};
@@ -1061,7 +1061,7 @@ where
     }
 }
 
-/// A MapView that serializes the indices.
+/// A map view that serializes the indices.
 #[derive(Debug)]
 pub struct CustomCollectionView<C, I, W> {
     collection: ByteCollectionView<C, W>,
@@ -1253,7 +1253,7 @@ where
         self.collection.reset_entry_to_default(&short_key)
     }
 
-    /// Removes an entry from the CollectionView. If absent nothing happens.
+    /// Removes an entry from the `CollectionView`. If absent nothing happens.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::context::{create_test_memory_context, MemoryContext};
