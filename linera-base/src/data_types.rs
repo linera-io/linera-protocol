@@ -18,9 +18,7 @@ use std::{
     str::FromStr,
 };
 
-use anyhow::Context as _;
 use async_graphql::{InputObject, SimpleObject};
-use base64::engine::{general_purpose::STANDARD_NO_PAD, Engine as _};
 use custom_debug_derive::Debug;
 use linera_witty::{WitLoad, WitStore, WitType};
 #[cfg(with_metrics)]
@@ -784,46 +782,6 @@ pub enum OracleResponse {
     Assert,
     /// The block's validation round.
     Round(Option<u32>),
-}
-
-impl Display for OracleResponse {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            OracleResponse::Service(bytes) => {
-                write!(f, "Service:{}", STANDARD_NO_PAD.encode(bytes))?
-            }
-            OracleResponse::Post(bytes) => write!(f, "Post:{}", STANDARD_NO_PAD.encode(bytes))?,
-            OracleResponse::Blob(blob_id) => write!(f, "Blob:{}", blob_id)?,
-            OracleResponse::Assert => write!(f, "Assert")?,
-            OracleResponse::Round(Some(round)) => write!(f, "Round:{round}")?,
-            OracleResponse::Round(None) => write!(f, "Round:None")?,
-        };
-
-        Ok(())
-    }
-}
-
-impl FromStr for OracleResponse {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if let Some(string) = s.strip_prefix("Service:") {
-            return Ok(OracleResponse::Service(
-                STANDARD_NO_PAD.decode(string).context("Invalid base64")?,
-            ));
-        }
-        if let Some(string) = s.strip_prefix("Post:") {
-            return Ok(OracleResponse::Post(
-                STANDARD_NO_PAD.decode(string).context("Invalid base64")?,
-            ));
-        }
-        if let Some(string) = s.strip_prefix("Blob:") {
-            return Ok(OracleResponse::Blob(
-                BlobId::from_str(string).context("Invalid BlobId")?,
-            ));
-        }
-        Err(anyhow::anyhow!("Invalid enum! Enum: {}", s))
-    }
 }
 
 impl<'de> BcsHashable<'de> for OracleResponse {}

@@ -4357,7 +4357,6 @@ dependencies = [
  "async-graphql",
  "async-graphql-derive",
  "async-trait",
- "base64 0.22.1",
  "bcs",
  "cfg-if",
  "cfg_aliases",
