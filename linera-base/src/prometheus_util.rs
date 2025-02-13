@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! This module defines util functions for interacting with Prometheus (logging metrics, etc)
+//! This module defines utility functions for interacting with Prometheus (logging metrics, etc)
 
 use prometheus::{
     exponential_buckets, histogram_opts, register_histogram_vec, register_int_counter_vec,
@@ -12,7 +12,7 @@ use crate::time::Instant;
 
 const LINERA_NAMESPACE: &str = "linera";
 
-/// Wrapper around Prometheus register_int_counter_vec! macro which also sets the linera namespace
+/// Wrapper around Prometheus register_int_counter_vec! macro which also sets the `linera` namespace
 pub fn register_int_counter_vec(
     name: &str,
     description: &str,
@@ -22,7 +22,7 @@ pub fn register_int_counter_vec(
     register_int_counter_vec!(counter_opts, label_names).expect("IntCounter can be created")
 }
 
-/// Wrapper around Prometheus register_histogram_vec! macro which also sets the linera namespace
+/// Wrapper around Prometheus `register_histogram_vec!` macro which also sets the `linera` namespace
 pub fn register_histogram_vec(
     name: &str,
     description: &str,

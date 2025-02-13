@@ -374,7 +374,7 @@ pub enum IndexedDbStoreError {
     #[error(transparent)]
     BcsError(#[from] bcs::Error),
 
-    /// The value is too large for the IndexedDbStore
+    /// The value is too large for the `IndexedDbStore`
     #[error("The value is too large for the IndexedDbStore")]
     TooLargeValue,
 

@@ -47,7 +47,7 @@ pub mod key_value_store_view;
 /// Wrapping a view to compute a hash.
 pub mod hashable_wrapper;
 
-/// The minimum value for the view tags. Values in 0..MIN_VIEW_TAG are used for other purposes.
+/// The minimum value for the view tags. Values in `0..MIN_VIEW_TAG` are used for other purposes.
 pub const MIN_VIEW_TAG: u8 = 1;
 
 /// A view gives exclusive access to read and write the data stored at an underlying
@@ -102,7 +102,7 @@ pub enum ViewError {
     #[error(transparent)]
     BcsError(#[from] bcs::Error),
 
-    /// We failed to acquire an entry in a CollectionView or a ReentrantCollectionView.
+    /// We failed to acquire an entry in a `CollectionView` or a `ReentrantCollectionView`.
     #[error("trying to access a collection view or reentrant collection view while some entries are still being accessed")]
     CannotAcquireCollectionEntry,
 
@@ -122,7 +122,7 @@ pub enum ViewError {
     #[error("Panic in sub-task: {0}")]
     TokioJoinError(#[from] tokio::task::JoinError),
 
-    /// Errors within the context can occur and are presented as ViewError.
+    /// Errors within the context can occur and are presented as `ViewError`.
     #[error("Storage operation error in {backend}: {error}")]
     StoreError {
         /// backend can be e.g. RocksDB / DynamoDB / Memory / etc.
@@ -135,7 +135,8 @@ pub enum ViewError {
     #[error("The key must not be too long")]
     KeyTooLong,
 
-    /// FIXME(#148): This belongs to a future `linera_storage::StoreError`.
+    /// The entry does not exist in memory
+    // FIXME(#148): This belongs to a future `linera_storage::StoreError`.
     #[error("Entry does not exist in memory: {0}")]
     NotFound(String),
 

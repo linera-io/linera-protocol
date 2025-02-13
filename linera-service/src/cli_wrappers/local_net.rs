@@ -49,7 +49,7 @@ pub enum ProcessInbox {
 #[cfg(with_testing)]
 static PORT_PROVIDER: LazyLock<RwLock<u16>> = LazyLock::new(|| RwLock::new(7080));
 
-/// Provides a port for the node_service. Increment the port numbers.
+/// Provides a port for the node service. Increment the port numbers.
 #[cfg(with_testing)]
 pub async fn get_node_port() -> u16 {
     let mut port = PORT_PROVIDER.write().await;

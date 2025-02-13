@@ -32,10 +32,10 @@ static LOG_VIEW_HASH_RUNTIME: LazyLock<HistogramVec> = LazyLock::new(|| {
     )
 });
 
-/// Key tags to create the sub-keys of a LogView on top of the base key.
+/// Key tags to create the sub-keys of a `LogView` on top of the base key.
 #[repr(u8)]
 enum KeyTag {
-    /// Prefix for the storing of the variable stored_count.
+    /// Prefix for the storing of the variable `stored_count`.
     Count = MIN_VIEW_TAG,
     /// Prefix for the indices of the log.
     Index,

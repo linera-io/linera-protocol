@@ -46,11 +46,11 @@ use crate::{
 /// The limit is in reality 100. But we need one entry for the root key.
 const MAX_MULTI_KEYS: usize = 99;
 
-/// The maximal size of an operation on ScyllaDB seems to be 16M
+/// The maximal size of an operation on ScyllaDB seems to be 16 MB
 /// https://www.scylladb.com/2019/03/27/best-practices-for-scylla-applications/
-/// "There is a hard limit at 16MB, and nothing bigger than that can arrive at once
+/// "There is a hard limit at 16 MB, and nothing bigger than that can arrive at once
 ///  at the database at any particular time"
-/// So, we set up the maximal size of 16M - 10K for the values and 10K for the keys
+/// So, we set up the maximal size of 16 MB - 10 KB for the values and 10 KB for the keys
 /// We also arbitrarily decrease the size by 4000 bytes because an amount of size is
 /// taken internally by the database.
 const RAW_MAX_VALUE_SIZE: usize = 16762976;
@@ -58,9 +58,9 @@ const MAX_KEY_SIZE: usize = 10240;
 const MAX_BATCH_TOTAL_SIZE: usize = RAW_MAX_VALUE_SIZE + MAX_KEY_SIZE;
 
 /// The `RAW_MAX_VALUE_SIZE` is the maximum size on the ScyllaDB storage.
-/// However, the value being written can also be the serialization of a SimpleUnorderedBatch
+/// However, the value being written can also be the serialization of a `SimpleUnorderedBatch`
 /// Therefore the actual `MAX_VALUE_SIZE` is lower.
-/// At the maximum the key_size is 1024 bytes (see below) and we pack just one entry.
+/// At the maximum the key size is 1024 bytes (see below) and we pack just one entry.
 /// So if the key has 1024 bytes this gets us the inequality
 /// `1 + 1 + 1 + serialized_size(MAX_KEY_SIZE)? + serialized_size(x)? <= RAW_MAX_VALUE_SIZE`.
 /// and so this simplifies to `1 + 1 + 1 + (2 + 10240) + (4 + x) <= RAW_MAX_VALUE_SIZE`
@@ -455,11 +455,11 @@ pub enum ScyllaDbStoreInternalError {
     #[error(transparent)]
     BcsError(#[from] bcs::Error),
 
-    /// The key must have at most ['MAX_KEY_SIZE'] bytes
+    /// The key must have at most [`MAX_KEY_SIZE`] bytes
     #[error("The key must have at most MAX_KEY_SIZE")]
     KeyTooLong,
 
-    /// The value must have at most ['MAX_VALUE_SIZE'] bytes
+    /// The value must have at most [`MAX_VALUE_SIZE`] bytes
     #[error("The value must have at most MAX_VALUE_SIZE")]
     ValueTooLong,
 
@@ -617,7 +617,7 @@ impl DirectWritableKeyValueStore for ScyllaDbStoreInternal {
     }
 }
 
-// ScyllaDb requires that the keys are non-empty.
+// ScyllaDB requires that the keys are non-empty.
 fn get_big_root_key(root_key: &[u8]) -> Vec<u8> {
     let mut big_key = vec![0];
     big_key.extend(root_key);
@@ -627,7 +627,7 @@ fn get_big_root_key(root_key: &[u8]) -> Vec<u8> {
 /// The type for building a new ScyllaDB Key Value Store
 #[derive(Debug)]
 pub struct ScyllaDbStoreInternalConfig {
-    /// The url to which the requests have to be sent
+    /// The URL to which the requests have to be sent
     pub uri: String,
     /// The common configuration of the key value store
     common_config: CommonStoreInternalConfig,
@@ -778,7 +778,7 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
         let miss_msg2 = "Undefined name root_key in selection clause";
         let miss_msg3 = "Keyspace kv does not exist";
         let Err(error) = result else {
-            // If ok, then the table exists
+            // If OK, then the table exists
             return Ok(true);
         };
         let missing_table = match &error {

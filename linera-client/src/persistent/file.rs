@@ -78,7 +78,7 @@ impl Drop for Lock {
 /// An implementation of [`Persist`] based on an atomically-updated file at a given path.
 /// An exclusive lock is taken using `flock(2)` to ensure that concurrent updates cannot
 /// happen, and writes are saved to a staging file before being moved over the old file,
-/// an operation that is atomic on all UNIXes.
+/// an operation that is atomic on all Unixes.
 pub struct File<T> {
     _lock: Lock,
     path: std::path::PathBuf,

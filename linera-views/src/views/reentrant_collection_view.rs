@@ -83,8 +83,8 @@ pub struct ReentrantByteCollectionView<C, W> {
     cached_entries: Mutex<BTreeMap<Vec<u8>, Arc<RwLock<W>>>>,
 }
 
-/// We need to find new base keys in order to implement the collection_view.
-/// We do this by appending a value to the base_key.
+/// We need to find new base keys in order to implement the collection view.
+/// We do this by appending a value to the base key.
 ///
 /// Sub-views in a collection share a common key prefix, like in other view types. However,
 /// just concatenating the shared prefix with sub-view keys makes it impossible to distinguish if a
@@ -572,8 +572,8 @@ where
             .collect()
     }
 
-    /// Load multiple entries for reading at once.
-    /// The entries in short_keys have to be all distinct.
+    /// Loads multiple entries for reading at once.
+    /// The entries in `short_keys` have to be all distinct.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::context::{create_test_memory_context, MemoryContext};

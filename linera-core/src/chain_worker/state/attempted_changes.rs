@@ -116,7 +116,7 @@ where
         Ok((info, actions))
     }
 
-    /// Validateds a proposal's signatures and blobs.
+    /// Validates a proposal's signatures and blobs.
     pub(super) async fn validate_block(
         &mut self,
         proposal: &BlockProposal,

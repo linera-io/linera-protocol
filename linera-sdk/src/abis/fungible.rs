@@ -62,7 +62,7 @@ pub enum Operation {
 /// A fungible response
 #[derive(Debug, Deserialize, Serialize, Default)]
 pub enum FungibleResponse {
-    /// Ok response
+    /// OK response
     #[default]
     Ok,
     /// Balance response

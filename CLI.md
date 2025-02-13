@@ -107,7 +107,7 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 
 * `--wallet <WALLET_STATE_PATH>` — Sets the file storing the private state of user chains (an empty one will be created if missing)
 * `--storage <STORAGE_CONFIG>` — Storage configuration for the blockchain history
-* `-w`, `--with-wallet <WITH_WALLET>` — Given an integer value N, read the wallet state and the wallet storage config from the environment variables LINERA_WALLET_{N} and LINERA_STORAGE_{N} instead of LINERA_WALLET and LINERA_STORAGE
+* `-w`, `--with-wallet <WITH_WALLET>` — Given an integer value `N`, read the wallet state and the wallet storage config from the environment variables `LINERA_WALLET_{N}` and `LINERA_STORAGE_{N}` instead of `LINERA_WALLET` and `LINERA_STORAGE`
 * `--send-timeout-ms <SEND_TIMEOUT>` — Timeout for sending queries (milliseconds)
 
   Default value: `4000`
@@ -907,7 +907,7 @@ Start a Local Linera Network
 
 ###### **Options:**
 
-* `--extra-wallets <EXTRA_WALLETS>` — The number of extra wallets and user chains to initialise. Default is 0
+* `--extra-wallets <EXTRA_WALLETS>` — The number of extra wallets and user chains to initialize. Default is 0
 * `--other-initial-chains <OTHER_INITIAL_CHAINS>` — The number of initial "root" chains created in the genesis config on top of the default "admin" chain. All initial chains belong to the first "admin" wallet
 
   Default value: `2`
@@ -929,7 +929,7 @@ Start a Local Linera Network
 * `--testing-prng-seed <TESTING_PRNG_SEED>` — Force this wallet to generate keys using a PRNG and a given seed. USE FOR TESTING ONLY
 * `--path <PATH>` — Run with a specific path where the wallet and validator input files are. If none, then a temporary directory is created
 * `--storage <STORAGE>` — Run with a specific storage. If none, then a linera-storage-service is started on a random free port
-* `--external-protocol <EXTERNAL_PROTOCOL>` — External protocol used, either grpc or grpcs
+* `--external-protocol <EXTERNAL_PROTOCOL>` — External protocol used, either `grpc` or `grpcs`
 
   Default value: `grpc`
 * `--with-faucet-chain <WITH_FAUCET_CHAIN>` — If present, a faucet is started using the given chain root number (0 for the admin chain, 1 for the first non-admin initial chain, etc)

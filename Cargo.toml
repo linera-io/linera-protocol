@@ -269,3 +269,6 @@ branch = "no-uuid-wasm-bindgen"
 [patch.crates-io.wasm_thread]
 git = "https://github.com/Twey/wasm_thread"
 branch = "post-message"
+
+[workspace.metadata.spellcheck]
+config = "spellcheck-cfg.toml"

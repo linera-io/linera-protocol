@@ -5,7 +5,7 @@
 //! arguments.
 
 #[cfg(feature = "kubernetes")]
-/// How to run docker operations
+/// How to run Docker operations
 pub mod docker;
 
 #[cfg(feature = "kubernetes")]
@@ -15,7 +15,7 @@ mod helmfile;
 /// How to run kind operations
 mod kind;
 #[cfg(feature = "kubernetes")]
-/// How to run kubectl operations
+/// How to run `kubectl` operations
 mod kubectl;
 #[cfg(feature = "kubernetes")]
 /// How to run Linera validators locally as a Kubernetes deployment.
@@ -23,12 +23,12 @@ pub mod local_kubernetes_net;
 /// How to run Linera validators locally as native processes.
 pub mod local_net;
 #[cfg(all(with_testing, feature = "remote-net"))]
-/// How to connect to running GCP DevNet.
+/// How to connect to running GCP devnet.
 pub mod remote_net;
 #[cfg(feature = "kubernetes")]
-/// Util functions for the wrappers
+/// Utility functions for the wrappers
 mod util;
-/// How to run a linera wallet and its GraphQL service.
+/// How to run a Linera wallet and its GraphQL service.
 mod wallet;
 
 use anyhow::Result;

@@ -22,10 +22,10 @@ use crate::{
 };
 
 /// We need to have a maximum key size that handles all possible underlying
-/// sizes. The constraint so far is DynamoDb which has a key length of 1024.
+/// sizes. The constraint so far is DynamoDB which has a key length of 1024.
 /// That key length is decreased by 4 due to the use of a value splitting.
-/// Then the [`KeyValueStore`] needs to handle some base_key and so we
-/// reduce to 900. Depending on the size, the error can occur in system_api
+/// Then the [`KeyValueStore`] needs to handle some base key and so we
+/// reduce to 900. Depending on the size, the error can occur in `system_api`
 /// or in the `KeyValueStoreView`.
 const MAX_KEY_SIZE: usize = 900;
 

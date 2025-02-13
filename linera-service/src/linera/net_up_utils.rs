@@ -29,7 +29,7 @@ use {
 };
 
 struct StorageConfigProvider {
-    /// The StorageConfig and the namespace
+    /// The `StorageConfig` and the namespace
     pub storage: StorageConfigNamespace,
     #[cfg(feature = "storage-service")]
     _service_guard: Option<StorageServiceGuard>,

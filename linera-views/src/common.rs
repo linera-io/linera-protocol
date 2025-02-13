@@ -65,12 +65,12 @@ impl DeletionSet {
     }
 }
 
-/// When wanting to find the entries in a BTreeMap with a specific prefix,
+/// When wanting to find the entries in a `BTreeMap` with a specific prefix,
 /// one option is to iterate over all keys. Another is to select an interval
 /// that represents exactly the keys having that prefix. Which fortunately
 /// is possible with the way the comparison operators for vectors are built.
 ///
-/// The statement is that p is a prefix of v if and only if p <= v < upper_bound(p).
+/// The statement is that `p` is a prefix of `v` if and only if `p <= v < upper_bound(p)`.
 pub(crate) fn get_upper_bound_option(key_prefix: &[u8]) -> Option<Vec<u8>> {
     let len = key_prefix.len();
     for i in (0..len).rev() {
@@ -85,8 +85,8 @@ pub(crate) fn get_upper_bound_option(key_prefix: &[u8]) -> Option<Vec<u8>> {
 }
 
 /// The upper bound that can be used in ranges when accessing
-/// a container. That is a vector v is a prefix of p if and only if
-/// v belongs to the interval (Included(p), get_upper_bound(p)).
+/// a container. That is a vector `v` is a prefix of `p` if and only if
+/// `v` belongs to the interval `(Included(p), get_upper_bound(p))`.
 pub(crate) fn get_upper_bound(key_prefix: &[u8]) -> Bound<Vec<u8>> {
     match get_upper_bound_option(key_prefix) {
         None => Unbounded,
@@ -101,7 +101,7 @@ pub(crate) fn get_interval(key_prefix: Vec<u8>) -> (Bound<Vec<u8>>, Bound<Vec<u8
     (Included(key_prefix), upper_bound)
 }
 
-/// Deserializes an Optional vector of u8
+/// Deserializes an optional vector of `u8`
 pub(crate) fn from_bytes_option<V: DeserializeOwned, E>(
     key_opt: &Option<Vec<u8>>,
 ) -> Result<Option<V>, E>
@@ -281,7 +281,7 @@ fn insert_key_prefix_test1() {
 
 /// Sometimes we need a serialization that is different from the usual one and
 /// for example preserves order.
-/// The {to/from}_custom_bytes has to be coherent with the Borrow trait.
+/// `{to/from}_custom_bytes` has to be coherent with the `Borrow` trait.
 pub trait CustomSerialize: Sized {
     /// Serializes the value
     fn to_custom_bytes(&self) -> Result<Vec<u8>, ViewError>;
@@ -307,8 +307,8 @@ impl CustomSerialize for u128 {
 
 /// This computes the offset of the BCS serialization of a vector.
 /// The formula that should be satisfied is
-/// serialized_size(vec![v_1, ...., v_n]) = get_uleb128_size(n)
-///  + serialized_size(v_1)? + .... serialized_size(v_n)?
+/// `serialized_size(vec![v_1, ...., v_n]) = get_uleb128_size(n)`
+///  `+ serialized_size(v_1)? + .... serialized_size(v_n)?`
 pub(crate) const fn get_uleb128_size(len: usize) -> usize {
     let mut power = 128;
     let mut expo = 1;

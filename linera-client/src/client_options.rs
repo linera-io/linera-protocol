@@ -80,9 +80,9 @@ pub struct ClientOptions {
     #[arg(long = "storage")]
     pub storage_config: Option<String>,
 
-    /// Given an integer value N, read the wallet state and the wallet storage config from the
-    /// environment variables LINERA_WALLET_{N} and LINERA_STORAGE_{N} instead of
-    /// LINERA_WALLET and LINERA_STORAGE.
+    /// Given an integer value `N`, read the wallet state and the wallet storage config from the
+    /// environment variables `LINERA_WALLET_{N}` and `LINERA_STORAGE_{N}` instead of
+    /// `LINERA_WALLET` and `LINERA_STORAGE`.
     #[arg(long, short = 'w')]
     pub with_wallet: Option<u32>,
 
@@ -917,7 +917,7 @@ pub enum ClientCommand {
     HelpMarkdown,
 
     /// Extract a Bash and GraphQL script embedded in a markdown file and print it on
-    /// stdout.
+    /// `stdout`.
     #[command(hide = true)]
     ExtractScriptFromMarkdown {
         /// The source file
@@ -1025,7 +1025,7 @@ impl DatabaseToolCommand {
 pub enum NetCommand {
     /// Start a Local Linera Network
     Up {
-        /// The number of extra wallets and user chains to initialise. Default is 0.
+        /// The number of extra wallets and user chains to initialize. Default is 0.
         #[arg(long)]
         extra_wallets: Option<usize>,
 
@@ -1090,7 +1090,7 @@ pub enum NetCommand {
         #[arg(long)]
         storage: Option<String>,
 
-        /// External protocol used, either grpc or grpcs.
+        /// External protocol used, either `grpc` or `grpcs`.
         #[arg(long, default_value = "grpc")]
         external_protocol: String,
 

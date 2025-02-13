@@ -59,7 +59,7 @@ pub struct ChainOperation {
 pub struct Operations<C> {
     last: MapView<C, ChainId, OperationKey>,
     count: MapView<C, ChainId, u64>,
-    /// ChainOperation MapView indexed by their hash
+    /// `ChainOperation` `MapView` indexed by their hash
     operations: MapView<C, OperationKey, ChainOperation>,
 }
 
