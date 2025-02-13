@@ -439,6 +439,15 @@ pub struct StreamName(
     pub Vec<u8>,
 );
 
+impl<T> From<T> for StreamName
+where
+    T: Into<Vec<u8>>,
+{
+    fn from(name: T) -> Self {
+        StreamName(name.into())
+    }
+}
+
 /// An event stream ID.
 #[derive(
     Clone,
@@ -460,6 +469,16 @@ pub struct StreamId {
     pub application_id: GenericApplicationId,
     /// The name of this stream: an application can have multiple streams with different names.
     pub stream_name: StreamName,
+}
+
+impl StreamId {
+    /// Creates a system stream ID with the given name.
+    pub fn system(name: impl Into<StreamName>) -> Self {
+        StreamId {
+            application_id: GenericApplicationId::System,
+            stream_name: name.into(),
+        }
+    }
 }
 
 /// An event identifier.

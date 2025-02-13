@@ -56,20 +56,10 @@ pub struct SystemExecutionState {
 
 impl SystemExecutionState {
     pub fn new(epoch: Epoch, description: ChainDescription, admin_id: impl Into<ChainId>) -> Self {
-        let admin_id = admin_id.into();
-        let subscriptions = if ChainId::from(description) == admin_id {
-            BTreeSet::new()
-        } else {
-            BTreeSet::from([ChannelSubscription {
-                chain_id: admin_id,
-                name: SystemChannel::Admin.name(),
-            }])
-        };
         SystemExecutionState {
             epoch: Some(epoch),
             description: Some(description),
-            admin_id: Some(admin_id),
-            subscriptions,
+            admin_id: Some(admin_id.into()),
             ..SystemExecutionState::default()
         }
     }
