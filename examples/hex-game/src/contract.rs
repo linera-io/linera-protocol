@@ -246,6 +246,5 @@ pub enum Message {
     End { winner: Owner, loser: Owner },
 }
 
-/// This implementation is only nonempty in the service.
 #[ComplexObject]
 impl HexState {}
