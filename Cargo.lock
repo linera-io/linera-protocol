@@ -4478,6 +4478,7 @@ dependencies = [
  "thiserror-context",
  "tokio",
  "tokio-stream",
+ "tokio-util",
  "tracing",
  "trait-variant",
  "wasm-bindgen-futures",

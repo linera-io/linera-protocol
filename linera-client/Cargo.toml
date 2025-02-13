@@ -13,7 +13,7 @@ version.workspace = true
 
 [features]
 test = ["linera-views/test", "linera-execution/test"]
-benchmark = ["linera-base/test", "dep:linera-sdk"]
+benchmark = ["linera-base/test", "dep:linera-sdk", "dep:tokio-util"]
 wasmer = [
     "linera-core/wasmer",
     "linera-execution/wasmer",
@@ -75,6 +75,7 @@ thiserror.workspace = true
 thiserror-context.workspace = true
 tokio.workspace = true
 tokio-stream.workspace = true
+tokio-util = { workspace = true, optional = true }
 tracing.workspace = true
 trait-variant.workspace = true
 
