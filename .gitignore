@@ -19,6 +19,9 @@
 .vscode
 /.direnv
 
+# Cursor
+.cursor
+
 # Helm
 kubernetes/linera-validator/working/*
 node_modules
