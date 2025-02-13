@@ -42,7 +42,7 @@ impl Contract for HexContract {
     }
 
     async fn instantiate(&mut self, arg: Timeouts) {
-        log::trace!("Instantiating");
+        log::trace!("Instantiating HexContract");
         self.runtime.application_parameters(); // Verifies that these are empty.
         self.state.timeouts.set(arg);
     }
@@ -79,17 +79,23 @@ impl Contract for HexContract {
                 self.state.board.set(Board::new(board_size));
             }
             Message::End { winner, loser } => {
-                let message_id = self.runtime.message_id().unwrap();
+                let message_id = match self.runtime.message_id() {
+                    Some(id) => id,
+                    None => {
+                        log::error!("Failed to retrieve message ID");
+                        return;
+                    }
+                };
                 for owner in [&winner, &loser] {
                     let chain_set = self
                         .state
                         .game_chains
                         .get_mut_or_default(owner)
                         .await
-                        .unwrap();
+                        .unwrap_or_default();
                     chain_set.retain(|game_chain| game_chain.chain_id != message_id.chain_id);
                     if chain_set.is_empty() {
-                        self.state.game_chains.remove(owner).unwrap();
+                        self.state.game_chains.remove(owner).unwrap_or_default();
                     }
                 }
             }
@@ -97,7 +103,9 @@ impl Contract for HexContract {
     }
 
     async fn store(mut self) {
-        self.state.save().await.expect("Failed to save state");
+        if let Err(err) = self.state.save().await {
+            log::error!("Failed to save state: {:?}", err);
+        }
     }
 }
 
@@ -107,11 +115,21 @@ impl HexContract {
         let active = self.state.board.get().active_player();
         let clock = self.state.clock.get_mut();
         let block_time = self.runtime.system_time();
+
+        let owners = match self.state.owners.get() {
+            Some(owners) => owners,
+            None => {
+                log::error!("No owners found.");
+                return HexOutcome::Error("No owners found.".to_string());
+            }
+        };
+
         assert_eq!(
             self.runtime.authenticated_signer(),
-            Some(self.state.owners.get().unwrap()[active.index()]),
+            Some(owners[active.index()]),
             "Move must be signed by the player whose turn it is."
         );
+
         self.runtime
             .assert_before(block_time.saturating_add(clock.block_delay));
         clock.make_move(block_time, active);
@@ -123,11 +141,21 @@ impl HexContract {
         let active = self.state.board.get().active_player();
         let clock = self.state.clock.get_mut();
         let block_time = self.runtime.system_time();
+
+        let owners = match self.state.owners.get() {
+            Some(owners) => owners,
+            None => {
+                log::error!("No owners found.");
+                return HexOutcome::Error("No owners found.".to_string());
+            }
+        };
+
         assert_eq!(
             self.runtime.authenticated_signer(),
-            Some(self.state.owners.get().unwrap()[active.other().index()]),
+            Some(owners[active.other().index()]),
             "Victory can only be claimed by the player whose turn it is not."
         );
+
         assert!(
             clock.timed_out(block_time, active),
             "Player has not timed out yet."
@@ -160,18 +188,20 @@ impl HexContract {
                 .game_chains
                 .get_mut_or_default(owner)
                 .await
-                .unwrap()
+                .unwrap_or_default()
                 .insert(GameChain {
                     message_id,
                     chain_id,
                 });
         }
+
+        let timeouts = timeouts.unwrap_or_else(|| self.state.timeouts.get().clone());
         self.runtime.send_message(
             chain_id,
             Message::Start {
                 players,
                 board_size,
-                timeouts: timeouts.unwrap_or_else(|| self.state.timeouts.get().clone()),
+                timeouts,
             },
         );
         HexOutcome::Ok
@@ -181,12 +211,18 @@ impl HexContract {
         let HexOutcome::Winner(player) = outcome else {
             return outcome;
         };
-        let winner = self.state.owners.get().unwrap()[player.index()];
-        let loser = self.state.owners.get().unwrap()[player.other().index()];
+        let winner = match self.state.owners.get() {
+            Some(owners) => owners[player.index()],
+            None => {
+                log::error!("No owners found when handling winner.");
+                return HexOutcome::Error("No owners found.".to_string());
+            }
+        };
+        let loser = self.state.owners.get().unwrap_or_default()[player.other().index()];
         let chain_id = self.main_chain_id();
         let message = Message::End { winner, loser };
         self.runtime.send_message(chain_id, message);
-        self.runtime.close_chain().unwrap();
+        self.runtime.close_chain().unwrap_or_default();
         outcome
     }
 
