@@ -590,19 +590,6 @@ where
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
-    /// Queries a service and returns the response.
-    fn query_service(
-        caller: &mut Caller,
-        application_id: ApplicationId,
-        query: Vec<u8>,
-    ) -> Result<Vec<u8>, RuntimeError> {
-        caller
-            .user_data_mut()
-            .runtime
-            .query_service(application_id, query)
-            .map_err(|error| RuntimeError::Custom(error.into()))
-    }
-
     /// Makes a POST request to the given URL and returns the response body.
     fn http_post(
         caller: &mut Caller,
