@@ -6,11 +6,15 @@
 
 use std::{fmt, str::FromStr};
 
-use secp256k1::{self, Message};
+use once_cell::sync::Lazy;
+use secp256k1::{self, All, Message, Secp256k1};
 use serde::{Deserialize, Serialize};
 
 use super::{BcsSignable, CryptoError, CryptoHash, HasTypeName};
 use crate::doc_scalar;
+
+/// Static Secp256k1 context for reuse.
+pub static SECP256K1: Lazy<Secp256k1<All>> = Lazy::new(secp256k1::Secp256k1::new);
 
 /// A secp256k1 secret key.
 pub struct Secp256k1SecretKey(pub secp256k1::SecretKey);
@@ -19,9 +23,32 @@ pub struct Secp256k1SecretKey(pub secp256k1::SecretKey);
 #[derive(Eq, PartialEq, Copy, Clone)]
 pub struct Secp256k1PublicKey(pub secp256k1::PublicKey);
 
+/// Secp256k1 public/private key pair.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Secp256k1KeyPair {
+    /// Secret key.
+    pub secret_key: Secp256k1SecretKey,
+    /// Public key.
+    pub public_key: Secp256k1PublicKey,
+}
+
 /// A secp256k1 signature.
 #[derive(Eq, PartialEq, Copy, Clone)]
 pub struct Secp256k1Signature(pub secp256k1::ecdsa::Signature);
+
+impl PartialEq for Secp256k1SecretKey {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl fmt::Debug for Secp256k1SecretKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "<redacted for Secp256k1 secret key>")
+    }
+}
+
+impl Eq for Secp256k1SecretKey {}
 
 impl Serialize for Secp256k1PublicKey {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -97,27 +124,61 @@ impl fmt::Debug for Secp256k1PublicKey {
     }
 }
 
+impl Secp256k1KeyPair {
+    #[cfg(all(with_getrandom, with_testing))]
+    /// Generates a new key-pair.
+    pub fn generate() -> Self {
+        let mut rng = rand::rngs::OsRng;
+        Self::generate_from(&mut rng)
+    }
+
+    #[cfg(with_getrandom)]
+    /// Generates a new key-pair from the given RNG. Use with care.
+    pub fn generate_from<R: super::CryptoRng>(rng: &mut R) -> Self {
+        let (sk, pk) = SECP256K1.generate_keypair(rng);
+        Secp256k1KeyPair {
+            secret_key: Secp256k1SecretKey(sk),
+            public_key: Secp256k1PublicKey(pk),
+        }
+    }
+}
+
+impl Secp256k1SecretKey {
+    /// Returns a public key for the given secret key.
+    pub fn to_public(&self) -> Secp256k1PublicKey {
+        Secp256k1PublicKey(self.0.public_key(&SECP256K1))
+    }
+}
+
+impl Secp256k1PublicKey {
+    /// Returns a public key for the given secret key.
+    #[allow(dead_code)]
+    fn from_secret_key(secret: &Secp256k1SecretKey) -> Self {
+        secret.to_public()
+    }
+}
+
 impl Secp256k1Signature {
     /// Computes a secp256k1 signature for `value` using the given `secret`.
     /// It first serializes the `T` type and then creates the `CryptoHash` from the serialized bytes.
-    pub fn new<'de, T>(value: &T, secret: &secp256k1::SecretKey) -> Self
+    pub fn new<'de, T>(value: &T, secret: &Secp256k1SecretKey) -> Self
     where
         T: BcsSignable<'de>,
     {
-        let secp = secp256k1::Secp256k1::new();
+        let secp = secp256k1::Secp256k1::signing_only();
         let message = Message::from_digest(CryptoHash::new(value).as_bytes().0);
-        let signature = secp.sign_ecdsa(&message, secret);
+        let signature = secp.sign_ecdsa(&message, &secret.0);
         Secp256k1Signature(signature)
     }
 
     /// Checks a signature.
-    pub fn check<'de, T>(&self, value: &T, author: &secp256k1::PublicKey) -> Result<(), CryptoError>
+    pub fn check<'de, T>(&self, value: &T, author: &Secp256k1PublicKey) -> Result<(), CryptoError>
     where
         T: BcsSignable<'de> + fmt::Debug,
     {
-        let secp = secp256k1::Secp256k1::new();
         let message = Message::from_digest(CryptoHash::new(value).as_bytes().0);
-        secp.verify_ecdsa(&message, &self.0, author)
+        SECP256K1
+            .verify_ecdsa(&message, &self.0, &author.0)
             .map_err(|error| CryptoError::InvalidSignature {
                 error: error.to_string(),
                 type_name: T::type_name().to_string(),
@@ -181,24 +242,27 @@ mod secp256k1_tests {
     fn test_signatures() {
         use serde::{Deserialize, Serialize};
 
-        use crate::crypto::{secp256k1::Secp256k1Signature, BcsSignable, TestString};
+        use crate::crypto::{
+            secp256k1::{Secp256k1KeyPair, Secp256k1Signature},
+            BcsSignable, TestString,
+        };
 
         #[derive(Debug, Serialize, Deserialize)]
         struct Foo(String);
 
         impl<'de> BcsSignable<'de> for Foo {}
 
-        let (sk1, pk1) = secp256k1::Secp256k1::new().generate_keypair(&mut rand::thread_rng());
-        let (_sk2, pk2) = secp256k1::Secp256k1::new().generate_keypair(&mut rand::thread_rng());
+        let keypair1 = Secp256k1KeyPair::generate();
+        let keypair2 = Secp256k1KeyPair::generate();
 
         let ts = TestString("hello".into());
         let tsx = TestString("hellox".into());
         let foo = Foo("hello".into());
 
-        let s = Secp256k1Signature::new(&ts, &sk1);
-        assert!(s.check(&ts, &pk1).is_ok());
-        assert!(s.check(&ts, &pk2).is_err());
-        assert!(s.check(&tsx, &pk1).is_err());
-        assert!(s.check(&foo, &pk1).is_err());
+        let s = Secp256k1Signature::new(&ts, &keypair1.secret_key);
+        assert!(s.check(&ts, &keypair1.public_key).is_ok());
+        assert!(s.check(&ts, &keypair2.public_key).is_err());
+        assert!(s.check(&tsx, &keypair1.public_key).is_err());
+        assert!(s.check(&foo, &keypair1.public_key).is_err());
     }
 }

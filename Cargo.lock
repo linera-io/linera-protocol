@@ -4398,6 +4398,7 @@ dependencies = [
  "is-terminal",
  "linera-base",
  "linera-witty",
+ "once_cell",
  "port-selector",
  "prometheus",
  "proptest",
