@@ -1613,7 +1613,8 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
                 path: _,
                 storage: _,
                 external_protocol: _,
-                with_faucet_chain,
+                with_faucet,
+                faucet_chain,
                 faucet_port,
                 faucet_amount,
             } => {
@@ -1628,7 +1629,8 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
                     *no_build,
                     docker_image_name.clone(),
                     policy_config.into_policy(),
-                    *with_faucet_chain,
+                    *with_faucet,
+                    *faucet_chain,
                     *faucet_port,
                     *faucet_amount,
                 )
@@ -1648,7 +1650,8 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
                 path,
                 storage,
                 external_protocol,
-                with_faucet_chain,
+                with_faucet,
+                faucet_chain,
                 faucet_port,
                 faucet_amount,
                 ..
@@ -1664,7 +1667,8 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
                     path,
                     storage,
                     external_protocol.clone(),
-                    *with_faucet_chain,
+                    *with_faucet,
+                    *faucet_chain,
                     *faucet_port,
                     *faucet_amount,
                 )
