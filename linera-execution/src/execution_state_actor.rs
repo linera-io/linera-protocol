@@ -563,7 +563,7 @@ pub enum ExecutionRequest {
         next_message_id: MessageId,
         application_permissions: ApplicationPermissions,
         #[debug(skip)]
-        callback: Sender<[RawOutgoingMessage<SystemMessage, Amount>; 2]>,
+        callback: Sender<RawOutgoingMessage<SystemMessage, Amount>>,
     },
 
     CloseChain {
