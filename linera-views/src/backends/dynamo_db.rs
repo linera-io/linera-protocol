@@ -1038,7 +1038,7 @@ pub enum DynamoDbStoreInternalError {
     #[error(transparent)]
     DescribeTables(#[from] Box<SdkError<DescribeTableError>>),
 
-    /// The transact maximum size is [`MAX_TRANSACT_WRITE_ITEM_SIZE`].
+    /// The transact maximum size is `MAX_TRANSACT_WRITE_ITEM_SIZE`.
     #[error("The transact must have length at most MAX_TRANSACT_WRITE_ITEM_SIZE")]
     TransactUpperLimitSize,
 

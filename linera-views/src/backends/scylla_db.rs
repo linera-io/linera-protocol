@@ -455,12 +455,12 @@ pub enum ScyllaDbStoreInternalError {
     #[error(transparent)]
     BcsError(#[from] bcs::Error),
 
-    /// The key must have at most [`MAX_KEY_SIZE`] bytes
+    /// The key must have at most `MAX_KEY_SIZE` bytes
     #[error("The key must have at most MAX_KEY_SIZE")]
     KeyTooLong,
 
-    /// The value must have at most [`MAX_VALUE_SIZE`] bytes
-    #[error("The value must have at most MAX_VALUE_SIZE")]
+    /// The value must have at most `RAW_MAX_VALUE_SIZE` bytes
+    #[error("The value must have at most RAW_MAX_VALUE_SIZE")]
     ValueTooLong,
 
     /// A deserialization error in ScyllaDB
