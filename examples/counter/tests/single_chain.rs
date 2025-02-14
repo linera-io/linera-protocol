@@ -9,7 +9,7 @@ use linera_sdk::test::{QueryOutcome, TestValidator};
 
 /// Test setting a counter and testing its coherency across microchains.
 ///
-/// Creates the application on a `chain`, initializing it with a 42 then add 15 and obtain 57.
+/// Creates the application on a `chain`, initializing it with a 42 then adds 15 and obtains 57.
 /// which is then checked.
 #[tokio::test(flavor = "multi_thread")]
 async fn single_chain_test() {
