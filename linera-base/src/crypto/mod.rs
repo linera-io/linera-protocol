@@ -6,15 +6,15 @@
 
 mod keypair;
 pub use keypair::*;
+pub mod ed25519;
 mod hash;
-mod signature;
+pub mod secp256k1;
 use std::{io, num::ParseIntError};
 
 use alloy_primitives::FixedBytes;
 use ed25519_dalek::{self as dalek};
 pub use hash::*;
 use serde::{Deserialize, Serialize};
-pub use signature::*;
 use thiserror::Error;
 
 /// Error type for cryptographic errors.
@@ -114,6 +114,22 @@ where
         serde_name::trace_name::<Self>().expect("Self must be a struct or an enum")
     }
 }
+
+/// A BCS-signable struct for testing.
+#[cfg(with_testing)]
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TestString(pub String);
+
+#[cfg(with_testing)]
+impl TestString {
+    /// Creates a new `TestString` with the given string.
+    pub fn new(s: impl Into<String>) -> Self {
+        Self(s.into())
+    }
+}
+
+#[cfg(with_testing)]
+impl<'de> BcsSignable<'de> for TestString {}
 
 /// Reads the `bytes` as four little-endian unsigned 64-bit integers and returns them.
 pub(crate) fn le_bytes_to_u64_array(bytes: &[u8]) -> [u64; 4] {
