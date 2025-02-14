@@ -13,6 +13,7 @@ use std::{
 };
 
 use linera_base::ensure;
+use rocksdb::ReadOptions;
 use tempfile::TempDir;
 use thiserror::Error;
 
@@ -152,6 +153,18 @@ impl RocksDbStoreExecutor {
         Ok(entries.into_iter().collect::<Result<_, _>>()?)
     }
 
+    fn get_next_prefix(prefix: &[u8]) -> Option<Vec<u8>> {
+        let mut next_prefix = prefix.to_vec();
+        for i in (0..next_prefix.len()).rev() {
+            if next_prefix[i] < 0xFF {
+                next_prefix[i] += 1;
+                next_prefix.truncate(i + 1);
+                return Some(next_prefix);
+            }
+        }
+        None
+    }
+
     fn find_keys_by_prefix_internal(
         &self,
         key_prefix: Vec<u8>,
@@ -160,7 +173,12 @@ impl RocksDbStoreExecutor {
         let mut prefix = self.start_key.clone();
         prefix.extend(key_prefix);
         let len = prefix.len();
-        let mut iter = self.db.raw_iterator();
+        let mut read_options = ReadOptions::default();
+        read_options.set_iterate_lower_bound(prefix.clone());
+        if let Some(next_prefix) = Self::get_next_prefix(&prefix) {
+            read_options.set_iterate_upper_bound(next_prefix);
+        }
+        let mut iter = self.db.raw_iterator_opt(read_options);
         let mut keys = Vec::new();
         iter.seek(&prefix);
         let mut next_key = iter.key();
@@ -184,7 +202,12 @@ impl RocksDbStoreExecutor {
         let mut prefix = self.start_key.clone();
         prefix.extend(key_prefix);
         let len = prefix.len();
-        let mut iter = self.db.raw_iterator();
+        let mut read_options = ReadOptions::default();
+        read_options.set_iterate_lower_bound(prefix.clone());
+        if let Some(next_prefix) = Self::get_next_prefix(&prefix) {
+            read_options.set_iterate_upper_bound(next_prefix);
+        }
+        let mut iter = self.db.raw_iterator_opt(read_options);
         let mut key_values = Vec::new();
         iter.seek(&prefix);
         let mut next_key = iter.key();
