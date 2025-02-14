@@ -43,6 +43,7 @@ use {
         data_types::Amount,
         hashed::Hashed,
         identifiers::{AccountOwner, ApplicationId, Owner},
+        listen_for_shutdown_signals,
     },
     linera_chain::{
         data_types::{BlockProposal, ExecutedBlock, ProposedBlock, SignatureAggregator, Vote},
@@ -57,6 +58,7 @@ use {
     linera_sdk::abis::fungible,
     std::{collections::HashMap, iter},
     tokio::task,
+    tokio_util::sync::CancellationToken,
     tracing::{error, trace, warn},
 };
 
@@ -571,9 +573,17 @@ where
         transactions_per_block: usize,
         epoch: Epoch,
     ) -> Result<(), Error> {
+        let shutdown_notifier = CancellationToken::new();
+        tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
+
         let mut num_sent_proposals = 0;
         let mut start = Instant::now();
         for (chain_id, operations, key_pair) in blocks_infos_iter {
+            if shutdown_notifier.is_cancelled() {
+                info!("Shutdown signal received, stopping benchmark");
+                self.save_wallet().await?;
+                return Ok(());
+            }
             let chain = self.wallet.get(*chain_id).expect("should have chain");
             let block = ProposedBlock {
                 epoch,
@@ -664,6 +674,7 @@ where
         }
 
         if bps.is_none() {
+            self.save_wallet().await?;
             let elapsed = start.elapsed();
             let bps = num_sent_proposals as f64 / elapsed.as_secs_f64();
             info!(
@@ -1046,7 +1057,6 @@ where
             chain.block_hash = info.block_hash;
             chain.next_block_height = info.next_block_height;
         }
-        self.save_wallet().await.unwrap();
     }
 
     /// Creates a fungible token transfer operation.
