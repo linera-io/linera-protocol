@@ -37,7 +37,7 @@ impl Template<C> {
     }
 
     pub async fn entrypoint2(&self, key: u32) -> Result<String, IndexerError> {
-        Ok(self.view1.get(&key).await?)
+        Ok(self.view2.get(&key).await?)
     }
 
     // Other functions are derived to fill the `linera_indexer::plugin::Plugin` trait.
