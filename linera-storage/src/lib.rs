@@ -35,7 +35,7 @@ use linera_views::{
 #[cfg(with_wasm_runtime)]
 use {
     linera_base::{data_types::CompressedBytecode, identifiers::BlobType},
-    linera_execution::{WasmContractModule, WasmServiceModule},
+    linera_execution::{VmContractModule, VmServiceModule},
 };
 
 #[cfg(with_testing)]
@@ -283,7 +283,7 @@ pub trait Storage: Sized {
             .await
             .join()
             .await?;
-        Ok(WasmContractModule::new(contract_bytecode, wasm_runtime)
+        Ok(VmContractModule::new(contract_bytecode, wasm_runtime)
             .await?
             .into())
     }
@@ -325,7 +325,7 @@ pub trait Storage: Sized {
         .await
         .join()
         .await?;
-        Ok(WasmServiceModule::new(service_bytecode, wasm_runtime)
+        Ok(VmServiceModule::new(service_bytecode, wasm_runtime)
             .await?
             .into())
     }

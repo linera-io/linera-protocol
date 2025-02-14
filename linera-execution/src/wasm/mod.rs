@@ -8,13 +8,18 @@
 //! - `wasmer` enables the [Wasmer](https://wasmer.io/) runtime
 //! - `wasmtime` enables the [Wasmtime](https://wasmtime.dev/) runtime
 
-#![cfg(with_wasm_runtime)]
+#![cfg(any(with_wasmer, with_wasmtime, with_revm))]
 
 mod entrypoints;
+#[cfg(any(with_wasmer, with_wasmtime))]
 mod module_cache;
+#[cfg(any(with_wasmer, with_wasmtime))]
 mod sanitizer;
+#[cfg(any(with_wasmer, with_wasmtime))]
 #[macro_use]
 mod system_api;
+#[cfg(with_revm)]
+mod revm;
 #[cfg(with_wasmer)]
 mod wasmer;
 #[cfg(with_wasmtime)]
@@ -32,8 +37,15 @@ use {
     prometheus::HistogramVec,
     std::sync::LazyLock,
 };
+#[cfg(with_revm)]
+use {
+    revm::{RevmContractInstance, RevmServiceInstance},
+    revm_primitives::HaltReason,
+};
 
+#[cfg(any(with_wasmer, with_wasmtime))]
 use self::sanitizer::sanitize;
+#[cfg(any(with_wasmer, with_wasmtime))]
 pub use self::{
     entrypoints::{ContractEntrypoints, ServiceEntrypoints},
     system_api::{ContractSystemApi, ServiceSystemApi, SystemApiData, ViewSystemApi},
@@ -65,7 +77,7 @@ static SERVICE_INSTANTIATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| 
 
 /// A user contract in a compiled WebAssembly module.
 #[derive(Clone)]
-pub enum WasmContractModule {
+pub enum VmContractModule {
     #[cfg(with_wasmer)]
     Wasmer {
         engine: ::wasmer::Engine,
@@ -73,51 +85,64 @@ pub enum WasmContractModule {
     },
     #[cfg(with_wasmtime)]
     Wasmtime { module: ::wasmtime::Module },
+    #[cfg(with_revm)]
+    Revm { module: Vec<u8> },
 }
 
-impl WasmContractModule {
-    /// Creates a new [`WasmContractModule`] using the WebAssembly module with the provided bytecodes.
+#[cfg(any(with_wasmer, with_wasmtime))]
+fn get_wasm_contract(
+    contract_bytecode: Bytecode,
+    runtime: WasmRuntime,
+) -> Result<Bytecode, VmExecutionError> {
+    if runtime.needs_sanitizer() {
+        // Ensure bytecode normalization whenever wasmer and wasmtime are possibly
+        // compared.
+        sanitize(contract_bytecode).map_err(VmExecutionError::LoadContractModule)
+    } else {
+        Ok(contract_bytecode)
+    }
+}
+
+impl VmContractModule {
+    /// Creates a new [`VmContractModule`] using the WebAssembly module with the provided bytecodes.
     pub async fn new(
         contract_bytecode: Bytecode,
         runtime: WasmRuntime,
-    ) -> Result<Self, WasmExecutionError> {
-        let contract_bytecode = if runtime.needs_sanitizer() {
-            // Ensure bytecode normalization whenever wasmer and wasmtime are possibly
-            // compared.
-            sanitize(contract_bytecode).map_err(WasmExecutionError::LoadContractModule)?
-        } else {
-            contract_bytecode
-        };
+    ) -> Result<Self, VmExecutionError> {
         match runtime {
             #[cfg(with_wasmer)]
             WasmRuntime::Wasmer | WasmRuntime::WasmerWithSanitizer => {
-                Self::from_wasmer(contract_bytecode).await
+                Self::from_wasmer(get_wasm_contract(contract_bytecode, runtime)?).await
             }
             #[cfg(with_wasmtime)]
             WasmRuntime::Wasmtime | WasmRuntime::WasmtimeWithSanitizer => {
-                Self::from_wasmtime(contract_bytecode).await
+                Self::from_wasmtime(get_wasm_contract(contract_bytecode, runtime)?).await
+            }
+            #[cfg(with_revm)]
+            WasmRuntime::Revm | WasmRuntime::RevmWithSanitizer => {
+                Self::from_revm(contract_bytecode).await
             }
         }
     }
 
-    /// Creates a new [`WasmContractModule`] using the WebAssembly module in `bytecode_file`.
+    /// Creates a new [`VmContractModule`] using the WebAssembly module in `bytecode_file`.
     #[cfg(with_fs)]
     pub async fn from_file(
         contract_bytecode_file: impl AsRef<std::path::Path>,
         runtime: WasmRuntime,
-    ) -> Result<Self, WasmExecutionError> {
+    ) -> Result<Self, VmExecutionError> {
         Self::new(
             Bytecode::load_from_file(contract_bytecode_file)
                 .await
                 .map_err(anyhow::Error::from)
-                .map_err(WasmExecutionError::LoadContractModule)?,
+                .map_err(VmExecutionError::LoadContractModule)?,
             runtime,
         )
         .await
     }
 }
 
-impl UserContractModule for WasmContractModule {
+impl UserContractModule for VmContractModule {
     fn instantiate(
         &self,
         runtime: ContractSyncRuntimeHandle,
@@ -127,13 +152,17 @@ impl UserContractModule for WasmContractModule {
 
         let instance: UserContractInstance = match self {
             #[cfg(with_wasmtime)]
-            WasmContractModule::Wasmtime { module } => {
+            VmContractModule::Wasmtime { module } => {
                 Box::new(WasmtimeContractInstance::prepare(module, runtime)?)
             }
             #[cfg(with_wasmer)]
-            WasmContractModule::Wasmer { engine, module } => Box::new(
+            VmContractModule::Wasmer { engine, module } => Box::new(
                 WasmerContractInstance::prepare(engine.clone(), module, runtime)?,
             ),
+            #[cfg(with_revm)]
+            VmContractModule::Revm { module } => {
+                Box::new(RevmContractInstance::prepare(module.to_vec(), runtime))
+            }
         };
 
         Ok(instance)
@@ -142,19 +171,21 @@ impl UserContractModule for WasmContractModule {
 
 /// A user service in a compiled WebAssembly module.
 #[derive(Clone)]
-pub enum WasmServiceModule {
+pub enum VmServiceModule {
     #[cfg(with_wasmer)]
     Wasmer { module: ::wasmer::Module },
     #[cfg(with_wasmtime)]
     Wasmtime { module: ::wasmtime::Module },
+    #[cfg(with_revm)]
+    Revm { module: Vec<u8> },
 }
 
-impl WasmServiceModule {
-    /// Creates a new [`WasmServiceModule`] using the WebAssembly module with the provided bytecodes.
+impl VmServiceModule {
+    /// Creates a new [`VmServiceModule`] using the WebAssembly module with the provided bytecodes.
     pub async fn new(
         service_bytecode: Bytecode,
         runtime: WasmRuntime,
-    ) -> Result<Self, WasmExecutionError> {
+    ) -> Result<Self, VmExecutionError> {
         match runtime {
             #[cfg(with_wasmer)]
             WasmRuntime::Wasmer | WasmRuntime::WasmerWithSanitizer => {
@@ -164,27 +195,31 @@ impl WasmServiceModule {
             WasmRuntime::Wasmtime | WasmRuntime::WasmtimeWithSanitizer => {
                 Self::from_wasmtime(service_bytecode).await
             }
+            #[cfg(with_revm)]
+            WasmRuntime::Revm | WasmRuntime::RevmWithSanitizer => {
+                Self::from_revm(service_bytecode).await
+            }
         }
     }
 
-    /// Creates a new [`WasmServiceModule`] using the WebAssembly module in `bytecode_file`.
+    /// Creates a new [`VmServiceModule`] using the WebAssembly module in `bytecode_file`.
     #[cfg(with_fs)]
     pub async fn from_file(
         service_bytecode_file: impl AsRef<std::path::Path>,
         runtime: WasmRuntime,
-    ) -> Result<Self, WasmExecutionError> {
+    ) -> Result<Self, VmExecutionError> {
         Self::new(
             Bytecode::load_from_file(service_bytecode_file)
                 .await
                 .map_err(anyhow::Error::from)
-                .map_err(WasmExecutionError::LoadServiceModule)?,
+                .map_err(VmExecutionError::LoadServiceModule)?,
             runtime,
         )
         .await
     }
 }
 
-impl UserServiceModule for WasmServiceModule {
+impl UserServiceModule for VmServiceModule {
     fn instantiate(
         &self,
         runtime: ServiceSyncRuntimeHandle,
@@ -194,12 +229,16 @@ impl UserServiceModule for WasmServiceModule {
 
         let instance: UserServiceInstance = match self {
             #[cfg(with_wasmtime)]
-            WasmServiceModule::Wasmtime { module } => {
+            VmServiceModule::Wasmtime { module } => {
                 Box::new(WasmtimeServiceInstance::prepare(module, runtime)?)
             }
             #[cfg(with_wasmer)]
-            WasmServiceModule::Wasmer { module } => {
+            VmServiceModule::Wasmer { module } => {
                 Box::new(WasmerServiceInstance::prepare(module, runtime)?)
+            }
+            #[cfg(with_revm)]
+            VmServiceModule::Revm { module } => {
+                Box::new(RevmServiceInstance::prepare(module.to_vec(), runtime))
             }
         };
 
@@ -211,7 +250,7 @@ impl UserServiceModule for WasmServiceModule {
 const _: () = {
     use js_sys::wasm_bindgen::JsValue;
 
-    impl TryFrom<JsValue> for WasmServiceModule {
+    impl TryFrom<JsValue> for VmServiceModule {
         type Error = JsValue;
 
         fn try_from(value: JsValue) -> Result<Self, JsValue> {
@@ -229,16 +268,16 @@ const _: () = {
         }
     }
 
-    impl From<WasmServiceModule> for JsValue {
-        fn from(module: WasmServiceModule) -> JsValue {
+    impl From<VmServiceModule> for JsValue {
+        fn from(module: VmServiceModule) -> JsValue {
             match module {
                 #[cfg(with_wasmer)]
-                WasmServiceModule::Wasmer { module } => ::wasmer::Module::clone(&module).into(),
+                VmServiceModule::Wasmer { module } => ::wasmer::Module::clone(&module).into(),
             }
         }
     }
 
-    impl TryFrom<JsValue> for WasmContractModule {
+    impl TryFrom<JsValue> for VmContractModule {
         type Error = JsValue;
 
         fn try_from(value: JsValue) -> Result<Self, JsValue> {
@@ -256,11 +295,11 @@ const _: () = {
         }
     }
 
-    impl From<WasmContractModule> for JsValue {
-        fn from(module: WasmContractModule) -> JsValue {
+    impl From<VmContractModule> for JsValue {
+        fn from(module: VmContractModule) -> JsValue {
             match module {
                 #[cfg(with_wasmer)]
-                WasmContractModule::Wasmer { module, engine: _ } => {
+                VmContractModule::Wasmer { module, engine: _ } => {
                     ::wasmer::Module::clone(&module).into()
                 }
             }
@@ -269,9 +308,8 @@ const _: () = {
 };
 
 /// Errors that can occur when executing a user application in a WebAssembly module.
-#[cfg(any(with_wasmer, with_wasmtime))]
 #[derive(Debug, Error)]
-pub enum WasmExecutionError {
+pub enum VmExecutionError {
     #[error("Failed to load contract Wasm module: {_0}")]
     LoadContractModule(#[source] anyhow::Error),
     #[error("Failed to load service Wasm module: {_0}")]
@@ -296,22 +334,45 @@ pub enum WasmExecutionError {
     UnknownPromise,
     #[error("Attempt to call incorrect `wait` function for a promise")]
     IncorrectPromise,
+    #[cfg(with_revm)]
+    #[error(transparent)]
+    RevmExecutionError(#[from] RevmExecutionError),
+}
+
+/// The possible errors when executing an EVM smart contract on REVM
+#[cfg(with_revm)]
+#[derive(Debug, Error)]
+pub enum RevmExecutionError {
+    /// The transact commit error
+    #[error("Transact commit error")]
+    TransactCommitError(String),
+
+    /// The operation was reverted
+    #[error("The operation was reverted")]
+    Revert {
+        gas_used: u64,
+        output: alloy::primitives::Bytes,
+    },
+
+    /// The operation was halted
+    #[error("The operation was halted")]
+    Halt { gas_used: u64, reason: HaltReason },
 }
 
 #[cfg(with_wasmer)]
-impl From<::wasmer::InstantiationError> for WasmExecutionError {
+impl From<::wasmer::InstantiationError> for VmExecutionError {
     fn from(instantiation_error: ::wasmer::InstantiationError) -> Self {
-        WasmExecutionError::InstantiateModuleWithWasmer(Box::new(instantiation_error))
+        VmExecutionError::InstantiateModuleWithWasmer(Box::new(instantiation_error))
     }
 }
 
 /// This assumes that the current directory is one of the crates.
-#[cfg(with_testing)]
+#[cfg(all(with_testing, with_wasm_runtime))]
 pub mod test {
     use std::sync::LazyLock;
 
     #[cfg(with_fs)]
-    use super::{WasmContractModule, WasmRuntime, WasmServiceModule};
+    use super::{VmContractModule, VmServiceModule, WasmRuntime};
 
     fn build_applications() -> Result<(), std::io::Error> {
         tracing::info!("Building example applications with cargo");
@@ -345,11 +406,11 @@ pub mod test {
     pub async fn build_example_application(
         name: &str,
         wasm_runtime: impl Into<Option<WasmRuntime>>,
-    ) -> Result<(WasmContractModule, WasmServiceModule), anyhow::Error> {
+    ) -> Result<(VmContractModule, VmServiceModule), anyhow::Error> {
         let (contract_path, service_path) = get_example_bytecode_paths(name)?;
         let wasm_runtime = wasm_runtime.into().unwrap_or_default();
-        let contract = WasmContractModule::from_file(&contract_path, wasm_runtime).await?;
-        let service = WasmServiceModule::from_file(&service_path, wasm_runtime).await?;
+        let contract = VmContractModule::from_file(&contract_path, wasm_runtime).await?;
+        let service = VmServiceModule::from_file(&service_path, wasm_runtime).await?;
         Ok((contract, service))
     }
 }
