@@ -1,0 +1,233 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="pharos"><title>pharos - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="pharos" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../pharos/index.html">pharos</a><span class="version">0.5.3</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#traits">Traits</a></li><li><a href="#types">Type Aliases</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">pharos</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/pharos/lib.rs.html#1-82">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="pharos"><a class="doc-anchor" href="#pharos">§</a>pharos</h2>
+<p><a href="https://github.com/RichardLitt/standard-readme"><img src="https://img.shields.io/badge/readme%20style-standard-brightgreen.svg?style=flat-square" alt="standard-readme compliant" /></a>
+<a href="https://github.com/najamelan/pharos/actions"><img src="https://github.com/najamelan/pharos/workflows/ci/badge.svg?branch=master" alt="Build Status" /></a>
+<a href="https://docs.rs/pharos"><img src="https://docs.rs/pharos/badge.svg" alt="Docs" /></a>
+<a href="https://crates.io/crates/pharos"><img src="https://img.shields.io/crates/v/pharos" alt="Crates.io" /></a>
+<a href="https://crates.io/crates/pharos"><img src="https://img.shields.io/crates/d/pharos" alt="Crates.io downloads" /></a></p>
+<blockquote>
+<p>An introduction to pharos is available in many formats: <a href="https://youtu.be/BAzsxW-nxh8">video</a>, <a href="https://en.wikipedia.org/wiki/Lighthouse_of_Alexandria">wikipedia</a> and it was even honored by many artists like <a href="http://omeka.wustl.edu/omeka/files/original/2694d12580166e77d40afd37b492a78e.jpg">this painting by Micheal Turner</a>.</p>
+</blockquote>
+<p>More seriously, pharos is a small <a href="https://en.wikipedia.org/wiki/Observer_pattern">observer</a> library that let’s you create futures 0.3 streams that observers can listen to.</p>
+<p>I created it to leverage interoperability we can create by using async <a href="https://docs.rs/futures-preview/0.3.0-alpha.19/futures/stream/trait.Stream.html">Stream</a> and <a href="https://docs.rs/futures-preview/0.3.0-alpha.19/futures/sink/trait.Sink.html">Sink</a> from the futures library. So you can use all stream combinators, forward it into Sinks and so on.</p>
+<p>Minimal rustc version: 1.39.</p>
+<h3 id="table-of-contents"><a class="doc-anchor" href="#table-of-contents">§</a>Table of Contents</h3>
+<ul>
+<li><a href="#security">Security</a></li>
+<li><a href="#limitations">Limitations</a></li>
+<li><a href="#future-work">Future work</a></li>
+<li><a href="#install">Install</a>
+<ul>
+<li><a href="#upgrade">Upgrade</a></li>
+<li><a href="#dependencies">Dependencies</a></li>
+</ul>
+</li>
+<li><a href="#usage">Usage</a>
+<ul>
+<li><a href="#filter">Filter</a></li>
+</ul>
+</li>
+<li><a href="#api">API</a></li>
+<li><a href="#contributing">Contributing</a>
+<ul>
+<li><a href="#code-of-conduct">Code of Conduct</a></li>
+</ul>
+</li>
+<li><a href="#license">License</a></li>
+</ul>
+<h3 id="security"><a class="doc-anchor" href="#security">§</a>Security</h3>
+<p>The main issue with this crate right now is the possibility for the observable to outpace the observer. When using bounded channels, there is back pressure, which might allow DDOS attacks if using the pattern on arriving network packets. When using the unbounded channels, it might lead to excessive memory consumption if observers are outpaced.</p>
+<p>TODO: To mitigate these problems effectively, I will add a ring channel where the channel will only buffer a certain amount events and will overwrite the oldest event instead of blocking the sender when the buffer is full.</p>
+<p>This crate has: <code>#![ forbid( unsafe_code ) ]</code>, but it’s dependency (futures library) uses a lot of unsafe code.</p>
+<h4 id="limitations"><a class="doc-anchor" href="#limitations">§</a>Limitations</h4>
+<ul>
+<li>only bounded and unbounded channel as back-end (for now)</li>
+<li><a href="struct.Events.html" title="struct pharos::Events"><code>Events</code></a> is not clonable right now (would require support from the channels we use as back-ends, eg. broadcast type channel)</li>
+<li>performance tweaking still needs to be done</li>
+</ul>
+<h4 id="future-work"><a class="doc-anchor" href="#future-work">§</a>Future work</h4>
+<p>Please check out the <a href="https://github.com/najamelan/pharos/blob/master/TODO.md">todo</a> for ambitions.</p>
+<h3 id="install"><a class="doc-anchor" href="#install">§</a>Install</h3>
+<p>With <a href="https://github.com/killercup/cargo-edit">cargo add</a>:
+<code>cargo add pharos</code></p>
+<p>With <a href="https://gitlab.com/storedbox/cargo-yaml">cargo yaml</a>:</p>
+<div class="example-wrap"><pre class="language-yaml"><code>dependencies:
+
+  pharos: ^0.5
+</code></pre></div>
+<p>With raw Cargo.toml</p>
+<div class="example-wrap"><pre class="language-toml"><code>[dependencies]
+
+   pharos = &quot;0.5&quot;
+</code></pre></div><h4 id="upgrade"><a class="doc-anchor" href="#upgrade">§</a>Upgrade</h4>
+<p>Please check out the <a href="https://github.com/najamelan/pharos/blob/master/CHANGELOG.md">changelog</a> when upgrading.</p>
+<h4 id="dependencies"><a class="doc-anchor" href="#dependencies">§</a>Dependencies</h4>
+<p>This crate only has but one dependency. Cargo will automatically handle it for you. This dependency contains <code>unsafe</code> code.</p>
+<div class="example-wrap"><pre class="language-yaml"><code>dependencies:
+
+  futures: { version: ^0.3, default-features: false }
+</code></pre></div><h3 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h3>
+<p><code>pharos</code> only works from async code, implementing Sink to notify observers. You can notify observers from within
+<code>poll_*</code> methods by calling the poll methods of the <a href="https://docs.rs/futures-preview/0.3.0-alpha.19/futures/sink/trait.Sink.html">Sink</a> impl directly. In async context you can use <a href="https://docs.rs/futures-preview/0.3.0-alpha.19/futures/sink/trait.SinkExt.html#method.send">SinkExt::send</a>. Observers must consume the messages fast enough, otherwise they will slow down the observable (bounded channel) or cause memory leak (unbounded channel).</p>
+<p>Whenever observers want to unsubscribe, they can just drop the stream or call <code>close</code> on it. If you are an observable and you want to notify observers that no more messages will follow, just drop the pharos object. Failing that, create an event type that signifies EOF and send that to observers.</p>
+<p>Your event type will be cloned once for each observer, so you might want to put it in an Arc if it’s bigger than 2 pointer sizes (eg. there’s no point putting an enum without data in an Arc).</p>
+<p>When you need to notify a pharos object from several async tasks, you can use <a href="struct.SharedPharos.html" title="struct pharos::SharedPharos"><code>SharedPharos</code></a>. This type allows observing and notifying with a shared reference and handles synchronyzation internally.</p>
+<p>Examples can be found in the <a href="https://github.com/najamelan/pharos/tree/master/examples">examples</a> directory. Here is the most basic one:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use
+</span>{
+   pharos  :: { *                                      } ,
+   futures :: { executor::block_on, StreamExt, SinkExt } ,
+};
+
+
+<span class="comment">// here we put a pharos object on our struct
+//
+</span><span class="kw">struct </span>Goddess { pharos: Pharos&lt;GoddessEvent&gt; }
+
+
+<span class="kw">impl </span>Goddess
+{
+   <span class="kw">fn </span>new() -&gt; <span class="self">Self
+   </span>{
+      <span class="self">Self </span>{ pharos: Pharos::default() }
+   }
+
+   <span class="comment">// Send Goddess sailing so she can tweet about it!
+   //
+   </span><span class="kw">pub async fn </span>sail( <span class="kw-2">&amp;mut </span><span class="self">self </span>)
+   {
+      <span class="comment">// It's infallible. Observers that error will be dropped, since the only kind of errors on
+      // channels are when the channel is closed.
+      //
+      </span><span class="self">self</span>.pharos.send( GoddessEvent::Sailing ).<span class="kw">await</span>.expect( <span class="string">"notify observers" </span>);
+   }
+}
+
+
+<span class="comment">// Event types need to implement clone, but you can wrap them in Arc if not. Also they will be
+// cloned, so if you will have several observers and big event data, putting them in an Arc is
+// definitely best. It has no benefit to put a simple dataless enum in an Arc though.
+//
+</span><span class="attr">#[ derive( Clone, Debug, PartialEq, Copy ) ]
+</span><span class="comment">//
+</span><span class="kw">enum </span>GoddessEvent
+{
+   Sailing
+}
+
+
+<span class="comment">// This is the needed implementation of Observable. We might one day have a derive for this,
+// but it's not so interesting, since you always have to point it to your pharos object,
+// and when you want to be observable over several types of events, you might want to keep
+// pharos in a hashmap over type_id, and a derive would quickly become a mess.
+//
+</span><span class="kw">impl </span>Observable&lt;GoddessEvent&gt; <span class="kw">for </span>Goddess
+{
+   <span class="kw">type </span>Error = PharErr;
+
+   <span class="kw">fn </span>observe( <span class="kw-2">&amp;mut </span><span class="self">self</span>, options: ObserveConfig&lt;GoddessEvent&gt;) -&gt; Observe&lt; <span class="lifetime">'_</span>, GoddessEvent, <span class="self">Self</span>::Error &gt;
+   {
+      <span class="self">self</span>.pharos.observe( options )
+   }
+}
+
+
+<span class="attr">#[ async_std::main ]
+</span><span class="comment">//
+</span><span class="kw">async fn </span>main()
+{
+  <span class="kw">let </span><span class="kw-2">mut </span>isis = Goddess::new();
+
+  <span class="comment">// subscribe, the observe method takes options to let you choose:
+  // - channel type (bounded/unbounded)
+  // - a predicate to filter events
+  //
+  </span><span class="kw">let </span><span class="kw-2">mut </span>events = isis.observe( Channel::Bounded( <span class="number">3 </span>).into() ).<span class="kw">await</span>.expect( <span class="string">"observe" </span>);
+
+  <span class="comment">// trigger an event
+  //
+  </span>isis.sail().<span class="kw">await</span>;
+
+  <span class="comment">// read from stream and let's put on the console what the event looks like.
+  //
+  </span><span class="kw">let </span>evt = <span class="macro">dbg!</span>( events.next().<span class="kw">await</span>.unwrap() );
+
+  <span class="comment">// After this reads on the event stream will return None.
+  //
+  </span>drop( isis );
+
+  <span class="macro">assert_eq!</span>( GoddessEvent::Sailing, evt );
+  <span class="macro">assert_eq!</span>( <span class="prelude-val">None</span>, events.next().<span class="kw">await </span>);
+}</code></pre></div>
+<h4 id="filter"><a class="doc-anchor" href="#filter">§</a>Filter</h4>
+<p>Sometimes you are not interested in all event types an observable can emit. A common use case is only listening for a
+close event on a network connection. The observe method takes options which let you set the predicate. You can only
+set one predicate for a given observer.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>pharos::<span class="kw-2">*</span>;
+
+<span class="attr">#[ derive( Clone, Debug, PartialEq, Copy ) ]
+</span><span class="comment">//
+</span><span class="kw">enum </span>NetworkEvent
+{
+   Open    ,
+   Error   ,
+   Closing ,
+   Closed  ,
+}
+
+<span class="kw">struct </span>Connection { pharos: Pharos&lt;NetworkEvent&gt; }
+
+<span class="kw">impl </span>Observable&lt;NetworkEvent&gt; <span class="kw">for </span>Connection
+{
+   <span class="kw">type </span>Error = PharErr;
+
+   <span class="kw">fn </span>observe( <span class="kw-2">&amp;mut </span><span class="self">self</span>, options: ObserveConfig&lt;NetworkEvent&gt;) -&gt; Observe&lt; <span class="lifetime">'_</span>, NetworkEvent, <span class="self">Self</span>::Error &gt;
+   {
+       <span class="self">self</span>.pharos.observe( options )
+   }
+}
+
+
+<span class="attr">#[ async_std::main ]
+</span><span class="comment">//
+</span><span class="kw">async fn </span>main()
+{
+   <span class="kw">let </span><span class="kw-2">mut </span>conn = Connection{ pharos: Pharos::default() };
+
+   <span class="comment">// We will only get close events. Note that here we don't need access to any surrounding variables in
+   // the closure, so we can use a function pointer which avoids having to box the closure.
+   //
+   // Filter also has a variant `Closure` which allows you to pass in a `Box&lt;dyn FnMut(&amp;Event) -&gt; bool + Send&gt;`
+   // if you need access to surrounding context to make the decision.
+   //
+   </span><span class="kw">let </span>filter = Filter::Pointer( |e| e == <span class="kw-2">&amp;</span>NetworkEvent::Closed );
+
+   <span class="comment">// By creating the config object through into, other options will be defaults, notably here
+   // this will use unbounded channels.
+   //
+   </span><span class="kw">let </span>observer = conn.observe( filter.into() ).<span class="kw">await</span>.expect( <span class="string">"observe" </span>);
+
+   <span class="comment">// Combine both options.
+   //
+   </span><span class="kw">let </span>filter = Filter::Pointer( |e| e != <span class="kw-2">&amp;</span>NetworkEvent::Closed );
+   <span class="kw">let </span>opts   = ObserveConfig::from( filter ).channel( Channel::Bounded(<span class="number">5</span>) );
+
+   <span class="comment">// Get everything but close events over a bounded channel with queue size 5.
+   //
+   </span><span class="kw">let </span>bounded_observer = conn.observe( opts ).<span class="kw">await</span>.expect( <span class="string">"observe" </span>);
+}</code></pre></div>
+<h3 id="api"><a class="doc-anchor" href="#api">§</a>API</h3>
+<p>API documentation can be found on <a href="https://docs.rs/pharos">docs.rs</a>.</p>
+<h3 id="contributing"><a class="doc-anchor" href="#contributing">§</a>Contributing</h3>
+<p>Please check out the <a href="https://github.com/najamelan/pharos/blob/master/CONTRIBUTING.md">contribution guidelines</a>.</p>
+<h4 id="code-of-conduct"><a class="doc-anchor" href="#code-of-conduct">§</a>Code of conduct</h4>
+<p>Any of the behaviors described in <a href="http://citizencodeofconduct.org/#unacceptable-behavior">point 4 “Unacceptable Behavior” of the Citizens Code of Conduct</a> are not welcome here and might get you banned. If anyone including maintainers and moderators of the project fail to respect these/your limits, you are entitled to call them out.</p>
+<h3 id="license"><a class="doc-anchor" href="#license">§</a>License</h3>
+<p><a href="https://unlicense.org/">Unlicence</a></p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Events.html" title="struct pharos::Events">Events</a></div><div class="desc docblock-short">A stream of events. This is returned from <a href="trait.Observable.html#tymethod.observe" title="method pharos::Observable::observe">Observable::observe</a>.
+You will only start receiving events from the moment you call this. Any events in the observed
+object emitted before will not be delivered.</div></li><li><div class="item-name"><a class="struct" href="struct.ObserveConfig.html" title="struct pharos::ObserveConfig">ObserveConfig</a></div><div class="desc docblock-short">Configuration for your event stream.</div></li><li><div class="item-name"><a class="struct" href="struct.PharErr.html" title="struct pharos::PharErr">PharErr</a></div><div class="desc docblock-short">The error type for errors happening in <code>pharos</code>.</div></li><li><div class="item-name"><a class="struct" href="struct.Pharos.html" title="struct pharos::Pharos">Pharos</a></div><div class="desc docblock-short">The Pharos lighthouse. When you implement <a href="trait.Observable.html" title="trait pharos::Observable">Observable</a> on your type, you can forward
+the <a href="trait.Observable.html#tymethod.observe" title="method pharos::Observable::observe"><code>observe</code></a> method to Pharos and use <a href="https://docs.rs/futures-preview/0.3.0-alpha.19/futures/sink/trait.SinkExt.html#method.send">SinkExt::send</a> to notify observers.</div></li><li><div class="item-name"><a class="struct" href="struct.SharedPharos.html" title="struct pharos::SharedPharos">SharedPharos</a></div><div class="desc docblock-short">A handy wrapper that uses a futures aware mutex to allow using Pharos from a shared
+reference.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.Channel.html" title="enum pharos::Channel">Channel</a></div><div class="desc docblock-short">Choose the type of channel that will be used for your event stream. Used in <a href="struct.ObserveConfig.html" title="struct pharos::ObserveConfig">ObserveConfig</a>.</div></li><li><div class="item-name"><a class="enum" href="enum.ErrorKind.html" title="enum pharos::ErrorKind">ErrorKind</a></div><div class="desc docblock-short">The different kind of errors that can happen when you use the <code>pharos</code> API.</div></li><li><div class="item-name"><a class="enum" href="enum.Filter.html" title="enum pharos::Filter">Filter</a></div><div class="desc docblock-short">Predicate for filtering events.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.Observable.html" title="trait pharos::Observable">Observable</a></div><div class="desc docblock-short">Indicate that a type is observable. You can call <a href="trait.Observable.html#tymethod.observe" title="method pharos::Observable::observe"><code>observe</code></a> to get a
+stream of events.</div></li><li><div class="item-name"><a class="trait" href="trait.ObservableLocal.html" title="trait pharos::ObservableLocal">ObservableLocal</a></div><div class="desc docblock-short">Like Observable, but the future returned is not <code>Send</code>, thus the observable type does not need to be <code>Send</code>.</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.Observe.html" title="type pharos::Observe">Observe</a></div><div class="desc docblock-short">A pinned boxed future returned by the Observable::observe method.</div></li><li><div class="item-name"><a class="type" href="type.ObserveLocal.html" title="type pharos::ObserveLocal">ObserveLocal</a></div><div class="desc docblock-short">A pinned boxed future returned by the ObservableLocal::observe_local method.</div></li></ul></section></div></main></body></html>

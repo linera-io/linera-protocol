@@ -1,0 +1,64 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A fast and flexible LRU map"><title>schnellru - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="schnellru" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../schnellru/index.html">schnellru</a><span class="version">0.2.4</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#traits">Traits</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">schnellru</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/schnellru/lib.rs.html#1-2658">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="a-fast-and-flexible-lru-map"><a class="doc-anchor" href="#a-fast-and-flexible-lru-map">§</a>A fast and flexible LRU map</h2>
+<p><a href="https://docs.rs/schnellru/*/schnellru/"><img src="https://docs.rs/schnellru/badge.svg" alt="Documentation" /></a></p>
+<p>This repository contains a fast and flexible LRU map.</p>
+<ul>
+<li>Blazingly fast. Up to twice as fast as the <a href="https://github.com/jeromefroe/lru-rs"><code>lru</code></a> crate, and with less memory overhead.</li>
+<li>Can be also used as an ordered map, with roughly the same performance as <a href="https://github.com/bluss/indexmap"><code>indexmap</code></a>,
+but with added support for O(1) removals without changing the element order (where <code>indexmap</code> only supports O(n) non-perturbing removals).</li>
+<li>Customizable. Out-of-box can be limited by length or by memory usage, but supports custom limiters which can be made to limit the map by whatever you want.</li>
+<li>Tested, miri-clean, clippy-clean and fuzzed.</li>
+<li>Supports <code>no_std</code>.</li>
+</ul>
+<h3 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>schnellru::{LruMap, ByLength};
+<span class="kw">let </span><span class="kw-2">mut </span>map = LruMap::new(ByLength::new(<span class="number">3</span>));
+
+<span class="comment">// Insert three elements.
+</span>map.insert(<span class="number">1</span>, <span class="string">"one"</span>);
+map.insert(<span class="number">2</span>, <span class="string">"two"</span>);
+map.insert(<span class="number">3</span>, <span class="string">"three"</span>);
+<span class="macro">assert_eq!</span>(map.len(), <span class="number">3</span>);
+
+<span class="comment">// They're ordered according to which one was inserted last.
+</span><span class="kw">let </span><span class="kw-2">mut </span>iter = map.iter();
+<span class="macro">assert_eq!</span>(iter.next().unwrap(), (<span class="kw-2">&amp;</span><span class="number">3</span>, <span class="kw-2">&amp;</span><span class="string">"three"</span>));
+<span class="macro">assert_eq!</span>(iter.next().unwrap(), (<span class="kw-2">&amp;</span><span class="number">2</span>, <span class="kw-2">&amp;</span><span class="string">"two"</span>));
+<span class="macro">assert_eq!</span>(iter.next().unwrap(), (<span class="kw-2">&amp;</span><span class="number">1</span>, <span class="kw-2">&amp;</span><span class="string">"one"</span>));
+
+<span class="comment">// Access the least recently inserted one.
+</span><span class="macro">assert_eq!</span>(<span class="kw-2">*</span>map.get(<span class="kw-2">&amp;</span><span class="number">1</span>).unwrap(), <span class="string">"one"</span>);
+
+<span class="comment">// Now the order's changed.
+// The element we've accessed was moved to the front.
+</span><span class="kw">let </span><span class="kw-2">mut </span>iter = map.iter();
+<span class="macro">assert_eq!</span>(iter.next().unwrap(), (<span class="kw-2">&amp;</span><span class="number">1</span>, <span class="kw-2">&amp;</span><span class="string">"one"</span>));
+<span class="macro">assert_eq!</span>(iter.next().unwrap(), (<span class="kw-2">&amp;</span><span class="number">3</span>, <span class="kw-2">&amp;</span><span class="string">"three"</span>));
+<span class="macro">assert_eq!</span>(iter.next().unwrap(), (<span class="kw-2">&amp;</span><span class="number">2</span>, <span class="kw-2">&amp;</span><span class="string">"two"</span>));
+
+<span class="comment">// Insert a fourth element.
+// This will automatically pop the least recently accessed one.
+</span>map.insert(<span class="number">4</span>, <span class="string">"four"</span>);
+
+<span class="comment">// Still the same number of elements.
+</span><span class="macro">assert_eq!</span>(map.len(), <span class="number">3</span>);
+
+<span class="comment">// And this is the one which was removed.
+</span><span class="macro">assert!</span>(map.peek(<span class="kw-2">&amp;</span><span class="number">2</span>).is_none());
+
+<span class="comment">// And here's the new order.
+</span><span class="kw">let </span><span class="kw-2">mut </span>iter = map.iter();
+<span class="macro">assert_eq!</span>(iter.next().unwrap(), (<span class="kw-2">&amp;</span><span class="number">4</span>, <span class="kw-2">&amp;</span><span class="string">"four"</span>));
+<span class="macro">assert_eq!</span>(iter.next().unwrap(), (<span class="kw-2">&amp;</span><span class="number">1</span>, <span class="kw-2">&amp;</span><span class="string">"one"</span>));
+<span class="macro">assert_eq!</span>(iter.next().unwrap(), (<span class="kw-2">&amp;</span><span class="number">3</span>, <span class="kw-2">&amp;</span><span class="string">"three"</span>));</code></pre></div>
+<h3 id="license"><a class="doc-anchor" href="#license">§</a>License</h3>
+<p>Licensed under either of</p>
+<ul>
+<li>Apache License, Version 2.0, (<a href="LICENSE-APACHE">LICENSE-APACHE</a> or <a href="http://www.apache.org/licenses/LICENSE-2.0">http://www.apache.org/licenses/LICENSE-2.0</a>)</li>
+<li>MIT license (<a href="LICENSE-MIT">LICENSE-MIT</a> or <a href="http://opensource.org/licenses/MIT">http://opensource.org/licenses/MIT</a>)</li>
+</ul>
+<p>at your option.</p>
+<h4 id="contribution"><a class="doc-anchor" href="#contribution">§</a>Contribution</h4>
+<p>Unless you explicitly state otherwise, any contribution intentionally submitted
+for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
+dual licensed as above, without any additional terms or conditions.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.ByLength.html" title="struct schnellru::ByLength">ByLength</a></div><div class="desc docblock-short">A limiter for a map which is limited by the number of elements.</div></li><li><div class="item-name"><a class="struct" href="struct.ByMemoryUsage.html" title="struct schnellru::ByMemoryUsage">ByMemoryUsage</a></div><div class="desc docblock-short">A limiter for a map which is limited by memory usage.</div></li><li><div class="item-name"><a class="struct" href="struct.DefaultHasher.html" title="struct schnellru::DefaultHasher">DefaultHasher</a></div><div class="desc docblock-short">The default hasher used by the LRU map.</div></li><li><div class="item-name"><a class="struct" href="struct.Drain.html" title="struct schnellru::Drain">Drain</a></div><div class="desc docblock-short">A drain iterator for the LRU map.</div></li><li><div class="item-name"><a class="struct" href="struct.Iter.html" title="struct schnellru::Iter">Iter</a></div><div class="desc docblock-short">An iterator for the LRU map.</div></li><li><div class="item-name"><a class="struct" href="struct.IterMut.html" title="struct schnellru::IterMut">IterMut</a></div><div class="desc docblock-short">An mutable iterator for the LRU map, values are mutable.</div></li><li><div class="item-name"><a class="struct" href="struct.LruMap.html" title="struct schnellru::LruMap">LruMap</a></div><div class="desc docblock-short">An LRU hash map.</div></li><li><div class="item-name"><a class="struct" href="struct.RandomState.html" title="struct schnellru::RandomState">RandomState</a></div><div class="desc docblock-short">The default hash builder used by the LRU map.</div></li><li><div class="item-name"><a class="struct" href="struct.Unlimited.html" title="struct schnellru::Unlimited">Unlimited</a></div><div class="desc docblock-short">A limiter for a map which can hold an unlimited number of elements.</div></li><li><div class="item-name"><a class="struct" href="struct.UnlimitedCompact.html" title="struct schnellru::UnlimitedCompact">UnlimitedCompact</a></div><div class="desc docblock-short">A limiter for a map which can hold an unlimited** number of elements.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.Limiter.html" title="trait schnellru::Limiter">Limiter</a></div><div class="desc docblock-short">A trait used to customize the behavior and the limits of the LRU map.</div></li></ul></section></div></main></body></html>

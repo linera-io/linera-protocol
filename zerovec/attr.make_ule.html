@@ -1,0 +1,77 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Generate a corresponding `ULE` type and the relevant `AsULE` implementations for this type"><title>make_ule in zerovec - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="zerovec" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc attr"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../zerovec/index.html">zerovec</a><span class="version">0.10.4</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Attribute Macro <a href="index.html">zerovec</a>::<wbr><a class="attr" href="#">make_ule</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/zerovec_derive/lib.rs.html#31">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>#[make_ule]</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Generate a corresponding <a href="ule/trait.ULE.html" title="trait zerovec::ule::ULE"><code>ULE</code></a> type and the relevant <a href="ule/trait.AsULE.html" title="trait zerovec::ule::AsULE"><code>AsULE</code></a> implementations for this type</p>
+<p>This can be attached to structs containing only <a href="ule/trait.AsULE.html" title="trait zerovec::ule::AsULE"><code>AsULE</code></a> types, or C-like enums that have <code>#[repr(u8)]</code>
+and all explicit discriminants.</p>
+<p>The type must be <a href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Copy.html" title="trait core::marker::Copy"><code>Copy</code></a>, <a href="https://doc.rust-lang.org/1.81.0/core/cmp/trait.PartialEq.html" title="trait core::cmp::PartialEq"><code>PartialEq</code></a>, and <a href="https://doc.rust-lang.org/1.81.0/core/cmp/trait.Eq.html" title="trait core::cmp::Eq"><code>Eq</code></a>.</p>
+<p><code>#[make_ule]</code> will automatically derive the following traits on the <a href="ule/trait.ULE.html" title="trait zerovec::ule::ULE"><code>ULE</code></a> type:</p>
+<ul>
+<li><a href="https://doc.rust-lang.org/1.81.0/core/cmp/trait.Ord.html" title="trait core::cmp::Ord"><code>Ord</code></a> and <a href="https://doc.rust-lang.org/1.81.0/core/cmp/trait.PartialOrd.html" title="trait core::cmp::PartialOrd"><code>PartialOrd</code></a></li>
+<li><a href="maps/trait.ZeroMapKV.html" title="trait zerovec::maps::ZeroMapKV"><code>ZeroMapKV</code></a></li>
+</ul>
+<p>To disable one of the automatic derives, use <code>#[zerovec::skip_derive(...)]</code> like so: <code>#[zerovec::skip_derive(ZeroMapKV)]</code>.
+<code>Ord</code> and <code>PartialOrd</code> are implemented as a unit and can only be disabled as a group with <code>#[zerovec::skip_derive(Ord)]</code>.</p>
+<p>The following traits are available to derive, but not automatic:</p>
+<ul>
+<li><a href="https://doc.rust-lang.org/1.81.0/core/fmt/macros/derive.Debug.html" title="derive core::fmt::macros::Debug"><code>Debug</code></a></li>
+</ul>
+<p>To enable one of these additional derives, use <code>#[zerovec::derive(...)]</code> like so: <code>#[zerovec::derive(Debug)]</code>.</p>
+<p>In most cases these derives will defer to the impl of the same trait on the current type, so such impls must exist.</p>
+<p>For enums, this attribute will generate a crate-public <code>fn new_from_u8(value: u8) -&gt; Option&lt;Self&gt;</code>
+method on the main type that allows one to construct the value from a u8. If this method is desired
+to be more public, it should be wrapped.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>zerovec::ZeroVec;
+
+<span class="attr">#[zerovec::make_ule(DateULE)]
+#[derive(
+    Copy,
+    Clone,
+    PartialEq,
+    Eq,
+    Ord,
+    PartialOrd,
+    serde::Serialize,
+    serde::Deserialize,
+)]
+</span><span class="kw">struct </span>Date {
+    y: u64,
+    m: u8,
+    d: u8,
+}
+
+<span class="attr">#[derive(serde::Serialize, serde::Deserialize)]
+</span><span class="kw">struct </span>Dates&lt;<span class="lifetime">'a</span>&gt; {
+    <span class="attr">#[serde(borrow)]
+    </span>dates: ZeroVec&lt;<span class="lifetime">'a</span>, Date&gt;,
+}
+
+<span class="kw">let </span>dates = Dates {
+    dates: ZeroVec::alloc_from_slice(<span class="kw-2">&amp;</span>[
+        Date {
+            y: <span class="number">1985</span>,
+            m: <span class="number">9</span>,
+            d: <span class="number">3</span>,
+        },
+        Date {
+            y: <span class="number">1970</span>,
+            m: <span class="number">2</span>,
+            d: <span class="number">20</span>,
+        },
+        Date {
+            y: <span class="number">1990</span>,
+            m: <span class="number">6</span>,
+            d: <span class="number">13</span>,
+        },
+    ]),
+};
+
+<span class="kw">let </span>bincode_bytes =
+    bincode::serialize(<span class="kw-2">&amp;</span>dates).expect(<span class="string">"Serialization should be successful"</span>);
+
+<span class="comment">// Will deserialize without allocations
+</span><span class="kw">let </span>deserialized: Dates = bincode::deserialize(<span class="kw-2">&amp;</span>bincode_bytes)
+    .expect(<span class="string">"Deserialization should be successful"</span>);
+
+<span class="macro">assert_eq!</span>(deserialized.dates.get(<span class="number">1</span>).unwrap().y, <span class="number">1970</span>);
+<span class="macro">assert_eq!</span>(deserialized.dates.get(<span class="number">2</span>).unwrap().d, <span class="number">13</span>);</code></pre></div>
+<p>Full docs for this proc macro can be found on the <a href="docs.rs/zerovec"><code>zerovec</code></a> crate.</p>
+</div></details></section></div></main></body></html>

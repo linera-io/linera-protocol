@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["ErrorReportingUtf16Chars","Utf16CharIndices","Utf16Chars","Utf16CharsError"],"trait":["Utf16CharsEx"]};

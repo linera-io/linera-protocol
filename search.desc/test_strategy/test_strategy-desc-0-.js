@@ -1,0 +1,1 @@
+searchState.loadedDescShard("test_strategy", 0, "This crate provides two procedural macros, …")

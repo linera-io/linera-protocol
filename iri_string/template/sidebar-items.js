@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["context","simple_context"],"struct":["CreationError","Error","Expanded","UriTemplateStr","UriTemplateString","UriTemplateVariables"],"type":["VarName"]};

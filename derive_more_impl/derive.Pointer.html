@@ -1,0 +1,210 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="What `#[derive(Display)]` generates"><title>Pointer in derive_more_impl - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="derive_more_impl" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc derive"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../derive_more_impl/index.html">derive_more_impl</a><span class="version">1.0.0</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Derive Macro <a href="index.html">derive_more_impl</a>::<wbr><a class="derive" href="#">Pointer</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/derive_more_impl/lib.rs.html#185">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>#[derive(Pointer)]
+{
+    <span class="comment">// Attributes available to this derive:</span>
+    #[pointer]
+}
+</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="what-derivedisplay-generates"><a class="doc-anchor" href="#what-derivedisplay-generates">§</a>What <code>#[derive(Display)]</code> generates</h2>
+<p>Deriving <code>Display</code> will generate a <code>Display</code> implementation, with a <code>fmt</code>
+method that matches <code>self</code> and each of its variants. In the case of a struct or union,
+only a single variant is available, and it is thus equivalent to a simple <code>let</code> statement.
+In the case of an enum, each of its variants is matched.</p>
+<p>For each matched variant, a <code>write!</code> expression will be generated with
+the supplied format, or an automatically inferred one.</p>
+<p>You specify the format on each variant by writing e.g. <code>#[display("my val: {}", some_val * 2)]</code>.
+For enums, you can either specify it on each variant, or on the enum as a whole.</p>
+<p>For variants that don’t have a format specified, it will simply defer to the format of the
+inner variable. If there is no such variable, or there is more than 1, an error is generated.</p>
+<h3 id="the-format-of-the-format"><a class="doc-anchor" href="#the-format-of-the-format">§</a>The format of the format</h3>
+<p>You supply a format by attaching an attribute of the syntax: <code>#[display("...", args...)]</code>.
+The format supplied is passed verbatim to <code>write!</code>.</p>
+<p>The variables available in the arguments is <code>self</code> and each member of the
+struct or enum variant, with members of tuple structs being named with a
+leading underscore and their index, i.e. <code>_0</code>, <code>_1</code>, <code>_2</code>, etc. Due to
+ownership/lifetime limitations the member variables are all references to the
+fields, except when used directly in the format string. For most purposes this
+detail doesn’t matter, but it is quite important when using <code>Pointer</code>
+formatting. If you don’t use the <code>{field:p}</code> syntax, you have to dereference
+once to get the address of the field itself, instead of the address of the
+reference to the field:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Display)]
+#[display(<span class="string">"{field:p} {:p}"</span>, <span class="kw-2">*</span>field)]
+</span><span class="kw">struct </span>RefInt&lt;<span class="lifetime">'a</span>&gt; {
+    field: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>i32,
+}
+
+<span class="kw">let </span>a = <span class="kw-2">&amp;</span><span class="number">123</span>;
+<span class="macro">assert_eq!</span>(<span class="macro">format!</span>(<span class="string">"{}"</span>, RefInt{field: <span class="kw-2">&amp;</span>a}), <span class="macro">format!</span>(<span class="string">"{a:p} {:p}"</span>, a));</code></pre></div>
+<p>For enums you can also specify a shared format on the enum itself instead of
+the variant. This format is used for each of the variants, and can be
+customized per variant by including the special <code>{_variant}</code> placeholder in
+this shared format, which is then replaced by the format string that’s provided
+on the variant.</p>
+<h4 id="other-formatting-traits"><a class="doc-anchor" href="#other-formatting-traits">§</a>Other formatting traits</h4>
+<p>The syntax does not change, but the name of the attribute is the snake case version of the trait.
+E.g. <code>Octal</code> -&gt; <code>octal</code>, <code>Pointer</code> -&gt; <code>pointer</code>, <code>UpperHex</code> -&gt; <code>upper_hex</code>.</p>
+<p>Note, that <code>Debug</code> has a slightly different API and semantics, described in its docs, and so,
+requires a separate <code>debug</code> feature.</p>
+<h4 id="generic-data-types"><a class="doc-anchor" href="#generic-data-types">§</a>Generic data types</h4>
+<p>When deriving <code>Display</code> (or other formatting trait) for a generic struct/enum, all generic type
+arguments used during formatting are bound by respective formatting trait.
+Bounds can only be inferred this way if a field is used directly in the interpolation.</p>
+<p>E.g., for a structure <code>Foo</code> defined like this:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Display)]
+#[display(<span class="string">"{a} {b} {c:?} {d:p}"</span>)]
+</span><span class="kw">struct </span>Foo&lt;<span class="lifetime">'a</span>, T1, T2: Trait, T3&gt; {
+    a: T1,
+    b: &lt;T2 <span class="kw">as </span>Trait&gt;::Type,
+    c: Vec&lt;T3&gt;,
+    d: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>T1,
+}</code></pre></div>
+<p>The following where clauses would be generated:</p>
+<ul>
+<li><code>T1: Display</code></li>
+<li><code>&lt;T2 as Trait&gt;::Type: Display</code></li>
+<li><code>Vec&lt;T3&gt;: Debug</code></li>
+<li><code>&amp;'a T1: Pointer</code></li>
+</ul>
+<h4 id="custom-trait-bounds"><a class="doc-anchor" href="#custom-trait-bounds">§</a>Custom trait bounds</h4>
+<p>Sometimes you may want to specify additional trait bounds on your generic type parameters, so that they
+could be used during formatting. This can be done with a <code>#[display(bound(...))]</code> attribute.</p>
+<p><code>#[display(bound(...))]</code> accepts code tokens in a format similar to the format
+used in angle bracket list (or <code>where</code> clause predicates): <code>T: MyTrait, U: Trait1 + Trait2</code>.</p>
+<p><code>#[display("fmt", ...)]</code> arguments are parsed as an arbitrary Rust expression and passed to generated
+<code>write!</code> as-is, it’s impossible to meaningfully infer any kind of trait bounds for generic type parameters
+used this way. That means that you’ll <strong>have to</strong> explicitly specify all the required trait bounds of the
+expression. Either in the struct/enum definition, or via <code>#[display(bound(...))]</code> attribute.</p>
+<p>Explicitly specified bounds are added to the inferred ones. Note how no <code>V: Display</code> bound is necessary,
+because it’s inferred already.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Display)]
+#[display(bound(T: MyTrait, U: Display))]
+#[display(<span class="string">"{} {} {}"</span>, a.my_function(), b.to_string().len(), c)]
+</span><span class="kw">struct </span>MyStruct&lt;T, U, V&gt; {
+    a: T,
+    b: U,
+    c: V,
+}</code></pre></div>
+<h4 id="transparency"><a class="doc-anchor" href="#transparency">§</a>Transparency</h4>
+<p>If the <code>#[display("...", args...)]</code> attribute is omitted, the implementation transparently delegates to the format
+of the inner type, so all the additional <a href="https://doc.rust-lang.org/stable/std/fmt/index.html#formatting-parameters">formatting parameters</a> do work as expected:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Display)]
+</span><span class="kw">struct </span>MyInt(i32);
+
+<span class="macro">assert_eq!</span>(<span class="macro">format!</span>(<span class="string">"{:03}"</span>, MyInt(<span class="number">7</span>)), <span class="string">"007"</span>);</code></pre></div>
+<p>If the <code>#[display("...", args...)]</code> attribute is specified and can be trivially substituted with a transparent
+delegation call to the inner type, then additional <a href="https://doc.rust-lang.org/stable/std/fmt/index.html#formatting-parameters">formatting parameters</a> will work too:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Display)]
+#[display(<span class="string">"{_0:o}"</span>)] </span><span class="comment">// the same as calling `Octal::fmt()`
+</span><span class="kw">struct </span>MyOctalInt(i32);
+
+<span class="comment">// so, additional formatting parameters do work transparently
+</span><span class="macro">assert_eq!</span>(<span class="macro">format!</span>(<span class="string">"{:03}"</span>, MyOctalInt(<span class="number">9</span>)), <span class="string">"011"</span>);
+
+<span class="attr">#[derive(Display)]
+#[display(<span class="string">"{_0:02b}"</span>)]   </span><span class="comment">// cannot be trivially substituted with `Binary::fmt()`,
+</span><span class="kw">struct </span>MyBinaryInt(i32); <span class="comment">// because of specified formatting parameters
+
+// so, additional formatting parameters have no effect
+</span><span class="macro">assert_eq!</span>(<span class="macro">format!</span>(<span class="string">"{:07}"</span>, MyBinaryInt(<span class="number">2</span>)), <span class="string">"10"</span>);</code></pre></div>
+<p>If, for some reason, transparency in trivial cases is not desired, it may be suppressed explicitly
+either with the <a href="https://doc.rust-lang.org/stable/std/macro.format_args.html"><code>format_args!()</code></a> macro usage:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Display)]
+#[display(<span class="string">"{}"</span>, <span class="macro">format_args!</span>(<span class="string">"{_0:o}"</span>))] </span><span class="comment">// `format_args!()` obscures the inner type
+</span><span class="kw">struct </span>MyOctalInt(i32);
+
+<span class="comment">// so, additional formatting parameters have no effect
+</span><span class="macro">assert_eq!</span>(<span class="macro">format!</span>(<span class="string">"{:07}"</span>, MyOctalInt(<span class="number">9</span>)), <span class="string">"11"</span>);</code></pre></div>
+<p>Or by adding <a href="https://doc.rust-lang.org/stable/std/fmt/index.html#formatting-parameters">formatting parameters</a> which cause no visual effects:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Display)]
+#[display(<span class="string">"{_0:^o}"</span>)] </span><span class="comment">// `^` is centering, but in absence of additional width has no effect
+</span><span class="kw">struct </span>MyOctalInt(i32);
+
+<span class="comment">// and so, additional formatting parameters have no effect
+</span><span class="macro">assert_eq!</span>(<span class="macro">format!</span>(<span class="string">"{:07}"</span>, MyOctalInt(<span class="number">9</span>)), <span class="string">"11"</span>);</code></pre></div>
+<h3 id="example-usage"><a class="doc-anchor" href="#example-usage">§</a>Example usage</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Display)]
+</span><span class="kw">struct </span>MyInt(i32);
+
+<span class="attr">#[derive(Display)]
+#[display(<span class="string">"({x}, {y})"</span>)]
+</span><span class="kw">struct </span>Point2D {
+    x: i32,
+    y: i32,
+}
+
+<span class="attr">#[derive(Display)]
+#[display(<span class="string">"Enum E: {_variant}"</span>)]
+</span><span class="kw">enum </span>E {
+    Uint(u32),
+    <span class="attr">#[display(<span class="string">"I am B {:b}"</span>, i)]
+    </span>Binary {
+        i: i8,
+    },
+    <span class="attr">#[display(<span class="string">"I am C {}"</span>, _0.display())]
+    </span>Path(PathBuf),
+}
+
+<span class="attr">#[derive(Display)]
+#[display(<span class="string">"Enum E2: {_0:?}"</span>)]
+</span><span class="kw">enum </span>E2 {
+    Uint(u32),
+    String(<span class="kw-2">&amp;</span><span class="lifetime">'static </span>str, <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str),
+}
+
+<span class="attr">#[derive(Display)]
+#[display(<span class="string">"Hello there!"</span>)]
+</span><span class="kw">union </span>U {
+    i: u32,
+}
+
+<span class="attr">#[derive(Octal)]
+#[octal(<span class="string">"7"</span>)]
+</span><span class="kw">struct </span>S;
+
+<span class="attr">#[derive(UpperHex)]
+#[upper_hex(<span class="string">"UpperHex"</span>)]
+</span><span class="kw">struct </span>UH;
+
+<span class="attr">#[derive(Display)]
+</span><span class="kw">struct </span>Unit;
+
+<span class="attr">#[derive(Display)]
+</span><span class="kw">struct </span>UnitStruct {}
+
+<span class="attr">#[derive(Display)]
+#[display(<span class="string">"{}"</span>, <span class="self">self</span>.sign())]
+</span><span class="kw">struct </span>PositiveOrNegative {
+    x: i32,
+}
+
+<span class="kw">impl </span>PositiveOrNegative {
+    <span class="kw">fn </span>sign(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>str {
+        <span class="kw">if </span><span class="self">self</span>.x &gt;= <span class="number">0 </span>{
+            <span class="string">"Positive"
+        </span>} <span class="kw">else </span>{
+            <span class="string">"Negative"
+        </span>}
+    }
+}
+
+<span class="macro">assert_eq!</span>(MyInt(-<span class="number">2</span>).to_string(), <span class="string">"-2"</span>);
+<span class="macro">assert_eq!</span>(Point2D { x: <span class="number">3</span>, y: <span class="number">4 </span>}.to_string(), <span class="string">"(3, 4)"</span>);
+<span class="macro">assert_eq!</span>(E::Uint(<span class="number">2</span>).to_string(), <span class="string">"Enum E: 2"</span>);
+<span class="macro">assert_eq!</span>(E::Binary { i: -<span class="number">2 </span>}.to_string(), <span class="string">"Enum E: I am B 11111110"</span>);
+<span class="macro">assert_eq!</span>(E::Path(<span class="string">"abc"</span>.into()).to_string(), <span class="string">"Enum E: I am C abc"</span>);
+<span class="macro">assert_eq!</span>(E2::Uint(<span class="number">2</span>).to_string(), <span class="string">"Enum E2: 2"</span>);
+<span class="macro">assert_eq!</span>(E2::String(<span class="string">"shown"</span>, <span class="string">"ignored"</span>).to_string(), <span class="string">"Enum E2: \"shown\""</span>);
+<span class="macro">assert_eq!</span>(U { i: <span class="number">2 </span>}.to_string(), <span class="string">"Hello there!"</span>);
+<span class="macro">assert_eq!</span>(<span class="macro">format!</span>(<span class="string">"{:o}"</span>, S), <span class="string">"7"</span>);
+<span class="macro">assert_eq!</span>(<span class="macro">format!</span>(<span class="string">"{:X}"</span>, UH), <span class="string">"UpperHex"</span>);
+<span class="macro">assert_eq!</span>(Unit.to_string(), <span class="string">"Unit"</span>);
+<span class="macro">assert_eq!</span>(UnitStruct {}.to_string(), <span class="string">"UnitStruct"</span>);
+<span class="macro">assert_eq!</span>(PositiveOrNegative { x: <span class="number">1 </span>}.to_string(), <span class="string">"Positive"</span>);
+<span class="macro">assert_eq!</span>(PositiveOrNegative { x: -<span class="number">1 </span>}.to_string(), <span class="string">"Negative"</span>);</code></pre></div>
+</div></details></section></div></main></body></html>

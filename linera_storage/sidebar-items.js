@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["list_all_blob_ids"],"struct":["ChainRuntimeContext","ChainStatesFirstAssignment","DbStorage","TestClock","WallClock"],"trait":["Clock","Storage"]};

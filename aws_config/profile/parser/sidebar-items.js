@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ProfileFileLoadError"],"fn":["load"],"struct":["Profile","ProfileParseError","ProfileSet","Property"]};

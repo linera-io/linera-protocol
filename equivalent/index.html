@@ -1,0 +1,56 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="`Equivalent` and `Comparable` are traits for key comparison in maps."><title>equivalent - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="equivalent" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../equivalent/index.html">equivalent</a><span class="version">1.0.1</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#traits">Traits</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">equivalent</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/equivalent/lib.rs.html#1-113">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><a href="trait.Equivalent.html" title="trait equivalent::Equivalent"><code>Equivalent</code></a> and <a href="trait.Comparable.html" title="trait equivalent::Comparable"><code>Comparable</code></a> are traits for key comparison in maps.</p>
+<p>These may be used in the implementation of maps where the lookup type <code>Q</code>
+may be different than the stored key type <code>K</code>.</p>
+<ul>
+<li><code>Q: Equivalent&lt;K&gt;</code> checks for equality, similar to the <code>HashMap&lt;K, V&gt;</code>
+constraint <code>K: Borrow&lt;Q&gt;, Q: Eq</code>.</li>
+<li><code>Q: Comparable&lt;K&gt;</code> checks the ordering, similar to the <code>BTreeMap&lt;K, V&gt;</code>
+constraint <code>K: Borrow&lt;Q&gt;, Q: Ord</code>.</li>
+</ul>
+<p>These traits are not used by the maps in the standard library, but they may
+add more flexibility in third-party map implementations, especially in
+situations where a strict <code>K: Borrow&lt;Q&gt;</code> relationship is not available.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>equivalent::<span class="kw-2">*</span>;
+<span class="kw">use </span>std::cmp::Ordering;
+
+<span class="kw">pub struct </span>Pair&lt;A, B&gt;(<span class="kw">pub </span>A, <span class="kw">pub </span>B);
+
+<span class="kw">impl</span>&lt;<span class="lifetime">'a</span>, A: <span class="question-mark">?</span>Sized, B: <span class="question-mark">?</span>Sized, C, D&gt; Equivalent&lt;(C, D)&gt; <span class="kw">for </span>Pair&lt;<span class="kw-2">&amp;</span><span class="lifetime">'a </span>A, <span class="kw-2">&amp;</span><span class="lifetime">'a </span>B&gt;
+<span class="kw">where
+    </span>A: Equivalent&lt;C&gt;,
+    B: Equivalent&lt;D&gt;,
+{
+    <span class="kw">fn </span>equivalent(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>(C, D)) -&gt; bool {
+        <span class="self">self</span>.<span class="number">0</span>.equivalent(<span class="kw-2">&amp;</span>key.<span class="number">0</span>) &amp;&amp; <span class="self">self</span>.<span class="number">1</span>.equivalent(<span class="kw-2">&amp;</span>key.<span class="number">1</span>)
+    }
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">'a</span>, A: <span class="question-mark">?</span>Sized, B: <span class="question-mark">?</span>Sized, C, D&gt; Comparable&lt;(C, D)&gt; <span class="kw">for </span>Pair&lt;<span class="kw-2">&amp;</span><span class="lifetime">'a </span>A, <span class="kw-2">&amp;</span><span class="lifetime">'a </span>B&gt;
+<span class="kw">where
+    </span>A: Comparable&lt;C&gt;,
+    B: Comparable&lt;D&gt;,
+{
+    <span class="kw">fn </span>compare(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>(C, D)) -&gt; Ordering {
+        <span class="kw">match </span><span class="self">self</span>.<span class="number">0</span>.compare(<span class="kw-2">&amp;</span>key.<span class="number">0</span>) {
+            Ordering::Equal =&gt; <span class="self">self</span>.<span class="number">1</span>.compare(<span class="kw-2">&amp;</span>key.<span class="number">1</span>),
+            not_equal =&gt; not_equal,
+        }
+    }
+}
+
+<span class="kw">fn </span>main() {
+    <span class="kw">let </span>key = (String::from(<span class="string">"foo"</span>), String::from(<span class="string">"bar"</span>));
+    <span class="kw">let </span>q1 = Pair(<span class="string">"foo"</span>, <span class="string">"bar"</span>);
+    <span class="kw">let </span>q2 = Pair(<span class="string">"boo"</span>, <span class="string">"bar"</span>);
+    <span class="kw">let </span>q3 = Pair(<span class="string">"foo"</span>, <span class="string">"baz"</span>);
+
+    <span class="macro">assert!</span>(q1.equivalent(<span class="kw-2">&amp;</span>key));
+    <span class="macro">assert!</span>(!q2.equivalent(<span class="kw-2">&amp;</span>key));
+    <span class="macro">assert!</span>(!q3.equivalent(<span class="kw-2">&amp;</span>key));
+
+    <span class="macro">assert_eq!</span>(q1.compare(<span class="kw-2">&amp;</span>key), Ordering::Equal);
+    <span class="macro">assert_eq!</span>(q2.compare(<span class="kw-2">&amp;</span>key), Ordering::Less);
+    <span class="macro">assert_eq!</span>(q3.compare(<span class="kw-2">&amp;</span>key), Ordering::Greater);
+}</code></pre></div>
+</div></details><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.Comparable.html" title="trait equivalent::Comparable">Comparable</a></div><div class="desc docblock-short">Key ordering trait.</div></li><li><div class="item-name"><a class="trait" href="trait.Equivalent.html" title="trait equivalent::Equivalent">Equivalent</a></div><div class="desc docblock-short">Key equivalence trait.</div></li></ul></section></div></main></body></html>

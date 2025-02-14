@@ -1,0 +1,1 @@
+searchState.loadedDescShard("frunk_derives", 0, "Frunk Derives\nDerives a Generic instance based on HList for a given …\nDerives a Generic instance based on Field + HList for a …")

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["BuiltinDeserializationErrorKind","BuiltinTypeCheckErrorKind"],"struct":["BuiltinDeserializationError","BuiltinTypeCheckError","ColumnIterator","RawColumn"]};

@@ -1,0 +1,51 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Define a scalar"><title>scalar in async_graphql - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="async_graphql" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../async_graphql/index.html">async_graphql</a><span class="version">7.0.2</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="index.html">async_graphql</a>::<wbr><a class="macro" href="#">scalar</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/async_graphql/resolver_utils/scalar.rs.html#99-135">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><span class="macro">macro_rules!</span> scalar {
+    (<span class="macro-nonterminal">$ty</span>:ty, <span class="macro-nonterminal">$name</span>:literal, <span class="macro-nonterminal">$desc</span>:literal, <span class="macro-nonterminal">$specified_by_url</span>:literal) =&gt; { ... };
+    (<span class="macro-nonterminal">$ty</span>:ty, <span class="macro-nonterminal">$name</span>:literal, <span class="macro-nonterminal">$desc</span>:literal) =&gt; { ... };
+    (<span class="macro-nonterminal">$ty</span>:ty, <span class="macro-nonterminal">$name</span>:literal) =&gt; { ... };
+    (<span class="macro-nonterminal">$ty</span>:ty) =&gt; { ... };
+}</pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Define a scalar</p>
+<p>If your type implemented <code>serde::Serialize</code> and <code>serde::Deserialize</code>, then
+you can use this macro to define a scalar more simply. It helps you
+implement the <code>ScalarType::parse</code> and <code>ScalarType::to_value</code> functions by
+calling the <a href="fn.from_value.html">from_value</a> and
+<a href="fn.to_value.html">to_value</a> functions.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>async_graphql::<span class="kw-2">*</span>;
+<span class="kw">use </span>serde::{Serialize, Deserialize};
+<span class="kw">use </span>std::collections::HashMap;
+
+<span class="attr">#[derive(Serialize, Deserialize)]
+</span><span class="kw">struct </span>MyValue {
+    a: i32,
+    b: HashMap&lt;String, i32&gt;,     
+}
+
+<span class="macro">scalar!</span>(MyValue);
+
+<span class="comment">// Rename to `MV`.
+// scalar!(MyValue, "MV");
+
+// Rename to `MV` and add description.
+// scalar!(MyValue, "MV", "This is my value");
+
+// Rename to `MV`, add description and specifiedByURL.
+// scalar!(MyValue, "MV", "This is my value", "https://tools.ietf.org/html/rfc4122");
+
+</span><span class="kw">struct </span>Query;
+
+<span class="attr">#[Object]
+</span><span class="kw">impl </span>Query {
+    <span class="kw">async fn </span>value(<span class="kw-2">&amp;</span><span class="self">self</span>, input: MyValue) -&gt; MyValue {
+        input
+    }
+}
+
+<span class="kw">let </span>schema = Schema::new(Query, EmptyMutation, EmptySubscription);
+<span class="kw">let </span>res = schema.execute(<span class="string">r#"{ value(input: {a: 10, b: {v1: 1, v2: 2} }) }"#</span>).<span class="kw">await</span>.into_result().unwrap().data;
+<span class="macro">assert_eq!</span>(res, <span class="macro">value!</span>({
+    <span class="string">"value"</span>: {
+        <span class="string">"a"</span>: <span class="number">10</span>,
+        <span class="string">"b"</span>: {<span class="string">"v1"</span>: <span class="number">1</span>, <span class="string">"v2"</span>: <span class="number">2</span>},
+    }
+}));</code></pre></div>
+</div></details></section></div></main></body></html>

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ExpectedCall"],"fn":["create_dummy_message_context","create_dummy_operation_context","create_dummy_query_context","create_dummy_user_application_description","create_dummy_user_application_registrations","test_accounts_strategy"],"struct":["MockApplication","MockApplicationInstance","SystemExecutionState"],"trait":["RegisterMockApplication"]};

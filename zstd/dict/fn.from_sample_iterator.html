@@ -1,0 +1,34 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Train a dictionary from multiple samples."><title>from_sample_iterator in zstd::dict - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="zstd" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../zstd/index.html">zstd</a><span class="version">0.13.2</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In zstd::dict</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../index.html">zstd</a>::<wbr><a href="index.html">dict</a>::<wbr><a class="fn" href="#">from_sample_iterator</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/zstd/dict.rs.html#202-220">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn from_sample_iterator&lt;I, R&gt;(
+    samples: I,
+    max_size: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>,
+) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>&gt;&gt;<div class="where">where
+    I: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/iter/traits/collect/trait.IntoIterator.html" title="trait core::iter::traits::collect::IntoIterator">IntoIterator</a>&lt;Item = <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;R&gt;&gt;,
+    R: <a class="trait" href="https://doc.rust-lang.org/1.81.0/std/io/trait.Read.html" title="trait std::io::Read">Read</a>,</div></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Train a dictionary from multiple samples.</p>
+<p>Unlike <a href="fn.from_samples.html" title="fn zstd::dict::from_samples"><code>from_samples</code></a>, this does not require having a list of all samples.
+It also allows running into an error when iterating through the samples.</p>
+<p>They will still be copied to a continuous array and fed to <a href="fn.from_continuous.html" title="fn zstd::dict::from_continuous"><code>from_continuous</code></a>.</p>
+<ul>
+<li><code>samples</code> is an iterator of individual samples to train on.</li>
+<li><code>max_size</code> is the maximum size of the dictionary to generate.</li>
+</ul>
+<p>The result is the dictionary data. You can, for example, feed it to <a href="struct.CDict.html#method.create" title="associated function zstd::dict::CDict::create"><code>CDict::create</code></a>.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// Train from a couple of json files.
+</span><span class="kw">let </span>dict_buffer = zstd::dict::from_sample_iterator(
+    [<span class="string">"file_a.json"</span>, <span class="string">"file_b.json"</span>]
+        .into_iter()
+        .map(|filename| std::fs::File::open(filename)),
+    <span class="number">10_000</span>,  <span class="comment">// 10kB dictionary
+</span>).unwrap();</code></pre></div>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io::BufRead <span class="kw">as _</span>;
+<span class="comment">// Treat each line from stdin as a separate sample.
+</span><span class="kw">let </span>dict_buffer = zstd::dict::from_sample_iterator(
+    std::io::stdin().lock().lines().map(|line: std::io::Result&lt;String&gt;| {
+        <span class="comment">// Transform each line into a `Cursor&lt;Vec&lt;u8&gt;&gt;` so they implement Read.
+        </span>line.map(String::into_bytes)
+            .map(std::io::Cursor::new)
+    }),
+    <span class="number">10_000</span>,  <span class="comment">// 10kB dictionary
+</span>).unwrap();</code></pre></div>
+</div></details></section></div></main></body></html>

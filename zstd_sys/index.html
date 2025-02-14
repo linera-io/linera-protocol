@@ -1,0 +1,239 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Low-level bindings to the zstd library."><title>zstd_sys - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="zstd_sys" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../zstd_sys/index.html">zstd_sys</a><span class="version">2.0.13+zstd.1.5.6</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#constants">Constants</a></li><li><a href="#functions">Functions</a></li><li><a href="#types">Type Aliases</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">zstd_sys</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/zstd_sys/lib.rs.html#1-38">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Low-level bindings to the <a href="https://facebook.github.io/zstd/">zstd</a> library.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.ZDICT_params_t.html" title="struct zstd_sys::ZDICT_params_t">ZDICT_params_t</a></div></li><li><div class="item-name"><a class="struct" href="struct.ZSTD_CCtx_s.html" title="struct zstd_sys::ZSTD_CCtx_s">ZSTD_CCtx_s</a></div></li><li><div class="item-name"><a class="struct" href="struct.ZSTD_CDict_s.html" title="struct zstd_sys::ZSTD_CDict_s">ZSTD_CDict_s</a></div></li><li><div class="item-name"><a class="struct" href="struct.ZSTD_DCtx_s.html" title="struct zstd_sys::ZSTD_DCtx_s">ZSTD_DCtx_s</a></div></li><li><div class="item-name"><a class="struct" href="struct.ZSTD_DDict_s.html" title="struct zstd_sys::ZSTD_DDict_s">ZSTD_DDict_s</a></div></li><li><div class="item-name"><a class="struct" href="struct.ZSTD_bounds.html" title="struct zstd_sys::ZSTD_bounds">ZSTD_bounds</a></div></li><li><div class="item-name"><a class="struct" href="struct.ZSTD_inBuffer_s.html" title="struct zstd_sys::ZSTD_inBuffer_s">ZSTD_inBuffer_s</a></div><div class="desc docblock-short">Streaming</div></li><li><div class="item-name"><a class="struct" href="struct.ZSTD_outBuffer_s.html" title="struct zstd_sys::ZSTD_outBuffer_s">ZSTD_outBuffer_s</a></div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.ZSTD_EndDirective.html" title="enum zstd_sys::ZSTD_EndDirective">ZSTD_EndDirective</a></div></li><li><div class="item-name"><a class="enum" href="enum.ZSTD_ResetDirective.html" title="enum zstd_sys::ZSTD_ResetDirective">ZSTD_ResetDirective</a></div></li><li><div class="item-name"><a class="enum" href="enum.ZSTD_cParameter.html" title="enum zstd_sys::ZSTD_cParameter">ZSTD_cParameter</a></div></li><li><div class="item-name"><a class="enum" href="enum.ZSTD_dParameter.html" title="enum zstd_sys::ZSTD_dParameter">ZSTD_dParameter</a></div><div class="desc docblock-short">Advanced decompression API (Requires v1.4.0+)</div></li><li><div class="item-name"><a class="enum" href="enum.ZSTD_strategy.html" title="enum zstd_sys::ZSTD_strategy">ZSTD_strategy</a></div><div class="desc docblock-short">Advanced compression API (Requires v1.4.0+)</div></li></ul><h2 id="constants" class="section-header">Constants<a href="#constants" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="constant" href="constant.ZSTD_BLOCKSIZELOG_MAX.html" title="constant zstd_sys::ZSTD_BLOCKSIZELOG_MAX">ZSTD_BLOCKSIZELOG_MAX</a></div></li><li><div class="item-name"><a class="constant" href="constant.ZSTD_BLOCKSIZE_MAX.html" title="constant zstd_sys::ZSTD_BLOCKSIZE_MAX">ZSTD_BLOCKSIZE_MAX</a></div></li><li><div class="item-name"><a class="constant" href="constant.ZSTD_CLEVEL_DEFAULT.html" title="constant zstd_sys::ZSTD_CLEVEL_DEFAULT">ZSTD_CLEVEL_DEFAULT</a></div></li><li><div class="item-name"><a class="constant" href="constant.ZSTD_CONTENTSIZE_ERROR.html" title="constant zstd_sys::ZSTD_CONTENTSIZE_ERROR">ZSTD_CONTENTSIZE_ERROR</a></div></li><li><div class="item-name"><a class="constant" href="constant.ZSTD_CONTENTSIZE_UNKNOWN.html" title="constant zstd_sys::ZSTD_CONTENTSIZE_UNKNOWN">ZSTD_CONTENTSIZE_UNKNOWN</a></div></li><li><div class="item-name"><a class="constant" href="constant.ZSTD_MAGICNUMBER.html" title="constant zstd_sys::ZSTD_MAGICNUMBER">ZSTD_MAGICNUMBER</a></div></li><li><div class="item-name"><a class="constant" href="constant.ZSTD_MAGIC_DICTIONARY.html" title="constant zstd_sys::ZSTD_MAGIC_DICTIONARY">ZSTD_MAGIC_DICTIONARY</a></div></li><li><div class="item-name"><a class="constant" href="constant.ZSTD_MAGIC_SKIPPABLE_MASK.html" title="constant zstd_sys::ZSTD_MAGIC_SKIPPABLE_MASK">ZSTD_MAGIC_SKIPPABLE_MASK</a></div></li><li><div class="item-name"><a class="constant" href="constant.ZSTD_MAGIC_SKIPPABLE_START.html" title="constant zstd_sys::ZSTD_MAGIC_SKIPPABLE_START">ZSTD_MAGIC_SKIPPABLE_START</a></div></li><li><div class="item-name"><a class="constant" href="constant.ZSTD_VERSION_MAJOR.html" title="constant zstd_sys::ZSTD_VERSION_MAJOR">ZSTD_VERSION_MAJOR</a></div></li><li><div class="item-name"><a class="constant" href="constant.ZSTD_VERSION_MINOR.html" title="constant zstd_sys::ZSTD_VERSION_MINOR">ZSTD_VERSION_MINOR</a></div></li><li><div class="item-name"><a class="constant" href="constant.ZSTD_VERSION_NUMBER.html" title="constant zstd_sys::ZSTD_VERSION_NUMBER">ZSTD_VERSION_NUMBER</a></div></li><li><div class="item-name"><a class="constant" href="constant.ZSTD_VERSION_RELEASE.html" title="constant zstd_sys::ZSTD_VERSION_RELEASE">ZSTD_VERSION_RELEASE</a></div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.ZDICT_finalizeDictionary.html" title="fn zstd_sys::ZDICT_finalizeDictionary">ZDICT_finalizeDictionary</a><sup title="unsafe function">⚠</sup></div><div class="desc docblock-short">ZDICT_finalizeDictionary():
+Given a custom content as a basis for dictionary, and a set of samples,
+finalize dictionary by adding headers and statistics according to the zstd
+dictionary format.</div></li><li><div class="item-name"><a class="fn" href="fn.ZDICT_getDictHeaderSize.html" title="fn zstd_sys::ZDICT_getDictHeaderSize">ZDICT_getDictHeaderSize</a><sup title="unsafe function">⚠</sup></div></li><li><div class="item-name"><a class="fn" href="fn.ZDICT_getDictID.html" title="fn zstd_sys::ZDICT_getDictID">ZDICT_getDictID</a><sup title="unsafe function">⚠</sup></div></li><li><div class="item-name"><a class="fn" href="fn.ZDICT_getErrorName.html" title="fn zstd_sys::ZDICT_getErrorName">ZDICT_getErrorName</a><sup title="unsafe function">⚠</sup></div></li><li><div class="item-name"><a class="fn" href="fn.ZDICT_isError.html" title="fn zstd_sys::ZDICT_isError">ZDICT_isError</a><sup title="unsafe function">⚠</sup></div></li><li><div class="item-name"><a class="fn" href="fn.ZDICT_trainFromBuffer.html" title="fn zstd_sys::ZDICT_trainFromBuffer">ZDICT_trainFromBuffer</a><sup title="unsafe function">⚠</sup></div><div class="desc docblock-short">ZDICT_trainFromBuffer():
+Train a dictionary from an array of samples.
+Redirect towards ZDICT_optimizeTrainFromBuffer_fastCover() single-threaded, with d=8, steps=4,
+f=20, and accel=1.
+Samples must be stored concatenated in a single flat buffer <code>samplesBuffer</code>,
+supplied with an array of sizes <code>samplesSizes</code>, providing the size of each sample, in order.
+The resulting dictionary will be saved into <code>dictBuffer</code>.
+@return: size of dictionary stored into <code>dictBuffer</code> (&lt;= <code>dictBufferCapacity</code>)
+or an error code, which can be tested with ZDICT_isError().
+Note:  Dictionary training will fail if there are not enough samples to construct a
+dictionary, or if most of the samples are too small (&lt; 8 bytes being the lower limit).
+If dictionary training fails, you should use zstd without a dictionary, as the dictionary
+would’ve been ineffective anyways. If you believe your samples would benefit from a dictionary
+please open an issue with details, and we can look into it.
+Note: ZDICT_trainFromBuffer()’s memory usage is about 6 MB.
+Tips: In general, a reasonable dictionary has a size of ~ 100 KB.
+It’s possible to select smaller or larger size, just by specifying <code>dictBufferCapacity</code>.
+In general, it’s recommended to provide a few thousands samples, though this can vary a lot.
+It’s recommended that total size of all samples be about ~x100 times the target size of dictionary.</div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_CCtx_loadDictionary.html" title="fn zstd_sys::ZSTD_CCtx_loadDictionary">ZSTD_CCtx_loadDictionary</a><sup title="unsafe function">⚠</sup></div><div class="desc docblock-short">ZSTD_CCtx_loadDictionary() : Requires v1.4.0+
+Create an internal CDict from <code>dict</code> buffer.
+Decompression will have to use same dictionary.
+@result : 0, or an error code (which can be tested with ZSTD_isError()).
+Special: Loading a NULL (or 0-size) dictionary invalidates previous dictionary,
+meaning “return to no-dictionary mode”.
+Note 1 : Dictionary is sticky, it will be used for all future compressed frames,
+until parameters are reset, a new dictionary is loaded, or the dictionary
+is explicitly invalidated by loading a NULL dictionary.
+Note 2 : Loading a dictionary involves building tables.
+It’s also a CPU consuming operation, with non-negligible impact on latency.
+Tables are dependent on compression parameters, and for this reason,
+compression parameters can no longer be changed after loading a dictionary.
+Note 3 :<code>dict</code> content will be copied internally.
+Use experimental ZSTD_CCtx_loadDictionary_byReference() to reference content instead.
+In such a case, dictionary buffer must outlive its users.
+Note 4 : Use ZSTD_CCtx_loadDictionary_advanced()
+to precisely select how dictionary content must be interpreted.
+Note 5 : This method does not benefit from LDM (long distance mode).
+If you want to employ LDM on some large dictionary content,
+prefer employing ZSTD_CCtx_refPrefix() described below.</div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_CCtx_refCDict.html" title="fn zstd_sys::ZSTD_CCtx_refCDict">ZSTD_CCtx_refCDict</a><sup title="unsafe function">⚠</sup></div><div class="desc docblock-short">ZSTD_CCtx_refCDict() : Requires v1.4.0+
+Reference a prepared dictionary, to be used for all future compressed frames.
+Note that compression parameters are enforced from within CDict,
+and supersede any compression parameter previously set within CCtx.
+The parameters ignored are labelled as “superseded-by-cdict” in the ZSTD_cParameter enum docs.
+The ignored parameters will be used again if the CCtx is returned to no-dictionary mode.
+The dictionary will remain valid for future compressed frames using same CCtx.
+@result : 0, or an error code (which can be tested with ZSTD_isError()).
+Special : Referencing a NULL CDict means “return to no-dictionary mode”.
+Note 1 : Currently, only one dictionary can be managed.
+Referencing a new dictionary effectively “discards” any previous one.
+Note 2 : CDict is just referenced, its lifetime must outlive its usage within CCtx.</div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_CCtx_refPrefix.html" title="fn zstd_sys::ZSTD_CCtx_refPrefix">ZSTD_CCtx_refPrefix</a><sup title="unsafe function">⚠</sup></div><div class="desc docblock-short">ZSTD_CCtx_refPrefix() : Requires v1.4.0+
+Reference a prefix (single-usage dictionary) for next compressed frame.
+A prefix is <strong>only used once</strong>. Tables are discarded at end of frame (ZSTD_e_end).
+Decompression will need same prefix to properly regenerate data.
+Compressing with a prefix is similar in outcome as performing a diff and compressing it,
+but performs much faster, especially during decompression (compression speed is tunable with compression level).
+This method is compatible with LDM (long distance mode).
+@result : 0, or an error code (which can be tested with ZSTD_isError()).
+Special: Adding any prefix (including NULL) invalidates any previous prefix or dictionary
+Note 1 : Prefix buffer is referenced. It <strong>must</strong> outlive compression.
+Its content must remain unmodified during compression.
+Note 2 : If the intention is to diff some large src data blob with some prior version of itself,
+ensure that the window size is large enough to contain the entire source.
+See ZSTD_c_windowLog.
+Note 3 : Referencing a prefix involves building tables, which are dependent on compression parameters.
+It’s a CPU consuming operation, with non-negligible impact on latency.
+If there is a need to use the same prefix multiple times, consider loadDictionary instead.
+Note 4 : By default, the prefix is interpreted as raw content (ZSTD_dct_rawContent).
+Use experimental ZSTD_CCtx_refPrefix_advanced() to alter dictionary interpretation.</div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_CCtx_reset.html" title="fn zstd_sys::ZSTD_CCtx_reset">ZSTD_CCtx_reset</a><sup title="unsafe function">⚠</sup></div><div class="desc docblock-short">ZSTD_CCtx_reset() :
+There are 2 different things that can be reset, independently or jointly :</div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_CCtx_setParameter.html" title="fn zstd_sys::ZSTD_CCtx_setParameter">ZSTD_CCtx_setParameter</a><sup title="unsafe function">⚠</sup></div><div class="desc docblock-short">ZSTD_CCtx_setParameter() :
+Set one compression parameter, selected by enum ZSTD_cParameter.
+All parameters have valid bounds. Bounds can be queried using ZSTD_cParam_getBounds().
+Providing a value beyond bound will either clamp it, or trigger an error (depending on parameter).
+Setting a parameter is generally only possible during frame initialization (before starting compression).
+Exception : when using multi-threading mode (nbWorkers &gt;= 1),
+the following parameters can be updated <em>during</em> compression (within same frame):
+=&gt; compressionLevel, hashLog, chainLog, searchLog, minMatch, targetLength and strategy.
+new parameters will be active for next job only (after a flush()).
+@return : an error code (which can be tested using ZSTD_isError()).</div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_CCtx_setPledgedSrcSize.html" title="fn zstd_sys::ZSTD_CCtx_setPledgedSrcSize">ZSTD_CCtx_setPledgedSrcSize</a><sup title="unsafe function">⚠</sup></div><div class="desc docblock-short">ZSTD_CCtx_setPledgedSrcSize() :
+Total input data size to be compressed as a single frame.
+Value will be written in frame header, unless if explicitly forbidden using ZSTD_c_contentSizeFlag.
+This value will also be controlled at end of frame, and trigger an error if not respected.
+@result : 0, or an error code (which can be tested with ZSTD_isError()).
+Note 1 : pledgedSrcSize==0 actually means zero, aka an empty frame.
+In order to mean “unknown content size”, pass constant ZSTD_CONTENTSIZE_UNKNOWN.
+ZSTD_CONTENTSIZE_UNKNOWN is default value for any new frame.
+Note 2 : pledgedSrcSize is only valid once, for the next frame.
+It’s discarded at the end of the frame, and replaced by ZSTD_CONTENTSIZE_UNKNOWN.
+Note 3 : Whenever all input data is provided and consumed in a single round,
+for example with ZSTD_compress2(),
+or invoking immediately ZSTD_compressStream2(,,,ZSTD_e_end),
+this value is automatically overridden by srcSize instead.</div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_CStreamInSize.html" title="fn zstd_sys::ZSTD_CStreamInSize">ZSTD_CStreamInSize</a><sup title="unsafe function">⚠</sup></div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_CStreamOutSize.html" title="fn zstd_sys::ZSTD_CStreamOutSize">ZSTD_CStreamOutSize</a><sup title="unsafe function">⚠</sup></div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_DCtx_loadDictionary.html" title="fn zstd_sys::ZSTD_DCtx_loadDictionary">ZSTD_DCtx_loadDictionary</a><sup title="unsafe function">⚠</sup></div><div class="desc docblock-short">ZSTD_DCtx_loadDictionary() : Requires v1.4.0+
+Create an internal DDict from dict buffer, to be used to decompress all future frames.
+The dictionary remains valid for all future frames, until explicitly invalidated, or
+a new dictionary is loaded.
+@result : 0, or an error code (which can be tested with ZSTD_isError()).
+Special : Adding a NULL (or 0-size) dictionary invalidates any previous dictionary,
+meaning “return to no-dictionary mode”.
+Note 1 : Loading a dictionary involves building tables,
+which has a non-negligible impact on CPU usage and latency.
+It’s recommended to “load once, use many times”, to amortize the cost
+Note 2 :<code>dict</code> content will be copied internally, so <code>dict</code> can be released after loading.
+Use ZSTD_DCtx_loadDictionary_byReference() to reference dictionary content instead.
+Note 3 : Use ZSTD_DCtx_loadDictionary_advanced() to take control of
+how dictionary content is loaded and interpreted.</div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_DCtx_refDDict.html" title="fn zstd_sys::ZSTD_DCtx_refDDict">ZSTD_DCtx_refDDict</a><sup title="unsafe function">⚠</sup></div><div class="desc docblock-short">ZSTD_DCtx_refDDict() : Requires v1.4.0+
+Reference a prepared dictionary, to be used to decompress next frames.
+The dictionary remains active for decompression of future frames using same DCtx.</div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_DCtx_refPrefix.html" title="fn zstd_sys::ZSTD_DCtx_refPrefix">ZSTD_DCtx_refPrefix</a><sup title="unsafe function">⚠</sup></div><div class="desc docblock-short">ZSTD_DCtx_refPrefix() : Requires v1.4.0+
+Reference a prefix (single-usage dictionary) to decompress next frame.
+This is the reverse operation of ZSTD_CCtx_refPrefix(),
+and must use the same prefix as the one used during compression.
+Prefix is <strong>only used once</strong>. Reference is discarded at end of frame.
+End of frame is reached when ZSTD_decompressStream() returns 0.
+@result : 0, or an error code (which can be tested with ZSTD_isError()).
+Note 1 : Adding any prefix (including NULL) invalidates any previously set prefix or dictionary
+Note 2 : Prefix buffer is referenced. It <strong>must</strong> outlive decompression.
+Prefix buffer must remain unmodified up to the end of frame,
+reached when ZSTD_decompressStream() returns 0.
+Note 3 : By default, the prefix is treated as raw content (ZSTD_dct_rawContent).
+Use ZSTD_CCtx_refPrefix_advanced() to alter dictMode (Experimental section)
+Note 4 : Referencing a raw content prefix has almost no cpu nor memory cost.
+A full dictionary is more costly, as it requires building tables.</div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_DCtx_reset.html" title="fn zstd_sys::ZSTD_DCtx_reset">ZSTD_DCtx_reset</a><sup title="unsafe function">⚠</sup></div><div class="desc docblock-short">ZSTD_DCtx_reset() :
+Return a DCtx to clean state.
+Session and parameters can be reset jointly or separately.
+Parameters can only be reset when no active frame is being decompressed.
+@return : 0, or an error code, which can be tested with ZSTD_isError()</div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_DCtx_setParameter.html" title="fn zstd_sys::ZSTD_DCtx_setParameter">ZSTD_DCtx_setParameter</a><sup title="unsafe function">⚠</sup></div><div class="desc docblock-short">ZSTD_DCtx_setParameter() :
+Set one compression parameter, selected by enum ZSTD_dParameter.
+All parameters have valid bounds. Bounds can be queried using ZSTD_dParam_getBounds().
+Providing a value beyond bound will either clamp it, or trigger an error (depending on parameter).
+Setting a parameter is only possible during frame initialization (before starting decompression).
+@return : 0, or an error code (which can be tested using ZSTD_isError()).</div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_DStreamInSize.html" title="fn zstd_sys::ZSTD_DStreamInSize">ZSTD_DStreamInSize</a><sup title="unsafe function">⚠</sup></div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_DStreamOutSize.html" title="fn zstd_sys::ZSTD_DStreamOutSize">ZSTD_DStreamOutSize</a><sup title="unsafe function">⚠</sup></div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_cParam_getBounds.html" title="fn zstd_sys::ZSTD_cParam_getBounds">ZSTD_cParam_getBounds</a><sup title="unsafe function">⚠</sup></div><div class="desc docblock-short">ZSTD_cParam_getBounds() :
+All parameters must belong to an interval with lower and upper bounds,
+otherwise they will either trigger an error or be automatically clamped.
+@return : a structure, ZSTD_bounds, which contains
+- an error status field, which must be tested using ZSTD_isError()
+- lower and upper bounds, both inclusive</div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_compress.html" title="fn zstd_sys::ZSTD_compress">ZSTD_compress</a><sup title="unsafe function">⚠</sup></div><div class="desc docblock-short">Simple API
+/
+/*! ZSTD_compress() :
+Compresses <code>src</code> content as a single zstd compressed frame into already allocated <code>dst</code>.
+NOTE: Providing <code>dstCapacity &gt;= ZSTD_compressBound(srcSize)</code> guarantees that zstd will have
+enough space to successfully compress the data.
+@return : compressed size written into <code>dst</code> (&lt;= `dstCapacity),
+or an error code if it fails (which can be tested using ZSTD_isError()).</div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_compress2.html" title="fn zstd_sys::ZSTD_compress2">ZSTD_compress2</a><sup title="unsafe function">⚠</sup></div><div class="desc docblock-short">ZSTD_compress2() :
+Behave the same as ZSTD_compressCCtx(), but compression parameters are set using the advanced API.
+(note that this entry point doesn’t even expose a compression level parameter).
+ZSTD_compress2() always starts a new frame.
+Should cctx hold data from a previously unfinished frame, everything about it is forgotten.</div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_compressBound.html" title="fn zstd_sys::ZSTD_compressBound">ZSTD_compressBound</a><sup title="unsafe function">⚠</sup></div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_compressCCtx.html" title="fn zstd_sys::ZSTD_compressCCtx">ZSTD_compressCCtx</a><sup title="unsafe function">⚠</sup></div><div class="desc docblock-short">ZSTD_compressCCtx() :
+Same as ZSTD_compress(), using an explicit ZSTD_CCtx.
+Important : in order to mirror <code>ZSTD_compress()</code> behavior,
+this function compresses at the requested compression level,
+<strong>ignoring any other advanced parameter</strong> .
+If any advanced parameter was set using the advanced API,
+they will all be reset. Only <code>compressionLevel</code> remains.</div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_compressStream.html" title="fn zstd_sys::ZSTD_compressStream">ZSTD_compressStream</a><sup title="unsafe function">⚠</sup></div><div class="desc docblock-short">Alternative for ZSTD_compressStream2(zcs, output, input, ZSTD_e_continue).
+NOTE: The return value is different. ZSTD_compressStream() returns a hint for
+the next read size (if non-zero and not an error). ZSTD_compressStream2()
+returns the minimum nb of bytes left to flush (if non-zero and not an error).</div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_compressStream2.html" title="fn zstd_sys::ZSTD_compressStream2">ZSTD_compressStream2</a><sup title="unsafe function">⚠</sup></div><div class="desc docblock-short">ZSTD_compressStream2() : Requires v1.4.0+
+Behaves about the same as ZSTD_compressStream, with additional control on end directive.</div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_compress_usingCDict.html" title="fn zstd_sys::ZSTD_compress_usingCDict">ZSTD_compress_usingCDict</a><sup title="unsafe function">⚠</sup></div><div class="desc docblock-short">ZSTD_compress_usingCDict() :
+Compression using a digested Dictionary.
+Recommended when same dictionary is used multiple times.
+Note : compression level is <em>decided at dictionary creation time</em>,
+and frame parameters are hardcoded (dictID=yes, contentSize=yes, checksum=no)</div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_compress_usingDict.html" title="fn zstd_sys::ZSTD_compress_usingDict">ZSTD_compress_usingDict</a><sup title="unsafe function">⚠</sup></div><div class="desc docblock-short">Simple dictionary API
+/
+/*! ZSTD_compress_usingDict() :
+Compression at an explicit compression level using a Dictionary.
+A dictionary can be any arbitrary data segment (also called a prefix),
+or a buffer with specified information (see zdict.h).
+Note : This function loads the dictionary, resulting in significant startup delay.
+It’s intended for a dictionary used only once.
+Note 2 : When <code>dict == NULL || dictSize &lt; 8</code> no dictionary is used.</div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_createCCtx.html" title="fn zstd_sys::ZSTD_createCCtx">ZSTD_createCCtx</a><sup title="unsafe function">⚠</sup></div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_createCDict.html" title="fn zstd_sys::ZSTD_createCDict">ZSTD_createCDict</a><sup title="unsafe function">⚠</sup></div><div class="desc docblock-short">ZSTD_createCDict() :
+When compressing multiple messages or blocks using the same dictionary,
+it’s recommended to digest the dictionary only once, since it’s a costly operation.
+ZSTD_createCDict() will create a state from digesting a dictionary.
+The resulting state can be used for future compression operations with very limited startup cost.
+ZSTD_CDict can be created once and shared by multiple threads concurrently, since its usage is read-only.
+@dictBuffer can be released after ZSTD_CDict creation, because its content is copied within CDict.
+Note 1 : Consider experimental function <code>ZSTD_createCDict_byReference()</code> if you prefer to not duplicate @dictBuffer content.
+Note 2 : A ZSTD_CDict can be created from an empty @dictBuffer,
+in which case the only thing that it transports is the @compressionLevel.
+This can be useful in a pipeline featuring ZSTD_compress_usingCDict() exclusively,
+expecting a ZSTD_CDict parameter with any data, including those without a known dictionary.</div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_createCStream.html" title="fn zstd_sys::ZSTD_createCStream">ZSTD_createCStream</a><sup title="unsafe function">⚠</sup></div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_createDCtx.html" title="fn zstd_sys::ZSTD_createDCtx">ZSTD_createDCtx</a><sup title="unsafe function">⚠</sup></div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_createDDict.html" title="fn zstd_sys::ZSTD_createDDict">ZSTD_createDDict</a><sup title="unsafe function">⚠</sup></div><div class="desc docblock-short">ZSTD_createDDict() :
+Create a digested dictionary, ready to start decompression operation without startup delay.
+dictBuffer can be released after DDict creation, as its content is copied inside DDict.</div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_createDStream.html" title="fn zstd_sys::ZSTD_createDStream">ZSTD_createDStream</a><sup title="unsafe function">⚠</sup></div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_dParam_getBounds.html" title="fn zstd_sys::ZSTD_dParam_getBounds">ZSTD_dParam_getBounds</a><sup title="unsafe function">⚠</sup></div><div class="desc docblock-short">ZSTD_dParam_getBounds() :
+All parameters must belong to an interval with lower and upper bounds,
+otherwise they will either trigger an error or be automatically clamped.
+@return : a structure, ZSTD_bounds, which contains
+- an error status field, which must be tested using ZSTD_isError()
+- both lower and upper bounds, inclusive</div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_decompress.html" title="fn zstd_sys::ZSTD_decompress">ZSTD_decompress</a><sup title="unsafe function">⚠</sup></div><div class="desc docblock-short">ZSTD_decompress() :
+<code>compressedSize</code> : must be the <em>exact</em> size of some number of compressed and/or skippable frames.
+<code>dstCapacity</code> is an upper bound of originalSize to regenerate.
+If user cannot imply a maximum upper bound, it’s better to use streaming mode to decompress data.
+@return : the number of bytes decompressed into <code>dst</code> (&lt;= <code>dstCapacity</code>),
+or an errorCode if it fails (which can be tested using ZSTD_isError()).</div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_decompressDCtx.html" title="fn zstd_sys::ZSTD_decompressDCtx">ZSTD_decompressDCtx</a><sup title="unsafe function">⚠</sup></div><div class="desc docblock-short">ZSTD_decompressDCtx() :
+Same as ZSTD_decompress(),
+requires an allocated ZSTD_DCtx.
+Compatible with sticky parameters (see below).</div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_decompressStream.html" title="fn zstd_sys::ZSTD_decompressStream">ZSTD_decompressStream</a><sup title="unsafe function">⚠</sup></div><div class="desc docblock-short">ZSTD_decompressStream() :
+Streaming decompression function.
+Call repetitively to consume full input updating it as necessary.
+Function will update both input and output <code>pos</code> fields exposing current state via these fields:</div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_decompress_usingDDict.html" title="fn zstd_sys::ZSTD_decompress_usingDDict">ZSTD_decompress_usingDDict</a><sup title="unsafe function">⚠</sup></div><div class="desc docblock-short">ZSTD_decompress_usingDDict() :
+Decompression using a digested Dictionary.
+Recommended when same dictionary is used multiple times.</div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_decompress_usingDict.html" title="fn zstd_sys::ZSTD_decompress_usingDict">ZSTD_decompress_usingDict</a><sup title="unsafe function">⚠</sup></div><div class="desc docblock-short">ZSTD_decompress_usingDict() :
+Decompression using a known Dictionary.
+Dictionary must be identical to the one used during compression.
+Note : This function loads the dictionary, resulting in significant startup delay.
+It’s intended for a dictionary used only once.
+Note : When <code>dict == NULL || dictSize &lt; 8</code> no dictionary is used.</div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_defaultCLevel.html" title="fn zstd_sys::ZSTD_defaultCLevel">ZSTD_defaultCLevel</a><sup title="unsafe function">⚠</sup></div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_endStream.html" title="fn zstd_sys::ZSTD_endStream">ZSTD_endStream</a><sup title="unsafe function">⚠</sup></div><div class="desc docblock-short">Equivalent to ZSTD_compressStream2(zcs, output, &amp;emptyInput, ZSTD_e_end).</div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_findFrameCompressedSize.html" title="fn zstd_sys::ZSTD_findFrameCompressedSize">ZSTD_findFrameCompressedSize</a><sup title="unsafe function">⚠</sup></div><div class="desc docblock-short">ZSTD_findFrameCompressedSize() : Requires v1.4.0+
+<code>src</code> should point to the start of a ZSTD frame or skippable frame.
+<code>srcSize</code> must be &gt;= first frame size
+@return : the compressed size of the first frame starting at <code>src</code>,
+suitable to pass as <code>srcSize</code> to <code>ZSTD_decompress</code> or similar,
+or an error code if input is invalid</div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_flushStream.html" title="fn zstd_sys::ZSTD_flushStream">ZSTD_flushStream</a><sup title="unsafe function">⚠</sup></div><div class="desc docblock-short">Equivalent to ZSTD_compressStream2(zcs, output, &amp;emptyInput, ZSTD_e_flush).</div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_freeCCtx.html" title="fn zstd_sys::ZSTD_freeCCtx">ZSTD_freeCCtx</a><sup title="unsafe function">⚠</sup></div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_freeCDict.html" title="fn zstd_sys::ZSTD_freeCDict">ZSTD_freeCDict</a><sup title="unsafe function">⚠</sup></div><div class="desc docblock-short">ZSTD_freeCDict() :
+Function frees memory allocated by ZSTD_createCDict().
+If a NULL pointer is passed, no operation is performed.</div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_freeCStream.html" title="fn zstd_sys::ZSTD_freeCStream">ZSTD_freeCStream</a><sup title="unsafe function">⚠</sup></div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_freeDCtx.html" title="fn zstd_sys::ZSTD_freeDCtx">ZSTD_freeDCtx</a><sup title="unsafe function">⚠</sup></div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_freeDDict.html" title="fn zstd_sys::ZSTD_freeDDict">ZSTD_freeDDict</a><sup title="unsafe function">⚠</sup></div><div class="desc docblock-short">ZSTD_freeDDict() :
+Function frees memory allocated with ZSTD_createDDict()
+If a NULL pointer is passed, no operation is performed.</div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_freeDStream.html" title="fn zstd_sys::ZSTD_freeDStream">ZSTD_freeDStream</a><sup title="unsafe function">⚠</sup></div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_getDecompressedSize.html" title="fn zstd_sys::ZSTD_getDecompressedSize">ZSTD_getDecompressedSize</a><sup title="unsafe function">⚠</sup></div><div class="desc docblock-short">ZSTD_getDecompressedSize() :
+NOTE: This function is now obsolete, in favor of ZSTD_getFrameContentSize().
+Both functions work the same way, but ZSTD_getDecompressedSize() blends
+“empty”, “unknown” and “error” results to the same return value (0),
+while ZSTD_getFrameContentSize() gives them separate return values.
+@return : decompressed size of <code>src</code> frame content <em>if known and not empty</em>, 0 otherwise.</div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_getDictID_fromCDict.html" title="fn zstd_sys::ZSTD_getDictID_fromCDict">ZSTD_getDictID_fromCDict</a><sup title="unsafe function">⚠</sup></div><div class="desc docblock-short">ZSTD_getDictID_fromCDict() : Requires v1.5.0+
+Provides the dictID of the dictionary loaded into <code>cdict</code>.
+If @return == 0, the dictionary is not conformant to Zstandard specification, or empty.
+Non-conformant dictionaries can still be loaded, but as content-only dictionaries.</div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_getDictID_fromDDict.html" title="fn zstd_sys::ZSTD_getDictID_fromDDict">ZSTD_getDictID_fromDDict</a><sup title="unsafe function">⚠</sup></div><div class="desc docblock-short">ZSTD_getDictID_fromDDict() : Requires v1.4.0+
+Provides the dictID of the dictionary loaded into <code>ddict</code>.
+If @return == 0, the dictionary is not conformant to Zstandard specification, or empty.
+Non-conformant dictionaries can still be loaded, but as content-only dictionaries.</div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_getDictID_fromDict.html" title="fn zstd_sys::ZSTD_getDictID_fromDict">ZSTD_getDictID_fromDict</a><sup title="unsafe function">⚠</sup></div><div class="desc docblock-short">ZSTD_getDictID_fromDict() : Requires v1.4.0+
+Provides the dictID stored within dictionary.
+if @return == 0, the dictionary is not conformant with Zstandard specification.
+It can still be loaded, but as a content-only dictionary.</div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_getDictID_fromFrame.html" title="fn zstd_sys::ZSTD_getDictID_fromFrame">ZSTD_getDictID_fromFrame</a><sup title="unsafe function">⚠</sup></div><div class="desc docblock-short">ZSTD_getDictID_fromFrame() : Requires v1.4.0+
+Provides the dictID required to decompressed the frame stored within <code>src</code>.
+If @return == 0, the dictID could not be decoded.
+This could for one of the following reasons :</div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_getErrorName.html" title="fn zstd_sys::ZSTD_getErrorName">ZSTD_getErrorName</a><sup title="unsafe function">⚠</sup></div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_getFrameContentSize.html" title="fn zstd_sys::ZSTD_getFrameContentSize">ZSTD_getFrameContentSize</a><sup title="unsafe function">⚠</sup></div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_initCStream.html" title="fn zstd_sys::ZSTD_initCStream">ZSTD_initCStream</a><sup title="unsafe function">⚠</sup></div><div class="desc docblock-short">Equivalent to:</div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_initDStream.html" title="fn zstd_sys::ZSTD_initDStream">ZSTD_initDStream</a><sup title="unsafe function">⚠</sup></div><div class="desc docblock-short">ZSTD_initDStream() :
+Initialize/reset DStream state for new decompression operation.
+Call before new decompression operation using same DStream.</div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_isError.html" title="fn zstd_sys::ZSTD_isError">ZSTD_isError</a><sup title="unsafe function">⚠</sup></div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_maxCLevel.html" title="fn zstd_sys::ZSTD_maxCLevel">ZSTD_maxCLevel</a><sup title="unsafe function">⚠</sup></div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_minCLevel.html" title="fn zstd_sys::ZSTD_minCLevel">ZSTD_minCLevel</a><sup title="unsafe function">⚠</sup></div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_sizeof_CCtx.html" title="fn zstd_sys::ZSTD_sizeof_CCtx">ZSTD_sizeof_CCtx</a><sup title="unsafe function">⚠</sup></div><div class="desc docblock-short">ZSTD_sizeof_*() : Requires v1.4.0+
+These functions give the <em>current</em> memory usage of selected object.
+Note that object memory usage can evolve (increase or decrease) over time.</div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_sizeof_CDict.html" title="fn zstd_sys::ZSTD_sizeof_CDict">ZSTD_sizeof_CDict</a><sup title="unsafe function">⚠</sup></div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_sizeof_CStream.html" title="fn zstd_sys::ZSTD_sizeof_CStream">ZSTD_sizeof_CStream</a><sup title="unsafe function">⚠</sup></div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_sizeof_DCtx.html" title="fn zstd_sys::ZSTD_sizeof_DCtx">ZSTD_sizeof_DCtx</a><sup title="unsafe function">⚠</sup></div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_sizeof_DDict.html" title="fn zstd_sys::ZSTD_sizeof_DDict">ZSTD_sizeof_DDict</a><sup title="unsafe function">⚠</sup></div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_sizeof_DStream.html" title="fn zstd_sys::ZSTD_sizeof_DStream">ZSTD_sizeof_DStream</a><sup title="unsafe function">⚠</sup></div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_versionNumber.html" title="fn zstd_sys::ZSTD_versionNumber">ZSTD_versionNumber</a><sup title="unsafe function">⚠</sup></div><div class="desc docblock-short">ZSTD_versionNumber() :
+Return runtime library version, the value is (MAJOR<em>100</em>100 + MINOR*100 + RELEASE).</div></li><li><div class="item-name"><a class="fn" href="fn.ZSTD_versionString.html" title="fn zstd_sys::ZSTD_versionString">ZSTD_versionString</a><sup title="unsafe function">⚠</sup></div><div class="desc docblock-short">ZSTD_versionString() :
+Return runtime library version, like “1.4.5”. Requires v1.3.0+.</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.ZSTD_CCtx.html" title="type zstd_sys::ZSTD_CCtx">ZSTD_CCtx</a></div><div class="desc docblock-short">Explicit context</div></li><li><div class="item-name"><a class="type" href="type.ZSTD_CDict.html" title="type zstd_sys::ZSTD_CDict">ZSTD_CDict</a></div><div class="desc docblock-short">Bulk processing dictionary API</div></li><li><div class="item-name"><a class="type" href="type.ZSTD_CStream.html" title="type zstd_sys::ZSTD_CStream">ZSTD_CStream</a></div></li><li><div class="item-name"><a class="type" href="type.ZSTD_DCtx.html" title="type zstd_sys::ZSTD_DCtx">ZSTD_DCtx</a></div></li><li><div class="item-name"><a class="type" href="type.ZSTD_DDict.html" title="type zstd_sys::ZSTD_DDict">ZSTD_DDict</a></div></li><li><div class="item-name"><a class="type" href="type.ZSTD_DStream.html" title="type zstd_sys::ZSTD_DStream">ZSTD_DStream</a></div></li><li><div class="item-name"><a class="type" href="type.ZSTD_inBuffer.html" title="type zstd_sys::ZSTD_inBuffer">ZSTD_inBuffer</a></div><div class="desc docblock-short">Streaming</div></li><li><div class="item-name"><a class="type" href="type.ZSTD_outBuffer.html" title="type zstd_sys::ZSTD_outBuffer">ZSTD_outBuffer</a></div></li></ul></section></div></main></body></html>
