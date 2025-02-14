@@ -31,7 +31,7 @@ pub struct CrowdFundingState {
     pub status: RegisterView<Status>,
     /// The map of pledges that will be collected if the campaign succeeds.
     pub pledges: MapView<AccountOwner, Amount>,
-    /// The instantiation data that determine the details the campaign.
+    /// The instantiation data that determines the details of the campaign.
     pub instantiation_argument: RegisterView<Option<InstantiationArgument>>,
 }
 
