@@ -4,16 +4,16 @@
 //! Handle requests from the synchronous execution thread of user applications.
 
 #[cfg(with_metrics)]
-use std::sync::LazyLock;
+use std::{collections::BTreeMap, sync::LazyLock};
 
 use custom_debug_derive::Debug;
 use futures::channel::mpsc;
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::{bucket_latencies, register_histogram_vec, MeasureLatency as _};
 use linera_base::{
-    data_types::{Amount, ApplicationPermissions, BlobContent, Timestamp},
+    data_types::{Amount, ApplicationPermissions, Blob, BlobContent, BlockHeight, Timestamp},
     hex_debug, hex_vec_debug, http,
-    identifiers::{Account, AccountOwner, BlobId, MessageId, Owner},
+    identifiers::{Account, AccountOwner, BlobId, BlobType, ChainId, MessageId, Owner},
     ownership::ChainOwnership,
 };
 use linera_views::{batch::Batch, context::Context, views::View};
@@ -62,10 +62,21 @@ where
     pub(crate) async fn load_contract(
         &mut self,
         id: UserApplicationId,
+        blobs_cache: &BTreeMap<BlobId, Blob>,
     ) -> Result<(UserContractCode, UserApplicationDescription), ExecutionError> {
         #[cfg(with_metrics)]
         let _latency = LOAD_CONTRACT_LATENCY.measure_latency();
-        let description = self.system.registry.describe_application(id).await?;
+        let blob_id = BlobId::new(
+            id.application_description_hash,
+            BlobType::ApplicationDescription,
+        );
+        let description = match blobs_cache.get(&blob_id) {
+            Some(description) => {
+                let blob = description.clone();
+                bcs::from_bytes(blob.bytes())?
+            }
+            None => self.system.describe_application(id).await?,
+        };
         let code = self
             .context()
             .extra()
@@ -80,7 +91,7 @@ where
     ) -> Result<(UserServiceCode, UserApplicationDescription), ExecutionError> {
         #[cfg(with_metrics)]
         let _latency = LOAD_SERVICE_LATENCY.measure_latency();
-        let description = self.system.registry.describe_application(id).await?;
+        let description = self.system.describe_application(id).await?;
         let code = self
             .context()
             .extra()
@@ -97,7 +108,11 @@ where
         use ExecutionRequest::*;
         match request {
             #[cfg(not(web))]
-            LoadContract { id, callback } => callback.respond(self.load_contract(id).await?),
+            LoadContract {
+                id,
+                blobs_cache,
+                callback,
+            } => callback.respond(self.load_contract(id, &blobs_cache).await?),
             #[cfg(not(web))]
             LoadService { id, callback } => callback.respond(self.load_service(id).await?),
 
@@ -306,7 +321,9 @@ where
             }
 
             CreateApplication {
-                next_message_id,
+                chain_id,
+                block_height,
+                application_index,
                 bytecode_id,
                 parameters,
                 required_application_ids,
@@ -315,7 +332,9 @@ where
                 let create_application_result = self
                     .system
                     .create_application(
-                        next_message_id,
+                        chain_id,
+                        block_height,
+                        application_index,
                         bytecode_id,
                         parameters,
                         required_application_ids,
@@ -367,6 +386,7 @@ pub enum ExecutionRequest {
     #[cfg(not(web))]
     LoadContract {
         id: UserApplicationId,
+        blobs_cache: BTreeMap<BlobId, Blob>,
         #[debug(skip)]
         callback: Sender<(UserContractCode, UserApplicationDescription)>,
     },
@@ -509,7 +529,9 @@ pub enum ExecutionRequest {
     },
 
     CreateApplication {
-        next_message_id: MessageId,
+        chain_id: ChainId,
+        block_height: BlockHeight,
+        application_index: u32,
         bytecode_id: BytecodeId,
         parameters: Vec<u8>,
         required_application_ids: Vec<UserApplicationId>,

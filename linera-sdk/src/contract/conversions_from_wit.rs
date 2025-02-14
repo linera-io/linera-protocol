@@ -34,8 +34,8 @@ impl From<wit_system_api::MessageId> for MessageId {
 impl From<wit_system_api::ApplicationId> for ApplicationId {
     fn from(application_id: wit_system_api::ApplicationId) -> Self {
         ApplicationId {
+            application_description_hash: application_id.application_description_hash.into(),
             bytecode_id: application_id.bytecode_id.into(),
-            creation: application_id.creation.into(),
         }
     }
 }

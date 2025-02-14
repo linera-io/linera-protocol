@@ -12,8 +12,8 @@ use custom_debug_derive::Debug;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{
-        Amount, ApplicationPermissions, ArithmeticError, BlockHeight, OracleResponse, Resources,
-        SendMessageRequest, Timestamp,
+        Amount, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, OracleResponse,
+        Resources, SendMessageRequest, Timestamp,
     },
     ensure, http,
     identifiers::{
@@ -115,8 +115,8 @@ struct ApplicationStatus {
     caller_id: Option<UserApplicationId>,
     /// The application ID.
     id: UserApplicationId,
-    /// The parameters from the application description.
-    parameters: Vec<u8>,
+    /// The application description.
+    description: UserApplicationDescription,
     /// The authenticated signer for the execution thread, if any.
     signer: Option<Owner>,
     /// The current execution outcome of the application.
@@ -127,7 +127,7 @@ struct ApplicationStatus {
 #[derive(Debug)]
 struct LoadedApplication<Instance> {
     instance: Arc<Mutex<Instance>>,
-    parameters: Vec<u8>,
+    description: UserApplicationDescription,
 }
 
 impl<Instance> LoadedApplication<Instance> {
@@ -135,7 +135,7 @@ impl<Instance> LoadedApplication<Instance> {
     fn new(instance: Instance, description: UserApplicationDescription) -> Self {
         LoadedApplication {
             instance: Arc::new(Mutex::new(instance)),
-            parameters: description.parameters,
+            description,
         }
     }
 }
@@ -146,7 +146,7 @@ impl<Instance> Clone for LoadedApplication<Instance> {
     fn clone(&self) -> Self {
         LoadedApplication {
             instance: self.instance.clone(),
-            parameters: self.parameters.clone(),
+            description: self.description.clone(),
         }
     }
 }
@@ -401,9 +401,14 @@ impl SyncRuntimeInternal<UserContractInstance> {
             }
             #[cfg(not(web))]
             hash_map::Entry::Vacant(entry) => {
+                let blobs_cache = self.transaction_tracker.get_blobs_cache().clone();
                 let (code, description) = self
                     .execution_state_sender
-                    .send_request(|callback| ExecutionRequest::LoadContract { id, callback })?
+                    .send_request(|callback| ExecutionRequest::LoadContract {
+                        id,
+                        blobs_cache,
+                        callback,
+                    })?
                     .recv_response()?;
 
                 let instance = code.instantiate(this)?;
@@ -457,7 +462,7 @@ impl SyncRuntimeInternal<UserContractInstance> {
         self.push_application(ApplicationStatus {
             caller_id: authenticated_caller_id,
             id: callee_id,
-            parameters: application.parameters,
+            description: application.description,
             // Allow further nested calls to be authenticated if this one is.
             signer: authenticated_signer,
             outcome: RawExecutionOutcome::default(),
@@ -739,11 +744,11 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
     }
 
     fn application_creator_chain_id(&mut self) -> Result<ChainId, ExecutionError> {
-        Ok(self.current_application().id.creation.chain_id)
+        Ok(self.current_application().description.creator_chain_id)
     }
 
     fn application_parameters(&mut self) -> Result<Vec<u8>, ExecutionError> {
-        Ok(self.current_application().parameters.clone())
+        Ok(self.current_application().description.parameters.clone())
     }
 
     fn read_system_timestamp(&mut self) -> Result<Timestamp, ExecutionError> {
@@ -1154,7 +1159,7 @@ impl ContractSyncRuntimeHandle {
             let status = ApplicationStatus {
                 caller_id: None,
                 id: application_id,
-                parameters: application.parameters.clone(),
+                description: application.description.clone(),
                 signer,
                 outcome: RawExecutionOutcome::default(),
             };
@@ -1175,7 +1180,7 @@ impl ContractSyncRuntimeHandle {
         let application_status = runtime.pop_application();
         assert_eq!(application_status.caller_id, None);
         assert_eq!(application_status.id, application_id);
-        assert_eq!(application_status.parameters, contract.parameters);
+        assert_eq!(application_status.description, contract.description);
         assert_eq!(application_status.signer, signer);
         assert!(runtime.call_stack.is_empty());
 
@@ -1449,24 +1454,20 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         required_application_ids: Vec<UserApplicationId>,
     ) -> Result<UserApplicationId, ExecutionError> {
         let chain_id = self.inner().chain_id;
-        let height = self.block_height()?;
-        let index = self.inner().transaction_tracker.next_message_index();
-
-        let message_id = MessageId {
-            chain_id,
-            height,
-            index,
-        };
+        let block_height = self.block_height()?;
+        let application_index = self.inner().transaction_tracker.next_application_index();
 
         let CreateApplicationResult {
             app_id,
-            message,
             blobs_to_register,
+            application_description,
         } = self
             .inner()
             .execution_state_sender
             .send_request(|callback| ExecutionRequest::CreateApplication {
-                next_message_id: message_id,
+                chain_id,
+                block_height,
+                application_index,
                 bytecode_id,
                 parameters,
                 required_application_ids,
@@ -1478,10 +1479,10 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
                 .transaction_tracker
                 .replay_oracle_response(OracleResponse::Blob(blob_id))?;
         }
-        let outcome = RawExecutionOutcome::default().with_message(message);
+
         self.inner()
             .transaction_tracker
-            .add_system_outcome(outcome)?;
+            .add_created_blob(Blob::new_application_description(&application_description));
 
         let (contract, context) = self.inner().prepare_for_call(self.clone(), true, app_id)?;
 
@@ -1662,7 +1663,7 @@ impl ServiceRuntime for ServiceSyncRuntimeHandle {
             this.push_application(ApplicationStatus {
                 caller_id: None,
                 id: queried_id,
-                parameters: application.parameters,
+                description: application.description,
                 signer: None,
                 outcome: RawExecutionOutcome::default(),
             });

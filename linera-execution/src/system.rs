@@ -9,7 +9,7 @@ mod tests;
 #[cfg(with_metrics)]
 use std::sync::LazyLock;
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, HashMap, HashSet},
     fmt::{self, Display, Formatter},
     iter,
 };
@@ -19,7 +19,8 @@ use custom_debug_derive::Debug;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{
-        Amount, ApplicationPermissions, ArithmeticError, BlobContent, OracleResponse, Timestamp,
+        Amount, ApplicationPermissions, ArithmeticError, Blob, BlobContent, BlockHeight,
+        OracleResponse, Timestamp,
     },
     ensure, hex_debug,
     identifiers::{
@@ -44,10 +45,9 @@ use {linera_base::prometheus_util::register_int_counter_vec, prometheus::IntCoun
 use crate::test_utils::SystemExecutionState;
 use crate::{
     committee::{Committee, Epoch},
-    ApplicationRegistryView, ChannelName, ChannelSubscription, Destination,
-    ExecutionRuntimeContext, MessageContext, MessageKind, OperationContext, QueryContext,
-    QueryOutcome, RawExecutionOutcome, RawOutgoingMessage, TransactionTracker,
-    UserApplicationDescription, UserApplicationId,
+    ChannelName, ChannelSubscription, Destination, ExecutionRuntimeContext, MessageContext,
+    MessageKind, OperationContext, QueryContext, QueryOutcome, RawExecutionOutcome,
+    RawOutgoingMessage, TransactionTracker, UserApplicationDescription, UserApplicationId,
 };
 
 /// The relative index of the `OpenChain` message created by the `OpenChain` operation.
@@ -90,8 +90,6 @@ pub struct SystemExecutionStateView<C> {
     pub balances: HashedMapView<C, AccountOwner, Amount>,
     /// The timestamp of the most recent block.
     pub timestamp: HashedRegisterView<C, Timestamp>,
-    /// Track the locations of known bytecodes as well as the descriptions of known applications.
-    pub registry: ApplicationRegistryView<C>,
     /// Whether this chain has been closed.
     pub closed: HashedRegisterView<C, bool>,
     /// Permissions for applications on this chain.
@@ -184,11 +182,6 @@ pub enum SystemOperation {
         #[debug(skip_if = Vec::is_empty)]
         required_application_ids: Vec<UserApplicationId>,
     },
-    /// Requests a message from another chain to register a user application on this chain.
-    RequestApplication {
-        chain_id: ChainId,
-        application_id: UserApplicationId,
-    },
     /// Operations that are only allowed on the admin chain.
     Admin(AdminOperation),
 }
@@ -249,9 +242,6 @@ pub enum SystemMessage {
     RegisterApplications {
         applications: Vec<UserApplicationDescription>,
     },
-    /// Requests a `RegisterApplication` message from the target chain to register the specified
-    /// application on the sender chain.
-    RequestApplication(UserApplicationId),
 }
 
 /// A query to the system state.
@@ -355,8 +345,8 @@ impl UserData {
 #[derive(Clone, Debug)]
 pub struct CreateApplicationResult {
     pub app_id: UserApplicationId,
-    pub message: RawOutgoingMessage<SystemMessage, Amount>,
     pub blobs_to_register: Vec<BlobId>,
+    pub application_description: UserApplicationDescription,
 }
 
 #[derive(Error, Debug)]
@@ -414,6 +404,8 @@ pub enum SystemExecutionError {
     TicksOutOfOrder,
     #[error("Application {0:?} is not registered by the chain")]
     UnknownApplicationId(Box<UserApplicationId>),
+    #[error("Couldn't deserialize blob content: {0:?}")]
+    BlobDeserializationError(#[from] bcs::Error),
     #[error("Chain is not active yet.")]
     InactiveChain,
 
@@ -423,6 +415,8 @@ pub enum SystemExecutionError {
     OracleResponseMismatch,
     #[error("No recorded response for oracle query")]
     MissingOracleResponse,
+    #[error("Invalid index for operation: {0:?}")]
+    InvalidOperationIndex(Option<u32>),
 }
 
 impl From<ViewError> for SystemExecutionError {
@@ -646,14 +640,16 @@ where
                 instantiation_argument,
                 required_application_ids,
             } => {
-                let next_message_id = context.next_message_id(txn_tracker.next_message_index());
+                let application_index = txn_tracker.next_application_index();
                 let CreateApplicationResult {
                     app_id,
-                    message,
                     blobs_to_register,
+                    application_description,
                 } = self
                     .create_application(
-                        next_message_id,
+                        context.chain_id,
+                        context.height,
+                        application_index,
                         bytecode_id,
                         parameters,
                         required_application_ids,
@@ -661,21 +657,9 @@ where
                     .await?;
                 self.record_bytecode_blobs(blobs_to_register, txn_tracker)
                     .await?;
-                outcome.messages.push(message);
+                txn_tracker
+                    .add_created_blob(Blob::new_application_description(&application_description));
                 new_application = Some((app_id, instantiation_argument));
-            }
-            RequestApplication {
-                chain_id,
-                application_id,
-            } => {
-                let message = RawOutgoingMessage {
-                    destination: Destination::Recipient(chain_id),
-                    authenticated: false,
-                    grant: Amount::ZERO,
-                    kind: MessageKind::Simple,
-                    message: SystemMessage::RequestApplication(application_id),
-                };
-                outcome.messages.push(message);
             }
             PublishDataBlob { blob_hash } => {
                 self.blob_published(&BlobId::new(blob_hash, BlobType::Data))?;
@@ -877,22 +861,9 @@ where
                 for application in applications {
                     self.check_and_record_bytecode_blobs(&application.bytecode_id, txn_tracker)
                         .await?;
-                    self.registry.register_application(application).await?;
+                    self.check_required_applications(&application).await?;
+                    txn_tracker.add_created_blob(Blob::new_application_description(&application));
                 }
-            }
-            RequestApplication(application_id) => {
-                let applications = self
-                    .registry
-                    .describe_applications_with_dependencies(vec![application_id])
-                    .await?;
-                let message = RawOutgoingMessage {
-                    destination: Destination::Recipient(context.message_id.chain_id),
-                    authenticated: false,
-                    grant: Amount::ZERO,
-                    kind: MessageKind::Simple,
-                    message: SystemMessage::RegisterApplications { applications },
-                };
-                outcome.messages.push(message);
             }
             // These messages are executed immediately when cross-chain requests are received.
             Subscribe { .. } | Unsubscribe { .. } | OpenChain(_) => {}
@@ -1028,19 +999,21 @@ where
 
     pub async fn create_application(
         &mut self,
-        next_message_id: MessageId,
+        chain_id: ChainId,
+        block_height: BlockHeight,
+        application_index: u32,
         bytecode_id: BytecodeId,
         parameters: Vec<u8>,
         required_application_ids: Vec<UserApplicationId>,
     ) -> Result<CreateApplicationResult, SystemExecutionError> {
-        let id = UserApplicationId {
-            bytecode_id,
-            creation: next_message_id,
-        };
         let mut blobs_to_register = vec![];
-        for application in required_application_ids.iter().chain(iter::once(&id)) {
+        for application_bytecode in required_application_ids
+            .iter()
+            .map(|app_id| &app_id.bytecode_id)
+            .chain(iter::once(&bytecode_id))
+        {
             let (contract_bytecode_blob_id, service_bytecode_blob_id) =
-                self.check_bytecode_blobs(&application.bytecode_id).await?;
+                self.check_bytecode_blobs(application_bytecode).await?;
             // We only remember to register the blobs that aren't recorded in `used_blobs`
             // already.
             if !self.used_blobs.contains(&contract_bytecode_blob_id).await? {
@@ -1050,23 +1023,105 @@ where
                 blobs_to_register.push(service_bytecode_blob_id);
             }
         }
-        self.registry
-            .register_new_application(id, parameters, required_application_ids)
-            .await?;
-        // Send a message to ourself to increment the message ID.
-        let message = RawOutgoingMessage {
-            destination: Destination::Recipient(next_message_id.chain_id),
-            authenticated: false,
-            grant: Amount::ZERO,
-            kind: MessageKind::Protected,
-            message: SystemMessage::ApplicationCreated,
+
+        let application_description = UserApplicationDescription {
+            bytecode_id,
+            creator_chain_id: chain_id,
+            block_height,
+            application_index,
+            parameters,
+            required_application_ids,
         };
+        self.check_required_applications(&application_description)
+            .await?;
 
         Ok(CreateApplicationResult {
-            app_id: id,
-            message,
+            app_id: UserApplicationId::from(&application_description),
             blobs_to_register,
+            application_description,
         })
+    }
+
+    async fn check_required_applications(
+        &mut self,
+        application_description: &UserApplicationDescription,
+    ) -> Result<(), SystemExecutionError> {
+        // Make sure that referenced applications ids have been registered.
+        for required_id in &application_description.required_application_ids {
+            self.describe_application(*required_id).await?;
+        }
+        Ok(())
+    }
+
+    /// Retrieves an application's description.
+    pub async fn describe_application(
+        &mut self,
+        id: UserApplicationId,
+    ) -> Result<UserApplicationDescription, SystemExecutionError> {
+        let blob_content = self
+            .read_blob_content(BlobId::new(
+                id.application_description_hash,
+                BlobType::ApplicationDescription,
+            ))
+            .await?;
+        Ok(bcs::from_bytes(blob_content.bytes())?)
+    }
+
+    /// Retrieves the recursive dependencies of applications and apply a topological sort.
+    pub async fn find_dependencies(
+        &mut self,
+        mut stack: Vec<UserApplicationId>,
+    ) -> Result<Vec<UserApplicationId>, SystemExecutionError> {
+        // What we return at the end.
+        let mut result = Vec::new();
+        // The entries already inserted in `result`.
+        let mut sorted = HashSet::new();
+        // The entries for which dependencies have already been pushed once to the stack.
+        let mut seen = HashSet::new();
+
+        while let Some(id) = stack.pop() {
+            if sorted.contains(&id) {
+                continue;
+            }
+            if seen.contains(&id) {
+                // Second time we see this entry. It was last pushed just before its
+                // dependencies -- which are now fully sorted.
+                sorted.insert(id);
+                result.push(id);
+                continue;
+            }
+            // First time we see this entry:
+            // 1. Mark it so that its dependencies are no longer pushed to the stack.
+            seen.insert(id);
+            // 2. Schedule all the (yet unseen) dependencies, then this entry for a second visit.
+            stack.push(id);
+            let app = self.describe_application(id).await?;
+            for child in app.required_application_ids.iter().rev() {
+                if !seen.contains(child) {
+                    stack.push(*child);
+                }
+            }
+        }
+        Ok(result)
+    }
+
+    /// Retrieves applications' descriptions preceded by their recursive dependencies.
+    pub async fn describe_applications_with_dependencies(
+        &mut self,
+        ids: Vec<UserApplicationId>,
+        extra_registered_apps: &HashMap<UserApplicationId, UserApplicationDescription>,
+    ) -> Result<Vec<UserApplicationDescription>, SystemExecutionError> {
+        let ids_with_deps = self.find_dependencies(ids).await?;
+        let mut result = Vec::new();
+        for id in ids_with_deps {
+            let description = if let Some(description) = extra_registered_apps.get(&id) {
+                description.clone()
+            } else {
+                self.describe_application(id).await?
+            };
+            result.push(description);
+        }
+        Ok(result)
     }
 
     /// Records a blob that is used in this block. If this is the first use on this chain, creates
@@ -1094,7 +1149,7 @@ where
     }
 
     pub async fn read_blob_content(
-        &mut self,
+        &self,
         blob_id: BlobId,
     ) -> Result<BlobContent, SystemExecutionError> {
         match self.context().extra().get_blob(blob_id).await {

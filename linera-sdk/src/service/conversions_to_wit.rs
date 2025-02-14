@@ -7,7 +7,7 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::BlockHeight,
     http,
-    identifiers::{AccountOwner, ApplicationId, BytecodeId, ChainId, MessageId, Owner},
+    identifiers::{AccountOwner, ApplicationId, BytecodeId, ChainId, Owner},
 };
 
 use super::wit::service_system_api as wit_system_api;
@@ -75,8 +75,8 @@ impl From<ChainId> for wit_system_api::ChainId {
 impl From<ApplicationId> for wit_system_api::ApplicationId {
     fn from(application_id: ApplicationId) -> Self {
         wit_system_api::ApplicationId {
+            application_description_hash: application_id.application_description_hash.into(),
             bytecode_id: application_id.bytecode_id.into(),
-            creation: application_id.creation.into(),
         }
     }
 }
@@ -86,16 +86,6 @@ impl From<BytecodeId> for wit_system_api::BytecodeId {
         wit_system_api::BytecodeId {
             contract_blob_hash: bytecode_id.contract_blob_hash.into(),
             service_blob_hash: bytecode_id.service_blob_hash.into(),
-        }
-    }
-}
-
-impl From<MessageId> for wit_system_api::MessageId {
-    fn from(message_id: MessageId) -> Self {
-        wit_system_api::MessageId {
-            chain_id: message_id.chain_id.into(),
-            height: message_id.height.into(),
-            index: message_id.index,
         }
     }
 }
