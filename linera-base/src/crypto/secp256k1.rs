@@ -17,7 +17,7 @@ use crate::doc_scalar;
 pub struct Secp256k1Signature(pub secp256k1::ecdsa::Signature);
 
 impl Secp256k1Signature {
-    /// Computes a secp256k1 signature for [`value`] using the given [`secret`].
+    /// Computes a secp256k1 signature for `value` using the given `secret`.
     /// It first serializes the `T` type and then creates the `CryptoHash` from the serialized bytes.
     pub fn new<'de, T>(value: &T, secret: &secp256k1::SecretKey) -> Self
     where
