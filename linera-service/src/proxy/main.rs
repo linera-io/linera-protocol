@@ -8,6 +8,7 @@ use std::{net::SocketAddr, path::PathBuf, time::Duration};
 use anyhow::{bail, ensure, Result};
 use async_trait::async_trait;
 use futures::{FutureExt as _, SinkExt, StreamExt};
+use linera_base::listen_for_shutdown_signals;
 use linera_client::{
     config::{GenesisConfig, ValidatorServerConfig},
     storage::{run_with_storage, Runnable, StorageConfigNamespace},
@@ -118,7 +119,7 @@ impl Runnable for ProxyContext {
         S: Storage + Clone + Send + Sync + 'static,
     {
         let shutdown_notifier = CancellationToken::new();
-        tokio::spawn(util::listen_for_shutdown_signals(shutdown_notifier.clone()));
+        tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
         let proxy = Proxy::from_context(self, storage)?;
         match proxy {
             Proxy::Simple(simple_proxy) => simple_proxy.run(shutdown_notifier).await,
