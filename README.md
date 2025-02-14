@@ -4,6 +4,9 @@
 [![Build Status for Rust](https://github.com/linera-io/linera-protocol/actions/workflows/rust.yml/badge.svg)](https://github.com/linera-io/linera-protocol/actions/workflows/rust.yml)
 [![Build Status for Documentation](https://github.com/linera-io/linera-protocol/actions/workflows/documentation.yml/badge.svg)](https://github.com/linera-io/linera-protocol/actions/workflows/documentation.yml)
 [![Build Status for DynamoDB](https://github.com/linera-io/linera-protocol/actions/workflows/dynamodb.yml/badge.svg)](https://github.com/linera-io/linera-protocol/actions/workflows/dynamodb.yml)
+[![Twitter](https://img.shields.io/twitter/follow/linera_io)](https://x.com/linera_io)
+[![Discord](https://img.shields.io/discord/984941796272521226)](https://discord.com/invite/linera)
+
 <!-- [![Build Status for Kubernetes](https://github.com/linera-io/linera-protocol/actions/workflows/kubernetes.yml/badge.svg)](https://github.com/linera-io/linera-protocol/actions/workflows/kubernetes.yml) -->
 
 [Linera](https://linera.io) is a decentralized blockchain infrastructure designed for highly scalable,
