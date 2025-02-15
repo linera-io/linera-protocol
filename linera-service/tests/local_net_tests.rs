@@ -664,7 +664,8 @@ async fn test_storage_service_linera_net_up_simple() -> Result<()> {
     command.args([
         "net",
         "up",
-        "--with-faucet-chain",
+        "--with-faucet",
+        "--faucet-chain",
         "1",
         "--faucet-port",
         &port.to_string(),
