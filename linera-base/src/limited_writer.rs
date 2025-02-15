@@ -37,6 +37,7 @@ impl<W: Write> Write for LimitedWriter<W> {
                 .checked_sub(self.written)
                 .is_some_and(|remaining| buf.len() <= remaining),
             io::Error::other(LimitedWriterError)
+
         );
         // Forward to the inner writer.
         let n = self.inner.write(buf)?;
