@@ -4,14 +4,16 @@
 
 //! Define the cryptographic primitives used by the Linera protocol.
 
-mod keypair;
-pub use keypair::*;
-pub mod ed25519;
+mod ed25519;
 mod hash;
-pub mod secp256k1;
+#[allow(dead_code)]
+mod secp256k1;
 use std::{io, num::ParseIntError};
 
 use alloy_primitives::FixedBytes;
+pub use ed25519::{
+    Ed25519PublicKey as PublicKey, Ed25519SecretKey as SigningKey, Ed25519Signature as Signature,
+};
 use ed25519_dalek::{self as dalek};
 pub use hash::*;
 use serde::{Deserialize, Serialize};

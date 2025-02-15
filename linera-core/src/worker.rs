@@ -13,7 +13,7 @@ use futures::future::Either;
 #[cfg(with_testing)]
 use linera_base::crypto::PublicKey;
 use linera_base::{
-    crypto::{CryptoError, CryptoHash, KeyPair},
+    crypto::{CryptoError, CryptoHash, SigningKey},
     data_types::{
         ArithmeticError, Blob, BlockHeight, DecompressionError, Round, UserApplicationDescription,
     },
@@ -293,7 +293,7 @@ where
     #[instrument(level = "trace", skip(nickname, key_pair, storage))]
     pub fn new(
         nickname: String,
-        key_pair: Option<KeyPair>,
+        key_pair: Option<SigningKey>,
         storage: StorageClient,
         chain_worker_limit: NonZeroUsize,
     ) -> Self {
@@ -389,7 +389,7 @@ where
 
     #[instrument(level = "trace", skip(self, key_pair))]
     #[cfg(test)]
-    pub(crate) async fn with_key_pair(mut self, key_pair: Option<Arc<KeyPair>>) -> Self {
+    pub(crate) async fn with_key_pair(mut self, key_pair: Option<Arc<SigningKey>>) -> Self {
         self.chain_worker_config.key_pair = key_pair;
         self.chain_workers.lock().unwrap().clear();
         self

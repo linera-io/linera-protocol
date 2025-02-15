@@ -12,7 +12,7 @@ use std::collections::BTreeSet;
 
 pub use generic::GenericCertificate;
 use linera_base::{
-    crypto::ed25519::Ed25519Signature,
+    crypto::Signature,
     data_types::{BlockHeight, Round},
     identifiers::{BlobId, ChainId},
 };
@@ -76,7 +76,7 @@ impl Certificate {
         }
     }
 
-    pub fn signatures(&self) -> &Vec<(ValidatorName, Ed25519Signature)> {
+    pub fn signatures(&self) -> &Vec<(ValidatorName, Signature)> {
         match self {
             Certificate::Validated(cert) => cert.signatures(),
             Certificate::Confirmed(cert) => cert.signatures(),

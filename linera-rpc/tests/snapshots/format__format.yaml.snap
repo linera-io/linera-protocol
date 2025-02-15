@@ -150,7 +150,7 @@ BlockProposal:
     - owner:
         TYPENAME: Owner
     - public_key:
-        TYPENAME: PublicKey
+        TYPENAME: Ed25519PublicKey
     - signature:
         TYPENAME: Ed25519Signature
     - validated_block_certificate:
@@ -407,6 +407,11 @@ Destination:
       Subscribers:
         NEWTYPE:
           TYPENAME: ChannelName
+Ed25519PublicKey:
+  NEWTYPESTRUCT:
+    TUPLEARRAY:
+      CONTENT: U8
+      SIZE: 32
 Ed25519Signature:
   NEWTYPESTRUCT:
     TUPLEARRAY:
@@ -762,11 +767,6 @@ ProposedBlock:
     - previous_block_hash:
         OPTION:
           TYPENAME: CryptoHash
-PublicKey:
-  NEWTYPESTRUCT:
-    TUPLEARRAY:
-      CONTENT: U8
-      SIZE: 32
 Recipient:
   ENUM:
     0:
@@ -1173,7 +1173,7 @@ ValidatedBlockCertificate:
             - TYPENAME: Ed25519Signature
 ValidatorName:
   NEWTYPESTRUCT:
-    TYPENAME: PublicKey
+    TYPENAME: Ed25519PublicKey
 ValidatorState:
   STRUCT:
     - network_address: STR

@@ -4,7 +4,7 @@
 //! Test utilities
 
 use linera_base::{
-    crypto::KeyPair,
+    crypto::SigningKey,
     data_types::{Amount, BlockHeight, Round, Timestamp},
     hashed::Hashed,
     identifiers::{ChainId, Owner},
@@ -78,12 +78,12 @@ pub trait BlockTestExt: Sized {
 
     /// Returns a block proposal in the first round in a default ownership configuration
     /// (`Round::MultiLeader(0)`) without any hashed certificate values or validated block.
-    fn into_first_proposal(self, key_pair: &KeyPair) -> BlockProposal {
+    fn into_first_proposal(self, key_pair: &SigningKey) -> BlockProposal {
         self.into_proposal_with_round(key_pair, Round::MultiLeader(0))
     }
 
     /// Returns a block proposal without any hashed certificate values or validated block.
-    fn into_proposal_with_round(self, key_pair: &KeyPair, round: Round) -> BlockProposal;
+    fn into_proposal_with_round(self, key_pair: &SigningKey, round: Round) -> BlockProposal;
 }
 
 impl BlockTestExt for ProposedBlock {
@@ -124,7 +124,7 @@ impl BlockTestExt for ProposedBlock {
         self
     }
 
-    fn into_proposal_with_round(self, key_pair: &KeyPair, round: Round) -> BlockProposal {
+    fn into_proposal_with_round(self, key_pair: &SigningKey, round: Round) -> BlockProposal {
         BlockProposal::new_initial(round, self, key_pair)
     }
 }

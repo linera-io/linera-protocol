@@ -62,8 +62,8 @@ explanation.
 ```bash
 export CHAIN_0=aee928d4bf3880353b4a3cd9b6f88e6cc6e5ed050860abae439e7782e9b2dfe8
 export CHAIN_1=582843bc9322ed1928239ce3f6a855f6cd9ea94c8690907f113d6d7a8296a119
-export OWNER_0=513bb0b9fdf2d671fa3c44add540f383aada343b34260cff6220d390f2336c4b
-export OWNER_1=79539f482c1a7fefd5c1fe66572498fd343c0410e29bc83fc59939e6804fdf1b
+export OWNER_0=de166237331a2966d8cf6778e81a8c007b4084be80dc1e0409d51f216c1deaa1
+export OWNER_1=849baa540589d95e167d2622018fa341553bf2aff9f328d760443282c6654deb
 ```
 
 The `--extra-wallets 1` option creates an additional user chain and wallet - we will use it for the
