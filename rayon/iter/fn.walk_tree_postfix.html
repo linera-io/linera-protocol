@@ -1,0 +1,92 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Create a tree like postfix parallel iterator from an initial root node. The `children_of` function should take a node and iterate on all of its child nodes. The best parallelization is obtained when the tree is balanced but we should also be able to handle harder cases."><title>walk_tree_postfix in rayon::iter - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="rayon" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../rayon/index.html">rayon</a><span class="version">1.10.0</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In rayon::iter</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../index.html">rayon</a>::<wbr><a href="index.html">iter</a>::<wbr><a class="fn" href="#">walk_tree_postfix</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/rayon/iter/walk_tree.rs.html#447-457">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn walk_tree_postfix&lt;S, B, I&gt;(
+    root: S,
+    children_of: B,
+) -&gt; <a class="struct" href="struct.WalkTreePostfix.html" title="struct rayon::iter::WalkTreePostfix">WalkTreePostfix</a>&lt;S, B&gt;<div class="where">where
+    S: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a>,
+    B: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.Fn.html" title="trait core::ops::function::Fn">Fn</a>(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;S</a>) -&gt; I + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a>,
+    I: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/iter/traits/collect/trait.IntoIterator.html" title="trait core::iter::traits::collect::IntoIterator">IntoIterator</a>&lt;Item = S&gt;,</div></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Create a tree like postfix parallel iterator from an initial root node.
+The <code>children_of</code> function should take a node and iterate on all of its child nodes.
+The best parallelization is obtained when the tree is balanced
+but we should also be able to handle harder cases.</p>
+<h2 id="ordering"><a class="doc-anchor" href="#ordering">§</a>Ordering</h2>
+<p>This function guarantees a postfix ordering. See also <a href="fn.walk_tree_prefix.html" title="fn rayon::iter::walk_tree_prefix"><code>walk_tree_prefix</code></a> which guarantees a
+prefix order. If you don’t care about ordering, you should use <a href="fn.walk_tree.html" title="fn rayon::iter::walk_tree"><code>walk_tree</code></a>, which will use
+whatever is believed to be fastest.</p>
+<p>Between siblings, children are reduced in order – that is first children are reduced first.</p>
+<p>For example a perfect binary tree of 7 nodes will reduced in the following order:</p>
+<div class="example-wrap"><pre class="language-text"><code>     a
+    / \
+   /   \
+  b     c
+ / \   / \
+d   e f   g
+
+reduced as d,e,b,f,g,c,a
+
+</code></pre></div><h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2><div class="example-wrap"><pre class="language-text"><code>     4
+    / \
+   /   \
+  2     3
+       / \
+      1   2
+</code></pre></div>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rayon::iter::walk_tree_postfix;
+<span class="kw">use </span>rayon::prelude::<span class="kw-2">*</span>;
+
+<span class="kw">let </span>par_iter = walk_tree_postfix(<span class="number">4</span>, |<span class="kw-2">&amp;</span>e| {
+    <span class="kw">if </span>e &lt;= <span class="number">2 </span>{
+        Vec::new()
+    } <span class="kw">else </span>{
+        <span class="macro">vec!</span>[e / <span class="number">2</span>, e / <span class="number">2 </span>+ <span class="number">1</span>]
+    }
+});
+<span class="macro">assert_eq!</span>(par_iter.sum::&lt;u32&gt;(), <span class="number">12</span>);</code></pre></div>
+<h2 id="example-1"><a class="doc-anchor" href="#example-1">§</a>Example</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>rayon::prelude::<span class="kw-2">*</span>;
+<span class="kw">use </span>rayon::iter::walk_tree_postfix;
+
+<span class="kw">struct </span>Node {
+    content: u32,
+    left: <span class="prelude-ty">Option</span>&lt;Box&lt;Node&gt;&gt;,
+    right: <span class="prelude-ty">Option</span>&lt;Box&lt;Node&gt;&gt;,
+}
+
+<span class="comment">// Here we loop on the following tree:
+//
+//       10
+//      /  \
+//     /    \
+//    3     14
+//            \
+//             \
+//              18
+
+</span><span class="kw">let </span>root = Node {
+    content: <span class="number">10</span>,
+    left: <span class="prelude-val">Some</span>(Box::new(Node {
+        content: <span class="number">3</span>,
+        left: <span class="prelude-val">None</span>,
+        right: <span class="prelude-val">None</span>,
+    })),
+    right: <span class="prelude-val">Some</span>(Box::new(Node {
+        content: <span class="number">14</span>,
+        left: <span class="prelude-val">None</span>,
+        right: <span class="prelude-val">Some</span>(Box::new(Node {
+            content: <span class="number">18</span>,
+            left: <span class="prelude-val">None</span>,
+            right: <span class="prelude-val">None</span>,
+        })),
+    })),
+};
+
+<span class="kw">let </span><span class="kw-2">mut </span>v: Vec&lt;u32&gt; = walk_tree_postfix(<span class="kw-2">&amp;</span>root, |r| {
+    r.left
+        .as_ref()
+        .into_iter()
+        .chain(r.right.as_ref())
+        .map(|n| <span class="kw-2">&amp;**</span>n)
+})
+.map(|node| node.content)
+.collect();
+<span class="macro">assert_eq!</span>(v, <span class="macro">vec!</span>[<span class="number">3</span>, <span class="number">18</span>, <span class="number">14</span>, <span class="number">10</span>]);</code></pre></div>
+</div></details></section></div></main></body></html>

@@ -1,0 +1,103 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Adapts a function to provide user-friendly error output for `main` functions and tests."><title>report in snafu - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="snafu" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc attr"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../snafu/index.html">snafu</a><span class="version">0.8.5</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Attribute Macro <a href="index.html">snafu</a>::<wbr><a class="attr" href="#">report</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/snafu_derive/lib.rs.html#24">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>#[report]</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Adapts a function to provide user-friendly error output for <code>main</code>
+functions and tests.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>snafu::prelude::<span class="kw-2">*</span>;
+
+<span class="attr">#[snafu::report]
+</span><span class="kw">fn </span>main() -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    <span class="kw">let </span>_v = frobnicate_the_mumbletypeg()<span class="question-mark">?</span>;
+
+    <span class="prelude-val">Ok</span>(())
+}
+
+<span class="kw">fn </span>frobnicate_the_mumbletypeg() -&gt; <span class="prelude-ty">Result</span>&lt;u8&gt; {
+    api::contact_frobnicate_api().context(FrobnicateSnafu)
+}
+
+<span class="attr">#[derive(Debug, Snafu)]
+#[snafu(display(<span class="string">"Unable to frobnicate the mumbletypeg"</span>))]
+</span><span class="kw">struct </span>FrobnicateError {
+    source: api::ContactFrobnicateApiError,
+}
+
+<span class="kw">type </span><span class="prelude-ty">Result</span>&lt;T, E = FrobnicateError&gt; = std::result::Result&lt;T, E&gt;;
+
+<span class="kw">mod </span>api {
+    <span class="kw">use </span><span class="kw">crate</span>::config;
+    <span class="kw">use </span>snafu::prelude::<span class="kw-2">*</span>;
+
+    <span class="kw">pub fn </span>contact_frobnicate_api() -&gt; <span class="prelude-ty">Result</span>&lt;u8&gt; {
+        config::load_password().context(ContactFrobnicateApiSnafu)
+    }
+
+    <span class="attr">#[derive(Debug, Snafu)]
+    #[snafu(display(<span class="string">"Could not contact the mumbletypeg API"</span>))]
+    </span><span class="kw">pub struct </span>ContactFrobnicateApiError {
+        source: <span class="kw">crate</span>::config::MissingPasswordError,
+    }
+
+    <span class="kw">pub type </span><span class="prelude-ty">Result</span>&lt;T, E = ContactFrobnicateApiError&gt; = std::result::Result&lt;T, E&gt;;
+}
+
+<span class="kw">mod </span>config {
+    <span class="kw">use </span>snafu::prelude::<span class="kw-2">*</span>;
+
+    <span class="kw">pub fn </span>load_password() -&gt; <span class="prelude-ty">Result</span>&lt;u8&gt; {
+        MissingPasswordSnafu.fail()
+    }
+
+    <span class="attr">#[derive(Debug, Snafu)]
+    #[snafu(display(<span class="string">"The configuration has no password"</span>))]
+    </span><span class="kw">pub struct </span>MissingPasswordError {
+        backtrace: snafu::Backtrace,
+    }
+
+    <span class="kw">pub type </span><span class="prelude-ty">Result</span>&lt;T, E = MissingPasswordError&gt; = std::result::Result&lt;T, E&gt;;
+}</code></pre></div>
+<p>When using <code>#[snafu::report]</code>, the output of running this program
+may look like (backtrace edited for clarity and brevity):</p>
+<div class="example-wrap"><pre class="language-text"><code>Error: Unable to frobnicate the mumbletypeg
+
+Caused by these errors (recent errors listed first):
+  1: Could not contact the mumbletypeg API
+  2: The configuration has no password
+
+Backtrace:
+   [... output edited ...]
+   3: &lt;std::backtrace::Backtrace as snafu::GenerateImplicitData&gt;::generate
+             at crates/snafu/src/lib.rs:1210:9
+   4: backtrace_example::config::MissingPasswordSnafu::build
+             at ./src/main.rs:48:21
+   5: backtrace_example::config::MissingPasswordSnafu::fail
+             at ./src/main.rs:48:21
+   6: backtrace_example::config::load_password
+             at ./src/main.rs:45:9
+   7: backtrace_example::api::contact_frobnicate_api
+             at ./src/main.rs:29:9
+   8: backtrace_example::frobnicate_the_mumbletypeg
+             at ./src/main.rs:13:5
+   9: backtrace_example::main::{{closure}}
+             at ./src/main.rs:7:14
+  10: backtrace_example::main
+             at ./src/main.rs:5:1
+   [... output edited ...]
+</code></pre></div>
+<p>Contrast this to the default output produced when returning a
+<code>Result</code>:</p>
+<div class="example-wrap"><pre class="language-text"><code>Error: FrobnicateError { source: ContactFrobnicateApiError { source: MissingPasswordError { backtrace: Backtrace [...2000+ bytes of backtrace...] } } }
+</code></pre></div>
+<p>This macro is syntax sugar for using <a href="struct.Report.html" title="struct snafu::Report"><code>Report</code></a>; please read
+its documentation for detailed information, especially if you wish to
+<a href="struct.Report.html#interaction-with-the-provider-api" title="struct snafu::Report">see backtraces</a> in the output.</p>
+<h3 id="usage-with-other-procedural-macros"><a class="doc-anchor" href="#usage-with-other-procedural-macros">§</a>Usage with other procedural macros</h3>
+<p>This macro should work with other common procedural macros. It has been tested with</p>
+<ul>
+<li><code>tokio::main</code></li>
+<li><code>tokio::test</code></li>
+<li><code>async_std::main</code></li>
+<li><code>async_std::test</code></li>
+</ul>
+<p>Depending on the implementation details of each procedural macro, you
+may need to experiment by placing <code>snafu::report</code> before or after
+other macro invocations.</p>
+</div></details></section></div></main></body></html>

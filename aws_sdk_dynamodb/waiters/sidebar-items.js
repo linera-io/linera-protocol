@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["table_exists","table_not_exists"]};

@@ -1,0 +1,48 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Zeroizes a flat type/struct. Only zeroizes the values that it owns, and it does not work on dynamically sized values or trait objects. It would be inefficient to use this function on a type that already implements `ZeroizeOnDrop`."><title>zeroize_flat_type in zeroize - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="zeroize" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="icon" href="https://raw.githubusercontent.com/RustCrypto/media/6ee8e381/logo.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../zeroize/index.html"><img src="https://raw.githubusercontent.com/RustCrypto/media/6ee8e381/logo.svg" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../zeroize/index.html"><img src="https://raw.githubusercontent.com/RustCrypto/media/6ee8e381/logo.svg" alt="logo"></a><h2><a href="../zeroize/index.html">zeroize</a><span class="version">1.8.1</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="index.html">zeroize</a>::<wbr><a class="fn" href="#">zeroize_flat_type</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/zeroize/lib.rs.html#839-847">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub unsafe fn zeroize_flat_type&lt;F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>&gt;(data: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.pointer.html">*mut F</a>)</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Zeroizes a flat type/struct. Only zeroizes the values that it owns, and it does not work on
+dynamically sized values or trait objects. It would be inefficient to use this function on a
+type that already implements <code>ZeroizeOnDrop</code>.</p>
+<h2 id="safety"><a class="doc-anchor" href="#safety">§</a>Safety</h2>
+<ul>
+<li>The type must not contain references to outside data or dynamically sized data, such as
+<code>Vec&lt;T&gt;</code> or <code>String</code>.</li>
+<li>Values stored in the type must not have <code>Drop</code> impls.</li>
+<li>This function can invalidate the type if it is used after this function is called on it.
+It is advisable to call this function only in <code>impl Drop</code>.</li>
+<li>The bit pattern of all zeroes must be valid for the data being zeroized. This may not be
+true for enums and pointers.</li>
+</ul>
+<h2 id="incompatible-data-types"><a class="doc-anchor" href="#incompatible-data-types">§</a>Incompatible data types</h2>
+<p>Some data types that cannot be safely zeroized using <code>zeroize_flat_type</code> include,
+but are not limited to:</p>
+<ul>
+<li>References: <code>&amp;T</code> and <code>&amp;mut T</code></li>
+<li>Non-nullable types: <code>NonNull&lt;T&gt;</code>, <code>NonZeroU32</code>, etc.</li>
+<li>Enums with explicit non-zero tags.</li>
+<li>Smart pointers and collections: <code>Arc&lt;T&gt;</code>, <code>Box&lt;T&gt;</code>, <code>Vec&lt;T&gt;</code>, <code>HashMap&lt;K, V&gt;</code>, <code>String</code>, etc.</li>
+</ul>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Safe usage for a struct containing strictly flat data:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>zeroize::{ZeroizeOnDrop, zeroize_flat_type};
+
+<span class="kw">struct </span>DataToZeroize {
+    flat_data_1: [u8; <span class="number">32</span>],
+    flat_data_2: SomeMoreFlatData,
+}
+
+<span class="kw">struct </span>SomeMoreFlatData(u64);
+
+<span class="kw">impl </span>Drop <span class="kw">for </span>DataToZeroize {
+    <span class="kw">fn </span>drop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+        <span class="kw">unsafe </span>{ zeroize_flat_type(<span class="self">self </span><span class="kw">as </span><span class="kw-2">*mut </span><span class="self">Self</span>) }
+    }
+}
+<span class="kw">impl </span>ZeroizeOnDrop <span class="kw">for </span>DataToZeroize {}
+
+<span class="kw">let </span><span class="kw-2">mut </span>data = DataToZeroize {
+    flat_data_1: [<span class="number">3u8</span>; <span class="number">32</span>],
+    flat_data_2: SomeMoreFlatData(<span class="number">123u64</span>)
+};
+
+<span class="comment">// data gets zeroized when dropped</span></code></pre></div>
+</div></details></section></div></main></body></html>

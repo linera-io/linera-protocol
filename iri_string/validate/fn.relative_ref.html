@@ -1,0 +1,39 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Validates relative reference."><title>relative_ref in iri_string::validate - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="iri_string" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../iri_string/index.html">iri_string</a><span class="version">0.7.7</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In iri_string::validate</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../index.html">iri_string</a>::<wbr><a href="index.html">validate</a>::<wbr><a class="fn" href="#">relative_ref</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/iri_string/validate.rs.html#261-263">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn relative_ref&lt;S: <a class="trait" href="../spec/trait.Spec.html" title="trait iri_string::spec::Spec">Spec</a>&gt;(s: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="struct" href="struct.Error.html" title="struct iri_string::validate::Error">Error</a>&gt;</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Validates <a href="https://tools.ietf.org/html/rfc3986#section-4.2">relative reference</a>.</p>
+<p>This validator corresponds to <a href="../types/struct.RiRelativeStr.html"><code>RiRelativeStr</code></a> and <a href="../types/struct.RiRelativeString.html"><code>RiRelativeString</code></a> types.</p>
+<h2 id="valid-values"><a class="doc-anchor" href="#valid-values">§</a>Valid values</h2>
+<p>This type can have a relative IRI reference.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>iri_string::{spec::UriSpec, validate::relative_ref};
+<span class="macro">assert!</span>(relative_ref::&lt;UriSpec&gt;(<span class="string">"foo"</span>).is_ok());
+<span class="macro">assert!</span>(relative_ref::&lt;UriSpec&gt;(<span class="string">"foo/bar"</span>).is_ok());
+<span class="macro">assert!</span>(relative_ref::&lt;UriSpec&gt;(<span class="string">"/foo"</span>).is_ok());
+<span class="macro">assert!</span>(relative_ref::&lt;UriSpec&gt;(<span class="string">"//foo/bar"</span>).is_ok());
+<span class="macro">assert!</span>(relative_ref::&lt;UriSpec&gt;(<span class="string">"?foo"</span>).is_ok());
+<span class="macro">assert!</span>(relative_ref::&lt;UriSpec&gt;(<span class="string">"#foo"</span>).is_ok());
+<span class="macro">assert!</span>(relative_ref::&lt;UriSpec&gt;(<span class="string">"foo/bar?baz#qux"</span>).is_ok());
+<span class="comment">// The first path component can have colon if the path is absolute.
+</span><span class="macro">assert!</span>(relative_ref::&lt;UriSpec&gt;(<span class="string">"/foo:bar/"</span>).is_ok());
+<span class="comment">// Second or following path components can have colon.
+</span><span class="macro">assert!</span>(relative_ref::&lt;UriSpec&gt;(<span class="string">"foo/bar://baz/"</span>).is_ok());
+<span class="macro">assert!</span>(relative_ref::&lt;UriSpec&gt;(<span class="string">"./foo://bar"</span>).is_ok());</code></pre></div>
+<p>Absolute form of a reference is not allowed.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>iri_string::{spec::UriSpec, validate::relative_ref};
+<span class="macro">assert!</span>(relative_ref::&lt;UriSpec&gt;(<span class="string">"https://example.com/"</span>).is_err());
+<span class="comment">// The first path component cannot have colon, if the path is not absolute.
+</span><span class="macro">assert!</span>(relative_ref::&lt;UriSpec&gt;(<span class="string">"foo:bar"</span>).is_err());
+<span class="macro">assert!</span>(relative_ref::&lt;UriSpec&gt;(<span class="string">"foo:"</span>).is_err());
+<span class="macro">assert!</span>(relative_ref::&lt;UriSpec&gt;(<span class="string">"foo:/"</span>).is_err());
+<span class="macro">assert!</span>(relative_ref::&lt;UriSpec&gt;(<span class="string">"foo://"</span>).is_err());
+<span class="macro">assert!</span>(relative_ref::&lt;UriSpec&gt;(<span class="string">"foo:///"</span>).is_err());
+<span class="macro">assert!</span>(relative_ref::&lt;UriSpec&gt;(<span class="string">"foo:////"</span>).is_err());
+<span class="macro">assert!</span>(relative_ref::&lt;UriSpec&gt;(<span class="string">"foo://///"</span>).is_err());</code></pre></div>
+<p>Some characters and sequences cannot used in an IRI reference.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>iri_string::{spec::UriSpec, validate::relative_ref};
+<span class="comment">// `&lt;` and `&gt;` cannot directly appear in a relative IRI reference.
+</span><span class="macro">assert!</span>(relative_ref::&lt;UriSpec&gt;(<span class="string">"&lt;not allowed&gt;"</span>).is_err());
+<span class="comment">// Broken percent encoding cannot appear in a relative IRI reference.
+</span><span class="macro">assert!</span>(relative_ref::&lt;UriSpec&gt;(<span class="string">"%"</span>).is_err());
+<span class="macro">assert!</span>(relative_ref::&lt;UriSpec&gt;(<span class="string">"%GG"</span>).is_err());</code></pre></div>
+</div></details></section></div></main></body></html>

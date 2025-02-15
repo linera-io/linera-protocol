@@ -1,0 +1,60 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A mutual exclusive primitive that is always fair, useful for protecting shared data"><title>FairMutex in parking_lot - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="parking_lot" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc type"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../parking_lot/index.html">parking_lot</a><span class="version">0.12.3</span></h2></div><h2 class="location"><a href="#">FairMutex</a></h2><div class="sidebar-elems"><section><h3><a href="#aliased-type">Aliased type</a></h3></section><h2><a href="index.html">In crate parking_lot</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Type Alias <a href="index.html">parking_lot</a>::<wbr><a class="type" href="#">FairMutex</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/parking_lot/fair_mutex.rs.html#77">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub type FairMutex&lt;T&gt; = <a class="struct" href="../lock_api/mutex/struct.Mutex.html" title="struct lock_api::mutex::Mutex">Mutex</a>&lt;<a class="struct" href="struct.RawFairMutex.html" title="struct parking_lot::RawFairMutex">RawFairMutex</a>, T&gt;;</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A mutual exclusive primitive that is always fair, useful for protecting shared data</p>
+<p>This mutex will block threads waiting for the lock to become available. The
+mutex can be statically initialized or created by the <code>new</code>
+constructor. Each mutex has a type parameter which represents the data that
+it is protecting. The data can only be accessed through the RAII guards
+returned from <code>lock</code> and <code>try_lock</code>, which guarantees that the data is only
+ever accessed when the mutex is locked.</p>
+<p>The regular mutex provided by <code>parking_lot</code> uses eventual fairness
+(after some time it will default to the fair algorithm), but eventual
+fairness does not provide the same guarantees an always fair method would.
+Fair mutexes are generally slower, but sometimes needed.</p>
+<p>In a fair mutex the waiters form a queue, and the lock is always granted to
+the next requester in the queue, in first-in first-out order. This ensures
+that one thread cannot starve others by quickly re-acquiring the lock after
+releasing it.</p>
+<p>A fair mutex may not be interesting if threads have different priorities (this is known as
+priority inversion).</p>
+<h2 id="differences-from-the-standard-library-mutex"><a class="doc-anchor" href="#differences-from-the-standard-library-mutex">§</a>Differences from the standard library <code>Mutex</code></h2>
+<ul>
+<li>No poisoning, the lock is released normally on panic.</li>
+<li>Only requires 1 byte of space, whereas the standard library boxes the
+<code>FairMutex</code> due to platform limitations.</li>
+<li>Can be statically constructed.</li>
+<li>Does not require any drop glue when dropped.</li>
+<li>Inline fast path for the uncontended case.</li>
+<li>Efficient handling of micro-contention using adaptive spinning.</li>
+<li>Allows raw locking &amp; unlocking without a guard.</li>
+</ul>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>parking_lot::FairMutex;
+<span class="kw">use </span>std::sync::{Arc, mpsc::channel};
+<span class="kw">use </span>std::thread;
+
+<span class="kw">const </span>N: usize = <span class="number">10</span>;
+
+<span class="comment">// Spawn a few threads to increment a shared variable (non-atomically), and
+// let the main thread know once all increments are done.
+//
+// Here we're using an Arc to share memory among threads, and the data inside
+// the Arc is protected with a mutex.
+</span><span class="kw">let </span>data = Arc::new(FairMutex::new(<span class="number">0</span>));
+
+<span class="kw">let </span>(tx, rx) = channel();
+<span class="kw">for _ in </span><span class="number">0</span>..<span class="number">10 </span>{
+    <span class="kw">let </span>(data, tx) = (Arc::clone(<span class="kw-2">&amp;</span>data), tx.clone());
+    thread::spawn(<span class="kw">move </span>|| {
+        <span class="comment">// The shared state can only be accessed once the lock is held.
+        // Our non-atomic increment is safe because we're the only thread
+        // which can access the shared state when the lock is held.
+        </span><span class="kw">let </span><span class="kw-2">mut </span>data = data.lock();
+        <span class="kw-2">*</span>data += <span class="number">1</span>;
+        <span class="kw">if </span><span class="kw-2">*</span>data == N {
+            tx.send(()).unwrap();
+        }
+        <span class="comment">// the lock is unlocked here when `data` goes out of scope.
+    </span>});
+}
+
+rx.recv().unwrap();</code></pre></div>
+</div></details><h2 id="aliased-type" class="section-header">Aliased Type<a href="#aliased-type" class="anchor">§</a></h2><pre class="rust item-decl"><code>struct FairMutex&lt;T&gt; { <span class="comment">/* private fields */</span> }</code></pre><script src="../type.impl/lock_api/mutex/struct.Mutex.js" data-self-path="parking_lot::fair_mutex::FairMutex" async></script></section></div></main></body></html>

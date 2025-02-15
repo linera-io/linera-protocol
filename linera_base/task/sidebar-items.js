@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["spawn"],"struct":["Blocking","SendError"],"trait":["Post"],"type":["BlockingFuture","InputReceiver","NoInput","NonBlockingFuture"]};

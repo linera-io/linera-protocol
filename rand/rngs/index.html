@@ -1,0 +1,72 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Random number generators and adapters"><title>rand::rngs - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="rand" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="icon" href="https://www.rust-lang.org/favicon.ico"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../../rand/index.html"><img src="https://www.rust-lang.org/logos/rust-logo-128x128-blk.png" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../../rand/index.html"><img src="https://www.rust-lang.org/logos/rust-logo-128x128-blk.png" alt="logo"></a><h2><a href="../../rand/index.html">rand</a><span class="version">0.8.5</span></h2></div><h2 class="location"><a href="#">Module rngs</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li></ul></section><h2><a href="../index.html">In crate rand</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">rand</a>::<wbr><a class="mod" href="#">rngs</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/rand/rngs/mod.rs.html#9-119">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Random number generators and adapters</p>
+<h3 id="background-random-number-generators-rngs"><a class="doc-anchor" href="#background-random-number-generators-rngs">§</a>Background: Random number generators (RNGs)</h3>
+<p>Computers cannot produce random numbers from nowhere. We classify
+random number generators as follows:</p>
+<ul>
+<li>“True” random number generators (TRNGs) use hard-to-predict data sources
+(e.g. the high-resolution parts of event timings and sensor jitter) to
+harvest random bit-sequences, apply algorithms to remove bias and
+estimate available entropy, then combine these bits into a byte-sequence
+or an entropy pool. This job is usually done by the operating system or
+a hardware generator (HRNG).</li>
+<li>“Pseudo”-random number generators (PRNGs) use algorithms to transform a
+seed into a sequence of pseudo-random numbers. These generators can be
+fast and produce well-distributed unpredictable random numbers (or not).
+They are usually deterministic: given algorithm and seed, the output
+sequence can be reproduced. They have finite period and eventually loop;
+with many algorithms this period is fixed and can be proven sufficiently
+long, while others are chaotic and the period depends on the seed.</li>
+<li>“Cryptographically secure” pseudo-random number generators (CSPRNGs)
+are the sub-set of PRNGs which are secure. Security of the generator
+relies both on hiding the internal state and using a strong algorithm.</li>
+</ul>
+<h3 id="traits-and-functionality"><a class="doc-anchor" href="#traits-and-functionality">§</a>Traits and functionality</h3>
+<p>All RNGs implement the <a href="../trait.RngCore.html" title="trait rand::RngCore"><code>RngCore</code></a> trait, as a consequence of which the
+<a href="../trait.Rng.html" title="trait rand::Rng"><code>Rng</code></a> extension trait is automatically implemented. Secure RNGs may
+additionally implement the <a href="../trait.CryptoRng.html" title="trait rand::CryptoRng"><code>CryptoRng</code></a> trait.</p>
+<p>All PRNGs require a seed to produce their random number sequence. The
+<a href="../trait.SeedableRng.html" title="trait rand::SeedableRng"><code>SeedableRng</code></a> trait provides three ways of constructing PRNGs:</p>
+<ul>
+<li><code>from_seed</code> accepts a type specific to the PRNG</li>
+<li><code>from_rng</code> allows a PRNG to be seeded from any other RNG</li>
+<li><code>seed_from_u64</code> allows any PRNG to be seeded from a <code>u64</code> insecurely</li>
+<li><code>from_entropy</code> securely seeds a PRNG from fresh entropy</li>
+</ul>
+<p>Use the <a href="../../rand_core/index.html" title="mod rand_core"><code>rand_core</code></a> crate when implementing your own RNGs.</p>
+<h3 id="our-generators"><a class="doc-anchor" href="#our-generators">§</a>Our generators</h3>
+<p>This crate provides several random number generators:</p>
+<ul>
+<li><a href="struct.OsRng.html" title="struct rand::rngs::OsRng"><code>OsRng</code></a> is an interface to the operating system’s random number
+source. Typically the operating system uses a CSPRNG with entropy
+provided by a TRNG and some type of on-going re-seeding.</li>
+<li><a href="struct.ThreadRng.html" title="struct rand::rngs::ThreadRng"><code>ThreadRng</code></a>, provided by the <a href="../fn.thread_rng.html" title="fn rand::thread_rng"><code>thread_rng</code></a> function, is a handle to a
+thread-local CSPRNG with periodic seeding from <a href="struct.OsRng.html" title="struct rand::rngs::OsRng"><code>OsRng</code></a>. Because this
+is local, it is typically much faster than <a href="struct.OsRng.html" title="struct rand::rngs::OsRng"><code>OsRng</code></a>. It should be
+secure, though the paranoid may prefer <a href="struct.OsRng.html" title="struct rand::rngs::OsRng"><code>OsRng</code></a>.</li>
+<li><a href="struct.StdRng.html" title="struct rand::rngs::StdRng"><code>StdRng</code></a> is a CSPRNG chosen for good performance and trust of security
+(based on reviews, maturity and usage). The current algorithm is ChaCha12,
+which is well established and rigorously analysed.
+<a href="struct.StdRng.html" title="struct rand::rngs::StdRng"><code>StdRng</code></a> provides the algorithm used by <a href="struct.ThreadRng.html" title="struct rand::rngs::ThreadRng"><code>ThreadRng</code></a> but without
+periodic reseeding.</li>
+<li><a href="struct.SmallRng.html" title="struct rand::rngs::SmallRng"><code>SmallRng</code></a> is an <strong>insecure</strong> PRNG designed to be fast, simple, require
+little memory, and have good output quality.</li>
+</ul>
+<p>The algorithms selected for <a href="struct.StdRng.html" title="struct rand::rngs::StdRng"><code>StdRng</code></a> and <a href="struct.SmallRng.html" title="struct rand::rngs::SmallRng"><code>SmallRng</code></a> may change in any
+release and may be platform-dependent, therefore they should be considered
+<strong>not reproducible</strong>.</p>
+<h3 id="additional-generators"><a class="doc-anchor" href="#additional-generators">§</a>Additional generators</h3>
+<p><strong>TRNGs</strong>: The <a href="https://crates.io/crates/rdrand"><code>rdrand</code></a> crate provides an interface to the RDRAND and
+RDSEED instructions available in modern Intel and AMD CPUs.
+The <a href="https://crates.io/crates/rand_jitter"><code>rand_jitter</code></a> crate provides a user-space implementation of
+entropy harvesting from CPU timer jitter, but is very slow and has
+<a href="https://github.com/rust-random/rand/issues/699">security issues</a>.</p>
+<p><strong>PRNGs</strong>: Several companion crates are available, providing individual or
+families of PRNG algorithms. These provide the implementations behind
+<a href="struct.StdRng.html" title="struct rand::rngs::StdRng"><code>StdRng</code></a> and <a href="struct.SmallRng.html" title="struct rand::rngs::SmallRng"><code>SmallRng</code></a> but can also be used directly, indeed <em>should</em>
+be used directly when <strong>reproducibility</strong> matters.
+Some suggestions are: <a href="https://crates.io/crates/rand_chacha"><code>rand_chacha</code></a>, <a href="https://crates.io/crates/rand_pcg"><code>rand_pcg</code></a>, <a href="https://crates.io/crates/rand_xoshiro"><code>rand_xoshiro</code></a>.
+A full list can be found by searching for crates with the <a href="https://crates.io/keywords/rng"><code>rng</code> tag</a>.</p>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="adapter/index.html" title="mod rand::rngs::adapter">adapter</a></div><div class="desc docblock-short">Wrappers / adapters forming RNGs</div></li><li><div class="item-name"><a class="mod" href="mock/index.html" title="mod rand::rngs::mock">mock</a></div><div class="desc docblock-short">Mock random number generator</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.OsRng.html" title="struct rand::rngs::OsRng">OsRng</a></div><div class="desc docblock-short">A random number generator that retrieves randomness from the
+operating system.</div></li><li><div class="item-name"><a class="struct" href="struct.SmallRng.html" title="struct rand::rngs::SmallRng">SmallRng</a></div><div class="desc docblock-short">A small-state, fast non-crypto PRNG</div></li><li><div class="item-name"><a class="struct" href="struct.StdRng.html" title="struct rand::rngs::StdRng">StdRng</a></div><div class="desc docblock-short">The standard RNG. The PRNG algorithm in <code>StdRng</code> is chosen to be efficient
+on the current platform, to be statistically strong and unpredictable
+(meaning a cryptographically secure PRNG).</div></li><li><div class="item-name"><a class="struct" href="struct.ThreadRng.html" title="struct rand::rngs::ThreadRng">ThreadRng</a></div><div class="desc docblock-short">A reference to the thread-local generator</div></li></ul></section></div></main></body></html>

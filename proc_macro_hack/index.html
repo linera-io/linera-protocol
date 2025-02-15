@@ -1,0 +1,101 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="github crates-io docs-rs"><title>proc_macro_hack - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="proc_macro_hack" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../proc_macro_hack/index.html">proc_macro_hack</a><span class="version">0.5.20+deprecated</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#attributes">Attribute Macros</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">proc_macro_hack</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/proc_macro_hack/lib.rs.html#1-599">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><a href="https://github.com/dtolnay/proc-macro-hack"><img src="https://img.shields.io/badge/github-8da0cb?style=for-the-badge&amp;labelColor=555555&amp;logo=github" alt="github" /></a> <a href="https://crates.io/crates/proc-macro-hack"><img src="https://img.shields.io/badge/crates.io-fc8d62?style=for-the-badge&amp;labelColor=555555&amp;logo=rust" alt="crates-io" /></a> <a href="https://docs.rs/proc-macro-hack"><img src="https://img.shields.io/badge/docs.rs-66c2a5?style=for-the-badge&amp;labelColor=555555&amp;logo=docs.rs" alt="docs-rs" /></a></p>
+<br>
+<table><tr><td><hr>
+<b>Note:</b> <i>As of Rust 1.45 this crate is superseded by native support
+for #[proc_macro] in expression position. Only consider using this crate if
+you care about supporting compilers between 1.31 and 1.45.</i>
+<hr></td></tr></table>
+<p>Since Rust 1.30, the language supports user-defined function-like procedural
+macros. However these can only be invoked in item position, not in
+statements or expressions.</p>
+<p>This crate implements an alternative type of procedural macro that can be
+invoked in statement or expression position.</p>
+<h2 id="defining-procedural-macros"><a class="doc-anchor" href="#defining-procedural-macros">§</a>Defining procedural macros</h2>
+<p>Two crates are required to define a procedural macro.</p>
+<h3 id="the-implementation-crate"><a class="doc-anchor" href="#the-implementation-crate">§</a>The implementation crate</h3>
+<p>This crate must contain nothing but procedural macros. Private helper
+functions and private modules are fine but nothing can be public.</p>
+<p><a href="https://github.com/dtolnay/proc-macro-hack/tree/master/demo-hack-impl">» example of an implementation crate</a></p>
+<p>Just like you would use a #[proc_macro] attribute to define a natively
+supported procedural macro, use proc-macro-hack’s #[proc_macro_hack]
+attribute to define a procedural macro that works in expression position.
+The function signature is the same as for ordinary function-like procedural
+macros.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>proc_macro::TokenStream;
+<span class="kw">use </span>proc_macro_hack::proc_macro_hack;
+<span class="kw">use </span>quote::quote;
+<span class="kw">use </span>syn::{parse_macro_input, Expr};
+
+<span class="attr">#[proc_macro_hack]
+</span><span class="kw">pub fn </span>add_one(input: TokenStream) -&gt; TokenStream {
+    <span class="kw">let </span>expr = <span class="macro">parse_macro_input!</span>(input <span class="kw">as </span>Expr);
+    TokenStream::from(<span class="macro">quote!</span> {
+        <span class="number">1 </span>+ (#expr)
+    })
+}</code></pre></div>
+<h3 id="the-declaration-crate"><a class="doc-anchor" href="#the-declaration-crate">§</a>The declaration crate</h3>
+<p>This crate is allowed to contain other public things if you need, for
+example traits or functions or ordinary macros.</p>
+<p><a href="https://github.com/dtolnay/proc-macro-hack/tree/master/demo-hack">» example of a declaration crate</a></p>
+<p>Within the declaration crate there needs to be a re-export of your
+procedural macro from the implementation crate. The re-export also carries a
+#[proc_macro_hack] attribute.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>proc_macro_hack::proc_macro_hack;
+
+<span class="doccomment">/// Add one to an expression.
+///
+/// (Documentation goes here on the re-export, not in the other crate.)
+</span><span class="attr">#[proc_macro_hack]
+</span><span class="kw">pub use </span>demo_hack_impl::add_one;</code></pre></div>
+<p>Both crates depend on <code>proc-macro-hack</code>:</p>
+<div class="example-wrap"><pre class="language-toml"><code>[dependencies]
+proc-macro-hack = &quot;0.5&quot;
+</code></pre></div>
+<p>Additionally, your implementation crate (but not your declaration crate) is
+a proc macro crate:</p>
+<div class="example-wrap"><pre class="language-toml"><code>[lib]
+proc-macro = true
+</code></pre></div><h2 id="using-procedural-macros"><a class="doc-anchor" href="#using-procedural-macros">§</a>Using procedural macros</h2>
+<p>Users of your crate depend on your declaration crate (not your
+implementation crate), then use your procedural macros as usual.</p>
+<p><a href="https://github.com/dtolnay/proc-macro-hack/tree/master/example">» example of a downstream crate</a></p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>demo_hack::add_one;
+
+<span class="kw">fn </span>main() {
+    <span class="kw">let </span>two = <span class="number">2</span>;
+    <span class="kw">let </span>nine = <span class="macro">add_one!</span>(two) + <span class="macro">add_one!</span>(<span class="number">2 </span>+ <span class="number">3</span>);
+    <span class="macro">println!</span>(<span class="string">"nine = {}"</span>, nine);
+}</code></pre></div>
+<h2 id="limitations"><a class="doc-anchor" href="#limitations">§</a>Limitations</h2>
+<ul>
+<li>
+<p>Only proc macros in expression position are supported. Proc macros in
+pattern position (<a href="https://github.com/dtolnay/proc-macro-hack/issues/20">#20</a>) are not supported.</p>
+</li>
+<li>
+<p>By default, nested invocations are not supported i.e. the code emitted by
+a proc-macro-hack macro invocation cannot contain recursive calls to the
+same proc-macro-hack macro nor calls to any other proc-macro-hack macros.
+Use <a href="https://docs.rs/proc-macro-nested"><code>proc-macro-nested</code></a> if you require support for nested invocations.</p>
+</li>
+<li>
+<p>By default, hygiene is structured such that the expanded code can’t refer
+to local variables other than those passed by name somewhere in the macro
+input. If your macro must refer to <em>local</em> variables that don’t get named
+in the macro input, use <code>#[proc_macro_hack(fake_call_site)]</code> on the
+re-export in your declaration crate. <em>Most macros won’t need this.</em></p>
+</li>
+<li>
+<p>On compilers that are new enough to natively support proc macros in
+expression position, proc-macro-hack does not automatically use that
+support, since the hygiene can be subtly different between the two
+implementations. To opt in to compiling your macro to native
+<code>#[proc_macro]</code> on sufficiently new compilers, use
+<code>#[proc_macro_hack(only_hack_old_rustc)]</code> on the re-export in your
+declaration crate.</p>
+</li>
+</ul>
+</div></details><h2 id="attributes" class="section-header">Attribute Macros<a href="#attributes" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="attr" href="attr.proc_macro_hack.html" title="attr proc_macro_hack::proc_macro_hack">proc_macro_hack</a></div></li></ul></section></div></main></body></html>

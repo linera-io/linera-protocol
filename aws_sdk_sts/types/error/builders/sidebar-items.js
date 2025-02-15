@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["ExpiredTokenExceptionBuilder","IdpCommunicationErrorExceptionBuilder","IdpRejectedClaimExceptionBuilder","InvalidAuthorizationMessageExceptionBuilder","InvalidIdentityTokenExceptionBuilder","MalformedPolicyDocumentExceptionBuilder","PackedPolicyTooLargeExceptionBuilder","RegionDisabledExceptionBuilder"]};

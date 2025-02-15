@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ExecInteractiveMode","InClusterError","KubeconfigError","LoadDataError"],"struct":["AuthInfo","AuthProviderConfig","Cluster","Config","Context","ExecAuthCluster","ExecConfig","InferConfigError","KubeConfigOptions","Kubeconfig","NamedAuthInfo","NamedCluster","NamedContext","NamedExtension","Preferences"]};

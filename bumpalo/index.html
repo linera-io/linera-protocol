@@ -1,0 +1,206 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="`bumpalo`"><title>bumpalo - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="bumpalo" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../bumpalo/index.html">bumpalo</a><span class="version">3.16.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">bumpalo</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/bumpalo/lib.rs.html#1-2075">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="bumpalo"><a class="doc-anchor" href="#bumpalo">§</a><code>bumpalo</code></h2>
+<p><strong>A fast bump allocation arena for Rust.</strong></p>
+<p><a href="https://docs.rs/bumpalo/"><img src="https://docs.rs/bumpalo/badge.svg" alt="" /></a>
+<a href="https://crates.io/crates/bumpalo"><img src="https://img.shields.io/crates/v/bumpalo.svg" alt="" /></a>
+<a href="https://crates.io/crates/bumpalo"><img src="https://img.shields.io/crates/d/bumpalo.svg" alt="" /></a>
+<a href="https://github.com/fitzgen/bumpalo/actions?query=workflow%3ARust"><img src="https://github.com/fitzgen/bumpalo/workflows/Rust/badge.svg" alt="Build Status" /></a></p>
+<p><img src="https://github.com/fitzgen/bumpalo/raw/main/bumpalo.png" alt="" /></p>
+<h4 id="bump-allocation"><a class="doc-anchor" href="#bump-allocation">§</a>Bump Allocation</h4>
+<p>Bump allocation is a fast, but limited approach to allocation. We have a chunk
+of memory, and we maintain a pointer within that memory. Whenever we allocate an
+object, we do a quick check that we have enough capacity left in our chunk to
+allocate the object and then update the pointer by the object’s size. <em>That’s
+it!</em></p>
+<p>The disadvantage of bump allocation is that there is no general way to
+deallocate individual objects or reclaim the memory region for a
+no-longer-in-use object.</p>
+<p>These trade offs make bump allocation well-suited for <em>phase-oriented</em>
+allocations. That is, a group of objects that will all be allocated during the
+same program phase, used, and then can all be deallocated together as a group.</p>
+<h4 id="deallocation-en-masse-but-no-drop"><a class="doc-anchor" href="#deallocation-en-masse-but-no-drop">§</a>Deallocation en Masse, but no <code>Drop</code></h4>
+<p>To deallocate all the objects in the arena at once, we can simply reset the bump
+pointer back to the start of the arena’s memory chunk. This makes mass
+deallocation <em>extremely</em> fast, but allocated objects’ <a href="https://doc.rust-lang.org/std/ops/trait.Drop.html"><code>Drop</code></a> implementations are
+not invoked.</p>
+<blockquote>
+<p><strong>However:</strong> <a href="https://docs.rs/bumpalo/latest/bumpalo/boxed/struct.Box.html"><code>bumpalo::boxed::Box&lt;T&gt;</code></a> can be used to wrap
+<code>T</code> values allocated in the <code>Bump</code> arena, and calls <code>T</code>’s <code>Drop</code>
+implementation when the <code>Box&lt;T&gt;</code> wrapper goes out of scope. This is similar to
+how <a href="https://doc.rust-lang.org/std/boxed/struct.Box.html"><code>std::boxed::Box</code></a> works, except without deallocating its backing memory.</p>
+</blockquote>
+<h4 id="what-happens-when-the-memory-chunk-is-full"><a class="doc-anchor" href="#what-happens-when-the-memory-chunk-is-full">§</a>What happens when the memory chunk is full?</h4>
+<p>This implementation will allocate a new memory chunk from the global allocator
+and then start bump allocating into this new memory chunk.</p>
+<h4 id="example"><a class="doc-anchor" href="#example">§</a>Example</h4>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>bumpalo::Bump;
+<span class="kw">use </span>std::u64;
+
+<span class="kw">struct </span>Doggo {
+    cuteness: u64,
+    age: u8,
+    scritches_required: bool,
+}
+
+<span class="comment">// Create a new arena to bump allocate into.
+</span><span class="kw">let </span>bump = Bump::new();
+
+<span class="comment">// Allocate values into the arena.
+</span><span class="kw">let </span>scooter = bump.alloc(Doggo {
+    cuteness: u64::max_value(),
+    age: <span class="number">8</span>,
+    scritches_required: <span class="bool-val">true</span>,
+});
+
+<span class="comment">// Exclusive, mutable references to the just-allocated value are returned.
+</span><span class="macro">assert!</span>(scooter.scritches_required);
+scooter.age += <span class="number">1</span>;</code></pre></div>
+<h4 id="collections"><a class="doc-anchor" href="#collections">§</a>Collections</h4>
+<p>When the <code>"collections"</code> cargo feature is enabled, a fork of some of the <code>std</code>
+library’s collections are available in the <a href="https://docs.rs/bumpalo/latest/bumpalo/collections/index.html"><code>collections</code></a> module. These
+collection types are modified to allocate their space inside <code>bumpalo::Bump</code>
+arenas.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[cfg(feature = <span class="string">"collections"</span>)]
+</span>{
+    <span class="kw">use </span>bumpalo::{Bump, collections::Vec};
+
+    <span class="comment">// Create a new bump arena.
+    </span><span class="kw">let </span>bump = Bump::new();
+
+    <span class="comment">// Create a vector of integers whose storage is backed by the bump arena. The
+    // vector cannot outlive its backing arena, and this property is enforced with
+    // Rust's lifetime rules.
+    </span><span class="kw">let </span><span class="kw-2">mut </span>v = Vec::new_in(<span class="kw-2">&amp;</span>bump);
+
+    <span class="comment">// Push a bunch of integers onto `v`!
+    </span><span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..<span class="number">100 </span>{
+        v.push(i);
+    }
+}</code></pre></div>
+<p>Eventually <a href="https://github.com/rust-lang/rust/issues/42774">all <code>std</code> collection types will be parameterized by an
+allocator</a> and we can remove
+this <code>collections</code> module and use the <code>std</code> versions.</p>
+<p>For unstable, nightly-only support for custom allocators in <code>std</code>, see the
+<code>allocator_api</code> section below.</p>
+<h4 id="bumpaloboxedbox"><a class="doc-anchor" href="#bumpaloboxedbox">§</a><code>bumpalo::boxed::Box</code></h4>
+<p>When the <code>"boxed"</code> cargo feature is enabled, a fork of <code>std::boxed::Box</code>
+is available in the <code>boxed</code> module. This <code>Box</code> type is modified to allocate its
+space inside <code>bumpalo::Bump</code> arenas.</p>
+<p><strong>A <code>Box&lt;T&gt;</code> runs <code>T</code>’s drop implementation when the <code>Box&lt;T&gt;</code> is dropped.</strong> You
+can use this to work around the fact that <code>Bump</code> does not drop values allocated
+in its space itself.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[cfg(feature = <span class="string">"boxed"</span>)]
+</span>{
+    <span class="kw">use </span>bumpalo::{Bump, boxed::Box};
+    <span class="kw">use </span>std::sync::atomic::{AtomicUsize, Ordering};
+
+    <span class="kw">static </span>NUM_DROPPED: AtomicUsize = AtomicUsize::new(<span class="number">0</span>);
+
+    <span class="kw">struct </span>CountDrops;
+
+    <span class="kw">impl </span>Drop <span class="kw">for </span>CountDrops {
+        <span class="kw">fn </span>drop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+            NUM_DROPPED.fetch_add(<span class="number">1</span>, Ordering::SeqCst);
+        }
+    }
+
+    <span class="comment">// Create a new bump arena.
+    </span><span class="kw">let </span>bump = Bump::new();
+
+    <span class="comment">// Create a `CountDrops` inside the bump arena.
+    </span><span class="kw">let </span><span class="kw-2">mut </span>c = Box::new_in(CountDrops, <span class="kw-2">&amp;</span>bump);
+
+    <span class="comment">// No `CountDrops` have been dropped yet.
+    </span><span class="macro">assert_eq!</span>(NUM_DROPPED.load(Ordering::SeqCst), <span class="number">0</span>);
+
+    <span class="comment">// Drop our `Box&lt;CountDrops&gt;`.
+    </span>drop(c);
+
+    <span class="comment">// Its `Drop` implementation was run, and so `NUM_DROPS` has been
+    // incremented.
+    </span><span class="macro">assert_eq!</span>(NUM_DROPPED.load(Ordering::SeqCst), <span class="number">1</span>);
+}</code></pre></div>
+<h5 id="serde"><a class="doc-anchor" href="#serde">§</a>Serde</h5>
+<p>Adding the <code>serde</code> feature flag will enable transparent serialization of Vecs and
+boxed values.</p>
+<div class="example-wrap"><pre class="language-toml"><code>[dependencies]
+bumpalo = { version = &quot;3.9&quot;, features = [&quot;collections&quot;, &quot;boxed&quot;, &quot;serde&quot;] }
+</code></pre></div>
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>bumpalo::{Bump, boxed::Box, collections::Vec};
+
+<span class="comment">// Create a new bump arena.
+</span><span class="kw">let </span>bump = Bump::new();
+
+<span class="comment">// Create a `Box`
+</span><span class="kw">let box </span>= Box::new_in(<span class="string">"hello"</span>, <span class="kw-2">&amp;</span>bump);
+
+<span class="comment">// Serialize with serde_json
+</span><span class="macro">assert_eq!</span>(serde_json::to_string(<span class="kw-2">&amp;</span><span class="kw">box</span>).unwrap(), <span class="string">"\"hello\""</span>);
+
+<span class="comment">// Create a `Vec`
+</span><span class="kw">let </span>vec = Vec::new_in( <span class="kw-2">&amp;</span>bump);
+vec.push(<span class="number">1</span>);
+vec.push(<span class="number">2</span>);
+
+<span class="comment">// Serialize with serde_json
+</span><span class="macro">assert_eq!</span>(serde_json::to_string(<span class="kw-2">&amp;</span>vec).unwrap(), <span class="string">"[1, 2]"</span>);</code></pre></div>
+<h4 id="no_std-support"><a class="doc-anchor" href="#no_std-support">§</a><code>#![no_std]</code> Support</h4>
+<p>Bumpalo is a <code>no_std</code> crate by default. It depends only on the <code>alloc</code> and <code>core</code> crates.</p>
+<h4 id="std-support"><a class="doc-anchor" href="#std-support">§</a><code>std</code> Support</h4>
+<p>You can optionally decide to enable the <code>std</code> feature in order to enable some
+std only trait implementations for some collections:</p>
+<ul>
+<li><code>std::io::Write</code> for <code>Vec&lt;'bump, u8&gt;</code></li>
+</ul>
+<h4 id="thread-support"><a class="doc-anchor" href="#thread-support">§</a>Thread support</h4>
+<p>The <code>Bump</code> is <code>!Sync</code>, which makes it hard to use in certain situations around
+threads ‒ for example in <code>rayon</code>.</p>
+<p>The <a href="https://crates.io/crates/bumpalo-herd"><code>bumpalo-herd</code></a> crate provides a
+pool of <code>Bump</code> allocators for use in such situations.</p>
+<h4 id="nightly-rust-allocator_api-support"><a class="doc-anchor" href="#nightly-rust-allocator_api-support">§</a>Nightly Rust <code>allocator_api</code> Support</h4>
+<p>The unstable, nightly-only Rust <code>allocator_api</code> feature defines an <a href="https://doc.rust-lang.org/std/alloc/trait.Allocator.html"><code>Allocator</code></a>
+trait and exposes custom allocators for <code>std</code> types. Bumpalo has a matching
+<code>allocator_api</code> cargo feature to enable implementing <code>Allocator</code> and using
+<code>Bump</code> with <code>std</code> collections. Note that, as <code>feature(allocator_api)</code> is
+unstable and only in nightly Rust, Bumpalo’s matching <code>allocator_api</code> cargo
+feature should be considered unstable, and will not follow the semver
+conventions that the rest of the crate does.</p>
+<p>First, enable the <code>allocator_api</code> feature in your <code>Cargo.toml</code>:</p>
+<div class="example-wrap"><pre class="language-toml"><code>[dependencies]
+bumpalo = { version = &quot;3&quot;, features = [&quot;allocator_api&quot;] }
+</code></pre></div>
+<p>Next, enable the <code>allocator_api</code> nightly Rust feature in your <code>src/lib.rs</code> or
+<code>src/main.rs</code>:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(allocator_api)]</span></code></pre></div>
+<p>Finally, use <code>std</code> collections with <code>Bump</code>, so that their internal heap
+allocations are made within the given bump arena:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>bumpalo::Bump;
+
+<span class="comment">// Create a new bump arena.
+</span><span class="kw">let </span>bump = Bump::new();
+
+<span class="comment">// Create a `Vec` whose elements are allocated within the bump arena.
+</span><span class="kw">let </span><span class="kw-2">mut </span>v = Vec::new_in(<span class="kw-2">&amp;</span>bump);
+v.push(<span class="number">0</span>);
+v.push(<span class="number">1</span>);
+v.push(<span class="number">2</span>);</code></pre></div>
+<h4 id="using-the-allocator-api-on-stable-rust"><a class="doc-anchor" href="#using-the-allocator-api-on-stable-rust">§</a>Using the <code>Allocator</code> API on Stable Rust</h4>
+<p>You can enable the <code>allocator-api2</code> Cargo feature and <code>bumpalo</code> will use <a href="https://crates.io/crates/allocator-api2">the
+<code>allocator-api2</code> crate</a> to implement
+the unstable nightly<code>Allocator</code> API on stable Rust. This means that
+<code>bumpalo::Bump</code> will be usable with any collection that is generic over
+<code>allocator_api2::Allocator</code>.</p>
+<h4 id="minimum-supported-rust-version-msrv"><a class="doc-anchor" href="#minimum-supported-rust-version-msrv">§</a>Minimum Supported Rust Version (MSRV)</h4>
+<p>This crate is guaranteed to compile on stable Rust <strong>1.73</strong> and up. It might
+compile with older versions but that may change in any new patch release.</p>
+<p>We reserve the right to increment the MSRV on minor releases, however we will
+strive to only do it deliberately and for good reasons.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.AllocErr.html" title="struct bumpalo::AllocErr">AllocErr</a></div><div class="desc docblock-short">The <code>AllocErr</code> error indicates an allocation failure
+that may be due to resource exhaustion or to
+something wrong when combining the given input arguments with this
+allocator.</div></li><li><div class="item-name"><a class="struct" href="struct.Bump.html" title="struct bumpalo::Bump">Bump</a></div><div class="desc docblock-short">An arena to bump allocate into.</div></li><li><div class="item-name"><a class="struct" href="struct.ChunkIter.html" title="struct bumpalo::ChunkIter">ChunkIter</a></div><div class="desc docblock-short">An iterator over each chunk of allocated memory that
+an arena has bump allocated into.</div></li><li><div class="item-name"><a class="struct" href="struct.ChunkRawIter.html" title="struct bumpalo::ChunkRawIter">ChunkRawIter</a></div><div class="desc docblock-short">An iterator over raw pointers to chunks of allocated memory that this
+arena has bump allocated into.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.AllocOrInitError.html" title="enum bumpalo::AllocOrInitError">AllocOrInitError</a></div><div class="desc docblock-short">An error returned from <a href="struct.Bump.html#method.try_alloc_try_with" title="method bumpalo::Bump::try_alloc_try_with"><code>Bump::try_alloc_try_with</code></a>.</div></li></ul></section></div></main></body></html>
