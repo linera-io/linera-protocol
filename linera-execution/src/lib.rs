@@ -60,8 +60,10 @@ pub use crate::wasm::test as wasm_test;
 #[cfg(with_wasm_runtime)]
 pub use crate::wasm::{
     ContractEntrypoints, ContractSystemApi, ServiceEntrypoints, ServiceSystemApi, SystemApiData,
-    ViewSystemApi, WasmContractModule, WasmExecutionError, WasmServiceModule,
+    ViewSystemApi,
 };
+#[cfg(any(with_wasmer, with_wasmtime, with_revm))]
+pub use crate::wasm::{VmContractModule, VmExecutionError, VmServiceModule};
 pub use crate::{
     applications::ApplicationRegistryView,
     execution::{ExecutionStateView, ServiceRuntimeEndpoint},
@@ -155,7 +157,7 @@ const _: () = {
 
     impl From<UserContractCode> for JsValue {
         fn from(code: UserContractCode) -> JsValue {
-            let module: WasmContractModule = *(code.0 as Box<dyn Any>)
+            let module: VmContractModule = *(code.0 as Box<dyn Any>)
                 .downcast()
                 .expect("we only support Wasm modules on the Web for now");
             module.into()
@@ -164,7 +166,7 @@ const _: () = {
 
     impl From<UserServiceCode> for JsValue {
         fn from(code: UserServiceCode) -> JsValue {
-            let module: WasmServiceModule = *(code.0 as Box<dyn Any>)
+            let module: VmServiceModule = *(code.0 as Box<dyn Any>)
                 .downcast()
                 .expect("we only support Wasm modules on the Web for now");
             module.into()
@@ -174,14 +176,14 @@ const _: () = {
     impl TryFrom<JsValue> for UserContractCode {
         type Error = JsValue;
         fn try_from(value: JsValue) -> Result<Self, JsValue> {
-            WasmContractModule::try_from(value).map(Into::into)
+            VmContractModule::try_from(value).map(Into::into)
         }
     }
 
     impl TryFrom<JsValue> for UserServiceCode {
         type Error = JsValue;
         fn try_from(value: JsValue) -> Result<Self, JsValue> {
-            WasmServiceModule::try_from(value).map(Into::into)
+            VmServiceModule::try_from(value).map(Into::into)
         }
     }
 };
@@ -197,9 +199,9 @@ pub enum ExecutionError {
     SystemError(SystemExecutionError),
     #[error("User application reported an error: {0}")]
     UserError(String),
-    #[cfg(any(with_wasmer, with_wasmtime))]
+    #[cfg(any(with_wasmer, with_wasmtime, with_revm))]
     #[error(transparent)]
-    WasmError(#[from] WasmExecutionError),
+    VmError(#[from] VmExecutionError),
     #[error(transparent)]
     DecompressionError(#[from] DecompressionError),
     #[error("The given promise is invalid or was polled once already")]
@@ -1303,7 +1305,7 @@ pub struct BlobState {
 
 /// The runtime to use for running the application.
 #[derive(Clone, Copy, Display)]
-#[cfg_attr(with_wasm_runtime, derive(Debug, Default))]
+#[cfg_attr(any(with_wasmer, with_wasmtime, with_revm), derive(Debug, Default))]
 pub enum WasmRuntime {
     #[cfg(with_wasmer)]
     #[default]
@@ -1317,6 +1319,11 @@ pub enum WasmRuntime {
     WasmerWithSanitizer,
     #[cfg(with_wasmtime)]
     WasmtimeWithSanitizer,
+    #[cfg(with_revm)]
+    #[cfg_attr(all(not(with_wasmer), not(with_wasmtime)), default)]
+    Revm,
+    #[cfg(with_revm)]
+    RevmWithSanitizer,
 }
 
 /// Trait used to select a default `WasmRuntime`, if one is available.
@@ -1332,6 +1339,8 @@ impl WasmRuntime {
                 WasmRuntime::WasmerWithSanitizer
             } else if #[cfg(with_wasmtime)] {
                 WasmRuntime::WasmtimeWithSanitizer
+            } else if #[cfg(with_revm)] {
+                WasmRuntime::RevmWithSanitizer
             } else {
                 compile_error!("BUG: Wasm runtime unhandled in `WasmRuntime::default_with_sanitizer`")
             }
@@ -1344,7 +1353,9 @@ impl WasmRuntime {
             WasmRuntime::WasmerWithSanitizer => true,
             #[cfg(with_wasmtime)]
             WasmRuntime::WasmtimeWithSanitizer => true,
-            #[cfg(with_wasm_runtime)]
+            #[cfg(with_revm)]
+            WasmRuntime::RevmWithSanitizer => true,
+            #[cfg(any(with_wasm_runtime, with_revm))]
             _ => false,
         }
     }
@@ -1372,6 +1383,8 @@ impl FromStr for WasmRuntime {
             "wasmer" => Ok(WasmRuntime::Wasmer),
             #[cfg(with_wasmtime)]
             "wasmtime" => Ok(WasmRuntime::Wasmtime),
+            #[cfg(with_revm)]
+            "revm" => Ok(WasmRuntime::Revm),
             unknown => Err(InvalidWasmRuntime(unknown.to_owned())),
         }
     }
