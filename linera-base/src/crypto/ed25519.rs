@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Defines ed25519 signature primitives used by the Linera protocol.
+//! Defines Ed25519 signature primitives used by the Linera protocol.
 
 use std::fmt;
 
@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use super::{BcsSignable, CryptoError, HasTypeName, Hashable, KeyPair, PublicKey};
 use crate::doc_scalar;
 
-/// A Ed25519 signature.
+/// An Ed25519 signature.
 #[derive(Eq, PartialEq, Copy, Clone)]
 pub struct Ed25519Signature(pub dalek::Signature);
 
@@ -115,7 +115,7 @@ impl Serialize for Ed25519Signature {
         if serializer.is_human_readable() {
             serializer.serialize_str(&hex::encode(self.0.to_bytes()))
         } else {
-            serializer.serialize_newtype_struct("Signature", &self.0)
+            serializer.serialize_newtype_struct("Ed25519Signature", &self.0)
         }
     }
 }
@@ -133,7 +133,7 @@ impl<'de> Deserialize<'de> for Ed25519Signature {
             Ok(Ed25519Signature(sig))
         } else {
             #[derive(Deserialize)]
-            #[serde(rename = "Signature")]
+            #[serde(rename = "Ed25519Signature")]
             struct Foo(dalek::Signature);
 
             let value = Foo::deserialize(deserializer)?;
@@ -158,7 +158,7 @@ impl fmt::Debug for Ed25519Signature {
 doc_scalar!(Ed25519Signature, "An Ed25519 signature value");
 
 #[cfg(with_testing)]
-mod ed25519_tests {
+mod tests {
     #[test]
     fn test_signatures() {
         use serde::{Deserialize, Serialize};

@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use super::{BcsSignable, CryptoError, CryptoHash, HasTypeName};
 use crate::doc_scalar;
 
-/// A Secp256k1 signature.
+/// A secp256k1 signature.
 #[derive(Eq, PartialEq, Copy, Clone)]
 pub struct Secp256k1Signature(pub secp256k1::ecdsa::Signature);
 
@@ -52,7 +52,7 @@ impl Serialize for Secp256k1Signature {
         if serializer.is_human_readable() {
             serializer.serialize_str(&hex::encode(self.0.serialize_der()))
         } else {
-            serializer.serialize_newtype_struct("Signature", &self.0)
+            serializer.serialize_newtype_struct("Secp256k1Signature", &self.0)
         }
     }
 }
@@ -70,7 +70,7 @@ impl<'de> Deserialize<'de> for Secp256k1Signature {
             Ok(Secp256k1Signature(sig))
         } else {
             #[derive(Deserialize)]
-            #[serde(rename = "Signature")]
+            #[serde(rename = "Secp256k1Signature")]
             struct Foo(secp256k1::ecdsa::Signature);
 
             let value = Foo::deserialize(deserializer)?;
@@ -92,7 +92,7 @@ impl fmt::Debug for Secp256k1Signature {
     }
 }
 
-doc_scalar!(Secp256k1Signature, "A Secp256k1 signature value");
+doc_scalar!(Secp256k1Signature, "A secp256k1 signature value");
 
 #[cfg(with_testing)]
 mod secp256k1_tests {
