@@ -9,7 +9,7 @@ use anyhow::Context as _;
 use assert_matches::assert_matches;
 use futures::{stream, StreamExt, TryStreamExt};
 use linera_base::{
-    crypto::ed25519::Ed25519PublicKey,
+    crypto::PublicKey,
     data_types::{
         Amount, ApplicationPermissions, BlockHeight, Resources, SendMessageRequest, Timestamp,
     },
@@ -79,7 +79,7 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
     let (caller_id, caller_application) = view.register_mock_application().await?;
     let (target_id, target_application) = view.register_mock_application().await?;
 
-    let owner = Owner::from(Ed25519PublicKey::test_key(0));
+    let owner = Owner::from(PublicKey::test_key(0));
     let state_key = vec![];
     let dummy_operation = vec![1];
 
@@ -1412,11 +1412,11 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
 /// Tests the system API calls `open_chain` and `chain_ownership`.
 #[tokio::test]
 async fn test_open_chain() -> anyhow::Result<()> {
-    let committee = Committee::make_simple(vec![Ed25519PublicKey::test_key(0).into()]);
+    let committee = Committee::make_simple(vec![PublicKey::test_key(0).into()]);
     let committees = BTreeMap::from([(Epoch::ZERO, committee)]);
-    let chain_key = Ed25519PublicKey::test_key(1);
+    let chain_key = PublicKey::test_key(1);
     let ownership = ChainOwnership::single(chain_key.into());
-    let child_ownership = ChainOwnership::single(Ed25519PublicKey::test_key(2).into());
+    let child_ownership = ChainOwnership::single(PublicKey::test_key(2).into());
     let state = SystemExecutionState {
         committees: committees.clone(),
         ownership: ownership.clone(),
@@ -1517,9 +1517,9 @@ async fn test_open_chain() -> anyhow::Result<()> {
 /// Tests the system API call `close_chain``.
 #[tokio::test]
 async fn test_close_chain() -> anyhow::Result<()> {
-    let committee = Committee::make_simple(vec![Ed25519PublicKey::test_key(0).into()]);
+    let committee = Committee::make_simple(vec![PublicKey::test_key(0).into()]);
     let committees = BTreeMap::from([(Epoch::ZERO, committee)]);
-    let ownership = ChainOwnership::single(Ed25519PublicKey::test_key(1).into());
+    let ownership = ChainOwnership::single(PublicKey::test_key(1).into());
     let state = SystemExecutionState {
         committees: committees.clone(),
         ownership: ownership.clone(),
@@ -1597,19 +1597,19 @@ async fn test_close_chain() -> anyhow::Result<()> {
 /// Tests an application attempting to transfer the tokens in the chain's balance while executing
 /// messages.
 #[test_case(
-    Some(Ed25519PublicKey::test_key(1).into()), Some(Ed25519PublicKey::test_key(1).into())
+    Some(PublicKey::test_key(1).into()), Some(PublicKey::test_key(1).into())
     => matches Ok(Ok(()));
     "works if sender is a receiving chain owner"
 )]
 #[test_case(
-    Some(Ed25519PublicKey::test_key(1).into()), Some(Ed25519PublicKey::test_key(2).into())
+    Some(PublicKey::test_key(1).into()), Some(PublicKey::test_key(2).into())
     => matches Ok(Err(
         ExecutionError::SystemError(SystemExecutionError::UnauthenticatedTransferOwner)
     ));
     "fails if sender is not a receiving chain owner"
 )]
 #[test_case(
-    Some(Ed25519PublicKey::test_key(1).into()), None
+    Some(PublicKey::test_key(1).into()), None
     => matches Ok(Err(
         ExecutionError::SystemError(SystemExecutionError::UnauthenticatedTransferOwner)
     ));
@@ -1623,7 +1623,7 @@ async fn test_close_chain() -> anyhow::Result<()> {
     "fails if unauthenticated and receiving chain has no owners"
 )]
 #[test_case(
-    None, Some(Ed25519PublicKey::test_key(1).into())
+    None, Some(PublicKey::test_key(1).into())
     => matches Ok(Err(
         ExecutionError::SystemError(SystemExecutionError::UnauthenticatedTransferOwner)
     ));

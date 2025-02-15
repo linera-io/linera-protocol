@@ -4,7 +4,7 @@
 
 use std::borrow::Cow;
 
-use linera_base::{crypto::ed25519::Ed25519Signature, data_types::Round, hashed::Hashed};
+use linera_base::{crypto::Signature, data_types::Round, hashed::Hashed};
 use linera_execution::committee::{Committee, ValidatorName};
 use serde::{Deserialize, Serialize};
 
@@ -23,14 +23,14 @@ pub struct LiteCertificate<'a> {
     /// The round in which the value was certified.
     pub round: Round,
     /// Signatures on the value.
-    pub signatures: Cow<'a, [(ValidatorName, Ed25519Signature)]>,
+    pub signatures: Cow<'a, [(ValidatorName, Signature)]>,
 }
 
 impl<'a> LiteCertificate<'a> {
     pub fn new(
         value: LiteValue,
         round: Round,
-        mut signatures: Vec<(ValidatorName, Ed25519Signature)>,
+        mut signatures: Vec<(ValidatorName, Signature)>,
     ) -> Self {
         signatures.sort_by_key(|&(validator_name, _)| validator_name);
 

@@ -18,7 +18,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::{
     bcs_scalar,
-    crypto::{ed25519::Ed25519PublicKey, BcsHashable, CryptoError, CryptoHash},
+    crypto::{BcsHashable, CryptoError, CryptoHash},
     data_types::BlockHeight,
     doc_scalar, hex_debug,
 };
@@ -850,18 +850,6 @@ impl<A> ApplicationId<A> {
 impl Display for Owner {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
         Display::fmt(&self.0, f)
-    }
-}
-
-impl From<Ed25519PublicKey> for Owner {
-    fn from(value: Ed25519PublicKey) -> Self {
-        Self(CryptoHash::new(&value))
-    }
-}
-
-impl From<&Ed25519PublicKey> for Owner {
-    fn from(value: &Ed25519PublicKey) -> Self {
-        Self(CryptoHash::new(value))
     }
 }
 

@@ -16,10 +16,7 @@ use futures::{
     Future,
 };
 use linera_base::{
-    crypto::{
-        ed25519::{Ed25519PublicKey, Ed25519SecretKey},
-        *,
-    },
+    crypto::{CryptoHash, PublicKey, SigningKey},
     data_types::*,
     identifiers::{BlobId, ChainDescription, ChainId},
 };
@@ -685,17 +682,12 @@ struct GenesisStorageBuilder {
 
 struct GenesisAccount {
     description: ChainDescription,
-    public_key: Ed25519PublicKey,
+    public_key: PublicKey,
     balance: Amount,
 }
 
 impl GenesisStorageBuilder {
-    fn add(
-        &mut self,
-        description: ChainDescription,
-        public_key: Ed25519PublicKey,
-        balance: Amount,
-    ) {
+    fn add(&mut self, description: ChainDescription, public_key: PublicKey, balance: Amount) {
         self.accounts.push(GenesisAccount {
             description,
             public_key,
@@ -736,7 +728,7 @@ where
         let mut key_pairs = Vec::new();
         let mut validators = Vec::new();
         for _ in 0..count {
-            let key_pair = Ed25519SecretKey::generate();
+            let key_pair = SigningKey::generate();
             let name = ValidatorName(key_pair.public());
             validators.push(name);
             key_pairs.push(key_pair);
@@ -806,7 +798,7 @@ where
         balance: Amount,
     ) -> Result<ChainClient<NodeProvider<B::Storage>, B::Storage>, anyhow::Error> {
         let description = ChainDescription::Root(index);
-        let key_pair = Ed25519SecretKey::generate();
+        let key_pair = SigningKey::generate();
         let public_key = key_pair.public();
         // Remember what's in the genesis store for future clients to join.
         self.genesis_storage_builder
@@ -856,7 +848,7 @@ where
             .await
     }
 
-    pub fn genesis_chains(&self) -> Vec<(Ed25519PublicKey, Amount)> {
+    pub fn genesis_chains(&self) -> Vec<(PublicKey, Amount)> {
         let mut result = Vec::new();
         for (i, genesis_account) in self.genesis_storage_builder.accounts.iter().enumerate() {
             assert_eq!(
@@ -894,7 +886,7 @@ where
     pub async fn make_client(
         &mut self,
         chain_id: ChainId,
-        key_pair: Ed25519SecretKey,
+        key_pair: SigningKey,
         block_hash: Option<CryptoHash>,
         block_height: BlockHeight,
     ) -> Result<ChainClient<NodeProvider<B::Storage>, B::Storage>, anyhow::Error> {

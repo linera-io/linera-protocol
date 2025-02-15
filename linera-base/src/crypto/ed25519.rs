@@ -15,9 +15,9 @@ use serde::{Deserialize, Serialize};
 
 use super::{
     le_bytes_to_u64_array, u64_array_to_le_bytes, BcsHashable, BcsSignable, CryptoError,
-    HasTypeName, Hashable,
+    CryptoHash, HasTypeName, Hashable,
 };
-use crate::doc_scalar;
+use crate::{doc_scalar, identifiers::Owner};
 
 /// An Ed25519 secret key.
 pub struct Ed25519SecretKey(pub(crate) dalek::SigningKey);
@@ -386,6 +386,18 @@ impl fmt::Display for Ed25519Signature {
 impl fmt::Debug for Ed25519Signature {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", hex::encode(&self.0.to_bytes()[0..8]))
+    }
+}
+
+impl From<Ed25519PublicKey> for Owner {
+    fn from(value: Ed25519PublicKey) -> Self {
+        Self(CryptoHash::new(&value))
+    }
+}
+
+impl From<&Ed25519PublicKey> for Owner {
+    fn from(value: &Ed25519PublicKey) -> Self {
+        Self(CryptoHash::new(value))
     }
 }
 

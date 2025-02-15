@@ -10,7 +10,7 @@ use futures::{
     StreamExt,
 };
 use linera_base::{
-    crypto::ed25519::Ed25519SecretKey,
+    crypto::SigningKey,
     data_types::Timestamp,
     identifiers::{ChainId, Destination},
 };
@@ -69,7 +69,7 @@ pub trait ClientContext: 'static {
     async fn update_wallet_for_new_chain(
         &mut self,
         chain_id: ChainId,
-        key_pair: Option<Ed25519SecretKey>,
+        key_pair: Option<SigningKey>,
         timestamp: Timestamp,
     ) -> Result<(), Error>;
 

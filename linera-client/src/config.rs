@@ -8,10 +8,7 @@ use std::{
 };
 
 use linera_base::{
-    crypto::{
-        ed25519::{Ed25519PublicKey, Ed25519SecretKey},
-        BcsSignable, CryptoHash, CryptoRng,
-    },
+    crypto::{BcsSignable, CryptoHash, CryptoRng, PublicKey, SigningKey},
     data_types::{Amount, Timestamp},
     identifiers::{ChainDescription, ChainId},
 };
@@ -57,7 +54,7 @@ pub struct ValidatorConfig {
 #[derive(Serialize, Deserialize)]
 pub struct ValidatorServerConfig {
     pub validator: ValidatorConfig,
-    pub key: Ed25519SecretKey,
+    pub key: SigningKey,
     pub internal_network: ValidatorInternalNetworkConfig,
 }
 
@@ -177,8 +174,8 @@ impl<W: Deref<Target = Wallet>> WalletState<W> {
         }
     }
 
-    pub fn generate_key_pair(&mut self) -> Ed25519SecretKey {
-        Ed25519SecretKey::generate_from(&mut self.prng)
+    pub fn generate_key_pair(&mut self) -> SigningKey {
+        SigningKey::generate_from(&mut self.prng)
     }
 }
 
@@ -187,7 +184,7 @@ pub struct GenesisConfig {
     pub committee: CommitteeConfig,
     pub admin_id: ChainId,
     pub timestamp: Timestamp,
-    pub chains: Vec<(Ed25519PublicKey, Amount)>,
+    pub chains: Vec<(PublicKey, Amount)>,
     pub policy: ResourceControlPolicy,
     pub network_name: String,
 }
