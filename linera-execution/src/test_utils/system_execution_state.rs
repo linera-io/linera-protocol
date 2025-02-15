@@ -16,7 +16,6 @@ use linera_base::{
 };
 use linera_views::{
     context::{Context, MemoryContext},
-    memory::TEST_MEMORY_MAX_STREAM_QUERIES,
     random::generate_test_namespace,
     views::{CryptoHashView, View, ViewError},
 };
@@ -128,14 +127,7 @@ impl SystemExecutionState {
             extra.user_services().insert(id, mock_application.into());
         }
 
-        let namespace = generate_test_namespace();
-        let root_key = &[];
-        let context = MemoryContext::new_for_testing(
-            TEST_MEMORY_MAX_STREAM_QUERIES,
-            &namespace,
-            root_key,
-            extra,
-        );
+        let context = MemoryContext::new_for_testing(extra);
         let mut view = ExecutionStateView::load(context)
             .await
             .expect("Loading from memory should work");
