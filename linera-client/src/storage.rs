@@ -593,32 +593,6 @@ impl StoreConfig {
         }
     }
 
-    /// Lists all root keys of the storage
-    pub async fn list_root_keys(self) -> Result<Vec<Vec<u8>>, ViewError> {
-        match self {
-            StoreConfig::Memory(_, _) => Err(ViewError::StoreError {
-                backend: "memory".to_string(),
-                error: "list_root_keys is not supported for the memory storage".to_string(),
-            }),
-            #[cfg(feature = "storage-service")]
-            StoreConfig::Service(config, namespace) => {
-                Ok(ServiceStoreClient::list_root_keys(&config, &namespace).await?)
-            }
-            #[cfg(feature = "rocksdb")]
-            StoreConfig::RocksDb(config, namespace) => {
-                Ok(RocksDbStore::list_root_keys(&config, &namespace).await?)
-            }
-            #[cfg(feature = "dynamodb")]
-            StoreConfig::DynamoDb(config, namespace) => {
-                Ok(DynamoDbStore::list_root_keys(&config, &namespace).await?)
-            }
-            #[cfg(feature = "scylladb")]
-            StoreConfig::ScyllaDb(config, namespace) => {
-                Ok(ScyllaDbStore::list_root_keys(&config, &namespace).await?)
-            }
-        }
-    }
-
     /// Lists all the chain ids of the storage
     pub async fn list_chain_ids(self) -> Result<Vec<ChainId>, ViewError> {
         match self {
@@ -641,6 +615,32 @@ impl StoreConfig {
             #[cfg(feature = "scylladb")]
             StoreConfig::ScyllaDb(config, namespace) => {
                 Ok(list_all_chain_ids::<ScyllaDbStore>(&config, &namespace).await?)
+            }
+        }
+    }
+
+    /// Lists all root keys of the storage
+    pub async fn list_root_keys(self) -> Result<Vec<Vec<u8>>, ViewError> {
+        match self {
+            StoreConfig::Memory(_, _) => Err(ViewError::StoreError {
+                backend: "memory".to_string(),
+                error: "list_root_keys is not supported for the memory storage".to_string(),
+            }),
+            #[cfg(feature = "storage-service")]
+            StoreConfig::Service(config, namespace) => {
+                Ok(ServiceStoreClient::list_root_keys(&config, &namespace).await?)
+            }
+            #[cfg(feature = "rocksdb")]
+            StoreConfig::RocksDb(config, namespace) => {
+                Ok(RocksDbStore::list_root_keys(&config, &namespace).await?)
+            }
+            #[cfg(feature = "dynamodb")]
+            StoreConfig::DynamoDb(config, namespace) => {
+                Ok(DynamoDbStore::list_root_keys(&config, &namespace).await?)
+            }
+            #[cfg(feature = "scylladb")]
+            StoreConfig::ScyllaDb(config, namespace) => {
+                Ok(ScyllaDbStore::list_root_keys(&config, &namespace).await?)
             }
         }
     }
