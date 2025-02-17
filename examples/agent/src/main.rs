@@ -261,14 +261,8 @@ pub async fn chat(chatbot: impl Chat) {
 
                 match chatbot.chat(input, chat_log.clone()).await {
                     Ok(response) => {
-                        chat_log.push(Message {
-                            role: "user".into(),
-                            content: input.into(),
-                        });
-                        chat_log.push(Message {
-                            role: "assistant".into(),
-                            content: response.clone(),
-                        });
+                        chat_log.push(Message::user(input));
+                        chat_log.push(Message::assistant(response.clone()));
 
                         println!(
                             "========================== Response ============================"
