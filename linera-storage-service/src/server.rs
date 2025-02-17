@@ -3,10 +3,13 @@
 
 #![allow(clippy::blocks_in_conditions)]
 
-use std::{collections::VecDeque, pin::Pin, sync::{Arc, Weak}};
+use std::{
+    collections::VecDeque,
+    pin::Pin,
+    sync::{Arc, Weak},
+};
 
 use futures::stream::Stream;
-use crate::common::{KeyPrefix, MAX_PAYLOAD_SIZE};
 use linera_views::{
     batch::Batch,
     memory::MemoryStore,
@@ -17,21 +20,22 @@ use linera_views::{
     rocks_db::{PathWithGuard, RocksDbSpawnMode, RocksDbStore, RocksDbStoreConfig},
     store::AdminKeyValueStore as _,
 };
-
 use tokio::sync::mpsc::{self, UnboundedSender};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tonic::{transport::Server, Request, Response, Status};
 use tracing::{info, instrument};
 
-use crate::key_value_store::{
-    store_processor_server::{StoreProcessor, StoreProcessorServer},
-    OptValue, ReplyContainsKey, ReplyContainsKeys,
-    ReplyExistsNamespace, ReplyFindKeyValuesByPrefix,
-    RequestWriteBatch, RequestListRootKeys, ReplyListRootKeys,
-    RequestContainsKey, RequestContainsKeys, RequestCreateNamespace,
-    RequestFindKeysByPrefix, RequestReadMultiValues, RequestReadValue,
-    ReplyListAll, ReplyReadMultiValues, ReplyReadValue, ReplyFindKeysByPrefix,
-    RequestDeleteNamespace, RequestExistsNamespace, RequestFindKeyValuesByPrefix,
+use crate::{
+    common::{KeyPrefix, MAX_PAYLOAD_SIZE},
+    key_value_store::{
+        store_processor_server::{StoreProcessor, StoreProcessorServer},
+        OptValue, ReplyContainsKey, ReplyContainsKeys, ReplyExistsNamespace,
+        ReplyFindKeyValuesByPrefix, ReplyFindKeysByPrefix, ReplyListAll, ReplyListRootKeys,
+        ReplyReadMultiValues, ReplyReadValue, RequestContainsKey, RequestContainsKeys,
+        RequestCreateNamespace, RequestDeleteNamespace, RequestExistsNamespace,
+        RequestFindKeyValuesByPrefix, RequestFindKeysByPrefix, RequestListRootKeys,
+        RequestReadMultiValues, RequestReadValue, RequestWriteBatch,
+    },
 };
 
 pub mod key_value_store {
@@ -58,11 +62,9 @@ pub struct ServiceStoreServer {
 
 impl ServiceStoreServer {
     pub fn new_from_store(store: ServiceStoreServerInternal) -> Arc<ServiceStoreServer> {
-        Arc::new_cyclic(|weak| {
-            ServiceStoreServer {
-                store,
-                self_ref: weak.clone(),
-            }
+        Arc::new_cyclic(|weak| ServiceStoreServer {
+            store,
+            self_ref: weak.clone(),
         })
     }
 }
@@ -256,11 +258,16 @@ pub enum ServiceStoreServerOptions {
 
 #[tonic::async_trait]
 impl StoreProcessor for ServiceStoreServer {
-    type ProcessReadValueStream = Pin<Box<dyn Stream<Item = Result<ReplyReadValue, Status>> + Send + Sync + 'static>>;
-    type ProcessReadMultiValuesStream = UnboundedReceiverStream<Result<ReplyReadMultiValues, Status>>;
-    type ProcessFindKeysByPrefixStream = futures::stream::Iter<std::vec::IntoIter<Result<ReplyFindKeysByPrefix, Status>>>;
-    type ProcessFindKeyValuesByPrefixStream = UnboundedReceiverStream<Result<ReplyFindKeyValuesByPrefix, Status>>;
-    type ProcessListAllStream = futures::stream::Iter<std::vec::IntoIter<Result<ReplyListAll, Status>>>;
+    type ProcessReadValueStream =
+        Pin<Box<dyn Stream<Item = Result<ReplyReadValue, Status>> + Send + Sync + 'static>>;
+    type ProcessReadMultiValuesStream =
+        UnboundedReceiverStream<Result<ReplyReadMultiValues, Status>>;
+    type ProcessFindKeysByPrefixStream =
+        futures::stream::Iter<std::vec::IntoIter<Result<ReplyFindKeysByPrefix, Status>>>;
+    type ProcessFindKeyValuesByPrefixStream =
+        UnboundedReceiverStream<Result<ReplyFindKeyValuesByPrefix, Status>>;
+    type ProcessListAllStream =
+        futures::stream::Iter<std::vec::IntoIter<Result<ReplyListAll, Status>>>;
 
     #[instrument(target = "store_server", skip_all, err, fields(key_len = ?request.get_ref().key.len()))]
     async fn process_read_value(
@@ -275,25 +282,36 @@ impl StoreProcessor for ServiceStoreServer {
             None => {
                 let mut counter = 0;
                 let closure = move || {
-                    if 0 == counter { counter = 1; Some(Ok(ReplyReadValue { value: None })) } else { None }
+                    if 0 == counter {
+                        counter = 1;
+                        Some(Ok(ReplyReadValue { value: None }))
+                    } else {
+                        None
+                    }
                 };
-                let closure: Box<dyn FnMut() -> Option<Result<ReplyReadValue, Status>> + Send + Sync> = Box::new(closure);
+                let closure: Box<
+                    dyn FnMut() -> Option<Result<ReplyReadValue, Status>> + Send + Sync,
+                > = Box::new(closure);
                 std::iter::from_fn(closure)
-            },
+            }
 
             Some(inner) => {
                 let mut inner = VecDeque::from(inner);
                 let closure = move || {
-                    let chunk = inner.drain(..MAX_PAYLOAD_SIZE.min(inner.len())).collect::<Vec<_>>();
+                    let chunk = inner
+                        .drain(..MAX_PAYLOAD_SIZE.min(inner.len()))
+                        .collect::<Vec<_>>();
                     if chunk.is_empty() {
-                        return None
+                        return None;
                     }
 
                     Some(Ok(ReplyReadValue { value: Some(chunk) }))
                 };
-                let closure: Box<dyn FnMut() -> Option<Result<ReplyReadValue, Status>> + Send + Sync> = Box::new(closure);
+                let closure: Box<
+                    dyn FnMut() -> Option<Result<ReplyReadValue, Status>> + Send + Sync,
+                > = Box::new(closure);
                 std::iter::from_fn(closure)
-            },
+            }
         };
 
         Ok(Response::new(Box::pin(tokio_stream::iter(stream))))
@@ -320,14 +338,15 @@ impl StoreProcessor for ServiceStoreServer {
         let self_ref = self.self_ref.upgrade().unwrap();
         let (tx, mut rx) = mpsc::unbounded_channel();
 
-        let producer_task = |
-            self_ref: Arc<ServiceStoreServer>,
-            keys,
-            feedback: UnboundedSender<Status>,
-        | async move {
+        let producer_task = |self_ref: Arc<ServiceStoreServer>,
+                             keys,
+                             feedback: UnboundedSender<Status>| async move {
             let tests = self_ref.contains_keys(keys).await;
             match tests {
-                Err(e) => { let _ = feedback.send(e); vec![] },
+                Err(e) => {
+                    let _ = feedback.send(e);
+                    vec![]
+                }
                 Ok(tests) => tests,
             }
         };
@@ -337,7 +356,10 @@ impl StoreProcessor for ServiceStoreServer {
             while let Some(message) = match streamer.message().await {
                 Ok(Some(msg)) => Some(msg),
                 Ok(None) => None,
-                Err(err) => { let _ = tx.send(err); return vec![] },
+                Err(err) => {
+                    let _ = tx.send(err);
+                    return vec![];
+                }
             } {
                 let RequestContainsKeys { keys } = message;
                 let moved_self_ref = Arc::clone(&self_ref);
@@ -349,7 +371,9 @@ impl StoreProcessor for ServiceStoreServer {
             for handle in handles {
                 let some_tests = handle.await;
                 match some_tests {
-                    Err(e) => { let _ = tx.send(Status::from_error(Box::new(e))); },
+                    Err(e) => {
+                        let _ = tx.send(Status::from_error(Box::new(e)));
+                    }
                     Ok(mut some_tests) => tests.append(&mut some_tests),
                 }
             }
@@ -358,8 +382,8 @@ impl StoreProcessor for ServiceStoreServer {
         };
 
         let consumer_handle = tokio::task::spawn(consumer_task);
-        while let Some(status) = rx.recv().await {
-            return Err(status)
+        if let Some(status) = rx.recv().await {
+            return Err(status);
         }
 
         let tests = match consumer_handle.await {
@@ -391,22 +415,33 @@ impl StoreProcessor for ServiceStoreServer {
 
             while let Some(response) = task_rx.recv().await {
                 let values: Vec<Option<Vec<u8>>> = match response {
-                    Err(e) => { let _ = outgoing_tx.send(Err(e)); return; },
+                    Err(e) => {
+                        let _ = outgoing_tx.send(Err(e));
+                        return;
+                    }
                     Ok(handle) => {
                         let result = handle.await;
                         match result {
-                            Err(e) => { let _ = outgoing_tx.send(Err(Status::from_error(Box::new(e)))); break },
-                            Ok(Err(e)) => {  let _ = outgoing_tx.send(Err(e)); return },
+                            Err(e) => {
+                                let _ = outgoing_tx.send(Err(Status::from_error(Box::new(e))));
+                                break;
+                            }
+                            Ok(Err(e)) => {
+                                let _ = outgoing_tx.send(Err(e));
+                                return;
+                            }
                             Ok(Ok(values)) => values,
                         }
-                    },
+                    }
                 };
 
                 for value in values {
                     match value {
                         Some(mut value) => {
                             if MAX_PAYLOAD_SIZE > value.len() {
-                                stream.push(OptValue { value: Some(1usize.to_be_bytes().to_vec()) });
+                                stream.push(OptValue {
+                                    value: Some(1usize.to_be_bytes().to_vec()),
+                                });
                                 stream.push(OptValue { value: Some(value) });
                                 streamer(stream);
                                 stream = Vec::new();
@@ -414,14 +449,18 @@ impl StoreProcessor for ServiceStoreServer {
                             }
 
                             let num_messages = value.len().div_ceil(MAX_PAYLOAD_SIZE);
-                            stream.push(OptValue { value: Some(num_messages.to_be_bytes().to_vec()) });
+                            stream.push(OptValue {
+                                value: Some(num_messages.to_be_bytes().to_vec()),
+                            });
                             for _ in 0..num_messages {
                                 let drain_amount = MAX_PAYLOAD_SIZE.min(value.len());
-                                stream.push(OptValue { value: Some(value.drain(..drain_amount).collect()) });
+                                stream.push(OptValue {
+                                    value: Some(value.drain(..drain_amount).collect()),
+                                });
                                 streamer(stream);
                                 stream = Vec::new();
                             }
-                        },
+                        }
 
                         None => streamer(vec![OptValue { value: None }]),
                     }
@@ -431,27 +470,29 @@ impl StoreProcessor for ServiceStoreServer {
 
         let self_ref = self.self_ref.upgrade().unwrap();
         let producer_task = |self_ref: Arc<ServiceStoreServer>, keys| async move {
-            let response = self_ref.read_multi_values_bytes(keys).await;
-            response
+            self_ref.read_multi_values_bytes(keys).await
         };
 
         let consumer_task = async move {
             while let Some(message) = incoming_stream.message().await.transpose() {
                 match message {
-                    Err(status) => { let _ = task_tx.send(Err(status)); break },
+                    Err(status) => {
+                        let _ = task_tx.send(Err(status));
+                        break;
+                    }
                     Ok(RequestReadMultiValues { keys }) => {
                         let moved_self_ref = self_ref.clone();
                         let handle = tokio::task::spawn(producer_task(moved_self_ref, keys));
                         if task_tx.send(Ok(handle)).is_err() {
                             break;
                         }
-                    },
+                    }
                 }
             }
         };
 
-        let _ = tokio::task::spawn(consumer_task);
-        let _ = tokio::task::spawn(outgoing_task);
+        std::mem::drop(tokio::task::spawn(consumer_task));
+        std::mem::drop(tokio::task::spawn(outgoing_task));
 
         Ok(Response::new(UnboundedReceiverStream::new(outgoing_rx)))
     }
@@ -565,15 +606,19 @@ impl StoreProcessor for ServiceStoreServer {
                         let op_kind = message.pop_front().unwrap() as usize;
                         state.push(op_kind);
                         state.push(0);
-                    },
+                    }
 
                     2 => {
-                        len_bytes.append(&mut message.drain(..(8 - len_bytes.len()).min(message.len())).collect::<Vec<u8>>());
+                        len_bytes.append(
+                            &mut message
+                                .drain(..(8 - len_bytes.len()).min(message.len()))
+                                .collect::<Vec<u8>>(),
+                        );
                         if 8 == len_bytes.len() {
                             state.push(usize::from_be_bytes(len_bytes.clone().try_into().unwrap()));
                             len_bytes.clear();
                         }
-                    },
+                    }
 
                     3 if 3 == state[0] && 1 == state[1] => {
                         value.extend(message.drain(..(state[2] - value.len()).min(message.len())));
@@ -585,7 +630,7 @@ impl StoreProcessor for ServiceStoreServer {
                             let _ = state.pop();
                             let _ = state.pop();
                         }
-                    },
+                    }
 
                     3 => {
                         key.extend(message.drain(..(state[2] - key.len()).min(message.len())));
@@ -596,7 +641,7 @@ impl StoreProcessor for ServiceStoreServer {
                                 let _ = state.pop();
                                 let _ = state.pop();
                                 let _ = state.pop();
-                            },
+                            }
 
                             (2, true) => {
                                 batch.delete_key_prefix(key);
@@ -611,17 +656,20 @@ impl StoreProcessor for ServiceStoreServer {
                                 let _ = state.pop();
                             }
 
-                            (_, false) => {},
+                            (_, false) => {}
                             (_, true) => unreachable!(),
                         }
-                    },
+                    }
 
                     _ => unreachable!(),
                 }
             }
         }
 
-        tracing::info!(target = "store_server", n_statements = batch.operations.len());
+        tracing::info!(
+            target = "store_server",
+            n_statements = batch.operations.len()
+        );
 
         if !batch.is_empty() {
             self.write_batch(batch).await?;
@@ -681,14 +729,18 @@ impl StoreProcessor for ServiceStoreServer {
                 continue;
             }
 
-            stream.push(Ok(ReplyListAll { namespaces: grouped_namespaces}));
+            stream.push(Ok(ReplyListAll {
+                namespaces: grouped_namespaces,
+            }));
             grouped_namespaces = Vec::new();
             chunk_size = namespace.len();
             grouped_namespaces.push(namespace);
         }
 
         if !grouped_namespaces.is_empty() {
-            stream.push(Ok(ReplyListAll { namespaces: grouped_namespaces }));
+            stream.push(Ok(ReplyListAll {
+                namespaces: grouped_namespaces,
+            }));
         }
 
         Ok(Response::new(futures::stream::iter(stream)))
@@ -724,7 +776,9 @@ impl StoreProcessor for ServiceStoreServer {
 }
 
 pub async fn server(endpoint: &str) {
-    let options = ServiceStoreServerOptions::Memory { endpoint: endpoint.to_owned() };
+    let options = ServiceStoreServerOptions::Memory {
+        endpoint: endpoint.to_owned(),
+    };
     let common_config = CommonStoreConfig::default();
     let namespace = "linera_storage_service";
     let root_key = &[];
@@ -750,11 +804,9 @@ pub async fn server(endpoint: &str) {
         }
     };
 
-    let heaped_store = Arc::new_cyclic(|weak| {
-        ServiceStoreServer {
-            store,
-            self_ref: weak.clone(),
-        }
+    let heaped_store = Arc::new_cyclic(|weak| ServiceStoreServer {
+        store,
+        self_ref: weak.clone(),
     });
 
     let endpoint = endpoint.parse().unwrap();

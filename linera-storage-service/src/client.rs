@@ -33,12 +33,12 @@ use crate::common::storage_service_test_endpoint;
 use crate::{
     common::{KeyPrefix, ServiceStoreError, ServiceStoreInternalConfig, MAX_PAYLOAD_SIZE},
     key_value_store::{
-        RequestReadMultiValues, RequestReadValue, RequestWriteBatch,
-        ReplyListAll, ReplyReadMultiValues, ReplyReadValue, RequestContainsKey,
         store_processor_client::StoreProcessorClient, OptValue, ReplyContainsKey,
-        RequestContainsKeys, RequestCreateNamespace, RequestDeleteNamespace, ReplyListRootKeys,
         ReplyContainsKeys, ReplyExistsNamespace, ReplyFindKeyValuesByPrefix, ReplyFindKeysByPrefix,
-        RequestExistsNamespace, RequestFindKeyValuesByPrefix, RequestFindKeysByPrefix, RequestListRootKeys
+        ReplyListAll, ReplyListRootKeys, ReplyReadMultiValues, ReplyReadValue, RequestContainsKey,
+        RequestContainsKeys, RequestCreateNamespace, RequestDeleteNamespace,
+        RequestExistsNamespace, RequestFindKeyValuesByPrefix, RequestFindKeysByPrefix,
+        RequestListRootKeys, RequestReadMultiValues, RequestReadValue, RequestWriteBatch,
     },
 };
 
@@ -102,7 +102,7 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
         let mut reformed_value = Vec::new();
         while let Some(ReplyReadValue { value }) = incoming_stream.message().await? {
             if value.is_none() {
-                return Ok(None)
+                return Ok(None);
             }
 
             reformed_value.append(&mut value.unwrap());
@@ -189,14 +189,18 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
                     continue;
                 }
 
-                let _ = tx.send(RequestReadMultiValues { keys: outgoing_message });
+                let _ = tx.send(RequestReadMultiValues {
+                    keys: outgoing_message,
+                });
                 outgoing_message = Vec::new();
                 chunk_size = key.len();
                 outgoing_message.push(key);
             }
 
             if !outgoing_message.is_empty() {
-                let _ = tx.send(RequestReadMultiValues { keys: outgoing_message });
+                let _ = tx.send(RequestReadMultiValues {
+                    keys: outgoing_message,
+                });
             }
         };
 
@@ -212,8 +216,14 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
         let mut values = Vec::new();
         let mut num_messages = 0;
         let mut value = Vec::new();
-        while let Some(ReplyReadMultiValues { values: incoming_values }) = incoming_stream.message().await? {
-            for OptValue { value: incoming_value  } in incoming_values {
+        while let Some(ReplyReadMultiValues {
+            values: incoming_values,
+        }) = incoming_stream.message().await?
+        {
+            for OptValue {
+                value: incoming_value,
+            } in incoming_values
+            {
                 match incoming_value {
                     None => values.push(None),
                     Some(mut bytes) => {
@@ -229,7 +239,7 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
                             values.push(Some(value));
                             value = Vec::new();
                         }
-                    },
+                    }
                 }
             }
         }
@@ -258,7 +268,10 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
         let mut incoming_stream = response.into_inner();
 
         let mut keys = Vec::new();
-        while let Some(ReplyFindKeysByPrefix { keys: mut some_keys }) = incoming_stream.message().await? {
+        while let Some(ReplyFindKeysByPrefix {
+            keys: mut some_keys,
+        }) = incoming_stream.message().await?
+        {
             keys.append(&mut some_keys);
         }
 
@@ -298,7 +311,10 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
         let mut key_len = Vec::with_capacity(8);
         let mut value_len = Vec::with_capacity(8);
         let mut incoming_stream = response.into_inner();
-        while let Some(ReplyFindKeyValuesByPrefix { key_values: message  }) = incoming_stream.message().await? {
+        while let Some(ReplyFindKeyValuesByPrefix {
+            key_values: message,
+        }) = incoming_stream.message().await?
+        {
             let mut message = VecDeque::from(message);
             while !message.is_empty() || 8 == value_len.len() && is_zero(&value_len) {
                 if 8 != key_len.len() {
@@ -312,17 +328,20 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
                 }
 
                 let expected_key_len = usize::from_be_bytes(key_len.clone().try_into().unwrap());
-                if  expected_key_len != key.len() {
+                if expected_key_len != key.len() {
                     key.extend(message.drain(..(expected_key_len - key.len()).min(message.len())));
                 }
 
-                if  expected_key_len != key.len() {
+                if expected_key_len != key.len() {
                     continue;
                 }
 
-                let expected_value_len = usize::from_be_bytes(value_len.clone().try_into().unwrap());
-                if  expected_value_len != value.len() {
-                    value.extend(message.drain(..(expected_value_len - value.len()).min(message.len())));
+                let expected_value_len =
+                    usize::from_be_bytes(value_len.clone().try_into().unwrap());
+                if expected_value_len != value.len() {
+                    value.extend(
+                        message.drain(..(expected_value_len - value.len()).min(message.len())),
+                    );
                 }
 
                 if expected_value_len != value.len() {
@@ -368,7 +387,6 @@ impl WritableKeyValueStore for ServiceStoreClientInternal {
             ensure!(key_len <= MAX_KEY_SIZE, ServiceStoreError::KeyTooLong);
             operations.push(operation);
         }
-        let mut operations = operations.into_iter();
 
         let (tx, rx) = mpsc::unbounded_channel();
         let mut stream = Vec::new();
@@ -403,19 +421,19 @@ impl WritableKeyValueStore for ServiceStoreClientInternal {
                 stream
             };
 
-            while let Some(operation) = operations.next() {
+            for operation in operations {
                 match operation {
                     Operation::Delete { key } => {
                         stream = extend_stream(stream, vec![1u8]);
                         stream = extend_stream(stream, key.len().to_be_bytes().to_vec());
                         stream = extend_stream(stream, key);
-                    },
+                    }
 
                     Operation::DeletePrefix { key_prefix } => {
                         stream = extend_stream(stream, vec![2u8]);
                         stream = extend_stream(stream, key_prefix.len().to_be_bytes().to_vec());
                         stream = extend_stream(stream, key_prefix);
-                    },
+                    }
 
                     Operation::Put { key, value } => {
                         stream = extend_stream(stream, vec![3u8]);
@@ -423,7 +441,7 @@ impl WritableKeyValueStore for ServiceStoreClientInternal {
                         stream = extend_stream(stream, key);
                         stream = extend_stream(stream, value.len().to_be_bytes().to_vec());
                         stream = extend_stream(stream, value);
-                    },
+                    }
                 }
             }
 
@@ -470,21 +488,28 @@ impl ServiceStoreClientInternal {
                 let mut full_key = self.start_key.clone();
                 full_key.extend(key);
                 (full_key.len(), Operation::Delete { key: full_key })
-            },
+            }
             WriteOperation::Put { key, value } => {
                 let mut full_key = self.start_key.clone();
                 full_key.extend(key);
-                (full_key.len(),
-                Operation::Put {
-                    key: full_key,
-                    value,
-                })
-            },
+                (
+                    full_key.len(),
+                    Operation::Put {
+                        key: full_key,
+                        value,
+                    },
+                )
+            }
             WriteOperation::DeletePrefix { key_prefix } => {
                 let mut full_key_prefix = self.start_key.clone();
                 full_key_prefix.extend(key_prefix);
-                (full_key_prefix.len(), Operation::DeletePrefix { key_prefix: full_key_prefix })
-            },
+                (
+                    full_key_prefix.len(),
+                    Operation::DeletePrefix {
+                        key_prefix: full_key_prefix,
+                    },
+                )
+            }
         }
     }
 }
@@ -549,7 +574,10 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
         let mut incoming_stream = response.into_inner();
 
         let mut namespaces = Vec::new();
-        while let Some(ReplyListAll { namespaces: mut some_namespaces }) = incoming_stream.message().await? {
+        while let Some(ReplyListAll {
+            namespaces: mut some_namespaces,
+        }) = incoming_stream.message().await?
+        {
             namespaces.append(&mut some_namespaces);
         }
 

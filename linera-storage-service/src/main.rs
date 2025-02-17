@@ -1,13 +1,19 @@
+// Copyright (c) Zefchain Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
 
 use linera_storage_service::{
     key_value_store::store_processor_server::StoreProcessorServer,
-    server::{ServiceStoreServer, ServiceStoreServerInternal, ServiceStoreServerOptions}
+    server::{ServiceStoreServer, ServiceStoreServerInternal, ServiceStoreServerOptions},
 };
 use linera_views::{memory::MemoryStore, store::CommonStoreConfig};
+#[cfg(with_rocksdb)]
+use linera_views::{
+    rocks_db::{PathWithGuard, RocksDbSpawnMode, RocksDbStore, RocksDbStoreConfig},
+    store::AdminKeyValueStore as _,
+};
 use tonic::transport::Server;
 use tracing::info;
 use tracing_subscriber::fmt::format::FmtSpan;
-
 
 #[tokio::main]
 async fn main() {
