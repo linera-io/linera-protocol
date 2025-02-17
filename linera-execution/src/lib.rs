@@ -606,13 +606,6 @@ pub trait BaseRuntime {
         promise: &Self::FindKeyValuesByPrefix,
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError>;
 
-    /// Queries a service.
-    fn query_service(
-        &mut self,
-        application_id: ApplicationId,
-        query: Vec<u8>,
-    ) -> Result<Vec<u8>, ExecutionError>;
-
     /// Makes a POST request to the given URL and returns the answer, if any.
     fn http_post(
         &mut self,
@@ -744,6 +737,13 @@ pub trait ContractRuntime: BaseRuntime {
 
     /// Returns the round in which this block was validated.
     fn validation_round(&mut self) -> Result<Option<u32>, ExecutionError>;
+
+    /// Queries a service.
+    fn query_service(
+        &mut self,
+        application_id: ApplicationId,
+        query: Vec<u8>,
+    ) -> Result<Vec<u8>, ExecutionError>;
 }
 
 /// An operation to be executed in a block.
