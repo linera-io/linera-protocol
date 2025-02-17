@@ -40,7 +40,7 @@ use {
 
 #[cfg(with_testing)]
 pub use crate::db_storage::TestClock;
-pub use crate::db_storage::{list_all_blob_ids, ChainStatesFirstAssignment, DbStorage, WallClock};
+pub use crate::db_storage::{list_all_blob_ids, list_all_chain_ids, ChainStatesFirstAssignment, DbStorage, WallClock};
 #[cfg(with_metrics)]
 pub use crate::db_storage::{
     READ_CERTIFICATE_COUNTER, READ_HASHED_CONFIRMED_BLOCK_COUNTER, WRITE_CERTIFICATE_COUNTER,

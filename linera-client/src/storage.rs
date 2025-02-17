@@ -4,10 +4,10 @@
 use std::{fmt, str::FromStr};
 
 use async_trait::async_trait;
-use linera_base::identifiers::BlobId;
+use linera_base::identifiers::{BlobId, ChainId};
 use linera_execution::WasmRuntime;
 #[cfg(with_storage)]
-use linera_storage::list_all_blob_ids;
+use linera_storage::{list_all_blob_ids, list_all_chain_ids};
 use linera_storage::{DbStorage, Storage};
 #[cfg(feature = "storage-service")]
 use linera_storage_service::{
@@ -558,7 +558,7 @@ impl StoreConfig {
         }
     }
 
-    /// Lists all the namespaces of the storage
+    /// Lists all the blobs of the storage
     pub async fn list_blob_ids(self) -> Result<Vec<BlobId>, ViewError> {
         match self {
             StoreConfig::Memory(_, _) => Err(ViewError::StoreError {
@@ -615,6 +615,32 @@ impl StoreConfig {
             #[cfg(feature = "scylladb")]
             StoreConfig::ScyllaDb(config, namespace) => {
                 Ok(ScyllaDbStore::list_root_keys(&config, &namespace).await?)
+            }
+        }
+    }
+
+    /// Lists all the chain ids of the storage
+    pub async fn list_chain_ids(self) -> Result<Vec<ChainId>, ViewError> {
+        match self {
+            StoreConfig::Memory(_, _) => Err(ViewError::StoreError {
+                backend: "memory".to_string(),
+                error: "list_root_keys is not supported for the memory storage".to_string(),
+            }),
+            #[cfg(feature = "storage-service")]
+            StoreConfig::Service(config, namespace) => {
+                Ok(list_all_chain_ids::<ServiceStoreClient>(&config, &namespace).await?)
+            }
+            #[cfg(feature = "rocksdb")]
+            StoreConfig::RocksDb(config, namespace) => {
+                Ok(list_all_chain_ids::<RocksDbStore>(&config, &namespace).await?)
+            }
+            #[cfg(feature = "dynamodb")]
+            StoreConfig::DynamoDb(config, namespace) => {
+                Ok(list_all_chain_ids::<DynamoDbStore>(&config, &namespace).await?)
+            }
+            #[cfg(feature = "scylladb")]
+            StoreConfig::ScyllaDb(config, namespace) => {
+                Ok(list_all_chain_ids::<ScyllaDbStore>(&config, &namespace).await?)
             }
         }
     }
