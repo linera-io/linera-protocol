@@ -289,7 +289,9 @@ mod tests {
         identifiers::{BlobId, BlobType, ChainId},
     };
 
-    use crate::db_storage::{BaseKey, BLOB_ID_LENGTH, CHAIN_ID_LENGTH, INDEX_BLOB_ID, INDEX_CHAIN_ID};
+    use crate::db_storage::{
+        BaseKey, BLOB_ID_LENGTH, CHAIN_ID_LENGTH, INDEX_BLOB_ID, INDEX_CHAIN_ID,
+    };
 
     #[test]
     fn test_base_key_serialization() {
@@ -328,7 +330,10 @@ pub async fn list_all_blob_ids<S: KeyValueStore>(store: &S) -> Result<Vec<BlobId
 }
 
 /// Lists the chain ids of the storage.
-pub async fn list_all_chain_ids<S: AdminKeyValueStore>(config: &S::Config, namespace: &str) -> Result<Vec<ChainId>, ViewError> {
+pub async fn list_all_chain_ids<S: AdminKeyValueStore>(
+    config: &S::Config,
+    namespace: &str,
+) -> Result<Vec<ChainId>, ViewError> {
     let root_keys = S::list_root_keys(config, namespace).await?;
     let mut chain_ids = Vec::new();
     for root_key in root_keys {
