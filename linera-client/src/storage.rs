@@ -72,10 +72,10 @@ pub enum StoreConfig {
     /// The RocksDB key value store
     #[cfg(feature = "rocksdb")]
     RocksDb(RocksDbStoreConfig, String),
-    /// The DynamoDb key value store
+    /// The DynamoDB key value store
     #[cfg(feature = "dynamodb")]
     DynamoDb(DynamoDbStoreConfig, String),
-    /// The ScyllaDb key value store
+    /// The ScyllaDB key value store
     #[cfg(feature = "scylladb")]
     ScyllaDb(ScyllaDbStoreConfig, String),
 }
@@ -103,10 +103,10 @@ pub enum StorageConfig {
     /// The DynamoDB description
     #[cfg(feature = "dynamodb")]
     DynamoDb {
-        /// Whether to use the localstack system
+        /// Whether to use the LocalStack system
         use_localstack: bool,
     },
-    /// The ScyllaDb description
+    /// The ScyllaDB description
     #[cfg(feature = "scylladb")]
     ScyllaDb {
         /// The URI for accessing the database

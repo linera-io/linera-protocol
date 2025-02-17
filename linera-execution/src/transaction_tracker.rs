@@ -5,9 +5,9 @@ use std::vec;
 
 use custom_debug_derive::Debug;
 use linera_base::{
-    data_types::{Amount, ArithmeticError, OracleResponse},
+    data_types::{Amount, ArithmeticError, Event, OracleResponse},
     ensure,
-    identifiers::ApplicationId,
+    identifiers::{ApplicationId, ChainId, ChannelFullName, StreamId},
 };
 
 use crate::{
@@ -25,6 +25,28 @@ pub struct TransactionTracker {
     #[debug(skip_if = Vec::is_empty)]
     outcomes: Vec<ExecutionOutcome>,
     next_message_index: u32,
+    /// Events recorded by contracts' `emit` calls.
+    events: Vec<Event>,
+    /// Subscribe chains to channels.
+    subscribe: Vec<(ChannelFullName, ChainId)>,
+    /// Unsubscribe chains from channels.
+    unsubscribe: Vec<(ChannelFullName, ChainId)>,
+}
+
+/// The [`TransactionTracker`] contents after a transaction has finished.
+#[derive(Debug, Default)]
+pub struct TransactionOutcome {
+    #[debug(skip_if = Vec::is_empty)]
+    pub oracle_responses: Vec<OracleResponse>,
+    #[debug(skip_if = Vec::is_empty)]
+    pub outcomes: Vec<ExecutionOutcome>,
+    pub next_message_index: u32,
+    /// Events recorded by contracts' `emit` calls.
+    pub events: Vec<Event>,
+    /// Subscribe chains to channels.
+    pub subscribe: Vec<(ChannelFullName, ChainId)>,
+    /// Unsubscribe chains from channels.
+    pub unsubscribe: Vec<(ChannelFullName, ChainId)>,
 }
 
 impl TransactionTracker {
@@ -32,8 +54,7 @@ impl TransactionTracker {
         TransactionTracker {
             replaying_oracle_responses: oracle_responses.map(Vec::into_iter),
             next_message_index,
-            oracle_responses: Vec::new(),
-            outcomes: Vec::new(),
+            ..Self::default()
         }
     }
 
@@ -77,6 +98,22 @@ impl TransactionTracker {
         Ok(())
     }
 
+    pub fn add_event(&mut self, stream_id: StreamId, key: Vec<u8>, value: Vec<u8>) {
+        self.events.push(Event {
+            stream_id,
+            key,
+            value,
+        });
+    }
+
+    pub fn subscribe(&mut self, name: ChannelFullName, subscriber: ChainId) {
+        self.subscribe.push((name, subscriber));
+    }
+
+    pub fn unsubscribe(&mut self, name: ChannelFullName, subscriber: ChainId) {
+        self.unsubscribe.push((name, subscriber));
+    }
+
     pub fn add_oracle_response(&mut self, oracle_response: OracleResponse) {
         self.oracle_responses.push(oracle_response);
     }
@@ -112,14 +149,15 @@ impl TransactionTracker {
         Ok(Some(response))
     }
 
-    pub fn destructure(
-        self,
-    ) -> Result<(Vec<ExecutionOutcome>, Vec<OracleResponse>, u32), ExecutionError> {
+    pub fn into_outcome(self) -> Result<TransactionOutcome, ExecutionError> {
         let TransactionTracker {
             replaying_oracle_responses,
             oracle_responses,
             outcomes,
             next_message_index,
+            events,
+            subscribe,
+            unsubscribe,
         } = self;
         if let Some(mut responses) = replaying_oracle_responses {
             ensure!(
@@ -127,7 +165,14 @@ impl TransactionTracker {
                 ExecutionError::UnexpectedOracleResponse
             );
         }
-        Ok((outcomes, oracle_responses, next_message_index))
+        Ok(TransactionOutcome {
+            outcomes,
+            oracle_responses,
+            next_message_index,
+            events,
+            subscribe,
+            unsubscribe,
+        })
     }
 
     pub(crate) fn outcomes_mut(&mut self) -> &mut Vec<ExecutionOutcome> {

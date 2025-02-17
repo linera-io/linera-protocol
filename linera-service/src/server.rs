@@ -14,7 +14,10 @@ use std::{
 use anyhow::{bail, Context};
 use async_trait::async_trait;
 use futures::{stream::FuturesUnordered, FutureExt as _, StreamExt, TryFutureExt as _};
-use linera_base::crypto::{CryptoRng, KeyPair};
+use linera_base::{
+    crypto::{CryptoRng, SigningKey},
+    listen_for_shutdown_signals,
+};
 use linera_client::{
     config::{CommitteeConfig, GenesisConfig, ValidatorConfig, ValidatorServerConfig},
     persistent::{self, Persist},
@@ -193,7 +196,7 @@ impl Runnable for ServerContext {
         let shutdown_notifier = CancellationToken::new();
         let listen_address = self.get_listen_address();
 
-        tokio::spawn(util::listen_for_shutdown_signals(shutdown_notifier.clone()));
+        tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
 
         // Run the server
         let states = match self.shard {
@@ -280,7 +283,7 @@ fn make_server_config<R: CryptoRng>(
     rng: &mut R,
     options: ValidatorOptions,
 ) -> anyhow::Result<persistent::File<ValidatorServerConfig>> {
-    let key = KeyPair::generate_from(rng);
+    let key = SigningKey::generate_from(rng);
     let name = ValidatorName(key.public());
     let network = ValidatorPublicNetworkConfig {
         protocol: options.external_protocol,

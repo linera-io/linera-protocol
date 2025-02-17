@@ -99,8 +99,8 @@ pub trait EthereumQueries {
     /// Reads the events of the smart contract.
     ///
     /// This is done from a specified `contract_address` and `event_name_expanded`.
-    /// That is one should have "MyEvent(type1 indexed,type2)" instead
-    /// of the usual "MyEvent(type1,type2)"
+    /// That is one should have `MyEvent(type1 indexed,type2)` instead
+    /// of the usual `MyEvent(type1,type2)`
     ///
     /// The `from_block` is inclusive.
     /// The `to_block` is exclusive (contrary to Ethereum where it is inclusive)

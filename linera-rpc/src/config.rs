@@ -47,7 +47,7 @@ pub type ShardId = usize;
 /// The network configuration of a shard.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ShardConfig {
-    /// The host name (e.g an IP address).
+    /// The host name (e.g., an IP address).
     pub host: String,
     /// The port.
     pub port: u16,

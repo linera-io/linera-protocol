@@ -11,14 +11,12 @@ use async_graphql::SimpleObject;
 use custom_debug_derive::Debug;
 use linera_base::{
     bcs,
-    crypto::{BcsHashable, BcsSignable, CryptoError, CryptoHash, KeyPair, PublicKey, Signature},
-    data_types::{Amount, BlockHeight, OracleResponse, Round, Timestamp},
+    crypto::{BcsHashable, BcsSignable, CryptoError, CryptoHash, PublicKey, Signature, SigningKey},
+    data_types::{Amount, BlockHeight, Event, OracleResponse, Round, Timestamp},
     doc_scalar, ensure,
     hashed::Hashed,
-    hex_debug,
     identifiers::{
-        Account, BlobId, BlobType, ChainId, ChannelName, Destination, GenericApplicationId,
-        MessageId, Owner, StreamId,
+        Account, BlobId, BlobType, ChainId, ChannelFullName, Destination, MessageId, Owner,
     },
 };
 use linera_execution::{
@@ -271,25 +269,6 @@ pub struct MessageBundle {
     pub messages: Vec<PostedMessage>,
 }
 
-#[derive(Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
-/// A channel name together with its application ID.
-pub struct ChannelFullName {
-    /// The application owning the channel.
-    pub application_id: GenericApplicationId,
-    /// The name of the channel.
-    pub name: ChannelName,
-}
-
-impl fmt::Display for ChannelFullName {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let name = hex::encode(&self.name);
-        match self.application_id {
-            GenericApplicationId::System => write!(f, "system channel {name}"),
-            GenericApplicationId::User(app_id) => write!(f, "user channel {name} for app {app_id}"),
-        }
-    }
-}
-
 /// The origin of a message coming from a particular chain. Used to identify each inbox.
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Serialize, Deserialize)]
 pub enum Medium {
@@ -413,25 +392,8 @@ pub struct BlockExecutionOutcome {
     /// The record of oracle responses for each transaction.
     pub oracle_responses: Vec<Vec<OracleResponse>>,
     /// The list of events produced by each transaction.
-    pub events: Vec<Vec<EventRecord>>,
+    pub events: Vec<Vec<Event>>,
 }
-
-/// An event recorded in an executed block.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
-pub struct EventRecord {
-    /// The ID of the stream this event belongs to.
-    pub stream_id: StreamId,
-    /// The event key.
-    #[debug(with = "hex_debug")]
-    #[serde(with = "serde_bytes")]
-    pub key: Vec<u8>,
-    /// The payload data.
-    #[debug(with = "hex_debug")]
-    #[serde(with = "serde_bytes")]
-    pub value: Vec<u8>,
-}
-
-impl<'de> BcsHashable<'de> for EventRecord {}
 
 /// The hash and chain ID of a `CertificateValue`.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -466,7 +428,7 @@ pub struct Vote<T> {
 
 impl<T> Vote<T> {
     /// Use signing key to create a signed object.
-    pub fn new(value: Hashed<T>, round: Round, key_pair: &KeyPair) -> Self
+    pub fn new(value: Hashed<T>, round: Round, key_pair: &SigningKey) -> Self
     where
         T: CertificateValue,
     {
@@ -772,7 +734,7 @@ pub struct ProposalContent {
 }
 
 impl BlockProposal {
-    pub fn new_initial(round: Round, block: ProposedBlock, secret: &KeyPair) -> Self {
+    pub fn new_initial(round: Round, block: ProposedBlock, secret: &SigningKey) -> Self {
         let content = ProposalContent {
             round,
             block,
@@ -791,7 +753,7 @@ impl BlockProposal {
     pub fn new_retry(
         round: Round,
         validated_block_certificate: ValidatedBlockCertificate,
-        secret: &KeyPair,
+        secret: &SigningKey,
     ) -> Self {
         let lite_cert = validated_block_certificate.lite_certificate().cloned();
         let block = validated_block_certificate.into_inner().into_inner();
@@ -852,7 +814,7 @@ impl BlockProposal {
 
 impl LiteVote {
     /// Uses the signing key to create a signed object.
-    pub fn new(value: LiteValue, round: Round, key_pair: &KeyPair) -> Self {
+    pub fn new(value: LiteValue, round: Round, key_pair: &SigningKey) -> Self {
         let hash_and_round = VoteValue(value.value_hash, round, value.kind);
         let signature = Signature::new(&hash_and_round, key_pair);
         Self {
@@ -969,10 +931,6 @@ impl<'de> BcsSignable<'de> for VoteValue {}
 doc_scalar!(
     MessageAction,
     "Whether an incoming message is accepted or rejected."
-);
-doc_scalar!(
-    ChannelFullName,
-    "A channel name together with its application ID."
 );
 doc_scalar!(
     Medium,

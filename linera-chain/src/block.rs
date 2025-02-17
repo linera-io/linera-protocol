@@ -7,17 +7,17 @@ use std::{collections::BTreeSet, fmt::Debug};
 use async_graphql::SimpleObject;
 use linera_base::{
     crypto::{BcsHashable, CryptoHash},
-    data_types::{BlockHeight, OracleResponse, Timestamp},
+    data_types::{BlockHeight, Event, OracleResponse, Timestamp},
     hashed::Hashed,
     identifiers::{BlobId, BlobType, ChainId, MessageId, Owner},
 };
-use linera_execution::{committee::Epoch, Operation, SystemOperation};
+use linera_execution::{committee::Epoch, BlobState, Operation, SystemOperation};
 use serde::{ser::SerializeStruct, Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
     data_types::{
-        BlockExecutionOutcome, EventRecord, ExecutedBlock, IncomingBundle, Medium, MessageBundle,
+        BlockExecutionOutcome, ExecutedBlock, IncomingBundle, Medium, MessageBundle,
         OutgoingMessage, ProposedBlock,
     },
     types::CertificateValue,
@@ -173,6 +173,16 @@ impl ConfirmedBlock {
             && *timestamp == self.block().header.timestamp
             && *authenticated_signer == self.block().header.authenticated_signer
             && *previous_block_hash == self.block().header.previous_block_hash
+    }
+
+    /// Returns a blob state that applies to all blobs used by this block.
+    pub fn to_blob_state(&self) -> BlobState {
+        BlobState {
+            last_used_by: self.0.hash(),
+            chain_id: self.chain_id(),
+            block_height: self.height(),
+            epoch: self.epoch(),
+        }
     }
 }
 
@@ -349,7 +359,7 @@ pub struct BlockBody {
     /// The record of oracle responses for each transaction.
     pub oracle_responses: Vec<Vec<OracleResponse>>,
     /// The list of events produced by each transaction.
-    pub events: Vec<Vec<EventRecord>>,
+    pub events: Vec<Vec<Event>>,
 }
 
 impl Block {

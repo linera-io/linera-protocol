@@ -47,6 +47,9 @@ const MAX_VALUE_SIZE: usize = 3221225072;
 // 8388608 and so for offset reason we decrease by 400
 const MAX_KEY_SIZE: usize = 8388208;
 
+const DB_CACHE_SIZE: usize = 8 * 1024 * 1024; // 8 MiB
+const DB_MAX_WRITE_BUFFER_NUMBER: i32 = 16;
+
 /// The RocksDB client that we use.
 type DB = rocksdb::DBWithThreadMode<rocksdb::MultiThreaded>;
 
@@ -55,12 +58,12 @@ type DB = rocksdb::DBWithThreadMode<rocksdb::MultiThreaded>;
 /// `BlockInPlace` can only be used in multi-threaded environment.
 /// One way to select that is to select BlockInPlace when
 /// `tokio::runtime::Handle::current().metrics().num_workers() > 1`
-/// The BlockInPlace is documented in <https://docs.rs/tokio/latest/tokio/task/fn.block_in_place.html>
+/// `BlockInPlace` is documented in <https://docs.rs/tokio/latest/tokio/task/fn.block_in_place.html>
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RocksDbSpawnMode {
-    /// This uses the `spawn_blocking` function of tokio.
+    /// This uses the `spawn_blocking` function of Tokio.
     SpawnBlocking,
-    /// This uses the `block_in_place` function of tokio.
+    /// This uses the `block_in_place` function of Tokio.
     BlockInPlace,
 }
 
@@ -254,7 +257,7 @@ pub struct RocksDbStoreInternal {
 pub struct RocksDbStoreInternalConfig {
     /// The path to the storage containing the namespaces
     path_with_guard: PathWithGuard,
-    /// The spawn_mode that is chosen
+    /// The chosen spawn mode
     spawn_mode: RocksDbSpawnMode,
     /// The common configuration of the key value store
     common_config: CommonStoreInternalConfig,
@@ -288,6 +291,12 @@ impl RocksDbStoreInternal {
         }
         let mut options = rocksdb::Options::default();
         options.create_if_missing(true);
+        options.create_missing_column_families(true);
+        // Flush in-memory buffer to disk more often
+        options.set_write_buffer_size(DB_CACHE_SIZE);
+        options.set_max_write_buffer_number(DB_MAX_WRITE_BUFFER_NUMBER);
+        options.set_compression_type(rocksdb::DBCompressionType::Lz4);
+
         let db = DB::open(&options, path_buf)?;
         let executor = RocksDbStoreExecutor {
             db: Arc::new(db),
@@ -534,7 +543,7 @@ impl TestKeyValueStore for RocksDbStoreInternal {
 /// The error type for [`RocksDbStoreInternal`]
 #[derive(Error, Debug)]
 pub enum RocksDbStoreInternalError {
-    /// Tokio join error in RocksDb.
+    /// Tokio join error in RocksDB.
     #[error("tokio join error: {0}")]
     TokioJoinError(#[from] tokio::task::JoinError),
 
@@ -550,8 +559,8 @@ pub enum RocksDbStoreInternalError {
     #[error("error in the conversion from OsString: {0:?}")]
     IntoStringError(OsString),
 
-    /// The key must have at most 8M
-    #[error("The key must have at most 8M")]
+    /// The key must have at most 8 MB
+    #[error("The key must have at most 8 MB")]
     KeyTooLong,
 
     /// Namespace contains forbidden characters
@@ -577,7 +586,7 @@ pub struct PathWithGuard {
 }
 
 impl PathWithGuard {
-    /// Create a PathWithGuard from an existing path.
+    /// Creates a `PathWithGuard` from an existing path.
     pub fn new(path_buf: PathBuf) -> Self {
         Self {
             path_buf,

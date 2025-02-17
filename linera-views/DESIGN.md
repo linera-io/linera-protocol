@@ -12,7 +12,7 @@ We provide an implementation of the trait `KeyValueStore` for the following key-
 * `MemoryStore` uses the memory (and uses internally a simple B-Tree map).
 * `RocksDbStore` is a disk-based key-value store
 * `DynamoDbStore` is the AWS-based DynamoDB service.
-* `ScyllaDbStore` is a cloud based Cassandra compatible database.
+* `ScyllaDbStore` is a cloud-based Cassandra-compatible database.
 
 The trait `KeyValueStore` was designed so that more storage solutions can be easily added in the future.
 

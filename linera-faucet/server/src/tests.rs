@@ -8,7 +8,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use futures::lock::Mutex;
 use linera_base::{
-    crypto::{KeyPair, PublicKey},
+    crypto::{PublicKey, SigningKey},
     data_types::{Amount, Timestamp},
     identifiers::ChainId,
 };
@@ -50,7 +50,7 @@ impl chain_listener::ClientContext for ClientContext {
     async fn update_wallet_for_new_chain(
         &mut self,
         _: ChainId,
-        _: Option<KeyPair>,
+        _: Option<SigningKey>,
         _: Timestamp,
     ) -> Result<(), linera_client::Error> {
         self.update_calls += 1;

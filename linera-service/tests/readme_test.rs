@@ -4,11 +4,11 @@
 
 #![cfg(feature = "storage-service")]
 
-mod common;
+mod guard;
 
 use std::{env, path::PathBuf};
 
-use common::INTEGRATION_TEST_GUARD;
+use guard::INTEGRATION_TEST_GUARD;
 use linera_client::{
     client_options::{
         DEFAULT_PAUSE_AFTER_GQL_MUTATIONS_SECS, DEFAULT_PAUSE_AFTER_LINERA_SERVICE_SECS,

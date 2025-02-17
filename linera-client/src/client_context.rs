@@ -8,7 +8,7 @@ use std::{collections::HashSet, sync::Arc};
 use async_trait::async_trait;
 use futures::Future;
 use linera_base::{
-    crypto::KeyPair,
+    crypto::SigningKey,
     data_types::{BlockHeight, Timestamp},
     identifiers::{Account, ChainId},
     ownership::ChainOwnership,
@@ -41,26 +41,25 @@ use {
     linera_base::{
         crypto::PublicKey,
         data_types::Amount,
+        hashed::Hashed,
         identifiers::{AccountOwner, ApplicationId, Owner},
+        listen_for_shutdown_signals,
     },
-    linera_chain::data_types::{
-        BlockProposal, ExecutedBlock, ProposedBlock, SignatureAggregator, Vote,
+    linera_chain::{
+        data_types::{BlockProposal, ExecutedBlock, ProposedBlock, SignatureAggregator, Vote},
+        types::{CertificateValue, ConfirmedBlock, GenericCertificate},
     },
-    linera_chain::types::{CertificateValue, GenericCertificate},
-    linera_core::data_types::ChainInfoQuery,
+    linera_core::{data_types::ChainInfoQuery, node::ValidatorNode},
     linera_execution::{
         committee::Epoch,
         system::{OpenChainConfig, Recipient, SystemOperation, OPEN_CHAIN_MESSAGE_INDEX},
         Operation,
     },
-    linera_rpc::{
-        config::NetworkProtocol, grpc::GrpcClient, mass_client::MassClient,
-        simple::SimpleMassClient, RpcMessage,
-    },
     linera_sdk::abis::fungible,
     std::{collections::HashMap, iter},
     tokio::task,
-    tracing::{error, trace},
+    tokio_util::sync::CancellationToken,
+    tracing::{error, trace, warn},
 };
 
 #[cfg(web)]
@@ -112,7 +111,7 @@ where
     async fn update_wallet_for_new_chain(
         &mut self,
         chain_id: ChainId,
-        key_pair: Option<KeyPair>,
+        key_pair: Option<SigningKey>,
         timestamp: Timestamp,
     ) -> Result<(), Error> {
         self.update_wallet_for_new_chain(chain_id, key_pair, timestamp)
@@ -320,7 +319,7 @@ where
     pub async fn update_wallet_for_new_chain(
         &mut self,
         chain_id: ChainId,
-        key_pair: Option<KeyPair>,
+        key_pair: Option<SigningKey>,
         timestamp: Timestamp,
     ) -> Result<(), Error> {
         self.update_wallet_for_new_chain_internal(chain_id, key_pair, timestamp)
@@ -330,7 +329,7 @@ where
     async fn update_wallet_for_new_chain_internal(
         &mut self,
         chain_id: ChainId,
-        key_pair: Option<KeyPair>,
+        key_pair: Option<SigningKey>,
         timestamp: Timestamp,
     ) -> Result<(), Error> {
         if self.wallet.get(chain_id).is_none() {
@@ -566,6 +565,128 @@ where
     S: Storage + Clone + Send + Sync + 'static,
     W: Persist<Target = Wallet>,
 {
+    pub async fn run_benchmark(
+        &mut self,
+        bps: Option<usize>,
+        blocks_infos_iter: impl Iterator<Item = &(ChainId, Vec<Operation>, SigningKey)>,
+        clients: Vec<linera_rpc::Client>,
+        transactions_per_block: usize,
+        epoch: Epoch,
+    ) -> Result<(), Error> {
+        let shutdown_notifier = CancellationToken::new();
+        tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
+
+        let mut num_sent_proposals = 0;
+        let mut start = Instant::now();
+        for (chain_id, operations, key_pair) in blocks_infos_iter {
+            if shutdown_notifier.is_cancelled() {
+                info!("Shutdown signal received, stopping benchmark");
+                self.save_wallet().await?;
+                return Ok(());
+            }
+            let chain = self.wallet.get(*chain_id).expect("should have chain");
+            let block = ProposedBlock {
+                epoch,
+                chain_id: *chain_id,
+                incoming_bundles: Vec::new(),
+                operations: operations.clone(),
+                previous_block_hash: chain.block_hash,
+                height: chain.next_block_height,
+                authenticated_signer: Some(Owner::from(key_pair.public())),
+                timestamp: chain.timestamp.max(Timestamp::now()),
+            };
+            let executed_block = self.stage_block_execution(block.clone(), None).await?;
+            let value = Hashed::new(ConfirmedBlock::new(executed_block));
+            let proposal =
+                BlockProposal::new_initial(linera_base::data_types::Round::Fast, block, key_pair);
+
+            let mut join_set = task::JoinSet::new();
+            for client in &clients {
+                let client = client.clone();
+                let proposal = proposal.clone();
+                join_set.spawn(async move { client.handle_block_proposal(proposal).await });
+            }
+            let votes = join_set
+                .join_all()
+                .await
+                .into_iter()
+                .collect::<Result<Vec<_>, _>>()?
+                .into_iter()
+                .filter_map(|response| {
+                    let vote = response.info.manager.pending?;
+                    vote.clone().with_value(value.clone())
+                })
+                .collect::<Vec<_>>();
+
+            let certificates = self.make_benchmark_certificates_from_votes(votes);
+            assert_eq!(
+                certificates.len(),
+                1,
+                "Unable to build all the expected certificates from received votes"
+            );
+
+            let certificate = &certificates[0];
+            let mut join_set = task::JoinSet::new();
+            for client in &clients {
+                let client = client.clone();
+                let certificate = certificate.clone();
+                join_set.spawn(async move {
+                    client
+                        .handle_confirmed_certificate(
+                            certificate,
+                            CrossChainMessageDelivery::NonBlocking,
+                        )
+                        .await
+                });
+            }
+
+            join_set
+                .join_all()
+                .await
+                .into_iter()
+                .collect::<Result<Vec<_>, _>>()?;
+            self.update_wallet_from_certificate(certificate.clone())
+                .await;
+            num_sent_proposals += 1;
+            if let Some(bps) = bps {
+                if num_sent_proposals == bps {
+                    let elapsed = start.elapsed();
+                    if elapsed > Duration::from_secs(1) {
+                        warn!(
+                            "Failed to achieve {} BPS/{} TPS, took {} ms",
+                            bps,
+                            bps * transactions_per_block,
+                            elapsed.as_millis()
+                        );
+                    } else {
+                        tokio::time::sleep(Duration::from_secs(1) - elapsed).await;
+                        info!(
+                            "Achieved {} BPS/{} TPS in {} ms",
+                            bps,
+                            bps * transactions_per_block,
+                            elapsed.as_millis()
+                        );
+                    }
+                    start = Instant::now();
+                    num_sent_proposals = 0;
+                }
+            }
+        }
+
+        if bps.is_none() {
+            self.save_wallet().await?;
+            let elapsed = start.elapsed();
+            let bps = num_sent_proposals as f64 / elapsed.as_secs_f64();
+            info!(
+                "Achieved {} BPS/{} TPS",
+                bps,
+                bps * transactions_per_block as f64
+            );
+        }
+
+        Ok(())
+    }
+
     pub async fn process_inboxes_and_force_validator_updates(&mut self) {
         let chain_clients = self
             .wallet
@@ -613,7 +734,7 @@ where
         &mut self,
         num_chains: usize,
         balance: Amount,
-    ) -> Result<HashMap<ChainId, KeyPair>, Error> {
+    ) -> Result<HashMap<ChainId, SigningKey>, Error> {
         let mut benchmark_chains = HashMap::new();
         let start = Instant::now();
         for chain_id in self.wallet.owned_chain_ids() {
@@ -723,7 +844,7 @@ where
         num_new_chains: usize,
         chain_client: &ChainClient<NodeProvider, S>,
         balance: Amount,
-        key_pair: &KeyPair,
+        key_pair: &SigningKey,
         admin_id: ChainId,
     ) -> Result<ConfirmedBlockCertificate, Error> {
         let chain_id = chain_client.chain_id();
@@ -750,7 +871,7 @@ where
     /// Supplies fungible tokens to the chains.
     pub async fn supply_fungible_tokens(
         &mut self,
-        key_pairs: &HashMap<ChainId, KeyPair>,
+        key_pairs: &HashMap<ChainId, SigningKey>,
         application_id: ApplicationId,
     ) -> Result<(), Error> {
         let default_chain_id = self
@@ -837,21 +958,21 @@ where
         Ok(())
     }
 
-    /// Makes one block proposal per chain, up to `num_chains` blocks.
-    pub fn make_benchmark_block_proposals(
+    /// Generates information related to one block per chain, up to `num_chains` blocks.
+    pub fn make_benchmark_block_info(
         &mut self,
-        key_pairs: &HashMap<ChainId, KeyPair>,
+        key_pairs: HashMap<ChainId, SigningKey>,
         transactions_per_block: usize,
         fungible_application_id: Option<ApplicationId>,
-    ) -> Vec<BlockProposal> {
-        let mut proposals = Vec::new();
+    ) -> Vec<(ChainId, Vec<Operation>, SigningKey)> {
+        let mut blocks_infos = Vec::new();
         let mut previous_chain_id = *key_pairs
             .iter()
             .last()
             .expect("There should be a last element")
             .0;
         let amount = Amount::from(1);
-        for (&chain_id, key_pair) in key_pairs {
+        for (chain_id, key_pair) in key_pairs {
             let public_key = key_pair.public();
             let operation = match fungible_application_id {
                 Some(application_id) => Self::fungible_transfer(
@@ -870,27 +991,10 @@ where
             let operations = iter::repeat(operation)
                 .take(transactions_per_block)
                 .collect();
-            let chain = self.wallet.get(chain_id).expect("should have chain");
-            let block = ProposedBlock {
-                epoch: Epoch::ZERO,
-                chain_id,
-                incoming_bundles: Vec::new(),
-                operations,
-                previous_block_hash: chain.block_hash,
-                height: chain.next_block_height,
-                authenticated_signer: Some(Owner::from(public_key)),
-                timestamp: chain.timestamp.max(Timestamp::now()),
-            };
-            trace!("Preparing block proposal: {:?}", block);
-            let proposal = BlockProposal::new_initial(
-                linera_base::data_types::Round::Fast,
-                block.clone(),
-                key_pair,
-            );
-            proposals.push(proposal);
-            previous_chain_id = chain.chain_id;
+            blocks_infos.push((chain_id, operations, key_pair));
+            previous_chain_id = chain_id;
         }
-        proposals
+        blocks_infos
     }
 
     /// Tries to aggregate votes into certificates.
@@ -940,78 +1044,11 @@ where
         certificates
     }
 
-    /// Broadcasts a bulk of blocks to each validator.
-    pub async fn mass_broadcast(
-        &self,
-        phase: &'static str,
-        proposals: Vec<RpcMessage>,
-    ) -> Vec<RpcMessage> {
-        let time_start = Instant::now();
-        info!("Broadcasting {} {}", proposals.len(), phase);
-        let mut join_set = task::JoinSet::new();
-        for client in self.make_validator_mass_clients() {
-            let proposals = proposals.clone();
-            join_set.spawn(async move {
-                debug!("Sending {} requests", proposals.len());
-                let responses = client.send(proposals).await.unwrap_or_default();
-                debug!("Done sending requests");
-                responses
-            });
-        }
-        let responses = join_set
-            .join_all()
-            .await
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>();
-        let time_elapsed = time_start.elapsed();
-        info!(
-            "Received {} responses in {} ms.",
-            responses.len(),
-            time_elapsed.as_millis()
-        );
-        info!(
-            "Estimated server throughput: {} {} per sec",
-            (proposals.len() as u128) * 1_000_000 / time_elapsed.as_micros(),
-            phase
-        );
-        responses
-    }
-
-    fn make_validator_mass_clients(&self) -> Vec<Box<dyn MassClient + Send>> {
-        let mut validator_clients = Vec::new();
-        for config in &self.wallet.genesis_config().committee.validators {
-            let client: Box<dyn MassClient + Send> = match config.network.protocol {
-                NetworkProtocol::Simple(protocol) => {
-                    let network = config.network.clone_with_protocol(protocol);
-                    Box::new(SimpleMassClient::new(
-                        network,
-                        self.send_timeout,
-                        self.recv_timeout,
-                    ))
-                }
-                NetworkProtocol::Grpc { .. } => {
-                    let node_options = self.make_node_options();
-                    let address = config.network.http_address();
-                    Box::new(GrpcClient::create(address, node_options))
-                }
-            };
-
-            validator_clients.push(client);
-        }
-        validator_clients
-    }
-
-    pub async fn update_wallet_from_certificates(
-        &mut self,
-        certificates: Vec<ConfirmedBlockCertificate>,
-    ) {
+    pub async fn update_wallet_from_certificate(&mut self, certificate: ConfirmedBlockCertificate) {
         let node = self.client.local_node().clone();
-        // Replay the certificates locally.
-        for certificate in certificates {
-            // No required certificates from other chains: This is only used with benchmark.
-            node.handle_certificate(certificate, &()).await.unwrap();
-        }
+        // Replay the certificate locally.
+        // No required certificates from other chains: This is only used with benchmark.
+        node.handle_certificate(certificate, &()).await.unwrap();
         // Last update the wallet.
         for chain in self.wallet.as_mut().chains_mut() {
             let query = ChainInfoQuery::new(chain.chain_id);
@@ -1020,7 +1057,6 @@ where
             chain.block_hash = info.block_hash;
             chain.next_block_height = info.next_block_height;
         }
-        self.save_wallet().await.unwrap();
     }
 
     /// Creates a fungible token transfer operation.

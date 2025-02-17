@@ -16,12 +16,12 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum EthereumQueryError {
-    /// The id should be matching
-    #[error("the id should be matching")]
+    /// The ID should be matching
+    #[error("the ID should be matching")]
     IdIsNotMatching,
 
-    /// wrong jsonrpc version
-    #[error("wrong jsonrpc version")]
+    /// wrong JSON-RPC version
+    #[error("wrong JSON-RPC version")]
     WrongJsonRpcVersion,
 }
 
@@ -97,9 +97,9 @@ pub enum EthereumDataType {
     Bool(bool),
 }
 
-/// Convert an entry named
-/// "Event(type1 indexed,type2 indexed)" into "Event(type1,type2)"
-/// The event_name_expanded is needed for parsing the obtained log.
+/// Converts an entry named
+/// `Event(type1 indexed,type2 indexed)` into `Event(type1,type2)`.
+/// `event_name_expanded` is needed for parsing the obtained log.
 pub fn event_name_from_expanded(event_name_expanded: &str) -> String {
     event_name_expanded.replace(" indexed", "").to_string()
 }

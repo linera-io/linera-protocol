@@ -60,9 +60,12 @@ mod types {
 
 #[cfg(not(target_arch = "wasm32"))]
 mod types {
-    pub use linera_base::{data_types::UserApplicationDescription, ownership::ChainOwnership};
+    pub use linera_base::{
+        data_types::UserApplicationDescription, identifiers::ChannelFullName,
+        ownership::ChainOwnership,
+    };
     pub use linera_chain::{
-        data_types::{ChannelFullName, MessageAction, MessageBundle, Origin, Target},
+        data_types::{MessageAction, MessageBundle, Origin, Target},
         manager::ChainManager,
     };
     pub use linera_core::worker::{Notification, Reason};
@@ -130,12 +133,11 @@ pub struct Transfer;
 
 #[cfg(not(target_arch = "wasm32"))]
 mod from {
-    use linera_base::{hashed::Hashed, identifiers::StreamId};
+    use linera_base::{data_types::Event, hashed::Hashed, identifiers::StreamId};
     use linera_chain::{
         block::{Block, BlockBody, BlockHeader},
         data_types::{
-            EventRecord, ExecutedBlock, IncomingBundle, MessageBundle, OutgoingMessage,
-            PostedMessage,
+            ExecutedBlock, IncomingBundle, MessageBundle, OutgoingMessage, PostedMessage,
         },
         types::ConfirmedBlock,
     };
@@ -283,9 +285,9 @@ mod from {
         }
     }
 
-    impl From<block::BlockBlockValueBlockBodyEvents> for EventRecord {
+    impl From<block::BlockBlockValueBlockBodyEvents> for Event {
         fn from(event: block::BlockBlockValueBlockBodyEvents) -> Self {
-            EventRecord {
+            Event {
                 stream_id: event.stream_id.into(),
                 key: event.key.into_iter().map(|byte| byte as u8).collect(),
                 value: event.value.into_iter().map(|byte| byte as u8).collect(),

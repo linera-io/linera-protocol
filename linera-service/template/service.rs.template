@@ -64,6 +64,8 @@ impl QueryRoot {{
 
 #[cfg(test)]
 mod tests {{
+    use std::sync::Arc;
+
     use async_graphql::{{Request, Response, Value}};
     use futures::FutureExt as _;
     use linera_sdk::{{util::BlockingWait, views::View, Service, ServiceRuntime}};
@@ -74,7 +76,7 @@ mod tests {{
     #[test]
     fn query() {{
         let value = 60u64;
-        let runtime = ServiceRuntime::<{project_name}Service>::new();
+        let runtime = Arc::new(ServiceRuntime::<{project_name}Service>::new());
         let mut state = {project_name}State::load(runtime.root_view_storage_context())
             .blocking_wait()
             .expect("Failed to read from mock key value store");

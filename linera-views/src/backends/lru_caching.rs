@@ -40,7 +40,7 @@ static NUM_CACHE_SUCCESS: LazyLock<IntCounterVec> =
 ///
 /// We cannot apply this crate directly because the batch operation
 /// need to update the cache. In the case of `DeletePrefix` we have to
-/// handle the keys by prefixes. And so we need to have a BTreeMap to
+/// handle the keys by prefixes. And so we need to have a `BTreeMap` to
 /// keep track of this.
 
 /// The data structures
@@ -51,7 +51,7 @@ struct LruPrefixCache {
 }
 
 impl<'a> LruPrefixCache {
-    /// Creates a LruPrefixCache.
+    /// Creates an `LruPrefixCache`.
     pub fn new(max_cache_size: usize) -> Self {
         Self {
             map: BTreeMap::new(),

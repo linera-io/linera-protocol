@@ -21,7 +21,7 @@ mod outbox_tests;
 ///   Messages are contained in blocks, together with destination information, so currently
 ///   we just send the certified blocks over and let the receivers figure out what were the
 ///   messages for them.
-/// * When marking block heights as received, messages at lower heights are also marked (ie. dequeued).
+/// * When marking block heights as received, messages at lower heights are also marked (i.e. dequeued).
 #[derive(Debug, ClonableView, View, async_graphql::SimpleObject)]
 pub struct OutboxStateView<C>
 where

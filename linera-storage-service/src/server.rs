@@ -40,7 +40,7 @@ pub mod key_value_store {
 
 pub enum ServiceStoreServerInternal {
     Memory(MemoryStore),
-    /// The RocksDb key value store
+    /// The RocksDB key value store
     #[cfg(with_rocksdb)]
     RocksDb(RocksDbStore),
 }

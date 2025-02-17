@@ -17,7 +17,7 @@ use linera_base::{
     },
     ensure,
     identifiers::{
-        ChainId, ChannelName, Destination, GenericApplicationId, MessageId, Owner, StreamId,
+        ChainId, ChannelFullName, Destination, GenericApplicationId, MessageId, Owner,
         UserApplicationId,
     },
     ownership::ChainOwnership,
@@ -43,9 +43,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     data_types::{
-        BlockExecutionOutcome, ChainAndHeight, ChannelFullName, EventRecord, IncomingBundle,
-        MessageAction, MessageBundle, Origin, OutgoingMessage, PostedMessage, ProposedBlock,
-        Target, Transaction,
+        BlockExecutionOutcome, ChainAndHeight, IncomingBundle, MessageAction, MessageBundle,
+        Origin, OutgoingMessage, PostedMessage, ProposedBlock, Target, Transaction,
     },
     inbox::{Cursor, InboxError, InboxStateView},
     manager::ChainManager,
@@ -281,26 +280,29 @@ impl ChainTipState {
     }
 
     /// Checks if the measurement counters would be valid.
-    pub fn verify_counters(
-        &self,
+    pub fn update_counters(
+        &mut self,
         new_block: &ProposedBlock,
         outcome: &BlockExecutionOutcome,
     ) -> Result<(), ChainError> {
         let num_incoming_bundles = u32::try_from(new_block.incoming_bundles.len())
             .map_err(|_| ArithmeticError::Overflow)?;
-        self.num_incoming_bundles
+        self.num_incoming_bundles = self
+            .num_incoming_bundles
             .checked_add(num_incoming_bundles)
             .ok_or(ArithmeticError::Overflow)?;
 
         let num_operations =
             u32::try_from(new_block.operations.len()).map_err(|_| ArithmeticError::Overflow)?;
-        self.num_operations
+        self.num_operations = self
+            .num_operations
             .checked_add(num_operations)
             .ok_or(ArithmeticError::Overflow)?;
 
         let num_outgoing_messages =
             u32::try_from(outcome.messages.len()).map_err(|_| ArithmeticError::Overflow)?;
-        self.num_outgoing_messages
+        self.num_outgoing_messages = self
+            .num_outgoing_messages
             .checked_add(num_outgoing_messages)
             .ok_or(ArithmeticError::Overflow)?;
 
@@ -505,17 +507,16 @@ where
                         .await?;
                 }
             } else if let Some((id, subscription)) = posted_message.message.matches_subscribe() {
-                subscribe_names_and_ids.push((subscription.name.clone(), *id));
+                let name = ChannelFullName::system(subscription.name.clone());
+                subscribe_names_and_ids.push((name, *id));
             }
             if let Some((id, subscription)) = posted_message.message.matches_unsubscribe() {
-                unsubscribe_names_and_ids.push((subscription.name.clone(), *id));
+                let name = ChannelFullName::system(subscription.name.clone());
+                unsubscribe_names_and_ids.push((name, *id));
             }
         }
-        self.process_unsubscribes(unsubscribe_names_and_ids, GenericApplicationId::System)
-            .await?;
-        let new_outbox_entries = self
-            .process_subscribes(subscribe_names_and_ids, GenericApplicationId::System)
-            .await?;
+        self.process_unsubscribes(unsubscribe_names_and_ids).await?;
+        let new_outbox_entries = self.process_subscribes(subscribe_names_and_ids).await?;
 
         if bundle.goes_to_inbox() {
             // Process the inbox bundle and update the inbox state.
@@ -565,13 +566,35 @@ where
         }
     }
 
-    pub async fn execute_init_message(
+    /// Verifies that the block's first message is `OpenChain`. Initializes the chain if necessary.
+    pub async fn execute_init_message_from(
+        &mut self,
+        block: &ProposedBlock,
+        local_time: Timestamp,
+    ) -> Result<(), ChainError> {
+        let (in_bundle, posted_message, config) = block
+            .starts_with_open_chain_message()
+            .ok_or_else(|| ChainError::InactiveChain(block.chain_id))?;
+        if self.is_active() {
+            return Ok(()); // Already initialized.
+        }
+        let message_id = MessageId {
+            chain_id: in_bundle.origin.sender,
+            height: in_bundle.bundle.height,
+            index: posted_message.index,
+        };
+        self.execute_init_message(message_id, config, block.timestamp, local_time)
+            .await
+    }
+
+    /// Initializes the chain using the given configuration.
+    async fn execute_init_message(
         &mut self,
         message_id: MessageId,
         config: &OpenChainConfig,
         timestamp: Timestamp,
         local_time: Timestamp,
-    ) -> Result<bool, ChainError> {
+    ) -> Result<(), ChainError> {
         // Initialize ourself.
         self.execution_state
             .system
@@ -586,8 +609,7 @@ where
             BlockHeight(0),
             local_time,
             maybe_committee.flat_map(|(_, committee)| committee.keys_and_weights()),
-        )?;
-        Ok(true)
+        )
     }
 
     pub fn current_committee(&self) -> Result<(Epoch, &Committee), ChainError> {
@@ -684,31 +706,7 @@ where
         #[cfg(with_metrics)]
         let _execution_latency = BLOCK_EXECUTION_LATENCY.measure_latency();
 
-        let chain_id = self.chain_id();
-        assert_eq!(block.chain_id, chain_id);
-        // The first incoming message of any child chain must be `OpenChain`. A root chain must
-        // already be initialized
-        if block.height == BlockHeight::ZERO
-            && self
-                .execution_state
-                .system
-                .description
-                .get()
-                .map_or(true, |description| description.is_child())
-        {
-            let (in_bundle, posted_message, config) = block
-                .starts_with_open_chain_message()
-                .ok_or_else(|| ChainError::InactiveChain(chain_id))?;
-            if !self.is_active() {
-                let message_id = MessageId {
-                    chain_id: in_bundle.origin.sender,
-                    height: in_bundle.bundle.height,
-                    index: posted_message.index,
-                };
-                self.execute_init_message(message_id, config, block.timestamp, local_time)
-                    .await?;
-            }
-        }
+        assert_eq!(block.chain_id, self.chain_id());
 
         ensure!(
             *self.execution_state.system.timestamp.get() <= block.timestamp,
@@ -723,14 +721,12 @@ where
         };
         resource_controller
             .track_block_size(EMPTY_BLOCK_SIZE)
-            .and_then(|()| {
-                resource_controller
-                    .track_executed_block_size_sequence_extension(0, block.incoming_bundles.len())
-            })
-            .and_then(|()| {
-                resource_controller
-                    .track_executed_block_size_sequence_extension(0, block.operations.len())
-            })
+            .with_execution_context(ChainExecutionContext::Block)?;
+        resource_controller
+            .track_executed_block_size_sequence_extension(0, block.incoming_bundles.len())
+            .with_execution_context(ChainExecutionContext::Block)?;
+        resource_controller
+            .track_executed_block_size_sequence_extension(0, block.operations.len())
             .with_execution_context(ChainExecutionContext::Block)?;
 
         if self.is_closed() {
@@ -739,33 +735,7 @@ where
                 ChainError::ClosedChain
             );
         }
-        let app_permissions = self.execution_state.system.application_permissions.get();
-        let mut mandatory = HashSet::<UserApplicationId>::from_iter(
-            app_permissions.mandatory_applications.iter().cloned(),
-        );
-        for operation in &block.operations {
-            ensure!(
-                app_permissions.can_execute_operations(&operation.application_id()),
-                ChainError::AuthorizedApplications(
-                    app_permissions.execute_operations.clone().unwrap()
-                )
-            );
-            if let Operation::User { application_id, .. } = operation {
-                mandatory.remove(application_id);
-            }
-        }
-        for pending in block.incoming_messages() {
-            if mandatory.is_empty() {
-                break;
-            }
-            if let Message::User { application_id, .. } = &pending.message {
-                mandatory.remove(application_id);
-            }
-        }
-        ensure!(
-            mandatory.is_empty(),
-            ChainError::MissingMandatoryApplications(mandatory.into_iter().collect())
-        );
+        self.check_app_permissions(block)?;
 
         // Execute each incoming bundle as a transaction, then each operation.
         // Collect messages, events and oracle responses, each as one list per transaction.
@@ -812,7 +782,7 @@ where
                     #[cfg(with_metrics)]
                     let _operation_latency = OPERATION_EXECUTION_LATENCY.measure_latency();
                     let context = OperationContext {
-                        chain_id,
+                        chain_id: block.chain_id,
                         height: block.height,
                         index: Some(txn_index),
                         round,
@@ -840,13 +810,17 @@ where
                 .update_execution_outcomes_with_app_registrations(&mut txn_tracker)
                 .await
                 .with_execution_context(chain_execution_context)?;
-            let (txn_outcomes, txn_oracle_responses, new_next_message_index) = txn_tracker
-                .destructure()
+            let txn_outcome = txn_tracker
+                .into_outcome()
                 .with_execution_context(chain_execution_context)?;
-            next_message_index = new_next_message_index;
-            let (txn_messages, txn_events) = self
-                .process_execution_outcomes(block.height, txn_outcomes)
+            next_message_index = txn_outcome.next_message_index;
+
+            // Update the channels.
+            self.process_unsubscribes(txn_outcome.unsubscribe).await?;
+            let txn_messages = self
+                .process_execution_outcomes(block.height, txn_outcome.outcomes)
                 .await?;
+            self.process_subscribes(txn_outcome.subscribe).await?;
             if matches!(
                 transaction,
                 Transaction::ExecuteOperation(_)
@@ -863,8 +837,13 @@ where
                         .with_execution_context(chain_execution_context)?;
                 }
             }
+
             resource_controller
-                .track_block_size_of(&(&txn_oracle_responses, &txn_messages, &txn_events))
+                .track_block_size_of(&(
+                    &txn_outcome.oracle_responses,
+                    &txn_messages,
+                    &txn_outcome.events,
+                ))
                 .with_execution_context(chain_execution_context)?;
             resource_controller
                 .track_executed_block_size_sequence_extension(oracle_responses.len(), 1)
@@ -875,9 +854,9 @@ where
             resource_controller
                 .track_executed_block_size_sequence_extension(events.len(), 1)
                 .with_execution_context(chain_execution_context)?;
-            oracle_responses.push(txn_oracle_responses);
+            oracle_responses.push(txn_outcome.oracle_responses);
             messages.push(txn_messages);
-            events.push(txn_events);
+            events.push(txn_outcome.events);
         }
 
         // Finally, charge for the block fee, except if the chain is closed. Closed chains should
@@ -891,41 +870,12 @@ where
         }
 
         // Recompute the state hash.
-        let state_hash = {
-            #[cfg(with_metrics)]
-            let _hash_latency = STATE_HASH_COMPUTATION_LATENCY.measure_latency();
-            self.execution_state.crypto_hash().await?
-        };
-        self.execution_state_hash.set(Some(state_hash));
+        let state_hash = self.update_execution_state_hash().await?;
         // Last, reset the consensus state based on the current ownership.
-        let maybe_committee = self.execution_state.system.current_committee().into_iter();
-
-        self.pending_validated_blobs.clear();
-        self.pending_proposed_blobs.clear();
-        self.manager.reset(
-            self.execution_state.system.ownership.get().clone(),
-            block.height.try_add_one()?,
-            local_time,
-            maybe_committee.flat_map(|(_, committee)| committee.keys_and_weights()),
-        )?;
+        self.reset_chain_manager(block.height.try_add_one()?, local_time)?;
 
         #[cfg(with_metrics)]
-        {
-            // Log Prometheus metrics
-            NUM_BLOCKS_EXECUTED.with_label_values(&[]).inc();
-            WASM_FUEL_USED_PER_BLOCK
-                .with_label_values(&[])
-                .observe(resource_controller.tracker.fuel as f64);
-            WASM_NUM_READS_PER_BLOCK
-                .with_label_values(&[])
-                .observe(resource_controller.tracker.read_operations as f64);
-            WASM_BYTES_READ_PER_BLOCK
-                .with_label_values(&[])
-                .observe(resource_controller.tracker.bytes_read as f64);
-            WASM_BYTES_WRITTEN_PER_BLOCK
-                .with_label_values(&[])
-                .observe(resource_controller.tracker.bytes_written as f64);
-        }
+        Self::track_block_metrics(&resource_controller.tracker);
 
         assert_eq!(
             messages.len(),
@@ -1029,13 +979,98 @@ where
         Ok(())
     }
 
+    /// Returns whether this is a child chain.
+    pub fn is_child(&self) -> bool {
+        let Some(description) = self.execution_state.system.description.get() else {
+            // Root chains are always initialized, so this must be a child chain.
+            return true;
+        };
+        description.is_child()
+    }
+
+    /// Verifies that the block is valid according to the chain's application permission settings.
+    fn check_app_permissions(&self, block: &ProposedBlock) -> Result<(), ChainError> {
+        let app_permissions = self.execution_state.system.application_permissions.get();
+        let mut mandatory = HashSet::<UserApplicationId>::from_iter(
+            app_permissions.mandatory_applications.iter().cloned(),
+        );
+        for operation in &block.operations {
+            ensure!(
+                app_permissions.can_execute_operations(&operation.application_id()),
+                ChainError::AuthorizedApplications(
+                    app_permissions.execute_operations.clone().unwrap()
+                )
+            );
+            if let Operation::User { application_id, .. } = operation {
+                mandatory.remove(application_id);
+            }
+        }
+        for pending in block.incoming_messages() {
+            if mandatory.is_empty() {
+                break;
+            }
+            if let Message::User { application_id, .. } = &pending.message {
+                mandatory.remove(application_id);
+            }
+        }
+        ensure!(
+            mandatory.is_empty(),
+            ChainError::MissingMandatoryApplications(mandatory.into_iter().collect())
+        );
+        Ok(())
+    }
+
+    /// Computes, sets and returns the hash of the current execution state.
+    async fn update_execution_state_hash(&mut self) -> Result<CryptoHash, ChainError> {
+        let state_hash = {
+            #[cfg(with_metrics)]
+            let _hash_latency = STATE_HASH_COMPUTATION_LATENCY.measure_latency();
+            self.execution_state.crypto_hash().await?
+        };
+        self.execution_state_hash.set(Some(state_hash));
+        Ok(state_hash)
+    }
+
+    /// Resets the chain manager for the next block height.
+    fn reset_chain_manager(
+        &mut self,
+        next_height: BlockHeight,
+        local_time: Timestamp,
+    ) -> Result<(), ChainError> {
+        let maybe_committee = self.execution_state.system.current_committee().into_iter();
+        let ownership = self.execution_state.system.ownership.get().clone();
+        let fallback_owners =
+            maybe_committee.flat_map(|(_, committee)| committee.keys_and_weights());
+        self.pending_validated_blobs.clear();
+        self.pending_proposed_blobs.clear();
+        self.manager
+            .reset(ownership, next_height, local_time, fallback_owners)
+    }
+
+    /// Tracks block execution metrics in Prometheus.
+    #[cfg(with_metrics)]
+    fn track_block_metrics(tracker: &ResourceTracker) {
+        NUM_BLOCKS_EXECUTED.with_label_values(&[]).inc();
+        WASM_FUEL_USED_PER_BLOCK
+            .with_label_values(&[])
+            .observe(tracker.fuel as f64);
+        WASM_NUM_READS_PER_BLOCK
+            .with_label_values(&[])
+            .observe(tracker.read_operations as f64);
+        WASM_BYTES_READ_PER_BLOCK
+            .with_label_values(&[])
+            .observe(tracker.bytes_read as f64);
+        WASM_BYTES_WRITTEN_PER_BLOCK
+            .with_label_values(&[])
+            .observe(tracker.bytes_written as f64);
+    }
+
     async fn process_execution_outcomes(
         &mut self,
         height: BlockHeight,
         results: Vec<ExecutionOutcome>,
-    ) -> Result<(Vec<OutgoingMessage>, Vec<EventRecord>), ChainError> {
+    ) -> Result<Vec<OutgoingMessage>, ChainError> {
         let mut messages = Vec::new();
-        let mut events = Vec::new();
         for result in results {
             match result {
                 ExecutionOutcome::System(result) => {
@@ -1043,7 +1078,6 @@ where
                         GenericApplicationId::System,
                         Message::System,
                         &mut messages,
-                        &mut events,
                         height,
                         result,
                     )
@@ -1057,7 +1091,6 @@ where
                             bytes,
                         },
                         &mut messages,
-                        &mut events,
                         height,
                         result,
                     )
@@ -1065,7 +1098,7 @@ where
                 }
             }
         }
-        Ok((messages, events))
+        Ok(messages)
     }
 
     async fn process_raw_execution_outcome<E, F>(
@@ -1073,26 +1106,12 @@ where
         application_id: GenericApplicationId,
         lift: F,
         messages: &mut Vec<OutgoingMessage>,
-        events: &mut Vec<EventRecord>,
         height: BlockHeight,
         raw_outcome: RawExecutionOutcome<E, Amount>,
     ) -> Result<(), ChainError>
     where
         F: Fn(E) -> Message,
     {
-        events.extend(
-            raw_outcome
-                .events
-                .into_iter()
-                .map(|(stream_name, key, value)| EventRecord {
-                    stream_id: StreamId {
-                        application_id,
-                        stream_name,
-                    },
-                    key,
-                    value,
-                }),
-        );
         let max_stream_queries = self.context().max_stream_queries();
         // Record the messages of the execution. Messages are understood within an
         // application.
@@ -1140,10 +1159,6 @@ where
             }
         }
 
-        // Update the channels.
-        self.process_unsubscribes(raw_outcome.unsubscribe, application_id)
-            .await?;
-
         let full_names = channel_broadcasts
             .into_iter()
             .map(|name| ChannelFullName {
@@ -1173,9 +1188,6 @@ where
                 *outbox_counters.entry(height).or_default() += 1;
             }
         }
-
-        self.process_subscribes(raw_outcome.subscribe, application_id)
-            .await?;
         Ok(())
     }
 
@@ -1183,18 +1195,14 @@ where
     /// which we have outgoing messages.
     async fn process_subscribes(
         &mut self,
-        names_and_ids: Vec<(ChannelName, ChainId)>,
-        application_id: GenericApplicationId,
+        names_and_ids: Vec<(ChannelFullName, ChainId)>,
     ) -> Result<bool, ChainError> {
         if names_and_ids.is_empty() {
             return Ok(false);
         }
         let full_names = names_and_ids
             .iter()
-            .map(|(name, _)| ChannelFullName {
-                application_id,
-                name: name.clone(),
-            })
+            .map(|(name, _)| name.clone())
             .collect::<Vec<_>>();
         let channels = self.channels.try_load_entries_mut(&full_names).await?;
         let subscribe_channels = names_and_ids.into_iter().zip(channels);
@@ -1204,18 +1212,14 @@ where
                 if channel.subscribers.contains(&id).await? {
                     return Ok(None); // Was already a subscriber.
                 }
-                let full_name = ChannelFullName {
-                    application_id,
-                    name,
-                };
-                tracing::trace!("Adding subscriber {id:.8} for {full_name:}");
+                tracing::trace!("Adding subscriber {id:.8} for {name:}");
                 channel.subscribers.insert(&id)?;
                 // Send all messages.
                 let heights = channel.block_heights.read(..).await?;
                 if heights.is_empty() {
                     return Ok(None); // No messages on this channel yet.
                 }
-                let target = Target::channel(id, full_name.clone());
+                let target = Target::channel(id, name.clone());
                 Ok::<_, ChainError>(Some((target, heights)))
             })
             .buffer_unordered(max_stream_queries);
@@ -1237,18 +1241,14 @@ where
 
     async fn process_unsubscribes(
         &mut self,
-        names_and_ids: Vec<(ChannelName, ChainId)>,
-        application_id: GenericApplicationId,
+        names_and_ids: Vec<(ChannelFullName, ChainId)>,
     ) -> Result<(), ChainError> {
         if names_and_ids.is_empty() {
             return Ok(());
         }
         let full_names = names_and_ids
             .iter()
-            .map(|(name, _)| ChannelFullName {
-                application_id,
-                name: name.clone(),
-            })
+            .map(|(name, _)| name.clone())
             .collect::<Vec<_>>();
         let channels = self.channels.try_load_entries_mut(&full_names).await?;
         for ((_name, id), mut channel) in names_and_ids.into_iter().zip(channels) {

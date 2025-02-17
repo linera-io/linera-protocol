@@ -93,7 +93,7 @@ query Chain(
   $chainId: ChainId!,
   $inboxesInput: MapInput_Origin_742d451b,
   $outboxesInput: MapInput_Target_7aac1e1c,
-  $channelsInput: MapInput_ChannelFullName_3b59bf69,
+  $channelsInput: MapInput_ChannelFullName_7b67e184,
 ) {
   chain(chainId: $chainId) {
     chainId

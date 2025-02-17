@@ -76,7 +76,7 @@ pub use crate::{
         SystemExecutionError, SystemExecutionStateView, SystemMessage, SystemOperation,
         SystemQuery, SystemResponse,
     },
-    transaction_tracker::TransactionTracker,
+    transaction_tracker::{TransactionOutcome, TransactionTracker},
 };
 
 /// The maximum length of an event key in bytes.
@@ -907,12 +907,6 @@ pub struct RawExecutionOutcome<Message, Grant = Resources> {
     /// Sends messages to the given destinations, possibly forwarding the authenticated
     /// signer and including grant with the refund policy described above.
     pub messages: Vec<RawOutgoingMessage<Message, Grant>>,
-    /// Events recorded by contracts' `emit` calls.
-    pub events: Vec<(StreamName, Vec<u8>, Vec<u8>)>,
-    /// Subscribe chains to channels.
-    pub subscribe: Vec<(ChannelName, ChainId)>,
-    /// Unsubscribe chains to channels.
-    pub unsubscribe: Vec<(ChannelName, ChainId)>,
 }
 
 /// The identifier of a channel, relative to a particular application.
@@ -975,9 +969,6 @@ impl<Message, Grant> Default for RawExecutionOutcome<Message, Grant> {
             authenticated_signer: None,
             refund_grant_to: None,
             messages: Vec::new(),
-            events: Vec::new(),
-            subscribe: Vec::new(),
-            unsubscribe: Vec::new(),
         }
     }
 }
@@ -1013,9 +1004,6 @@ impl<Message> RawExecutionOutcome<Message, Resources> {
             authenticated_signer,
             refund_grant_to,
             messages,
-            events,
-            subscribe,
-            unsubscribe,
         } = self;
         let messages = messages
             .into_iter()
@@ -1025,9 +1013,6 @@ impl<Message> RawExecutionOutcome<Message, Resources> {
             authenticated_signer,
             refund_grant_to,
             messages,
-            events,
-            subscribe,
-            unsubscribe,
         })
     }
 }
@@ -1334,7 +1319,7 @@ pub enum WasmRuntime {
     WasmtimeWithSanitizer,
 }
 
-/// Trait used to select a default WasmRuntime, if one is available.
+/// Trait used to select a default `WasmRuntime`, if one is available.
 pub trait WithWasmDefault {
     fn with_wasm_default(self) -> Self;
 }
@@ -1400,6 +1385,6 @@ pub struct InvalidWasmRuntime(String);
 doc_scalar!(Operation, "An operation to be executed in a block");
 doc_scalar!(
     Message,
-    "An message to be sent and possibly executed in the receiver's block."
+    "A message to be sent and possibly executed in the receiver's block."
 );
 doc_scalar!(MessageKind, "The kind of outgoing message being sent");

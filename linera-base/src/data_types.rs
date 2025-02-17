@@ -18,9 +18,7 @@ use std::{
     str::FromStr,
 };
 
-use anyhow::Context as _;
-use async_graphql::InputObject;
-use base64::engine::{general_purpose::STANDARD_NO_PAD, Engine as _};
+use async_graphql::{InputObject, SimpleObject};
 use custom_debug_derive::Debug;
 use linera_witty::{WitLoad, WitStore, WitType};
 #[cfg(with_metrics)]
@@ -34,8 +32,8 @@ use crate::{
     crypto::{BcsHashable, CryptoHash},
     doc_scalar, hex_debug,
     identifiers::{
-        ApplicationId, BlobId, BlobType, BytecodeId, Destination, GenericApplicationId, MessageId,
-        UserApplicationId,
+        ApplicationId, BlobId, BlobType, BytecodeId, ChainId, Destination, EventId,
+        GenericApplicationId, MessageId, StreamId, UserApplicationId,
     },
     limited_writer::{LimitedWriter, LimitedWriterError},
     time::{Duration, SystemTime},
@@ -786,46 +784,6 @@ pub enum OracleResponse {
     Round(Option<u32>),
 }
 
-impl Display for OracleResponse {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            OracleResponse::Service(bytes) => {
-                write!(f, "Service:{}", STANDARD_NO_PAD.encode(bytes))?
-            }
-            OracleResponse::Post(bytes) => write!(f, "Post:{}", STANDARD_NO_PAD.encode(bytes))?,
-            OracleResponse::Blob(blob_id) => write!(f, "Blob:{}", blob_id)?,
-            OracleResponse::Assert => write!(f, "Assert")?,
-            OracleResponse::Round(Some(round)) => write!(f, "Round:{round}")?,
-            OracleResponse::Round(None) => write!(f, "Round:None")?,
-        };
-
-        Ok(())
-    }
-}
-
-impl FromStr for OracleResponse {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if let Some(string) = s.strip_prefix("Service:") {
-            return Ok(OracleResponse::Service(
-                STANDARD_NO_PAD.decode(string).context("Invalid base64")?,
-            ));
-        }
-        if let Some(string) = s.strip_prefix("Post:") {
-            return Ok(OracleResponse::Post(
-                STANDARD_NO_PAD.decode(string).context("Invalid base64")?,
-            ));
-        }
-        if let Some(string) = s.strip_prefix("Blob:") {
-            return Ok(OracleResponse::Blob(
-                BlobId::from_str(string).context("Invalid BlobId")?,
-            ));
-        }
-        Err(anyhow::anyhow!("Invalid enum! Enum: {}", s))
-    }
-}
-
 impl<'de> BcsHashable<'de> for OracleResponse {}
 
 /// Description of the necessary information to run a user application.
@@ -1155,6 +1113,34 @@ impl<'a> Deserialize<'a> for Blob {
         }
     }
 }
+
+/// An event recorded in an executed block.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
+pub struct Event {
+    /// The ID of the stream this event belongs to.
+    pub stream_id: StreamId,
+    /// The event key.
+    #[debug(with = "hex_debug")]
+    #[serde(with = "serde_bytes")]
+    pub key: Vec<u8>,
+    /// The payload data.
+    #[debug(with = "hex_debug")]
+    #[serde(with = "serde_bytes")]
+    pub value: Vec<u8>,
+}
+
+impl Event {
+    /// Returns the ID of this event record, given the publisher chain ID.
+    pub fn id(&self, chain_id: ChainId) -> EventId {
+        EventId {
+            chain_id,
+            stream_id: self.stream_id.clone(),
+            key: self.key.clone(),
+        }
+    }
+}
+
+impl<'de> BcsHashable<'de> for Event {}
 
 doc_scalar!(Bytecode, "A WebAssembly module's bytecode");
 doc_scalar!(Amount, "A non-negative amount of tokens.");

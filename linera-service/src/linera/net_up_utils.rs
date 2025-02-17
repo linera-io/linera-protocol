@@ -4,16 +4,14 @@
 use std::{num::NonZeroU16, str::FromStr};
 
 use colored::Colorize as _;
-use linera_base::{data_types::Amount, identifiers::ChainId, time::Duration};
+use linera_base::{
+    data_types::Amount, identifiers::ChainId, listen_for_shutdown_signals, time::Duration,
+};
 use linera_client::storage::{StorageConfig, StorageConfigNamespace};
 use linera_execution::ResourceControlPolicy;
-use linera_service::{
-    cli_wrappers::{
-        local_net::{Database, LocalNetConfig, PathProvider, StorageConfigBuilder},
-        ClientWrapper, FaucetOption, FaucetService, LineraNet, LineraNetConfig, Network,
-        NetworkConfig,
-    },
-    util::listen_for_shutdown_signals,
+use linera_service::cli_wrappers::{
+    local_net::{Database, LocalNetConfig, PathProvider, StorageConfigBuilder},
+    ClientWrapper, FaucetOption, FaucetService, LineraNet, LineraNetConfig, Network, NetworkConfig,
 };
 #[cfg(feature = "storage-service")]
 use linera_storage_service::{
@@ -29,7 +27,7 @@ use {
 };
 
 struct StorageConfigProvider {
-    /// The StorageConfig and the namespace
+    /// The `StorageConfig` and the namespace
     pub storage: StorageConfigNamespace,
     #[cfg(feature = "storage-service")]
     _service_guard: Option<StorageServiceGuard>,
@@ -114,7 +112,8 @@ pub async fn handle_net_up_kubernetes(
     no_build: bool,
     docker_image_name: String,
     policy: ResourceControlPolicy,
-    with_faucet_chain: Option<u32>,
+    with_faucet: bool,
+    faucet_chain: Option<u32>,
     faucet_port: NonZeroU16,
     faucet_amount: Amount,
 ) -> anyhow::Result<()> {
@@ -123,6 +122,12 @@ pub async fn handle_net_up_kubernetes(
     }
     if num_shards < 1 {
         panic!("The local test network must have at least one shard per validator.");
+    }
+    if faucet_chain.is_some() {
+        assert!(
+            with_faucet,
+            "--faucet-chain must be provided only with --with-faucet"
+        );
     }
 
     let shutdown_notifier = CancellationToken::new();
@@ -145,9 +150,11 @@ pub async fn handle_net_up_kubernetes(
         extra_wallets,
         &mut net,
         client,
-        with_faucet_chain,
+        with_faucet,
+        faucet_chain,
         faucet_port,
         faucet_amount,
+        num_other_initial_chains,
     )
     .await?;
     wait_for_shutdown(shutdown_notifier, &mut net, faucet_service).await
@@ -165,7 +172,8 @@ pub async fn handle_net_up_service(
     path: &Option<String>,
     storage: &Option<String>,
     external_protocol: String,
-    with_faucet_chain: Option<u32>,
+    with_faucet: bool,
+    faucet_chain: Option<u32>,
     faucet_port: NonZeroU16,
     faucet_amount: Amount,
 ) -> anyhow::Result<()> {
@@ -210,9 +218,11 @@ pub async fn handle_net_up_service(
         extra_wallets,
         &mut net,
         client,
-        with_faucet_chain,
+        with_faucet,
+        faucet_chain,
         faucet_port,
         faucet_amount,
+        num_other_initial_chains,
     )
     .await?;
     wait_for_shutdown(shutdown_notifier, &mut net, faucet_service).await
@@ -236,13 +246,16 @@ async fn wait_for_shutdown(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn create_wallets_and_faucets(
     extra_wallets: Option<usize>,
     net: &mut impl LineraNet,
     client: ClientWrapper,
-    with_faucet_chain: Option<u32>,
+    with_faucet: bool,
+    faucet_chain: Option<u32>,
     faucet_port: NonZeroU16,
     faucet_amount: Amount,
+    num_other_initial_chains: u32,
 ) -> Result<Option<FaucetService>, anyhow::Error> {
     let default_chain = client
         .default_chain()
@@ -319,13 +332,18 @@ async fn create_wallets_and_faucets(
     }
 
     // Run the faucet,
-    let faucet_service = if let Some(faucet_chain) = with_faucet_chain {
+    let faucet_service = if with_faucet {
+        let faucet_chain = if let Some(faucet_chain) = faucet_chain {
+            ChainId::root(faucet_chain)
+        } else {
+            assert!(
+                num_other_initial_chains > 1,
+                "num_other_initial_chains must be greater than 1 if with_faucet is true"
+            );
+            ChainId::root(1)
+        };
         let service = client
-            .run_faucet(
-                Some(faucet_port.into()),
-                ChainId::root(faucet_chain),
-                faucet_amount,
-            )
+            .run_faucet(Some(faucet_port.into()), faucet_chain, faucet_amount)
             .await?;
         Some(service)
     } else {

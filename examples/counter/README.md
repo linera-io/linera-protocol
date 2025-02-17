@@ -38,7 +38,7 @@ explanation.
 
 ```bash
 CHAIN_1=aee928d4bf3880353b4a3cd9b6f88e6cc6e5ed050860abae439e7782e9b2dfe8
-OWNER_1=513bb0b9fdf2d671fa3c44add540f383aada343b34260cff6220d390f2336c4b
+OWNER_1=de166237331a2966d8cf6778e81a8c007b4084be80dc1e0409d51f216c1deaa1
 ```
 
 Now, compile the `counter` application WebAssembly binaries, publish and create an application instance.

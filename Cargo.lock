@@ -4357,7 +4357,6 @@ dependencies = [
  "async-graphql",
  "async-graphql-derive",
  "async-trait",
- "base64 0.22.1",
  "bcs",
  "cfg-if",
  "cfg_aliases",
@@ -4375,6 +4374,7 @@ dependencies = [
  "proptest",
  "rand",
  "ruzstd",
+ "secp256k1",
  "serde",
  "serde-name",
  "serde_bytes",
@@ -4384,6 +4384,7 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "tokio-stream",
+ "tokio-util",
  "tracing",
  "tracing-subscriber",
  "tracing-web",
@@ -4408,7 +4409,6 @@ dependencies = [
  "cfg_aliases",
  "custom_debug_derive",
  "futures",
- "hex",
  "linera-base",
  "linera-chain",
  "linera-execution",
@@ -4479,6 +4479,7 @@ dependencies = [
  "thiserror-context",
  "tokio",
  "tokio-stream",
+ "tokio-util",
  "tracing",
  "trait-variant",
  "wasm-bindgen-futures",
@@ -7043,6 +7044,26 @@ dependencies = [
  "pkcs8",
  "subtle",
  "zeroize",
+]
+
+[[package]]
+name = "secp256k1"
+version = "0.30.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b50c5943d326858130af85e049f2661ba3c78b26589b8ab98e65e80ae44a1252"
+dependencies = [
+ "rand",
+ "secp256k1-sys",
+ "serde",
+]
+
+[[package]]
+name = "secp256k1-sys"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d4387882333d3aa8cb20530a17c69a3752e97837832f34f6dccc760e715001d9"
+dependencies = [
+ "cc",
 ]
 
 [[package]]

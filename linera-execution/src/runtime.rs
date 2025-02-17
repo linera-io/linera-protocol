@@ -17,8 +17,8 @@ use linera_base::{
     },
     ensure,
     identifiers::{
-        Account, AccountOwner, ApplicationId, BlobId, BlobType, ChainId, ChannelName, MessageId,
-        Owner, StreamName,
+        Account, AccountOwner, ApplicationId, BlobId, BlobType, ChainId, ChannelFullName,
+        ChannelName, MessageId, Owner, StreamId, StreamName,
     },
     ownership::ChainOwnership,
 };
@@ -1278,20 +1278,20 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         Ok(())
     }
 
-    fn subscribe(&mut self, chain: ChainId, channel: ChannelName) -> Result<(), ExecutionError> {
+    fn subscribe(&mut self, chain: ChainId, name: ChannelName) -> Result<(), ExecutionError> {
         let mut this = self.inner();
-        let application = this.current_application_mut();
-
-        application.outcome.subscribe.push((channel, chain));
+        let application_id = this.current_application_mut().id;
+        let full_name = ChannelFullName::user(name, application_id);
+        this.transaction_tracker.subscribe(full_name, chain);
 
         Ok(())
     }
 
-    fn unsubscribe(&mut self, chain: ChainId, channel: ChannelName) -> Result<(), ExecutionError> {
+    fn unsubscribe(&mut self, chain: ChainId, name: ChannelName) -> Result<(), ExecutionError> {
         let mut this = self.inner();
-        let application = this.current_application_mut();
-
-        application.outcome.unsubscribe.push((channel, chain));
+        let application_id = this.current_application_mut().id;
+        let full_name = ChannelFullName::user(name, application_id);
+        this.transaction_tracker.unsubscribe(full_name, chain);
 
         Ok(())
     }
@@ -1374,7 +1374,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
 
     fn emit(
         &mut self,
-        name: StreamName,
+        stream_name: StreamName,
         key: Vec<u8>,
         value: Vec<u8>,
     ) -> Result<(), ExecutionError> {
@@ -1384,11 +1384,15 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
             ExecutionError::EventKeyTooLong
         );
         ensure!(
-            name.0.len() <= MAX_STREAM_NAME_LEN,
+            stream_name.0.len() <= MAX_STREAM_NAME_LEN,
             ExecutionError::StreamNameTooLong
         );
-        let application = this.current_application_mut();
-        application.outcome.events.push((name, key, value));
+        let application_id = this.current_application_mut().id.into();
+        let stream_id = StreamId {
+            stream_name,
+            application_id,
+        };
+        this.transaction_tracker.add_event(stream_id, key, value);
         Ok(())
     }
 

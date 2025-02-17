@@ -9,11 +9,12 @@
 ))]
 
 mod common;
+mod guard;
 
-use std::{env, path::PathBuf, process::Command, time::Duration};
+use std::{env, path::PathBuf, time::Duration};
 
 use anyhow::Result;
-use common::INTEGRATION_TEST_GUARD;
+use guard::INTEGRATION_TEST_GUARD;
 use linera_base::{
     data_types::{Amount, BlockHeight},
     identifiers::{Account, AccountOwner, ChainId},
@@ -22,44 +23,21 @@ use linera_core::{data_types::ChainInfoQuery, node::ValidatorNode};
 use linera_faucet::ClaimOutcome;
 use linera_service::{
     cli_wrappers::{
-        local_net::{
-            get_node_port, Database, LocalNet, LocalNetConfig, PathProvider, ProcessInbox,
-        },
-        ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network, OnClientDrop,
+        local_net::{get_node_port, Database, LocalNet, LocalNetConfig, ProcessInbox},
+        ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
     },
     test_name,
 };
 use test_case::test_case;
 #[cfg(feature = "storage-service")]
-use {linera_base::port::get_free_port, linera_service::cli_wrappers::Faucet};
+use {
+    linera_base::port::get_free_port, linera_service::cli_wrappers::Faucet, std::process::Command,
+};
 
 #[cfg(feature = "benchmark")]
 fn get_fungible_account_owner(client: &ClientWrapper) -> AccountOwner {
     let owner = client.get_owner().unwrap();
     AccountOwner::User(owner)
-}
-
-/// Clears the `RUSTFLAGS` environment variable, if it was configured to make warnings fail as
-/// errors.
-///
-/// The returned [`RestoreVarOnDrop`] restores the environment variable to its original value when
-/// it is dropped.
-fn override_disable_warnings_as_errors() -> Option<RestoreVarOnDrop> {
-    if matches!(env::var("RUSTFLAGS"), Ok(value) if value == "-D warnings") {
-        env::set_var("RUSTFLAGS", "");
-        Some(RestoreVarOnDrop)
-    } else {
-        None
-    }
-}
-
-/// Restores the `RUSTFLAGS` environment variable to make warnings fail as errors.
-struct RestoreVarOnDrop;
-
-impl Drop for RestoreVarOnDrop {
-    fn drop(&mut self) {
-        env::set_var("RUSTFLAGS", "-D warnings");
-    }
 }
 
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Udp) ; "scylladb_udp"))]
@@ -72,7 +50,7 @@ impl Drop for RestoreVarOnDrop {
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Udp) ; "aws_udp"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
-    use linera_base::{crypto::KeyPair, identifiers::Owner};
+    use linera_base::{crypto::SigningKey, identifiers::Owner};
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
@@ -186,7 +164,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
         net.remove_validator(i)?;
     }
 
-    let recipient = AccountOwner::User(Owner::from(KeyPair::generate().public()));
+    let recipient = AccountOwner::User(Owner::from(SigningKey::generate().public()));
     client
         .transfer_with_accounts(
             Amount::from_tokens(5),
@@ -567,7 +545,7 @@ async fn test_project_publish(database: Database, network: Network) -> Result<()
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
-    let _rustflags_override = override_disable_warnings_as_errors();
+    let _rustflags_override = common::override_disable_warnings_as_errors();
     let config = LocalNetConfig {
         num_initial_validators: 1,
         num_shards: 1,
@@ -641,61 +619,6 @@ async fn test_example_publish(database: Database, network: Network) -> Result<()
     Ok(())
 }
 
-#[test_log::test(tokio::test)]
-async fn test_project_new() -> Result<()> {
-    let _rustflags_override = override_disable_warnings_as_errors();
-    let path_provider = PathProvider::create_temporary_directory()?;
-    let id = 0;
-    let client = ClientWrapper::new(
-        path_provider,
-        Network::Grpc,
-        None,
-        id,
-        OnClientDrop::LeakChains,
-    );
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let linera_root = manifest_dir
-        .parent()
-        .expect("CARGO_MANIFEST_DIR should not be at the root");
-    let tmp_dir = client.project_new("init-test", linera_root).await?;
-    let project_dir = tmp_dir.path().join("init-test");
-    client
-        .build_application(project_dir.as_path(), "init-test", false)
-        .await?;
-
-    let mut child = Command::new("cargo")
-        .args(["fmt", "--check"])
-        .current_dir(project_dir.as_path())
-        .spawn()?;
-    assert!(child.wait()?.success());
-
-    let mut child = Command::new("cargo")
-        .arg("test")
-        .current_dir(project_dir.as_path())
-        .spawn()?;
-    assert!(child.wait()?.success());
-
-    Ok(())
-}
-
-#[test_log::test(tokio::test)]
-async fn test_project_test() -> Result<()> {
-    let path_provider = PathProvider::create_temporary_directory()?;
-    let id = 0;
-    let client = ClientWrapper::new(
-        path_provider,
-        Network::Grpc,
-        None,
-        id,
-        OnClientDrop::LeakChains,
-    );
-    client
-        .project_test(&ClientWrapper::example_path("counter")?)
-        .await?;
-
-    Ok(())
-}
-
 /// Test if the wallet file is correctly locked when used.
 #[cfg(feature = "storage-service")]
 #[test_log::test(tokio::test)]
@@ -741,7 +664,8 @@ async fn test_storage_service_linera_net_up_simple() -> Result<()> {
     command.args([
         "net",
         "up",
-        "--with-faucet-chain",
+        "--with-faucet",
+        "--faucet-chain",
         "1",
         "--faucet-port",
         &port.to_string(),

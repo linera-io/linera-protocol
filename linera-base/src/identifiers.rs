@@ -18,7 +18,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::{
     bcs_scalar,
-    crypto::{BcsHashable, CryptoError, CryptoHash, PublicKey},
+    crypto::{BcsHashable, CryptoError, CryptoHash},
     data_types::BlockHeight,
     doc_scalar, hex_debug,
 };
@@ -376,6 +376,43 @@ pub struct ChannelName(
     Vec<u8>,
 );
 
+#[derive(Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
+/// A channel name together with its application ID.
+pub struct ChannelFullName {
+    /// The application owning the channel.
+    pub application_id: GenericApplicationId,
+    /// The name of the channel.
+    pub name: ChannelName,
+}
+
+impl fmt::Display for ChannelFullName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let name = hex::encode(&self.name);
+        match self.application_id {
+            GenericApplicationId::System => write!(f, "system channel {name}"),
+            GenericApplicationId::User(app_id) => write!(f, "user channel {name} for app {app_id}"),
+        }
+    }
+}
+
+impl ChannelFullName {
+    /// Creates a full system channel name.
+    pub fn system(name: ChannelName) -> Self {
+        Self {
+            application_id: GenericApplicationId::System,
+            name,
+        }
+    }
+
+    /// Creates a full user channel name.
+    pub fn user(name: ChannelName, application_id: ApplicationId) -> Self {
+        Self {
+            application_id: application_id.into(),
+            name,
+        }
+    }
+}
+
 /// The name of an event stream.
 #[derive(
     Clone,
@@ -418,6 +455,29 @@ pub struct StreamId {
     pub application_id: GenericApplicationId,
     /// The name of this stream: an application can have multiple streams with different names.
     pub stream_name: StreamName,
+}
+
+/// An event identifier.
+#[derive(
+    Debug,
+    PartialEq,
+    Eq,
+    Hash,
+    Clone,
+    Serialize,
+    Deserialize,
+    WitLoad,
+    WitStore,
+    WitType,
+    SimpleObject,
+)]
+pub struct EventId {
+    /// The ID of the chain that generated this event.
+    pub chain_id: ChainId,
+    /// The ID of the stream this event belongs to.
+    pub stream_id: StreamId,
+    /// The event key.
+    pub key: Vec<u8>,
 }
 
 /// The destination of a message, relative to a particular application.
@@ -793,18 +853,6 @@ impl Display for Owner {
     }
 }
 
-impl From<PublicKey> for Owner {
-    fn from(value: PublicKey) -> Self {
-        Self(CryptoHash::new(&value))
-    }
-}
-
-impl From<&PublicKey> for Owner {
-    fn from(value: &PublicKey) -> Self {
-        Self(CryptoHash::new(value))
-    }
-}
-
 impl std::str::FromStr for Owner {
     type Err = CryptoError;
 
@@ -1014,6 +1062,10 @@ doc_scalar!(Account, "An account");
 doc_scalar!(
     BlobId,
     "A content-addressed blob ID i.e. the hash of the `BlobContent`"
+);
+doc_scalar!(
+    ChannelFullName,
+    "A channel name together with its application ID."
 );
 
 #[cfg(test)]

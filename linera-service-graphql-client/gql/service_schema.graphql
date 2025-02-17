@@ -102,7 +102,7 @@ type BlockBody {
 	"""
 	The list of events produced by each transaction.
 	"""
-	events: [[EventRecord!]!]!
+	events: [[Event!]!]!
 }
 
 """
@@ -320,7 +320,7 @@ type ChainStateExtendedView {
 	"""
 	Channels able to multicast messages to subscribers.
 	"""
-	channels: ReentrantCollectionView_ChannelFullName_ChannelStateView_629706216!
+	channels: ReentrantCollectionView_ChannelFullName_ChannelStateView_3660287053!
 }
 
 """
@@ -470,7 +470,7 @@ type Entry_BlobId_Blob_9f0b41f3 {
 """
 A GraphQL-visible map item, complete with key.
 """
-type Entry_ChannelFullName_ChannelStateView_ef52a064 {
+type Entry_ChannelFullName_ChannelStateView_bd1de7ae {
 	key: ChannelFullName!
 	value: ChannelStateView!
 }
@@ -507,7 +507,7 @@ scalar Epoch
 """
 An event recorded in an executed block.
 """
-type EventRecord {
+type Event {
 	"""
 	The ID of the stream this event belongs to.
 	"""
@@ -616,7 +616,7 @@ input MapFilters_BlobId_4d2a0555 {
 	keys: [BlobId!]
 }
 
-input MapFilters_ChannelFullName_3b59bf69 {
+input MapFilters_ChannelFullName_7b67e184 {
 	keys: [ChannelFullName!]
 }
 
@@ -640,8 +640,8 @@ input MapInput_BlobId_4d2a0555 {
 	filters: MapFilters_BlobId_4d2a0555
 }
 
-input MapInput_ChannelFullName_3b59bf69 {
-	filters: MapFilters_ChannelFullName_3b59bf69
+input MapInput_ChannelFullName_7b67e184 {
+	filters: MapFilters_ChannelFullName_7b67e184
 }
 
 input MapInput_Origin_742d451b {
@@ -675,7 +675,7 @@ type MapView_BlobId_Blob_9f0b41f3 {
 }
 
 """
-An message to be sent and possibly executed in the receiver's block.
+A message to be sent and possibly executed in the receiver's block.
 """
 scalar Message
 
@@ -865,7 +865,7 @@ The state of an outbox
 Messages are contained in blocks, together with destination information, so currently
 we just send the certified blocks over and let the receivers figure out what were the
 messages for them.
-* When marking block heights as received, messages at lower heights are also marked (ie. dequeued).
+* When marking block heights as received, messages at lower heights are also marked (i.e. dequeued).
 """
 type OutboxStateView {
 	"""
@@ -995,10 +995,10 @@ The recipient of a transfer
 """
 scalar Recipient
 
-type ReentrantCollectionView_ChannelFullName_ChannelStateView_629706216 {
+type ReentrantCollectionView_ChannelFullName_ChannelStateView_3660287053 {
 	keys: [ChannelFullName!]!
-	entry(key: ChannelFullName!): Entry_ChannelFullName_ChannelStateView_ef52a064!
-	entries(input: MapInput_ChannelFullName_3b59bf69): [Entry_ChannelFullName_ChannelStateView_ef52a064!]!
+	entry(key: ChannelFullName!): Entry_ChannelFullName_ChannelStateView_bd1de7ae!
+	entries(input: MapInput_ChannelFullName_7b67e184): [Entry_ChannelFullName_ChannelStateView_bd1de7ae!]!
 }
 
 type ReentrantCollectionView_Origin_InboxStateView_3699835794 {

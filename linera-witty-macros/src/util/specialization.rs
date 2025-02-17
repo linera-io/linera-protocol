@@ -45,7 +45,7 @@ impl Specializations {
     /// `witty_specialize_with` attributes.
     ///
     /// The [`DeriveInput`] is changed so that its `where` clause and field types are specialized.
-    /// Returns the[`Specializations`] instance created from parsing the `witty_specialize_with`
+    /// Returns the [`Specializations`] instance created from parsing the `witty_specialize_with`
     /// attributes from the [`DeriveInput`].
     pub fn prepare_derive_input(input: &mut DeriveInput) -> Self {
         let this: Self = Self::parse_specialization_attributes(&input.attrs).collect();

@@ -6,7 +6,7 @@ use std::{collections::BTreeMap, ops::Not};
 
 use custom_debug_derive::Debug;
 use linera_base::{
-    crypto::{BcsSignable, CryptoError, CryptoHash, KeyPair, Signature},
+    crypto::{BcsSignable, CryptoError, CryptoHash, Signature, SigningKey},
     data_types::{Amount, BlockHeight, Round, Timestamp},
     identifiers::{AccountOwner, ChainDescription, ChainId},
 };
@@ -25,7 +25,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::client::ChainClientError;
 
-/// A range of block heights as used in ChainInfoQuery.
+/// A range of block heights as used in `ChainInfoQuery`.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(with_testing, derive(test_strategy::Arbitrary, Eq, PartialEq))]
 pub struct BlockHeightRange {
@@ -73,7 +73,7 @@ pub struct ChainInfoQuery {
     /// Query the current committees.
     #[debug(skip_if = Not::not)]
     pub request_committees: bool,
-    /// Query the received messages that are waiting be picked in the next block.
+    /// Query the received messages that are waiting to be picked in the next block.
     #[debug(skip_if = Not::not)]
     pub request_pending_message_bundles: bool,
     /// Query a range of certificate hashes sent from the chain.
@@ -292,15 +292,15 @@ where
 }
 
 impl ChainInfoResponse {
-    pub fn new(info: impl Into<ChainInfo>, key_pair: Option<&KeyPair>) -> Self {
+    pub fn new(info: impl Into<ChainInfo>, key_pair: Option<&SigningKey>) -> Self {
         let info = Box::new(info.into());
         let signature = key_pair.map(|kp| Signature::new(&*info, kp));
         Self { info, signature }
     }
 
     /// Signs the [`ChainInfo`] stored inside this [`ChainInfoResponse`] with the provided
-    /// [`KeyPair`].
-    pub fn sign(&mut self, key_pair: &KeyPair) {
+    /// [`SigningKey`].
+    pub fn sign(&mut self, key_pair: &SigningKey) {
         self.signature = Some(Signature::new(&*self.info, key_pair));
     }
 
@@ -322,7 +322,7 @@ impl<'de> BcsSignable<'de> for ChainInfo {}
 pub enum ClientOutcome<T> {
     /// The operations were committed successfully.
     Committed(T),
-    /// We are not the round leader and cannot do anything. Try again at the specified time or
+    /// We are not the round leader and cannot do anything. Try again at the specified time
     /// or whenever the round or block height changes.
     WaitForTimeout(RoundTimeout),
 }

@@ -80,9 +80,9 @@ pub struct ClientOptions {
     #[arg(long = "storage")]
     pub storage_config: Option<String>,
 
-    /// Given an integer value N, read the wallet state and the wallet storage config from the
-    /// environment variables LINERA_WALLET_{N} and LINERA_STORAGE_{N} instead of
-    /// LINERA_WALLET and LINERA_STORAGE.
+    /// Given an integer value `N`, read the wallet state and the wallet storage config from the
+    /// environment variables `LINERA_WALLET_{N}` and `LINERA_STORAGE_{N}` instead of
+    /// `LINERA_WALLET` and `LINERA_STORAGE`.
     #[arg(long, short = 'w')]
     pub with_wallet: Option<u32>,
 
@@ -602,6 +602,11 @@ pub enum ClientCommand {
         /// If none is specified, the benchmark uses the native token.
         #[arg(long)]
         fungible_application_id: Option<linera_base::identifiers::ApplicationId>,
+
+        /// If provided, will be long running, and block proposals will be sent at the
+        /// provided fixed BPS rate.
+        #[arg(long)]
+        bps: Option<usize>,
     },
 
     /// Create genesis configuration for a Linera deployment.
@@ -917,7 +922,7 @@ pub enum ClientCommand {
     HelpMarkdown,
 
     /// Extract a Bash and GraphQL script embedded in a markdown file and print it on
-    /// stdout.
+    /// `stdout`.
     #[command(hide = true)]
     ExtractScriptFromMarkdown {
         /// The source file
@@ -1025,7 +1030,7 @@ impl DatabaseToolCommand {
 pub enum NetCommand {
     /// Start a Local Linera Network
     Up {
-        /// The number of extra wallets and user chains to initialise. Default is 0.
+        /// The number of extra wallets and user chains to initialize. Default is 0.
         #[arg(long)]
         extra_wallets: Option<usize>,
 
@@ -1090,14 +1095,20 @@ pub enum NetCommand {
         #[arg(long)]
         storage: Option<String>,
 
-        /// External protocol used, either grpc or grpcs.
+        /// External protocol used, either `grpc` or `grpcs`.
         #[arg(long, default_value = "grpc")]
         external_protocol: String,
 
-        /// If present, a faucet is started using the given chain root number (0 for the
-        /// admin chain, 1 for the first non-admin initial chain, etc).
+        /// If present, a faucet is started using the chain provided by --faucet-chain, or
+        /// `ChainId::root(1)` if not provided, as root 0 is usually the admin chain.
+        #[arg(long, default_value = "false")]
+        with_faucet: bool,
+
+        /// When using --with-faucet, this specifies the chain on which the faucet will be started.
+        /// The chain is specified by its root number (0 for the admin chain, 1 for the first
+        /// non-admin initial chain, etc).
         #[arg(long)]
-        with_faucet_chain: Option<u32>,
+        faucet_chain: Option<u32>,
 
         /// The port on which to run the faucet server
         #[arg(long, default_value = "8080")]

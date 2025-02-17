@@ -6,11 +6,11 @@
 use linera_base::{
     data_types::{ArithmeticError, Timestamp, UserApplicationDescription},
     ensure,
-    identifiers::{AccountOwner, GenericApplicationId, UserApplicationId},
+    identifiers::{AccountOwner, ChannelFullName, GenericApplicationId, UserApplicationId},
 };
 use linera_chain::data_types::{
-    BlockExecutionOutcome, ChannelFullName, ExecutedBlock, IncomingBundle, Medium, MessageAction,
-    ProposalContent, ProposedBlock,
+    BlockExecutionOutcome, ExecutedBlock, IncomingBundle, Medium, MessageAction, ProposalContent,
+    ProposedBlock,
 };
 use linera_execution::{ChannelSubscription, Query, QueryOutcome};
 use linera_storage::{Clock as _, Storage};
@@ -180,8 +180,8 @@ where
         // Check if the counters of tip_state would be valid.
         chain
             .tip_state
-            .get()
-            .verify_counters(block, &executed_block.outcome)?;
+            .get_mut()
+            .update_counters(block, &executed_block.outcome)?;
         // Verify that the resulting chain would have no unconfirmed incoming messages.
         chain.validate_incoming_bundles().await?;
         Ok(Some((executed_block.outcome, local_time)))

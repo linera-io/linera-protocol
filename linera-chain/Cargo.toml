@@ -22,7 +22,6 @@ async-graphql.workspace = true
 async-trait.workspace = true
 custom_debug_derive.workspace = true
 futures.workspace = true
-hex.workspace = true
 linera-base.workspace = true
 linera-execution.workspace = true
 linera-views.workspace = true

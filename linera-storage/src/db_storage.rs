@@ -11,7 +11,7 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{Blob, TimeDelta, Timestamp},
     hashed::Hashed,
-    identifiers::{BlobId, ChainId, UserApplicationId},
+    identifiers::{BlobId, ChainId, EventId, UserApplicationId},
 };
 use linera_chain::{
     types::{ConfirmedBlock, ConfirmedBlockCertificate, LiteCertificate},
@@ -185,6 +185,28 @@ pub static LOAD_CHAIN_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
     )
 });
 
+/// The metric counting how often an event is read from storage.
+#[cfg(with_metrics)]
+#[doc(hidden)]
+pub static READ_EVENT_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
+    register_int_counter_vec(
+        "read_event",
+        "The metric counting how often an event is read from storage",
+        &[],
+    )
+});
+
+/// The metric counting how often an event is written to storage.
+#[cfg(with_metrics)]
+#[doc(hidden)]
+pub static WRITE_EVENT_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
+    register_int_counter_vec(
+        "write_event",
+        "The metric counting how often an event is written to storage",
+        &[],
+    )
+});
+
 trait BatchExt {
     fn add_blob(&mut self, blob: &Blob) -> Result<(), ViewError>;
 
@@ -192,6 +214,8 @@ trait BatchExt {
 
     fn add_certificate(&mut self, certificate: &ConfirmedBlockCertificate)
         -> Result<(), ViewError>;
+
+    fn add_event(&mut self, event_id: EventId, value: &[u8]) -> Result<(), ViewError>;
 }
 
 impl BatchExt for Batch {
@@ -222,6 +246,14 @@ impl BatchExt for Batch {
         self.put_key_value(value_key.to_vec(), certificate.value())?;
         Ok(())
     }
+
+    fn add_event(&mut self, event_id: EventId, value: &[u8]) -> Result<(), ViewError> {
+        #[cfg(with_metrics)]
+        WRITE_EVENT_COUNTER.with_label_values(&[]).inc();
+        let event_key = bcs::to_bytes(&BaseKey::Event(event_id))?;
+        self.put_key_value_bytes(event_key.to_vec(), value.to_vec());
+        Ok(())
+    }
 }
 
 /// Main implementation of the [`Storage`] trait.
@@ -242,6 +274,7 @@ enum BaseKey {
     ConfirmedBlock(CryptoHash),
     Blob(BlobId),
     BlobState(BlobId),
+    Event(EventId),
 }
 
 const INDEX_BLOB: u8 = 3;
@@ -739,6 +772,25 @@ where
             certificates.push(certificate);
         }
         Ok(certificates)
+    }
+
+    async fn read_event(&self, event_id: EventId) -> Result<Vec<u8>, ViewError> {
+        let event_key = bcs::to_bytes(&BaseKey::Event(event_id.clone()))?;
+        let maybe_value = self.store.read_value::<Vec<u8>>(&event_key).await?;
+        #[cfg(with_metrics)]
+        READ_EVENT_COUNTER.with_label_values(&[]).inc();
+        maybe_value.ok_or_else(|| ViewError::not_found("value for event ID", event_id))
+    }
+
+    async fn write_events(
+        &self,
+        events: impl IntoIterator<Item = (EventId, &[u8])> + Send,
+    ) -> Result<(), ViewError> {
+        let mut batch = Batch::new();
+        for (event_id, value) in events {
+            batch.add_event(event_id, value)?;
+        }
+        self.write_batch(batch).await
     }
 
     fn wasm_runtime(&self) -> Option<WasmRuntime> {

@@ -9,7 +9,7 @@ use futures::future::Either;
 use linera_base::{
     data_types::{Blob, BlockHeight, Timestamp},
     ensure,
-    identifiers::{ChainId, MessageId},
+    identifiers::ChainId,
 };
 use linera_chain::{
     data_types::{
@@ -20,10 +20,7 @@ use linera_chain::{
     types::{ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
     ChainExecutionContext, ChainStateView, ExecutionResultExt as _,
 };
-use linera_execution::{
-    committee::{Committee, Epoch, ValidatorName},
-    BlobState,
-};
+use linera_execution::committee::{Committee, Epoch, ValidatorName};
 use linera_storage::{Clock as _, Storage};
 use linera_views::{
     context::Context,
@@ -119,7 +116,7 @@ where
         Ok((info, actions))
     }
 
-    /// Validateds a proposal's signatures and blobs.
+    /// Validates a proposal's signatures and blobs.
     pub(super) async fn validate_block(
         &mut self,
         proposal: &BlockProposal,
@@ -302,54 +299,39 @@ where
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         let executed_block: ExecutedBlock = certificate.block().clone().into();
-        let block_height = executed_block.block.height;
+        let block = &executed_block.block;
+        let height = block.height;
+        let chain_id = block.chain_id;
+
         // Check that the chain is active and ready for this confirmation.
         let tip = self.state.chain.tip_state.get().clone();
-        if tip.next_block_height < block_height {
+        if tip.next_block_height < height {
             return Err(WorkerError::MissingEarlierBlocks {
                 current_block_height: tip.next_block_height,
             });
         }
-        if tip.next_block_height > block_height {
+        if tip.next_block_height > height {
             // Block was already confirmed.
             let info = ChainInfoResponse::new(&self.state.chain, self.state.config.key_pair());
             let actions = self.state.create_network_actions().await?;
             return Ok((info, actions));
         }
+        let local_time = self.state.storage.clock().current_time();
         // TODO(#2351): This sets the committee and then checks that committee's signatures.
-        if tip.is_first_block() && !self.state.chain.is_active() {
-            if let Some((incoming_bundle, posted_message, config)) =
-                executed_block.block.starts_with_open_chain_message()
-            {
-                let message_id = MessageId {
-                    chain_id: incoming_bundle.origin.sender,
-                    height: incoming_bundle.bundle.height,
-                    index: posted_message.index,
-                };
-                let local_time = self.state.storage.clock().current_time();
-                self.state
-                    .chain
-                    .execute_init_message(
-                        message_id,
-                        config,
-                        incoming_bundle.bundle.timestamp,
-                        local_time,
-                    )
-                    .await?;
-            }
+        if tip.is_first_block() && self.state.chain.is_child() {
+            self.state
+                .chain
+                .execute_init_message_from(block, local_time)
+                .await?;
         }
         self.state.ensure_is_active()?;
         // Verify the certificate.
         let (epoch, committee) = self.state.chain.current_committee()?;
-        check_block_epoch(
-            epoch,
-            executed_block.block.chain_id,
-            executed_block.block.epoch,
-        )?;
+        check_block_epoch(epoch, chain_id, block.epoch)?;
         certificate.check(committee)?;
         // This should always be true for valid certificates.
         ensure!(
-            tip.block_hash == executed_block.block.previous_block_hash,
+            tip.block_hash == block.previous_block_hash,
             WorkerError::InvalidBlockChaining
         );
 
@@ -365,15 +347,17 @@ where
                 .storage
                 .write_blobs_and_certificate(blobs, &certificate)
                 .await?;
+            let events = executed_block
+                .outcome
+                .events
+                .iter()
+                .flatten()
+                .map(|event| (event.id(chain_id), &event.value[..]));
+            self.state.storage.write_events(events).await?;
         }
 
         // Update the blob state with last used certificate hash.
-        let blob_state = BlobState {
-            last_used_by: certificate.hash(),
-            chain_id: executed_block.block.chain_id,
-            block_height,
-            epoch: executed_block.block.epoch,
-        };
+        let blob_state = certificate.value().inner().to_blob_state();
         let overwrite = blobs_result.is_ok(); // Overwrite only if we wrote the certificate.
         let blob_ids = required_blob_ids.into_iter().collect::<Vec<_>>();
         self.state
@@ -385,19 +369,14 @@ where
         // Execute the block and update inboxes.
         self.state
             .chain
-            .remove_bundles_from_inboxes(
-                executed_block.block.timestamp,
-                &executed_block.block.incoming_bundles,
-            )
+            .remove_bundles_from_inboxes(block.timestamp, &block.incoming_bundles)
             .await?;
-        let local_time = self.state.storage.clock().current_time();
-        let verified_outcome = Box::pin(self.state.chain.execute_block(
-            &executed_block.block,
-            local_time,
-            None,
-            Some(executed_block.outcome.oracle_responses.clone()),
-        ))
-        .await?;
+        let oracle_responses = Some(executed_block.outcome.oracle_responses.clone());
+        let verified_outcome = self
+            .state
+            .chain
+            .execute_block(block, local_time, None, oracle_responses)
+            .await?;
         // We should always agree on the messages and state hash.
         ensure!(
             executed_block.outcome == verified_outcome,
@@ -408,26 +387,17 @@ where
         );
         // Advance to next block height.
         let tip = self.state.chain.tip_state.get_mut();
-        tip.block_hash = Some(certificate.hash());
+        let hash = certificate.hash();
+        tip.block_hash = Some(hash);
         tip.next_block_height.try_add_assign_one()?;
-        tip.num_incoming_bundles += executed_block.block.incoming_bundles.len() as u32;
-        tip.num_operations += executed_block.block.operations.len() as u32;
-        tip.num_outgoing_messages += executed_block.outcome.messages.len() as u32;
-        self.state.chain.confirmed_log.push(certificate.hash());
-        let info = ChainInfoResponse::new(&self.state.chain, self.state.config.key_pair());
+        tip.update_counters(block, &executed_block.outcome)?;
+        self.state.chain.confirmed_log.push(hash);
         self.state.track_newly_created_chains(&executed_block);
         let mut actions = self.state.create_network_actions().await?;
-        trace!(
-            "Processed confirmed block {} on chain {:.8}",
-            block_height,
-            executed_block.block.chain_id
-        );
+        trace!("Processed confirmed block {height} on chain {chain_id:.8}");
         actions.notifications.push(Notification {
-            chain_id: executed_block.block.chain_id,
-            reason: Reason::NewBlock {
-                height: block_height,
-                hash: certificate.hash(),
-            },
+            chain_id,
+            reason: Reason::NewBlock { height, hash },
         });
         // Persist chain.
         self.save().await?;
@@ -436,8 +406,9 @@ where
             .block_values
             .insert(Cow::Owned(certificate.into_inner().into_inner()));
 
-        self.register_delivery_notifier(block_height, &actions, notify_when_messages_are_delivered)
+        self.register_delivery_notifier(height, &actions, notify_when_messages_are_delivered)
             .await;
+        let info = ChainInfoResponse::new(&self.state.chain, self.state.config.key_pair());
 
         Ok((info, actions))
     }

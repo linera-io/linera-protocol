@@ -15,13 +15,10 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, Blob, BlockHeight, TimeDelta, Timestamp, UserApplicationDescription},
     hashed::Hashed,
-    identifiers::{
-        BlobId, ChainDescription, ChainId, GenericApplicationId, Owner, UserApplicationId,
-    },
+    identifiers::{BlobId, ChainDescription, ChainId, EventId, Owner, UserApplicationId},
     ownership::ChainOwnership,
 };
 use linera_chain::{
-    data_types::ChannelFullName,
     types::{ConfirmedBlock, ConfirmedBlockCertificate},
     ChainError, ChainStateView,
 };
@@ -163,6 +160,15 @@ pub trait Storage: Sized {
         hashes: I,
     ) -> Result<Vec<ConfirmedBlockCertificate>, ViewError>;
 
+    /// Reads the event with the given ID.
+    async fn read_event(&self, id: EventId) -> Result<Vec<u8>, ViewError>;
+
+    /// Writes a vector of events.
+    async fn write_events(
+        &self,
+        events: impl IntoIterator<Item = (EventId, &[u8])> + Send,
+    ) -> Result<(), ViewError>;
+
     /// Loads the view of a chain state and checks that it is active.
     ///
     /// # Notes
@@ -235,10 +241,7 @@ pub trait Storage: Sized {
                 name: SystemChannel::Admin.name(),
             })?;
             let mut admin_chain = self.load_chain(admin_id).await?;
-            let full_name = ChannelFullName {
-                application_id: GenericApplicationId::System,
-                name: SystemChannel::Admin.name(),
-            };
+            let full_name = SystemChannel::Admin.full_name();
             {
                 let mut channel = admin_chain.channels.try_load_entry_mut(&full_name).await?;
                 channel.subscribers.insert(&id)?;

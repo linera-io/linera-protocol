@@ -45,7 +45,7 @@ impl MemoryStoreConfig {
 pub const TEST_MEMORY_MAX_STREAM_QUERIES: usize = 10;
 
 /// The data is serialized in memory just like for RocksDB / DynamoDB
-/// The analog of the database is the BTreeMap
+/// The analog of the database is the `BTreeMap`
 type MemoryStoreMap = BTreeMap<Vec<u8>, Vec<u8>>;
 
 /// The container for the `MemoryStoreMap`s by namespace and then root key
@@ -410,7 +410,7 @@ pub enum MemoryStoreError {
     #[error(transparent)]
     BcsError(#[from] bcs::Error),
 
-    /// The value is too large for the MemoryStore
+    /// The value is too large for the `MemoryStore`
     #[error("The value is too large for the MemoryStore")]
     TooLargeValue,
 

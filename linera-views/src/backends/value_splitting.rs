@@ -31,11 +31,11 @@ pub enum ValueSplittingError<E> {
     #[error("the key is of length less than 4, so we cannot extract the first byte")]
     TooShortKey,
 
-    /// value segment is missing from the database
+    /// Value segment is missing from the database
     #[error("value segment is missing from the database")]
     MissingSegment,
 
-    /// no count of size u32 is available in the value
+    /// No count of size `u32` is available in the value
     #[error("no count of size u32 is available in the value")]
     NoCountAvailable,
 }
@@ -56,7 +56,7 @@ impl<E: KeyValueStoreError + 'static> KeyValueStoreError for ValueSplittingError
 /// It wraps a key-value store, potentially _with_ a size limit, and automatically
 /// splits up large values into smaller ones. A single logical key-value pair is
 /// stored as multiple smaller key-value pairs in the wrapped store.
-/// See the README.md for additional details.
+/// See the `README.md` for additional details.
 #[derive(Clone)]
 pub struct ValueSplittingStore<K> {
     /// The underlying store of the transformed store.

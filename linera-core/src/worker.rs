@@ -13,7 +13,7 @@ use futures::future::Either;
 #[cfg(with_testing)]
 use linera_base::crypto::PublicKey;
 use linera_base::{
-    crypto::{CryptoError, CryptoHash, KeyPair},
+    crypto::{CryptoError, CryptoHash, SigningKey},
     data_types::{
         ArithmeticError, Blob, BlockHeight, DecompressionError, Round, UserApplicationDescription,
     },
@@ -148,7 +148,7 @@ pub enum Reason {
     },
 }
 
-/// Error type for worker operations..
+/// Error type for worker operations.
 #[derive(Debug, Error)]
 pub enum WorkerError {
     #[error(transparent)]
@@ -190,7 +190,7 @@ pub enum WorkerError {
     // Other server-side errors
     #[error("Invalid cross-chain request")]
     InvalidCrossChainRequest,
-    #[error("The block does contain the hash that we expected for the previous block")]
+    #[error("The block does not contain the hash that we expected for the previous block")]
     InvalidBlockChaining,
     #[error(
         "
@@ -293,7 +293,7 @@ where
     #[instrument(level = "trace", skip(nickname, key_pair, storage))]
     pub fn new(
         nickname: String,
-        key_pair: Option<KeyPair>,
+        key_pair: Option<SigningKey>,
         storage: StorageClient,
         chain_worker_limit: NonZeroUsize,
     ) -> Self {
@@ -389,7 +389,7 @@ where
 
     #[instrument(level = "trace", skip(self, key_pair))]
     #[cfg(test)]
-    pub(crate) async fn with_key_pair(mut self, key_pair: Option<Arc<KeyPair>>) -> Self {
+    pub(crate) async fn with_key_pair(mut self, key_pair: Option<Arc<SigningKey>>) -> Self {
         self.chain_worker_config.key_pair = key_pair;
         self.chain_workers.lock().unwrap().clear();
         self
@@ -697,20 +697,20 @@ where
                 .or_default()
                 .clone();
 
-            let actor = ChainWorkerActor::load(
+            let actor_task = ChainWorkerActor::run(
                 self.chain_worker_config.clone(),
                 self.storage.clone(),
                 self.executed_block_cache.clone(),
                 self.tracked_chains.clone(),
                 delivery_notifier,
                 chain_id,
-            )
-            .await?;
+                receiver,
+            );
 
             self.chain_worker_tasks
                 .lock()
                 .unwrap()
-                .spawn_task(actor.run(receiver).in_current_span());
+                .spawn_task(actor_task.in_current_span());
         }
 
         Ok(sender)
