@@ -39,7 +39,7 @@ Most of this can also be referred to the [fungible app README](https://github.co
 ```bash
 linera wallet show
 CHAIN_1=aee928d4bf3880353b4a3cd9b6f88e6cc6e5ed050860abae439e7782e9b2dfe8  # default chain for the wallet
-OWNER_1=513bb0b9fdf2d671fa3c44add540f383aada343b34260cff6220d390f2336c4b  # owner of chain 1
+OWNER_1=de166237331a2966d8cf6778e81a8c007b4084be80dc1e0409d51f216c1deaa1  # owner of chain 1
 CHAIN_2=63620ea465af9e9e0e8e4dd8d21593cc3a719feac5f096df8440f90738f4dbd8  # another chain in the wallet
 OWNER_2=598d18f67709fe76ed6a36b75a7c9889012d30b896800dfd027ee10e1afd49a3  # owner of chain 2
 ```

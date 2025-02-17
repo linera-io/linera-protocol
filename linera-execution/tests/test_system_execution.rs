@@ -4,7 +4,7 @@
 #![allow(clippy::field_reassign_with_default)]
 
 use linera_base::{
-    crypto::{CryptoHash, KeyPair},
+    crypto::{CryptoHash, SigningKey},
     data_types::{Amount, BlockHeight, Timestamp},
     identifiers::{Account, AccountOwner, ChainDescription, ChainId, MessageId, Owner},
     ownership::ChainOwnership,
@@ -18,7 +18,7 @@ use linera_execution::{
 
 #[tokio::test]
 async fn test_simple_system_operation() -> anyhow::Result<()> {
-    let owner_key_pair = KeyPair::generate();
+    let owner_key_pair = SigningKey::generate();
     let owner = Owner::from(owner_key_pair.public());
     let state = SystemExecutionState {
         description: Some(ChainDescription::Root(0)),

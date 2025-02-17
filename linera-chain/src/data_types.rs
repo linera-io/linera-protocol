@@ -11,7 +11,7 @@ use async_graphql::SimpleObject;
 use custom_debug_derive::Debug;
 use linera_base::{
     bcs,
-    crypto::{BcsHashable, BcsSignable, CryptoError, CryptoHash, KeyPair, PublicKey, Signature},
+    crypto::{BcsHashable, BcsSignable, CryptoError, CryptoHash, PublicKey, Signature, SigningKey},
     data_types::{Amount, BlockHeight, Event, OracleResponse, Round, Timestamp},
     doc_scalar, ensure,
     hashed::Hashed,
@@ -428,7 +428,7 @@ pub struct Vote<T> {
 
 impl<T> Vote<T> {
     /// Use signing key to create a signed object.
-    pub fn new(value: Hashed<T>, round: Round, key_pair: &KeyPair) -> Self
+    pub fn new(value: Hashed<T>, round: Round, key_pair: &SigningKey) -> Self
     where
         T: CertificateValue,
     {
@@ -734,7 +734,7 @@ pub struct ProposalContent {
 }
 
 impl BlockProposal {
-    pub fn new_initial(round: Round, block: ProposedBlock, secret: &KeyPair) -> Self {
+    pub fn new_initial(round: Round, block: ProposedBlock, secret: &SigningKey) -> Self {
         let content = ProposalContent {
             round,
             block,
@@ -753,7 +753,7 @@ impl BlockProposal {
     pub fn new_retry(
         round: Round,
         validated_block_certificate: ValidatedBlockCertificate,
-        secret: &KeyPair,
+        secret: &SigningKey,
     ) -> Self {
         let lite_cert = validated_block_certificate.lite_certificate().cloned();
         let block = validated_block_certificate.into_inner().into_inner();
@@ -814,7 +814,7 @@ impl BlockProposal {
 
 impl LiteVote {
     /// Uses the signing key to create a signed object.
-    pub fn new(value: LiteValue, round: Round, key_pair: &KeyPair) -> Self {
+    pub fn new(value: LiteValue, round: Round, key_pair: &SigningKey) -> Self {
         let hash_and_round = VoteValue(value.value_hash, round, value.kind);
         let signature = Signature::new(&hash_and_round, key_pair);
         Self {
