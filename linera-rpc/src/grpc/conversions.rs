@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_base::{
-    crypto::{ed25519::Ed25519Signature, CryptoError, CryptoHash, PublicKey},
+    crypto::{CryptoError, CryptoHash, PublicKey, Signature},
     data_types::{BlobContent, BlockHeight},
     ensure,
     hashed::Hashed,
@@ -648,15 +648,15 @@ impl TryFrom<api::PublicKey> for ValidatorName {
     }
 }
 
-impl From<Ed25519Signature> for api::Signature {
-    fn from(signature: Ed25519Signature) -> Self {
+impl From<Signature> for api::Signature {
+    fn from(signature: Signature) -> Self {
         Self {
             bytes: signature.0.to_vec(),
         }
     }
 }
 
-impl TryFrom<api::Signature> for Ed25519Signature {
+impl TryFrom<api::Signature> for Signature {
     type Error = GrpcProtoConversionError;
 
     fn try_from(signature: api::Signature) -> Result<Self, Self::Error> {
@@ -970,7 +970,7 @@ pub mod tests {
     use std::{borrow::Cow, fmt::Debug};
 
     use linera_base::{
-        crypto::{BcsSignable, CryptoHash, KeyPair},
+        crypto::{BcsSignable, CryptoHash, SigningKey},
         data_types::{Amount, Blob, Round, Timestamp},
     };
     use linera_chain::{
@@ -1007,20 +1007,20 @@ pub mod tests {
 
     #[test]
     pub fn test_public_key() {
-        let public_key = KeyPair::generate().public();
+        let public_key = SigningKey::generate().public();
         round_trip_check::<_, api::PublicKey>(public_key);
     }
 
     #[test]
     pub fn test_signature() {
-        let key_pair = KeyPair::generate();
-        let signature = Ed25519Signature::new(&Foo("test".into()), &key_pair);
+        let key_pair = SigningKey::generate();
+        let signature = Signature::new(&Foo("test".into()), &key_pair);
         round_trip_check::<_, api::Signature>(signature);
     }
 
     #[test]
     pub fn test_owner() {
-        let key_pair = KeyPair::generate();
+        let key_pair = SigningKey::generate();
         let owner = Owner::from(key_pair.public());
         round_trip_check::<_, api::Owner>(owner);
     }
@@ -1033,7 +1033,7 @@ pub mod tests {
 
     #[test]
     pub fn validator_name() {
-        let validator_name = ValidatorName::from(KeyPair::generate().public());
+        let validator_name = ValidatorName::from(SigningKey::generate().public());
         // This is a correct comparison - `ValidatorNameRpc` does not exist in our
         // proto definitions.
         round_trip_check::<_, api::PublicKey>(validator_name);
@@ -1075,10 +1075,7 @@ pub mod tests {
         let chain_info_response_some = ChainInfoResponse {
             // `info` is bincode so no need to test conversions extensively
             info: chain_info,
-            signature: Some(Ed25519Signature::new(
-                &Foo("test".into()),
-                &KeyPair::generate(),
-            )),
+            signature: Some(Signature::new(&Foo("test".into()), &SigningKey::generate())),
         };
         round_trip_check::<_, api::ChainInfoResponse>(chain_info_response_some);
     }
@@ -1132,7 +1129,7 @@ pub mod tests {
 
     #[test]
     pub fn test_lite_certificate() {
-        let key_pair = KeyPair::generate();
+        let key_pair = SigningKey::generate();
         let certificate = LiteCertificate {
             value: LiteValue {
                 value_hash: CryptoHash::new(&Foo("value".into())),
@@ -1142,7 +1139,7 @@ pub mod tests {
             round: Round::MultiLeader(2),
             signatures: Cow::Owned(vec![(
                 ValidatorName::from(key_pair.public()),
-                Ed25519Signature::new(&Foo("test".into()), &key_pair),
+                Signature::new(&Foo("test".into()), &key_pair),
             )]),
         };
         let request = HandleLiteCertRequest {
@@ -1155,7 +1152,7 @@ pub mod tests {
 
     #[test]
     pub fn test_certificate() {
-        let key_pair = KeyPair::generate();
+        let key_pair = SigningKey::generate();
         let certificate = ValidatedBlockCertificate::new(
             Hashed::new(ValidatedBlock::new(
                 BlockExecutionOutcome {
@@ -1167,7 +1164,7 @@ pub mod tests {
             Round::MultiLeader(3),
             vec![(
                 ValidatorName::from(key_pair.public()),
-                Ed25519Signature::new(&Foo("test".into()), &key_pair),
+                Signature::new(&Foo("test".into()), &key_pair),
             )],
         );
         let request = HandleValidatedCertificateRequest { certificate };
@@ -1200,7 +1197,7 @@ pub mod tests {
 
     #[test]
     pub fn test_block_proposal() {
-        let key_pair = KeyPair::generate();
+        let key_pair = SigningKey::generate();
         let outcome = BlockExecutionOutcome {
             state_hash: CryptoHash::new(&Foo("validated".into())),
             ..BlockExecutionOutcome::default()
@@ -1210,12 +1207,12 @@ pub mod tests {
             Round::SingleLeader(2),
             vec![(
                 ValidatorName::from(key_pair.public()),
-                Ed25519Signature::new(&Foo("signed".into()), &key_pair),
+                Signature::new(&Foo("signed".into()), &key_pair),
             )],
         )
         .lite_certificate()
         .cloned();
-        let public_key = KeyPair::generate().public();
+        let public_key = SigningKey::generate().public();
         let block_proposal = BlockProposal {
             content: ProposalContent {
                 block: get_block(),
@@ -1224,7 +1221,7 @@ pub mod tests {
             },
             owner: Owner::from(public_key),
             public_key,
-            signature: Ed25519Signature::new(&Foo("test".into()), &KeyPair::generate()),
+            signature: Signature::new(&Foo("test".into()), &SigningKey::generate()),
             validated_block_certificate: Some(cert),
         };
 
