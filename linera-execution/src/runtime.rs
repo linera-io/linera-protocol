@@ -697,14 +697,6 @@ impl<UserInstance> BaseRuntime for SyncRuntimeHandle<UserInstance> {
         self.inner().find_key_values_by_prefix_wait(promise)
     }
 
-    fn query_service(
-        &mut self,
-        application_id: ApplicationId,
-        query: Vec<u8>,
-    ) -> Result<Vec<u8>, ExecutionError> {
-        self.inner().query_service(application_id, query)
-    }
-
     fn http_post(
         &mut self,
         url: &str,
@@ -952,42 +944,6 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         self.resource_controller
             .track_bytes_read(read_size as u64)?;
         Ok(key_values)
-    }
-
-    fn query_service(
-        &mut self,
-        application_id: ApplicationId,
-        query: Vec<u8>,
-    ) -> Result<Vec<u8>, ExecutionError> {
-        ensure!(
-            cfg!(feature = "unstable-oracles"),
-            ExecutionError::UnstableOracle
-        );
-        let response =
-            if let Some(response) = self.transaction_tracker.next_replayed_oracle_response()? {
-                match response {
-                    OracleResponse::Service(bytes) => bytes,
-                    _ => return Err(ExecutionError::OracleResponseMismatch),
-                }
-            } else {
-                let context = QueryContext {
-                    chain_id: self.chain_id,
-                    next_block_height: self.height,
-                    local_time: self.local_time,
-                };
-                let sender = self.execution_state_sender.clone();
-
-                let QueryOutcome {
-                    response,
-                    operations,
-                } = ServiceSyncRuntime::new(sender, context).run_query(application_id, query)?;
-
-                self.scheduled_operations.extend(operations);
-                response
-            };
-        self.transaction_tracker
-            .add_oracle_response(OracleResponse::Service(response.clone()));
-        Ok(response)
     }
 
     fn http_post(
@@ -1543,6 +1499,43 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         this.transaction_tracker
             .add_oracle_response(OracleResponse::Round(round));
         Ok(round)
+    }
+
+    fn query_service(
+        &mut self,
+        application_id: ApplicationId,
+        query: Vec<u8>,
+    ) -> Result<Vec<u8>, ExecutionError> {
+        ensure!(
+            cfg!(feature = "unstable-oracles"),
+            ExecutionError::UnstableOracle
+        );
+        let mut this = self.inner();
+        let response =
+            if let Some(response) = this.transaction_tracker.next_replayed_oracle_response()? {
+                match response {
+                    OracleResponse::Service(bytes) => bytes,
+                    _ => return Err(ExecutionError::OracleResponseMismatch),
+                }
+            } else {
+                let context = QueryContext {
+                    chain_id: this.chain_id,
+                    next_block_height: this.height,
+                    local_time: this.local_time,
+                };
+                let sender = this.execution_state_sender.clone();
+
+                let QueryOutcome {
+                    response,
+                    operations,
+                } = ServiceSyncRuntime::new(sender, context).run_query(application_id, query)?;
+
+                this.scheduled_operations.extend(operations);
+                response
+            };
+        this.transaction_tracker
+            .add_oracle_response(OracleResponse::Service(response.clone()));
+        Ok(response)
     }
 }
 
