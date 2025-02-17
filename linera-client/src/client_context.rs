@@ -581,8 +581,7 @@ where
         for (chain_id, operations, key_pair) in blocks_infos_iter {
             if shutdown_notifier.is_cancelled() {
                 info!("Shutdown signal received, stopping benchmark");
-                self.save_wallet().await?;
-                return Ok(());
+                break;
             }
             let chain = self.wallet.get(*chain_id).expect("should have chain");
             let block = ProposedBlock {
@@ -674,7 +673,6 @@ where
         }
 
         if bps.is_none() {
-            self.save_wallet().await?;
             let elapsed = start.elapsed();
             let bps = num_sent_proposals as f64 / elapsed.as_secs_f64();
             info!(
@@ -683,6 +681,9 @@ where
                 bps * transactions_per_block as f64
             );
         }
+
+        info!("Saving wallet");
+        self.save_wallet().await?;
 
         Ok(())
     }
