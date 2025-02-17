@@ -13,7 +13,7 @@ use wasmtime::{AsContextMut, Config, Engine, Linker, Module, Store};
 use super::{
     module_cache::ModuleCache,
     system_api::{ContractSystemApi, ServiceSystemApi, SystemApiData, ViewSystemApi, WriteBatch},
-    ContractEntrypoints, ServiceEntrypoints, WasmExecutionError,
+    ContractEntrypoints, ServiceEntrypoints, VmExecutionError,
 };
 use crate::{
     wasm::{WasmContractModule, WasmServiceModule},
@@ -96,13 +96,13 @@ pub struct WasmtimeServiceInstance<Runtime> {
 
 impl WasmContractModule {
     /// Creates a new [`WasmContractModule`] using Wasmtime with the provided bytecodes.
-    pub async fn from_wasmtime(contract_bytecode: Bytecode) -> Result<Self, WasmExecutionError> {
+    pub async fn from_wasmtime(contract_bytecode: Bytecode) -> Result<Self, VmExecutionError> {
         let mut contract_cache = CONTRACT_CACHE.lock().await;
         let module = contract_cache
             .get_or_insert_with(contract_bytecode, |bytecode| {
                 Module::new(&CONTRACT_ENGINE, bytecode)
             })
-            .map_err(WasmExecutionError::LoadContractModule)?;
+            .map_err(VmExecutionError::LoadContractModule)?;
         Ok(WasmContractModule::Wasmtime { module })
     }
 }
@@ -112,7 +112,7 @@ where
     Runtime: ContractRuntime + WriteBatch + 'static,
 {
     /// Prepares a runtime instance to call into the Wasm contract.
-    pub fn prepare(contract_module: &Module, runtime: Runtime) -> Result<Self, WasmExecutionError> {
+    pub fn prepare(contract_module: &Module, runtime: Runtime) -> Result<Self, VmExecutionError> {
         let mut linker = Linker::new(&CONTRACT_ENGINE);
 
         ContractSystemApi::export_to(&mut linker)?;
@@ -122,7 +122,7 @@ where
         let mut store = Store::new(&CONTRACT_ENGINE, user_data);
         let instance = linker
             .instantiate(&mut store, contract_module)
-            .map_err(WasmExecutionError::LoadContractModule)?;
+            .map_err(VmExecutionError::LoadContractModule)?;
 
         Ok(Self {
             instance: EntrypointInstance::new(instance, store),
@@ -133,13 +133,13 @@ where
 
 impl WasmServiceModule {
     /// Creates a new [`WasmServiceModule`] using Wasmtime with the provided bytecodes.
-    pub async fn from_wasmtime(service_bytecode: Bytecode) -> Result<Self, WasmExecutionError> {
+    pub async fn from_wasmtime(service_bytecode: Bytecode) -> Result<Self, VmExecutionError> {
         let mut service_cache = SERVICE_CACHE.lock().await;
         let module = service_cache
             .get_or_insert_with(service_bytecode, |bytecode| {
                 Module::new(&SERVICE_ENGINE, bytecode)
             })
-            .map_err(WasmExecutionError::LoadServiceModule)?;
+            .map_err(VmExecutionError::LoadServiceModule)?;
         Ok(WasmServiceModule::Wasmtime { module })
     }
 }
@@ -149,7 +149,7 @@ where
     Runtime: ServiceRuntime + WriteBatch + 'static,
 {
     /// Prepares a runtime instance to call into the Wasm service.
-    pub fn prepare(service_module: &Module, runtime: Runtime) -> Result<Self, WasmExecutionError> {
+    pub fn prepare(service_module: &Module, runtime: Runtime) -> Result<Self, VmExecutionError> {
         let mut linker = Linker::new(&SERVICE_ENGINE);
 
         ServiceSystemApi::export_to(&mut linker)?;
@@ -159,7 +159,7 @@ where
         let mut store = Store::new(&SERVICE_ENGINE, user_data);
         let instance = linker
             .instantiate(&mut store, service_module)
-            .map_err(WasmExecutionError::LoadServiceModule)?;
+            .map_err(VmExecutionError::LoadServiceModule)?;
 
         Ok(Self {
             instance: EntrypointInstance::new(instance, store),
@@ -179,7 +179,7 @@ where
         self.configure_initial_fuel()?;
         let result = ContractEntrypoints::new(&mut self.instance).instantiate(argument);
         self.persist_remaining_fuel()?;
-        result.map_err(WasmExecutionError::from)?;
+        result.map_err(VmExecutionError::from)?;
         Ok(())
     }
 
@@ -191,7 +191,7 @@ where
         self.configure_initial_fuel()?;
         let result = ContractEntrypoints::new(&mut self.instance).execute_operation(operation);
         self.persist_remaining_fuel()?;
-        Ok(result.map_err(WasmExecutionError::from)?)
+        Ok(result.map_err(VmExecutionError::from)?)
     }
 
     fn execute_message(
@@ -202,7 +202,7 @@ where
         self.configure_initial_fuel()?;
         let result = ContractEntrypoints::new(&mut self.instance).execute_message(message);
         self.persist_remaining_fuel()?;
-        result.map_err(WasmExecutionError::from)?;
+        result.map_err(VmExecutionError::from)?;
         Ok(())
     }
 
@@ -210,7 +210,7 @@ where
         self.configure_initial_fuel()?;
         let result = ContractEntrypoints::new(&mut self.instance).finalize();
         self.persist_remaining_fuel()?;
-        result.map_err(WasmExecutionError::from)?;
+        result.map_err(VmExecutionError::from)?;
         Ok(())
     }
 }
@@ -226,6 +226,6 @@ where
     ) -> Result<Vec<u8>, ExecutionError> {
         Ok(ServiceEntrypoints::new(&mut self.instance)
             .handle_query(argument)
-            .map_err(WasmExecutionError::from)?)
+            .map_err(VmExecutionError::from)?)
     }
 }

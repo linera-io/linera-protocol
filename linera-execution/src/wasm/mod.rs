@@ -80,11 +80,11 @@ impl WasmContractModule {
     pub async fn new(
         contract_bytecode: Bytecode,
         runtime: WasmRuntime,
-    ) -> Result<Self, WasmExecutionError> {
+    ) -> Result<Self, VmExecutionError> {
         let contract_bytecode = if runtime.needs_sanitizer() {
             // Ensure bytecode normalization whenever wasmer and wasmtime are possibly
             // compared.
-            sanitize(contract_bytecode).map_err(WasmExecutionError::LoadContractModule)?
+            sanitize(contract_bytecode).map_err(VmExecutionError::LoadContractModule)?
         } else {
             contract_bytecode
         };
@@ -105,12 +105,12 @@ impl WasmContractModule {
     pub async fn from_file(
         contract_bytecode_file: impl AsRef<std::path::Path>,
         runtime: WasmRuntime,
-    ) -> Result<Self, WasmExecutionError> {
+    ) -> Result<Self, VmExecutionError> {
         Self::new(
             Bytecode::load_from_file(contract_bytecode_file)
                 .await
                 .map_err(anyhow::Error::from)
-                .map_err(WasmExecutionError::LoadContractModule)?,
+                .map_err(VmExecutionError::LoadContractModule)?,
             runtime,
         )
         .await
@@ -154,7 +154,7 @@ impl WasmServiceModule {
     pub async fn new(
         service_bytecode: Bytecode,
         runtime: WasmRuntime,
-    ) -> Result<Self, WasmExecutionError> {
+    ) -> Result<Self, VmExecutionError> {
         match runtime {
             #[cfg(with_wasmer)]
             WasmRuntime::Wasmer | WasmRuntime::WasmerWithSanitizer => {
@@ -172,12 +172,12 @@ impl WasmServiceModule {
     pub async fn from_file(
         service_bytecode_file: impl AsRef<std::path::Path>,
         runtime: WasmRuntime,
-    ) -> Result<Self, WasmExecutionError> {
+    ) -> Result<Self, VmExecutionError> {
         Self::new(
             Bytecode::load_from_file(service_bytecode_file)
                 .await
                 .map_err(anyhow::Error::from)
-                .map_err(WasmExecutionError::LoadServiceModule)?,
+                .map_err(VmExecutionError::LoadServiceModule)?,
             runtime,
         )
         .await
@@ -271,7 +271,7 @@ const _: () = {
 /// Errors that can occur when executing a user application in a WebAssembly module.
 #[cfg(any(with_wasmer, with_wasmtime))]
 #[derive(Debug, Error)]
-pub enum WasmExecutionError {
+pub enum VmExecutionError {
     #[error("Failed to load contract Wasm module: {_0}")]
     LoadContractModule(#[source] anyhow::Error),
     #[error("Failed to load service Wasm module: {_0}")]
@@ -299,9 +299,9 @@ pub enum WasmExecutionError {
 }
 
 #[cfg(with_wasmer)]
-impl From<::wasmer::InstantiationError> for WasmExecutionError {
+impl From<::wasmer::InstantiationError> for VmExecutionError {
     fn from(instantiation_error: ::wasmer::InstantiationError) -> Self {
-        WasmExecutionError::InstantiateModuleWithWasmer(Box::new(instantiation_error))
+        VmExecutionError::InstantiateModuleWithWasmer(Box::new(instantiation_error))
     }
 }
 

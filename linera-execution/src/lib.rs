@@ -60,7 +60,7 @@ pub use crate::wasm::test as wasm_test;
 #[cfg(with_wasm_runtime)]
 pub use crate::wasm::{
     ContractEntrypoints, ContractSystemApi, ServiceEntrypoints, ServiceSystemApi, SystemApiData,
-    ViewSystemApi, WasmContractModule, WasmExecutionError, WasmServiceModule,
+    ViewSystemApi, WasmContractModule, VmExecutionError, WasmServiceModule,
 };
 pub use crate::{
     applications::ApplicationRegistryView,
@@ -199,7 +199,7 @@ pub enum ExecutionError {
     UserError(String),
     #[cfg(any(with_wasmer, with_wasmtime))]
     #[error(transparent)]
-    WasmError(#[from] WasmExecutionError),
+    WasmError(#[from] VmExecutionError),
     #[error(transparent)]
     DecompressionError(#[from] DecompressionError),
     #[error("The given promise is invalid or was polled once already")]

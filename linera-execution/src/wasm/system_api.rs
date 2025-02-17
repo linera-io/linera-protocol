@@ -15,7 +15,7 @@ use linera_views::batch::{Batch, WriteOperation};
 use linera_witty::{wit_export, Instance, RuntimeError};
 use tracing::log;
 
-use super::WasmExecutionError;
+use super::VmExecutionError;
 use crate::{
     BaseRuntime, BytecodeId, ContractRuntime, ContractSyncRuntimeHandle, ExecutionError,
     ServiceRuntime, ServiceSyncRuntimeHandle,
@@ -65,12 +65,12 @@ impl<Runtime> SystemApiData<Runtime> {
         let type_erased_promise = self
             .active_promises
             .remove(&promise_id)
-            .ok_or_else(|| RuntimeError::Custom(WasmExecutionError::UnknownPromise.into()))?;
+            .ok_or_else(|| RuntimeError::Custom(VmExecutionError::UnknownPromise.into()))?;
 
         type_erased_promise
             .downcast()
             .map(|boxed_promise| *boxed_promise)
-            .map_err(|_| RuntimeError::Custom(WasmExecutionError::IncorrectPromise.into()))
+            .map_err(|_| RuntimeError::Custom(VmExecutionError::IncorrectPromise.into()))
     }
 }
 
