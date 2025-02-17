@@ -6,7 +6,7 @@ use std::{
     mem, vec,
 };
 
-use futures::{stream::FuturesOrdered, FutureExt, StreamExt, TryStreamExt};
+use futures::{stream::FuturesOrdered, StreamExt, TryStreamExt};
 use linera_base::{
     data_types::{Amount, BlockHeight, Timestamp},
     identifiers::{Account, AccountOwner, ChainId, Destination, Owner},
@@ -238,9 +238,7 @@ where
 
         contract_runtime_task.send(code)?;
 
-        while let Some(request) = execution_state_receiver.next().await {
-            self.handle_request(request).await?;
-        }
+        let _ = self.handle_requests(&mut execution_state_receiver).await?;
 
         let (controller, txn_tracker_moved) = contract_runtime_task.join().await?;
         *txn_tracker = txn_tracker_moved;
@@ -540,9 +538,7 @@ where
 
         service_runtime_task.send(code)?;
 
-        while let Some(request) = execution_state_receiver.next().await {
-            self.handle_request(request).await?;
-        }
+        let _ = self.handle_requests(&mut execution_state_receiver).await?;
 
         service_runtime_task.join().await
     }
@@ -557,8 +553,7 @@ where
         >,
         runtime_request_sender: &mut std::sync::mpsc::Sender<ServiceRuntimeRequest>,
     ) -> Result<QueryOutcome<Vec<u8>>, ExecutionError> {
-        let (outcome_sender, outcome_receiver) = oneshot::channel();
-        let mut outcome_receiver = outcome_receiver.fuse();
+        let (outcome_sender, mut outcome_receiver) = oneshot::channel();
 
         runtime_request_sender
             .send(ServiceRuntimeRequest::Query {
@@ -569,16 +564,12 @@ where
             })
             .expect("Service runtime thread should only stop when `request_sender` is dropped");
 
+        // manual fusing.
+        let mut is_done = false;
         loop {
-            futures::select! {
-                maybe_request = incoming_execution_requests.next() => {
-                    if let Some(request) = maybe_request {
-                        self.handle_request(request).await?;
-                    }
-                }
-                outcome = &mut outcome_receiver => {
-                    return outcome.map_err(|_| ExecutionError::MissingRuntimeResponse)?;
-                }
+            tokio::select! {
+                result = self.handle_requests(incoming_execution_requests), if !is_done => { is_done = true; let _ = result?; },
+                outcome = &mut outcome_receiver => { return outcome.map_err(|_| ExecutionError::MissingRuntimeResponse)?; }
             }
         }
     }

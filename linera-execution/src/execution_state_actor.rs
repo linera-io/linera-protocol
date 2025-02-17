@@ -7,7 +7,7 @@
 use std::sync::LazyLock;
 
 use custom_debug_derive::Debug;
-use futures::channel::mpsc;
+use futures::{channel::mpsc::{self, UnboundedReceiver}, StreamExt};
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::{bucket_latencies, register_histogram_vec, MeasureLatency as _};
 use linera_base::{
@@ -21,6 +21,7 @@ use oneshot::Sender;
 #[cfg(with_metrics)]
 use prometheus::HistogramVec;
 use reqwest::{header::CONTENT_TYPE, Client};
+use tokio::sync::RwLock;
 
 use crate::{
     system::{CreateApplicationResult, OpenChainConfig, Recipient},
@@ -60,7 +61,7 @@ where
     C::Extra: ExecutionRuntimeContext,
 {
     pub(crate) async fn load_contract(
-        &mut self,
+        &self,
         id: UserApplicationId,
     ) -> Result<(UserContractCode, UserApplicationDescription), ExecutionError> {
         #[cfg(with_metrics)]
@@ -75,7 +76,7 @@ where
     }
 
     pub(crate) async fn load_service(
-        &mut self,
+        &self,
         id: UserApplicationId,
     ) -> Result<(UserServiceCode, UserApplicationDescription), ExecutionError> {
         #[cfg(with_metrics)]
@@ -89,6 +90,7 @@ where
         Ok((code, description))
     }
 
+    #[allow(dead_code)]
     // TODO(#1416): Support concurrent I/O.
     pub(crate) async fn handle_request(
         &mut self,
@@ -355,6 +357,400 @@ where
             AssertBlobExists { blob_id, callback } => {
                 self.system.assert_blob_exists(blob_id).await?;
                 callback.respond(self.system.blob_used(None, blob_id).await?)
+            }
+        }
+
+        Ok(())
+    }
+
+    pub(crate) async fn handle_requests(
+        &mut self,
+        execution_state_receiver: &mut UnboundedReceiver<ExecutionRequest>,
+    ) -> Result<(), ExecutionError> {
+        use ExecutionRequest::*;
+
+        let request_handle = |request, this: &'static RwLock<&'static mut Self>| async {
+            match request {
+                #[cfg(not(web))]
+                LoadContract { id, callback } => {
+                    let actor = this.read().await;
+                    let  response = actor.load_contract(id).await?;
+                    drop(actor);
+                    callback.respond(response);
+                },
+
+                #[cfg(not(web))]
+                LoadService { id, callback } => {
+                    let actor = this.read().await;
+                    let  response = actor.load_service(id).await?;
+                    drop(actor);
+                    callback.respond(response);
+                },
+
+                ChainBalance { callback } => {
+                    let actor = this.read().await;
+                    let balance = *actor.system.balance.get();
+                    drop(actor);
+                    callback.respond(balance);
+                }
+
+                OwnerBalance { owner, callback } => {
+                    let actor = this.read().await;
+                    let balance = actor.system.balances.get(&owner).await.map(Option::unwrap_or_default)?;
+                    drop(actor);
+                    callback.respond(balance);
+                }
+
+                OwnerBalances { callback } => {
+                    let actor = this.read().await;
+                    let balances = actor.system.balances.index_values().await?;
+                    drop(actor);
+                    callback.respond(balances);
+                }
+
+                BalanceOwners { callback } => {
+                    let actor = this.read().await;
+                    let owners = actor.system.balances.indices().await?;
+                    drop(actor);
+                    callback.respond(owners)
+                }
+
+                Transfer {
+                    source,
+                    destination,
+                    amount,
+                    signer,
+                    application_id,
+                    callback,
+                } => {
+                    let mut actor = this.write().await;
+
+                    let mut execution_outcome = RawExecutionOutcome::default();
+                    let result = actor
+                        .system
+                        .transfer(
+                            signer,
+                            Some(application_id),
+                            source,
+                            Recipient::Account(destination),
+                            amount,
+                        )
+                        .await?;
+
+                    drop(actor);
+
+                    if let Some(message) = result {
+                        execution_outcome.messages.push(message);
+                    }
+
+                    callback.respond(execution_outcome);
+                }
+
+                Claim {
+                    source,
+                    destination,
+                    amount,
+                    signer,
+                    application_id,
+                    callback,
+                } => {
+                    let actor = this.read().await;
+
+                    let owner = source.owner.ok_or(ExecutionError::OwnerIsNone)?;
+                    let mut execution_outcome = RawExecutionOutcome::default();
+                    let message = actor
+                        .system
+                        .claim(
+                            signer,
+                            Some(application_id),
+                            owner,
+                            source.chain_id,
+                            Recipient::Account(destination),
+                            amount,
+                        )
+                        .await?;
+
+                    drop(actor);
+
+                    execution_outcome.messages.push(message);
+                    callback.respond(execution_outcome);
+                }
+
+                SystemTimestamp { callback } => {
+                    let actor = this.read().await;
+                    let timestamp = *actor.system.timestamp.get();
+                    drop(actor);
+
+                    callback.respond(timestamp);
+                }
+
+                ChainOwnership { callback } => {
+                    let actor = this.read().await;
+                    let ownership = actor.system.ownership.get().clone();
+                    drop(actor);
+
+                    callback.respond(ownership);
+                }
+
+                ContainsKey { id, key, callback } => {
+                    let actor = this.read().await;
+                    let view = actor
+                        .users
+                        .try_load_entry(&id)
+                        .await?;
+                    drop(actor);
+
+                    let result = match view {
+                        Some(view) => view.contains_key(&key).await?,
+                        None => false,
+                    };
+
+                    callback.respond(result);
+                }
+
+                ContainsKeys { id, keys, callback } => {
+                    let actor = this.read().await;
+                    let view = actor
+                        .users
+                        .try_load_entry(&id)
+                        .await?;
+                    drop(actor);
+
+                    let result = match view {
+                        Some(view) => view.contains_keys(keys).await?,
+                        None => vec![false; keys.len()],
+                    };
+
+                    callback.respond(result);
+                }
+
+                ReadMultiValuesBytes { id, keys, callback } => {
+                    let actor = this.read().await;
+                    let view = actor.users.try_load_entry(&id).await?;
+                    drop(actor);
+
+                    let values = match view {
+                        Some(view) => view.multi_get(keys).await?,
+                        None => vec![None; keys.len()],
+                    };
+
+                    callback.respond(values);
+                }
+
+                ReadValueBytes { id, key, callback } => {
+                    let actor = this.read().await;
+                    let view = actor.users.try_load_entry(&id).await?;
+                    drop(actor);
+
+                    let result = match view {
+                        Some(view) => view.get(&key).await?,
+                        None => None,
+                    };
+
+                    callback.respond(result);
+                }
+
+                FindKeysByPrefix {
+                    id,
+                    key_prefix,
+                    callback,
+                } => {
+                    let actor = this.read().await;
+                    let view = actor.users.try_load_entry(&id).await?;
+                    drop(actor);
+
+                    let result = match view {
+                        Some(view) => view.find_keys_by_prefix(&key_prefix).await?,
+                        None => Vec::new(),
+                    };
+
+                    callback.respond(result);
+                }
+
+                FindKeyValuesByPrefix {
+                    id,
+                    key_prefix,
+                    callback,
+                } => {
+                    let actor = this.read().await;
+                    let view = actor.users.try_load_entry(&id).await?;
+                    drop(actor);
+
+                    let result = match view {
+                        Some(view) => view.find_key_values_by_prefix(&key_prefix).await?,
+                        None => Vec::new(),
+                    };
+
+                    callback.respond(result);
+                }
+
+                WriteBatch {
+                    id,
+                    batch,
+                    callback,
+                } => {
+                    let mut actor = this.write().await;
+                    let mut view = actor.users.try_load_entry_mut(&id).await?;
+                    view.write_batch(batch).await?;
+
+                    callback.respond(());
+                }
+
+                OpenChain {
+                    ownership,
+                    balance,
+                    next_message_id,
+                    application_permissions,
+                    callback,
+                } => {
+                    let mut write_actor = this.write().await;
+
+                    let inactive_err = || SystemExecutionError::InactiveChain;
+                    let config = OpenChainConfig {
+                        ownership,
+                        admin_id: write_actor.system.admin_id.get().ok_or_else(inactive_err)?,
+                        epoch: write_actor.system.epoch.get().ok_or_else(inactive_err)?,
+                        committees: write_actor.system.committees.get().clone(),
+                        balance,
+                        application_permissions,
+                    };
+                    let messages = write_actor.system.open_chain(config, next_message_id).await?;
+
+                    callback.respond(messages)
+                }
+
+                CloseChain {
+                    application_id,
+                    callback,
+                } => {
+                    let mut write_actor = this.write().await;
+                    let app_permissions = write_actor.system.application_permissions.get();
+                    if !app_permissions.can_close_chain(&application_id) {
+                        callback.respond(Err(ExecutionError::UnauthorizedApplication(application_id)));
+                    } else {
+                        let chain_id = write_actor.context().extra().chain_id();
+                        let _messsages = write_actor.system.close_chain(chain_id).await?;
+
+                        callback.respond(Ok(()))
+                    }
+                }
+
+                ChangeApplicationPermissions {
+                    application_id,
+                    application_permissions,
+                    callback,
+                } => {
+                    let mut write_actor = this.write().await;
+                    let app_permissions = write_actor.system.application_permissions.get();
+                    if !app_permissions.can_change_application_permissions(&application_id) {
+                        callback.respond(Err(ExecutionError::UnauthorizedApplication(application_id)));
+                    } else {
+                        write_actor
+                            .system
+                            .application_permissions
+                            .set(application_permissions);
+                        drop(write_actor);
+
+                        callback.respond(Ok(()));
+                    }
+                }
+
+                CreateApplication {
+                    next_message_id,
+                    bytecode_id,
+                    parameters,
+                    required_application_ids,
+                    callback,
+                } => {
+                    let mut write_actor = this.write().await;
+                    let create_application_result = write_actor
+                        .system
+                        .create_application(
+                            next_message_id,
+                            bytecode_id,
+                            parameters,
+                            required_application_ids,
+                        )
+                        .await?;
+                    drop(write_actor);
+
+                    callback.respond(Ok(create_application_result));
+                }
+
+                FetchUrl { url, callback } => {
+                    let bytes = reqwest::get(url).await?.bytes().await?.to_vec();
+                    callback.respond(bytes);
+                }
+
+                HttpPost {
+                    url,
+                    content_type,
+                    payload,
+                    callback,
+                } => {
+                    let res = Client::new()
+                        .post(url)
+                        .body(payload)
+                        .header(CONTENT_TYPE, content_type)
+                        .send()
+                        .await?;
+                    let body = res.bytes().await?;
+                    let bytes = body.as_ref().to_vec();
+
+                    callback.respond(bytes);
+                }
+
+                ReadBlobContent { blob_id, callback } => {
+                    let mut write_actor = this.write().await;
+                    let blob = write_actor.system.read_blob_content(blob_id).await?;
+                    let is_new = write_actor.system.blob_used(None, blob_id).await?;
+
+                    callback.respond((blob, is_new))
+                }
+
+                AssertBlobExists { blob_id, callback } => {
+                    let mut write_actor = this.write().await;
+                    write_actor.system.assert_blob_exists(blob_id).await?;
+                    callback.respond(write_actor.system.blob_used(None, blob_id).await?)
+                }
+            }
+
+            Ok(())
+        };
+
+        // alternative is to use FuturesUnordered
+        let self_transmuted: &'static mut ExecutionStateView<C> = unsafe { std::mem::transmute(self) };
+        let this = tokio::sync::RwLock::with_max_readers(self_transmuted, 4);
+        let mut set = tokio::task::JoinSet::new();
+        let this_ref = &this as * const _;
+        let this_moved = unsafe { &*this_ref };
+
+    'it:loop {
+            tokio::select! {
+
+                biased;
+
+                Some(request) = execution_state_receiver.next() => {
+                    set.spawn(request_handle(request, this_moved));
+                },
+
+                Some(res) = set.join_next() => {
+                    match res {
+                        Err(_e) => {
+                            drop(set);
+                            return Err(ExecutionError::MissingRuntimeResponse)
+                        },
+
+                        Ok(Err(e)) => {
+                            drop(set);
+                            return Err(e)
+                        },
+
+                        Ok(Ok(_)) => {()},
+                    }
+                },
+
+                else => break 'it (),
             }
         }
 
