@@ -21,16 +21,14 @@ mod wasmer;
 mod wasmtime;
 
 use linera_base::data_types::Bytecode;
-use thiserror::Error;
 #[cfg(with_wasmer)]
 use wasmer::{WasmerContractInstance, WasmerServiceInstance};
 #[cfg(with_wasmtime)]
 use wasmtime::{WasmtimeContractInstance, WasmtimeServiceInstance};
 #[cfg(with_metrics)]
 use {
-    linera_base::prometheus_util::{bucket_latencies, register_histogram_vec, MeasureLatency},
-    prometheus::HistogramVec,
-    std::sync::LazyLock,
+    crate::{CONTRACT_INSTANTIATION_LATENCY, SERVICE_INSTANTIATION_LATENCY},
+    linera_base::prometheus_util::MeasureLatency as _,
 };
 
 use self::sanitizer::sanitize;
@@ -40,28 +38,8 @@ pub use self::{
 };
 use crate::{
     ContractSyncRuntimeHandle, ExecutionError, ServiceSyncRuntimeHandle, UserContractInstance,
-    UserContractModule, UserServiceInstance, UserServiceModule, WasmRuntime,
+    UserContractModule, UserServiceInstance, UserServiceModule, VmExecutionError, WasmRuntime,
 };
-
-#[cfg(with_metrics)]
-static CONTRACT_INSTANTIATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "contract_instantiation_latency",
-        "Contract instantiation latency",
-        &[],
-        bucket_latencies(1.0),
-    )
-});
-
-#[cfg(with_metrics)]
-static SERVICE_INSTANTIATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "service_instantiation_latency",
-        "Service instantiation latency",
-        &[],
-        bucket_latencies(1.0),
-    )
-});
 
 /// A user contract in a compiled WebAssembly module.
 #[derive(Clone)]
@@ -267,36 +245,6 @@ const _: () = {
         }
     }
 };
-
-/// Errors that can occur when executing a user application in a WebAssembly module.
-#[cfg(any(with_wasmer, with_wasmtime))]
-#[derive(Debug, Error)]
-pub enum VmExecutionError {
-    #[error("Failed to load contract Wasm module: {_0}")]
-    LoadContractModule(#[source] anyhow::Error),
-    #[error("Failed to load service Wasm module: {_0}")]
-    LoadServiceModule(#[source] anyhow::Error),
-    #[cfg(with_wasmer)]
-    #[error("Failed to instantiate Wasm module: {_0}")]
-    InstantiateModuleWithWasmer(#[from] Box<::wasmer::InstantiationError>),
-    #[cfg(with_wasmtime)]
-    #[error("Failed to create and configure Wasmtime runtime: {_0}")]
-    CreateWasmtimeEngine(#[source] anyhow::Error),
-    #[cfg(with_wasmer)]
-    #[error(
-        "Failed to execute Wasm module in Wasmer. This may be caused by panics or insufficient fuel. {0}"
-    )]
-    ExecuteModuleInWasmer(#[from] ::wasmer::RuntimeError),
-    #[cfg(with_wasmtime)]
-    #[error("Failed to execute Wasm module in Wasmtime: {0}")]
-    ExecuteModuleInWasmtime(#[from] ::wasmtime::Trap),
-    #[error("Failed to execute Wasm module: {0}")]
-    ExecuteModule(#[from] linera_witty::RuntimeError),
-    #[error("Attempt to wait for an unknown promise")]
-    UnknownPromise,
-    #[error("Attempt to call incorrect `wait` function for a promise")]
-    IncorrectPromise,
-}
 
 #[cfg(with_wasmer)]
 impl From<::wasmer::InstantiationError> for VmExecutionError {

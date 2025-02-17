@@ -13,12 +13,12 @@ use wasmtime::{AsContextMut, Config, Engine, Linker, Module, Store};
 use super::{
     module_cache::ModuleCache,
     system_api::{ContractSystemApi, ServiceSystemApi, SystemApiData, ViewSystemApi, WriteBatch},
-    ContractEntrypoints, ServiceEntrypoints, VmExecutionError,
+    ContractEntrypoints, ServiceEntrypoints,
 };
 use crate::{
     wasm::{WasmContractModule, WasmServiceModule},
     ContractRuntime, ExecutionError, FinalizeContext, MessageContext, OperationContext,
-    QueryContext, ServiceRuntime,
+    QueryContext, ServiceRuntime, VmExecutionError,
 };
 
 /// An [`Engine`] instance configured to run application contracts.

@@ -15,10 +15,9 @@ use linera_views::batch::{Batch, WriteOperation};
 use linera_witty::{wit_export, Instance, RuntimeError};
 use tracing::log;
 
-use super::VmExecutionError;
 use crate::{
     BaseRuntime, BytecodeId, ContractRuntime, ContractSyncRuntimeHandle, ExecutionError,
-    ServiceRuntime, ServiceSyncRuntimeHandle,
+    ServiceRuntime, ServiceSyncRuntimeHandle, VmExecutionError,
 };
 
 /// Common host data used as the `UserData` of the system API implementations.

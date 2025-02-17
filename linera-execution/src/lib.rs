@@ -51,6 +51,12 @@ use linera_views::{batch::Batch, views::ViewError};
 use serde::{Deserialize, Serialize};
 use system::OpenChainConfig;
 use thiserror::Error;
+#[cfg(all(with_metrics, with_wasm_runtime))]
+use {
+    linera_base::prometheus_util::{bucket_latencies, register_histogram_vec},
+    prometheus::HistogramVec,
+    std::sync::LazyLock,
+};
 
 #[cfg(with_testing)]
 pub use crate::applications::ApplicationRegistry;
@@ -60,7 +66,7 @@ pub use crate::wasm::test as wasm_test;
 #[cfg(with_wasm_runtime)]
 pub use crate::wasm::{
     ContractEntrypoints, ContractSystemApi, ServiceEntrypoints, ServiceSystemApi, SystemApiData,
-    ViewSystemApi, WasmContractModule, VmExecutionError, WasmServiceModule,
+    ViewSystemApi, WasmContractModule, WasmServiceModule,
 };
 pub use crate::{
     applications::ApplicationRegistryView,
@@ -78,6 +84,26 @@ pub use crate::{
     },
     transaction_tracker::{TransactionOutcome, TransactionTracker},
 };
+
+#[cfg(all(with_metrics, with_wasm_runtime))]
+static CONTRACT_INSTANTIATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
+    register_histogram_vec(
+        "contract_instantiation_latency",
+        "Contract instantiation latency",
+        &[],
+        bucket_latencies(1.0),
+    )
+});
+
+#[cfg(all(with_metrics, with_wasm_runtime))]
+static SERVICE_INSTANTIATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
+    register_histogram_vec(
+        "service_instantiation_latency",
+        "Service instantiation latency",
+        &[],
+        bucket_latencies(1.0),
+    )
+});
 
 /// The maximum length of an event key in bytes.
 const MAX_EVENT_KEY_LEN: usize = 64;
@@ -197,9 +223,9 @@ pub enum ExecutionError {
     SystemError(SystemExecutionError),
     #[error("User application reported an error: {0}")]
     UserError(String),
-    #[cfg(any(with_wasmer, with_wasmtime))]
+    #[cfg(with_wasm_runtime)]
     #[error(transparent)]
-    WasmError(#[from] VmExecutionError),
+    VmError(#[from] VmExecutionError),
     #[error(transparent)]
     DecompressionError(#[from] DecompressionError),
     #[error("The given promise is invalid or was polled once already")]
@@ -275,6 +301,36 @@ pub enum ExecutionError {
     ServiceModuleSend(#[from] linera_base::task::SendError<UserServiceCode>),
     #[error("Blobs not found: {0:?}")]
     BlobsNotFound(Vec<BlobId>),
+}
+
+/// Errors that can occur when executing a user application in a WebAssembly module.
+#[cfg(with_wasm_runtime)]
+#[derive(Debug, Error)]
+pub enum VmExecutionError {
+    #[error("Failed to load contract Wasm module: {_0}")]
+    LoadContractModule(#[source] anyhow::Error),
+    #[error("Failed to load service Wasm module: {_0}")]
+    LoadServiceModule(#[source] anyhow::Error),
+    #[cfg(with_wasmer)]
+    #[error("Failed to instantiate Wasm module: {_0}")]
+    InstantiateModuleWithWasmer(#[from] Box<::wasmer::InstantiationError>),
+    #[cfg(with_wasmtime)]
+    #[error("Failed to create and configure Wasmtime runtime: {_0}")]
+    CreateWasmtimeEngine(#[source] anyhow::Error),
+    #[cfg(with_wasmer)]
+    #[error(
+        "Failed to execute Wasm module in Wasmer. This may be caused by panics or insufficient fuel. {0}"
+    )]
+    ExecuteModuleInWasmer(#[from] ::wasmer::RuntimeError),
+    #[cfg(with_wasmtime)]
+    #[error("Failed to execute Wasm module in Wasmtime: {0}")]
+    ExecuteModuleInWasmtime(#[from] ::wasmtime::Trap),
+    #[error("Failed to execute Wasm module: {0}")]
+    ExecuteModule(#[from] linera_witty::RuntimeError),
+    #[error("Attempt to wait for an unknown promise")]
+    UnknownPromise,
+    #[error("Attempt to call incorrect `wait` function for a promise")]
+    IncorrectPromise,
 }
 
 impl From<ViewError> for ExecutionError {

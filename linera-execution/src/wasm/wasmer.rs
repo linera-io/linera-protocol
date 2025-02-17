@@ -16,12 +16,12 @@ use wasm_instrument::{gas_metering, parity_wasm};
 use super::{
     module_cache::ModuleCache,
     system_api::{ContractSystemApi, ServiceSystemApi, SystemApiData, ViewSystemApi, WriteBatch},
-    ContractEntrypoints, ServiceEntrypoints, VmExecutionError,
+    ContractEntrypoints, ServiceEntrypoints,
 };
 use crate::{
     wasm::{WasmContractModule, WasmServiceModule},
     ContractRuntime, ExecutionError, FinalizeContext, MessageContext, OperationContext,
-    QueryContext, ServiceRuntime,
+    QueryContext, ServiceRuntime, VmExecutionError,
 };
 
 /// An [`Engine`] instance configured to run application services.
@@ -192,7 +192,7 @@ impl From<wasmer::RuntimeError> for ExecutionError {
         error
             .downcast::<ExecutionError>()
             .unwrap_or_else(|unknown_error| {
-                ExecutionError::WasmError(VmExecutionError::ExecuteModuleInWasmer(unknown_error))
+                ExecutionError::VmError(VmExecutionError::ExecuteModuleInWasmer(unknown_error))
             })
     }
 }
