@@ -53,12 +53,6 @@ use linera_views::{batch::Batch, views::ViewError};
 use serde::{Deserialize, Serialize};
 use system::OpenChainConfig;
 use thiserror::Error;
-#[cfg(all(with_metrics, any(with_wasm_runtime, with_revm)))]
-use {
-    linera_base::prometheus_util::{bucket_latencies, register_histogram_vec},
-    prometheus::HistogramVec,
-    std::sync::LazyLock,
-};
 
 #[cfg(with_testing)]
 pub use crate::applications::ApplicationRegistry;
@@ -88,26 +82,6 @@ pub use crate::{
     },
     transaction_tracker::{TransactionOutcome, TransactionTracker},
 };
-
-#[cfg(all(with_metrics, any(with_wasm_runtime, with_revm)))]
-static CONTRACT_INSTANTIATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "contract_instantiation_latency",
-        "Contract instantiation latency",
-        &[],
-        bucket_latencies(1.0),
-    )
-});
-
-#[cfg(all(with_metrics, any(with_wasm_runtime, with_revm)))]
-static SERVICE_INSTANTIATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    register_histogram_vec(
-        "service_instantiation_latency",
-        "Service instantiation latency",
-        &[],
-        bucket_latencies(1.0),
-    )
-});
 
 /// The maximum length of an event key in bytes.
 const MAX_EVENT_KEY_LEN: usize = 64;

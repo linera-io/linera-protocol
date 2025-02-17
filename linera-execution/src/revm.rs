@@ -24,8 +24,9 @@ use revm_primitives::{ExecutionResult, HaltReason, Log, Output, TxKind};
 use thiserror::Error;
 #[cfg(with_metrics)]
 use {
-    crate::{CONTRACT_INSTANTIATION_LATENCY, SERVICE_INSTANTIATION_LATENCY},
-    linera_base::prometheus_util::MeasureLatency as _,
+    linera_base::prometheus_util::{bucket_latencies, register_histogram_vec, MeasureLatency as _},
+    prometheus::HistogramVec,
+    std::sync::LazyLock,
 };
 
 use crate::{
@@ -35,11 +36,31 @@ use crate::{
     UserServiceInstance, UserServiceModule, ViewError,
 };
 
+#[cfg(with_metrics)]
+static CONTRACT_INSTANTIATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
+    register_histogram_vec(
+        "evm_contract_instantiation_latency",
+        "Evm contract instantiation latency",
+        &[],
+        bucket_latencies(1.0),
+    )
+});
+
+#[cfg(with_metrics)]
+static SERVICE_INSTANTIATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
+    register_histogram_vec(
+        "evm_service_instantiation_latency",
+        "Evm service instantiation latency",
+        &[],
+        bucket_latencies(1.0),
+    )
+});
+
 #[derive(Debug, Error)]
 pub enum EvmExecutionError {
-    #[error("Failed to load contract Wasm module: {_0}")]
+    #[error("Failed to load contract EVM module: {_0}")]
     LoadContractModule(#[source] anyhow::Error),
-    #[error("Failed to load service Wasm module: {_0}")]
+    #[error("Failed to load service EVM module: {_0}")]
     LoadServiceModule(#[source] anyhow::Error),
     #[error("Commit error")]
     CommitError(String),
@@ -72,7 +93,7 @@ impl EvmContractModule {
         }
     }
 
-    /// Creates a new [`WasmContractModule`] using the WebAssembly module in `contract_bytecode_file`.
+    /// Creates a new [`EvmContractModule`] using the WebAssembly module in `contract_bytecode_file`.
     #[cfg(with_fs)]
     pub async fn from_file(
         contract_bytecode_file: impl AsRef<std::path::Path>,

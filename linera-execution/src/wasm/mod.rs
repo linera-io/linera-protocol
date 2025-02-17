@@ -28,8 +28,9 @@ use wasmer::{WasmerContractInstance, WasmerServiceInstance};
 use wasmtime::{WasmtimeContractInstance, WasmtimeServiceInstance};
 #[cfg(with_metrics)]
 use {
-    crate::{CONTRACT_INSTANTIATION_LATENCY, SERVICE_INSTANTIATION_LATENCY},
-    linera_base::prometheus_util::MeasureLatency as _,
+    linera_base::prometheus_util::{bucket_latencies, register_histogram_vec, MeasureLatency as _},
+    prometheus::HistogramVec,
+    std::sync::LazyLock,
 };
 
 use self::sanitizer::sanitize;
@@ -41,6 +42,26 @@ use crate::{
     ContractSyncRuntimeHandle, ExecutionError, ServiceSyncRuntimeHandle, UserContractInstance,
     UserContractModule, UserServiceInstance, UserServiceModule, WasmRuntime,
 };
+
+#[cfg(with_metrics)]
+static CONTRACT_INSTANTIATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
+    register_histogram_vec(
+        "wasm_contract_instantiation_latency",
+        "Wasm contract instantiation latency",
+        &[],
+        bucket_latencies(1.0),
+    )
+});
+
+#[cfg(with_metrics)]
+static SERVICE_INSTANTIATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
+    register_histogram_vec(
+        "wasm_service_instantiation_latency",
+        "Wasm service instantiation latency",
+        &[],
+        bucket_latencies(1.0),
+    )
+});
 
 /// A user contract in a compiled WebAssembly module.
 #[derive(Clone)]
