@@ -3718,6 +3718,7 @@ dependencies = [
  "serde",
  "thiserror 1.0.65",
  "tokio",
+ "tokio-stream",
  "tonic",
  "tonic-build",
  "tracing",
