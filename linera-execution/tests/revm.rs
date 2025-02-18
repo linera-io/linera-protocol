@@ -14,7 +14,7 @@ use linera_execution::{
     revm::{EvmContractModule, EvmServiceModule},
     test_utils::{create_dummy_user_application_description, SystemExecutionState},
     ExecutionRuntimeConfig, ExecutionRuntimeContext, Operation, OperationContext,
-    ResourceControlPolicy, ResourceController, ResourceTracker, TransactionTracker,
+    Query, QueryResponse, QueryContext, ResourceControlPolicy, ResourceController, ResourceTracker, TransactionTracker,
 };
 use linera_views::{context::Context as _, views::View};
 use revm_primitives::U256;
@@ -29,6 +29,7 @@ async fn test_fuel_for_counter_revm_application() -> anyhow::Result<()> {
             uint256 initial_value;
         }
         function increment(uint256 input);
+        function get_value();
     }
 
     let initial_value = U256::from(10000);
@@ -74,13 +75,19 @@ async fn test_fuel_for_counter_revm_application() -> anyhow::Result<()> {
     )
     .await?;
 
-    let context = OperationContext {
+    let operation_context = OperationContext {
         chain_id: ChainId::root(0),
         height: BlockHeight(0),
         round: Some(0),
         index: Some(0),
         authenticated_signer: None,
         authenticated_caller_id: None,
+    };
+
+    let query_context = QueryContext {
+        chain_id: ChainId::root(0),
+        next_block_height: BlockHeight(0),
+        local_time: Timestamp::from(0),
     };
 
     let increments = [
@@ -112,13 +119,34 @@ async fn test_fuel_for_counter_revm_application() -> anyhow::Result<()> {
         };
         let result = view
             .execute_operation(
-                context,
+                operation_context,
                 Timestamp::from(0),
                 operation,
                 &mut txn_tracker,
                 &mut controller,
             )
             .await?;
+        let result = U256::from_be_slice(&result);
+        assert_eq!(result, value);
+
+
+        let query = get_valueCall { };
+        let bytes = query.abi_encode();
+        let query = Query::User {
+            application_id: app_id,
+            bytes,
+        };
+
+        let result = view
+            .query_application(
+                query_context,
+                query,
+                None,
+            )
+            .await?;
+        let QueryResponse::User(result) = result.response else {
+            anyhow::bail!("Wrong QueryResponse result");
+        };
         let result = U256::from_be_slice(&result);
         assert_eq!(result, value);
     }
