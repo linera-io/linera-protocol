@@ -749,18 +749,26 @@ impl Runnable for Job {
                 if let Some(bps) = bps {
                     assert!(bps > 0, "BPS must be greater than 0");
                 }
+
                 let start = Instant::now();
+                let default_chain_id = context
+                    .wallet
+                    .default_chain()
+                    .expect("should have default chain");
+                let chain_client = context.make_chain_client(default_chain_id)?;
                 // Below all block proposals are supposed to succeed without retries, we
                 // must make sure that all incoming payments have been accepted on-chain
                 // and that no validator is missing user certificates.
-                context.process_inboxes_and_force_validator_updates().await;
+                context
+                    .process_inbox_without_updating_wallet(&chain_client)
+                    .await?;
                 info!(
-                    "Processed inboxes and forced validator updates in {} ms",
+                    "Processed inbox and forced validator updates in {} ms",
                     start.elapsed().as_millis()
                 );
 
                 let start = Instant::now();
-                let key_pairs = context
+                let (key_pairs, chain_states) = context
                     .make_benchmark_chains(num_chains, tokens_per_chain)
                     .await?;
                 info!(
@@ -778,10 +786,6 @@ impl Runnable for Job {
                     );
                 }
 
-                let default_chain_id = context
-                    .wallet
-                    .default_chain()
-                    .expect("should have default chain");
                 let chain_client = context.make_chain_client(default_chain_id)?;
                 let (epoch, committees) =
                     chain_client.epoch_and_committees(default_chain_id).await?;
@@ -810,6 +814,7 @@ impl Runnable for Job {
                             clients,
                             transactions_per_block,
                             epoch,
+                            chain_states,
                         )
                         .await?;
                 } else {
@@ -820,6 +825,7 @@ impl Runnable for Job {
                             clients,
                             transactions_per_block,
                             epoch,
+                            chain_states,
                         )
                         .await?;
                 }
