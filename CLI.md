@@ -964,8 +964,8 @@ Operation on the storage
 * `check_absence` — Check absence of a namespace in the database
 * `initialize` — Initialize a namespace in the database
 * `list_namespaces` — List the namespaces of the database
-* `list_blob_ids` — List the blob ids of the database
-* `list_chain_ids` — List the chain ids of the database
+* `list_blob_ids` — List the blob IDs of the database
+* `list_chain_ids` — List the chain IDs of the database
 
 
 
@@ -1043,7 +1043,7 @@ List the namespaces of the database
 
 ## `linera storage list_blob_ids`
 
-List the blob ids of the database
+List the blob IDs of the database
 
 **Usage:** `linera storage list_blob_ids --storage <STORAGE_CONFIG>`
 
@@ -1055,7 +1055,7 @@ List the blob ids of the database
 
 ## `linera storage list_chain_ids`
 
-List the chain ids of the database
+List the chain IDs of the database
 
 **Usage:** `linera storage list_chain_ids --storage <STORAGE_CONFIG>`
 

@@ -593,7 +593,7 @@ impl StoreConfig {
         }
     }
 
-    /// Lists all the chain ids of the storage
+    /// Lists all the chain IDs of the storage
     pub async fn list_chain_ids(self) -> Result<Vec<ChainId>, ViewError> {
         match self {
             StoreConfig::Memory(_, _) => Err(ViewError::StoreError {

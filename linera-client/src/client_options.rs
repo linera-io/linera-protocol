@@ -992,7 +992,7 @@ pub enum DatabaseToolCommand {
         storage_config: String,
     },
 
-    /// List the blob ids of the database
+    /// List the blob IDs of the database
     #[command(name = "list_blob_ids")]
     ListBlobIds {
         /// Storage configuration for the blockchain history.
@@ -1000,7 +1000,7 @@ pub enum DatabaseToolCommand {
         storage_config: String,
     },
 
-    /// List the chain ids of the database
+    /// List the chain IDs of the database
     #[command(name = "list_chain_ids")]
     ListChainIds {
         /// Storage configuration for the blockchain history.

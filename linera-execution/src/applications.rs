@@ -53,7 +53,7 @@ where
         &mut self,
         application: UserApplicationDescription,
     ) -> Result<UserApplicationId, SystemExecutionError> {
-        // Make sure that referenced applications ids have been registered.
+        // Make sure that referenced applications IDs have been registered.
         for required_id in &application.required_application_ids {
             self.describe_application(*required_id).await?;
         }
@@ -69,7 +69,7 @@ where
         parameters: Vec<u8>,
         required_application_ids: Vec<UserApplicationId>,
     ) -> Result<(), SystemExecutionError> {
-        // Make sure that referenced applications ids have been registered.
+        // Make sure that referenced applications IDs have been registered.
         for required_id in &required_application_ids {
             self.describe_application(*required_id).await?;
         }

@@ -315,7 +315,7 @@ mod tests {
     }
 }
 
-/// Lists the blob ids of the storage.
+/// Lists the blob IDs of the storage.
 pub async fn list_all_blob_ids<S: KeyValueStore>(store: &S) -> Result<Vec<BlobId>, ViewError> {
     let prefix = &[INDEX_BLOB_ID];
     let keys = store.find_keys_by_prefix(prefix).await?;
@@ -329,7 +329,7 @@ pub async fn list_all_blob_ids<S: KeyValueStore>(store: &S) -> Result<Vec<BlobId
     Ok(blob_ids)
 }
 
-/// Lists the chain ids of the storage.
+/// Lists the chain IDs of the storage.
 pub async fn list_all_chain_ids<S: AdminKeyValueStore>(
     config: &S::Config,
     namespace: &str,

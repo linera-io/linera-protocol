@@ -40,7 +40,7 @@ pub enum GrpcProtoConversionError {
     SignatureError(ed25519_dalek::SignatureError),
     #[error("Cryptographic error: {0}")]
     CryptoError(#[from] CryptoError),
-    #[error("Inconsistent outer/inner chain ids")]
+    #[error("Inconsistent outer/inner chain IDs")]
     InconsistentChainId,
     #[error("Unrecognized certificate type")]
     InvalidCertificateType,
