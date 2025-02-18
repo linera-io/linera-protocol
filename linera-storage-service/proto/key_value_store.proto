@@ -3,25 +3,6 @@ package key_value_store.v1;
 
 import "google/protobuf/empty.proto";
 
-message KeyValue {
-  bytes key = 1;
-  bytes value = 2;
-}
-
-message KeyValueAppend {
-  bytes key = 1;
-  bytes value = 2;
-  bool last = 3;
-}
-
-message Statement {
-  oneof Operation {
-    bytes delete = 1;
-    KeyValue put = 2;
-    KeyValueAppend append = 3;
-    bytes delete_prefix = 4;
-  }
-}
 
 message OptValue {
   optional bytes value = 1;
@@ -34,8 +15,6 @@ message RequestReadValue {
 
 message ReplyReadValue {
   optional bytes value = 1;
-  int64 message_index = 2;
-  int32 num_chunks = 3;
 }
 
 
@@ -53,7 +32,7 @@ message RequestContainsKeys {
 }
 
 message ReplyContainsKeys {
-  repeated bool tests = 1;
+  repeated bool tests = 1 [packed = true];
 }
 
 
@@ -63,8 +42,6 @@ message RequestReadMultiValues {
 
 message ReplyReadMultiValues {
   repeated OptValue values = 1;
-  int64 message_index = 2;
-  int32 num_chunks = 3;
 }
 
 
@@ -74,8 +51,6 @@ message RequestFindKeysByPrefix {
 
 message ReplyFindKeysByPrefix {
   repeated bytes keys = 1;
-  int64 message_index = 2;
-  int32 num_chunks = 3;
 }
 
 
@@ -84,24 +59,12 @@ message RequestFindKeyValuesByPrefix {
 }
 
 message ReplyFindKeyValuesByPrefix {
-  repeated KeyValue key_values = 1;
-  int64 message_index = 2;
-  int32 num_chunks = 3;
+  bytes key_values = 1;
 }
 
 
-message RequestWriteBatchExtended {
-  repeated Statement statements = 1;
-}
-
-
-message RequestSpecificChunk {
-  int64 message_index = 1;
-  int32 index = 2;
-}
-
-message ReplySpecificChunk {
-  bytes chunk = 1;
+message RequestWriteBatch {
+  bytes stream = 1;
 }
 
 
@@ -139,18 +102,17 @@ message ReplyListRootKeys {
 
 
 service StoreProcessor {
-  rpc ProcessReadValue (RequestReadValue) returns (ReplyReadValue) {}
+  rpc ProcessReadValue (RequestReadValue) returns (stream ReplyReadValue) {}
   rpc ProcessContainsKey (RequestContainsKey) returns (ReplyContainsKey) {}
-  rpc ProcessContainsKeys (RequestContainsKeys) returns (ReplyContainsKeys) {}
-  rpc ProcessReadMultiValues (RequestReadMultiValues) returns (ReplyReadMultiValues) {}
-  rpc ProcessFindKeysByPrefix (RequestFindKeysByPrefix) returns (ReplyFindKeysByPrefix) {}
-  rpc ProcessFindKeyValuesByPrefix (RequestFindKeyValuesByPrefix) returns (ReplyFindKeyValuesByPrefix) {}
-  rpc ProcessWriteBatchExtended (RequestWriteBatchExtended) returns (google.protobuf.Empty) {}
-  rpc ProcessSpecificChunk (RequestSpecificChunk) returns (ReplySpecificChunk) {}
+  rpc ProcessContainsKeys (stream RequestContainsKeys) returns (ReplyContainsKeys) {}
+  rpc ProcessReadMultiValues (stream RequestReadMultiValues) returns (stream ReplyReadMultiValues) {}
+  rpc ProcessFindKeysByPrefix (RequestFindKeysByPrefix) returns (stream ReplyFindKeysByPrefix) {}
+  rpc ProcessFindKeyValuesByPrefix (RequestFindKeyValuesByPrefix) returns (stream ReplyFindKeyValuesByPrefix) {}
+  rpc ProcessWriteBatch (stream RequestWriteBatch) returns (google.protobuf.Empty) {}
   rpc ProcessCreateNamespace (RequestCreateNamespace) returns (google.protobuf.Empty) {}
   rpc ProcessExistsNamespace (RequestExistsNamespace) returns (ReplyExistsNamespace) {}
   rpc ProcessDeleteNamespace (RequestDeleteNamespace) returns (google.protobuf.Empty) {}
-  rpc ProcessListAll (google.protobuf.Empty) returns (ReplyListAll) {}
+  rpc ProcessListAll (google.protobuf.Empty) returns (stream ReplyListAll) {}
   rpc ProcessListRootKeys (RequestListRootKeys) returns (ReplyListRootKeys) {}
   rpc ProcessDeleteAll (google.protobuf.Empty) returns (google.protobuf.Empty) {}
 }
