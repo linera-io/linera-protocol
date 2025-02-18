@@ -45,9 +45,11 @@ impl From<CrateVersion> for semver::Version {
 
 pub type Hash = std::borrow::Cow<'static, str>;
 
+// camelCase rename to align with the `SimpleObject` implementation.
 #[cfg_attr(
     linera_version_building,
-    derive(async_graphql::SimpleObject, serde::Deserialize, serde::Serialize)
+    derive(async_graphql::SimpleObject, serde::Deserialize, serde::Serialize),
+    serde(rename_all = "camelCase"),
 )]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 /// The version info of a build of Linera.
