@@ -19,7 +19,6 @@ revm = [
     "dep:alloy",
     "dep:alloy-sol-types",
     "dep:hex",
-    "dep:tempfile",
 ]
 fs = ["tokio/fs"]
 metrics = ["prometheus", "linera-views/metrics"]
@@ -70,7 +69,6 @@ revm-primitives = { workspace = true, optional = true }
 serde.workspace = true
 serde_bytes.workspace = true
 serde_json.workspace = true
-tempfile = { workspace = true, optional = true }
 thiserror.workspace = true
 tracing = { workspace = true, features = ["log"] }
 wasm-encoder = { workspace = true, optional = true }

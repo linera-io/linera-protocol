@@ -4621,7 +4621,6 @@ dependencies = [
  "serde",
  "serde_bytes",
  "serde_json",
- "tempfile",
  "test-case",
  "test-log",
  "test-strategy",
