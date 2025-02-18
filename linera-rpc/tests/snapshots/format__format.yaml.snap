@@ -147,8 +147,6 @@ BlockProposal:
   STRUCT:
     - content:
         TYPENAME: ProposalContent
-    - owner:
-        TYPENAME: Owner
     - public_key:
         TYPENAME: Ed25519PublicKey
     - signature:

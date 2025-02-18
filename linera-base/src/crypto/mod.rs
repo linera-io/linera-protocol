@@ -11,13 +11,26 @@ mod secp256k1;
 use std::{io, num::ParseIntError};
 
 use alloy_primitives::FixedBytes;
-pub use ed25519::{
-    Ed25519PublicKey as PublicKey, Ed25519SecretKey as SigningKey, Ed25519Signature as Signature,
-};
 use ed25519_dalek::{self as dalek};
 pub use hash::*;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
+/// The public key of an authority.
+pub type AuthorityPublicKey = ed25519::Ed25519PublicKey;
+/// The private key of an authority.
+pub type AuthorityPrivateKey = ed25519::Ed25519SecretKey;
+/// The signature of an authority.
+pub type AuthoritySignature = ed25519::Ed25519Signature;
+
+/// The public key of a chain owner.
+/// Corresponding private key is allowed to propose blocks
+/// on the chain and transfer account's tokens.
+pub type AccountPublicKey = ed25519::Ed25519PublicKey;
+/// The private key of a chain owner.
+pub type AccountPrivateKey = ed25519::Ed25519SecretKey;
+/// The signature of a chain owner.
+pub type AccountSignature = ed25519::Ed25519Signature;
 
 /// Error type for cryptographic errors.
 #[derive(Error, Debug)]

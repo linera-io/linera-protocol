@@ -6,7 +6,7 @@ use std::{borrow::Cow, collections::BTreeMap, str::FromStr};
 
 use async_graphql::InputObject;
 use linera_base::{
-    crypto::{CryptoError, PublicKey},
+    crypto::{AuthorityPublicKey, CryptoError},
     data_types::ArithmeticError,
 };
 use serde::{Deserialize, Serialize};
@@ -55,7 +55,7 @@ impl<'de> Deserialize<'de> for Epoch {
 
 /// The identity of a validator.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug)]
-pub struct ValidatorName(pub PublicKey);
+pub struct ValidatorName(pub AuthorityPublicKey);
 
 impl Serialize for ValidatorName {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -82,7 +82,7 @@ impl<'de> Deserialize<'de> for ValidatorName {
         } else {
             #[derive(Deserialize)]
             #[serde(rename = "ValidatorName")]
-            struct ValidatorNameDerived(PublicKey);
+            struct ValidatorNameDerived(AuthorityPublicKey);
 
             let value = ValidatorNameDerived::deserialize(deserializer)?;
             Ok(Self(value.0))
@@ -244,7 +244,7 @@ impl std::str::FromStr for ValidatorName {
     type Err = CryptoError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(ValidatorName(PublicKey::from_str(s)?))
+        Ok(ValidatorName(AuthorityPublicKey::from_str(s)?))
     }
 }
 
@@ -268,8 +268,8 @@ impl From<u32> for Epoch {
     }
 }
 
-impl From<PublicKey> for ValidatorName {
-    fn from(value: PublicKey) -> Self {
+impl From<AuthorityPublicKey> for ValidatorName {
+    fn from(value: AuthorityPublicKey) -> Self {
         Self(value)
     }
 }
@@ -334,7 +334,7 @@ impl Committee {
         }
     }
 
-    pub fn keys_and_weights(&self) -> impl Iterator<Item = (PublicKey, u64)> + '_ {
+    pub fn keys_and_weights(&self) -> impl Iterator<Item = (AuthorityPublicKey, u64)> + '_ {
         self.validators
             .iter()
             .map(|(name, validator)| (name.0, validator.votes))

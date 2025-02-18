@@ -198,13 +198,13 @@ pub enum ChangeApplicationPermissionsError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::crypto::SigningKey;
+    use crate::crypto::AccountPrivateKey;
 
     #[test]
     fn test_ownership_round_timeouts() {
-        let super_pub_key = SigningKey::generate().public();
+        let super_pub_key = AccountPrivateKey::generate().public();
         let super_owner = Owner::from(super_pub_key);
-        let pub_key = SigningKey::generate().public();
+        let pub_key = AccountPrivateKey::generate().public();
         let owner = Owner::from(pub_key);
 
         let ownership = ChainOwnership {
