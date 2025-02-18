@@ -49,7 +49,7 @@ pub type Hash = std::borrow::Cow<'static, str>;
 #[cfg_attr(
     linera_version_building,
     derive(async_graphql::SimpleObject, serde::Deserialize, serde::Serialize),
-    serde(rename_all = "camelCase"),
+    serde(rename_all = "camelCase")
 )]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 /// The version info of a build of Linera.
