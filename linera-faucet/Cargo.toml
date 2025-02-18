@@ -9,6 +9,7 @@ edition.workspace = true
 
 [dependencies]
 linera-base.workspace = true
+serde.workspace = true
 
 [dependencies.async-graphql]
 workspace = true

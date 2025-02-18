@@ -4678,19 +4678,22 @@ version = "0.14.0"
 dependencies = [
  "async-graphql",
  "linera-base",
+ "serde",
 ]
 
 [[package]]
 name = "linera-faucet-client"
 version = "0.14.0"
 dependencies = [
- "anyhow",
  "linera-base",
  "linera-client",
  "linera-faucet",
  "linera-version",
  "reqwest 0.11.27",
+ "serde",
  "serde_json",
+ "thiserror 1.0.69",
+ "thiserror-context",
 ]
 
 [[package]]
