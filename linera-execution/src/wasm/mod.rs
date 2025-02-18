@@ -75,33 +75,27 @@ pub enum WasmContractModule {
     Wasmtime { module: ::wasmtime::Module },
 }
 
-fn get_wasm_contract(
-    contract_bytecode: Bytecode,
-    runtime: WasmRuntime,
-) -> Result<Bytecode, WasmExecutionError> {
-    if runtime.needs_sanitizer() {
-        // Ensure bytecode normalization whenever Wasmer and Wasmtime are possibly
-        // compared.
-        sanitize(contract_bytecode).map_err(WasmExecutionError::LoadContractModule)
-    } else {
-        Ok(contract_bytecode)
-    }
-}
-
 impl WasmContractModule {
     /// Creates a new [`WasmContractModule`] using the WebAssembly module with the provided bytecode.
     pub async fn new(
         contract_bytecode: Bytecode,
         runtime: WasmRuntime,
     ) -> Result<Self, WasmExecutionError> {
+        let contract_bytecode = if runtime.needs_sanitizer() {
+            // Ensure bytecode normalization whenever wasmer and wasmtime are possibly
+            // compared.
+            sanitize(contract_bytecode).map_err(WasmExecutionError::LoadContractModule)?
+        } else {
+            contract_bytecode
+        };
         match runtime {
             #[cfg(with_wasmer)]
             WasmRuntime::Wasmer | WasmRuntime::WasmerWithSanitizer => {
-                Self::from_wasmer(get_wasm_contract(contract_bytecode, runtime)?).await
+                Self::from_wasmer(contract_bytecode).await
             }
             #[cfg(with_wasmtime)]
             WasmRuntime::Wasmtime | WasmRuntime::WasmtimeWithSanitizer => {
-                Self::from_wasmtime(get_wasm_contract(contract_bytecode, runtime)?).await
+                Self::from_wasmtime(contract_bytecode).await
             }
         }
     }
