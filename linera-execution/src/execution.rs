@@ -187,8 +187,7 @@ where
             txn_tracker,
             resource_controller,
         )
-        .await?;
-        Ok(())
+        .await
     }
 
     #[expect(clippy::too_many_arguments)]

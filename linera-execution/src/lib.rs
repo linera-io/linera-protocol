@@ -14,6 +14,8 @@ mod execution_state_actor;
 mod graphql;
 mod policy;
 mod resources;
+#[cfg(with_revm)]
+pub mod revm;
 mod runtime;
 pub mod system;
 #[cfg(with_testing)]
@@ -54,6 +56,8 @@ use thiserror::Error;
 
 #[cfg(with_testing)]
 pub use crate::applications::ApplicationRegistry;
+#[cfg(with_revm)]
+use crate::revm::EvmExecutionError;
 use crate::runtime::ContractSyncRuntime;
 #[cfg(all(with_testing, with_wasm_runtime))]
 pub use crate::wasm::test as wasm_test;
@@ -197,9 +201,12 @@ pub enum ExecutionError {
     SystemError(SystemExecutionError),
     #[error("User application reported an error: {0}")]
     UserError(String),
-    #[cfg(any(with_wasmer, with_wasmtime))]
+    #[cfg(with_wasm_runtime)]
     #[error(transparent)]
     WasmError(#[from] WasmExecutionError),
+    #[cfg(with_revm)]
+    #[error(transparent)]
+    EvmError(#[from] EvmExecutionError),
     #[error(transparent)]
     DecompressionError(#[from] DecompressionError),
     #[error("The given promise is invalid or was polled once already")]
@@ -1317,6 +1324,15 @@ pub enum WasmRuntime {
     WasmerWithSanitizer,
     #[cfg(with_wasmtime)]
     WasmtimeWithSanitizer,
+}
+
+#[derive(Clone, Copy, Display)]
+#[cfg_attr(with_revm, derive(Debug, Default))]
+pub enum EvmRuntime {
+    #[cfg(with_revm)]
+    #[default]
+    #[display("revm")]
+    Revm,
 }
 
 /// Trait used to select a default `WasmRuntime`, if one is available.
