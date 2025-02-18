@@ -7,17 +7,25 @@ mod state;
 
 use std::sync::Arc;
 
+use alloy::primitives::U256;
 use async_graphql::{EmptySubscription, Request, Response, Schema};
 use ethereum_tracker::Operation;
 use linera_sdk::{
-    base::WithServiceAbi, graphql::GraphQLMutationRoot, views::View, Service, ServiceRuntime,
+    base::WithServiceAbi,
+    ethereum::{EthereumDataType, EthereumEvent, EthereumQueries, ServiceEthereumClient},
+    graphql::GraphQLMutationRoot,
+    views::View,
+    Service, ServiceRuntime,
 };
+use serde::{Deserialize, Serialize};
 
 use self::state::EthereumTrackerState;
 
-#[derive(Clone)]
+#[derive(Clone, async_graphql::SimpleObject)]
 pub struct EthereumTrackerService {
+    #[graphql(flatten)]
     state: Arc<EthereumTrackerState>,
+    #[graphql(skip)]
     runtime: Arc<ServiceRuntime<Self>>,
 }
 
@@ -42,7 +50,9 @@ impl Service for EthereumTrackerService {
 
     async fn handle_query(&self, request: Request) -> Response {
         let schema = Schema::build(
-            self.state.clone(),
+            Query {
+                service: self.clone(),
+            },
             Operation::mutation_root(self.runtime.clone()),
             EmptySubscription,
         )
@@ -50,3 +60,122 @@ impl Service for EthereumTrackerService {
         schema.execute(request).await
     }
 }
+
+/// The service handler for GraphQL queries.
+#[derive(async_graphql::SimpleObject)]
+#[graphql(complex)]
+pub struct Query {
+    #[graphql(flatten)]
+    service: EthereumTrackerService,
+}
+
+#[async_graphql::ComplexObject]
+impl Query {
+    /// Reads the initial Ethereum event emitted by the monitored contract.
+    async fn read_initial_event(&self) -> InitialEvent {
+        let start_block = *self.service.state.start_block.get();
+        let mut events = self
+            .read_events("Initial(address,uint256)", start_block, start_block + 1)
+            .await;
+
+        assert_eq!(events.len(), 1);
+        let mut event_values = events.pop().unwrap().values.into_iter();
+
+        let address_value = event_values.next().expect("Missing initial address value");
+        let balance_value = event_values.next().expect("Missing initial balance value");
+
+        let EthereumDataType::Address(address) = address_value else {
+            panic!("wrong type for the first entry");
+        };
+        let EthereumDataType::Uint256(balance) = balance_value else {
+            panic!("wrong type for the second entry");
+        };
+
+        InitialEvent { address, balance }
+    }
+
+    /// Reads the transfer events emitted by the monitored Ethereum contract.
+    async fn read_transfer_events(&self, end_block: u64) -> Vec<TransferEvent> {
+        let start_block = *self.service.state.start_block.get();
+        let events = self
+            .read_events(
+                "Transfer(address indexed,address indexed,uint256)",
+                start_block,
+                end_block,
+            )
+            .await;
+
+        events
+            .into_iter()
+            .map(|event| {
+                let mut event_values = event.values.into_iter();
+
+                let source_value = event_values
+                    .next()
+                    .expect("Missing source address in response");
+                let destination_value = event_values
+                    .next()
+                    .expect("Missing destination address in response");
+                let amount_value = event_values.next().expect("Missing amount in response");
+
+                let EthereumDataType::Address(source) = source_value else {
+                    panic!("Wrong type for the source address");
+                };
+                let EthereumDataType::Address(destination) = destination_value else {
+                    panic!("Wrong type for the destination address");
+                };
+                let EthereumDataType::Uint256(value) = amount_value else {
+                    panic!("Wrong type for the amount");
+                };
+
+                TransferEvent {
+                    source,
+                    value,
+                    destination,
+                }
+            })
+            .collect()
+    }
+}
+
+impl Query {
+    /// Reads events of type `event_name` from the monitored contract emitted during the requested
+    /// block height range.
+    async fn read_events(
+        &self,
+        event_name: &str,
+        start_block: u64,
+        end_block: u64,
+    ) -> Vec<EthereumEvent> {
+        let url = self.service.state.ethereum_endpoint.get().clone();
+        let contract_address = self.service.state.contract_address.get().clone();
+        let ethereum_client = ServiceEthereumClient { url };
+
+        ethereum_client
+            .read_events(&contract_address, event_name, start_block, end_block)
+            .await
+            .unwrap_or_else(|error| {
+                panic!(
+                    "Failed to read Ethereum events for {contract_address} \
+                    from block {start_block} to block {end_block}: {error}"
+                )
+            })
+    }
+}
+
+/// The initial event emitted by the contract.
+#[derive(Clone, Default, Deserialize, Serialize)]
+pub struct InitialEvent {
+    address: String,
+    balance: U256,
+}
+async_graphql::scalar!(InitialEvent);
+
+/// The transfer events emitted by the contract.
+#[derive(Clone, Default, Deserialize, Serialize)]
+pub struct TransferEvent {
+    source: String,
+    value: U256,
+    destination: String,
+}
+async_graphql::scalar!(TransferEvent);
