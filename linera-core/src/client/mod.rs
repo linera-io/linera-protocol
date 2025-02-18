@@ -28,7 +28,7 @@ use linera_base::data_types::Bytecode;
 use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     abi::Abi,
-    crypto::{CryptoHash, PublicKey, SigningKey},
+    crypto::{AuthorityPrivateKey, AuthorityPublicKey, CryptoHash},
     data_types::{
         Amount, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, Round, Timestamp,
     },
@@ -285,7 +285,7 @@ impl<P, S: Storage + Clone> Client<P, S> {
     pub fn create_chain_client(
         self: &Arc<Self>,
         chain_id: ChainId,
-        known_key_pairs: Vec<SigningKey>,
+        known_key_pairs: Vec<AuthorityPrivateKey>,
         admin_id: ChainId,
         block_hash: Option<CryptoHash>,
         timestamp: Timestamp,
@@ -976,7 +976,7 @@ where
 
     /// Obtains the key pair associated to the current identity.
     #[instrument(level = "trace")]
-    pub async fn key_pair(&self) -> Result<SigningKey, ChainClientError> {
+    pub async fn key_pair(&self) -> Result<AuthorityPrivateKey, ChainClientError> {
         let id = self.identity().await?;
         Ok(self
             .state()
@@ -988,7 +988,7 @@ where
 
     /// Obtains the public key associated to the current identity.
     #[instrument(level = "trace")]
-    pub async fn public_key(&self) -> Result<PublicKey, ChainClientError> {
+    pub async fn public_key(&self) -> Result<AuthorityPublicKey, ChainClientError> {
         Ok(self.key_pair().await?.public())
     }
 
@@ -2690,7 +2690,7 @@ where
     #[instrument(level = "trace", skip(key_pair))]
     pub async fn rotate_key_pair(
         &self,
-        key_pair: SigningKey,
+        key_pair: AuthorityPrivateKey,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         let new_public_key = self.state_mut().insert_known_key_pair(key_pair);
         self.transfer_ownership(new_public_key.into()).await

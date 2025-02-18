@@ -693,23 +693,20 @@ impl<T> GrpcMessageLimiter<T> {
 
 #[cfg(test)]
 mod proto_message_cap {
-    use linera_base::{
-        crypto::{Signature, SigningKey},
-        hashed::Hashed,
-    };
+    use linera_base::hashed::Hashed;
     use linera_chain::{
         data_types::{BlockExecutionOutcome, ExecutedBlock},
         types::{Certificate, ConfirmedBlock, ConfirmedBlockCertificate},
     };
     use linera_execution::committee::ValidatorName;
-    use linera_sdk::base::{ChainId, TestString};
+    use linera_sdk::base::{AuthorityPrivateKey, AuthoritySignature, ChainId, TestString};
 
     use super::{CertificatesBatchResponse, GrpcMessageLimiter};
 
     fn test_certificate() -> Certificate {
-        let keypair = SigningKey::generate();
+        let keypair = AuthorityPrivateKey::generate();
         let validator = ValidatorName(keypair.public());
-        let signature = Signature::new(&TestString::new("Test"), &keypair);
+        let signature = AuthoritySignature::new(&TestString::new("Test"), &keypair);
         let executed_block = ExecutedBlock {
             block: linera_chain::test::make_first_block(ChainId::root(0)),
             outcome: BlockExecutionOutcome::default(),

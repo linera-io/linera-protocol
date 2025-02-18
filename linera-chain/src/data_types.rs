@@ -11,7 +11,10 @@ use async_graphql::SimpleObject;
 use custom_debug_derive::Debug;
 use linera_base::{
     bcs,
-    crypto::{BcsHashable, BcsSignable, CryptoError, CryptoHash, PublicKey, Signature, SigningKey},
+    crypto::{
+        AccountPrivateKey, AccountPublicKey, AccountSignature, AuthorityPrivateKey,
+        AuthoritySignature, BcsHashable, BcsSignable, CryptoError, CryptoHash,
+    },
     data_types::{Amount, BlockHeight, Event, OracleResponse, Round, Timestamp},
     doc_scalar, ensure,
     hashed::Hashed,
@@ -285,8 +288,8 @@ pub enum Medium {
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct BlockProposal {
     pub content: ProposalContent,
-    pub public_key: PublicKey,
-    pub signature: Signature,
+    pub public_key: AccountPublicKey,
+    pub signature: AccountSignature,
     #[debug(skip_if = Option::is_none)]
     pub validated_block_certificate: Option<LiteCertificate<'static>>,
 }
@@ -422,17 +425,17 @@ pub struct Vote<T> {
     pub value: Hashed<T>,
     pub round: Round,
     pub validator: ValidatorName,
-    pub signature: Signature,
+    pub signature: AuthoritySignature,
 }
 
 impl<T> Vote<T> {
     /// Use signing key to create a signed object.
-    pub fn new(value: Hashed<T>, round: Round, key_pair: &SigningKey) -> Self
+    pub fn new(value: Hashed<T>, round: Round, key_pair: &AuthorityPrivateKey) -> Self
     where
         T: CertificateValue,
     {
         let hash_and_round = VoteValue(value.hash(), round, T::KIND);
-        let signature = Signature::new(&hash_and_round, key_pair);
+        let signature = AuthoritySignature::new(&hash_and_round, key_pair);
         Self {
             value,
             round,
@@ -467,7 +470,7 @@ pub struct LiteVote {
     pub value: LiteValue,
     pub round: Round,
     pub validator: ValidatorName,
-    pub signature: Signature,
+    pub signature: AuthoritySignature,
 }
 
 impl LiteVote {
@@ -733,13 +736,13 @@ pub struct ProposalContent {
 }
 
 impl BlockProposal {
-    pub fn new_initial(round: Round, block: ProposedBlock, secret: &SigningKey) -> Self {
+    pub fn new_initial(round: Round, block: ProposedBlock, secret: &AccountPrivateKey) -> Self {
         let content = ProposalContent {
             round,
             block,
             outcome: None,
         };
-        let signature = Signature::new(&content, secret);
+        let signature = AccountSignature::new(&content, secret);
         Self {
             content,
             public_key: secret.public(),
@@ -751,7 +754,7 @@ impl BlockProposal {
     pub fn new_retry(
         round: Round,
         validated_block_certificate: ValidatedBlockCertificate,
-        secret: &SigningKey,
+        secret: &AccountPrivateKey,
     ) -> Self {
         let lite_cert = validated_block_certificate.lite_certificate().cloned();
         let block = validated_block_certificate.into_inner().into_inner();
@@ -761,7 +764,7 @@ impl BlockProposal {
             round,
             outcome: Some(executed_block.outcome),
         };
-        let signature = Signature::new(&content, secret);
+        let signature = AccountSignature::new(&content, secret);
         Self {
             content,
             public_key: secret.public(),
@@ -807,9 +810,9 @@ impl BlockProposal {
 
 impl LiteVote {
     /// Uses the signing key to create a signed object.
-    pub fn new(value: LiteValue, round: Round, key_pair: &SigningKey) -> Self {
+    pub fn new(value: LiteValue, round: Round, key_pair: &AuthorityPrivateKey) -> Self {
         let hash_and_round = VoteValue(value.value_hash, round, value.kind);
-        let signature = Signature::new(&hash_and_round, key_pair);
+        let signature = AuthoritySignature::new(&hash_and_round, key_pair);
         Self {
             value,
             round,
@@ -849,7 +852,7 @@ impl<'a, T> SignatureAggregator<'a, T> {
     pub fn append(
         &mut self,
         validator: ValidatorName,
-        signature: Signature,
+        signature: AuthoritySignature,
     ) -> Result<Option<GenericCertificate<T>>, ChainError>
     where
         T: CertificateValue,
@@ -880,7 +883,7 @@ impl<'a, T> SignatureAggregator<'a, T> {
 
 // Checks if the array slice is strictly ordered. That means that if the array
 // has duplicates, this will return False, even if the array is sorted
-pub(crate) fn is_strictly_ordered(values: &[(ValidatorName, Signature)]) -> bool {
+pub(crate) fn is_strictly_ordered(values: &[(ValidatorName, AuthoritySignature)]) -> bool {
     values.windows(2).all(|pair| pair[0].0 < pair[1].0)
 }
 
@@ -889,7 +892,7 @@ pub(crate) fn check_signatures(
     value_hash: CryptoHash,
     certificate_kind: CertificateKind,
     round: Round,
-    signatures: &[(ValidatorName, Signature)],
+    signatures: &[(ValidatorName, AuthoritySignature)],
     committee: &Committee,
 ) -> Result<(), ChainError> {
     // Check the quorum.
@@ -913,7 +916,7 @@ pub(crate) fn check_signatures(
     );
     // All that is left is checking signatures!
     let hash_and_round = VoteValue(value_hash, round, certificate_kind);
-    Signature::verify_batch(&hash_and_round, signatures.iter().map(|(v, s)| (&v.0, s)))?;
+    AuthoritySignature::verify_batch(&hash_and_round, signatures.iter().map(|(v, s)| (&v.0, s)))?;
     Ok(())
 }
 

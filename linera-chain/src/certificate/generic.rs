@@ -4,7 +4,7 @@
 
 use custom_debug_derive::Debug;
 use linera_base::{
-    crypto::{CryptoHash, Signature},
+    crypto::{AuthoritySignature, CryptoHash},
     data_types::Round,
     hashed::Hashed,
 };
@@ -18,14 +18,14 @@ use crate::{data_types::LiteValue, ChainError};
 pub struct GenericCertificate<T> {
     value: Hashed<T>,
     pub round: Round,
-    signatures: Vec<(ValidatorName, Signature)>,
+    signatures: Vec<(ValidatorName, AuthoritySignature)>,
 }
 
 impl<T> GenericCertificate<T> {
     pub fn new(
         value: Hashed<T>,
         round: Round,
-        mut signatures: Vec<(ValidatorName, Signature)>,
+        mut signatures: Vec<(ValidatorName, AuthoritySignature)>,
     ) -> Self {
         signatures.sort_by_key(|&(validator_name, _)| validator_name);
 
@@ -61,16 +61,16 @@ impl<T> GenericCertificate<T> {
         self.value.hash()
     }
 
-    pub fn destructure(self) -> (Hashed<T>, Round, Vec<(ValidatorName, Signature)>) {
+    pub fn destructure(self) -> (Hashed<T>, Round, Vec<(ValidatorName, AuthoritySignature)>) {
         (self.value, self.round, self.signatures)
     }
 
-    pub fn signatures(&self) -> &Vec<(ValidatorName, Signature)> {
+    pub fn signatures(&self) -> &Vec<(ValidatorName, AuthoritySignature)> {
         &self.signatures
     }
 
     #[cfg(with_testing)]
-    pub fn signatures_mut(&mut self) -> &mut Vec<(ValidatorName, Signature)> {
+    pub fn signatures_mut(&mut self) -> &mut Vec<(ValidatorName, AuthoritySignature)> {
         &mut self.signatures
     }
 
@@ -78,8 +78,8 @@ impl<T> GenericCertificate<T> {
     /// It's the responsibility of the caller to not insert duplicates
     pub fn add_signature(
         &mut self,
-        signature: (ValidatorName, Signature),
-    ) -> &Vec<(ValidatorName, Signature)> {
+        signature: (ValidatorName, AuthoritySignature),
+    ) -> &Vec<(ValidatorName, AuthoritySignature)> {
         let index = self
             .signatures
             .binary_search_by(|(name, _)| name.cmp(&signature.0))

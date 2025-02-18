@@ -8,7 +8,7 @@ use std::{collections::HashSet, sync::Arc};
 use async_trait::async_trait;
 use futures::Future;
 use linera_base::{
-    crypto::SigningKey,
+    crypto::AccountPrivateKey,
     data_types::{BlockHeight, Timestamp},
     identifiers::{Account, ChainId},
     ownership::ChainOwnership,
@@ -26,20 +26,10 @@ use linera_rpc::node_provider::{NodeOptions, NodeProvider};
 use linera_storage::Storage;
 use thiserror_context::Context;
 use tracing::{debug, info};
-#[cfg(feature = "fs")]
-use {
-    linera_base::{
-        crypto::CryptoHash,
-        data_types::{BlobContent, Bytecode},
-        identifiers::BytecodeId,
-    },
-    linera_core::client::create_bytecode_blobs,
-    std::{fs, path::PathBuf},
-};
 #[cfg(feature = "benchmark")]
 use {
     linera_base::{
-        crypto::PublicKey,
+        crypto::AccountPublicKey,
         data_types::Amount,
         hashed::Hashed,
         identifiers::{AccountOwner, ApplicationId, Owner},
@@ -60,6 +50,16 @@ use {
     tokio::task,
     tokio_util::sync::CancellationToken,
     tracing::{error, trace, warn},
+};
+#[cfg(feature = "fs")]
+use {
+    linera_base::{
+        crypto::CryptoHash,
+        data_types::{BlobContent, Bytecode},
+        identifiers::BytecodeId,
+    },
+    linera_core::client::create_bytecode_blobs,
+    std::{fs, path::PathBuf},
 };
 
 #[cfg(web)]
@@ -111,7 +111,7 @@ where
     async fn update_wallet_for_new_chain(
         &mut self,
         chain_id: ChainId,
-        key_pair: Option<SigningKey>,
+        key_pair: Option<AccountPrivateKey>,
         timestamp: Timestamp,
     ) -> Result<(), Error> {
         self.update_wallet_for_new_chain(chain_id, key_pair, timestamp)
@@ -319,7 +319,7 @@ where
     pub async fn update_wallet_for_new_chain(
         &mut self,
         chain_id: ChainId,
-        key_pair: Option<SigningKey>,
+        key_pair: Option<AccountPrivateKey>,
         timestamp: Timestamp,
     ) -> Result<(), Error> {
         self.update_wallet_for_new_chain_internal(chain_id, key_pair, timestamp)
@@ -329,7 +329,7 @@ where
     async fn update_wallet_for_new_chain_internal(
         &mut self,
         chain_id: ChainId,
-        key_pair: Option<SigningKey>,
+        key_pair: Option<AccountPrivateKey>,
         timestamp: Timestamp,
     ) -> Result<(), Error> {
         if self.wallet.get(chain_id).is_none() {
@@ -568,7 +568,7 @@ where
     pub async fn run_benchmark(
         &mut self,
         bps: Option<usize>,
-        blocks_infos_iter: impl Iterator<Item = &(ChainId, Vec<Operation>, SigningKey)>,
+        blocks_infos_iter: impl Iterator<Item = &(ChainId, Vec<Operation>, AccountPrivateKey)>,
         clients: Vec<linera_rpc::Client>,
         transactions_per_block: usize,
         epoch: Epoch,
@@ -734,7 +734,7 @@ where
         &mut self,
         num_chains: usize,
         balance: Amount,
-    ) -> Result<HashMap<ChainId, SigningKey>, Error> {
+    ) -> Result<HashMap<ChainId, AccountPrivateKey>, Error> {
         let mut benchmark_chains = HashMap::new();
         let start = Instant::now();
         for chain_id in self.wallet.owned_chain_ids() {
@@ -844,7 +844,7 @@ where
         num_new_chains: usize,
         chain_client: &ChainClient<NodeProvider, S>,
         balance: Amount,
-        key_pair: &SigningKey,
+        key_pair: &AccountPrivateKey,
         admin_id: ChainId,
     ) -> Result<ConfirmedBlockCertificate, Error> {
         let chain_id = chain_client.chain_id();
@@ -871,7 +871,7 @@ where
     /// Supplies fungible tokens to the chains.
     pub async fn supply_fungible_tokens(
         &mut self,
-        key_pairs: &HashMap<ChainId, SigningKey>,
+        key_pairs: &HashMap<ChainId, AccountPrivateKey>,
         application_id: ApplicationId,
     ) -> Result<(), Error> {
         let default_chain_id = self
@@ -961,10 +961,10 @@ where
     /// Generates information related to one block per chain, up to `num_chains` blocks.
     pub fn make_benchmark_block_info(
         &mut self,
-        key_pairs: HashMap<ChainId, SigningKey>,
+        key_pairs: HashMap<ChainId, AccountPrivateKey>,
         transactions_per_block: usize,
         fungible_application_id: Option<ApplicationId>,
-    ) -> Vec<(ChainId, Vec<Operation>, SigningKey)> {
+    ) -> Vec<(ChainId, Vec<Operation>, AccountPrivateKey)> {
         let mut blocks_infos = Vec::new();
         let mut previous_chain_id = *key_pairs
             .iter()
@@ -1063,8 +1063,8 @@ where
     fn fungible_transfer(
         application_id: ApplicationId,
         chain_id: ChainId,
-        sender: PublicKey,
-        receiver: PublicKey,
+        sender: AccountPublicKey,
+        receiver: AccountPublicKey,
         amount: Amount,
     ) -> Operation {
         let target_account = fungible::Account {
