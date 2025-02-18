@@ -30,12 +30,6 @@ pub struct Faucet {
     url: String,
 }
 
-#[derive(serde::Deserialize)]
-struct GraphQlResponse<T> {
-    data: Option<T>,
-    errors: Option<Vec<serde_json::Value>>,
-}
-
 impl Faucet {
     pub fn new(url: String) -> Self {
         Self { url }
@@ -49,6 +43,12 @@ impl Faucet {
         &self,
         query: &str,
     ) -> Result<Response, Error> {
+        #[derive(serde::Deserialize)]
+        struct GraphQlResponse<T> {
+            data: Option<T>,
+            errors: Option<Vec<serde_json::Value>>,
+        }
+
         let builder = reqwest::ClientBuilder::new();
 
         #[cfg(not(target_arch = "wasm32"))]
@@ -125,8 +125,6 @@ impl Faucet {
     }
 
     pub async fn current_validators(&self) -> Result<Vec<(ValidatorPublicKey, String)>, Error> {
-        let query = "query { currentValidators { publicKey networkAddress } }";
-
         #[derive(serde::Deserialize)]
         #[serde(rename_all = "camelCase")]
         struct Validator {
@@ -141,7 +139,7 @@ impl Faucet {
         }
 
         Ok(self
-            .query::<Response>(&query)
+            .query::<Response>("query { currentValidators { publicKey networkAddress } }")
             .await?
             .current_validators
             .into_iter()

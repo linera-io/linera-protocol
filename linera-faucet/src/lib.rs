@@ -13,6 +13,7 @@ use linera_base::{
 /// The result of a successful `claim` mutation.
 #[cfg_attr(feature = "async-graphql", derive(async_graphql::SimpleObject))]
 #[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ClaimOutcome {
     /// The ID of the message that created the new chain.
     pub message_id: MessageId,
