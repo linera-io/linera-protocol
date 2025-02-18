@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["HttpSignatureType","PayloadSigningOverride"],"mod":["sigv4"],"struct":["PayloadSigningOverrideRuntimePlugin","SigV4OperationSigningConfig","SigV4SessionTokenNameOverride","SigningOptions"]};

@@ -1,0 +1,1 @@
+searchState.loadedDescShard("alloy_rpc_types_any", 0, "alloy-rpc-types-any\nA catch-all header type for handling headers on multiple …\nAlias for a catch-all receipt type.\nHash of the block\nThe inner struct.\nInner consensus header.\nAll fields not present in the inner struct.\nInteger the size of this block in bytes.\nTotal difficulty")

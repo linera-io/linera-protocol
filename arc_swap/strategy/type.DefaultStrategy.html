@@ -1,0 +1,34 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="The default strategy."><title>DefaultStrategy in arc_swap::strategy - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="arc_swap" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc type"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../arc_swap/index.html">arc_swap</a><span class="version">1.7.1</span></h2></div><h2 class="location"><a href="#">DefaultStrategy</a></h2><div class="sidebar-elems"><section><h3><a href="#aliased-type">Aliased type</a></h3></section><h2><a href="index.html">In arc_swap::strategy</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Type Alias <a href="../index.html">arc_swap</a>::<wbr><a href="index.html">strategy</a>::<wbr><a class="type" href="#">DefaultStrategy</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/arc_swap/strategy/mod.rs.html#101">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub type DefaultStrategy = HybridStrategy&lt;DefaultConfig&gt;;</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>The default strategy.</p>
+<p>It is used by the type aliases <a href="../type.ArcSwap.html" title="type arc_swap::ArcSwap"><code>ArcSwap</code></a> and
+<a href="../type.ArcSwapOption.html" title="type arc_swap::ArcSwapOption"><code>ArcSwapOption</code></a>. Only the other strategies need to be used explicitly.</p>
+<h2 id="performance-characteristics"><a class="doc-anchor" href="#performance-characteristics">§</a>Performance characteristics</h2>
+<ul>
+<li>It is optimized for read-heavy situations, with possibly many concurrent read accesses from
+multiple threads. Readers don’t contend each other at all.</li>
+<li>Readers are wait-free (with the exception of at most once in <code>usize::MAX / 4</code> accesses, which
+is only lock-free).</li>
+<li>Writers are lock-free.</li>
+<li>Reclamation is exact ‒ the resource is released as soon as possible (works like RAII, not
+like a traditional garbage collector; can contain non-<code>'static</code> data).</li>
+</ul>
+<p>Each thread has a limited number of fast slots (currently 8, but the exact number is not
+guaranteed). If it holds at most that many <a href="../struct.Guard.html" title="struct arc_swap::Guard"><code>Guard</code></a>s at once, acquiring them is fast. Once
+these slots are used up (by holding to these many <a href="../struct.Guard.html" title="struct arc_swap::Guard"><code>Guard</code></a>s), acquiring more of them will be
+slightly slower, but still wait-free.</p>
+<p>If you expect to hold a lot of “handles” to the data around, or hold onto it for a long time,
+you may want to prefer the <a href="../struct.ArcSwapAny.html#method.load_full" title="method arc_swap::ArcSwapAny::load_full"><code>load_full</code></a> method.</p>
+<p>The speed of the fast slots is in the ballpark of locking an <em>uncontented</em> mutex. The advantage
+over the mutex is the stability of speed in the face of contention from other threads ‒ while
+the performance of mutex goes rapidly down, the slowdown of running out of held slots or heavy
+concurrent writer thread in the area of single-digit multiples.</p>
+<p>The ballpark benchmark figures (my older computer) are around these, but you’re welcome to run
+the benchmarks in the git repository or write your own.</p>
+<ul>
+<li>Load (both uncontented and contented by other loads): ~30ns</li>
+<li><code>load_full</code>: ~50ns uncontented, goes up a bit with other <code>load_full</code> in other threads on the
+same <code>Arc</code> value (~80-100ns).</li>
+<li>Loads after running out of the slots ‒ about 10-20ns slower than <code>load_full</code>.</li>
+<li>Stores: Dependent on number of threads, but generally low microseconds.</li>
+<li>Loads with heavy concurrent writer (to the same <code>ArcSwap</code>): ~250ns.</li>
+</ul>
+</div></details><h2 id="aliased-type" class="section-header">Aliased Type<a href="#aliased-type" class="anchor">§</a></h2><pre class="rust item-decl"><code>struct DefaultStrategy { <span class="comment">/* private fields */</span> }</code></pre></section></div></main></body></html>

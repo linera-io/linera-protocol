@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ImportFunctionKind","ImportKind","ImportModule","LitOrExpr","MethodKind","MethodSelf","OperationKind","ThreadLocal","TypeKind","TypeLocation"],"struct":["Enum","Export","Function","Import","ImportFunction","ImportStatic","ImportString","ImportType","LinkToModule","Operation","Program","StringEnum","Struct","StructField","Variant"]};

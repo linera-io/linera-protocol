@@ -1,0 +1,54 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="RustCrypto: RFC6979 Deterministic Signatures"><title>rfc6979 - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="rfc6979" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="icon" href="https://raw.githubusercontent.com/RustCrypto/media/8f1a9894/logo.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../rfc6979/index.html"><img src="https://raw.githubusercontent.com/RustCrypto/media/8f1a9894/logo.svg" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../rfc6979/index.html"><img src="https://raw.githubusercontent.com/RustCrypto/media/8f1a9894/logo.svg" alt="logo"></a><h2><a href="../rfc6979/index.html">rfc6979</a><span class="version">0.4.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#functions">Functions</a></li><li><a href="#types">Type Aliases</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">rfc6979</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/rfc6979/lib.rs.html#1-149">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="rustcrypto-rfc6979-deterministic-signatures"><a class="doc-anchor" href="#rustcrypto-rfc6979-deterministic-signatures">§</a><a href="https://github.com/RustCrypto">RustCrypto</a>: RFC6979 Deterministic Signatures</h2>
+<p><a href="https://crates.io/crates/rfc6979"><img src="https://buildstats.info/crate/rfc6979" alt="crate" /></a>
+<a href="https://docs.rs/rfc6979/"><img src="https://docs.rs/rfc6979/badge.svg" alt="Docs" /></a>
+<a href="https://github.com/RustCrypto/signatures/actions/workflows/rfc6979.yml"><img src="https://github.com/RustCrypto/signatures/actions/workflows/rfc6979.yml/badge.svg" alt="Build Status" /></a>
+<img src="https://img.shields.io/badge/license-Apache2.0/MIT-blue.svg" alt="Apache2/MIT licensed" />
+<img src="https://img.shields.io/badge/rustc-1.61+-blue.svg" alt="MSRV" />
+<a href="https://rustcrypto.zulipchat.com/#narrow/stream/260048-signatures"><img src="https://img.shields.io/badge/zulip-join_chat-blue.svg" alt="Project Chat" /></a></p>
+<p>Pure Rust implementation of RFC6979: Deterministic Usage of the
+Digital Signature Algorithm (DSA) and Elliptic Curve Digital Signature Algorithm (ECDSA).</p>
+<p>Algorithm described in RFC 6979 § 3.2:
+<a href="https://tools.ietf.org/html/rfc6979#section-3">https://tools.ietf.org/html/rfc6979#section-3</a></p>
+<p><a href="https://docs.rs/rfc6979/">Documentation</a></p>
+<h3 id="minimum-supported-rust-version"><a class="doc-anchor" href="#minimum-supported-rust-version">§</a>Minimum Supported Rust Version</h3>
+<p>This crate requires <strong>Rust 1.61</strong> at a minimum.</p>
+<p>We may change the MSRV in the future, but it will be accompanied by a minor
+version bump.</p>
+<h3 id="license"><a class="doc-anchor" href="#license">§</a>License</h3>
+<p>All crates licensed under either of</p>
+<ul>
+<li><a href="http://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a></li>
+<li><a href="http://opensource.org/licenses/MIT">MIT license</a></li>
+</ul>
+<p>at your option.</p>
+<h4 id="contribution"><a class="doc-anchor" href="#contribution">§</a>Contribution</h4>
+<p>Unless you explicitly state otherwise, any contribution intentionally submitted
+for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
+dual licensed as above, without any additional terms or conditions.</p>
+<h3 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h3>
+<p>See also: the documentation for the <a href="fn.generate_k.html" title="fn rfc6979::generate_k"><code>generate_k</code></a> function.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>hex_literal::hex;
+<span class="kw">use </span>rfc6979::consts::U32;
+<span class="kw">use </span>sha2::{Digest, Sha256};
+
+<span class="comment">// NIST P-256 field modulus
+</span><span class="kw">const </span>NIST_P256_MODULUS: [u8; <span class="number">32</span>] =
+    <span class="macro">hex!</span>(<span class="string">"FFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551"</span>);
+
+<span class="comment">// Public key for RFC6979 NIST P256/SHA256 test case
+</span><span class="kw">const </span>RFC6979_KEY: [u8; <span class="number">32</span>] =
+    <span class="macro">hex!</span>(<span class="string">"C9AFA9D845BA75166B5C215767B1D6934E50C3DB36E89B127B8A622B120F6721"</span>);
+
+<span class="comment">// Test message for RFC6979 NIST P256/SHA256 test case
+</span><span class="kw">const </span>RFC6979_MSG: <span class="kw-2">&amp;</span>[u8; <span class="number">6</span>] = <span class="string">b"sample"</span>;
+
+<span class="comment">// Expected K for RFC6979 NIST P256/SHA256 test case
+</span><span class="kw">const </span>RFC6979_EXPECTED_K: [u8; <span class="number">32</span>] =
+    <span class="macro">hex!</span>(<span class="string">"A6E3C57DD01ABE90086538398355DD4C3B17AA873382B0F24D6129493D8AAD60"</span>);
+
+<span class="kw">let </span>h = Sha256::digest(RFC6979_MSG);
+<span class="kw">let </span>aad = <span class="string">b""</span>;
+<span class="kw">let </span>k = rfc6979::generate_k::&lt;Sha256, U32&gt;(<span class="kw-2">&amp;</span>RFC6979_KEY.into(), <span class="kw-2">&amp;</span>NIST_P256_MODULUS.into(), <span class="kw-2">&amp;</span>h, aad);
+<span class="macro">assert_eq!</span>(k.as_slice(), <span class="kw-2">&amp;</span>RFC6979_EXPECTED_K);</code></pre></div>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="consts/index.html" title="mod rfc6979::consts">consts</a></div><div class="desc docblock-short">Type aliases for many constants.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.HmacDrbg.html" title="struct rfc6979::HmacDrbg">HmacDrbg</a></div><div class="desc docblock-short">Internal implementation of <code>HMAC_DRBG</code> as described in NIST SP800-90A.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.generate_k.html" title="fn rfc6979::generate_k">generate_k</a></div><div class="desc docblock-short">Deterministically generate ephemeral scalar <code>k</code>.</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.ByteArray.html" title="type rfc6979::ByteArray">ByteArray</a></div><div class="desc docblock-short">Array of bytes representing a scalar serialized as a big endian integer.</div></li></ul></section></div></main></body></html>
