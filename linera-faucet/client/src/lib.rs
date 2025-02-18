@@ -3,7 +3,7 @@
 
 //! The client component of the Linera faucet.
 
-// TODO(3362): generate this code
+// TODO(#3362): generate this code
 
 use linera_base::crypto::ValidatorPublicKey;
 use linera_client::config::GenesisConfig;
@@ -92,17 +92,11 @@ impl Faucet {
 
     pub async fn version_info(&self) -> Result<VersionInfo, Error> {
         #[derive(serde::Deserialize)]
-        #[serde(rename_all = "camelCase")]
         struct Response {
             version: VersionInfo,
         }
 
-        Ok(self
-            .query::<Response>(
-                "query { version { crateVersion gitCommit gitDirty rpcHash graphqlHash witHash } }",
-            )
-            .await?
-            .version)
+        Ok(self.query::<Response>("query { version }").await?.version)
     }
 
     pub async fn claim(
@@ -116,7 +110,6 @@ impl Faucet {
         );
 
         #[derive(serde::Deserialize)]
-        #[serde(rename_all = "camelCase")]
         struct Response {
             claim: ClaimOutcome,
         }
