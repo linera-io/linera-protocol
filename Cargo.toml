@@ -83,7 +83,6 @@ ed25519-dalek = { version = "2.1.1", default-features = false, features = [
     "zeroize",
 ] }
 either = "1.10.0"
-ethers = { version = "2.0.14", features = ["solc"] }
 flarch = "0.7.0"
 frunk = "0.4.2"
 fs-err = "2.11.0"
