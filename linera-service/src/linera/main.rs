@@ -1756,13 +1756,13 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
                     info!("Blob IDs listed in {} ms", start_time.elapsed().as_millis());
                     println!("The list of blob IDs is {:?}", blob_ids);
                 }
-                DatabaseToolCommand::ListRootKeys { .. } => {
-                    let root_keys = Box::pin(full_storage_config.list_root_keys()).await?;
+                DatabaseToolCommand::ListChainIds { .. } => {
+                    let chain_ids = Box::pin(full_storage_config.list_chain_ids()).await?;
                     info!(
-                        "Root keys listed in {} ms",
+                        "Chain IDs listed in {} ms",
                         start_time.elapsed().as_millis()
                     );
-                    println!("The list of root keys is {:?}", root_keys);
+                    println!("The list of chain IDs is {:?}", chain_ids);
                 }
             }
             Ok(0)

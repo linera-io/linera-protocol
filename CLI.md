@@ -57,7 +57,7 @@ This document contains the help content for the `linera` command-line program.
 * [`linera storage initialize`↴](#linera-storage-initialize)
 * [`linera storage list_namespaces`↴](#linera-storage-list_namespaces)
 * [`linera storage list_blob_ids`↴](#linera-storage-list_blob_ids)
-* [`linera storage list_root_keys`↴](#linera-storage-list_root_keys)
+* [`linera storage list_chain_ids`↴](#linera-storage-list_chain_ids)
 
 ## `linera`
 
@@ -967,8 +967,8 @@ Operation on the storage
 * `check_absence` — Check absence of a namespace in the database
 * `initialize` — Initialize a namespace in the database
 * `list_namespaces` — List the namespaces of the database
-* `list_blob_ids` — List the blobs of the database
-* `list_root_keys` — List the root keys of the database
+* `list_blob_ids` — List the blob IDs of the database
+* `list_chain_ids` — List the chain IDs of the database
 
 
 
@@ -1046,7 +1046,7 @@ List the namespaces of the database
 
 ## `linera storage list_blob_ids`
 
-List the blobs of the database
+List the blob IDs of the database
 
 **Usage:** `linera storage list_blob_ids --storage <STORAGE_CONFIG>`
 
@@ -1056,11 +1056,11 @@ List the blobs of the database
 
 
 
-## `linera storage list_root_keys`
+## `linera storage list_chain_ids`
 
-List the root keys of the database
+List the chain IDs of the database
 
-**Usage:** `linera storage list_root_keys --storage <STORAGE_CONFIG>`
+**Usage:** `linera storage list_chain_ids --storage <STORAGE_CONFIG>`
 
 ###### **Options:**
 
