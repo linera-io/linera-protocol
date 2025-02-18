@@ -175,7 +175,7 @@ where
         grant: Option<&mut Amount>,
         txn_tracker: &mut TransactionTracker,
         resource_controller: &mut ResourceController<Option<Owner>>,
-    ) -> Result<Vec<u8>, ExecutionError> {
+    ) -> Result<(), ExecutionError> {
         let ExecutionRuntimeConfig {} = self.context().extra().execution_runtime_config();
         self.run_user_action_with_runtime(
             application_id,
@@ -201,7 +201,7 @@ where
         grant: Option<&mut Amount>,
         txn_tracker: &mut TransactionTracker,
         resource_controller: &mut ResourceController<Option<Owner>>,
-    ) -> Result<Vec<u8>, ExecutionError> {
+    ) -> Result<(), ExecutionError> {
         let mut cloned_grant = grant.as_ref().map(|x| **x);
         let initial_balance = resource_controller
             .with_state_and_grant(self, cloned_grant.as_mut())
@@ -241,14 +241,14 @@ where
             self.handle_request(request).await?;
         }
 
-        let (result, controller, txn_tracker_moved) = contract_runtime_task.join().await?;
+        let (controller, txn_tracker_moved) = contract_runtime_task.join().await?;
         *txn_tracker = txn_tracker_moved;
         resource_controller
             .with_state_and_grant(self, grant)
             .await?
             .merge_balance(initial_balance, controller.balance()?)?;
         resource_controller.tracker = controller.tracker;
-        Ok(result)
+        Ok(())
     }
 
     /// Schedules application registration messages when needed.
@@ -326,7 +326,7 @@ where
         operation: Operation,
         txn_tracker: &mut TransactionTracker,
         resource_controller: &mut ResourceController<Option<Owner>>,
-    ) -> Result<Vec<u8>, ExecutionError> {
+    ) -> Result<(), ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         match operation {
             Operation::System(op) => {
@@ -336,41 +336,37 @@ where
                     .await?;
                 if let Some((application_id, argument)) = new_application {
                     let user_action = UserAction::Instantiate(context, argument);
-                    let result = self
-                        .run_user_action(
-                            application_id,
-                            context.chain_id,
-                            local_time,
-                            user_action,
-                            context.refund_grant_to(),
-                            None,
-                            txn_tracker,
-                            resource_controller,
-                        )
-                        .await?;
-                    return Ok(result);
-                }
-            }
-            Operation::User {
-                application_id,
-                bytes,
-            } => {
-                let result = self
-                    .run_user_action(
+                    self.run_user_action(
                         application_id,
                         context.chain_id,
                         local_time,
-                        UserAction::Operation(context, bytes),
+                        user_action,
                         context.refund_grant_to(),
                         None,
                         txn_tracker,
                         resource_controller,
                     )
                     .await?;
-                return Ok(result);
+                }
+            }
+            Operation::User {
+                application_id,
+                bytes,
+            } => {
+                self.run_user_action(
+                    application_id,
+                    context.chain_id,
+                    local_time,
+                    UserAction::Operation(context, bytes),
+                    context.refund_grant_to(),
+                    None,
+                    txn_tracker,
+                    resource_controller,
+                )
+                .await?;
             }
         }
-        Ok(Vec::new())
+        Ok(())
     }
 
     pub async fn execute_message(

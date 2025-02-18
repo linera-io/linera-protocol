@@ -13,8 +13,9 @@ use linera_base::{
 use linera_execution::{
     revm::{EvmContractModule, EvmServiceModule},
     test_utils::{create_dummy_user_application_description, SystemExecutionState},
-    ExecutionRuntimeConfig, ExecutionRuntimeContext, Operation, OperationContext,
-    Query, QueryResponse, QueryContext, ResourceControlPolicy, ResourceController, ResourceTracker, TransactionTracker,
+    ExecutionRuntimeConfig, ExecutionRuntimeContext, Operation, OperationContext, Query,
+    QueryContext, QueryResponse, ResourceControlPolicy, ResourceController, ResourceTracker,
+    TransactionTracker,
 };
 use linera_views::{context::Context as _, views::View};
 use revm_primitives::U256;
@@ -117,33 +118,23 @@ async fn test_fuel_for_counter_revm_application() -> anyhow::Result<()> {
             application_id: app_id,
             bytes,
         };
-        let result = view
-            .execute_operation(
-                operation_context,
-                Timestamp::from(0),
-                operation,
-                &mut txn_tracker,
-                &mut controller,
-            )
-            .await?;
-        let result = U256::from_be_slice(&result);
-        assert_eq!(result, value);
+        view.execute_operation(
+            operation_context,
+            Timestamp::from(0),
+            operation,
+            &mut txn_tracker,
+            &mut controller,
+        )
+        .await?;
 
-
-        let query = get_valueCall { };
+        let query = get_valueCall {};
         let bytes = query.abi_encode();
         let query = Query::User {
             application_id: app_id,
             bytes,
         };
 
-        let result = view
-            .query_application(
-                query_context,
-                query,
-                None,
-            )
-            .await?;
+        let result = view.query_application(query_context, query, None).await?;
         let QueryResponse::User(result) = result.response else {
             anyhow::bail!("Wrong QueryResponse result");
         };

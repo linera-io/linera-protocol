@@ -1132,18 +1132,13 @@ impl ContractSyncRuntime {
         application_id: UserApplicationId,
         chain_id: ChainId,
         action: UserAction,
-    ) -> Result<(Vec<u8>, ResourceController, TransactionTracker), ExecutionError> {
-        let result: Vec<u8> = self
-            .deref_mut()
+    ) -> Result<(ResourceController, TransactionTracker), ExecutionError> {
+        self.deref_mut()
             .run_action(application_id, chain_id, action)?;
         let runtime = self
             .into_inner()
             .expect("Runtime clones should have been freed by now");
-        Ok((
-            result,
-            runtime.resource_controller,
-            runtime.transaction_tracker,
-        ))
+        Ok((runtime.resource_controller, runtime.transaction_tracker))
     }
 }
 
@@ -1153,7 +1148,7 @@ impl ContractSyncRuntimeHandle {
         application_id: UserApplicationId,
         chain_id: ChainId,
         action: UserAction,
-    ) -> Result<Vec<u8>, ExecutionError> {
+    ) -> Result<(), ExecutionError> {
         let finalize_context = FinalizeContext {
             authenticated_signer: action.signer(),
             chain_id,
@@ -1167,19 +1162,15 @@ impl ContractSyncRuntimeHandle {
             assert_eq!(runtime.chain_id, chain_id);
             assert_eq!(runtime.height, action.height());
         }
-        let result = self.execute(application_id, action.signer(), move |code| match action {
-            UserAction::Instantiate(context, argument) => {
-                code.instantiate(context, argument)?;
-                Ok(Vec::new())
+        self.execute(application_id, action.signer(), move |code| match action {
+            UserAction::Instantiate(context, argument) => code.instantiate(context, argument),
+            UserAction::Operation(context, operation) => {
+                code.execute_operation(context, operation).map(|_| ())
             }
-            UserAction::Operation(context, operation) => code.execute_operation(context, operation),
-            UserAction::Message(context, message) => {
-                code.execute_message(context, message)?;
-                Ok(Vec::new())
-            }
+            UserAction::Message(context, message) => code.execute_message(context, message),
         })?;
         self.finalize(finalize_context)?;
-        Ok(result)
+        Ok(())
     }
 
     /// Notifies all loaded applications that execution is finalizing.
@@ -1192,8 +1183,7 @@ impl ContractSyncRuntimeHandle {
 
         for application in applications {
             self.execute(application, context.authenticated_signer, |contract| {
-                contract.finalize(context)?;
-                Ok(Vec::new())
+                contract.finalize(context)
             })?;
             self.inner().loaded_applications.remove(&application);
         }
@@ -1206,8 +1196,8 @@ impl ContractSyncRuntimeHandle {
         &mut self,
         application_id: UserApplicationId,
         signer: Option<Owner>,
-        closure: impl FnOnce(&mut UserContractInstance) -> Result<Vec<u8>, ExecutionError>,
-    ) -> Result<Vec<u8>, ExecutionError> {
+        closure: impl FnOnce(&mut UserContractInstance) -> Result<(), ExecutionError>,
+    ) -> Result<(), ExecutionError> {
         let contract = {
             let mut runtime = self.inner();
             let application = runtime.load_contract_instance(self.clone(), application_id)?;
@@ -1225,7 +1215,7 @@ impl ContractSyncRuntimeHandle {
             application
         };
 
-        let result = closure(
+        closure(
             &mut contract
                 .instance
                 .try_lock()
@@ -1242,7 +1232,7 @@ impl ContractSyncRuntimeHandle {
 
         runtime.handle_outcome(application_status.outcome, signer, application_id)?;
 
-        Ok(result)
+        Ok(())
     }
 }
 
