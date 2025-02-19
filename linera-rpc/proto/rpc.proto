@@ -205,13 +205,13 @@ message BlockProposal {
   bytes content = 2;
 
   // Byte-encoded public key
-  PublicKey public_key = 3;
+  AccountPublicKey public_key = 3;
 
   // Byte-encoded owner
   Owner owner = 4;
 
-  // Signature value
-  Signature signature = 5;
+  // Signature by chain owner
+  AccountSignature signature = 5;
 
   // A lite certificate for a validated block that justifies the proposal in this round.
   optional bytes validated_block_certificate = 6;
@@ -321,7 +321,14 @@ message ChainId {
   bytes bytes = 1;
 }
 
-message PublicKey {
+/// Public key of a validator.
+message ValidatorPublicKey {
+  bytes bytes = 1;
+}
+
+/// Public key of a Linera account.
+/// Corresponding private key is used to sign block proposals.
+message AccountPublicKey {
   bytes bytes = 1;
 }
 
@@ -337,7 +344,13 @@ message Owner {
   bytes bytes = 1;
 }
 
-message Signature {
+/// Signature created by a validator.
+message ValidatorSignature {
+  bytes bytes = 1;
+}
+
+/// Signature created by a Linera account.
+message AccountSignature {
   bytes bytes = 1;
 }
 
@@ -361,8 +374,8 @@ message ChainInfoResponse {
   // bincode-encoded chain info
   bytes chain_info = 1;
 
-  // Optional signature for the response.
-  optional Signature signature = 2;
+  // Optional validator signature for the response.
+  optional ValidatorSignature signature = 2;
 }
 
 message BlockHeight {

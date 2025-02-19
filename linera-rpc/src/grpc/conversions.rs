@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_base::{
-    crypto::{AccountSignature, CryptoError, CryptoHash, ValidatorPublicKey, ValidatorSignature},
+    crypto::{
+        AccountPublicKey, AccountSignature, CryptoError, CryptoHash, ValidatorPublicKey,
+        ValidatorSignature,
+    },
     data_types::{BlobContent, BlockHeight},
     ensure,
     hashed::Hashed,
@@ -614,7 +617,15 @@ impl TryFrom<api::ChainId> for ChainId {
     }
 }
 
-impl From<ValidatorPublicKey> for api::PublicKey {
+impl From<AccountPublicKey> for api::AccountPublicKey {
+    fn from(public_key: AccountPublicKey) -> Self {
+        Self {
+            bytes: public_key.0.to_vec(),
+        }
+    }
+}
+
+impl From<ValidatorPublicKey> for api::ValidatorPublicKey {
     fn from(public_key: ValidatorPublicKey) -> Self {
         Self {
             bytes: public_key.0.to_vec(),
@@ -622,15 +633,23 @@ impl From<ValidatorPublicKey> for api::PublicKey {
     }
 }
 
-impl TryFrom<api::PublicKey> for ValidatorPublicKey {
+impl TryFrom<api::ValidatorPublicKey> for ValidatorPublicKey {
     type Error = GrpcProtoConversionError;
 
-    fn try_from(public_key: api::PublicKey) -> Result<Self, Self::Error> {
+    fn try_from(public_key: api::ValidatorPublicKey) -> Result<Self, Self::Error> {
         Ok(ValidatorPublicKey::try_from(public_key.bytes.as_slice())?)
     }
 }
 
-impl From<AccountSignature> for api::Signature {
+impl TryFrom<api::AccountPublicKey> for AccountPublicKey {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(public_key: api::AccountPublicKey) -> Result<Self, Self::Error> {
+        Ok(AccountPublicKey::try_from(public_key.bytes.as_slice())?)
+    }
+}
+
+impl From<AccountSignature> for api::AccountSignature {
     fn from(signature: AccountSignature) -> Self {
         Self {
             bytes: signature.0.to_vec(),
@@ -638,10 +657,26 @@ impl From<AccountSignature> for api::Signature {
     }
 }
 
-impl TryFrom<api::Signature> for ValidatorSignature {
+impl From<ValidatorSignature> for api::ValidatorSignature {
+    fn from(signature: ValidatorSignature) -> Self {
+        Self {
+            bytes: signature.0.to_vec(),
+        }
+    }
+}
+
+impl TryFrom<api::ValidatorSignature> for ValidatorSignature {
     type Error = GrpcProtoConversionError;
 
-    fn try_from(signature: api::Signature) -> Result<Self, Self::Error> {
+    fn try_from(signature: api::ValidatorSignature) -> Result<Self, Self::Error> {
+        Ok(Self(signature.bytes.as_slice().try_into()?))
+    }
+}
+
+impl TryFrom<api::AccountSignature> for AccountSignature {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(signature: api::AccountSignature) -> Result<Self, Self::Error> {
         Ok(Self(signature.bytes.as_slice().try_into()?))
     }
 }
@@ -989,15 +1024,22 @@ pub mod tests {
 
     #[test]
     pub fn test_public_key() {
-        let public_key = ValidatorSecretKey::generate().public();
-        round_trip_check::<_, api::PublicKey>(public_key);
+        let account_key = AccountSecretKey::generate().public();
+        round_trip_check::<_, api::AccountPublicKey>(account_key);
+
+        let validator_key = ValidatorSecretKey::generate().public();
+        round_trip_check::<_, api::ValidatorPublicKey>(validator_key);
     }
 
     #[test]
     pub fn test_signature() {
-        let key_pair = ValidatorSecretKey::generate();
-        let signature = ValidatorSignature::new(&Foo("test".into()), &key_pair);
-        round_trip_check::<_, api::Signature>(signature);
+        let validator_key_pair = ValidatorSecretKey::generate();
+        let validator_signature = ValidatorSignature::new(&Foo("test".into()), &validator_key_pair);
+        round_trip_check::<_, api::ValidatorSignature>(validator_signature);
+
+        let account_key_pair = AccountSecretKey::generate();
+        let account_signature = AccountSignature::new(&Foo("test".into()), &account_key_pair);
+        round_trip_check::<_, api::AccountSignature>(account_signature);
     }
 
     #[test]
@@ -1011,14 +1053,6 @@ pub mod tests {
     pub fn test_block_height() {
         let block_height = BlockHeight::from(10);
         round_trip_check::<_, api::BlockHeight>(block_height);
-    }
-
-    #[test]
-    pub fn validator_public_key() {
-        let validator_key = ValidatorPublicKey::from(ValidatorSecretKey::generate().public());
-        // This is a correct comparison - `ValidatorNameRpc` does not exist in our
-        // proto definitions.
-        round_trip_check::<_, api::PublicKey>(validator_key);
     }
 
     #[test]
