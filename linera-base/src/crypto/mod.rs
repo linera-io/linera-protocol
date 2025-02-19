@@ -24,7 +24,7 @@ pub type ValidatorPrivateKey = ed25519::Ed25519SecretKey;
 pub type ValidatorSignature = ed25519::Ed25519Signature;
 
 /// The public key of a chain owner.
-/// Corresponding private key is allowed to propose blocks
+/// The corresponding private key is allowed to propose blocks
 /// on the chain and transfer account's tokens.
 pub type AccountPublicKey = ed25519::Ed25519PublicKey;
 /// The private key of a chain owner.
