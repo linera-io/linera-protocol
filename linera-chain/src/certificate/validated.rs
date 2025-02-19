@@ -2,7 +2,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_base::{crypto::Signature, data_types::Round, hashed::Hashed, identifiers::BlobId};
+use linera_base::{
+    crypto::ValidatorSignature, data_types::Round, hashed::Hashed, identifiers::BlobId,
+};
 use linera_execution::committee::ValidatorName;
 use serde::{
     ser::{Serialize, SerializeStruct, Serializer},
@@ -65,7 +67,7 @@ impl<'de> Deserialize<'de> for GenericCertificate<ValidatedBlock> {
         struct Inner {
             value: Hashed<ValidatedBlock>,
             round: Round,
-            signatures: Vec<(ValidatorName, Signature)>,
+            signatures: Vec<(ValidatorName, ValidatorSignature)>,
         }
         let inner = Inner::deserialize(deserializer)?;
         if !crate::data_types::is_strictly_ordered(&inner.signatures) {

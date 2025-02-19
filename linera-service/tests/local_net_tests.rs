@@ -21,6 +21,7 @@ use linera_base::{
 };
 use linera_core::{data_types::ChainInfoQuery, node::ValidatorNode};
 use linera_faucet::ClaimOutcome;
+use linera_sdk::base::AccountSecretKey;
 use linera_service::{
     cli_wrappers::{
         local_net::{get_node_port, Database, LocalNet, LocalNetConfig, ProcessInbox},
@@ -50,8 +51,8 @@ fn get_fungible_account_owner(client: &ClientWrapper) -> AccountOwner {
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Udp) ; "aws_udp"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
-    use linera_base::{crypto::SigningKey, identifiers::Owner};
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    use linera_base::identifiers::Owner;
+    let _guard: tokio::sync::MutexGuard<'_, ()> = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
     let network = config.network.external;
@@ -164,7 +165,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
         net.remove_validator(i)?;
     }
 
-    let recipient = AccountOwner::User(Owner::from(SigningKey::generate().public()));
+    let recipient = AccountOwner::User(Owner::from(AccountSecretKey::generate().public()));
     client
         .transfer_with_accounts(
             Amount::from_tokens(5),

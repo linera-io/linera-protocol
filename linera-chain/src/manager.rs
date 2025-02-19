@@ -74,7 +74,7 @@ use async_graphql::{ComplexObject, SimpleObject};
 use custom_debug_derive::Debug;
 use futures::future::Either;
 use linera_base::{
-    crypto::{PublicKey, SigningKey},
+    crypto::{AccountPublicKey, ValidatorSecretKey},
     data_types::{Blob, BlockHeight, Round, Timestamp},
     ensure,
     hashed::Hashed,
@@ -223,7 +223,7 @@ where
         ownership: ChainOwnership,
         height: BlockHeight,
         local_time: Timestamp,
-        fallback_owners: impl Iterator<Item = (PublicKey, u64)> + 'a,
+        fallback_owners: impl Iterator<Item = (AccountPublicKey, u64)> + 'a,
     ) -> Result<(), ChainError> {
         let distribution = if !ownership.owners.is_empty() {
             let weights = ownership.owners.values().copied().collect();
@@ -361,7 +361,7 @@ where
         chain_id: ChainId,
         height: BlockHeight,
         epoch: Epoch,
-        key_pair: Option<&SigningKey>,
+        key_pair: Option<&ValidatorSecretKey>,
         local_time: Timestamp,
     ) -> bool {
         let Some(key_pair) = key_pair else {
@@ -394,7 +394,7 @@ where
         chain_id: ChainId,
         height: BlockHeight,
         epoch: Epoch,
-        key_pair: Option<&SigningKey>,
+        key_pair: Option<&ValidatorSecretKey>,
     ) -> bool {
         let Some(key_pair) = key_pair else {
             return false; // We are not a validator.
@@ -446,7 +446,7 @@ where
         &mut self,
         proposal: BlockProposal,
         executed_block: ExecutedBlock,
-        key_pair: Option<&SigningKey>,
+        key_pair: Option<&ValidatorSecretKey>,
         local_time: Timestamp,
         blobs: BTreeMap<BlobId, Blob>,
     ) -> Result<Option<ValidatedOrConfirmedVote>, ChainError> {
@@ -500,7 +500,7 @@ where
     pub fn create_final_vote(
         &mut self,
         validated: ValidatedBlockCertificate,
-        key_pair: Option<&SigningKey>,
+        key_pair: Option<&ValidatorSecretKey>,
         local_time: Timestamp,
         blobs: BTreeMap<BlobId, Blob>,
     ) -> Result<(), ViewError> {
