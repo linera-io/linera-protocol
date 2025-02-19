@@ -7,7 +7,7 @@ use std::{collections::BTreeMap, iter};
 
 use assert_matches::assert_matches;
 use linera_base::{
-    crypto::{CryptoHash, ValidatorPublicKey},
+    crypto::{AccountPublicKey, CryptoHash, ValidatorPublicKey},
     data_types::{
         Amount, ApplicationPermissions, Blob, BlockHeight, Bytecode, Timestamp,
         UserApplicationDescription,
@@ -95,7 +95,7 @@ fn make_admin_message_id(height: BlockHeight) -> MessageId {
 fn make_open_chain_config() -> OpenChainConfig {
     let committee = Committee::make_simple(vec![ValidatorPublicKey::test_key(1).into()]);
     OpenChainConfig {
-        ownership: ChainOwnership::single(ValidatorPublicKey::test_key(0).into()),
+        ownership: ChainOwnership::single(AccountPublicKey::test_key(0).into()),
         admin_id: admin_id(),
         epoch: Epoch::ZERO,
         committees: iter::once((Epoch::ZERO, committee)).collect(),

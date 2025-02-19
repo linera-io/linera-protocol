@@ -67,7 +67,7 @@ impl Clone for TestValidator {
 impl TestValidator {
     /// Creates a new [`TestValidator`].
     pub async fn new() -> Self {
-        let key_pair = AccountSecretKey::generate();
+        let key_pair = ValidatorSecretKey::generate();
         let committee = Committee::make_simple(vec![ValidatorName(key_pair.public())]);
         let wasm_runtime = Some(WasmRuntime::default());
         let storage = DbStorage::<MemoryStore, _>::make_test_storage(wasm_runtime)
