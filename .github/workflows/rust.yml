@@ -183,8 +183,10 @@ jobs:
       run: echo "/home/runner/.solc" >> $GITHUB_PATH
     - name: List the content of the Solc cache
       run: ls /home/runner/.solc/v0.8.25/solc-static-linux
+    - name: Create a Solc symbolic link
+      run: ln -sf /home/runner/.solc/v0.8.25/solc-static-linux /home/runner/.solc/solc
     - name: Check if Solc is in PATH
-      run: which solc-v0.8.25 || echo "Solc not found in PATH"
+      run: which solc || echo "Solc not found in PATH"
     - name: Install Protoc
       uses: arduino/setup-protoc@v1
       with:
