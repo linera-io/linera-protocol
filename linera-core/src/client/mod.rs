@@ -684,10 +684,16 @@ impl<P: 'static, S: Storage> ChainClient<P, S> {
         )
     }
 
-    /// Gets the per-`ChainClient` options.
+    /// Gets a mutable reference to the per-`ChainClient` options.
     #[instrument(level = "trace", skip(self))]
     pub fn options_mut(&mut self) -> &mut ChainClientOptions {
         &mut self.options
+    }
+
+    /// Gets a reference to the per-`ChainClient` options.
+    #[instrument(level = "trace", skip(self))]
+    pub fn options(&self) -> &ChainClientOptions {
+        &self.options
     }
 
     /// Gets the ID of the associated chain.
@@ -1070,7 +1076,7 @@ where
 
     /// Submits a block proposal to the validators.
     #[instrument(level = "trace", skip(committee, proposal, value))]
-    async fn submit_block_proposal<T: ProcessableCertificate>(
+    pub async fn submit_block_proposal<T: ProcessableCertificate>(
         &self,
         committee: &Committee,
         proposal: Box<BlockProposal>,
@@ -1123,7 +1129,7 @@ where
 
     /// Broadcasts certified blocks to validators.
     #[instrument(level = "trace", skip(committee, delivery))]
-    async fn communicate_chain_updates(
+    pub async fn communicate_chain_updates(
         &self,
         committee: &Committee,
         chain_id: ChainId,
