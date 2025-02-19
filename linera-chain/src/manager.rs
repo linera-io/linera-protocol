@@ -309,7 +309,7 @@ where
                 // If the fast round has not timed out yet, only a super owner is allowed to open
                 // a later round by making a proposal.
                 ensure!(
-                    self.is_super(&proposal.public_key.into()) || !current_round.is_fast(),
+                    self.is_super(&proposal.owner) || !current_round.is_fast(),
                     ChainError::WrongRound(current_round)
                 );
                 // After the fast round, proposals older than the current round are obsolete.
@@ -582,7 +582,7 @@ where
     /// Returns whether the signer is a valid owner and allowed to propose a block in the
     /// proposal's round.
     pub fn verify_owner(&self, proposal: &BlockProposal) -> bool {
-        let owner = &proposal.public_key.into();
+        let owner = &proposal.owner;
         if self.ownership.get().super_owners.contains(owner) {
             return true;
         }

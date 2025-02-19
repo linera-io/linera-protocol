@@ -9,7 +9,7 @@ use futures::future::Either;
 use linera_base::{
     data_types::{Blob, BlockHeight, Timestamp},
     ensure,
-    identifiers::{ChainId, Owner},
+    identifiers::ChainId,
 };
 use linera_chain::{
     data_types::{
@@ -128,12 +128,12 @@ where
                     round,
                     outcome: _,
                 },
-            public_key,
+            public_key: _,
+            owner,
             validated_block_certificate,
             signature: _,
         } = proposal;
 
-        let owner: Owner = public_key.into();
         let chain = &self.state.chain;
         // Check the epoch.
         let (epoch, committee) = chain.current_committee()?;
@@ -150,7 +150,7 @@ where
             lite_certificate.check(committee)?;
         } else if let Some(signer) = block.authenticated_signer {
             // Check the authentication of the operations in the new block.
-            ensure!(signer == owner, WorkerError::InvalidSigner(signer));
+            ensure!(signer == *owner, WorkerError::InvalidSigner(signer));
         }
         // Check if the chain is ready for this new block proposal.
         chain.tip_state.get().verify_block_chaining(block)?;
@@ -170,7 +170,7 @@ where
             }
             chain
                 .pending_proposed_blobs
-                .try_load_entry_mut(&owner)
+                .try_load_entry_mut(owner)
                 .await?
                 .update(*round, validated_block_certificate.is_some(), maybe_blobs)
                 .await?;

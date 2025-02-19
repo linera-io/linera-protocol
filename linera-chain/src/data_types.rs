@@ -288,6 +288,7 @@ pub enum Medium {
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct BlockProposal {
     pub content: ProposalContent,
+    pub owner: Owner,
     pub public_key: AccountPublicKey,
     pub signature: AccountSignature,
     #[debug(skip_if = Option::is_none)]
@@ -746,6 +747,7 @@ impl BlockProposal {
         Self {
             content,
             public_key: secret.public(),
+            owner: secret.public().into(),
             signature,
             validated_block_certificate: None,
         }
@@ -768,6 +770,7 @@ impl BlockProposal {
         Self {
             content,
             public_key: secret.public(),
+            owner: secret.public().into(),
             signature,
             validated_block_certificate: Some(lite_cert),
         }
@@ -789,6 +792,10 @@ impl BlockProposal {
     /// Checks that the public key matches the owner and that the optional certificate matches
     /// the outcome.
     pub fn check_invariants(&self) -> Result<(), &'static str> {
+        ensure!(
+            self.owner == Owner::from(&self.public_key),
+            "Public key does not match owner"
+        );
         match (&self.validated_block_certificate, &self.content.outcome) {
             (None, None) => {}
             (None, Some(_)) | (Some(_), None) => {

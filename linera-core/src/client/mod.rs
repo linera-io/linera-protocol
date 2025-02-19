@@ -1778,7 +1778,7 @@ where
             }
         }
         for proposal in proposals {
-            let owner: Owner = proposal.public_key.into();
+            let owner = proposal.owner;
             if let Err(mut err) = self
                 .client
                 .local_node

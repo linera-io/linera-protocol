@@ -197,7 +197,7 @@ impl TryFrom<BlockProposal> for api::BlockProposal {
             chain_id: Some(block_proposal.content.block.chain_id.into()),
             content: bincode::serialize(&block_proposal.content)?,
             public_key: Some(block_proposal.public_key.into()),
-            owner: Some(Owner::from(block_proposal.public_key).into()),
+            owner: Some(block_proposal.owner.into()),
             signature: Some(block_proposal.signature.into()),
             validated_block_certificate: block_proposal
                 .validated_block_certificate
@@ -219,6 +219,7 @@ impl TryFrom<api::BlockProposal> for BlockProposal {
         Ok(Self {
             content,
             public_key: try_proto_convert(block_proposal.public_key)?,
+            owner: try_proto_convert(block_proposal.owner)?,
             signature: try_proto_convert(block_proposal.signature)?,
             validated_block_certificate: block_proposal
                 .validated_block_certificate
@@ -1221,6 +1222,7 @@ pub mod tests {
                 round: Round::SingleLeader(4),
                 outcome: Some(outcome),
             },
+            owner: Owner::from(key_pair.public()),
             public_key: key_pair.public(),
             signature: AccountSignature::new(&Foo("test".into()), &key_pair),
             validated_block_certificate: Some(cert),
