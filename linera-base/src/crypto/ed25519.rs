@@ -32,25 +32,25 @@ pub struct Ed25519Signature(pub dalek::Signature);
 
 impl Ed25519SecretKey {
     #[cfg(all(with_getrandom, with_testing))]
-    /// Generates a new key-pair.
+    /// Generates a new key pair.
     pub fn generate() -> Self {
         let mut rng = rand::rngs::OsRng;
         Self::generate_from(&mut rng)
     }
 
     #[cfg(with_getrandom)]
-    /// Generates a new key-pair from the given RNG. Use with care.
+    /// Generates a new key pair from the given RNG. Use with care.
     pub fn generate_from<R: super::CryptoRng>(rng: &mut R) -> Self {
         let keypair = dalek::SigningKey::generate(rng);
         Ed25519SecretKey(keypair)
     }
 
-    /// Obtains the public key of a key-pair.
+    /// Obtains the public key of a key pair.
     pub fn public(&self) -> Ed25519PublicKey {
         Ed25519PublicKey(self.0.verifying_key().to_bytes())
     }
 
-    /// Copies the key-pair, **including the secret key**.
+    /// Copies the key pair, **including the secret key**.
     ///
     /// The `Clone` and `Copy` traits are deliberately not implemented for `KeyPair` to prevent
     /// accidental copies of secret keys.

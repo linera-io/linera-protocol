@@ -3508,7 +3508,6 @@ dependencies = [
  "hex",
  "is-terminal",
  "linera-witty",
- "once_cell",
  "port-selector",
  "prometheus",
  "proptest",

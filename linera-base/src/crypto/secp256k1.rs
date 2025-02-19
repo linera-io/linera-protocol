@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use super::{BcsSignable, CryptoError, CryptoHash, HasTypeName};
 use crate::doc_scalar;
 
-/// Static Secp256k1 context for reuse.
+/// Static secp256k1 context for reuse.
 pub static SECP256K1: LazyLock<Secp256k1<All>> = LazyLock::new(secp256k1::Secp256k1::new);
 
 /// A secp256k1 secret key.
@@ -23,7 +23,7 @@ pub struct Secp256k1SecretKey(pub secp256k1::SecretKey);
 #[derive(Eq, PartialEq, Copy, Clone)]
 pub struct Secp256k1PublicKey(pub secp256k1::PublicKey);
 
-/// Secp256k1 public/private key pair.
+/// Secp256k1 public/secret key pair.
 #[derive(Debug, PartialEq, Eq)]
 pub struct Secp256k1KeyPair {
     /// Secret key.
@@ -108,14 +108,14 @@ impl fmt::Debug for Secp256k1PublicKey {
 }
 
 impl Secp256k1KeyPair {
-    /// Generates a new key-pair.
+    /// Generates a new key pair.
     #[cfg(all(with_getrandom, with_testing))]
     pub fn generate() -> Self {
         let mut rng = rand::rngs::OsRng;
         Self::generate_from(&mut rng)
     }
 
-    /// Generates a new key-pair from the given RNG. Use with care.
+    /// Generates a new key pair from the given RNG. Use with care.
     #[cfg(with_getrandom)]
     pub fn generate_from<R: super::CryptoRng>(rng: &mut R) -> Self {
         let (sk, pk) = SECP256K1.generate_keypair(rng);
