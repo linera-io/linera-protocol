@@ -699,12 +699,12 @@ mod proto_message_cap {
         types::{Certificate, ConfirmedBlock, ConfirmedBlockCertificate},
     };
     use linera_execution::committee::ValidatorName;
-    use linera_sdk::base::{ChainId, TestString, ValidatorPrivateKey, ValidatorSignature};
+    use linera_sdk::base::{ChainId, TestString, ValidatorSecretKey, ValidatorSignature};
 
     use super::{CertificatesBatchResponse, GrpcMessageLimiter};
 
     fn test_certificate() -> Certificate {
-        let keypair = ValidatorPrivateKey::generate();
+        let keypair = ValidatorSecretKey::generate();
         let validator = ValidatorName(keypair.public());
         let signature = ValidatorSignature::new(&TestString::new("Test"), &keypair);
         let executed_block = ExecutedBlock {

@@ -7,14 +7,14 @@
 
 use hex_game::{HexAbi, Operation, Timeouts};
 use linera_sdk::{
-    base::{AccountPrivateKey, Amount, ChainDescription, TimeDelta},
+    base::{AccountSecretKey, Amount, ChainDescription, TimeDelta},
     test::{ActiveChain, QueryOutcome, TestValidator},
 };
 
 #[test_log::test(tokio::test)]
 async fn hex_game() {
-    let key_pair1 = AccountPrivateKey::generate();
-    let key_pair2 = AccountPrivateKey::generate();
+    let key_pair1 = AccountSecretKey::generate();
+    let key_pair2 = AccountSecretKey::generate();
 
     let (validator, app_id, creation_chain) =
         TestValidator::with_current_application::<HexAbi, _, _>((), Timeouts::default()).await;
@@ -74,8 +74,8 @@ async fn hex_game() {
 
 #[tokio::test]
 async fn hex_game_clock() {
-    let key_pair1 = AccountPrivateKey::generate();
-    let key_pair2 = AccountPrivateKey::generate();
+    let key_pair1 = AccountSecretKey::generate();
+    let key_pair2 = AccountSecretKey::generate();
 
     let timeouts = Timeouts {
         start_time: TimeDelta::from_secs(60),

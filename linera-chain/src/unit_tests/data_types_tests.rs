@@ -12,8 +12,8 @@ use crate::{
 
 #[test]
 fn test_signed_values() {
-    let key1 = ValidatorPrivateKey::generate();
-    let key2 = ValidatorPrivateKey::generate();
+    let key1 = ValidatorSecretKey::generate();
+    let key2 = ValidatorSecretKey::generate();
     let name1 = ValidatorName(key1.public());
 
     let block =
@@ -81,9 +81,9 @@ fn test_hashes() {
 
 #[test]
 fn test_certificates() {
-    let key1 = ValidatorPrivateKey::generate();
-    let key2 = ValidatorPrivateKey::generate();
-    let key3 = ValidatorPrivateKey::generate();
+    let key1 = ValidatorSecretKey::generate();
+    let key2 = ValidatorSecretKey::generate();
+    let key3 = ValidatorSecretKey::generate();
     let name1 = ValidatorName(key1.public());
     let name2 = ValidatorName(key2.public());
 

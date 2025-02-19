@@ -969,7 +969,7 @@ pub mod tests {
     use std::{borrow::Cow, fmt::Debug};
 
     use linera_base::{
-        crypto::{AccountPrivateKey, BcsSignable, CryptoHash, ValidatorPrivateKey},
+        crypto::{AccountSecretKey, BcsSignable, CryptoHash, ValidatorSecretKey},
         data_types::{Amount, Blob, Round, Timestamp},
     };
     use linera_chain::{
@@ -1006,20 +1006,20 @@ pub mod tests {
 
     #[test]
     pub fn test_public_key() {
-        let public_key = ValidatorPrivateKey::generate().public();
+        let public_key = ValidatorSecretKey::generate().public();
         round_trip_check::<_, api::PublicKey>(public_key);
     }
 
     #[test]
     pub fn test_signature() {
-        let key_pair = ValidatorPrivateKey::generate();
+        let key_pair = ValidatorSecretKey::generate();
         let signature = ValidatorSignature::new(&Foo("test".into()), &key_pair);
         round_trip_check::<_, api::Signature>(signature);
     }
 
     #[test]
     pub fn test_owner() {
-        let key_pair = AccountPrivateKey::generate();
+        let key_pair = AccountSecretKey::generate();
         let owner = Owner::from(key_pair.public());
         round_trip_check::<_, api::Owner>(owner);
     }
@@ -1032,7 +1032,7 @@ pub mod tests {
 
     #[test]
     pub fn validator_name() {
-        let validator_name = ValidatorName::from(ValidatorPrivateKey::generate().public());
+        let validator_name = ValidatorName::from(ValidatorSecretKey::generate().public());
         // This is a correct comparison - `ValidatorNameRpc` does not exist in our
         // proto definitions.
         round_trip_check::<_, api::PublicKey>(validator_name);
@@ -1076,7 +1076,7 @@ pub mod tests {
             info: chain_info,
             signature: Some(ValidatorSignature::new(
                 &Foo("test".into()),
-                &ValidatorPrivateKey::generate(),
+                &ValidatorSecretKey::generate(),
             )),
         };
         round_trip_check::<_, api::ChainInfoResponse>(chain_info_response_some);
@@ -1131,7 +1131,7 @@ pub mod tests {
 
     #[test]
     pub fn test_lite_certificate() {
-        let key_pair = ValidatorPrivateKey::generate();
+        let key_pair = ValidatorSecretKey::generate();
         let certificate = LiteCertificate {
             value: LiteValue {
                 value_hash: CryptoHash::new(&Foo("value".into())),
@@ -1154,7 +1154,7 @@ pub mod tests {
 
     #[test]
     pub fn test_certificate() {
-        let key_pair = ValidatorPrivateKey::generate();
+        let key_pair = ValidatorSecretKey::generate();
         let certificate = ValidatedBlockCertificate::new(
             Hashed::new(ValidatedBlock::new(
                 BlockExecutionOutcome {
@@ -1199,7 +1199,7 @@ pub mod tests {
 
     #[test]
     pub fn test_block_proposal() {
-        let key_pair = ValidatorPrivateKey::generate();
+        let key_pair = ValidatorSecretKey::generate();
         let outcome = BlockExecutionOutcome {
             state_hash: CryptoHash::new(&Foo("validated".into())),
             ..BlockExecutionOutcome::default()
@@ -1214,7 +1214,7 @@ pub mod tests {
         )
         .lite_certificate()
         .cloned();
-        let key_pair = AccountPrivateKey::generate();
+        let key_pair = AccountSecretKey::generate();
         let block_proposal = BlockProposal {
             content: ProposalContent {
                 block: get_block(),

@@ -9,8 +9,7 @@ use std::{
 
 use linera_base::{
     crypto::{
-        AccountPrivateKey, AccountPublicKey, BcsSignable, CryptoHash, CryptoRng,
-        ValidatorPrivateKey,
+        AccountPublicKey, AccountSecretKey, BcsSignable, CryptoHash, CryptoRng, ValidatorSecretKey,
     },
     data_types::{Amount, Timestamp},
     identifiers::{ChainDescription, ChainId},
@@ -57,7 +56,7 @@ pub struct ValidatorConfig {
 #[derive(Serialize, Deserialize)]
 pub struct ValidatorServerConfig {
     pub validator: ValidatorConfig,
-    pub key: ValidatorPrivateKey,
+    pub key: ValidatorSecretKey,
     pub internal_network: ValidatorInternalNetworkConfig,
 }
 
@@ -177,8 +176,8 @@ impl<W: Deref<Target = Wallet>> WalletState<W> {
         }
     }
 
-    pub fn generate_key_pair(&mut self) -> AccountPrivateKey {
-        AccountPrivateKey::generate_from(&mut self.prng)
+    pub fn generate_key_pair(&mut self) -> AccountSecretKey {
+        AccountSecretKey::generate_from(&mut self.prng)
     }
 }
 

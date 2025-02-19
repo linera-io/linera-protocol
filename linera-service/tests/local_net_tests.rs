@@ -21,7 +21,7 @@ use linera_base::{
 };
 use linera_core::{data_types::ChainInfoQuery, node::ValidatorNode};
 use linera_faucet::ClaimOutcome;
-use linera_sdk::base::AccountPrivateKey;
+use linera_sdk::base::AccountSecretKey;
 use linera_service::{
     cli_wrappers::{
         local_net::{get_node_port, Database, LocalNet, LocalNetConfig, ProcessInbox},
@@ -165,7 +165,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
         net.remove_validator(i)?;
     }
 
-    let recipient = AccountOwner::User(Owner::from(AccountPrivateKey::generate().public()));
+    let recipient = AccountOwner::User(Owner::from(AccountSecretKey::generate().public()));
     client
         .transfer_with_accounts(
             Amount::from_tokens(5),

@@ -16,7 +16,7 @@ use futures::{
     Future,
 };
 use linera_base::{
-    crypto::{AccountPrivateKey, AccountPublicKey, CryptoHash, ValidatorPrivateKey},
+    crypto::{AccountPublicKey, AccountSecretKey, CryptoHash, ValidatorSecretKey},
     data_types::*,
     identifiers::{BlobId, ChainDescription, ChainId},
 };
@@ -733,7 +733,7 @@ where
         let mut key_pairs = Vec::new();
         let mut validators = Vec::new();
         for _ in 0..count {
-            let key_pair = ValidatorPrivateKey::generate();
+            let key_pair = ValidatorSecretKey::generate();
             let name = ValidatorName(key_pair.public());
             validators.push(name);
             key_pairs.push(key_pair);
@@ -803,7 +803,7 @@ where
         balance: Amount,
     ) -> Result<ChainClient<NodeProvider<B::Storage>, B::Storage>, anyhow::Error> {
         let description = ChainDescription::Root(index);
-        let key_pair = AccountPrivateKey::generate();
+        let key_pair = AccountSecretKey::generate();
         let public_key = key_pair.public();
         // Remember what's in the genesis store for future clients to join.
         self.genesis_storage_builder
@@ -891,7 +891,7 @@ where
     pub async fn make_client(
         &mut self,
         chain_id: ChainId,
-        key_pair: ValidatorPrivateKey,
+        key_pair: ValidatorSecretKey,
         block_hash: Option<CryptoHash>,
         block_height: BlockHeight,
     ) -> Result<ChainClient<NodeProvider<B::Storage>, B::Storage>, anyhow::Error> {

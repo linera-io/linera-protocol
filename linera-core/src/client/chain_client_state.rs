@@ -8,7 +8,7 @@ use std::{
 };
 
 use linera_base::{
-    crypto::{AccountPrivateKey, AccountPublicKey, CryptoHash},
+    crypto::{AccountPublicKey, AccountSecretKey, CryptoHash},
     data_types::{Blob, BlockHeight, Timestamp},
     ensure,
     identifiers::Owner,
@@ -35,7 +35,7 @@ pub struct ChainClientState {
     /// This is always at the same height as `next_block_height`.
     pending_proposal: Option<PendingProposal>,
     /// Known key pairs from present and past identities.
-    known_key_pairs: BTreeMap<Owner, AccountPrivateKey>,
+    known_key_pairs: BTreeMap<Owner, AccountSecretKey>,
 
     /// A mutex that is held whilst we are performing operations that should not be
     /// attempted by multiple clients at the same time.
@@ -44,7 +44,7 @@ pub struct ChainClientState {
 
 impl ChainClientState {
     pub fn new(
-        known_key_pairs: Vec<AccountPrivateKey>,
+        known_key_pairs: Vec<AccountSecretKey>,
         block_hash: Option<CryptoHash>,
         timestamp: Timestamp,
         next_block_height: BlockHeight,
@@ -97,7 +97,7 @@ impl ChainClientState {
         }
     }
 
-    pub fn known_key_pairs(&self) -> &BTreeMap<Owner, AccountPrivateKey> {
+    pub fn known_key_pairs(&self) -> &BTreeMap<Owner, AccountSecretKey> {
         &self.known_key_pairs
     }
 
@@ -108,10 +108,7 @@ impl ChainClientState {
             .any(|owner| !self.known_key_pairs.contains_key(owner))
     }
 
-    pub(super) fn insert_known_key_pair(
-        &mut self,
-        key_pair: AccountPrivateKey,
-    ) -> AccountPublicKey {
+    pub(super) fn insert_known_key_pair(&mut self, key_pair: AccountSecretKey) -> AccountPublicKey {
         let new_public_key = key_pair.public();
         self.known_key_pairs.insert(new_public_key.into(), key_pair);
         new_public_key

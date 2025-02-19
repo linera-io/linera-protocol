@@ -12,8 +12,8 @@ use custom_debug_derive::Debug;
 use linera_base::{
     bcs,
     crypto::{
-        AccountPrivateKey, AccountPublicKey, AccountSignature, BcsHashable, BcsSignable,
-        CryptoError, CryptoHash, ValidatorPrivateKey, ValidatorSignature,
+        AccountPublicKey, AccountSecretKey, AccountSignature, BcsHashable, BcsSignable,
+        CryptoError, CryptoHash, ValidatorSecretKey, ValidatorSignature,
     },
     data_types::{Amount, BlockHeight, Event, OracleResponse, Round, Timestamp},
     doc_scalar, ensure,
@@ -430,7 +430,7 @@ pub struct Vote<T> {
 
 impl<T> Vote<T> {
     /// Use signing key to create a signed object.
-    pub fn new(value: Hashed<T>, round: Round, key_pair: &ValidatorPrivateKey) -> Self
+    pub fn new(value: Hashed<T>, round: Round, key_pair: &ValidatorSecretKey) -> Self
     where
         T: CertificateValue,
     {
@@ -736,7 +736,7 @@ pub struct ProposalContent {
 }
 
 impl BlockProposal {
-    pub fn new_initial(round: Round, block: ProposedBlock, secret: &AccountPrivateKey) -> Self {
+    pub fn new_initial(round: Round, block: ProposedBlock, secret: &AccountSecretKey) -> Self {
         let content = ProposalContent {
             round,
             block,
@@ -754,7 +754,7 @@ impl BlockProposal {
     pub fn new_retry(
         round: Round,
         validated_block_certificate: ValidatedBlockCertificate,
-        secret: &AccountPrivateKey,
+        secret: &AccountSecretKey,
     ) -> Self {
         let lite_cert = validated_block_certificate.lite_certificate().cloned();
         let block = validated_block_certificate.into_inner().into_inner();
@@ -810,7 +810,7 @@ impl BlockProposal {
 
 impl LiteVote {
     /// Uses the signing key to create a signed object.
-    pub fn new(value: LiteValue, round: Round, key_pair: &ValidatorPrivateKey) -> Self {
+    pub fn new(value: LiteValue, round: Round, key_pair: &ValidatorSecretKey) -> Self {
         let hash_and_round = VoteValue(value.value_hash, round, value.kind);
         let signature = ValidatorSignature::new(&hash_and_round, key_pair);
         Self {

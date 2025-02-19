@@ -13,7 +13,7 @@ use futures::future::Either;
 #[cfg(with_testing)]
 use linera_base::crypto::ValidatorPublicKey;
 use linera_base::{
-    crypto::{CryptoError, CryptoHash, ValidatorPrivateKey},
+    crypto::{CryptoError, CryptoHash, ValidatorSecretKey},
     data_types::{
         ArithmeticError, Blob, BlockHeight, DecompressionError, Round, UserApplicationDescription,
     },
@@ -293,7 +293,7 @@ where
     #[instrument(level = "trace", skip(nickname, key_pair, storage))]
     pub fn new(
         nickname: String,
-        key_pair: Option<ValidatorPrivateKey>,
+        key_pair: Option<ValidatorSecretKey>,
         storage: StorageClient,
         chain_worker_limit: NonZeroUsize,
     ) -> Self {
@@ -389,10 +389,7 @@ where
 
     #[instrument(level = "trace", skip(self, key_pair))]
     #[cfg(test)]
-    pub(crate) async fn with_key_pair(
-        mut self,
-        key_pair: Option<Arc<ValidatorPrivateKey>>,
-    ) -> Self {
+    pub(crate) async fn with_key_pair(mut self, key_pair: Option<Arc<ValidatorSecretKey>>) -> Self {
         self.chain_worker_config.key_pair = key_pair;
         self.chain_workers.lock().unwrap().clear();
         self

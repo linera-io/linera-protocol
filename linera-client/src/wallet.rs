@@ -7,7 +7,7 @@ use std::{
 };
 
 use linera_base::{
-    crypto::{AccountPrivateKey, CryptoHash, CryptoRng},
+    crypto::{AccountSecretKey, CryptoHash, CryptoRng},
     data_types::{BlockHeight, Timestamp},
     ensure,
     identifiers::{ChainDescription, ChainId, Owner},
@@ -25,7 +25,7 @@ use crate::{config::GenesisConfig, error, Error};
 #[derive(Serialize, Deserialize)]
 pub struct Wallet {
     pub chains: BTreeMap<ChainId, UserChain>,
-    pub unassigned_key_pairs: HashMap<Owner, AccountPrivateKey>,
+    pub unassigned_key_pairs: HashMap<Owner, AccountSecretKey>,
     pub default: Option<ChainId>,
     pub genesis_config: GenesisConfig,
     pub testing_prng_seed: Option<u64>,
@@ -68,7 +68,7 @@ impl Wallet {
         self.chains.insert(chain.chain_id, chain);
     }
 
-    pub fn forget_keys(&mut self, chain_id: &ChainId) -> Result<AccountPrivateKey, Error> {
+    pub fn forget_keys(&mut self, chain_id: &ChainId) -> Result<AccountSecretKey, Error> {
         let chain = self
             .chains
             .get_mut(chain_id)
@@ -113,12 +113,12 @@ impl Wallet {
         self.chains.values_mut()
     }
 
-    pub fn add_unassigned_key_pair(&mut self, key_pair: AccountPrivateKey) {
+    pub fn add_unassigned_key_pair(&mut self, key_pair: AccountSecretKey) {
         let owner = key_pair.public().into();
         self.unassigned_key_pairs.insert(owner, key_pair);
     }
 
-    pub fn key_pair_for_owner(&self, owner: &Owner) -> Option<AccountPrivateKey> {
+    pub fn key_pair_for_owner(&self, owner: &Owner) -> Option<AccountSecretKey> {
         if let Some(key_pair) = self
             .unassigned_key_pairs
             .get(owner)
@@ -206,7 +206,7 @@ impl Wallet {
 #[derive(Serialize, Deserialize)]
 pub struct UserChain {
     pub chain_id: ChainId,
-    pub key_pair: Option<AccountPrivateKey>,
+    pub key_pair: Option<AccountSecretKey>,
     pub block_hash: Option<CryptoHash>,
     pub timestamp: Timestamp,
     pub next_block_height: BlockHeight,
@@ -220,7 +220,7 @@ impl UserChain {
         description: ChainDescription,
         timestamp: Timestamp,
     ) -> Self {
-        let key_pair = AccountPrivateKey::generate_from(rng);
+        let key_pair = AccountSecretKey::generate_from(rng);
         Self {
             chain_id: description.into(),
             key_pair: Some(key_pair),

@@ -11,7 +11,7 @@ use std::{num::NonZeroUsize, sync::Arc};
 use dashmap::DashMap;
 use futures::FutureExt as _;
 use linera_base::{
-    crypto::{AccountPrivateKey, ValidatorPrivateKey},
+    crypto::{AccountSecretKey, ValidatorSecretKey},
     data_types::{Amount, ApplicationPermissions, Timestamp},
     identifiers::{ApplicationId, BytecodeId, ChainDescription, ChainId, MessageId, Owner},
     ownership::ChainOwnership,
@@ -43,7 +43,7 @@ use crate::ContractAbi;
 /// # });
 /// ```
 pub struct TestValidator {
-    key_pair: ValidatorPrivateKey,
+    key_pair: ValidatorSecretKey,
     committee: Committee,
     storage: DbStorage<MemoryStore, TestClock>,
     worker: WorkerState<DbStorage<MemoryStore, TestClock>>,
@@ -67,7 +67,7 @@ impl Clone for TestValidator {
 impl TestValidator {
     /// Creates a new [`TestValidator`].
     pub async fn new() -> Self {
-        let key_pair = AccountPrivateKey::generate();
+        let key_pair = AccountSecretKey::generate();
         let committee = Committee::make_simple(vec![ValidatorName(key_pair.public())]);
         let wasm_runtime = Some(WasmRuntime::default());
         let storage = DbStorage::<MemoryStore, _>::make_test_storage(wasm_runtime)
@@ -155,7 +155,7 @@ impl TestValidator {
     }
 
     /// Returns the keys this test validator uses for signing certificates.
-    pub fn key_pair(&self) -> &AccountPrivateKey {
+    pub fn key_pair(&self) -> &AccountSecretKey {
         &self.key_pair
     }
 
@@ -169,7 +169,7 @@ impl TestValidator {
     /// Creates a new microchain and returns the [`ActiveChain`] that can be used to add blocks to
     /// it.
     pub async fn new_chain(&self) -> ActiveChain {
-        let key_pair = AccountPrivateKey::generate();
+        let key_pair = AccountSecretKey::generate();
         let description = self
             .request_new_chain_from_admin_chain(key_pair.public().into())
             .await;
@@ -224,7 +224,7 @@ impl TestValidator {
 
     /// Creates the root admin microchain and returns the [`ActiveChain`] map with it.
     async fn create_admin_chain(&self) {
-        let key_pair = AccountPrivateKey::generate();
+        let key_pair = AccountSecretKey::generate();
         let description = ChainDescription::Root(0);
 
         self.worker()

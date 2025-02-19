@@ -19,7 +19,7 @@ use thiserror::Error;
 /// The public key of a validator.
 pub type ValidatorPublicKey = ed25519::Ed25519PublicKey;
 /// The private key of a validator.
-pub type ValidatorPrivateKey = ed25519::Ed25519SecretKey;
+pub type ValidatorSecretKey = ed25519::Ed25519SecretKey;
 /// The signature of a validator.
 pub type ValidatorSignature = ed25519::Ed25519Signature;
 
@@ -28,7 +28,7 @@ pub type ValidatorSignature = ed25519::Ed25519Signature;
 /// on the chain and transfer account's tokens.
 pub type AccountPublicKey = ed25519::Ed25519PublicKey;
 /// The private key of a chain owner.
-pub type AccountPrivateKey = ed25519::Ed25519SecretKey;
+pub type AccountSecretKey = ed25519::Ed25519SecretKey;
 /// The signature of a chain owner.
 pub type AccountSignature = ed25519::Ed25519Signature;
 
