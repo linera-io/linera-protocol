@@ -54,6 +54,8 @@ pub enum CryptoError {
     IncorrectPublicKeySize(usize),
     #[error("Could not parse integer: {0}")]
     ParseIntError(#[from] ParseIntError),
+    #[error("secp256k1 error: {0}")]
+    Secp256k1Error(::secp256k1::Error),
 }
 
 #[cfg(with_getrandom)]

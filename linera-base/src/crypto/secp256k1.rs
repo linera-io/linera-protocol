@@ -4,9 +4,8 @@
 
 //! Defines secp256k1 signature primitives used by the Linera protocol.
 
-use std::{fmt, str::FromStr};
+use std::{fmt, str::FromStr, sync::LazyLock};
 
-use once_cell::sync::Lazy;
 use secp256k1::{self, All, Message, Secp256k1};
 use serde::{Deserialize, Serialize};
 
@@ -14,9 +13,10 @@ use super::{BcsSignable, CryptoError, CryptoHash, HasTypeName};
 use crate::doc_scalar;
 
 /// Static Secp256k1 context for reuse.
-pub static SECP256K1: Lazy<Secp256k1<All>> = Lazy::new(secp256k1::Secp256k1::new);
+pub static SECP256K1: LazyLock<Secp256k1<All>> = LazyLock::new(secp256k1::Secp256k1::new);
 
 /// A secp256k1 secret key.
+#[derive(Eq, PartialEq)]
 pub struct Secp256k1SecretKey(pub secp256k1::SecretKey);
 
 /// A secp256k1 public key.
@@ -36,19 +36,11 @@ pub struct Secp256k1KeyPair {
 #[derive(Eq, PartialEq, Copy, Clone)]
 pub struct Secp256k1Signature(pub secp256k1::ecdsa::Signature);
 
-impl PartialEq for Secp256k1SecretKey {
-    fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
-    }
-}
-
 impl fmt::Debug for Secp256k1SecretKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "<redacted for Secp256k1 secret key>")
     }
 }
-
-impl Eq for Secp256k1SecretKey {}
 
 impl Serialize for Secp256k1PublicKey {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -88,16 +80,8 @@ impl FromStr for Secp256k1PublicKey {
     type Err = CryptoError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let pk = secp256k1::PublicKey::from_str(s)
-            .map_err(|_| CryptoError::IncorrectPublicKeySize(0))?;
+        let pk = secp256k1::PublicKey::from_str(s).map_err(CryptoError::Secp256k1Error)?;
         Ok(Secp256k1PublicKey(pk))
-    }
-}
-
-impl From<[u8; 33]> for Secp256k1PublicKey {
-    fn from(value: [u8; 33]) -> Self {
-        let pk = secp256k1::PublicKey::from_slice(&value).expect("Invalid public key");
-        Secp256k1PublicKey(pk)
     }
 }
 
@@ -105,8 +89,7 @@ impl TryFrom<&[u8]> for Secp256k1PublicKey {
     type Error = CryptoError;
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
-        let pk = secp256k1::PublicKey::from_slice(value)
-            .map_err(|_| CryptoError::IncorrectPublicKeySize(value.len()))?;
+        let pk = secp256k1::PublicKey::from_slice(value).map_err(CryptoError::Secp256k1Error)?;
         Ok(Secp256k1PublicKey(pk))
     }
 }
@@ -125,15 +108,15 @@ impl fmt::Debug for Secp256k1PublicKey {
 }
 
 impl Secp256k1KeyPair {
-    #[cfg(all(with_getrandom, with_testing))]
     /// Generates a new key-pair.
+    #[cfg(all(with_getrandom, with_testing))]
     pub fn generate() -> Self {
         let mut rng = rand::rngs::OsRng;
         Self::generate_from(&mut rng)
     }
 
-    #[cfg(with_getrandom)]
     /// Generates a new key-pair from the given RNG. Use with care.
+    #[cfg(with_getrandom)]
     pub fn generate_from<R: super::CryptoRng>(rng: &mut R) -> Self {
         let (sk, pk) = SECP256K1.generate_keypair(rng);
         Secp256k1KeyPair {
@@ -147,14 +130,6 @@ impl Secp256k1SecretKey {
     /// Returns a public key for the given secret key.
     pub fn to_public(&self) -> Secp256k1PublicKey {
         Secp256k1PublicKey(self.0.public_key(&SECP256K1))
-    }
-}
-
-impl Secp256k1PublicKey {
-    /// Returns a public key for the given secret key.
-    #[allow(dead_code)]
-    fn from_secret_key(secret: &Secp256k1SecretKey) -> Self {
-        secret.to_public()
     }
 }
 

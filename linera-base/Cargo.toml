@@ -44,7 +44,6 @@ getrandom = { workspace = true, optional = true }
 hex.workspace = true
 is-terminal.workspace = true
 linera-witty = { workspace = true, features = ["macros"] }
-once_cell.workspace = true
 prometheus = { workspace = true, optional = true }
 proptest = { workspace = true, optional = true, features = ["alloc"] }
 rand.workspace = true
