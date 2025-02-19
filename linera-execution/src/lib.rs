@@ -606,13 +606,6 @@ pub trait BaseRuntime {
         promise: &Self::FindKeyValuesByPrefix,
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError>;
 
-    /// Queries a service.
-    fn query_service(
-        &mut self,
-        application_id: ApplicationId,
-        query: Vec<u8>,
-    ) -> Result<Vec<u8>, ExecutionError>;
-
     /// Makes a POST request to the given URL and returns the answer, if any.
     fn http_post(
         &mut self,
@@ -712,6 +705,13 @@ pub trait ContractRuntime: BaseRuntime {
         key: Vec<u8>,
         value: Vec<u8>,
     ) -> Result<(), ExecutionError>;
+
+    /// Queries a service.
+    fn query_service(
+        &mut self,
+        application_id: ApplicationId,
+        query: Vec<u8>,
+    ) -> Result<Vec<u8>, ExecutionError>;
 
     /// Opens a new chain.
     fn open_chain(
