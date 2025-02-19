@@ -360,7 +360,7 @@ impl Runnable for Job {
             QueryValidator {
                 address,
                 chain_id,
-                name,
+                validator,
             } => {
                 use linera_core::node::ValidatorNode as _;
 
@@ -409,11 +409,11 @@ impl Runnable for Job {
                             response.info.next_block_height,
                             response.info.epoch,
                         );
-                        if let Some(name) = name {
-                            if response.check(&name).is_ok() {
-                                info!("Signature for public key {name} is OK.");
+                        if let Some(validator) = validator {
+                            if response.check(&validator).is_ok() {
+                                info!("Signature for public key {validator} is OK.");
                             } else {
-                                error!("Signature for public key {name} is NOT OK.");
+                                error!("Signature for public key {validator} is NOT OK.");
                             }
                         }
                     }
