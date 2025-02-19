@@ -11,9 +11,9 @@ use std::{
 
 use futures::future::Either;
 #[cfg(with_testing)]
-use linera_base::crypto::AuthorityPublicKey;
+use linera_base::crypto::ValidatorPublicKey;
 use linera_base::{
-    crypto::{AuthorityPrivateKey, CryptoError, CryptoHash},
+    crypto::{CryptoError, CryptoHash, ValidatorPrivateKey},
     data_types::{
         ArithmeticError, Blob, BlockHeight, DecompressionError, Round, UserApplicationDescription,
     },
@@ -293,7 +293,7 @@ where
     #[instrument(level = "trace", skip(nickname, key_pair, storage))]
     pub fn new(
         nickname: String,
-        key_pair: Option<AuthorityPrivateKey>,
+        key_pair: Option<ValidatorPrivateKey>,
         storage: StorageClient,
         chain_worker_limit: NonZeroUsize,
     ) -> Self {
@@ -391,7 +391,7 @@ where
     #[cfg(test)]
     pub(crate) async fn with_key_pair(
         mut self,
-        key_pair: Option<Arc<AuthorityPrivateKey>>,
+        key_pair: Option<Arc<ValidatorPrivateKey>>,
     ) -> Self {
         self.chain_worker_config.key_pair = key_pair;
         self.chain_workers.lock().unwrap().clear();
@@ -1058,13 +1058,13 @@ impl<StorageClient> WorkerState<StorageClient>
 where
     StorageClient: Storage,
 {
-    /// Gets a reference to the validator's [`AuthorityPublicKey`].
+    /// Gets a reference to the validator's [`ValidatorPublicKey`].
     ///
     /// # Panics
     ///
     /// If the validator doesn't have a key pair assigned to it.
     #[instrument(level = "trace", skip(self))]
-    pub fn public_key(&self) -> AuthorityPublicKey {
+    pub fn public_key(&self) -> ValidatorPublicKey {
         self.chain_worker_config
             .key_pair()
             .expect(

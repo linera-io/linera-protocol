@@ -4,7 +4,7 @@
 
 use custom_debug_derive::Debug;
 use linera_base::{
-    crypto::{AuthoritySignature, CryptoHash},
+    crypto::{CryptoHash, ValidatorSignature},
     data_types::Round,
     hashed::Hashed,
 };
@@ -18,14 +18,14 @@ use crate::{data_types::LiteValue, ChainError};
 pub struct GenericCertificate<T> {
     value: Hashed<T>,
     pub round: Round,
-    signatures: Vec<(ValidatorName, AuthoritySignature)>,
+    signatures: Vec<(ValidatorName, ValidatorSignature)>,
 }
 
 impl<T> GenericCertificate<T> {
     pub fn new(
         value: Hashed<T>,
         round: Round,
-        mut signatures: Vec<(ValidatorName, AuthoritySignature)>,
+        mut signatures: Vec<(ValidatorName, ValidatorSignature)>,
     ) -> Self {
         signatures.sort_by_key(|&(validator_name, _)| validator_name);
 
@@ -61,16 +61,16 @@ impl<T> GenericCertificate<T> {
         self.value.hash()
     }
 
-    pub fn destructure(self) -> (Hashed<T>, Round, Vec<(ValidatorName, AuthoritySignature)>) {
+    pub fn destructure(self) -> (Hashed<T>, Round, Vec<(ValidatorName, ValidatorSignature)>) {
         (self.value, self.round, self.signatures)
     }
 
-    pub fn signatures(&self) -> &Vec<(ValidatorName, AuthoritySignature)> {
+    pub fn signatures(&self) -> &Vec<(ValidatorName, ValidatorSignature)> {
         &self.signatures
     }
 
     #[cfg(with_testing)]
-    pub fn signatures_mut(&mut self) -> &mut Vec<(ValidatorName, AuthoritySignature)> {
+    pub fn signatures_mut(&mut self) -> &mut Vec<(ValidatorName, ValidatorSignature)> {
         &mut self.signatures
     }
 
@@ -78,8 +78,8 @@ impl<T> GenericCertificate<T> {
     /// It's the responsibility of the caller to not insert duplicates
     pub fn add_signature(
         &mut self,
-        signature: (ValidatorName, AuthoritySignature),
-    ) -> &Vec<(ValidatorName, AuthoritySignature)> {
+        signature: (ValidatorName, ValidatorSignature),
+    ) -> &Vec<(ValidatorName, ValidatorSignature)> {
         let index = self
             .signatures
             .binary_search_by(|(name, _)| name.cmp(&signature.0))

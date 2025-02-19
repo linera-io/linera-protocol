@@ -17,7 +17,7 @@ use std::{
 
 use assert_matches::assert_matches;
 use linera_base::{
-    crypto::{AccountPrivateKey, AccountPublicKey, AuthorityPrivateKey, CryptoHash},
+    crypto::{AccountPrivateKey, AccountPublicKey, CryptoHash, ValidatorPrivateKey},
     data_types::*,
     hashed::Hashed,
     identifiers::{
@@ -89,7 +89,7 @@ fn init_worker<S>(
 where
     S: Storage + Clone + Send + Sync + 'static,
 {
-    let key_pair = AuthorityPrivateKey::generate();
+    let key_pair = ValidatorPrivateKey::generate();
     let committee = Committee::make_simple(vec![ValidatorName(key_pair.public())]);
     let worker = WorkerState::new(
         "Single validator node".to_string(),

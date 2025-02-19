@@ -16,12 +16,12 @@ pub use hash::*;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-/// The public key of an authority.
-pub type AuthorityPublicKey = ed25519::Ed25519PublicKey;
-/// The private key of an authority.
-pub type AuthorityPrivateKey = ed25519::Ed25519SecretKey;
-/// The signature of an authority.
-pub type AuthoritySignature = ed25519::Ed25519Signature;
+/// The public key of a validator.
+pub type ValidatorPublicKey = ed25519::Ed25519PublicKey;
+/// The private key of a validator.
+pub type ValidatorPrivateKey = ed25519::Ed25519SecretKey;
+/// The signature of a validator.
+pub type ValidatorSignature = ed25519::Ed25519Signature;
 
 /// The public key of a chain owner.
 /// Corresponding private key is allowed to propose blocks

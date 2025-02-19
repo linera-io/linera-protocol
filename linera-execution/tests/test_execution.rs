@@ -9,7 +9,7 @@ use anyhow::Context as _;
 use assert_matches::assert_matches;
 use futures::{stream, StreamExt, TryStreamExt};
 use linera_base::{
-    crypto::{AccountPublicKey, AuthorityPublicKey},
+    crypto::{AccountPublicKey, ValidatorPublicKey},
     data_types::{
         Amount, ApplicationPermissions, BlockHeight, Resources, SendMessageRequest, Timestamp,
     },
@@ -1412,7 +1412,7 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
 /// Tests the system API calls `open_chain` and `chain_ownership`.
 #[tokio::test]
 async fn test_open_chain() -> anyhow::Result<()> {
-    let committee = Committee::make_simple(vec![AuthorityPublicKey::test_key(0).into()]);
+    let committee = Committee::make_simple(vec![ValidatorPublicKey::test_key(0).into()]);
     let committees = BTreeMap::from([(Epoch::ZERO, committee)]);
     let chain_key = AccountPublicKey::test_key(1);
     let ownership = ChainOwnership::single(chain_key.into());
@@ -1517,7 +1517,7 @@ async fn test_open_chain() -> anyhow::Result<()> {
 /// Tests the system API call `close_chain``.
 #[tokio::test]
 async fn test_close_chain() -> anyhow::Result<()> {
-    let committee = Committee::make_simple(vec![AuthorityPublicKey::test_key(0).into()]);
+    let committee = Committee::make_simple(vec![ValidatorPublicKey::test_key(0).into()]);
     let committees = BTreeMap::from([(Epoch::ZERO, committee)]);
     let ownership = ChainOwnership::single(AccountPublicKey::test_key(1).into());
     let state = SystemExecutionState {

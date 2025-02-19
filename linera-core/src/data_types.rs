@@ -6,7 +6,7 @@ use std::{collections::BTreeMap, ops::Not};
 
 use custom_debug_derive::Debug;
 use linera_base::{
-    crypto::{AuthorityPrivateKey, AuthoritySignature, BcsSignable, CryptoError, CryptoHash},
+    crypto::{BcsSignable, CryptoError, CryptoHash, ValidatorPrivateKey, ValidatorSignature},
     data_types::{Amount, BlockHeight, Round, Timestamp},
     identifiers::{AccountOwner, ChainDescription, ChainId},
 };
@@ -217,7 +217,7 @@ impl ChainInfo {
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct ChainInfoResponse {
     pub info: Box<ChainInfo>,
-    pub signature: Option<AuthoritySignature>,
+    pub signature: Option<ValidatorSignature>,
 }
 
 /// An internal request between chains within a validator.
@@ -292,20 +292,20 @@ where
 }
 
 impl ChainInfoResponse {
-    pub fn new(info: impl Into<ChainInfo>, key_pair: Option<&AuthorityPrivateKey>) -> Self {
+    pub fn new(info: impl Into<ChainInfo>, key_pair: Option<&ValidatorPrivateKey>) -> Self {
         let info = Box::new(info.into());
-        let signature = key_pair.map(|kp| AuthoritySignature::new(&*info, kp));
+        let signature = key_pair.map(|kp| ValidatorSignature::new(&*info, kp));
         Self { info, signature }
     }
 
     /// Signs the [`ChainInfo`] stored inside this [`ChainInfoResponse`] with the provided
-    /// [`AuthorityPrivateKey`].
-    pub fn sign(&mut self, key_pair: &AuthorityPrivateKey) {
-        self.signature = Some(AuthoritySignature::new(&*self.info, key_pair));
+    /// [`ValidatorPrivateKey`].
+    pub fn sign(&mut self, key_pair: &ValidatorPrivateKey) {
+        self.signature = Some(ValidatorSignature::new(&*self.info, key_pair));
     }
 
     pub fn check(&self, name: &ValidatorName) -> Result<(), CryptoError> {
-        AuthoritySignature::check_optional_signature(self.signature.as_ref(), &*self.info, &name.0)
+        ValidatorSignature::check_optional_signature(self.signature.as_ref(), &*self.info, &name.0)
     }
 
     /// Returns the committee in the latest epoch.

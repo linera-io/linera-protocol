@@ -11,7 +11,7 @@ use std::{num::NonZeroUsize, sync::Arc};
 use dashmap::DashMap;
 use futures::FutureExt as _;
 use linera_base::{
-    crypto::{AccountPrivateKey, AuthorityPrivateKey},
+    crypto::{AccountPrivateKey, ValidatorPrivateKey},
     data_types::{Amount, ApplicationPermissions, Timestamp},
     identifiers::{ApplicationId, BytecodeId, ChainDescription, ChainId, MessageId, Owner},
     ownership::ChainOwnership,
@@ -43,7 +43,7 @@ use crate::ContractAbi;
 /// # });
 /// ```
 pub struct TestValidator {
-    key_pair: AuthorityPrivateKey,
+    key_pair: ValidatorPrivateKey,
     committee: Committee,
     storage: DbStorage<MemoryStore, TestClock>,
     worker: WorkerState<DbStorage<MemoryStore, TestClock>>,

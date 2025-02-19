@@ -9,8 +9,8 @@ use std::{
 
 use linera_base::{
     crypto::{
-        AccountPrivateKey, AccountPublicKey, AuthorityPrivateKey, BcsSignable, CryptoHash,
-        CryptoRng,
+        AccountPrivateKey, AccountPublicKey, BcsSignable, CryptoHash, CryptoRng,
+        ValidatorPrivateKey,
     },
     data_types::{Amount, Timestamp},
     identifiers::{ChainDescription, ChainId},
@@ -57,7 +57,7 @@ pub struct ValidatorConfig {
 #[derive(Serialize, Deserialize)]
 pub struct ValidatorServerConfig {
     pub validator: ValidatorConfig,
-    pub key: AuthorityPrivateKey,
+    pub key: ValidatorPrivateKey,
     pub internal_network: ValidatorInternalNetworkConfig,
 }
 
