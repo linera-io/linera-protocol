@@ -182,7 +182,7 @@ jobs:
     - name: Add Solc to PATH
       run: echo "/home/runner/.solc" >> $GITHUB_PATH
     - name: List the content of the Solc cache
-      run: ls /home/runner/.solc/v0.8.25
+      run: ls /home/runner/.solc/v0.8.25/solc-static-linux
     - name: Check if Solc is in PATH
       run: which solc-v0.8.25 || echo "Solc not found in PATH"
     - name: Install Protoc
