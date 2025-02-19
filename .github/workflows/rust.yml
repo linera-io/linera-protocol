@@ -177,6 +177,8 @@ jobs:
       uses: pontem-network/get-solc@master
       with:
         version: v0.8.25
+    - name: Check if solc is in PATH
+      run: which solc || echo "Solc not found in PATH"
     - name: Install Protoc
       uses: arduino/setup-protoc@v1
       with:
