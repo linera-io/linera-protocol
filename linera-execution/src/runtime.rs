@@ -1349,9 +1349,9 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
     }
 
     fn query_service(
-            &mut self,
-            application_id: ApplicationId,
-            query: Vec<u8>,
+        &mut self,
+        application_id: ApplicationId,
+        query: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
         ensure!(
             cfg!(feature = "unstable-oracles"),
