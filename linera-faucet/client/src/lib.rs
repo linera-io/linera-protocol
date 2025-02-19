@@ -170,7 +170,7 @@ impl Faucet {
     }
 
     pub async fn current_validators(&self) -> Result<Vec<(ValidatorPublicKey, String)>> {
-        let query = "query { currentValidators { name networkAddress } }";
+        let query = "query { currentValidators { validator networkAddress } }";
         let client = reqwest_client();
         let response = client
             .post(&self.url)
@@ -198,8 +198,9 @@ impl Faucet {
         validators
             .into_iter()
             .map(|mut validator| {
-                let name = serde_json::from_value::<ValidatorPublicKey>(validator["name"].take())
-                    .context("could not parse current validators: invalid name")?;
+                let name =
+                    serde_json::from_value::<ValidatorPublicKey>(validator["validator"].take())
+                        .context("could not parse current validators: invalid name")?;
                 let addr = validator["networkAddress"]
                     .as_str()
                     .context("could not parse current validators: invalid address")?
