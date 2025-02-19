@@ -52,7 +52,7 @@ impl JsonRpcClient for EthereumClientSimplified {
 }
 
 impl EthereumClientSimplified {
-    /// Connects to an existing Ethereum node and creates an `EthereumEndpoint`
+    /// Connects to an existing Ethereum node and creates an `EthereumClientSimplified`
     /// if successful.
     pub fn new(url: String) -> Self {
         let id = Mutex::new(1);
