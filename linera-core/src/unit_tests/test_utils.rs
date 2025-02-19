@@ -250,14 +250,14 @@ impl<S> LocalValidatorClient<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
 {
-    fn new(name: ValidatorPublicKey, state: WorkerState<S>) -> Self {
+    fn new(validator: ValidatorPublicKey, state: WorkerState<S>) -> Self {
         let client = LocalValidator {
             fault_type: FaultType::Honest,
             state,
             notifier: Arc::new(ChannelNotifier::default()),
         };
         Self {
-            validator_pk: name,
+            validator_pk: validator,
             client: Arc::new(Mutex::new(client)),
         }
     }

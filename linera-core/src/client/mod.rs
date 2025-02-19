@@ -921,7 +921,7 @@ where
             .client
             .validator_node_provider
             .make_nodes(committee)?
-            .map(|(name, node)| RemoteNode { name, node })
+            .map(|(validator, node)| RemoteNode { validator, node })
             .collect())
     }
 
@@ -1309,7 +1309,7 @@ where
             .await?
             .received_certificate_trackers
             .get()
-            .get(&remote_node.name)
+            .get(&remote_node.validator)
             .copied()
             .unwrap_or(0);
         let (committees, max_epoch) = self.known_committees().await?;
@@ -1409,7 +1409,7 @@ where
         }
 
         Ok(ReceivedCertificatesFromValidator {
-            name: remote_node.name,
+            validator: remote_node.validator,
             tracker,
             certificates,
             other_sender_chains,
@@ -1456,7 +1456,7 @@ where
         let mut new_trackers = BTreeMap::new();
         for response in received_certificates_batches {
             other_sender_chains.extend(response.other_sender_chains);
-            new_trackers.insert(response.name, response.tracker);
+            new_trackers.insert(response.validator, response.tracker);
             for certificate in response.certificates {
                 certificates
                     .entry(certificate.block().header.chain_id)
@@ -1771,7 +1771,7 @@ where
                     if let Err(err) = self.try_process_locking_block_from(remote_node, cert).await {
                         warn!(
                             "Skipping certificate {hash} from validator {}: {err}",
-                            remote_node.name
+                            remote_node.validator
                         );
                     }
                 }
@@ -1797,8 +1797,8 @@ where
                             {
                                 Ok(content) => content,
                                 Err(err) => {
-                                    let name = &remote_node.name;
-                                    warn!("Skipping proposal from {owner} and validator {name}: {err}");
+                                    let validator = &remote_node.validator;
+                                    warn!("Skipping proposal from {owner} and validator {validator}: {err}");
                                     continue;
                                 }
                             };
@@ -1837,8 +1837,8 @@ where
                     }
                 }
 
-                let name = &remote_node.name;
-                warn!("Skipping proposal from {owner} and validator {name}: {err}");
+                let validator = &remote_node.validator;
+                warn!("Skipping proposal from {owner} and validator {validator}: {err}");
             }
         }
         Ok(())
@@ -3350,8 +3350,8 @@ where
         });
         // Add tasks for new validators.
         let validator_tasks = FuturesUnordered::new();
-        for (name, node) in nodes {
-            let hash_map::Entry::Vacant(entry) = senders.entry(name) else {
+        for (validator, node) in nodes {
+            let hash_map::Entry::Vacant(entry) = senders.entry(validator) else {
                 continue;
             };
             let stream = stream::once({
@@ -3360,9 +3360,9 @@ where
             })
             .filter_map(move |result| async move {
                 if let Err(error) = &result {
-                    warn!(?error, "Could not connect to validator {name}");
+                    warn!(?error, "Could not connect to validator {validator}");
                 } else {
-                    info!("Connected to validator {name}");
+                    info!("Connected to validator {validator}");
                 }
                 result.ok()
             })
@@ -3371,7 +3371,7 @@ where
             let mut stream = Box::pin(stream);
             let this = self.clone();
             let local_node = local_node.clone();
-            let remote_node = RemoteNode { name, node };
+            let remote_node = RemoteNode { validator, node };
             validator_tasks.push(async move {
                 while let Some(notification) = stream.next().await {
                     this.process_notification(
@@ -3502,7 +3502,7 @@ impl Drop for AbortOnDrop {
 /// The result of `synchronize_received_certificates_from_validator`.
 struct ReceivedCertificatesFromValidator {
     /// The name of the validator we downloaded from.
-    name: ValidatorPublicKey,
+    validator: ValidatorPublicKey,
     /// The new tracker value for that validator.
     tracker: u64,
     /// The downloaded certificates. The signatures were already checked and they are ready

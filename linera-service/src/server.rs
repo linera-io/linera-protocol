@@ -284,14 +284,14 @@ fn make_server_config<R: CryptoRng>(
     options: ValidatorOptions,
 ) -> anyhow::Result<persistent::File<ValidatorServerConfig>> {
     let key = ValidatorSecretKey::generate_from(rng);
-    let name = key.public();
+    let validator = key.public();
     let network = ValidatorPublicNetworkConfig {
         protocol: options.external_protocol,
         host: options.host,
         port: options.port,
     };
     let internal_network = ValidatorInternalNetworkConfig {
-        name,
+        validator,
         protocol: options.internal_protocol,
         shards: options.shards,
         host: options.internal_host,
@@ -299,7 +299,7 @@ fn make_server_config<R: CryptoRng>(
         metrics_host: options.metrics_host,
         metrics_port: options.metrics_port,
     };
-    let validator = ValidatorConfig { network, name };
+    let validator = ValidatorConfig { network, validator };
     Ok(persistent::File::new(
         path,
         ValidatorServerConfig {
@@ -475,12 +475,12 @@ fn log_file_name_for(command: &ServerCommand) -> Cow<'static, str> {
         } => {
             let server_config: ValidatorServerConfig =
                 util::read_json(server_config_path).expect("Failed to read server config");
-            let name = &server_config.validator.name;
+            let publc_key = &server_config.validator.validator;
 
             if let Some(shard) = shard {
-                format!("validator-{name}-shard-{shard}")
+                format!("validator-{publc_key}-shard-{shard}")
             } else {
-                format!("validator-{name}")
+                format!("validator-{publc_key}")
             }
             .into()
         }
@@ -565,7 +565,7 @@ async fn run(options: ServerOptions) {
                     .await
                     .expect("Unable to write server config file");
                 info!("Wrote server config {}", path.to_str().unwrap());
-                println!("{}", server.validator.name);
+                println!("{}", server.validator.validator);
                 config_validators.push(Persist::into_value(server).validator);
             }
             if let Some(committee) = committee {

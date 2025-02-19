@@ -24,7 +24,6 @@ doc_scalar!(
 );
 doc_scalar!(Recipient, "The recipient of a transfer");
 doc_scalar!(UserData, "Optional user message attached to a transfer");
-// doc_scalar!(ValidatorPublicKey, "The identity of a validator");
 
 #[async_graphql::Object(cache_control(no_cache))]
 impl Committee {

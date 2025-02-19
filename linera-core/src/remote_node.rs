@@ -29,7 +29,7 @@ use crate::{
 /// A validator node together with the validator's name.
 #[derive(Clone, Debug)]
 pub struct RemoteNode<N> {
-    pub name: ValidatorPublicKey,
+    pub validator: ValidatorPublicKey,
     #[debug(skip)]
     pub node: N,
 }
@@ -105,7 +105,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
         certificate: &ValidatedBlockCertificate,
         delivery: CrossChainMessageDelivery,
     ) -> Result<Box<ChainInfo>, NodeError> {
-        if certificate.is_signed_by(&self.name) {
+        if certificate.is_signed_by(&self.validator) {
             let result = self
                 .handle_lite_certificate(certificate.lite_certificate(), delivery)
                 .await;
@@ -113,7 +113,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
                 Err(NodeError::MissingCertificateValue) => {
                     warn!(
                         "Validator {} forgot a certificate value that they signed before",
-                        self.name
+                        self.validator
                     );
                 }
                 _ => return result,
@@ -127,7 +127,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
         certificate: &ConfirmedBlockCertificate,
         delivery: CrossChainMessageDelivery,
     ) -> Result<Box<ChainInfo>, NodeError> {
-        if certificate.is_signed_by(&self.name) {
+        if certificate.is_signed_by(&self.validator) {
             let result = self
                 .handle_lite_certificate(certificate.lite_certificate(), delivery)
                 .await;
@@ -135,7 +135,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
                 Err(NodeError::MissingCertificateValue) => {
                     warn!(
                         "Validator {} forgot a certificate value that they signed before",
-                        self.name
+                        self.validator
                     );
                 }
                 _ => return result,
@@ -156,7 +156,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
         ensure!(
             proposed.map_or(true, |proposal| proposal.content.block.chain_id == chain_id)
                 && locking.map_or(true, |cert| cert.chain_id() == chain_id)
-                && response.check(&self.name).is_ok(),
+                && response.check(&self.validator).is_ok(),
             NodeError::InvalidChainInfoResponse
         );
         Ok(response.info)
@@ -169,7 +169,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
         start: BlockHeight,
         limit: u64,
     ) -> Result<Option<Vec<ConfirmedBlockCertificate>>, NodeError> {
-        tracing::debug!(name = ?self.name, ?chain_id, ?start, ?limit, "Querying certificates");
+        tracing::debug!(name = ?self.validator, ?chain_id, ?start, ?limit, "Querying certificates");
         let range = BlockHeightRange {
             start,
             limit: Some(limit),
@@ -202,7 +202,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
         if !certificate.requires_blob(&blob_id) {
             warn!(
                 "Got invalid last used by certificate for blob {} from validator {}",
-                blob_id, self.name
+                blob_id, self.validator
             );
             return Err(NodeError::InvalidCertificateForBlob(blob_id));
         }
@@ -253,7 +253,10 @@ impl<N: ValidatorNode> RemoteNode<N> {
             Ok(blob) => {
                 let blob = Blob::new(blob);
                 if blob.id() != blob_id {
-                    tracing::info!("Validator {} sent an invalid blob {blob_id}.", self.name);
+                    tracing::info!(
+                        "Validator {} sent an invalid blob {blob_id}.",
+                        self.validator
+                    );
                     None
                 } else {
                     Some(blob)
@@ -262,7 +265,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
             Err(error) => {
                 tracing::debug!(
                     "Failed to fetch blob {blob_id} from validator {}: {error}",
-                    self.name
+                    self.validator
                 );
                 None
             }
@@ -361,16 +364,16 @@ impl<N: ValidatorNode> RemoteNode<N> {
     ) -> Result<(), NodeError> {
         ensure!(!blob_ids.is_empty(), NodeError::EmptyBlobsNotFound);
         let required = certificate.inner().required_blob_ids();
-        let name = &self.name;
+        let validator = &self.validator;
         for blob_id in blob_ids {
             if !required.contains(blob_id) {
-                warn!("validator {name} requested blob {blob_id:?} but it is not required");
+                warn!("validator {validator} requested blob {blob_id:?} but it is not required");
                 return Err(NodeError::UnexpectedEntriesInBlobsNotFound);
             }
         }
         let unique_missing_blob_ids = blob_ids.iter().cloned().collect::<HashSet<_>>();
         if blob_ids.len() > unique_missing_blob_ids.len() {
-            warn!("blobs requested by validator {name} contain duplicates");
+            warn!("blobs requested by validator {validator} contain duplicates");
             return Err(NodeError::DuplicatesInBlobsNotFound);
         }
         Ok(())

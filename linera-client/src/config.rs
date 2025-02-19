@@ -48,7 +48,7 @@ util::impl_from_dynamic!(Error:Persistence, persistent::file::Error);
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ValidatorConfig {
     /// The public key of the validator.
-    pub name: ValidatorPublicKey,
+    pub validator: ValidatorPublicKey,
     /// The network configuration for the validator.
     pub network: ValidatorPublicNetworkConfig,
 }
@@ -79,7 +79,7 @@ impl CommitteeConfig {
             .into_iter()
             .map(|v| {
                 (
-                    v.name,
+                    v.validator,
                     ValidatorState {
                         network_address: v.network.to_string(),
                         votes: 100,

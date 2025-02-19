@@ -68,7 +68,7 @@ pub struct ClaimOutcome {
 
 #[derive(Debug, Deserialize, SimpleObject)]
 pub struct Validator {
-    pub name: ValidatorPublicKey,
+    pub validator: ValidatorPublicKey,
     pub network_address: String,
 }
 
@@ -94,8 +94,8 @@ where
         Ok(committee
             .validators()
             .iter()
-            .map(|(name, validator)| Validator {
-                name: *name,
+            .map(|(public_key, validator)| Validator {
+                validator: *public_key,
                 network_address: validator.network_address.clone(),
             })
             .collect())

@@ -475,7 +475,7 @@ pub enum ClientCommand {
     SetValidator {
         /// The public key of the validator.
         #[arg(long)]
-        name: ValidatorPublicKey,
+        validator: ValidatorPublicKey,
 
         /// Network address
         #[arg(long)]
@@ -494,7 +494,7 @@ pub enum ClientCommand {
     RemoveValidator {
         /// The public key of the validator.
         #[arg(long)]
-        name: ValidatorPublicKey,
+        validator: ValidatorPublicKey,
     },
 
     /// Deprecates all committees except the last one.
