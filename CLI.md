@@ -958,20 +958,20 @@ Operation on the storage
 
 ###### **Subcommands:**
 
-* `delete_all` — Delete all the namespaces of the database
+* `delete_all` — Delete all the namespaces in the database
 * `delete_namespace` — Delete a single namespace from the database
 * `check_existence` — Check existence of a namespace in the database
 * `check_absence` — Check absence of a namespace in the database
 * `initialize` — Initialize a namespace in the database
-* `list_namespaces` — List the namespaces of the database
-* `list_blob_ids` — List the blob IDs of the database
-* `list_chain_ids` — List the chain IDs of the database
+* `list_namespaces` — List the namespaces in the database
+* `list_blob_ids` — List the blob IDs in the database
+* `list_chain_ids` — List the chain IDs in the database
 
 
 
 ## `linera storage delete_all`
 
-Delete all the namespaces of the database
+Delete all the namespaces in the database
 
 **Usage:** `linera storage delete_all --storage <STORAGE_CONFIG>`
 
@@ -1031,7 +1031,7 @@ Initialize a namespace in the database
 
 ## `linera storage list_namespaces`
 
-List the namespaces of the database
+List the namespaces in the database
 
 **Usage:** `linera storage list_namespaces --storage <STORAGE_CONFIG>`
 
@@ -1043,7 +1043,7 @@ List the namespaces of the database
 
 ## `linera storage list_blob_ids`
 
-List the blob IDs of the database
+List the blob IDs in the database
 
 **Usage:** `linera storage list_blob_ids --storage <STORAGE_CONFIG>`
 
@@ -1055,7 +1055,7 @@ List the blob IDs of the database
 
 ## `linera storage list_chain_ids`
 
-List the chain IDs of the database
+List the chain IDs in the database
 
 **Usage:** `linera storage list_chain_ids --storage <STORAGE_CONFIG>`
 

@@ -944,7 +944,7 @@ pub static DEFAULT_PAUSE_AFTER_GQL_MUTATIONS_SECS: &str = "3";
 
 #[derive(Clone, clap::Parser)]
 pub enum DatabaseToolCommand {
-    /// Delete all the namespaces of the database
+    /// Delete all the namespaces in the database
     #[command(name = "delete_all")]
     DeleteAll {
         /// Storage configuration for the blockchain history.
@@ -984,7 +984,7 @@ pub enum DatabaseToolCommand {
         storage_config: String,
     },
 
-    /// List the namespaces of the database
+    /// List the namespaces in the database
     #[command(name = "list_namespaces")]
     ListNamespaces {
         /// Storage configuration for the blockchain history.
@@ -992,7 +992,7 @@ pub enum DatabaseToolCommand {
         storage_config: String,
     },
 
-    /// List the blob IDs of the database
+    /// List the blob IDs in the database
     #[command(name = "list_blob_ids")]
     ListBlobIds {
         /// Storage configuration for the blockchain history.
@@ -1000,7 +1000,7 @@ pub enum DatabaseToolCommand {
         storage_config: String,
     },
 
-    /// List the chain IDs of the database
+    /// List the chain IDs in the database
     #[command(name = "list_chain_ids")]
     ListChainIds {
         /// Storage configuration for the blockchain history.
