@@ -20,7 +20,6 @@ use linera_core::{
     node::NodeError,
     worker::Notification,
 };
-use linera_execution::committee::ValidatorName;
 use thiserror::Error;
 use tonic::{Code, Status};
 
@@ -631,22 +630,6 @@ impl TryFrom<api::PublicKey> for ValidatorPublicKey {
     }
 }
 
-impl From<ValidatorName> for api::PublicKey {
-    fn from(validator_name: ValidatorName) -> Self {
-        Self {
-            bytes: validator_name.0 .0.to_vec(),
-        }
-    }
-}
-
-impl TryFrom<api::PublicKey> for ValidatorName {
-    type Error = GrpcProtoConversionError;
-
-    fn try_from(public_key: api::PublicKey) -> Result<Self, Self::Error> {
-        Ok(ValidatorName(public_key.try_into()?))
-    }
-}
-
 impl From<AccountSignature> for api::Signature {
     fn from(signature: AccountSignature) -> Self {
         Self {
@@ -1031,11 +1014,11 @@ pub mod tests {
     }
 
     #[test]
-    pub fn validator_name() {
-        let validator_name = ValidatorName::from(ValidatorSecretKey::generate().public());
+    pub fn validator_public_key() {
+        let validator_key = ValidatorPublicKey::from(ValidatorSecretKey::generate().public());
         // This is a correct comparison - `ValidatorNameRpc` does not exist in our
         // proto definitions.
-        round_trip_check::<_, api::PublicKey>(validator_name);
+        round_trip_check::<_, api::PublicKey>(validator_key);
     }
 
     #[test]
@@ -1140,7 +1123,7 @@ pub mod tests {
             },
             round: Round::MultiLeader(2),
             signatures: Cow::Owned(vec![(
-                ValidatorName::from(key_pair.public()),
+                key_pair.public(),
                 ValidatorSignature::new(&Foo("test".into()), &key_pair),
             )]),
         };
@@ -1165,7 +1148,7 @@ pub mod tests {
             )),
             Round::MultiLeader(3),
             vec![(
-                ValidatorName::from(key_pair.public()),
+                key_pair.public(),
                 ValidatorSignature::new(&Foo("test".into()), &key_pair),
             )],
         );
@@ -1208,7 +1191,7 @@ pub mod tests {
             Hashed::new(ValidatedBlock::new(outcome.clone().with(get_block()))),
             Round::SingleLeader(2),
             vec![(
-                ValidatorName::from(key_pair.public()),
+                key_pair.public(),
                 ValidatorSignature::new(&Foo("signed".into()), &key_pair),
             )],
         )

@@ -340,7 +340,7 @@ Committee:
     - validators:
         MAP:
           KEY:
-            TYPENAME: ValidatorName
+            TYPENAME: Ed25519PublicKey
           VALUE:
             TYPENAME: ValidatorState
     - policy:
@@ -354,7 +354,7 @@ ConfirmedBlockCertificate:
     - signatures:
         SEQ:
           TUPLE:
-            - TYPENAME: ValidatorName
+            - TYPENAME: Ed25519PublicKey
             - TYPENAME: Ed25519Signature
 CrateVersion:
   STRUCT:
@@ -466,7 +466,7 @@ LiteCertificate:
     - signatures:
         SEQ:
           TUPLE:
-            - TYPENAME: ValidatorName
+            - TYPENAME: Ed25519PublicKey
             - TYPENAME: Ed25519Signature
 LiteValue:
   STRUCT:
@@ -483,7 +483,7 @@ LiteVote:
     - round:
         TYPENAME: Round
     - validator:
-        TYPENAME: ValidatorName
+        TYPENAME: Ed25519PublicKey
     - signature:
         TYPENAME: Ed25519Signature
 LockingBlock:
@@ -1133,7 +1133,7 @@ TimeoutCertificate:
     - signatures:
         SEQ:
           TUPLE:
-            - TYPENAME: ValidatorName
+            - TYPENAME: Ed25519PublicKey
             - TYPENAME: Ed25519Signature
 TimeoutConfig:
   STRUCT:
@@ -1167,11 +1167,8 @@ ValidatedBlockCertificate:
     - signatures:
         SEQ:
           TUPLE:
-            - TYPENAME: ValidatorName
+            - TYPENAME: Ed25519PublicKey
             - TYPENAME: Ed25519Signature
-ValidatorName:
-  NEWTYPESTRUCT:
-    TYPENAME: Ed25519PublicKey
 ValidatorState:
   STRUCT:
     - network_address: STR

@@ -13,7 +13,7 @@ use linera_base::{
     bcs,
     crypto::{
         AccountPublicKey, AccountSecretKey, AccountSignature, BcsHashable, BcsSignable,
-        CryptoError, CryptoHash, ValidatorSecretKey, ValidatorSignature,
+        CryptoError, CryptoHash, ValidatorPublicKey, ValidatorSecretKey, ValidatorSignature,
     },
     data_types::{Amount, BlockHeight, Event, OracleResponse, Round, Timestamp},
     doc_scalar, ensure,
@@ -23,7 +23,7 @@ use linera_base::{
     },
 };
 use linera_execution::{
-    committee::{Committee, Epoch, ValidatorName},
+    committee::{Committee, Epoch},
     system::OpenChainConfig,
     Message, MessageKind, Operation, SystemMessage, SystemOperation,
 };
@@ -424,7 +424,7 @@ struct VoteValue(CryptoHash, Round, CertificateKind);
 pub struct Vote<T> {
     pub value: Hashed<T>,
     pub round: Round,
-    pub validator: ValidatorName,
+    pub validator: ValidatorPublicKey,
     pub signature: ValidatorSignature,
 }
 
@@ -439,7 +439,7 @@ impl<T> Vote<T> {
         Self {
             value,
             round,
-            validator: ValidatorName(key_pair.public()),
+            validator: key_pair.public(),
             signature,
         }
     }
@@ -469,7 +469,7 @@ impl<T> Vote<T> {
 pub struct LiteVote {
     pub value: LiteValue,
     pub round: Round,
-    pub validator: ValidatorName,
+    pub validator: ValidatorPublicKey,
     pub signature: ValidatorSignature,
 }
 
@@ -816,7 +816,7 @@ impl LiteVote {
         Self {
             value,
             round,
-            validator: ValidatorName(key_pair.public()),
+            validator: key_pair.public(),
             signature,
         }
     }
@@ -824,14 +824,14 @@ impl LiteVote {
     /// Verifies the signature in the vote.
     pub fn check(&self) -> Result<(), ChainError> {
         let hash_and_round = VoteValue(self.value.value_hash, self.round, self.value.kind);
-        Ok(self.signature.check(&hash_and_round, self.validator.0)?)
+        Ok(self.signature.check(&hash_and_round, self.validator)?)
     }
 }
 
 pub struct SignatureAggregator<'a, T> {
     committee: &'a Committee,
     weight: u64,
-    used_validators: HashSet<ValidatorName>,
+    used_validators: HashSet<ValidatorPublicKey>,
     partial: GenericCertificate<T>,
 }
 
@@ -851,14 +851,14 @@ impl<'a, T> SignatureAggregator<'a, T> {
     /// of `check` below. Returns an error if the signed value cannot be aggregated.
     pub fn append(
         &mut self,
-        validator: ValidatorName,
+        validator: ValidatorPublicKey,
         signature: ValidatorSignature,
     ) -> Result<Option<GenericCertificate<T>>, ChainError>
     where
         T: CertificateValue,
     {
         let hash_and_round = VoteValue(self.partial.hash(), self.partial.round, T::KIND);
-        signature.check(&hash_and_round, validator.0)?;
+        signature.check(&hash_and_round, validator)?;
         // Check that each validator only appears once.
         ensure!(
             !self.used_validators.contains(&validator),
@@ -883,7 +883,7 @@ impl<'a, T> SignatureAggregator<'a, T> {
 
 // Checks if the array slice is strictly ordered. That means that if the array
 // has duplicates, this will return False, even if the array is sorted
-pub(crate) fn is_strictly_ordered(values: &[(ValidatorName, ValidatorSignature)]) -> bool {
+pub(crate) fn is_strictly_ordered(values: &[(ValidatorPublicKey, ValidatorSignature)]) -> bool {
     values.windows(2).all(|pair| pair[0].0 < pair[1].0)
 }
 
@@ -892,7 +892,7 @@ pub(crate) fn check_signatures(
     value_hash: CryptoHash,
     certificate_kind: CertificateKind,
     round: Round,
-    signatures: &[(ValidatorName, ValidatorSignature)],
+    signatures: &[(ValidatorPublicKey, ValidatorSignature)],
     committee: &Committee,
 ) -> Result<(), ChainError> {
     // Check the quorum.
@@ -916,7 +916,7 @@ pub(crate) fn check_signatures(
     );
     // All that is left is checking signatures!
     let hash_and_round = VoteValue(value_hash, round, certificate_kind);
-    ValidatorSignature::verify_batch(&hash_and_round, signatures.iter().map(|(v, s)| (&v.0, s)))?;
+    ValidatorSignature::verify_batch(&hash_and_round, signatures.iter().map(|(v, s)| (v, s)))?;
     Ok(())
 }
 

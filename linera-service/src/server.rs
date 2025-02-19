@@ -24,7 +24,7 @@ use linera_client::{
     storage::{full_initialize_storage, run_with_storage, Runnable, StorageConfigNamespace},
 };
 use linera_core::{worker::WorkerState, JoinSetExt as _};
-use linera_execution::{committee::ValidatorName, WasmRuntime, WithWasmDefault};
+use linera_execution::{WasmRuntime, WithWasmDefault};
 use linera_rpc::{
     config::{
         CrossChainConfig, NetworkProtocol, NotificationConfig, ShardConfig, ShardId, TlsConfig,
@@ -284,7 +284,7 @@ fn make_server_config<R: CryptoRng>(
     options: ValidatorOptions,
 ) -> anyhow::Result<persistent::File<ValidatorServerConfig>> {
     let key = ValidatorSecretKey::generate_from(rng);
-    let name = ValidatorName(key.public());
+    let name = key.public();
     let network = ValidatorPublicNetworkConfig {
         protocol: options.external_protocol,
         host: options.host,

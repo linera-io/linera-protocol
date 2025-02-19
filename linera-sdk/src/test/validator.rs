@@ -18,7 +18,7 @@ use linera_base::{
 };
 use linera_core::worker::WorkerState;
 use linera_execution::{
-    committee::{Committee, Epoch, ValidatorName},
+    committee::{Committee, Epoch},
     system::{OpenChainConfig, SystemOperation, OPEN_CHAIN_MESSAGE_INDEX},
     WasmRuntime,
 };
@@ -68,7 +68,7 @@ impl TestValidator {
     /// Creates a new [`TestValidator`].
     pub async fn new() -> Self {
         let key_pair = ValidatorSecretKey::generate();
-        let committee = Committee::make_simple(vec![ValidatorName(key_pair.public())]);
+        let committee = Committee::make_simple(vec![key_pair.public()]);
         let wasm_runtime = Some(WasmRuntime::default());
         let storage = DbStorage::<MemoryStore, _>::make_test_storage(wasm_runtime)
             .now_or_never()

@@ -10,10 +10,8 @@ use std::{
 };
 
 use futures::future::Either;
-#[cfg(with_testing)]
-use linera_base::crypto::ValidatorPublicKey;
 use linera_base::{
-    crypto::{CryptoError, CryptoHash, ValidatorSecretKey},
+    crypto::{CryptoError, CryptoHash, ValidatorPublicKey, ValidatorSecretKey},
     data_types::{
         ArithmeticError, Blob, BlockHeight, DecompressionError, Round, UserApplicationDescription,
     },
@@ -33,10 +31,7 @@ use linera_chain::{
     },
     ChainError, ChainStateView,
 };
-use linera_execution::{
-    committee::{Epoch, ValidatorName},
-    ExecutionError, Query, QueryOutcome,
-};
+use linera_execution::{committee::Epoch, ExecutionError, Query, QueryOutcome};
 use linera_storage::Storage;
 use linera_views::views::ViewError;
 use lru::LruCache;
@@ -1038,7 +1033,7 @@ where
     pub async fn update_received_certificate_trackers(
         &self,
         chain_id: ChainId,
-        new_trackers: BTreeMap<ValidatorName, u64>,
+        new_trackers: BTreeMap<ValidatorPublicKey, u64>,
     ) -> Result<(), WorkerError> {
         self.query_chain_worker(chain_id, move |callback| {
             ChainWorkerRequest::UpdateReceivedCertificateTrackers {

@@ -53,7 +53,7 @@ use linera_chain::{
     ChainError, ChainExecutionContext, ChainStateView, ExecutionResultExt as _,
 };
 use linera_execution::{
-    committee::{Committee, Epoch, ValidatorName},
+    committee::{Committee, Epoch},
     system::{
         AdminOperation, OpenChainConfig, Recipient, SystemChannel, SystemOperation,
         CREATE_APPLICATION_MESSAGE_INDEX, OPEN_CHAIN_MESSAGE_INDEX,
@@ -3330,7 +3330,7 @@ where
     #[instrument(level = "trace", skip(senders))]
     async fn update_streams(
         &self,
-        senders: &mut HashMap<ValidatorName, AbortHandle>,
+        senders: &mut HashMap<ValidatorPublicKey, AbortHandle>,
     ) -> Result<impl Future<Output = ()>, ChainClientError> {
         let (chain_id, nodes, local_node) = {
             let committee = self.local_committee().await?;
@@ -3342,8 +3342,8 @@ where
             (self.chain_id, nodes, self.client.local_node.clone())
         };
         // Drop removed validators.
-        senders.retain(|name, abort| {
-            if !nodes.contains_key(name) {
+        senders.retain(|validator, abort| {
+            if !nodes.contains_key(validator) {
                 abort.abort();
             }
             !abort.is_aborted()
@@ -3502,7 +3502,7 @@ impl Drop for AbortOnDrop {
 /// The result of `synchronize_received_certificates_from_validator`.
 struct ReceivedCertificatesFromValidator {
     /// The name of the validator we downloaded from.
-    name: ValidatorName,
+    name: ValidatorPublicKey,
     /// The new tracker value for that validator.
     tracker: u64,
     /// The downloaded certificates. The signatures were already checked and they are ready

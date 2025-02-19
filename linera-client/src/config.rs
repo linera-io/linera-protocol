@@ -9,13 +9,14 @@ use std::{
 
 use linera_base::{
     crypto::{
-        AccountPublicKey, AccountSecretKey, BcsSignable, CryptoHash, CryptoRng, ValidatorSecretKey,
+        AccountPublicKey, AccountSecretKey, BcsSignable, CryptoHash, CryptoRng, ValidatorPublicKey,
+        ValidatorSecretKey,
     },
     data_types::{Amount, Timestamp},
     identifiers::{ChainDescription, ChainId},
 };
 use linera_execution::{
-    committee::{Committee, ValidatorName, ValidatorState},
+    committee::{Committee, ValidatorState},
     ResourceControlPolicy,
 };
 use linera_rpc::config::{ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig};
@@ -47,7 +48,7 @@ util::impl_from_dynamic!(Error:Persistence, persistent::file::Error);
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ValidatorConfig {
     /// The public key of the validator.
-    pub name: ValidatorName,
+    pub name: ValidatorPublicKey,
     /// The network configuration for the validator.
     pub network: ValidatorPublicNetworkConfig,
 }

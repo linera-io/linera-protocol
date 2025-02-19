@@ -10,7 +10,7 @@ use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
 use axum::{Extension, Router};
 use futures::lock::Mutex;
 use linera_base::{
-    crypto::CryptoHash,
+    crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{Amount, ApplicationPermissions, Timestamp},
     identifiers::{ChainId, MessageId, Owner},
     ownership::ChainOwnership,
@@ -20,7 +20,6 @@ use linera_client::{
     config::GenesisConfig,
 };
 use linera_core::data_types::ClientOutcome;
-use linera_execution::committee::ValidatorName;
 use linera_storage::{Clock as _, Storage};
 use serde::Deserialize;
 use tower_http::cors::CorsLayer;
@@ -69,7 +68,7 @@ pub struct ClaimOutcome {
 
 #[derive(Debug, Deserialize, SimpleObject)]
 pub struct Validator {
-    pub name: ValidatorName,
+    pub name: ValidatorPublicKey,
     pub network_address: String,
 }
 

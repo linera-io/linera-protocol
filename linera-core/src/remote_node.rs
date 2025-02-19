@@ -6,7 +6,7 @@ use std::{collections::HashSet, time::Duration};
 use custom_debug_derive::Debug;
 use futures::{future::try_join_all, stream::FuturesUnordered, StreamExt};
 use linera_base::{
-    crypto::CryptoHash,
+    crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{Blob, BlockHeight},
     ensure,
     identifiers::{BlobId, ChainId},
@@ -18,7 +18,6 @@ use linera_chain::{
         TimeoutCertificate, ValidatedBlockCertificate,
     },
 };
-use linera_execution::committee::ValidatorName;
 use rand::seq::SliceRandom as _;
 use tracing::{instrument, warn};
 
@@ -30,7 +29,7 @@ use crate::{
 /// A validator node together with the validator's name.
 #[derive(Clone, Debug)]
 pub struct RemoteNode<N> {
-    pub name: ValidatorName,
+    pub name: ValidatorPublicKey,
     #[debug(skip)]
     pub node: N,
 }

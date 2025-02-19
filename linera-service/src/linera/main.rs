@@ -40,10 +40,11 @@ use linera_core::{
     JoinSetExt as _,
 };
 use linera_execution::{
-    committee::{Committee, ValidatorName, ValidatorState},
+    committee::{Committee, ValidatorState},
     Message, ResourceControlPolicy, SystemMessage,
 };
 use linera_faucet_server::FaucetService;
+use linera_sdk::base::ValidatorPublicKey;
 use linera_service::{
     cli_wrappers,
     node_service::NodeService,
@@ -1208,7 +1209,7 @@ impl Job {
         chain_id: ChainId,
         message_id: MessageId,
         owner: Owner,
-        validators: Option<Vec<(ValidatorName, String)>>,
+        validators: Option<Vec<(ValidatorPublicKey, String)>>,
         context: &mut ClientContext<S, impl Persist<Target = Wallet>>,
     ) -> anyhow::Result<()>
     where

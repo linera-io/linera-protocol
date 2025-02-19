@@ -17,7 +17,7 @@ use linera_base::{
     ownership::ChainOwnership,
 };
 use linera_execution::{
-    committee::{Committee, Epoch, ValidatorName, ValidatorState},
+    committee::{Committee, Epoch, ValidatorState},
     system::{OpenChainConfig, Recipient},
     test_utils::{ExpectedCall, MockApplication},
     ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext, Message, MessageKind,
@@ -93,7 +93,7 @@ fn make_admin_message_id(height: BlockHeight) -> MessageId {
 }
 
 fn make_open_chain_config() -> OpenChainConfig {
-    let committee = Committee::make_simple(vec![ValidatorPublicKey::test_key(1).into()]);
+    let committee = Committee::make_simple(vec![ValidatorPublicKey::test_key(1)]);
     OpenChainConfig {
         ownership: ChainOwnership::single(AccountPublicKey::test_key(0).into()),
         admin_id: admin_id(),
@@ -120,7 +120,7 @@ async fn test_block_size_limit() {
         Epoch(0),
         Committee::new(
             BTreeMap::from([(
-                ValidatorName(ValidatorPublicKey::test_key(1)),
+                ValidatorPublicKey::test_key(1),
                 ValidatorState {
                     network_address: ValidatorPublicKey::test_key(1).to_string(),
                     votes: 1,

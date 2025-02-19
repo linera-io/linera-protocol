@@ -12,11 +12,11 @@ use std::collections::BTreeSet;
 
 pub use generic::GenericCertificate;
 use linera_base::{
-    crypto::ValidatorSignature,
+    crypto::{ValidatorPublicKey, ValidatorSignature},
     data_types::{BlockHeight, Round},
     identifiers::{BlobId, ChainId},
 };
-use linera_execution::committee::{Epoch, ValidatorName};
+use linera_execution::committee::Epoch;
 pub use lite::LiteCertificate;
 use serde::{Deserialize, Serialize};
 
@@ -76,7 +76,7 @@ impl Certificate {
         }
     }
 
-    pub fn signatures(&self) -> &Vec<(ValidatorName, ValidatorSignature)> {
+    pub fn signatures(&self) -> &Vec<(ValidatorPublicKey, ValidatorSignature)> {
         match self {
             Certificate::Validated(cert) => cert.signatures(),
             Certificate::Confirmed(cert) => cert.signatures(),
