@@ -1634,7 +1634,7 @@ where
 
     /// Handles the certificate in the local node and the resulting notifications.
     #[instrument(level = "trace", skip(certificate))]
-    async fn process_certificate<T: ProcessableCertificate>(
+    pub async fn process_certificate<T: ProcessableCertificate>(
         &self,
         certificate: GenericCertificate<T>,
     ) -> Result<(), LocalNodeError> {

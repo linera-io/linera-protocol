@@ -8,7 +8,7 @@ use std::{collections::HashSet, sync::Arc};
 use async_trait::async_trait;
 use futures::Future;
 use linera_base::{
-    crypto::AccountSecretKey,
+    crypto::{AccountSecretKey, CryptoHash},
     data_types::{BlockHeight, Timestamp},
     identifiers::{Account, ChainId},
     ownership::ChainOwnership,
@@ -16,7 +16,7 @@ use linera_base::{
 };
 use linera_chain::types::ConfirmedBlockCertificate;
 use linera_core::{
-    client::{BlanketMessagePolicy, ChainClient, Client, MessagePolicy},
+    client::{BlanketMessagePolicy, ChainClient, Client, MessagePolicy, PendingProposal},
     data_types::ClientOutcome,
     join_set_ext::JoinSet,
     node::CrossChainMessageDelivery,
@@ -39,7 +39,7 @@ use {
         data_types::{BlockProposal, ExecutedBlock, ProposedBlock, SignatureAggregator, Vote},
         types::{CertificateValue, ConfirmedBlock, GenericCertificate},
     },
-    linera_core::{data_types::ChainInfoQuery, node::ValidatorNode},
+    linera_core::{client::ChainClientError, data_types::ChainInfoQuery, node::ValidatorNode},
     linera_execution::{
         committee::Epoch,
         system::{OpenChainConfig, Recipient, SystemOperation, OPEN_CHAIN_MESSAGE_INDEX},
@@ -54,7 +54,6 @@ use {
 #[cfg(feature = "fs")]
 use {
     linera_base::{
-        crypto::CryptoHash,
         data_types::{BlobContent, Bytecode},
         identifiers::BytecodeId,
     },
@@ -262,20 +261,39 @@ where
             .map(|kp| kp.copy())
             .into_iter()
             .collect();
-        let mut chain_client = self.client.create_chain_client(
+        Ok(self.make_chain_client_internal(
             chain_id,
             known_key_pairs,
-            self.wallet.genesis_admin_chain(),
             chain.block_hash,
             chain.timestamp,
             chain.next_block_height,
             chain.pending_proposal.clone(),
+        ))
+    }
+
+    fn make_chain_client_internal(
+        &self,
+        chain_id: ChainId,
+        known_key_pairs: Vec<AccountSecretKey>,
+        block_hash: Option<CryptoHash>,
+        timestamp: Timestamp,
+        next_block_height: BlockHeight,
+        pending_proposal: Option<PendingProposal>,
+    ) -> ChainClient<NodeProvider, S> {
+        let mut chain_client = self.client.create_chain_client(
+            chain_id,
+            known_key_pairs,
+            self.wallet.genesis_admin_chain(),
+            block_hash,
+            timestamp,
+            next_block_height,
+            pending_proposal,
         );
         chain_client.options_mut().message_policy = MessagePolicy::new(
             self.blanket_message_policy,
             self.restrict_chain_ids_to.clone(),
         );
-        Ok(chain_client)
+        chain_client
     }
 
     pub fn make_node_provider(&self) -> NodeProvider {
@@ -565,6 +583,7 @@ where
     S: Storage + Clone + Send + Sync + 'static,
     W: Persist<Target = Wallet>,
 {
+    #[allow(clippy::too_many_arguments)]
     pub async fn run_benchmark(
         &mut self,
         bps: Option<usize>,
@@ -572,6 +591,7 @@ where
         clients: Vec<linera_rpc::Client>,
         transactions_per_block: usize,
         epoch: Epoch,
+        chain_clients: HashMap<ChainId, ChainClient<NodeProvider, S>>,
     ) -> Result<(), Error> {
         let shutdown_notifier = CancellationToken::new();
         tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
@@ -581,19 +601,18 @@ where
         for (chain_id, operations, key_pair) in blocks_infos_iter {
             if shutdown_notifier.is_cancelled() {
                 info!("Shutdown signal received, stopping benchmark");
-                self.save_wallet().await?;
-                return Ok(());
+                break;
             }
-            let chain = self.wallet.get(*chain_id).expect("should have chain");
+            let chain_client = &chain_clients[chain_id];
             let block = ProposedBlock {
                 epoch,
                 chain_id: *chain_id,
                 incoming_bundles: Vec::new(),
                 operations: operations.clone(),
-                previous_block_hash: chain.block_hash,
-                height: chain.next_block_height,
+                previous_block_hash: chain_client.block_hash(),
+                height: chain_client.next_block_height(),
                 authenticated_signer: Some(Owner::from(key_pair.public())),
-                timestamp: chain.timestamp.max(Timestamp::now()),
+                timestamp: chain_client.timestamp().max(Timestamp::now()),
             };
             let executed_block = self.stage_block_execution(block.clone(), None).await?;
             let value = Hashed::new(ConfirmedBlock::new(executed_block));
@@ -645,8 +664,13 @@ where
                 .await
                 .into_iter()
                 .collect::<Result<Vec<_>, _>>()?;
-            self.update_wallet_from_certificate(certificate.clone())
-                .await;
+
+            // Replay the certificate locally.
+            // No required certificates from other chains: This is only used with benchmark.
+            chain_client
+                .process_certificate(certificate.clone())
+                .await?;
+
             num_sent_proposals += 1;
             if let Some(bps) = bps {
                 if num_sent_proposals == bps {
@@ -674,7 +698,6 @@ where
         }
 
         if bps.is_none() {
-            self.save_wallet().await?;
             let elapsed = start.elapsed();
             let bps = num_sent_proposals as f64 / elapsed.as_secs_f64();
             info!(
@@ -684,6 +707,7 @@ where
             );
         }
 
+        self.close_benchmark_chains(chain_clients).await?;
         Ok(())
     }
 
@@ -728,64 +752,43 @@ where
         Ok(certificates)
     }
 
-    /// Creates chains if necessary, and returns a map of exactly `num_chains` chain IDs
-    /// with key pairs.
+    /// Creates chains, and returns a map of exactly `num_chains` chain IDs
+    /// with key pairs, as well as a map of the chain clients.
     pub async fn make_benchmark_chains(
         &mut self,
         num_chains: usize,
         balance: Amount,
-    ) -> Result<HashMap<ChainId, AccountSecretKey>, Error> {
-        let mut benchmark_chains = HashMap::new();
-        let start = Instant::now();
-        for chain_id in self.wallet.owned_chain_ids() {
-            if benchmark_chains.len() == num_chains {
-                break;
-            }
-            // This should never panic, because `owned_chain_ids` only returns the owned chains that
-            // we have a key pair for.
-            let key_pair = self
-                .wallet
-                .get(chain_id)
-                .and_then(|chain| chain.key_pair.as_ref().map(|kp| kp.copy()))
-                .unwrap();
-            let chain_client = self.make_chain_client(chain_id)?;
-
-            let ownership = chain_client.chain_info().await?.manager.ownership;
-            if !ownership.owners.is_empty() || ownership.super_owners.len() != 1 {
-                continue;
-            }
-            benchmark_chains.insert(chain_client.chain_id(), key_pair);
-        }
-
-        info!(
-            "Got {} chains from the wallet in {} ms",
-            benchmark_chains.len(),
-            start.elapsed().as_millis()
-        );
-
-        let chains_from_wallet = benchmark_chains.len();
+    ) -> Result<
+        (
+            HashMap<ChainId, AccountSecretKey>,
+            HashMap<ChainId, ChainClient<NodeProvider, S>>,
+        ),
+        Error,
+    > {
         let start = Instant::now();
         let default_chain_id = self
             .wallet
             .default_chain()
             .expect("should have default chain");
-        let num_chains_to_create = num_chains - benchmark_chains.len();
         let operations_per_block = 900; // Over this we seem to hit the block size limits.
 
         let mut key_pairs = Vec::new();
-        for _ in (0..num_chains_to_create).step_by(operations_per_block) {
+        for _ in (0..num_chains).step_by(operations_per_block) {
             key_pairs.push(self.wallet.generate_key_pair());
         }
         let mut key_pairs_iter = key_pairs.into_iter();
         let admin_id = self.wallet.genesis_admin_chain();
-        let chain_client = self.make_chain_client(default_chain_id)?;
-        for i in (0..num_chains_to_create).step_by(operations_per_block) {
-            let num_new_chains = operations_per_block.min(num_chains_to_create - i);
+        let default_chain_client = self.make_chain_client(default_chain_id)?;
+
+        let mut chain_clients = HashMap::new();
+        let mut benchmark_chains = HashMap::new();
+        for i in (0..num_chains).step_by(operations_per_block) {
+            let num_new_chains = operations_per_block.min(num_chains - i);
             let key_pair = key_pairs_iter.next().unwrap();
 
             let certificate = Self::execute_open_chains_operations(
                 num_new_chains,
-                &chain_client,
+                &default_chain_client,
                 balance,
                 &key_pair,
                 admin_id,
@@ -794,9 +797,6 @@ where
             info!("Block executed successfully");
 
             let block = certificate.block();
-            let timestamp = block.header.timestamp;
-
-            info!("Will update wallet for {} new chains", num_new_chains);
             for i in 0..num_new_chains {
                 let message_id = block
                     .message_id_for_operation(i, OPEN_CHAIN_MESSAGE_INDEX)
@@ -804,40 +804,73 @@ where
                 let chain_id = ChainId::child(message_id);
                 benchmark_chains.insert(chain_id, key_pair.copy());
                 self.client.track_chain(chain_id);
-                self.update_wallet_for_new_chain(chain_id, Some(key_pair.copy()), timestamp)
-                    .await?;
+
+                let chain_client = self.make_chain_client_internal(
+                    chain_id,
+                    vec![key_pair.copy()],
+                    None,
+                    certificate.block().header.timestamp,
+                    BlockHeight::ZERO,
+                    None,
+                );
+                chain_client.process_inbox().await?;
+                chain_clients.insert(chain_id, chain_client);
             }
-            info!("Updated wallet for {} new chains", num_new_chains);
         }
 
-        if num_chains - chains_from_wallet > 0 {
-            info!(
-                "Created {} chains in {} ms",
-                num_chains - chains_from_wallet,
-                start.elapsed().as_millis()
-            );
-        }
+        info!(
+            "Created {} chains in {} ms",
+            num_chains,
+            start.elapsed().as_millis()
+        );
 
         info!("Updating wallet from client");
-        self.update_wallet_from_client(&chain_client).await?;
+        self.update_wallet_from_client(&default_chain_client)
+            .await?;
         info!("Retrying pending outgoing messages");
-        let updated_chain_client = self.make_chain_client(default_chain_id)?;
-        updated_chain_client
+        default_chain_client
             .retry_pending_outgoing_messages()
             .await
             .context("outgoing messages to create the new chains should be delivered")?;
+        info!("Processing inbox");
+        default_chain_client.process_inbox().await?;
 
-        info!("Processing inboxes");
-        let start = Instant::now();
-        for chain_id in benchmark_chains.keys() {
-            let child_client = self.make_chain_client(*chain_id)?;
-            child_client.process_inbox().await?;
-            self.wallet.as_mut().update_from_state(&child_client).await;
+        Ok((benchmark_chains, chain_clients))
+    }
+
+    /// Closes the chains that were created for the benchmark.
+    pub async fn close_benchmark_chains(
+        &mut self,
+        chain_clients: HashMap<ChainId, ChainClient<NodeProvider, S>>,
+    ) -> Result<(), Error> {
+        let num_chains = chain_clients.len();
+
+        let mut join_set = task::JoinSet::new();
+        for chain_client in chain_clients.values() {
+            let chain_client = chain_client.clone();
+            join_set.spawn(async move {
+                chain_client
+                    .execute_operation(Operation::System(SystemOperation::CloseChain))
+                    .await?
+                    .expect("Close chain operation should not fail!");
+                Ok::<_, ChainClientError>(())
+            });
         }
-        info!("Processed inboxes in {} ms", start.elapsed().as_millis());
-        info!("Saving wallet");
-        self.save_wallet().await?;
-        Ok(benchmark_chains)
+
+        let start = Instant::now();
+        join_set
+            .join_all()
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()?;
+
+        info!(
+            "Closed {} chains in {} ms",
+            num_chains,
+            start.elapsed().as_millis()
+        );
+
+        Ok(())
     }
 
     async fn execute_open_chains_operations(
@@ -873,6 +906,7 @@ where
         &mut self,
         key_pairs: &HashMap<ChainId, AccountSecretKey>,
         application_id: ApplicationId,
+        chain_clients: &HashMap<ChainId, ChainClient<NodeProvider, S>>,
     ) -> Result<(), Error> {
         let default_chain_id = self
             .wallet
@@ -910,10 +944,9 @@ where
         self.update_wallet_from_client(&chain_client).await?;
         // Make sure all chains have registered the application now.
         let mut join_set = task::JoinSet::new();
-        for &chain_id in key_pairs.keys() {
-            let chain_client = self
-                .make_chain_client(chain_id)
-                .expect("chain should have been created");
+        for (chain_id, chain_client) in chain_clients.iter() {
+            let chain_id = *chain_id;
+            let chain_client = chain_client.clone();
             join_set.spawn(async move {
                 let mut delay_ms = 0;
                 let mut total_delay_ms = 0;
@@ -929,7 +962,7 @@ where
                         .contains_key(&application_id)
                         .await?
                     {
-                        return Ok::<_, Error>(chain_client);
+                        return Ok::<_, Error>(());
                     }
 
                     total_delay_ms += delay_ms;
@@ -947,14 +980,12 @@ where
                 panic!("Could not instantiate application on chain {chain_id:?}");
             });
         }
-        let clients = join_set
+        join_set
             .join_all()
             .await
             .into_iter()
             .collect::<Result<Vec<_>, _>>()?;
-        for client in clients {
-            self.update_wallet_from_client(&client).await?;
-        }
+
         Ok(())
     }
 
