@@ -38,7 +38,7 @@ impl Request {
         }
     }
 
-    /// Creates an HTTP POST [`Request`] for a `url` with a `payload` that's an arbitrary bytes.
+    /// Creates an HTTP POST [`Request`] for a `url` with a `payload` that's arbitrary bytes.
     pub fn post(url: impl Into<String>, payload: impl Into<Vec<u8>>) -> Self {
         Request {
             method: Method::Post,
@@ -188,7 +188,7 @@ impl Response {
     }
 }
 
-/// A header for a HTTP request or response.
+/// A header for an HTTP request or response.
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize, WitLoad, WitStore, WitType)]
 #[witty(name = "http-header")]
 pub struct Header {
