@@ -10,7 +10,7 @@ use std::{
 
 use chrono::{DateTime, Utc};
 use linera_base::{
-    crypto::{CryptoHash, ValidatorPublicKey},
+    crypto::{AccountPublicKey, CryptoHash, ValidatorPublicKey},
     data_types::{Amount, ApplicationPermissions, TimeDelta},
     identifiers::{
         Account, ApplicationId, BytecodeId, ChainId, MessageId, Owner, UserApplicationId,
@@ -478,6 +478,10 @@ pub enum ClientCommand {
         /// The public key of the validator.
         #[arg(long)]
         public_key: ValidatorPublicKey,
+
+        /// The public key of the account controlled by the validator.
+        #[arg(long)]
+        account_key: AccountPublicKey,
 
         /// Network address
         #[arg(long)]
