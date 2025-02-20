@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{
     le_bytes_to_u64_array, u64_array_to_le_bytes, BcsHashable, BcsSignable, CryptoError,
-    CryptoHash, HasTypeName, Hashable, ValidatorPublicKey, ValidatorSignature,
+    CryptoHash, HasTypeName, Hashable,
 };
 use crate::{doc_scalar, identifiers::Owner};
 
@@ -330,7 +330,7 @@ impl Ed25519Signature {
     pub fn verify_batch<'a, 'de, T, I>(value: &'a T, votes: I) -> Result<(), CryptoError>
     where
         T: BcsSignable<'de>,
-        I: IntoIterator<Item = (&'a ValidatorPublicKey, &'a ValidatorSignature)>,
+        I: IntoIterator<Item = (&'a Ed25519PublicKey, &'a Ed25519Signature)>,
     {
         Ed25519Signature::verify_batch_internal(value, votes).map_err(|error| {
             CryptoError::InvalidSignature {
