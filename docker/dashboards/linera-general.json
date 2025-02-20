@@ -120,14 +120,14 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "(sum(rate(linera_proxy_request_error[1h])) / (sum(rate(linera_proxy_request_success[1h])) + sum(rate(linera_proxy_request_error[1h])))) * 100",
+          "expr": "(sum(rate(linera_proxy_request_error[1m])) / (sum(rate(linera_proxy_request_success[1m])) + sum(rate(linera_proxy_request_error[1m])))) * 100",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Proxy Error rate (hourly)",
+      "title": "Proxy Error rate (1m)",
       "type": "timeseries"
     },
     {
@@ -216,14 +216,14 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(rate(linera_proxy_request_latency_bucket[1h])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(rate(linera_proxy_request_latency_bucket[1m])) by (le))",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Proxy p99 latency ms (hourly)",
+      "title": "Proxy p99 latency ms (1m)",
       "type": "timeseries"
     },
     {
@@ -312,14 +312,14 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum(rate(linera_proxy_request_latency_bucket[1h])) by (le))",
+          "expr": "histogram_quantile(0.90, sum(rate(linera_proxy_request_latency_bucket[1m])) by (le))",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Proxy p90 latency ms (hourly)",
+      "title": "Proxy p90 latency ms (1m)",
       "type": "timeseries"
     },
     {
@@ -408,14 +408,14 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(linera_proxy_request_latency_bucket[1h])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(rate(linera_proxy_request_latency_bucket[1m])) by (le))",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Proxy p50 latency ms (hourly)",
+      "title": "Proxy p50 latency ms (1m)",
       "type": "timeseries"
     },
     {
@@ -518,7 +518,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "(sum(rate(linera_server_request_error[1h])) / (sum(rate(linera_server_request_success[1h])) + sum(rate(linera_server_request_error[1h])))) * 100",
+          "expr": "(sum(rate(linera_server_request_error[1m])) / (sum(rate(linera_server_request_success[1m])) + sum(rate(linera_server_request_error[1m])))) * 100",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "instant": false,
@@ -528,7 +528,7 @@
           "useBackend": false
         }
       ],
-      "title": "Server Error rate (hourly)",
+      "title": "Server Error rate (1m)",
       "type": "timeseries"
     },
     {
@@ -618,7 +618,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(rate(linera_server_request_latency_bucket[1h])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(rate(linera_server_request_latency_bucket[1m])) by (le))",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "instant": false,
@@ -628,7 +628,7 @@
           "useBackend": false
         }
       ],
-      "title": "Server p99 latency ms (hourly)",
+      "title": "Server p99 latency ms (1m)",
       "type": "timeseries"
     },
     {
@@ -717,14 +717,14 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum(rate(linera_server_request_latency_bucket[1h])) by (le))",
+          "expr": "histogram_quantile(0.90, sum(rate(linera_server_request_latency_bucket[1m])) by (le))",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Server p90 latency ms (hourly)",
+      "title": "Server p90 latency ms (1m)",
       "type": "timeseries"
     },
     {
@@ -813,14 +813,14 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(linera_server_request_latency_bucket[1h])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(rate(linera_server_request_latency_bucket[1m])) by (le))",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Server p50 latency ms (hourly)",
+      "title": "Server p50 latency ms (1m)",
       "type": "timeseries"
     },
     {
