@@ -6,6 +6,7 @@
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, BlockHeight, TimeDelta, Timestamp},
+    http,
     identifiers::{ApplicationId, BytecodeId, ChainId, MessageId, Owner},
     ownership::{
         ChainOwnership, ChangeApplicationPermissionsError, CloseChainError, TimeoutConfig,
@@ -145,5 +146,21 @@ impl From<wit_system_api::ChangeApplicationPermissionsError> for ChangeApplicati
                 ChangeApplicationPermissionsError::NotPermitted
             }
         }
+    }
+}
+
+impl From<wit_system_api::HttpResponse> for http::Response {
+    fn from(guest: wit_system_api::HttpResponse) -> http::Response {
+        http::Response {
+            status: guest.status,
+            headers: guest.headers.into_iter().map(http::Header::from).collect(),
+            body: guest.body,
+        }
+    }
+}
+
+impl From<wit_system_api::HttpHeader> for http::Header {
+    fn from(guest: wit_system_api::HttpHeader) -> http::Header {
+        http::Header::new(guest.name, guest.value)
     }
 }

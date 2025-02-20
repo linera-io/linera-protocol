@@ -13,6 +13,7 @@ use linera_base::{
     data_types::{
         Amount, ApplicationPermissions, BlockHeight, Resources, SendMessageRequest, Timestamp,
     },
+    http,
     identifiers::{
         Account, AccountOwner, ApplicationId, BytecodeId, ChainId, ChannelName, Destination,
         MessageId, Owner, StreamName,
@@ -60,7 +61,7 @@ where
     events: Vec<(StreamName, Vec<u8>, Vec<u8>)>,
     claim_requests: Vec<ClaimRequest>,
     expected_service_queries: VecDeque<(ApplicationId, String, String)>,
-    expected_post_requests: VecDeque<(String, Vec<u8>, Vec<u8>)>,
+    expected_http_requests: VecDeque<(http::Request, http::Response)>,
     expected_read_data_blob_requests: VecDeque<(DataBlobHash, Vec<u8>)>,
     expected_assert_data_blob_exists_requests: VecDeque<(DataBlobHash, Option<()>)>,
     expected_open_chain_calls:
@@ -109,7 +110,7 @@ where
             events: Vec::new(),
             claim_requests: Vec::new(),
             expected_service_queries: VecDeque::new(),
-            expected_post_requests: VecDeque::new(),
+            expected_http_requests: VecDeque::new(),
             expected_read_data_blob_requests: VecDeque::new(),
             expected_assert_data_blob_exists_requests: VecDeque::new(),
             expected_open_chain_calls: VecDeque::new(),
@@ -809,10 +810,9 @@ where
             .push_back((application_id.forget_abi(), query, response));
     }
 
-    /// Adds an expected `http_post` call, and the response it should return in the test.
-    pub fn add_expected_post_request(&mut self, url: String, payload: Vec<u8>, response: Vec<u8>) {
-        self.expected_post_requests
-            .push_back((url, payload, response));
+    /// Adds an expected `http_request` call, and the response it should return in the test.
+    pub fn add_expected_http_request(&mut self, request: http::Request, response: http::Response) {
+        self.expected_http_requests.push_back((request, response));
     }
 
     /// Adds an expected `read_data_blob` call, and the response it should return in the test.
@@ -852,19 +852,17 @@ where
         serde_json::from_str(&response).expect("Failed to deserialize response")
     }
 
-    /// Makes a GET request to the given URL as an oracle and returns the JSON part, if any.
+    /// Makes an HTTP `request` as an oracle and returns the HTTP response.
     ///
     /// Should only be used with queries where it is very likely that all validators will receive
     /// the same response, otherwise most block proposals will fail.
     ///
     /// Cannot be used in fast blocks: A block using this call should be proposed by a regular
     /// owner, not a super owner.
-    pub fn http_post(&mut self, url: &str, payload: Vec<u8>) -> Vec<u8> {
-        let maybe_request = self.expected_post_requests.pop_front();
-        let (expected_url, expected_payload, response) =
-            maybe_request.expect("Unexpected POST request");
-        assert_eq!(*url, expected_url);
-        assert_eq!(payload, expected_payload);
+    pub fn http_request(&mut self, request: http::Request) -> http::Response {
+        let maybe_request = self.expected_http_requests.pop_front();
+        let (expected_request, response) = maybe_request.expect("Unexpected HTTP request");
+        assert_eq!(request, expected_request);
         response
     }
 

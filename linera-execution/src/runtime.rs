@@ -15,7 +15,7 @@ use linera_base::{
         Amount, ApplicationPermissions, ArithmeticError, BlockHeight, OracleResponse, Resources,
         SendMessageRequest, Timestamp,
     },
-    ensure,
+    ensure, http,
     identifiers::{
         Account, AccountOwner, ApplicationId, BlobId, BlobType, ChainId, ChannelFullName,
         ChannelName, MessageId, Owner, StreamId, StreamName,
@@ -697,13 +697,11 @@ impl<UserInstance> BaseRuntime for SyncRuntimeHandle<UserInstance> {
         self.inner().find_key_values_by_prefix_wait(promise)
     }
 
-    fn http_post(
+    fn perform_http_request(
         &mut self,
-        url: &str,
-        content_type: String,
-        payload: Vec<u8>,
-    ) -> Result<Vec<u8>, ExecutionError> {
-        self.inner().http_post(url, content_type, payload)
+        request: http::Request,
+    ) -> Result<http::Response, ExecutionError> {
+        self.inner().perform_http_request(request)
     }
 
     fn assert_before(&mut self, timestamp: Timestamp) -> Result<(), ExecutionError> {
@@ -946,36 +944,31 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         Ok(key_values)
     }
 
-    fn http_post(
+    fn perform_http_request(
         &mut self,
-        url: &str,
-        content_type: String,
-        payload: Vec<u8>,
-    ) -> Result<Vec<u8>, ExecutionError> {
+        request: http::Request,
+    ) -> Result<http::Response, ExecutionError> {
         ensure!(
             cfg!(feature = "unstable-oracles"),
             ExecutionError::UnstableOracle
         );
-        let bytes =
+        let response =
             if let Some(response) = self.transaction_tracker.next_replayed_oracle_response()? {
                 match response {
-                    OracleResponse::Post(bytes) => bytes,
+                    OracleResponse::Http(response) => response,
                     _ => return Err(ExecutionError::OracleResponseMismatch),
                 }
             } else {
-                let url = url.to_string();
                 self.execution_state_sender
-                    .send_request(|callback| ExecutionRequest::HttpPost {
-                        url,
-                        content_type,
-                        payload,
+                    .send_request(|callback| ExecutionRequest::PerformHttpRequest {
+                        request,
                         callback,
                     })?
                     .recv_response()?
             };
         self.transaction_tracker
-            .add_oracle_response(OracleResponse::Post(bytes.clone()));
-        Ok(bytes)
+            .add_oracle_response(OracleResponse::Http(response.clone()));
+        Ok(response)
     }
 
     fn assert_before(&mut self, timestamp: Timestamp) -> Result<(), ExecutionError> {

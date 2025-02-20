@@ -30,7 +30,7 @@ use thiserror::Error;
 use crate::prometheus_util::{bucket_latencies, register_histogram_vec, MeasureLatency};
 use crate::{
     crypto::{BcsHashable, CryptoHash},
-    doc_scalar, hex_debug,
+    doc_scalar, hex_debug, http,
     identifiers::{
         ApplicationId, BlobId, BlobType, BytecodeId, ChainId, Destination, EventId,
         GenericApplicationId, MessageId, StreamId, UserApplicationId,
@@ -770,12 +770,8 @@ pub enum OracleResponse {
         #[serde(with = "serde_bytes")]
         Vec<u8>,
     ),
-    /// The response from an HTTP POST request.
-    Post(
-        #[debug(with = "hex_debug")]
-        #[serde(with = "serde_bytes")]
-        Vec<u8>,
-    ),
+    /// The response from an HTTP request.
+    Http(http::Response),
     /// A successful read or write of a blob.
     Blob(BlobId),
     /// An assertion oracle that passed.

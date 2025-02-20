@@ -3,12 +3,16 @@
 
 //! Runtime types to simulate interfacing with the host executing the service.
 
-use std::{collections::HashMap, mem, sync::Mutex};
+use std::{
+    collections::{HashMap, VecDeque},
+    mem,
+    sync::Mutex,
+};
 
 use linera_base::{
     abi::ServiceAbi,
     data_types::{Amount, BlockHeight, Timestamp},
-    hex,
+    hex, http,
     identifiers::{AccountOwner, ApplicationId, ChainId},
 };
 use serde::{de::DeserializeOwned, Serialize};
@@ -28,6 +32,7 @@ where
     chain_balance: Mutex<Option<Amount>>,
     owner_balances: Mutex<Option<HashMap<AccountOwner, Amount>>>,
     query_application_handler: Mutex<Option<QueryApplicationHandler>>,
+    expected_http_requests: VecDeque<(http::Request, http::Response)>,
     url_blobs: Mutex<Option<HashMap<String, Vec<u8>>>>,
     blobs: Mutex<Option<HashMap<DataBlobHash, Vec<u8>>>>,
     scheduled_operations: Mutex<Vec<Vec<u8>>>,
@@ -58,6 +63,7 @@ where
             chain_balance: Mutex::new(None),
             owner_balances: Mutex::new(None),
             query_application_handler: Mutex::new(None),
+            expected_http_requests: VecDeque::new(),
             url_blobs: Mutex::new(None),
             blobs: Mutex::new(None),
             scheduled_operations: Mutex::new(vec![]),
@@ -374,6 +380,25 @@ where
 
         serde_json::from_slice(&response_bytes)
             .expect("Failed to deserialize query response from application")
+    }
+
+    /// Adds an expected `http_request` call, and the response it should return in the test.
+    pub fn add_expected_http_request(&mut self, request: http::Request, response: http::Response) {
+        self.expected_http_requests.push_back((request, response));
+    }
+
+    /// Makes an HTTP `request` as an oracle and returns the HTTP response.
+    ///
+    /// Should only be used with queries where it is very likely that all validators will receive
+    /// the same response, otherwise most block proposals will fail.
+    ///
+    /// Cannot be used in fast blocks: A block using this call should be proposed by a regular
+    /// owner, not a super owner.
+    pub fn http_request(&mut self, request: http::Request) -> http::Response {
+        let maybe_request = self.expected_http_requests.pop_front();
+        let (expected_request, response) = maybe_request.expect("Unexpected HTTP request");
+        assert_eq!(request, expected_request);
+        response
     }
 
     /// Configures the blobs returned when fetching from URLs during the test.

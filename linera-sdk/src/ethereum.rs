@@ -7,6 +7,7 @@ use std::fmt::Debug;
 
 use async_graphql::scalar;
 use async_trait::async_trait;
+use linera_base::http;
 pub use linera_ethereum::{
     client::EthereumQueries,
     common::{EthereumDataType, EthereumEvent},
@@ -42,12 +43,17 @@ impl JsonRpcClient for ContractEthereumClient {
     }
 
     async fn request_inner(&self, payload: Vec<u8>) -> Result<Vec<u8>, Self::Error> {
-        let content_type = "application/json";
-        Ok(contract_system_api::http_post(
-            &self.url,
-            content_type,
-            &payload,
-        ))
+        let response = contract_system_api::perform_http_request(
+            &http::Request {
+                method: http::Method::Post,
+                url: self.url.clone(),
+                headers: Vec::from([http::Header::new("Content-Type", b"application/json")]),
+                body: payload,
+            }
+            .into(),
+        );
+
+        Ok(response.body)
     }
 }
 
@@ -75,11 +81,16 @@ impl JsonRpcClient for ServiceEthereumClient {
     }
 
     async fn request_inner(&self, payload: Vec<u8>) -> Result<Vec<u8>, Self::Error> {
-        let content_type = "application/json";
-        Ok(service_system_api::http_post(
-            &self.url,
-            content_type,
-            &payload,
-        ))
+        let response = service_system_api::perform_http_request(
+            &http::Request {
+                method: http::Method::Post,
+                url: self.url.clone(),
+                headers: Vec::from([http::Header::new("Content-Type", b"application/json")]),
+                body: payload,
+            }
+            .into(),
+        );
+
+        Ok(response.body)
     }
 }

@@ -449,6 +449,10 @@ HandleValidatedCertificateRequest:
   STRUCT:
     - certificate:
         TYPENAME: ValidatedBlockCertificate
+Header:
+  STRUCT:
+    - name: STR
+    - value: BYTES
 IncomingBundle:
   STRUCT:
     - origin:
@@ -682,8 +686,9 @@ OracleResponse:
       Service:
         NEWTYPE: BYTES
     1:
-      Post:
-        NEWTYPE: BYTES
+      Http:
+        NEWTYPE:
+          TYPENAME: Response
     2:
       Blob:
         NEWTYPE:
@@ -805,6 +810,13 @@ ResourceControlPolicy:
     - maximum_block_proposal_size: U64
     - maximum_bytes_read_per_block: U64
     - maximum_bytes_written_per_block: U64
+Response:
+  STRUCT:
+    - status: U16
+    - headers:
+        SEQ:
+          TYPENAME: Header
+    - body: BYTES
 Round:
   ENUM:
     0:
