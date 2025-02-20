@@ -523,6 +523,7 @@ impl Runnable for Job {
                 let mut context = context.lock().await;
                 if let SetValidator {
                     public_key,
+                    account_key: _,
                     address,
                     votes: _,
                     skip_online_check: false,
@@ -576,6 +577,7 @@ impl Runnable for Job {
                             match command {
                                 SetValidator {
                                     public_key,
+                                    account_key,
                                     address,
                                     votes,
                                     skip_online_check: _,
@@ -585,6 +587,7 @@ impl Runnable for Job {
                                         ValidatorState {
                                             network_address: address,
                                             votes,
+                                            account_public_key: account_key,
                                         },
                                     );
                                 }

@@ -608,7 +608,7 @@ where
             self.execution_state.system.ownership.get().clone(),
             BlockHeight(0),
             local_time,
-            maybe_committee.flat_map(|(_, committee)| committee.keys_and_weights()),
+            maybe_committee.flat_map(|(_, committee)| committee.fallback_keys_and_weights()),
         )
     }
 
@@ -1040,7 +1040,7 @@ where
         let maybe_committee = self.execution_state.system.current_committee().into_iter();
         let ownership = self.execution_state.system.ownership.get().clone();
         let fallback_owners =
-            maybe_committee.flat_map(|(_, committee)| committee.keys_and_weights());
+            maybe_committee.flat_map(|(_, committee)| committee.fallback_keys_and_weights());
         self.pending_validated_blobs.clear();
         self.pending_proposed_blobs.clear();
         self.manager

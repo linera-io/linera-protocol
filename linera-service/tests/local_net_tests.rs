@@ -115,7 +115,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
 
     // Add 5th validator
     client
-        .set_validator(net.validator_name(4).unwrap(), LocalNet::proxy_port(4), 100)
+        .set_validator(net.validator_keys(4).unwrap(), LocalNet::proxy_port(4), 100)
         .await?;
     client.finalize_committee().await?;
 
@@ -128,7 +128,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
 
     // Add 6th validator
     client
-        .set_validator(net.validator_name(5).unwrap(), LocalNet::proxy_port(5), 100)
+        .set_validator(net.validator_keys(5).unwrap(), LocalNet::proxy_port(5), 100)
         .await?;
     client.finalize_committee().await?;
     if matches!(network, Network::Grpc) {
@@ -137,7 +137,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
 
     // Remove 5th validator
     client
-        .remove_validator(net.validator_name(4).unwrap())
+        .remove_validator(&net.validator_keys(4).unwrap().0)
         .await?;
     client.finalize_committee().await?;
     net.remove_validator(4)?;
@@ -154,8 +154,8 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
 
     // Remove the first 4 validators, so only the last one remains.
     for i in 0..4 {
-        let name = net.validator_name(i).unwrap();
-        client.remove_validator(name).await?;
+        let validator_key = net.validator_keys(i).unwrap();
+        client.remove_validator(&validator_key.0).await?;
         client.finalize_committee().await?;
         if let Some(service) = &node_service_2 {
             service.process_inbox(&chain_2).await?;
@@ -268,7 +268,7 @@ async fn test_end_to_end_receipt_of_old_create_committee_messages(
 
     // Add 5th validator to the network
     client
-        .set_validator(net.validator_name(4).unwrap(), LocalNet::proxy_port(4), 100)
+        .set_validator(net.validator_keys(4).unwrap(), LocalNet::proxy_port(4), 100)
         .await?;
 
     client.query_validators(None).await?;
@@ -360,7 +360,7 @@ async fn test_end_to_end_receipt_of_old_remove_committee_messages(
 
     // Add 5th validator to the network
     client
-        .set_validator(net.validator_name(4).unwrap(), LocalNet::proxy_port(4), 100)
+        .set_validator(net.validator_keys(4).unwrap(), LocalNet::proxy_port(4), 100)
         .await?;
     client.finalize_committee().await?;
 
@@ -398,7 +398,7 @@ async fn test_end_to_end_receipt_of_old_remove_committee_messages(
 
     // Add 6th validator to the network
     client
-        .set_validator(net.validator_name(5).unwrap(), LocalNet::proxy_port(5), 100)
+        .set_validator(net.validator_keys(5).unwrap(), LocalNet::proxy_port(5), 100)
         .await?;
 
     client.query_validators(None).await?;

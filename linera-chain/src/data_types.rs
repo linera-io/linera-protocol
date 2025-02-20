@@ -810,13 +810,13 @@ impl BlockProposal {
 
 impl LiteVote {
     /// Uses the signing key to create a signed object.
-    pub fn new(value: LiteValue, round: Round, key_pair: &ValidatorSecretKey) -> Self {
+    pub fn new(value: LiteValue, round: Round, secret_key: &ValidatorSecretKey) -> Self {
         let hash_and_round = VoteValue(value.value_hash, round, value.kind);
-        let signature = ValidatorSignature::new(&hash_and_round, key_pair);
+        let signature = ValidatorSignature::new(&hash_and_round, secret_key);
         Self {
             value,
             round,
-            public_key: key_pair.public(),
+            public_key: secret_key.public(),
             signature,
         }
     }
@@ -824,7 +824,7 @@ impl LiteVote {
     /// Verifies the signature in the vote.
     pub fn check(&self) -> Result<(), ChainError> {
         let hash_and_round = VoteValue(self.value.value_hash, self.round, self.value.kind);
-        Ok(self.signature.check(&hash_and_round, self.public_key)?)
+        Ok(self.signature.check(&hash_and_round, &self.public_key)?)
     }
 }
 
@@ -858,7 +858,7 @@ impl<'a, T> SignatureAggregator<'a, T> {
         T: CertificateValue,
     {
         let hash_and_round = VoteValue(self.partial.hash(), self.partial.round, T::KIND);
-        signature.check(&hash_and_round, public_key)?;
+        signature.check(&hash_and_round, &public_key)?;
         // Check that each validator only appears once.
         ensure!(
             !self.used_validators.contains(&public_key),
@@ -916,7 +916,7 @@ pub(crate) fn check_signatures(
     );
     // All that is left is checking signatures!
     let hash_and_round = VoteValue(value_hash, round, certificate_kind);
-    ValidatorSignature::verify_batch(&hash_and_round, signatures.iter().map(|(v, s)| (v, s)))?;
+    ValidatorSignature::verify_batch(&hash_and_round, signatures.iter())?;
     Ok(())
 }
 
