@@ -95,7 +95,7 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 * `create-application` — Create an application
 * `publish-and-create` — Create an application, and publish the required bytecode
 * `request-application` — Request an application from another chain, so it can be used on this one
-* `keygen` — Create an unassigned key-pair
+* `keygen` — Create an unassigned key pair
 * `assign` — Link an owner with a key pair in the wallet to a chain that was created for that owner
 * `retry-pending-block` — Retry a block we unsuccessfully tried to propose earlier
 * `wallet` — Show the contents of the wallet
@@ -700,7 +700,7 @@ Request an application from another chain, so it can be used on this one
 
 ## `linera keygen`
 
-Create an unassigned key-pair
+Create an unassigned key pair
 
 **Usage:** `linera keygen`
 

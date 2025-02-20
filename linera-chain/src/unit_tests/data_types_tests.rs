@@ -84,10 +84,8 @@ fn test_certificates() {
     let key1 = ValidatorSecretKey::generate();
     let key2 = ValidatorSecretKey::generate();
     let key3 = ValidatorSecretKey::generate();
-    let validator1_pk = key1.public();
-    let validator2_pk = key2.public();
 
-    let committee = Committee::make_simple(vec![validator1_pk, validator2_pk]);
+    let committee = Committee::make_simple(vec![key1.public(), key2.public()]);
 
     let block =
         make_first_block(ChainId::root(1)).with_simple_transfer(ChainId::root(1), Amount::ONE);

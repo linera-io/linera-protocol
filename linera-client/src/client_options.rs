@@ -875,7 +875,7 @@ pub enum ClientCommand {
         requester_chain_id: Option<ChainId>,
     },
 
-    /// Create an unassigned key-pair.
+    /// Create an unassigned key pair.
     Keygen,
 
     /// Link an owner with a key pair in the wallet to a chain that was created for that owner.
