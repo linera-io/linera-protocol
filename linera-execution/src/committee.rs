@@ -90,7 +90,7 @@ impl<'de> Deserialize<'de> for ValidatorName {
     }
 }
 
-/// Public state of validator.
+/// Public state of a validator.
 #[derive(Eq, PartialEq, Hash, Clone, Debug, Default, Serialize, Deserialize)]
 pub struct ValidatorState {
     /// The network address (in a string format understood by the networking layer).
