@@ -91,7 +91,7 @@ async fn make_testing_config(database: Database) -> Result<StorageConfig> {
                 })
             }
             #[cfg(not(feature = "scylladb"))]
-            panic!("Database::ScyllaDb is selected without the feature sctlladb");
+            panic!("Database::ScyllaDb is selected without the feature scylladb");
         }
     }
 }
