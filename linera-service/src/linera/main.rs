@@ -360,7 +360,7 @@ impl Runnable for Job {
             QueryValidator {
                 address,
                 chain_id,
-                validator,
+                public_key,
             } => {
                 use linera_core::node::ValidatorNode as _;
 
@@ -409,11 +409,11 @@ impl Runnable for Job {
                             response.info.next_block_height,
                             response.info.epoch,
                         );
-                        if let Some(validator) = validator {
-                            if response.check(&validator).is_ok() {
-                                info!("Signature for public key {validator} is OK.");
+                        if let Some(public_key) = public_key {
+                            if response.check(&public_key).is_ok() {
+                                info!("Signature for public key {public_key} is OK.");
                             } else {
-                                error!("Signature for public key {validator} is NOT OK.");
+                                error!("Signature for public key {public_key} is NOT OK.");
                             }
                         }
                     }
@@ -522,7 +522,7 @@ impl Runnable for Job {
                 let context = Arc::new(Mutex::new(context));
                 let mut context = context.lock().await;
                 if let SetValidator {
-                    validator,
+                    public_key,
                     address,
                     votes: _,
                     skip_online_check: false,
@@ -538,7 +538,7 @@ impl Runnable for Job {
                             linera_version::VERSION_INFO
                         ),
                         Err(error) => bail!(
-                            "Failed to get version information for validator {validator:?} at {address}:\n{error}"
+                            "Failed to get version information for validator {public_key:?} at {address}:\n{error}"
                         ),
                     }
                     let genesis_config_hash = context.wallet().genesis_config().hash();
@@ -550,7 +550,7 @@ impl Runnable for Job {
                             genesis_config_hash
                         ),
                         Err(error) => bail!(
-                            "Failed to get genesis config hash for validator {validator:?} at {address}:\n{error}"
+                            "Failed to get genesis config hash for validator {public_key:?} at {address}:\n{error}"
                         ),
                     }
                 }
@@ -575,21 +575,21 @@ impl Runnable for Job {
                             let mut validators = committee.validators().clone();
                             match command {
                                 SetValidator {
-                                    validator,
+                                    public_key,
                                     address,
                                     votes,
                                     skip_online_check: _,
                                 } => {
                                     validators.insert(
-                                        validator,
+                                        public_key,
                                         ValidatorState {
                                             network_address: address,
                                             votes,
                                         },
                                     );
                                 }
-                                RemoveValidator { validator } => {
-                                    if validators.remove(&validator).is_none() {
+                                RemoveValidator { public_key } => {
+                                    if validators.remove(&public_key).is_none() {
                                         warn!("Skipping removal of nonexistent validator");
                                         return Ok(ClientOutcome::Committed(None));
                                     }
@@ -1229,7 +1229,7 @@ impl Job {
         let nodes: Vec<_> = if let Some(validators) = validators {
             node_provider
                 .make_nodes_from_list(validators)?
-                .map(|(validator, node)| RemoteNode { validator, node })
+                .map(|(public_key, node)| RemoteNode { public_key, node })
                 .collect()
         } else {
             let info = client.local_node().handle_chain_info_query(query).await?;
@@ -1238,7 +1238,7 @@ impl Job {
                 .context("Invalid chain info response; missing latest committee")?;
             node_provider
                 .make_nodes(committee)?
-                .map(|(validator, node)| RemoteNode { validator, node })
+                .map(|(public_key, node)| RemoteNode { public_key, node })
                 .collect()
         };
 

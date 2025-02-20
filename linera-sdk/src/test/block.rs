@@ -226,7 +226,7 @@ impl BlockBuilder {
         );
         let mut builder = SignatureAggregator::new(value, Round::Fast, self.validator.committee());
         let certificate = builder
-            .append(vote.validator, vote.signature)
+            .append(vote.public_key, vote.signature)
             .expect("Failed to sign block")
             .expect("Committee has more than one test validator");
 

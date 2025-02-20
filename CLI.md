@@ -368,7 +368,7 @@ Show the version and genesis config hash of a new validator, and print a warning
 
 ###### **Options:**
 
-* `--name <VALIDATOR>` — The public key of the validator. If given, the signature of the chain query info will be checked
+* `--public-key <PUBLIC_KEY>` — The public key of the validator. If given, the signature of the chain query info will be checked
 
 
 
@@ -404,11 +404,11 @@ Synchronizes a validator with the local state of chains
 
 Add or modify a validator (admin only)
 
-**Usage:** `linera set-validator [OPTIONS] --name <VALIDATOR> --address <ADDRESS>`
+**Usage:** `linera set-validator [OPTIONS] --public-key <PUBLIC_KEY> --address <ADDRESS>`
 
 ###### **Options:**
 
-* `--name <VALIDATOR>` — The public key of the validator
+* `--public-key <PUBLIC_KEY>` — The public key of the validator
 * `--address <ADDRESS>` — Network address
 * `--votes <VOTES>` — Voting power
 
@@ -421,11 +421,11 @@ Add or modify a validator (admin only)
 
 Remove a validator (admin only)
 
-**Usage:** `linera remove-validator --name <VALIDATOR>`
+**Usage:** `linera remove-validator --public-key <PUBLIC_KEY>`
 
 ###### **Options:**
 
-* `--name <VALIDATOR>` — The public key of the validator
+* `--public-key <PUBLIC_KEY>` — The public key of the validator
 
 
 

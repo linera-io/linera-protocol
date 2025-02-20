@@ -172,7 +172,7 @@ where
     );
     let mut builder = SignatureAggregator::new(value, round, committee);
     builder
-        .append(vote.validator, vote.signature)
+        .append(vote.public_key, vote.signature)
         .unwrap()
         .unwrap()
 }

@@ -92,7 +92,7 @@ pub struct LocalValidatorClient<S>
 where
     S: Storage,
 {
-    validator_pk: ValidatorPublicKey,
+    public_key: ValidatorPublicKey,
     client: Arc<Mutex<LocalValidator<S>>>,
 }
 
@@ -250,20 +250,20 @@ impl<S> LocalValidatorClient<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
 {
-    fn new(validator: ValidatorPublicKey, state: WorkerState<S>) -> Self {
+    fn new(public_key: ValidatorPublicKey, state: WorkerState<S>) -> Self {
         let client = LocalValidator {
             fault_type: FaultType::Honest,
             state,
             notifier: Arc::new(ChannelNotifier::default()),
         };
         Self {
-            validator_pk: validator,
+            public_key,
             client: Arc::new(Mutex::new(client)),
         }
     }
 
     pub fn name(&self) -> ValidatorPublicKey {
-        self.validator_pk
+        self.public_key
     }
 
     async fn set_fault_type(&self, fault_type: FaultType) {
@@ -629,15 +629,7 @@ where
                         address: address.as_ref().to_string(),
                     })
                     .cloned()
-                    .map(|client| {
-                        (
-                            public_key,
-                            LocalValidatorClient {
-                                validator_pk: public_key,
-                                client,
-                            },
-                        )
-                    })
+                    .map(|client| (public_key, LocalValidatorClient { public_key, client }))
             })
             .collect::<Result<Vec<_>, _>>()?
             .into_iter())
@@ -653,7 +645,7 @@ where
         T: IntoIterator<Item = LocalValidatorClient<S>>,
     {
         let destructure =
-            |validator: LocalValidatorClient<S>| (validator.validator_pk, validator.client);
+            |validator: LocalValidatorClient<S>| (validator.public_key, validator.client);
         Self(iter.into_iter().map(destructure).collect())
     }
 }
@@ -795,7 +787,7 @@ where
         for index in indexes.as_ref() {
             let validator = &mut self.validator_clients[*index];
             validator.set_fault_type(fault_type).await;
-            faulty_validators.push(validator.validator_pk);
+            faulty_validators.push(validator.public_key);
         }
         tracing::info!(
             "Making the following validators {:?}: {:?}",
@@ -819,7 +811,7 @@ where
         for validator in &self.validator_clients {
             let storage = self
                 .validator_storages
-                .get_mut(&validator.validator_pk)
+                .get_mut(&validator.public_key)
                 .unwrap();
             if validator.fault_type().await == FaultType::Malicious {
                 storage
@@ -950,7 +942,7 @@ where
         let mut certificate = None;
         for validator in self.validator_clients.clone() {
             if let Ok(response) = validator.handle_chain_info_query(query.clone()).await {
-                if response.check(&validator.validator_pk).is_ok() {
+                if response.check(&validator.public_key).is_ok() {
                     let ChainInfo {
                         mut requested_sent_certificate_hashes,
                         ..
@@ -989,7 +981,7 @@ where
             if let Ok(response) = validator.handle_chain_info_query(query.clone()).await {
                 if response.info.manager.current_round == round
                     && response.info.next_block_height == block_height
-                    && response.check(&validator.validator_pk).is_ok()
+                    && response.check(&validator.public_key).is_ok()
                 {
                     count += 1;
                 }

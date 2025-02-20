@@ -361,7 +361,7 @@ fn main() -> Result<()> {
     let options = <ProxyOptions as clap::Parser>::parse();
     let server_config: ValidatorServerConfig =
         util::read_json(&options.config_path).expect("Fail to read server config");
-    let public_key = &server_config.validator.validator;
+    let public_key = &server_config.validator.public_key;
 
     linera_base::tracing::init(&format!("validator-{public_key}-proxy"));
 

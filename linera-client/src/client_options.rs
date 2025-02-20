@@ -450,8 +450,8 @@ pub enum ClientCommand {
         chain_id: Option<ChainId>,
         /// The public key of the validator. If given, the signature of the chain query
         /// info will be checked.
-        #[arg(long = "name")]
-        validator: Option<ValidatorPublicKey>,
+        #[arg(long)]
+        public_key: Option<ValidatorPublicKey>,
     },
 
     /// Show the current set of validators for a chain. Also print some information about
@@ -474,8 +474,8 @@ pub enum ClientCommand {
     /// Add or modify a validator (admin only)
     SetValidator {
         /// The public key of the validator.
-        #[arg(long = "name")]
-        validator: ValidatorPublicKey,
+        #[arg(long)]
+        public_key: ValidatorPublicKey,
 
         /// Network address
         #[arg(long)]
@@ -493,8 +493,8 @@ pub enum ClientCommand {
     /// Remove a validator (admin only)
     RemoveValidator {
         /// The public key of the validator.
-        #[arg(long = "name")]
-        validator: ValidatorPublicKey,
+        #[arg(long)]
+        public_key: ValidatorPublicKey,
     },
 
     /// Deprecates all committees except the last one.

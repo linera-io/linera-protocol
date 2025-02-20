@@ -38,7 +38,7 @@ fn test_signed_values() {
     );
 
     let mut v = LiteVote::new(LiteValue::new(&confirmed_value), Round::Fast, &key2);
-    v.validator = validator_1;
+    v.public_key = validator_1;
     assert!(v.check().is_err());
 
     assert!(validated_vote.check().is_ok());
@@ -106,18 +106,21 @@ fn test_certificates() {
 
     let mut builder = SignatureAggregator::new(value.clone(), Round::Fast, &committee);
     assert!(builder
-        .append(v1.validator, v1.signature)
+        .append(v1.public_key, v1.signature)
         .unwrap()
         .is_none());
-    let mut c = builder.append(v2.validator, v2.signature).unwrap().unwrap();
+    let mut c = builder
+        .append(v2.public_key, v2.signature)
+        .unwrap()
+        .unwrap();
     assert!(c.check(&committee).is_ok());
     c.signatures_mut().pop();
     assert!(c.check(&committee).is_err());
 
     let mut builder = SignatureAggregator::new(value, Round::Fast, &committee);
     assert!(builder
-        .append(v1.validator, v1.signature)
+        .append(v1.public_key, v1.signature)
         .unwrap()
         .is_none());
-    assert!(builder.append(v3.validator, v3.signature).is_err());
+    assert!(builder.append(v3.public_key, v3.signature).is_err());
 }

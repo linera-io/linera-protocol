@@ -53,15 +53,15 @@ impl<'a> LiteCertificate<'a> {
         let LiteVote {
             value,
             round,
-            validator,
+            public_key,
             signature,
         } = votes.next()?;
-        let mut signatures = vec![(validator, signature)];
+        let mut signatures = vec![(public_key, signature)];
         for vote in votes {
             if vote.value.value_hash != value.value_hash || vote.round != round {
                 return None;
             }
-            signatures.push((vote.validator, vote.signature));
+            signatures.push((vote.public_key, vote.signature));
         }
         Some(LiteCertificate::new(value, round, signatures))
     }

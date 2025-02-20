@@ -424,7 +424,7 @@ struct VoteValue(CryptoHash, Round, CertificateKind);
 pub struct Vote<T> {
     pub value: Hashed<T>,
     pub round: Round,
-    pub validator: ValidatorPublicKey,
+    pub public_key: ValidatorPublicKey,
     pub signature: ValidatorSignature,
 }
 
@@ -439,7 +439,7 @@ impl<T> Vote<T> {
         Self {
             value,
             round,
-            validator: key_pair.public(),
+            public_key: key_pair.public(),
             signature,
         }
     }
@@ -452,7 +452,7 @@ impl<T> Vote<T> {
         LiteVote {
             value: LiteValue::new(&self.value),
             round: self.round,
-            validator: self.validator,
+            public_key: self.public_key,
             signature: self.signature,
         }
     }
@@ -469,7 +469,7 @@ impl<T> Vote<T> {
 pub struct LiteVote {
     pub value: LiteValue,
     pub round: Round,
-    pub validator: ValidatorPublicKey,
+    pub public_key: ValidatorPublicKey,
     pub signature: ValidatorSignature,
 }
 
@@ -483,7 +483,7 @@ impl LiteVote {
         Some(Vote {
             value,
             round: self.round,
-            validator: self.validator,
+            public_key: self.public_key,
             signature: self.signature,
         })
     }
@@ -816,7 +816,7 @@ impl LiteVote {
         Self {
             value,
             round,
-            validator: key_pair.public(),
+            public_key: key_pair.public(),
             signature,
         }
     }
@@ -824,7 +824,7 @@ impl LiteVote {
     /// Verifies the signature in the vote.
     pub fn check(&self) -> Result<(), ChainError> {
         let hash_and_round = VoteValue(self.value.value_hash, self.round, self.value.kind);
-        Ok(self.signature.check(&hash_and_round, self.validator)?)
+        Ok(self.signature.check(&hash_and_round, self.public_key)?)
     }
 }
 
@@ -851,26 +851,26 @@ impl<'a, T> SignatureAggregator<'a, T> {
     /// of `check` below. Returns an error if the signed value cannot be aggregated.
     pub fn append(
         &mut self,
-        validator: ValidatorPublicKey,
+        public_key: ValidatorPublicKey,
         signature: ValidatorSignature,
     ) -> Result<Option<GenericCertificate<T>>, ChainError>
     where
         T: CertificateValue,
     {
         let hash_and_round = VoteValue(self.partial.hash(), self.partial.round, T::KIND);
-        signature.check(&hash_and_round, validator)?;
+        signature.check(&hash_and_round, public_key)?;
         // Check that each validator only appears once.
         ensure!(
-            !self.used_validators.contains(&validator),
+            !self.used_validators.contains(&public_key),
             ChainError::CertificateValidatorReuse
         );
-        self.used_validators.insert(validator);
+        self.used_validators.insert(public_key);
         // Update weight.
-        let voting_rights = self.committee.weight(&validator);
+        let voting_rights = self.committee.weight(&public_key);
         ensure!(voting_rights > 0, ChainError::InvalidSigner);
         self.weight += voting_rights;
         // Update certificate.
-        self.partial.add_signature((validator, signature));
+        self.partial.add_signature((public_key, signature));
 
         if self.weight >= self.committee.quorum_threshold() {
             self.weight = 0; // Prevent from creating the certificate twice.
