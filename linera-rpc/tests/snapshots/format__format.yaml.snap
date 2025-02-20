@@ -482,7 +482,7 @@ LiteVote:
         TYPENAME: LiteValue
     - round:
         TYPENAME: Round
-    - validator:
+    - public_key:
         TYPENAME: Ed25519PublicKey
     - signature:
         TYPENAME: Ed25519Signature
