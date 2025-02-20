@@ -137,7 +137,7 @@ revm-interpreter = { version = "15.1.0", features = [ "serde" ] }
 revm-precompile = "16.0.0"
 revm-primitives = "15.1.0"
 rocksdb = "0.21.0"
-secp256k1 = { version = "0.30.0", default-features = false, features = [ "alloc", "rand", "serde" ] }
+secp256k1 = { version = "0.30.0", default-features = false }
 scylla = "0.15.1"
 semver = "1.0.22"
 serde = { version = "1.0.197", features = ["derive"] }

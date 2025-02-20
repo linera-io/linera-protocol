@@ -47,7 +47,6 @@ linera-witty = { workspace = true, features = ["macros"] }
 prometheus = { workspace = true, optional = true }
 proptest = { workspace = true, optional = true, features = ["alloc"] }
 rand.workspace = true
-secp256k1.workspace = true
 serde.workspace = true
 serde-name.workspace = true
 serde_bytes.workspace = true
@@ -67,11 +66,13 @@ web-time = { workspace = true, optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 ruzstd.workspace = true
+secp256k1 = { workspace = true, features = [ "alloc", "rand", "serde" ] }
 tracing-web = { optional = true, workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 chrono.workspace = true
 rand = { workspace = true, features = ["getrandom", "std", "std_rng"] }
+secp256k1 = { workspace = true, features = [ "std", "rand", "serde" ] }
 tokio = { workspace = true, features = ["process", "rt-multi-thread", "signal", "macros"] }
 tokio-util.workspace = true
 prometheus.workspace = true
