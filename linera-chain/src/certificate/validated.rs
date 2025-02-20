@@ -3,9 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_base::{
-    crypto::ValidatorSignature, data_types::Round, hashed::Hashed, identifiers::BlobId,
+    crypto::{ValidatorPublicKey, ValidatorSignature},
+    data_types::Round,
+    hashed::Hashed,
+    identifiers::BlobId,
 };
-use linera_execution::committee::ValidatorName;
 use serde::{
     ser::{Serialize, SerializeStruct, Serializer},
     Deserialize, Deserializer,
@@ -67,7 +69,7 @@ impl<'de> Deserialize<'de> for GenericCertificate<ValidatedBlock> {
         struct Inner {
             value: Hashed<ValidatedBlock>,
             round: Round,
-            signatures: Vec<(ValidatorName, ValidatorSignature)>,
+            signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
         }
         let inner = Inner::deserialize(deserializer)?;
         if !crate::data_types::is_strictly_ordered(&inner.signatures) {

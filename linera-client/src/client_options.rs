@@ -10,7 +10,7 @@ use std::{
 
 use chrono::{DateTime, Utc};
 use linera_base::{
-    crypto::CryptoHash,
+    crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{Amount, ApplicationPermissions, TimeDelta},
     identifiers::{
         Account, ApplicationId, BytecodeId, ChainId, MessageId, Owner, UserApplicationId,
@@ -19,9 +19,7 @@ use linera_base::{
     time::Duration,
 };
 use linera_core::{client::BlanketMessagePolicy, DEFAULT_GRACE_PERIOD};
-use linera_execution::{
-    committee::ValidatorName, ResourceControlPolicy, WasmRuntime, WithWasmDefault as _,
-};
+use linera_execution::{ResourceControlPolicy, WasmRuntime, WithWasmDefault as _};
 use linera_views::store::CommonStoreConfig;
 
 #[cfg(feature = "fs")]
@@ -453,7 +451,7 @@ pub enum ClientCommand {
         /// The public key of the validator. If given, the signature of the chain query
         /// info will be checked.
         #[arg(long)]
-        name: Option<ValidatorName>,
+        public_key: Option<ValidatorPublicKey>,
     },
 
     /// Show the current set of validators for a chain. Also print some information about
@@ -477,7 +475,7 @@ pub enum ClientCommand {
     SetValidator {
         /// The public key of the validator.
         #[arg(long)]
-        name: ValidatorName,
+        public_key: ValidatorPublicKey,
 
         /// Network address
         #[arg(long)]
@@ -496,7 +494,7 @@ pub enum ClientCommand {
     RemoveValidator {
         /// The public key of the validator.
         #[arg(long)]
-        name: ValidatorName,
+        public_key: ValidatorPublicKey,
     },
 
     /// Deprecates all committees except the last one.

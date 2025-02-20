@@ -14,7 +14,7 @@ use crate::{
 fn test_signed_values() {
     let key1 = ValidatorSecretKey::generate();
     let key2 = ValidatorSecretKey::generate();
-    let name1 = ValidatorName(key1.public());
+    let validator_1 = key1.public();
 
     let block =
         make_first_block(ChainId::root(1)).with_simple_transfer(ChainId::root(2), Amount::ONE);
@@ -38,7 +38,7 @@ fn test_signed_values() {
     );
 
     let mut v = LiteVote::new(LiteValue::new(&confirmed_value), Round::Fast, &key2);
-    v.validator = name1;
+    v.public_key = validator_1;
     assert!(v.check().is_err());
 
     assert!(validated_vote.check().is_ok());
@@ -84,10 +84,10 @@ fn test_certificates() {
     let key1 = ValidatorSecretKey::generate();
     let key2 = ValidatorSecretKey::generate();
     let key3 = ValidatorSecretKey::generate();
-    let name1 = ValidatorName(key1.public());
-    let name2 = ValidatorName(key2.public());
+    let validator1_pk = key1.public();
+    let validator2_pk = key2.public();
 
-    let committee = Committee::make_simple(vec![name1, name2]);
+    let committee = Committee::make_simple(vec![validator1_pk, validator2_pk]);
 
     let block =
         make_first_block(ChainId::root(1)).with_simple_transfer(ChainId::root(1), Amount::ONE);
@@ -106,18 +106,21 @@ fn test_certificates() {
 
     let mut builder = SignatureAggregator::new(value.clone(), Round::Fast, &committee);
     assert!(builder
-        .append(v1.validator, v1.signature)
+        .append(v1.public_key, v1.signature)
         .unwrap()
         .is_none());
-    let mut c = builder.append(v2.validator, v2.signature).unwrap().unwrap();
+    let mut c = builder
+        .append(v2.public_key, v2.signature)
+        .unwrap()
+        .unwrap();
     assert!(c.check(&committee).is_ok());
     c.signatures_mut().pop();
     assert!(c.check(&committee).is_err());
 
     let mut builder = SignatureAggregator::new(value, Round::Fast, &committee);
     assert!(builder
-        .append(v1.validator, v1.signature)
+        .append(v1.public_key, v1.signature)
         .unwrap()
         .is_none());
-    assert!(builder.append(v3.validator, v3.signature).is_err());
+    assert!(builder.append(v3.public_key, v3.signature).is_err());
 }

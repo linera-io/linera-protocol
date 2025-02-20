@@ -11,7 +11,7 @@ use std::{
 
 use custom_debug_derive::Debug;
 use linera_base::{
-    crypto::CryptoHash,
+    crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{Blob, BlockHeight, Timestamp, UserApplicationDescription},
     hashed::Hashed,
     identifiers::{BlobId, ChainId, UserApplicationId},
@@ -22,8 +22,7 @@ use linera_chain::{
     ChainStateView,
 };
 use linera_execution::{
-    committee::{Epoch, ValidatorName},
-    Query, QueryContext, QueryOutcome, ServiceRuntimeEndpoint, ServiceSyncRuntime,
+    committee::Epoch, Query, QueryContext, QueryOutcome, ServiceRuntimeEndpoint, ServiceSyncRuntime,
 };
 use linera_storage::Storage;
 use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
@@ -158,7 +157,7 @@ where
 
     /// Update the received certificate trackers to at least the given values.
     UpdateReceivedCertificateTrackers {
-        new_trackers: BTreeMap<ValidatorName, u64>,
+        new_trackers: BTreeMap<ValidatorPublicKey, u64>,
         callback: oneshot::Sender<Result<(), WorkerError>>,
     },
 }

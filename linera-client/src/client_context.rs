@@ -1018,7 +1018,7 @@ where
             trace!(
                 "Processing vote on {:?}'s block by {:?}",
                 chain_id,
-                vote.validator,
+                vote.public_key,
             );
             let aggregator = aggregators.entry(chain_id).or_insert_with(|| {
                 SignatureAggregator::new(
@@ -1027,7 +1027,7 @@ where
                     &committee,
                 )
             });
-            match aggregator.append(vote.validator, vote.signature) {
+            match aggregator.append(vote.public_key, vote.signature) {
                 Ok(Some(certificate)) => {
                     trace!("Found certificate: {:?}", certificate);
                     certificates.push(certificate);

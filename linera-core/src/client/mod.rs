@@ -53,7 +53,7 @@ use linera_chain::{
     ChainError, ChainExecutionContext, ChainStateView, ExecutionResultExt as _,
 };
 use linera_execution::{
-    committee::{Committee, Epoch, ValidatorName},
+    committee::{Committee, Epoch},
     system::{
         AdminOperation, OpenChainConfig, Recipient, SystemChannel, SystemOperation,
         CREATE_APPLICATION_MESSAGE_INDEX, OPEN_CHAIN_MESSAGE_INDEX,
@@ -921,7 +921,7 @@ where
             .client
             .validator_node_provider
             .make_nodes(committee)?
-            .map(|(name, node)| RemoteNode { name, node })
+            .map(|(public_key, node)| RemoteNode { public_key, node })
             .collect())
     }
 
@@ -1309,7 +1309,7 @@ where
             .await?
             .received_certificate_trackers
             .get()
-            .get(&remote_node.name)
+            .get(&remote_node.public_key)
             .copied()
             .unwrap_or(0);
         let (committees, max_epoch) = self.known_committees().await?;
@@ -1409,7 +1409,7 @@ where
         }
 
         Ok(ReceivedCertificatesFromValidator {
-            name: remote_node.name,
+            public_key: remote_node.public_key,
             tracker,
             certificates,
             other_sender_chains,
@@ -1456,7 +1456,7 @@ where
         let mut new_trackers = BTreeMap::new();
         for response in received_certificates_batches {
             other_sender_chains.extend(response.other_sender_chains);
-            new_trackers.insert(response.name, response.tracker);
+            new_trackers.insert(response.public_key, response.tracker);
             for certificate in response.certificates {
                 certificates
                     .entry(certificate.block().header.chain_id)
@@ -1771,7 +1771,7 @@ where
                     if let Err(err) = self.try_process_locking_block_from(remote_node, cert).await {
                         warn!(
                             "Skipping certificate {hash} from validator {}: {err}",
-                            remote_node.name
+                            remote_node.public_key
                         );
                     }
                 }
@@ -1797,8 +1797,8 @@ where
                             {
                                 Ok(content) => content,
                                 Err(err) => {
-                                    let name = &remote_node.name;
-                                    warn!("Skipping proposal from {owner} and validator {name}: {err}");
+                                    let public_key = &remote_node.public_key;
+                                    warn!("Skipping proposal from {owner} and validator {public_key}: {err}");
                                     continue;
                                 }
                             };
@@ -1837,8 +1837,8 @@ where
                     }
                 }
 
-                let name = &remote_node.name;
-                warn!("Skipping proposal from {owner} and validator {name}: {err}");
+                let public_key = &remote_node.public_key;
+                warn!("Skipping proposal from {owner} and validator {public_key}: {err}");
             }
         }
         Ok(())
@@ -3330,7 +3330,7 @@ where
     #[instrument(level = "trace", skip(senders))]
     async fn update_streams(
         &self,
-        senders: &mut HashMap<ValidatorName, AbortHandle>,
+        senders: &mut HashMap<ValidatorPublicKey, AbortHandle>,
     ) -> Result<impl Future<Output = ()>, ChainClientError> {
         let (chain_id, nodes, local_node) = {
             let committee = self.local_committee().await?;
@@ -3342,16 +3342,16 @@ where
             (self.chain_id, nodes, self.client.local_node.clone())
         };
         // Drop removed validators.
-        senders.retain(|name, abort| {
-            if !nodes.contains_key(name) {
+        senders.retain(|validator, abort| {
+            if !nodes.contains_key(validator) {
                 abort.abort();
             }
             !abort.is_aborted()
         });
         // Add tasks for new validators.
         let validator_tasks = FuturesUnordered::new();
-        for (name, node) in nodes {
-            let hash_map::Entry::Vacant(entry) = senders.entry(name) else {
+        for (public_key, node) in nodes {
+            let hash_map::Entry::Vacant(entry) = senders.entry(public_key) else {
                 continue;
             };
             let stream = stream::once({
@@ -3360,9 +3360,9 @@ where
             })
             .filter_map(move |result| async move {
                 if let Err(error) = &result {
-                    warn!(?error, "Could not connect to validator {name}");
+                    warn!(?error, "Could not connect to validator {public_key}");
                 } else {
-                    info!("Connected to validator {name}");
+                    info!("Connected to validator {public_key}");
                 }
                 result.ok()
             })
@@ -3371,7 +3371,7 @@ where
             let mut stream = Box::pin(stream);
             let this = self.clone();
             let local_node = local_node.clone();
-            let remote_node = RemoteNode { name, node };
+            let remote_node = RemoteNode { public_key, node };
             validator_tasks.push(async move {
                 while let Some(notification) = stream.next().await {
                     this.process_notification(
@@ -3502,7 +3502,7 @@ impl Drop for AbortOnDrop {
 /// The result of `synchronize_received_certificates_from_validator`.
 struct ReceivedCertificatesFromValidator {
     /// The name of the validator we downloaded from.
-    name: ValidatorName,
+    public_key: ValidatorPublicKey,
     /// The new tracker value for that validator.
     tracker: u64,
     /// The downloaded certificates. The signatures were already checked and they are ready

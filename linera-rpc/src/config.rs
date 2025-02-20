@@ -1,8 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_base::identifiers::ChainId;
-use linera_execution::committee::ValidatorName;
+use linera_base::{crypto::ValidatorPublicKey, identifiers::ChainId};
 use serde::{Deserialize, Serialize};
 
 #[cfg(with_simple_network)]
@@ -103,8 +102,8 @@ pub type ValidatorPublicNetworkConfig = ValidatorPublicNetworkPreConfig<NetworkP
 /// The network configuration for all shards.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ValidatorInternalNetworkPreConfig<P> {
-    /// The name of the validator.
-    pub name: ValidatorName,
+    /// The public key of the validator.
+    pub public_key: ValidatorPublicKey,
     /// The network protocol to use for all shards.
     pub protocol: P,
     /// The available shards. Each chain UID is mapped to a unique shard in the vector in
@@ -123,7 +122,7 @@ pub struct ValidatorInternalNetworkPreConfig<P> {
 impl<P> ValidatorInternalNetworkPreConfig<P> {
     pub fn clone_with_protocol<Q>(&self, protocol: Q) -> ValidatorInternalNetworkPreConfig<Q> {
         ValidatorInternalNetworkPreConfig {
-            name: self.name,
+            public_key: self.public_key,
             protocol,
             shards: self.shards.clone(),
             host: self.host.clone(),
@@ -235,7 +234,7 @@ impl<P> ValidatorInternalNetworkPreConfig<P> {
         use std::hash::{Hash, Hasher};
         let mut s = std::collections::hash_map::DefaultHasher::new();
         // Use the validator public key to randomise shard assignment.
-        self.name.hash(&mut s);
+        self.public_key.hash(&mut s);
         chain_id.hash(&mut s);
         (s.finish() as ShardId) % self.shards.len()
     }

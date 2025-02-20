@@ -141,11 +141,11 @@ impl<T: CertificateValue> VoteTestExt<T> for Vote<T> {
             votes: 100,
         };
         let committee = Committee::new(
-            vec![(self.validator, state)].into_iter().collect(),
+            vec![(self.public_key, state)].into_iter().collect(),
             ResourceControlPolicy::only_fuel(),
         );
         SignatureAggregator::new(self.value, self.round, &committee)
-            .append(self.validator, self.signature)
+            .append(self.public_key, self.signature)
             .unwrap()
             .unwrap()
     }

@@ -13,7 +13,7 @@ use std::{
 };
 
 use linera_base::{
-    crypto::CryptoHash,
+    crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{Blob, BlockHeight, UserApplicationDescription},
     ensure,
     hashed::Hashed,
@@ -27,8 +27,8 @@ use linera_chain::{
     ChainError, ChainStateView,
 };
 use linera_execution::{
-    committee::{Epoch, ValidatorName},
-    Message, Query, QueryContext, QueryOutcome, ServiceRuntimeEndpoint, SystemMessage,
+    committee::Epoch, Message, Query, QueryContext, QueryOutcome, ServiceRuntimeEndpoint,
+    SystemMessage,
 };
 use linera_storage::{Clock as _, Storage};
 use linera_views::views::{ClonableView, ViewError};
@@ -553,7 +553,7 @@ where
     /// Updates the received certificate trackers to at least the given values.
     pub async fn update_received_certificate_trackers(
         &mut self,
-        new_trackers: BTreeMap<ValidatorName, u64>,
+        new_trackers: BTreeMap<ValidatorPublicKey, u64>,
     ) -> Result<(), WorkerError> {
         ChainWorkerStateWithAttemptedChanges::new(self)
             .await

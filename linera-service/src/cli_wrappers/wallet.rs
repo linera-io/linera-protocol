@@ -881,12 +881,12 @@ impl ClientWrapper {
             .is_some_and(|wallet| wallet.get(chain).is_some())
     }
 
-    pub async fn set_validator(&self, name: &str, port: usize, votes: usize) -> Result<()> {
+    pub async fn set_validator(&self, public_key: &str, port: usize, votes: usize) -> Result<()> {
         let address = format!("{}:127.0.0.1:{}", self.network.short(), port);
         self.command()
             .await?
             .arg("set-validator")
-            .args(["--name", name])
+            .args(["--public-key", public_key])
             .args(["--address", &address])
             .args(["--votes", &votes.to_string()])
             .spawn_and_wait_for_stdout()
@@ -894,11 +894,11 @@ impl ClientWrapper {
         Ok(())
     }
 
-    pub async fn remove_validator(&self, name: &str) -> Result<()> {
+    pub async fn remove_validator(&self, public_key: &str) -> Result<()> {
         self.command()
             .await?
             .arg("remove-validator")
-            .args(["--name", name])
+            .args(["--public-key", public_key])
             .spawn_and_wait_for_stdout()
             .await?;
         Ok(())

@@ -11,7 +11,7 @@ use std::{
 use async_graphql::SimpleObject;
 use futures::stream::{self, StreamExt, TryStreamExt};
 use linera_base::{
-    crypto::CryptoHash,
+    crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{
         Amount, ArithmeticError, BlockHeight, OracleResponse, Timestamp, UserApplicationDescription,
     },
@@ -23,7 +23,7 @@ use linera_base::{
     ownership::ChainOwnership,
 };
 use linera_execution::{
-    committee::{Committee, Epoch, ValidatorName},
+    committee::{Committee, Epoch},
     system::OpenChainConfig,
     ExecutionOutcome, ExecutionRuntimeContext, ExecutionStateView, Message, MessageContext,
     Operation, OperationContext, Query, QueryContext, QueryOutcome, RawExecutionOutcome,
@@ -212,7 +212,7 @@ where
     /// Sender chain and height of all certified blocks known as a receiver (local ordering).
     pub received_log: LogView<C, ChainAndHeight>,
     /// The number of `received_log` entries we have synchronized, for each validator.
-    pub received_certificate_trackers: RegisterView<C, HashMap<ValidatorName, u64>>,
+    pub received_certificate_trackers: RegisterView<C, HashMap<ValidatorPublicKey, u64>>,
 
     /// Mailboxes used to receive messages indexed by their origin.
     pub inboxes: ReentrantCollectionView<C, Origin, InboxStateView<C>>,
@@ -549,7 +549,7 @@ where
     /// Updates the `received_log` trackers.
     pub fn update_received_certificate_trackers(
         &mut self,
-        new_trackers: BTreeMap<ValidatorName, u64>,
+        new_trackers: BTreeMap<ValidatorPublicKey, u64>,
     ) {
         for (name, tracker) in new_trackers {
             self.received_certificate_trackers

@@ -6,7 +6,10 @@ use std::{collections::BTreeMap, ops::Not};
 
 use custom_debug_derive::Debug;
 use linera_base::{
-    crypto::{BcsSignable, CryptoError, CryptoHash, ValidatorSecretKey, ValidatorSignature},
+    crypto::{
+        BcsSignable, CryptoError, CryptoHash, ValidatorPublicKey, ValidatorSecretKey,
+        ValidatorSignature,
+    },
     data_types::{Amount, BlockHeight, Round, Timestamp},
     identifiers::{AccountOwner, ChainDescription, ChainId},
 };
@@ -16,7 +19,7 @@ use linera_chain::{
     ChainStateView,
 };
 use linera_execution::{
-    committee::{Committee, Epoch, ValidatorName},
+    committee::{Committee, Epoch},
     ExecutionRuntimeContext,
 };
 use linera_storage::ChainRuntimeContext;
@@ -304,8 +307,8 @@ impl ChainInfoResponse {
         self.signature = Some(ValidatorSignature::new(&*self.info, key_pair));
     }
 
-    pub fn check(&self, name: &ValidatorName) -> Result<(), CryptoError> {
-        ValidatorSignature::check_optional_signature(self.signature.as_ref(), &*self.info, &name.0)
+    pub fn check(&self, name: &ValidatorPublicKey) -> Result<(), CryptoError> {
+        ValidatorSignature::check_optional_signature(self.signature.as_ref(), &*self.info, name)
     }
 
     /// Returns the committee in the latest epoch.

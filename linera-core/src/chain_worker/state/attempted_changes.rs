@@ -7,6 +7,7 @@ use std::{borrow::Cow, collections::BTreeMap};
 
 use futures::future::Either;
 use linera_base::{
+    crypto::ValidatorPublicKey,
     data_types::{Blob, BlockHeight, Timestamp},
     ensure,
     identifiers::{ChainId, Owner},
@@ -20,7 +21,7 @@ use linera_chain::{
     types::{ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
     ChainExecutionContext, ChainStateView, ExecutionResultExt as _,
 };
-use linera_execution::committee::{Committee, Epoch, ValidatorName};
+use linera_execution::committee::{Committee, Epoch};
 use linera_storage::{Clock as _, Storage};
 use linera_views::{
     context::Context,
@@ -540,7 +541,7 @@ where
 
     pub async fn update_received_certificate_trackers(
         &mut self,
-        new_trackers: BTreeMap<ValidatorName, u64>,
+        new_trackers: BTreeMap<ValidatorPublicKey, u64>,
     ) -> Result<(), WorkerError> {
         self.state
             .chain

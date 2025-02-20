@@ -41,7 +41,7 @@ use linera_chain::{
     ChainError, ChainExecutionContext,
 };
 use linera_execution::{
-    committee::{Committee, Epoch, ValidatorName},
+    committee::{Committee, Epoch},
     system::{
         AdminOperation, OpenChainConfig, Recipient, SystemChannel, SystemMessage, SystemOperation,
     },
@@ -90,7 +90,7 @@ where
     S: Storage + Clone + Send + Sync + 'static,
 {
     let key_pair = ValidatorSecretKey::generate();
-    let committee = Committee::make_simple(vec![ValidatorName(key_pair.public())]);
+    let committee = Committee::make_simple(vec![key_pair.public()]);
     let worker = WorkerState::new(
         "Single validator node".to_string(),
         Some(key_pair),
@@ -172,7 +172,7 @@ where
     );
     let mut builder = SignatureAggregator::new(value, round, committee);
     builder
-        .append(vote.validator, vote.signature)
+        .append(vote.public_key, vote.signature)
         .unwrap()
         .unwrap()
 }
@@ -1186,7 +1186,7 @@ where
         .into_first_proposal(&sender_key_pair);
 
     let (chain_info_response, _actions) = worker.handle_block_proposal(block_proposal).await?;
-    chain_info_response.check(&ValidatorName(worker.public_key()))?;
+    chain_info_response.check(&worker.public_key())?;
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
     assert!(chain.manager.confirmed_vote().is_none()); // It was a multi-leader
@@ -1201,7 +1201,7 @@ where
     let (chain_info_response, _actions) = worker
         .handle_validated_certificate(validated_certificate)
         .await?;
-    chain_info_response.check(&ValidatorName(worker.public_key()))?;
+    chain_info_response.check(&worker.public_key())?;
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
     assert!(chain.manager.validated_vote().is_none()); // Should be confirmed by now.
@@ -1245,7 +1245,7 @@ where
         .into_first_proposal(&sender_key_pair);
 
     let (response, _actions) = worker.handle_block_proposal(block_proposal.clone()).await?;
-    response.check(&ValidatorName(worker.public_key()))?;
+    response.check(&worker.public_key())?;
     let (replay_response, _actions) = worker.handle_block_proposal(block_proposal).await?;
     // Workaround lack of equality.
     assert_eq!(
