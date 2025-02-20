@@ -63,7 +63,7 @@ static SERVER_REQUEST_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
         "server_request_latency",
         "Server request latency",
         &[],
-        bucket_interval(0.1, 50.0),
+        bucket_interval(1.0, 200.0),
     )
 });
 
@@ -95,7 +95,7 @@ static SERVER_REQUEST_LATENCY_PER_REQUEST_TYPE: LazyLock<HistogramVec> = LazyLoc
         "server_request_latency_per_request_type",
         "Server request latency per request type",
         &["method_name"],
-        bucket_interval(0.1, 50.0),
+        bucket_interval(1.0, 200.0),
     )
 });
 
