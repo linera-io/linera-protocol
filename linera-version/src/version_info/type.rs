@@ -45,10 +45,7 @@ impl From<CrateVersion> for semver::Version {
 
 pub type Hash = std::borrow::Cow<'static, str>;
 
-#[cfg_attr(
-    linera_version_building,
-    derive(serde::Deserialize, serde::Serialize),
-)]
+#[cfg_attr(linera_version_building, derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 /// The version info of a build of Linera.
 pub struct VersionInfo {

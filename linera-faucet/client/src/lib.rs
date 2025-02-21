@@ -96,10 +96,7 @@ impl Faucet {
             version: VersionInfo,
         }
 
-        Ok(self
-            .query::<Response>("query { version }")
-            .await?
-            .version)
+        Ok(self.query::<Response>("query { version }").await?.version)
     }
 
     pub async fn claim(
