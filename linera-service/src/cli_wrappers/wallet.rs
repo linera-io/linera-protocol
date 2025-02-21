@@ -24,6 +24,7 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, Bytecode},
     identifiers::{Account, ApplicationId, BytecodeId, ChainId, MessageId, Owner},
+    vm::VmRuntime,
 };
 use linera_client::{client_options::ResourceControlPolicyConfig, wallet::Wallet};
 use linera_core::worker::Notification;
@@ -1168,14 +1169,16 @@ impl NodeService {
         chain_id: &ChainId,
         contract: PathBuf,
         service: PathBuf,
+        vm_runtime: VmRuntime,
     ) -> Result<BytecodeId<Abi, Parameters, InstantiationArgument>> {
         let contract_code = Bytecode::load_from_file(&contract).await?;
         let service_code = Bytecode::load_from_file(&service).await?;
         let query = format!(
-            "mutation {{ publishBytecode(chainId: {}, contract: {}, service: {}) }}",
+            "mutation {{ publishBytecode(chainId: {}, contract: {}, service: {}, vmRuntime: {}) }}",
             chain_id.to_value(),
             contract_code.to_value(),
             service_code.to_value(),
+            vm_runtime.to_value(),
         );
         let data = self.query_node(query).await?;
         let bytecode_str = data["publishBytecode"]

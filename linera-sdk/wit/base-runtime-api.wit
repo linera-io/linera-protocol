@@ -64,10 +64,11 @@ interface base-runtime-api {
         height: block-height,
         index: u32,
     }
-    
+
     record bytecode-id {
         contract-blob-hash: crypto-hash,
         service-blob-hash: crypto-hash,
+        vm-runtime: vm-runtime,
     }
 
     record application-id {
@@ -89,7 +90,7 @@ interface base-runtime-api {
         timeout-increment: time-delta,
         fallback-duration: time-delta,
     }
-    
+
     record chain-ownership {
         super-owners: list<owner>,
         owners: list<tuple<owner, u64>>,
@@ -137,4 +138,9 @@ interface base-runtime-api {
     }
 
     type u128 = tuple<u64, u64>;
+
+    enum vm-runtime {
+        wasm,
+        evm,
+    }
 }

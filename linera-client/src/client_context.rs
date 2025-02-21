@@ -45,6 +45,7 @@ use {
     linera_base::{
         data_types::{BlobContent, Bytecode},
         identifiers::BytecodeId,
+        vm::VmRuntime,
     },
     linera_core::client::create_bytecode_blobs,
     std::{fs, path::PathBuf},
@@ -561,6 +562,7 @@ where
         chain_client: &ChainClient<NodeProvider, S>,
         contract: PathBuf,
         service: PathBuf,
+        vm_runtime: VmRuntime,
     ) -> Result<BytecodeId, Error> {
         info!("Loading bytecode files");
         let contract_bytecode = Bytecode::load_from_file(&contract)
@@ -572,7 +574,7 @@ where
 
         info!("Publishing bytecode");
         let (contract_blob, service_blob, bytecode_id) =
-            create_bytecode_blobs(contract_bytecode, service_bytecode).await;
+            create_bytecode_blobs(contract_bytecode, service_bytecode, vm_runtime).await;
         let (bytecode_id, _) = self
             .apply_client_command(chain_client, |chain_client| {
                 let contract_blob = contract_blob.clone();

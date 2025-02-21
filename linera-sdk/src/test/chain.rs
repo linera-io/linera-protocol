@@ -16,6 +16,7 @@ use linera_base::{
     crypto::{AccountPublicKey, AccountSecretKey},
     data_types::{Blob, BlockHeight, Bytecode, CompressedBytecode},
     identifiers::{ApplicationId, BytecodeId, ChainDescription, ChainId, MessageId},
+    vm::VmRuntime,
 };
 use linera_chain::{types::ConfirmedBlockCertificate, ChainError, ChainExecutionContext};
 use linera_core::{data_types::ChainInfoQuery, worker::WorkerError};
@@ -214,8 +215,9 @@ impl ActiveChain {
         let service_blob = Blob::new_service_bytecode(service);
         let contract_blob_hash = contract_blob.id().hash;
         let service_blob_hash = service_blob.id().hash;
+        let vm_runtime = VmRuntime::Wasm;
 
-        let bytecode_id = BytecodeId::new(contract_blob_hash, service_blob_hash);
+        let bytecode_id = BytecodeId::new(contract_blob_hash, service_blob_hash, vm_runtime);
 
         let certificate = self
             .add_block_with_blobs(

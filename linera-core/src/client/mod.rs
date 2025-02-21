@@ -22,8 +22,6 @@ use futures::{
     future::{self, try_join_all, Either, FusedFuture, Future},
     stream::{self, AbortHandle, FusedStream, FuturesUnordered, StreamExt},
 };
-#[cfg(not(target_arch = "wasm32"))]
-use linera_base::data_types::Bytecode;
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
@@ -40,6 +38,8 @@ use linera_base::{
     },
     ownership::{ChainOwnership, TimeoutConfig},
 };
+#[cfg(not(target_arch = "wasm32"))]
+use linera_base::{data_types::Bytecode, vm::VmRuntime};
 use linera_chain::{
     data_types::{
         BlockProposal, ChainAndHeight, ExecutedBlock, IncomingBundle, LiteVote, MessageAction,
@@ -743,6 +743,7 @@ enum CheckCertificateResult {
 pub async fn create_bytecode_blobs(
     contract: Bytecode,
     service: Bytecode,
+    vm_runtime: VmRuntime,
 ) -> (Blob, Blob, BytecodeId) {
     let (compressed_contract, compressed_service) =
         tokio::task::spawn_blocking(move || (contract.compress(), service.compress()))
@@ -750,7 +751,7 @@ pub async fn create_bytecode_blobs(
             .expect("Compression should not panic");
     let contract_blob = Blob::new_contract_bytecode(compressed_contract);
     let service_blob = Blob::new_service_bytecode(compressed_service);
-    let bytecode_id = BytecodeId::new(contract_blob.id().hash, service_blob.id().hash);
+    let bytecode_id = BytecodeId::new(contract_blob.id().hash, service_blob.id().hash, vm_runtime);
     (contract_blob, service_blob, bytecode_id)
 }
 
@@ -2855,9 +2856,10 @@ where
         &self,
         contract: Bytecode,
         service: Bytecode,
+        vm_runtime: VmRuntime,
     ) -> Result<ClientOutcome<(BytecodeId, ConfirmedBlockCertificate)>, ChainClientError> {
         let (contract_blob, service_blob, bytecode_id) =
-            create_bytecode_blobs(contract, service).await;
+            create_bytecode_blobs(contract, service, vm_runtime).await;
         self.publish_bytecode_blobs(contract_blob, service_blob, bytecode_id)
             .await
     }

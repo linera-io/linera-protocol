@@ -160,6 +160,8 @@ BytecodeId:
         TYPENAME: CryptoHash
     - service_blob_hash:
         TYPENAME: CryptoHash
+    - vm_runtime:
+        TYPENAME: VmRuntime
 Certificate:
   ENUM:
     0:
@@ -1206,3 +1208,9 @@ VersionInfo:
     - rpc_hash: STR
     - graphql_hash: STR
     - wit_hash: STR
+VmRuntime:
+  ENUM:
+    0:
+      Wasm: UNIT
+    1:
+      Evm: UNIT

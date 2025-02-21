@@ -1375,19 +1375,6 @@ pub trait WithWasmDefault {
 }
 
 impl WasmRuntime {
-    #[cfg(with_wasm_runtime)]
-    pub fn default_with_sanitizer() -> Self {
-        cfg_if::cfg_if! {
-            if #[cfg(with_wasmer)] {
-                WasmRuntime::WasmerWithSanitizer
-            } else if #[cfg(with_wasmtime)] {
-                WasmRuntime::WasmtimeWithSanitizer
-            } else {
-                compile_error!("BUG: Wasm runtime unhandled in `WasmRuntime::default_with_sanitizer`")
-            }
-        }
-    }
-
     pub fn needs_sanitizer(self) -> bool {
         match self {
             #[cfg(with_wasmer)]

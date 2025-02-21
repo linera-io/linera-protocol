@@ -12,6 +12,7 @@ repository.workspace = true
 version.workspace = true
 
 [features]
+revm = ["linera-execution/revm"]
 test = ["linera-execution/test", "linera-views/test"]
 wasmer = ["linera-execution/wasmer"]
 wasmtime = ["linera-execution/wasmtime"]
@@ -31,6 +32,7 @@ web = [
 [dependencies]
 async-trait.workspace = true
 bcs.workspace = true
+cfg-if.workspace = true
 dashmap.workspace = true
 futures.workspace = true
 linera-base.workspace = true
