@@ -75,8 +75,6 @@ pub async fn create_with_accounts(
         .await;
 
     for (chain, account, initial_amount) in &accounts {
-        chain.register_application(application_id).await;
-
         let claim_certificate = chain
             .add_block(|block| {
                 block.with_operation(

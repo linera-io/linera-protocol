@@ -3,8 +3,9 @@
 
 //! Handle requests from the synchronous execution thread of user applications.
 
+use std::collections::BTreeMap;
 #[cfg(with_metrics)]
-use std::{collections::BTreeMap, sync::LazyLock};
+use std::sync::LazyLock;
 
 use custom_debug_derive::Debug;
 use futures::channel::mpsc;

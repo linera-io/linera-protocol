@@ -32,7 +32,6 @@ This document contains the help content for the `linera` command-line program.
 * [`linera read-data-blob`↴](#linera-read-data-blob)
 * [`linera create-application`↴](#linera-create-application)
 * [`linera publish-and-create`↴](#linera-publish-and-create)
-* [`linera request-application`↴](#linera-request-application)
 * [`linera keygen`↴](#linera-keygen)
 * [`linera assign`↴](#linera-assign)
 * [`linera retry-pending-block`↴](#linera-retry-pending-block)
@@ -57,7 +56,7 @@ This document contains the help content for the `linera` command-line program.
 * [`linera storage initialize`↴](#linera-storage-initialize)
 * [`linera storage list_namespaces`↴](#linera-storage-list_namespaces)
 * [`linera storage list_blob_ids`↴](#linera-storage-list_blob_ids)
-* [`linera storage list_chain_ids`↴](#linera-storage-list_chain_ids)
+* [`linera storage list_root_keys`↴](#linera-storage-list_root_keys)
 
 ## `linera`
 
@@ -94,8 +93,7 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 * `read-data-blob` — Verify that a data blob is readable
 * `create-application` — Create an application
 * `publish-and-create` — Create an application, and publish the required bytecode
-* `request-application` — Request an application from another chain, so it can be used on this one
-* `keygen` — Create an unassigned key pair
+* `keygen` — Create an unassigned key-pair
 * `assign` — Link an owner with a key pair in the wallet to a chain that was created for that owner
 * `retry-pending-block` — Retry a block we unsuccessfully tried to propose earlier
 * `wallet` — Show the contents of the wallet
@@ -368,7 +366,7 @@ Show the version and genesis config hash of a new validator, and print a warning
 
 ###### **Options:**
 
-* `--public-key <PUBLIC_KEY>` — The public key of the validator. If given, the signature of the chain query info will be checked
+* `--name <NAME>` — The public key of the validator. If given, the signature of the chain query info will be checked
 
 
 
@@ -404,11 +402,11 @@ Synchronizes a validator with the local state of chains
 
 Add or modify a validator (admin only)
 
-**Usage:** `linera set-validator [OPTIONS] --public-key <PUBLIC_KEY> --address <ADDRESS>`
+**Usage:** `linera set-validator [OPTIONS] --name <NAME> --address <ADDRESS>`
 
 ###### **Options:**
 
-* `--public-key <PUBLIC_KEY>` — The public key of the validator
+* `--name <NAME>` — The public key of the validator
 * `--address <ADDRESS>` — Network address
 * `--votes <VOTES>` — Voting power
 
@@ -421,11 +419,11 @@ Add or modify a validator (admin only)
 
 Remove a validator (admin only)
 
-**Usage:** `linera remove-validator --public-key <PUBLIC_KEY>`
+**Usage:** `linera remove-validator --name <NAME>`
 
 ###### **Options:**
 
-* `--public-key <PUBLIC_KEY>` — The public key of the validator
+* `--name <NAME>` — The public key of the validator
 
 
 
@@ -681,26 +679,9 @@ Create an application, and publish the required bytecode
 
 
 
-## `linera request-application`
-
-Request an application from another chain, so it can be used on this one
-
-**Usage:** `linera request-application [OPTIONS] <APPLICATION_ID>`
-
-###### **Arguments:**
-
-* `<APPLICATION_ID>` — The ID of the application to request
-
-###### **Options:**
-
-* `--target-chain-id <TARGET_CHAIN_ID>` — The target chain on which the application is already registered. If not specified, the chain on which the application was created is used
-* `--requester-chain-id <REQUESTER_CHAIN_ID>` — The owned chain on which the application is missing
-
-
-
 ## `linera keygen`
 
-Create an unassigned key pair
+Create an unassigned key-pair
 
 **Usage:** `linera keygen`
 
@@ -932,10 +913,7 @@ Start a Local Linera Network
 * `--external-protocol <EXTERNAL_PROTOCOL>` — External protocol used, either `grpc` or `grpcs`
 
   Default value: `grpc`
-* `--with-faucet` — If present, a faucet is started using the chain provided by --faucet-chain, or `ChainId::root(1)` if not provided, as root 0 is usually the admin chain
-
-  Default value: `false`
-* `--faucet-chain <FAUCET_CHAIN>` — When using --with-faucet, this specifies the chain on which the faucet will be started. The chain is specified by its root number (0 for the admin chain, 1 for the first non-admin initial chain, etc)
+* `--with-faucet-chain <WITH_FAUCET_CHAIN>` — If present, a faucet is started using the given chain root number (0 for the admin chain, 1 for the first non-admin initial chain, etc)
 * `--faucet-port <FAUCET_PORT>` — The port on which to run the faucet server
 
   Default value: `8080`
@@ -961,20 +939,20 @@ Operation on the storage
 
 ###### **Subcommands:**
 
-* `delete_all` — Delete all the namespaces in the database
+* `delete_all` — Delete all the namespaces of the database
 * `delete_namespace` — Delete a single namespace from the database
 * `check_existence` — Check existence of a namespace in the database
 * `check_absence` — Check absence of a namespace in the database
 * `initialize` — Initialize a namespace in the database
-* `list_namespaces` — List the namespaces in the database
-* `list_blob_ids` — List the blob IDs in the database
-* `list_chain_ids` — List the chain IDs in the database
+* `list_namespaces` — List the namespaces of the database
+* `list_blob_ids` — List the blobs of the database
+* `list_root_keys` — List the root keys of the database
 
 
 
 ## `linera storage delete_all`
 
-Delete all the namespaces in the database
+Delete all the namespaces of the database
 
 **Usage:** `linera storage delete_all --storage <STORAGE_CONFIG>`
 
@@ -1034,7 +1012,7 @@ Initialize a namespace in the database
 
 ## `linera storage list_namespaces`
 
-List the namespaces in the database
+List the namespaces of the database
 
 **Usage:** `linera storage list_namespaces --storage <STORAGE_CONFIG>`
 
@@ -1046,7 +1024,7 @@ List the namespaces in the database
 
 ## `linera storage list_blob_ids`
 
-List the blob IDs in the database
+List the blobs of the database
 
 **Usage:** `linera storage list_blob_ids --storage <STORAGE_CONFIG>`
 
@@ -1056,11 +1034,11 @@ List the blob IDs in the database
 
 
 
-## `linera storage list_chain_ids`
+## `linera storage list_root_keys`
 
-List the chain IDs in the database
+List the root keys of the database
 
-**Usage:** `linera storage list_chain_ids --storage <STORAGE_CONFIG>`
+**Usage:** `linera storage list_root_keys --storage <STORAGE_CONFIG>`
 
 ###### **Options:**
 
