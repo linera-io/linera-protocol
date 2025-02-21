@@ -24,7 +24,9 @@ use revm_primitives::{ExecutionResult, HaltReason, Log, Output, TxKind};
 use thiserror::Error;
 #[cfg(with_metrics)]
 use {
-    linera_base::prometheus_util::{bucket_latencies, register_histogram_vec, MeasureLatency as _},
+    linera_base::prometheus_util::{
+        exponential_bucket_latencies, register_histogram_vec, MeasureLatency as _,
+    },
     prometheus::HistogramVec,
     std::sync::LazyLock,
 };
@@ -59,7 +61,7 @@ static CONTRACT_INSTANTIATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(||
         "evm_contract_instantiation_latency",
         "Evm contract instantiation latency",
         &[],
-        bucket_latencies(1.0),
+        exponential_bucket_latencies(1.0),
     )
 });
 
@@ -69,7 +71,7 @@ static SERVICE_INSTANTIATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| 
         "evm_service_instantiation_latency",
         "Evm service instantiation latency",
         &[],
-        bucket_latencies(1.0),
+        exponential_bucket_latencies(1.0),
     )
 });
 

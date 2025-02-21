@@ -94,7 +94,7 @@ mod client_tests;
 mod metrics {
     use std::sync::LazyLock;
 
-    use linera_base::prometheus_util::{bucket_latencies, register_histogram_vec};
+    use linera_base::prometheus_util::{exponential_bucket_latencies, register_histogram_vec};
     use prometheus::HistogramVec;
 
     pub static PROCESS_INBOX_WITHOUT_PREPARE_LATENCY: LazyLock<HistogramVec> =
@@ -103,7 +103,7 @@ mod metrics {
                 "process_inbox_latency",
                 "process_inbox latency",
                 &[],
-                bucket_latencies(500.0),
+                exponential_bucket_latencies(500.0),
             )
         });
 
@@ -112,7 +112,7 @@ mod metrics {
             "prepare_chain_latency",
             "prepare_chain latency",
             &[],
-            bucket_latencies(500.0),
+            exponential_bucket_latencies(500.0),
         )
     });
 
@@ -121,7 +121,7 @@ mod metrics {
             "synchronize_chain_state_latency",
             "synchronize_chain_state latency",
             &[],
-            bucket_latencies(500.0),
+            exponential_bucket_latencies(500.0),
         )
     });
 
@@ -130,7 +130,7 @@ mod metrics {
             "execute_block_latency",
             "execute_block latency",
             &[],
-            bucket_latencies(500.0),
+            exponential_bucket_latencies(500.0),
         )
     });
 
@@ -139,7 +139,7 @@ mod metrics {
             "find_received_certificates_latency",
             "find_received_certificates latency",
             &[],
-            bucket_latencies(500.0),
+            exponential_bucket_latencies(500.0),
         )
     });
 }

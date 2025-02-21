@@ -9,7 +9,9 @@ use std::sync::LazyLock;
 use custom_debug_derive::Debug;
 use futures::channel::mpsc;
 #[cfg(with_metrics)]
-use linera_base::prometheus_util::{bucket_latencies, register_histogram_vec, MeasureLatency as _};
+use linera_base::prometheus_util::{
+    exponential_bucket_latencies, register_histogram_vec, MeasureLatency as _,
+};
 use linera_base::{
     data_types::{Amount, ApplicationPermissions, BlobContent, Timestamp},
     hex_debug, hex_vec_debug, http,
@@ -37,7 +39,7 @@ static LOAD_CONTRACT_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
         "load_contract_latency",
         "Load contract latency",
         &[],
-        bucket_latencies(250.0),
+        exponential_bucket_latencies(250.0),
     )
 });
 
@@ -48,7 +50,7 @@ static LOAD_SERVICE_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
         "load_service_latency",
         "Load service latency",
         &[],
-        bucket_latencies(250.0),
+        exponential_bucket_latencies(250.0),
     )
 });
 

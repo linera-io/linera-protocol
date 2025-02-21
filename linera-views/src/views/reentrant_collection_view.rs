@@ -17,7 +17,9 @@ use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 #[cfg(with_metrics)]
 use {
-    linera_base::prometheus_util::{bucket_latencies, register_histogram_vec, MeasureLatency},
+    linera_base::prometheus_util::{
+        exponential_bucket_latencies, register_histogram_vec, MeasureLatency,
+    },
     prometheus::HistogramVec,
 };
 
@@ -37,7 +39,7 @@ static REENTRANT_COLLECTION_VIEW_HASH_RUNTIME: LazyLock<HistogramVec> = LazyLock
         "reentrant_collection_view_hash_runtime",
         "ReentrantCollectionView hash runtime",
         &[],
-        bucket_latencies(5.0),
+        exponential_bucket_latencies(5.0),
     )
 });
 
