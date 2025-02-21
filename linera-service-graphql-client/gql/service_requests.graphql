@@ -277,6 +277,7 @@ query Block($hash: CryptoHash, $chainId: ChainId!) {
             key
             value
           }
+          blobs
         }
       }
     }
@@ -340,6 +341,7 @@ query Blocks($from: CryptoHash, $chainId: ChainId!, $limit: Int) {
             key
             value
           }
+          blobs
         }
       }
     }

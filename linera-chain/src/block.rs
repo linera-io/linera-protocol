@@ -2,12 +2,15 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeSet, fmt::Debug};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fmt::Debug,
+};
 
 use async_graphql::SimpleObject;
 use linera_base::{
     crypto::{BcsHashable, CryptoHash},
-    data_types::{BlockHeight, Event, OracleResponse, Timestamp},
+    data_types::{Blob, BlockHeight, Event, OracleResponse, Timestamp},
     hashed::Hashed,
     identifiers::{BlobId, BlobType, ChainId, MessageId, Owner},
 };
@@ -360,6 +363,8 @@ pub struct BlockBody {
     pub oracle_responses: Vec<Vec<OracleResponse>>,
     /// The list of events produced by each transaction.
     pub events: Vec<Vec<Event>>,
+    /// The list of blobs produced by each transaction.
+    pub blobs: Vec<Vec<Blob>>,
 }
 
 impl Block {
@@ -391,6 +396,7 @@ impl Block {
             messages: outcome.messages,
             oracle_responses: outcome.oracle_responses,
             events: outcome.events,
+            blobs: outcome.blobs,
         };
 
         Self { header, body }
@@ -492,12 +498,15 @@ impl Block {
     pub fn required_blob_ids(&self) -> BTreeSet<BlobId> {
         let mut blob_ids = self.oracle_blob_ids();
         blob_ids.extend(self.published_blob_ids());
+        blob_ids.extend(self.created_blob_ids());
         blob_ids
     }
 
     /// Returns whether this block requires the blob with the specified ID.
     pub fn requires_blob(&self, blob_id: &BlobId) -> bool {
-        self.oracle_blob_ids().contains(blob_id) || self.published_blob_ids().contains(blob_id)
+        self.oracle_blob_ids().contains(blob_id)
+            || self.published_blob_ids().contains(blob_id)
+            || self.created_blob_ids().contains(blob_id)
     }
 
     /// Returns all the published blob IDs in this block's operations.
@@ -516,6 +525,26 @@ impl Block {
         }
 
         blob_ids
+    }
+
+    /// Returns all the blob IDs created by the block's operations.
+    fn created_blob_ids(&self) -> BTreeSet<BlobId> {
+        self.body
+            .blobs
+            .iter()
+            .flatten()
+            .map(|blob| blob.id())
+            .collect()
+    }
+
+    /// Returns all the blobs created by the block's operations.
+    pub fn created_blobs(&self) -> BTreeMap<BlobId, Blob> {
+        self.body
+            .blobs
+            .iter()
+            .flatten()
+            .map(|blob| (blob.id(), blob.clone()))
+            .collect()
     }
 
     /// Returns set of blob IDs that were a result of an oracle call.
@@ -563,6 +592,7 @@ impl From<Block> for ExecutedBlock {
                     messages,
                     oracle_responses,
                     events,
+                    blobs,
                 },
         } = block;
 
@@ -582,6 +612,7 @@ impl From<Block> for ExecutedBlock {
             messages,
             oracle_responses,
             events,
+            blobs,
         };
 
         ExecutedBlock { block, outcome }

@@ -860,21 +860,6 @@ pub enum ClientCommand {
         required_application_ids: Option<Vec<UserApplicationId>>,
     },
 
-    /// Request an application from another chain, so it can be used on this one.
-    RequestApplication {
-        /// The ID of the application to request.
-        application_id: UserApplicationId,
-
-        /// The target chain on which the application is already registered.
-        /// If not specified, the chain on which the application was created is used.
-        #[arg(long)]
-        target_chain_id: Option<ChainId>,
-
-        /// The owned chain on which the application is missing.
-        #[arg(long)]
-        requester_chain_id: Option<ChainId>,
-    },
-
     /// Create an unassigned key pair.
     Keygen,
 

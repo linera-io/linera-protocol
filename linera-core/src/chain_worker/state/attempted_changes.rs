@@ -160,7 +160,7 @@ where
         }
         let maybe_blobs = self
             .state
-            .maybe_get_required_blobs(proposal.required_blob_ids())
+            .maybe_get_required_blobs(proposal.required_blob_ids(), None)
             .await?;
         let missing_blob_ids = super::missing_blob_ids(&maybe_blobs);
         if !missing_blob_ids.is_empty() {
@@ -190,9 +190,10 @@ where
     ) -> Result<(), WorkerError> {
         // Create the vote and store it in the chain state.
         let executed_block = outcome.with(proposal.content.block.clone());
+        let created_blobs: BTreeMap<_, _> = executed_block.outcome.iter_created_blobs().collect();
         let blobs = self
             .state
-            .get_required_blobs(proposal.required_blob_ids())
+            .get_required_blobs(proposal.expected_blob_ids(), &created_blobs)
             .await?;
         let key_pair = self.state.config.key_pair();
         let manager = &mut self.state.chain.manager;
@@ -258,7 +259,7 @@ where
         let required_blob_ids = block.required_blob_ids();
         let maybe_blobs = self
             .state
-            .maybe_get_required_blobs(required_blob_ids)
+            .maybe_get_required_blobs(required_blob_ids, Some(&block.created_blobs()))
             .await?;
         let missing_blob_ids = super::missing_blob_ids(&maybe_blobs);
         if !missing_blob_ids.is_empty() {
@@ -337,9 +338,10 @@ where
         );
 
         let required_blob_ids = executed_block.required_blob_ids();
+        let created_blobs: BTreeMap<_, _> = executed_block.outcome.iter_created_blobs().collect();
         let blobs_result = self
             .state
-            .get_required_blobs(executed_block.required_blob_ids())
+            .get_required_blobs(executed_block.required_blob_ids(), &created_blobs)
             .await
             .map(|blobs| blobs.into_values().collect::<Vec<_>>());
 

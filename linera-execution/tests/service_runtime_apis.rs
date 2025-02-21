@@ -29,7 +29,7 @@ async fn test_read_chain_balance_system_api(chain_balance: Amount) {
     .into_view()
     .await;
 
-    let (application_id, application) = view.register_mock_application().await.unwrap();
+    let (application_id, application) = view.register_mock_application(0).await.unwrap();
 
     application.expect_call(ExpectedCall::handle_query(
         move |runtime, _context, _query| {
@@ -61,7 +61,7 @@ async fn test_read_owner_balance_system_api(
     .into_view()
     .await;
 
-    let (application_id, application) = view.register_mock_application().await.unwrap();
+    let (application_id, application) = view.register_mock_application(0).await.unwrap();
 
     application.expect_call(ExpectedCall::handle_query(
         move |runtime, _context, _query| {
@@ -92,7 +92,7 @@ async fn test_read_owner_balance_returns_zero_for_missing_accounts(missing_accou
     .into_view()
     .await;
 
-    let (application_id, application) = view.register_mock_application().await.unwrap();
+    let (application_id, application) = view.register_mock_application(0).await.unwrap();
 
     application.expect_call(ExpectedCall::handle_query(
         move |runtime, _context, _query| {
@@ -127,7 +127,7 @@ async fn test_read_owner_balances_system_api(
     .into_view()
     .await;
 
-    let (application_id, application) = view.register_mock_application().await.unwrap();
+    let (application_id, application) = view.register_mock_application(0).await.unwrap();
 
     application.expect_call(ExpectedCall::handle_query(
         move |runtime, _context, _query| {
@@ -162,7 +162,7 @@ async fn test_read_balance_owners_system_api(
     .into_view()
     .await;
 
-    let (application_id, application) = view.register_mock_application().await.unwrap();
+    let (application_id, application) = view.register_mock_application(0).await.unwrap();
 
     application.expect_call(ExpectedCall::handle_query(
         move |runtime, _context, _query| {

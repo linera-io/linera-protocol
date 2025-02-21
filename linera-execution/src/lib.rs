@@ -7,7 +7,6 @@
 #![cfg_attr(web, feature(trait_upcasting))]
 #![deny(clippy::large_futures)]
 
-mod applications;
 pub mod committee;
 mod execution;
 mod execution_state_actor;
@@ -54,8 +53,6 @@ use serde::{Deserialize, Serialize};
 use system::OpenChainConfig;
 use thiserror::Error;
 
-#[cfg(with_testing)]
-pub use crate::applications::ApplicationRegistry;
 #[cfg(with_revm)]
 use crate::revm::EvmExecutionError;
 use crate::runtime::ContractSyncRuntime;
@@ -67,7 +64,6 @@ pub use crate::wasm::{
     ViewSystemApi, WasmContractModule, WasmExecutionError, WasmServiceModule,
 };
 pub use crate::{
-    applications::ApplicationRegistryView,
     execution::{ExecutionStateView, ServiceRuntimeEndpoint},
     execution_state_actor::ExecutionRequest,
     policy::ResourceControlPolicy,

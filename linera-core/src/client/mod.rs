@@ -56,7 +56,7 @@ use linera_execution::{
     committee::{Committee, Epoch},
     system::{
         AdminOperation, OpenChainConfig, Recipient, SystemChannel, SystemOperation,
-        CREATE_APPLICATION_MESSAGE_INDEX, OPEN_CHAIN_MESSAGE_INDEX,
+        OPEN_CHAIN_MESSAGE_INDEX,
     },
     ExecutionError, Operation, Query, QueryOutcome, QueryResponse, SystemExecutionError,
     SystemQuery, SystemResponse,
@@ -2389,22 +2389,6 @@ where
         ))
     }
 
-    /// Requests a `RegisterApplications` message from another chain so the application can be used
-    /// on this one.
-    #[instrument(level = "trace")]
-    pub async fn request_application(
-        &self,
-        application_id: UserApplicationId,
-        chain_id: Option<ChainId>,
-    ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
-        let chain_id = chain_id.unwrap_or(application_id.creation.chain_id);
-        self.execute_operation(Operation::System(SystemOperation::RequestApplication {
-            application_id,
-            chain_id,
-        }))
-        .await
-    }
-
     /// Sends tokens to a chain.
     #[instrument(level = "trace")]
     pub async fn transfer_to_account(
@@ -2958,12 +2942,22 @@ where
         .await?
         .try_map(|certificate| {
             // The first message of the only operation created the application.
-            let creation = certificate
+            let mut creation: Vec<_> = certificate
                 .block()
-                .message_id_for_operation(0, CREATE_APPLICATION_MESSAGE_INDEX)
-                .ok_or_else(|| ChainClientError::InternalError("Failed to create application"))?;
+                .required_blob_ids()
+                .into_iter()
+                .filter(|blob_id| blob_id.blob_type == BlobType::ApplicationDescription)
+                .collect();
+            if creation.len() > 1 {
+                return Err(ChainClientError::InternalError(
+                    "Unexpected number of application descriptions published",
+                ));
+            }
+            let blob_id = creation.pop().ok_or(ChainClientError::InternalError(
+                "ApplicationDescription blob not found.",
+            ))?;
             let id = ApplicationId {
-                creation,
+                application_description_hash: blob_id.hash,
                 bytecode_id,
             };
             Ok((id, certificate))

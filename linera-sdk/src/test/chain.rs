@@ -14,15 +14,12 @@ use std::{
 use cargo_toml::Manifest;
 use linera_base::{
     crypto::{AccountPublicKey, AccountSecretKey},
-    data_types::{Blob, BlockHeight, Bytecode, CompressedBytecode},
-    identifiers::{ApplicationId, BytecodeId, ChainDescription, ChainId, MessageId},
+    data_types::{Blob, BlockHeight, Bytecode, CompressedBytecode, UserApplicationDescription},
+    identifiers::{ApplicationId, BytecodeId, ChainDescription, ChainId},
 };
-use linera_chain::{types::ConfirmedBlockCertificate, ChainError, ChainExecutionContext};
+use linera_chain::types::ConfirmedBlockCertificate;
 use linera_core::{data_types::ChainInfoQuery, worker::WorkerError};
-use linera_execution::{
-    system::{SystemExecutionError, SystemOperation, CREATE_APPLICATION_MESSAGE_INDEX},
-    ExecutionError, Query, QueryOutcome, QueryResponse,
-};
+use linera_execution::{system::SystemOperation, Query, QueryOutcome, QueryResponse};
 use linera_storage::Storage as _;
 use serde::Serialize;
 use tokio::{fs, sync::Mutex};
@@ -365,33 +362,30 @@ impl ActiveChain {
         let parameters = serde_json::to_vec(&parameters).unwrap();
         let instantiation_argument = serde_json::to_vec(&instantiation_argument).unwrap();
 
-        for &dependency in &required_application_ids {
-            self.register_application(dependency).await;
-        }
-
         let creation_certificate = self
             .add_block(|block| {
                 block.with_system_operation(SystemOperation::CreateApplication {
                     bytecode_id: bytecode_id.forget_abi(),
-                    parameters,
+                    parameters: parameters.clone(),
                     instantiation_argument,
-                    required_application_ids,
+                    required_application_ids: required_application_ids.clone(),
                 });
             })
             .await;
 
         let block = creation_certificate.inner().block();
         assert_eq!(block.messages().len(), 1);
-        let creation = MessageId {
-            chain_id: block.header.chain_id,
-            height: block.header.height,
-            index: CREATE_APPLICATION_MESSAGE_INDEX,
+
+        let description = UserApplicationDescription {
+            bytecode_id: bytecode_id.forget_abi(),
+            creator_chain_id: block.header.chain_id,
+            block_height: block.header.height,
+            application_index: 0,
+            parameters,
+            required_application_ids,
         };
 
-        ApplicationId {
-            bytecode_id: bytecode_id.just_abi(),
-            creation,
-        }
+        ApplicationId::<()>::from(&description).with_abi()
     }
 
     /// Returns whether this chain has been closed.
@@ -402,61 +396,6 @@ impl ActiveChain {
             .await
             .expect("Failed to load chain")
             .is_closed()
-    }
-
-    /// Registers on this chain an application created on another chain.
-    pub async fn register_application<Abi>(&self, application_id: ApplicationId<Abi>) {
-        if self.needs_application_description(application_id).await {
-            let source_chain = self.validator.get_chain(&application_id.creation.chain_id);
-
-            let request_certificate = self
-                .add_block(|block| {
-                    block.with_request_for_application(application_id);
-                })
-                .await;
-
-            let register_certificate = source_chain
-                .add_block(|block| {
-                    block.with_messages_from(&request_certificate);
-                })
-                .await;
-
-            let final_certificate = self
-                .add_block(|block| {
-                    block.with_messages_from(&register_certificate);
-                })
-                .await;
-
-            assert_eq!(final_certificate.outgoing_message_count(), 0);
-        }
-    }
-
-    /// Checks if the `application_id` is missing from this microchain.
-    async fn needs_application_description<Abi>(&self, application_id: ApplicationId<Abi>) -> bool {
-        let description_result = self
-            .validator
-            .worker()
-            .describe_application(self.id(), application_id.forget_abi())
-            .await;
-
-        match description_result {
-            Ok(_) => false,
-            Err(WorkerError::ChainError(boxed_chain_error))
-                if matches!(
-                    &*boxed_chain_error,
-                    ChainError::ExecutionError(
-                        execution_error,
-                        ChainExecutionContext::DescribeApplication,
-                    ) if matches!(
-                        **execution_error,
-                        ExecutionError::SystemError(SystemExecutionError::UnknownApplicationId(_))
-                    )
-                ) =>
-            {
-                true
-            }
-            Err(_) => panic!("Failed to check known bytecode locations"),
-        }
     }
 
     /// Executes a `query` on an `application`'s state on this microchain.

@@ -23,7 +23,6 @@ use linera_views::{
 
 use super::{MockApplication, RegisterMockApplication};
 use crate::{
-    applications::ApplicationRegistry,
     committee::{Committee, Epoch},
     execution::UserAction,
     system::SystemChannel,
@@ -45,7 +44,6 @@ pub struct SystemExecutionState {
     #[debug(skip_if = BTreeMap::is_empty)]
     pub balances: BTreeMap<AccountOwner, Amount>,
     pub timestamp: Timestamp,
-    pub registry: ApplicationRegistry,
     pub used_blobs: BTreeSet<BlobId>,
     #[debug(skip_if = Not::not)]
     pub closed: bool,
@@ -108,7 +106,6 @@ impl SystemExecutionState {
             balance,
             balances,
             timestamp,
-            registry,
             used_blobs,
             closed,
             application_permissions,
@@ -158,10 +155,6 @@ impl SystemExecutionState {
                 .expect("insertion of balances should not fail");
         }
         view.system.timestamp.set(timestamp);
-        view.system
-            .registry
-            .import(registry)
-            .expect("serialization of registry components should not fail");
         for blob_id in used_blobs {
             view.system
                 .used_blobs
@@ -183,10 +176,6 @@ impl RegisterMockApplication for SystemExecutionState {
         ).into()
     }
 
-    async fn registered_application_count(&self) -> anyhow::Result<usize> {
-        Ok(self.registry.known_applications.len())
-    }
-
     async fn register_mock_application_with(
         &mut self,
         description: UserApplicationDescription,
@@ -196,8 +185,11 @@ impl RegisterMockApplication for SystemExecutionState {
         let id = ApplicationId::from(&description);
         let application = MockApplication::default();
 
-        self.registry.known_applications.insert(id, description);
-        self.extra_blobs.extend([contract, service]);
+        self.extra_blobs.extend([
+            contract,
+            service,
+            Blob::new_application_description(&description),
+        ]);
         self.mock_applications.insert(id, application.clone());
 
         Ok((id, application))

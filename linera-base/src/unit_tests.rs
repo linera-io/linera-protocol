@@ -104,11 +104,7 @@ fn application_id_test_case() -> ApplicationId {
             CryptoHash::test_hash("contract bytecode"),
             CryptoHash::test_hash("service bytecode"),
         ),
-        creation: MessageId {
-            chain_id: ChainId::root(0),
-            height: BlockHeight(0),
-            index: 0,
-        },
+        application_description_hash: CryptoHash::test_hash("application description"),
     }
 }
 

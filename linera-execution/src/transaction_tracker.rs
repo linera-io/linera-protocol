@@ -1,13 +1,13 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::vec;
+use std::{collections::BTreeMap, vec};
 
 use custom_debug_derive::Debug;
 use linera_base::{
-    data_types::{Amount, ArithmeticError, Event, OracleResponse},
+    data_types::{Amount, ArithmeticError, Blob, Event, OracleResponse},
     ensure,
-    identifiers::{ApplicationId, ChainId, ChannelFullName, StreamId},
+    identifiers::{ApplicationId, BlobId, ChainId, ChannelFullName, StreamId},
 };
 
 use crate::{
@@ -25,8 +25,11 @@ pub struct TransactionTracker {
     #[debug(skip_if = Vec::is_empty)]
     outcomes: Vec<ExecutionOutcome>,
     next_message_index: u32,
+    next_application_index: u32,
     /// Events recorded by contracts' `emit` calls.
     events: Vec<Event>,
+    /// Blobs created by contracts.
+    blobs: BTreeMap<BlobId, Blob>,
     /// Subscribe chains to channels.
     subscribe: Vec<(ChannelFullName, ChainId)>,
     /// Unsubscribe chains from channels.
@@ -41,8 +44,11 @@ pub struct TransactionOutcome {
     #[debug(skip_if = Vec::is_empty)]
     pub outcomes: Vec<ExecutionOutcome>,
     pub next_message_index: u32,
+    pub next_application_index: u32,
     /// Events recorded by contracts' `emit` calls.
     pub events: Vec<Event>,
+    /// Blobs created by contracts.
+    pub blobs: Vec<Blob>,
     /// Subscribe chains to channels.
     pub subscribe: Vec<(ChannelFullName, ChainId)>,
     /// Unsubscribe chains from channels.
@@ -50,16 +56,27 @@ pub struct TransactionOutcome {
 }
 
 impl TransactionTracker {
-    pub fn new(next_message_index: u32, oracle_responses: Option<Vec<OracleResponse>>) -> Self {
+    pub fn new(
+        next_message_index: u32,
+        next_application_index: u32,
+        oracle_responses: Option<Vec<OracleResponse>>,
+    ) -> Self {
         TransactionTracker {
             replaying_oracle_responses: oracle_responses.map(Vec::into_iter),
             next_message_index,
+            next_application_index,
             ..Self::default()
         }
     }
 
     pub fn next_message_index(&self) -> u32 {
         self.next_message_index
+    }
+
+    pub fn next_application_index(&mut self) -> u32 {
+        let index = self.next_application_index;
+        self.next_application_index += 1;
+        index
     }
 
     pub fn add_system_outcome(
@@ -104,6 +121,14 @@ impl TransactionTracker {
             key,
             value,
         });
+    }
+
+    pub fn add_created_blob(&mut self, blob: Blob) {
+        self.blobs.insert(blob.id(), blob);
+    }
+
+    pub fn get_blobs_cache(&self) -> &BTreeMap<BlobId, Blob> {
+        &self.blobs
     }
 
     pub fn subscribe(&mut self, name: ChannelFullName, subscriber: ChainId) {
@@ -155,7 +180,9 @@ impl TransactionTracker {
             oracle_responses,
             outcomes,
             next_message_index,
+            next_application_index,
             events,
+            blobs,
             subscribe,
             unsubscribe,
         } = self;
@@ -169,13 +196,11 @@ impl TransactionTracker {
             outcomes,
             oracle_responses,
             next_message_index,
+            next_application_index,
             events,
+            blobs: blobs.into_values().collect(),
             subscribe,
             unsubscribe,
         })
-    }
-
-    pub(crate) fn outcomes_mut(&mut self) -> &mut Vec<ExecutionOutcome> {
-        &mut self.outcomes
     }
 }

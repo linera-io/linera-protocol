@@ -16,8 +16,7 @@ use linera_base::{
         Amount, Blob, BlockHeight, CompressedBytecode, Timestamp, UserApplicationDescription,
     },
     identifiers::{
-        Account, AccountOwner, ApplicationId, BytecodeId, ChainDescription, ChainId, MessageId,
-        Owner,
+        Account, AccountOwner, ApplicationId, BytecodeId, ChainDescription, ChainId, Owner,
     },
     ownership::ChainOwnership,
 };
@@ -80,7 +79,7 @@ async fn test_transfer_system_api(
         application_id,
         bytes: vec![],
     };
-    let mut tracker = TransactionTracker::new(0, Some(Vec::new()));
+    let mut tracker = TransactionTracker::new(0, 0, Some(Vec::new()));
     view.execute_operation(
         context,
         Timestamp::from(0),
@@ -111,7 +110,7 @@ async fn test_transfer_system_api(
         Timestamp::from(0),
         Message::System(outcome.messages[0].message.clone()),
         None,
-        &mut TransactionTracker::new(0, Some(Vec::new())),
+        &mut TransactionTracker::new(0, 0, Some(Vec::new())),
         &mut controller,
     )
     .await?;
@@ -172,7 +171,7 @@ async fn test_unauthorized_transfer_system_api(
             context,
             Timestamp::from(0),
             operation,
-            &mut TransactionTracker::new(0, Some(Vec::new())),
+            &mut TransactionTracker::new(0, 0, Some(Vec::new())),
             &mut controller,
         )
         .await;
@@ -253,7 +252,7 @@ async fn test_claim_system_api(
         application_id,
         bytes: vec![],
     };
-    let mut tracker = TransactionTracker::new(0, Some(Vec::new()));
+    let mut tracker = TransactionTracker::new(0, 0, Some(Vec::new()));
     claimer_view
         .execute_operation(
             context,
@@ -280,7 +279,7 @@ async fn test_claim_system_api(
 
     assert_eq!(outcome.messages.len(), 1);
 
-    let mut tracker = TransactionTracker::new(0, Some(Vec::new()));
+    let mut tracker = TransactionTracker::new(0, 0, Some(Vec::new()));
     source_view
         .execute_message(
             create_dummy_message_context(None),
@@ -320,7 +319,7 @@ async fn test_claim_system_api(
 
     assert_eq!(outcome.messages.len(), 1);
 
-    let mut tracker = TransactionTracker::new(0, Some(Vec::new()));
+    let mut tracker = TransactionTracker::new(0, 0, Some(Vec::new()));
     let context = MessageContext {
         chain_id: claimer_chain_id,
         ..create_dummy_message_context(None)
@@ -403,7 +402,7 @@ async fn test_unauthorized_claims(
         application_id,
         bytes: vec![],
     };
-    let mut tracker = TransactionTracker::new(0, Some(Vec::new()));
+    let mut tracker = TransactionTracker::new(0, 0, Some(Vec::new()));
     let result = claimer_view
         .execute_operation(
             context,
@@ -435,7 +434,7 @@ async fn test_read_chain_balance_system_api(chain_balance: Amount) {
     .into_view()
     .await;
 
-    let (application_id, application) = view.register_mock_application().await.unwrap();
+    let (application_id, application) = view.register_mock_application(0).await.unwrap();
 
     application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
@@ -456,7 +455,7 @@ async fn test_read_chain_balance_system_api(chain_balance: Amount) {
         context,
         Timestamp::from(0),
         operation,
-        &mut TransactionTracker::new(0, Some(Vec::new())),
+        &mut TransactionTracker::new(0, 0, Some(Vec::new())),
         &mut controller,
     )
     .await
@@ -476,7 +475,7 @@ async fn test_read_owner_balance_system_api(
     .into_view()
     .await;
 
-    let (application_id, application) = view.register_mock_application().await.unwrap();
+    let (application_id, application) = view.register_mock_application(0).await.unwrap();
 
     application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
@@ -499,7 +498,7 @@ async fn test_read_owner_balance_system_api(
         context,
         Timestamp::from(0),
         operation,
-        &mut TransactionTracker::new(0, Some(Vec::new())),
+        &mut TransactionTracker::new(0, 0, Some(Vec::new())),
         &mut controller,
     )
     .await
@@ -516,7 +515,7 @@ async fn test_read_owner_balance_returns_zero_for_missing_accounts(missing_accou
     .into_view()
     .await;
 
-    let (application_id, application) = view.register_mock_application().await.unwrap();
+    let (application_id, application) = view.register_mock_application(0).await.unwrap();
 
     application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
@@ -540,7 +539,7 @@ async fn test_read_owner_balance_returns_zero_for_missing_accounts(missing_accou
         context,
         Timestamp::from(0),
         operation,
-        &mut TransactionTracker::new(0, Some(Vec::new())),
+        &mut TransactionTracker::new(0, 0, Some(Vec::new())),
         &mut controller,
     )
     .await
@@ -560,7 +559,7 @@ async fn test_read_owner_balances_system_api(
     .into_view()
     .await;
 
-    let (application_id, application) = view.register_mock_application().await.unwrap();
+    let (application_id, application) = view.register_mock_application(0).await.unwrap();
 
     application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
@@ -584,7 +583,7 @@ async fn test_read_owner_balances_system_api(
         context,
         Timestamp::from(0),
         operation,
-        &mut TransactionTracker::new(0, Some(Vec::new())),
+        &mut TransactionTracker::new(0, 0, Some(Vec::new())),
         &mut controller,
     )
     .await
@@ -604,7 +603,7 @@ async fn test_read_balance_owners_system_api(
     .into_view()
     .await;
 
-    let (application_id, application) = view.register_mock_application().await.unwrap();
+    let (application_id, application) = view.register_mock_application(0).await.unwrap();
 
     application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
@@ -628,7 +627,7 @@ async fn test_read_balance_owners_system_api(
         context,
         Timestamp::from(0),
         operation,
-        &mut TransactionTracker::new(0, Some(Vec::new())),
+        &mut TransactionTracker::new(0, 0, Some(Vec::new())),
         &mut controller,
     )
     .await
@@ -661,11 +660,9 @@ impl TransferTestEndpoint {
 
         UserApplicationDescription {
             bytecode_id: BytecodeId::new(contract_id, service_id),
-            creation: MessageId {
-                chain_id: ChainId::root(1000),
-                height: BlockHeight(0),
-                index: 0,
-            },
+            creator_chain_id: ChainId::root(1000),
+            block_height: BlockHeight(0),
+            application_index: 0,
             parameters: vec![],
             required_application_ids: vec![],
         }
@@ -699,11 +696,9 @@ impl TransferTestEndpoint {
                 CryptoHash::test_hash("recipient contract bytecode"),
                 CryptoHash::test_hash("recipient service bytecode"),
             ),
-            creation: MessageId {
-                chain_id: ChainId::root(2000),
-                height: BlockHeight(0),
-                index: 0,
-            },
+            application_description_hash: CryptoHash::test_hash(
+                "recipient application description",
+            ),
         }
     }
 

@@ -146,11 +146,7 @@ contract ExampleCounter {
         .into_view_with(ChainId::root(0), ExecutionRuntimeConfig::default())
         .await;
     let (app_desc, contract_blob, service_blob) = create_dummy_user_application_description(1);
-    let app_id = view
-        .system
-        .registry
-        .register_application(app_desc.clone())
-        .await?;
+    let app_id = From::from(&app_desc);
 
     let contract = EvmContractModule::Revm {
         module: module.clone(),
@@ -210,7 +206,7 @@ contract ExampleCounter {
     };
 
     for increment in &increments {
-        let mut txn_tracker = TransactionTracker::new(0, Some(Vec::new()));
+        let mut txn_tracker = TransactionTracker::new(0, 0, Some(Vec::new()));
         value += increment;
         let operation = incrementCall { input: *increment };
         let bytes = operation.abi_encode();
