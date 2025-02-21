@@ -2839,8 +2839,8 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) -> Result<()> {
     // Chain 1 should have transferred four tokens, two to each child.
     client1.sync(chain1).await?;
     let faucet_balance = client1.query_balance(Account::chain(chain1)).await?;
-    assert!(faucet_balance <= balance1 - Amount::from_tokens(4));
-    assert!(faucet_balance > balance1 - Amount::from_tokens(5));
+    assert!(faucet_balance <= balance1 - Amount::from_tokens(8));
+    assert!(faucet_balance > balance1 - Amount::from_tokens(9));
 
     // Assign chain2 to client2_key.
     assert_eq!(chain2, client2.assign(owner2, message_id).await?);
