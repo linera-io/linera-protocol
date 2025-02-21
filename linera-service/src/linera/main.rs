@@ -773,9 +773,7 @@ impl Runnable for Job {
 
                 if let Some(id) = fungible_application_id {
                     let start = Instant::now();
-                    context
-                        .supply_fungible_tokens(&key_pairs, id, &chain_clients)
-                        .await?;
+                    context.supply_fungible_tokens(&key_pairs, id).await?;
                     info!(
                         "Supplied fungible tokens in {} ms",
                         start.elapsed().as_millis()

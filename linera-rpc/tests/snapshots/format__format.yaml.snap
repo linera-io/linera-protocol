@@ -37,10 +37,10 @@ Amount:
   NEWTYPESTRUCT: U128
 ApplicationId:
   STRUCT:
+    - application_description_hash:
+        TYPENAME: CryptoHash
     - bytecode_id:
         TYPENAME: BytecodeId
-    - creation:
-        TYPENAME: MessageId
 ApplicationPermissions:
   STRUCT:
     - execute_operations:
@@ -75,6 +75,8 @@ BlobType:
       ContractBytecode: UNIT
     2:
       ServiceBytecode: UNIT
+    3:
+      ApplicationDescription: UNIT
 Block:
   STRUCT:
     - header:
@@ -101,6 +103,10 @@ BlockBody:
         SEQ:
           SEQ:
             TYPENAME: Event
+    - blobs:
+        SEQ:
+          SEQ:
+            TYPENAME: BlobContent
 BlockExecutionOutcome:
   STRUCT:
     - messages:
@@ -117,6 +123,10 @@ BlockExecutionOutcome:
         SEQ:
           SEQ:
             TYPENAME: Event
+    - blobs:
+        SEQ:
+          SEQ:
+            TYPENAME: BlobContent
 BlockHeader:
   STRUCT:
     - chain_id:
@@ -1024,10 +1034,6 @@ SystemMessage:
           - applications:
               SEQ:
                 TYPENAME: UserApplicationDescription
-    9:
-      RequestApplication:
-        NEWTYPE:
-          TYPENAME: ApplicationId
 SystemOperation:
   ENUM:
     0:
@@ -1116,13 +1122,6 @@ SystemOperation:
               SEQ:
                 TYPENAME: ApplicationId
     12:
-      RequestApplication:
-        STRUCT:
-          - chain_id:
-              TYPENAME: ChainId
-          - application_id:
-              TYPENAME: ApplicationId
-    13:
       Admin:
         NEWTYPE:
           TYPENAME: AdminOperation
@@ -1164,8 +1163,11 @@ UserApplicationDescription:
   STRUCT:
     - bytecode_id:
         TYPENAME: BytecodeId
-    - creation:
-        TYPENAME: MessageId
+    - creator_chain_id:
+        TYPENAME: ChainId
+    - block_height:
+        TYPENAME: BlockHeight
+    - application_index: U32
     - parameters: BYTES
     - required_application_ids:
         SEQ:

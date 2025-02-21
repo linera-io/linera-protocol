@@ -906,7 +906,6 @@ where
         &mut self,
         key_pairs: &HashMap<ChainId, AccountSecretKey>,
         application_id: ApplicationId,
-        chain_clients: &HashMap<ChainId, ChainClient<NodeProvider, S>>,
     ) -> Result<(), Error> {
         let default_chain_id = self
             .wallet
