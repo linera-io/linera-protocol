@@ -93,8 +93,15 @@ export LINERA_STORAGE="rocksdb:$LINERA_TMP_DIR/client.db"
 linera wallet init --faucet $FAUCET_URL
 
 # Request chains.
-CHAIN1=$(linera wallet request-chain --faucet $FAUCET_URL | head -n 1)
-CHAIN2=$(linera wallet request-chain --faucet $FAUCET_URL | head -n 1)
+INFO1=($(linera wallet request-chain --faucet $FAUCET_URL))
+INFO2=($(linera wallet request-chain --faucet $FAUCET_URL))
+CHAIN1="${INFO1[0]}"
+ACCOUNT1="User:${INFO1[3]}"
+CHAIN2="${INFO2[0]}"
+ACCOUNT2="User:${INFO2[3]}"
+
+# Show the different chains tracked by the wallet.
+linera wallet show
 
 # Query the chain balance of some of the chains.
 linera query-balance "$CHAIN1"
@@ -107,6 +114,16 @@ linera transfer 5 --from "$CHAIN2" --to "$CHAIN1"
 # Query balances again.
 linera query-balance "$CHAIN1"
 linera query-balance "$CHAIN2"
+
+# Now let's fund the user balances.
+linera transfer 5 --from "$CHAIN1" --to "$CHAIN1:$ACCOUNT1"
+linera transfer 2 --from "$CHAIN1:$ACCOUNT1" --to "$CHAIN2:$ACCOUNT2"
+
+# Query user balances again.
+linera query-balance "$CHAIN1:$ACCOUNT1"
+linera query-balance "$CHAIN2:$ACCOUNT2"
+
+# TODO(#1713): The syntax `User:$OWNER` for user accounts will change in the future.
 ```
 
 More complex examples may be found in our [developer manual](https://linera.dev) as well
