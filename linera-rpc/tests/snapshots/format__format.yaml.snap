@@ -270,7 +270,7 @@ ChainInfoResponse:
         TYPENAME: ChainInfo
     - signature:
         OPTION:
-          TYPENAME: Ed25519Signature
+          TYPENAME: Secp256k1Signature
 ChainManagerInfo:
   STRUCT:
     - ownership:
@@ -340,7 +340,7 @@ Committee:
     - validators:
         MAP:
           KEY:
-            TYPENAME: Ed25519PublicKey
+            TYPENAME: Secp256k1PublicKey
           VALUE:
             TYPENAME: ValidatorState
     - policy:
@@ -354,8 +354,8 @@ ConfirmedBlockCertificate:
     - signatures:
         SEQ:
           TUPLE:
-            - TYPENAME: Ed25519PublicKey
-            - TYPENAME: Ed25519Signature
+            - TYPENAME: Secp256k1PublicKey
+            - TYPENAME: Secp256k1Signature
 CrateVersion:
   STRUCT:
     - major: U32
@@ -470,8 +470,8 @@ LiteCertificate:
     - signatures:
         SEQ:
           TUPLE:
-            - TYPENAME: Ed25519PublicKey
-            - TYPENAME: Ed25519Signature
+            - TYPENAME: Secp256k1PublicKey
+            - TYPENAME: Secp256k1Signature
 LiteValue:
   STRUCT:
     - value_hash:
@@ -487,9 +487,9 @@ LiteVote:
     - round:
         TYPENAME: Round
     - public_key:
-        TYPENAME: Ed25519PublicKey
+        TYPENAME: Secp256k1PublicKey
     - signature:
-        TYPENAME: Ed25519Signature
+        TYPENAME: Secp256k1Signature
 LockingBlock:
   ENUM:
     0:
@@ -952,6 +952,13 @@ RpcMessage:
       CrossChainRequest:
         NEWTYPE:
           TYPENAME: CrossChainRequest
+Secp256k1PublicKey:
+  NEWTYPESTRUCT:
+    TUPLEARRAY:
+      CONTENT: U8
+      SIZE: 33
+Secp256k1Signature:
+  NEWTYPESTRUCT: BYTES
 StreamId:
   STRUCT:
     - application_id:
@@ -1145,8 +1152,8 @@ TimeoutCertificate:
     - signatures:
         SEQ:
           TUPLE:
-            - TYPENAME: Ed25519PublicKey
-            - TYPENAME: Ed25519Signature
+            - TYPENAME: Secp256k1PublicKey
+            - TYPENAME: Secp256k1Signature
 TimeoutConfig:
   STRUCT:
     - fast_round_duration:
@@ -1179,12 +1186,14 @@ ValidatedBlockCertificate:
     - signatures:
         SEQ:
           TUPLE:
-            - TYPENAME: Ed25519PublicKey
-            - TYPENAME: Ed25519Signature
+            - TYPENAME: Secp256k1PublicKey
+            - TYPENAME: Secp256k1Signature
 ValidatorState:
   STRUCT:
     - network_address: STR
     - votes: U64
+    - account_public_key:
+        TYPENAME: Ed25519PublicKey
 VersionInfo:
   STRUCT:
     - crate_version:
