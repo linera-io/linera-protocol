@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Implementations of Wasm instance related traits to mutable borrows of instances.
+//! Implementations of Wasm instance-related traits for mutable borrows of instances.
 //!
 //! This allows using the same traits without having to move the type implementation around, for
 //! example as parameters in reentrant functions.

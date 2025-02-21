@@ -11,7 +11,7 @@
 
 use super::FlatType;
 
-/// Marker trait to prevent [`SimpleType`] to be implemented for other types.
+/// Marker trait to prevent [`SimpleType`] from being implemented for other types.
 pub trait Sealed {}
 
 /// Primitive fundamental WIT types.
