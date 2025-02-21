@@ -79,10 +79,7 @@ where
         let action = UserAction::Instantiate(context, instantiation_argument);
         let next_message_index = application_description.application_index + 1;
 
-        let application_id = self
-            .system
-            .register_application(application_description)
-            .await?;
+        let application_id = From::from(&application_description);
 
         self.system.used_blobs.insert(&contract_blob.id())?;
         self.system.used_blobs.insert(&service_blob.id())?;
@@ -104,8 +101,8 @@ where
             tracker,
             account: None,
         };
-        // TODO: can we just reuse the same index for both counters here?
         let mut txn_tracker = TransactionTracker::new(next_message_index, next_message_index, None);
+        txn_tracker.add_created_blob(Blob::new_application_description(&application_description));
         self.run_user_action(
             application_id,
             chain_id,

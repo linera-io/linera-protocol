@@ -23,6 +23,7 @@ fn test_signed_values() {
         state_hash: CryptoHash::test_hash("state"),
         oracle_responses: vec![Vec::new()],
         events: vec![Vec::new()],
+        blobs: vec![Vec::new()],
     }
     .with(block);
     let confirmed_value = Hashed::new(ConfirmedBlock::new(executed_block.clone()));
@@ -71,6 +72,7 @@ fn test_hashes() {
         state_hash: CryptoHash::test_hash("state"),
         oracle_responses: vec![Vec::new()],
         events: vec![Vec::new()],
+        blobs: vec![Vec::new()],
     }
     .with(block);
     let confirmed_hashed = Hashed::new(ConfirmedBlock::new(executed_block.clone()));
@@ -94,6 +96,7 @@ fn test_certificates() {
         state_hash: CryptoHash::test_hash("state"),
         oracle_responses: vec![Vec::new()],
         events: vec![Vec::new()],
+        blobs: vec![Vec::new()],
     }
     .with(block);
     let value = Hashed::new(ConfirmedBlock::new(executed_block));

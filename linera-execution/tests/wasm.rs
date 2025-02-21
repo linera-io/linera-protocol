@@ -41,11 +41,7 @@ async fn test_fuel_for_counter_wasm_application(
         .into_view_with(ChainId::root(0), ExecutionRuntimeConfig::default())
         .await;
     let (app_desc, contract_blob, service_blob) = create_dummy_user_application_description(1);
-    let app_id = view
-        .system
-        .registry
-        .register_application(app_desc.clone())
-        .await?;
+    let app_id = From::from(&app_desc);
 
     let contract =
         WasmContractModule::from_file("tests/fixtures/counter_contract.wasm", wasm_runtime).await?;
@@ -92,7 +88,7 @@ async fn test_fuel_for_counter_wasm_application(
             chain_id: ChainId::root(0),
             owner: None,
         };
-        let mut txn_tracker = TransactionTracker::new(0, Some(Vec::new()));
+        let mut txn_tracker = TransactionTracker::new(0, 0, Some(Vec::new()));
         view.execute_operation(
             context,
             Timestamp::from(0),

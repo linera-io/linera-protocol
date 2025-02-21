@@ -121,7 +121,7 @@ async fn test_fee_consumption(
         description: Some(ChainDescription::Root(0)),
         ..SystemExecutionState::default()
     };
-    let (application_id, application) = state.register_mock_application().await?;
+    let (application_id, application) = state.register_mock_application(0).await?;
     let mut view = state.into_view().await;
 
     let signer = Owner::from(AccountPublicKey::test_key(0));
@@ -196,7 +196,7 @@ async fn test_fee_consumption(
         message_id: MessageId::default(),
     };
     let mut grant = initial_grant.unwrap_or_default();
-    let mut txn_tracker = TransactionTracker::new(0, Some(Vec::new()));
+    let mut txn_tracker = TransactionTracker::new(0, 0, Some(Vec::new()));
     view.execute_message(
         context,
         Timestamp::from(0),

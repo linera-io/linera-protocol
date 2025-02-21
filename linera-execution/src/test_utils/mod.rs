@@ -29,15 +29,15 @@ pub use self::{
     system_execution_state::SystemExecutionState,
 };
 use crate::{
-    ApplicationRegistryView, ExecutionRequest, ExecutionRuntimeContext, ExecutionStateView,
-    MessageContext, OperationContext, QueryContext, ServiceRuntimeEndpoint, ServiceRuntimeRequest,
+    ExecutionRequest, ExecutionRuntimeContext, ExecutionStateView, MessageContext,
+    OperationContext, QueryContext, ServiceRuntimeEndpoint, ServiceRuntimeRequest,
     ServiceSyncRuntime, SystemExecutionStateView, TestExecutionRuntimeContext,
     UserApplicationDescription, UserApplicationId,
 };
 
 /// Creates a dummy [`UserApplicationDescription`] for use in tests.
 pub fn create_dummy_user_application_description(
-    index: u64,
+    index: u32,
 ) -> (UserApplicationDescription, Blob, Blob) {
     let chain_id = ChainId::root(1);
     let contract_blob = Blob::new_contract_bytecode(CompressedBytecode {
@@ -50,11 +50,9 @@ pub fn create_dummy_user_application_description(
     (
         UserApplicationDescription {
             bytecode_id: BytecodeId::new(contract_blob.id().hash, service_blob.id().hash),
-            creation: MessageId {
-                chain_id,
-                height: BlockHeight(index),
-                index: 1,
-            },
+            creator_chain_id: chain_id,
+            block_height: 0.into(),
+            application_index: index,
             required_application_ids: vec![],
             parameters: vec![],
         },
@@ -110,19 +108,13 @@ pub trait RegisterMockApplication {
     /// This is included in the mocked [`ApplicationId`].
     fn creator_chain_id(&self) -> ChainId;
 
-    /// Returns the amount of known registered applications.
-    ///
-    /// Used to avoid duplicate registrations.
-    async fn registered_application_count(&self) -> anyhow::Result<usize>;
-
     /// Registers a new [`MockApplication`] and returns it with the [`UserApplicationId`] that was
     /// used for it.
     async fn register_mock_application(
         &mut self,
+        index: u32,
     ) -> anyhow::Result<(UserApplicationId, MockApplication)> {
-        let (description, contract, service) = create_dummy_user_application_description(
-            self.registered_application_count().await? as u64,
-        );
+        let (description, contract, service) = create_dummy_user_application_description(index);
 
         self.register_mock_application_with(description, contract, service)
             .await
@@ -145,10 +137,6 @@ where
 {
     fn creator_chain_id(&self) -> ChainId {
         self.system.creator_chain_id()
-    }
-
-    async fn registered_application_count(&self) -> anyhow::Result<usize> {
-        self.system.registered_application_count().await
     }
 
     async fn register_mock_application_with(
@@ -174,17 +162,13 @@ where
         ).into()
     }
 
-    async fn registered_application_count(&self) -> anyhow::Result<usize> {
-        Ok(self.registry.known_applications.count().await?)
-    }
-
     async fn register_mock_application_with(
         &mut self,
         description: UserApplicationDescription,
         contract: Blob,
         service: Blob,
     ) -> anyhow::Result<(UserApplicationId, MockApplication)> {
-        let id = self.registry.register_application(description).await?;
+        let id = From::from(&description);
         let extra = self.context().extra();
         let mock_application = MockApplication::default();
 
@@ -194,27 +178,27 @@ where
         extra
             .user_services()
             .insert(id, mock_application.clone().into());
-        extra.add_blobs([contract, service]).await?;
+        extra
+            .add_blobs([
+                contract,
+                service,
+                Blob::new_application_description(&description),
+            ])
+            .await?;
 
         Ok((id, mock_application))
     }
 }
 
-pub async fn create_dummy_user_application_registrations<C>(
-    registry: &mut ApplicationRegistryView<C>,
-    count: u64,
-) -> anyhow::Result<Vec<(UserApplicationId, UserApplicationDescription, Blob, Blob)>>
-where
-    C: Context + Clone + Send + Sync + 'static,
-{
+pub async fn create_dummy_user_application_registrations(
+    count: u32,
+) -> anyhow::Result<Vec<(UserApplicationId, UserApplicationDescription, Blob, Blob)>> {
     let mut ids = Vec::with_capacity(count as usize);
 
     for index in 0..count {
         let (description, contract_blob, service_blob) =
             create_dummy_user_application_description(index);
-        let id = registry.register_application(description.clone()).await?;
-
-        assert_eq!(registry.describe_application(id).await?, description);
+        let id = From::from(&description);
 
         ids.push((id, description, contract_blob, service_blob));
     }

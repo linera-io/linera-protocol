@@ -19,22 +19,17 @@ use linera_base::{
         Amount, Blob, BlockHeight, Bytecode, OracleResponse, Timestamp, UserApplicationDescription,
     },
     hashed::Hashed,
-    identifiers::{
-        BytecodeId, ChainDescription, ChainId, Destination, MessageId, UserApplicationId,
-    },
+    identifiers::{BytecodeId, ChainDescription, ChainId},
     ownership::ChainOwnership,
 };
 use linera_chain::{
-    data_types::{BlockExecutionOutcome, OutgoingMessage},
+    data_types::BlockExecutionOutcome,
     test::{make_child_block, make_first_block, BlockTestExt},
     types::ConfirmedBlock,
 };
 use linera_execution::{
-    committee::Epoch,
-    system::{SystemMessage, SystemOperation},
-    test_utils::SystemExecutionState,
-    Message, MessageKind, Operation, OperationContext, ResourceController, TransactionTracker,
-    WasmContractModule, WasmRuntime,
+    committee::Epoch, system::SystemOperation, test_utils::SystemExecutionState, Operation,
+    OperationContext, ResourceController, TransactionTracker, WasmContractModule, WasmRuntime,
 };
 use linera_storage::{DbStorage, Storage};
 #[cfg(feature = "dynamodb")]
@@ -148,6 +143,7 @@ where
         BlockExecutionOutcome {
             messages: vec![Vec::new()],
             events: vec![Vec::new()],
+            blobs: vec![Vec::new()],
             state_hash: publisher_state_hash,
             oracle_responses: vec![vec![]],
         }
@@ -193,34 +189,25 @@ where
         instantiation_argument: initial_value_bytes.clone(),
         required_application_ids: vec![],
     };
-    let application_id = UserApplicationId {
-        bytecode_id,
-        creation: MessageId {
-            chain_id: creator_chain.into(),
-            height: BlockHeight::from(0),
-            index: 0,
-        },
-    };
     let application_description = UserApplicationDescription {
         bytecode_id,
-        creation: application_id.creation,
+        creator_chain_id: creator_chain.into(),
+        block_height: BlockHeight::from(0),
+        application_index: 0,
         required_application_ids: vec![],
         parameters: parameters_bytes,
     };
+    let application_id = From::from(&application_description);
     let create_block = make_first_block(creator_chain.into())
         .with_timestamp(2)
         .with_operation(create_operation);
-    creator_system_state
-        .registry
-        .known_applications
-        .insert(application_id, application_description.clone());
     creator_system_state.timestamp = Timestamp::from(2);
     let mut creator_state = creator_system_state.into_view().await;
     creator_state
         .simulate_instantiation(
             contract.into(),
             Timestamp::from(2),
-            application_description,
+            application_description.clone(),
             initial_value_bytes.clone(),
             contract_blob,
             service_blob,
@@ -228,20 +215,16 @@ where
         .await?;
     let create_block_proposal = Hashed::new(ConfirmedBlock::new(
         BlockExecutionOutcome {
-            messages: vec![vec![OutgoingMessage {
-                destination: Destination::Recipient(creator_chain.into()),
-                authenticated_signer: None,
-                grant: Amount::ZERO,
-                refund_grant_to: None,
-                kind: MessageKind::Protected,
-                message: Message::System(SystemMessage::ApplicationCreated),
-            }]],
+            messages: vec![vec![]],
             events: vec![Vec::new()],
             state_hash: creator_state.crypto_hash().await?,
             oracle_responses: vec![vec![
                 OracleResponse::Blob(contract_blob_id),
                 OracleResponse::Blob(service_blob_id),
             ]],
+            blobs: vec![vec![Blob::new_application_description(
+                &application_description,
+            )]],
         }
         .with(create_block),
     ));
@@ -285,7 +268,7 @@ where
                 application_id,
                 bytes: user_operation,
             },
-            &mut TransactionTracker::new(0, Some(Vec::new())),
+            &mut TransactionTracker::new(0, 0, Some(Vec::new())),
             &mut controller,
         )
         .await?;
@@ -294,6 +277,7 @@ where
         BlockExecutionOutcome {
             messages: vec![Vec::new()],
             events: vec![Vec::new()],
+            blobs: vec![Vec::new()],
             state_hash: creator_state.crypto_hash().await?,
             oracle_responses: vec![Vec::new()],
         }
