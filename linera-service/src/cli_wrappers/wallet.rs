@@ -444,25 +444,6 @@ impl ClientWrapper {
         Ok(stdout.trim().parse::<ApplicationId>()?.with_abi())
     }
 
-    /// Runs `linera request-application`
-    pub async fn request_application(
-        &self,
-        application_id: ApplicationId,
-        requester_chain_id: ChainId,
-        target_chain_id: Option<ChainId>,
-    ) -> Result<BytecodeId> {
-        let mut command = self.command().await?;
-        command
-            .arg("request-application")
-            .arg(application_id.to_string())
-            .args(["--requester-chain-id", &requester_chain_id.to_string()]);
-        if let Some(target_chain_id) = target_chain_id {
-            command.args(["--target-chain-id", &target_chain_id.to_string()]);
-        }
-        let stdout = command.spawn_and_wait_for_stdout().await?;
-        Ok(stdout.trim().parse()?)
-    }
-
     /// Runs `linera service`.
     pub async fn run_node_service(
         &self,
@@ -1276,23 +1257,6 @@ impl NodeService {
             .parse::<ApplicationId>()
             .context("invalid application ID")?
             .with_abi())
-    }
-
-    pub async fn request_application<A: ContractAbi>(
-        &self,
-        chain_id: &ChainId,
-        application_id: &ApplicationId<A>,
-    ) -> Result<String> {
-        let application_id = application_id.forget_abi();
-        let query = format!(
-            "mutation {{ requestApplication(\
-                 chainId: \"{chain_id}\", \
-                 applicationId: \"{application_id}\") \
-             }}"
-        );
-        let data = self.query_node(query).await?;
-        serde_json::from_value(data["requestApplication"].clone())
-            .context("missing requestApplication field in response")
     }
 
     pub async fn subscribe(
