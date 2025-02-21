@@ -117,7 +117,6 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 * `--max-pending-message-bundles <MAX_PENDING_MESSAGE_BUNDLES>` — The maximum number of incoming message bundles to include in a block proposal
 
   Default value: `10`
-* `--wasm-runtime <WASM_RUNTIME>` — The WebAssembly runtime to use
 * `--max-loaded-chains <MAX_LOADED_CHAINS>` — The maximal number of chains loaded in memory at a given time
 
   Default value: `40`
@@ -651,6 +650,7 @@ Create an application
 
 ###### **Options:**
 
+* `--vm-runtime <VM_RUNTIME>` — The virtual machine runtime to use
 * `--json-parameters <JSON_PARAMETERS>` — The shared parameters as JSON string
 * `--json-parameters-path <JSON_PARAMETERS_PATH>` — Path to a JSON file containing the shared parameters
 * `--json-argument <JSON_ARGUMENT>` — The instantiation argument as a JSON string
@@ -673,6 +673,7 @@ Create an application, and publish the required bytecode
 
 ###### **Options:**
 
+* `--vm-runtime <VM_RUNTIME>` — The virtual machine runtime to use
 * `--json-parameters <JSON_PARAMETERS>` — The shared parameters as JSON string
 * `--json-parameters-path <JSON_PARAMETERS_PATH>` — Path to a JSON file containing the shared parameters
 * `--json-argument <JSON_ARGUMENT>` — The instantiation argument as a JSON string
@@ -878,6 +879,7 @@ Build and publish a Linera project
 
 ###### **Options:**
 
+* `--vm-runtime <VM_RUNTIME>` — The virtual machine runtime to use
 * `--json-parameters <JSON_PARAMETERS>` — The shared parameters as JSON string
 * `--json-parameters-path <JSON_PARAMETERS_PATH>` — Path to a JSON file containing the shared parameters
 * `--json-argument <JSON_ARGUMENT>` — The instantiation argument as a JSON string

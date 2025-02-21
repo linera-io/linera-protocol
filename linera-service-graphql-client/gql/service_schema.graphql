@@ -830,7 +830,7 @@ type MutationRoot {
 	"""
 	Creates a new application.
 	"""
-	createApplication(chainId: ChainId!, bytecodeId: BytecodeId!, parameters: String!, instantiationArgument: String!, requiredApplicationIds: [ApplicationId!]!): ApplicationId!
+	createApplication(chainId: ChainId!, bytecodeId: BytecodeId!, vmRuntime: VmRuntime!, parameters: String!, instantiationArgument: String!, requiredApplicationIds: [ApplicationId!]!): ApplicationId!
 	"""
 	Requests a `RegisterApplications` message from another chain so the application can be used
 	on this one.
@@ -1214,6 +1214,8 @@ type VersionInfo {
 	"""
 	witHash: String!
 }
+
+scalar VmRuntime
 
 directive @include(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
 directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT

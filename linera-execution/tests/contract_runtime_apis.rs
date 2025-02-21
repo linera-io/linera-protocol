@@ -653,7 +653,7 @@ impl TransferTestEndpoint {
         ApplicationId::from(&Self::sender_application_description())
     }
 
-    /// Returns the [`ApplicationDescription`] used to represent a sender that's an application.
+    /// Returns the [`UserApplicationDescription`] used to represent a sender that's an application.
     fn sender_application_description() -> UserApplicationDescription {
         let contract_id = Self::sender_application_contract_blob().id().hash;
         let service_id = Self::sender_application_service_blob().id().hash;
