@@ -1119,6 +1119,7 @@ impl Runnable for Job {
                 println!("{}", outcome.chain_id);
                 println!("{}", outcome.message_id);
                 println!("{}", outcome.certificate_hash);
+                println!("{}", owner);
                 Self::assign_new_chain_to_key(
                     outcome.chain_id,
                     outcome.message_id,
@@ -1163,6 +1164,7 @@ impl Runnable for Job {
                 println!("{}", outcome.chain_id);
                 println!("{}", outcome.message_id);
                 println!("{}", outcome.certificate_hash);
+                println!("{}", owner);
                 Self::assign_new_chain_to_key(
                     outcome.chain_id,
                     outcome.message_id,
