@@ -24,7 +24,6 @@ use linera_client::{
     storage::{full_initialize_storage, run_with_storage, Runnable, StorageConfigNamespace},
 };
 use linera_core::{worker::WorkerState, JoinSetExt as _};
-use linera_execution::committee::ValidatorName;
 use linera_rpc::{
     config::{
         CrossChainConfig, NetworkProtocol, NotificationConfig, ShardConfig, ShardId, TlsConfig,

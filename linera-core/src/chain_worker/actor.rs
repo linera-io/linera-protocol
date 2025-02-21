@@ -22,9 +22,8 @@ use linera_chain::{
     ChainStateView,
 };
 use linera_execution::{
-    committee::{Epoch, ValidatorName},
-    Query, QueryContext, QueryOutcome, ServiceRuntimeEndpoint, ServiceSyncRuntime,
-    UserApplicationDescription,
+    committee::Epoch, Query, QueryContext, QueryOutcome, ServiceRuntimeEndpoint,
+    ServiceSyncRuntime, UserApplicationDescription,
 };
 use linera_storage::Storage;
 use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};

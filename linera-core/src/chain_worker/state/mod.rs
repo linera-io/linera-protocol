@@ -27,9 +27,8 @@ use linera_chain::{
     ChainError, ChainStateView,
 };
 use linera_execution::{
-    committee::{Epoch, ValidatorName},
-    Message, Query, QueryContext, QueryOutcome, ServiceRuntimeEndpoint, SystemMessage,
-    UserApplicationDescription,
+    committee::Epoch, Message, Query, QueryContext, QueryOutcome, ServiceRuntimeEndpoint,
+    SystemMessage, UserApplicationDescription,
 };
 use linera_storage::{Clock as _, Storage};
 use linera_views::views::{ClonableView, ViewError};

@@ -29,7 +29,9 @@ use linera_chain::{
     },
     ChainError, ChainStateView,
 };
-use linera_execution::{committee::Epoch, ExecutionError, Query, QueryOutcome, UserApplicationDescription};
+use linera_execution::{
+    committee::Epoch, ExecutionError, Query, QueryOutcome, UserApplicationDescription,
+};
 use linera_storage::Storage;
 use linera_views::views::ViewError;
 use lru::LruCache;
