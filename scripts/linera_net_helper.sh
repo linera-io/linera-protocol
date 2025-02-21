@@ -5,7 +5,7 @@
 # - Then executes the bash command recorded from stdout
 # - Returns without killing the process
 function linera_spawn_and_read_wallet_variables() {
-    export LINERA_TMP_DIR=$(mktemp -d) || exit 1
+    LINERA_TMP_DIR=$(mktemp -d) || exit 1
 
     # When the shell exits, we will clean up the top-level jobs (if any), the temporary
     # directory, and the main process. Handling future top-level jobs here is useful
@@ -36,7 +36,7 @@ function linera_spawn_and_read_wallet_variables() {
 # - Waits for the background process to print READY! on stderr
 # - Returns without killing the process
 function linera_spawn() {
-    export LINERA_TMP_DIR=$(mktemp -d) || exit 1
+    LINERA_TMP_DIR=$(mktemp -d) || exit 1
 
     trap 'jobs -p | xargs -r kill; rm -rf "$LINERA_TMP_DIR"' EXIT
 
