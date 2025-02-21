@@ -1199,7 +1199,7 @@ pub enum WalletCommand {
         testing_prng_seed: Option<u64>,
     },
 
-    /// Request a chain from a faucet and add it to the wallet.
+    /// Request a new chain from a faucet and add it to the wallet.
     RequestChain {
         /// The address of a faucet.
         #[arg(long)]
@@ -1210,7 +1210,7 @@ pub enum WalletCommand {
         set_default: bool,
     },
 
-    /// Add a new followed chain (a chain without keypair) to the follow.
+    /// Add a new followed chain (i.e. a chain without keypair) to the wallet.
     FollowChain {
         /// The chain ID.
         chain_id: ChainId,

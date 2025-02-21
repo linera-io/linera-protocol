@@ -746,8 +746,8 @@ Show the contents of the wallet
 * `show` — Show the contents of the wallet
 * `set-default` — Change the wallet default chain
 * `init` — Initialize a wallet from the genesis configuration
-* `request-chain` — Request a chain from a faucet and add it to the wallet
-* `follow-chain` — Add a new followed chain (a chain without keypair) to the follow
+* `request-chain` — Request a new chain from a faucet and add it to the wallet
+* `follow-chain` — Add a new followed chain (i.e. a chain without keypair) to the wallet
 * `forget-keys` — Forgets the specified chain's keys. The chain will still be followed by the wallet
 * `forget-chain` — Forgets the specified chain, including the associated key pair
 
@@ -800,7 +800,7 @@ Initialize a wallet from the genesis configuration
 
 ## `linera wallet request-chain`
 
-Request a chain from a faucet and add it to the wallet
+Request a new chain from a faucet and add it to the wallet
 
 **Usage:** `linera wallet request-chain [OPTIONS] --faucet <FAUCET>`
 
@@ -813,7 +813,7 @@ Request a chain from a faucet and add it to the wallet
 
 ## `linera wallet follow-chain`
 
-Add a new followed chain (a chain without keypair) to the follow
+Add a new followed chain (i.e. a chain without keypair) to the wallet
 
 **Usage:** `linera wallet follow-chain <CHAIN_ID>`
 
