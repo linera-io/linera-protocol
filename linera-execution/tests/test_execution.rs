@@ -10,7 +10,7 @@ use assert_matches::assert_matches;
 use linera_base::{
     crypto::{AccountPublicKey, ValidatorPublicKey},
     data_types::{
-        Amount, ApplicationPermissions, BlockHeight, Resources, SendMessageRequest, Timestamp,
+        Amount, ApplicationPermissions, Blob, BlockHeight, Resources, SendMessageRequest, Timestamp,
     },
     identifiers::{
         Account, AccountOwner, ChainDescription, ChainId, Destination, MessageId, Owner,
@@ -43,7 +43,11 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
         &create_dummy_user_application_registrations(1).await?[0];
     view.context()
         .extra()
-        .add_blobs([contract_blob.clone(), service_blob.clone()])
+        .add_blobs([
+            contract_blob.clone(),
+            service_blob.clone(),
+            Blob::new_application_description(&app_desc),
+        ])
         .await?;
 
     let context = create_dummy_operation_context();
@@ -646,7 +650,6 @@ async fn test_sending_message_from_finalize() -> anyhow::Result<()> {
     assert_eq!(
         txn_outcome.outcomes,
         vec![
-            ExecutionOutcome::System(RawExecutionOutcome::default()),
             ExecutionOutcome::User(
                 fourth_id,
                 RawExecutionOutcome::default().with_refund_grant_to(Some(account))
@@ -950,7 +953,6 @@ async fn test_simple_message() -> anyhow::Result<()> {
     assert_eq!(
         txn_outcome.outcomes,
         &[
-            ExecutionOutcome::System(RawExecutionOutcome::default()),
             ExecutionOutcome::User(
                 application_id,
                 RawExecutionOutcome::default()
@@ -1032,7 +1034,6 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
     assert_eq!(
         txn_outcome.outcomes,
         &[
-            ExecutionOutcome::System(RawExecutionOutcome::default()),
             ExecutionOutcome::User(
                 target_id,
                 RawExecutionOutcome::default()
@@ -1129,7 +1130,6 @@ async fn test_message_from_deeper_call() -> anyhow::Result<()> {
     assert_eq!(
         txn_outcome.outcomes,
         &[
-            ExecutionOutcome::System(RawExecutionOutcome::default()),
             ExecutionOutcome::User(
                 target_id,
                 RawExecutionOutcome::default()
@@ -1274,7 +1274,6 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
     assert_eq!(
         txn_outcome.outcomes,
         &[
-            ExecutionOutcome::System(RawExecutionOutcome::default()),
             ExecutionOutcome::User(
                 silent_target_id,
                 RawExecutionOutcome::default().with_refund_grant_to(Some(account)),
