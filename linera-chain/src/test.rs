@@ -4,7 +4,7 @@
 //! Test utilities
 
 use linera_base::{
-    crypto::SigningKey,
+    crypto::AccountSecretKey,
     data_types::{Amount, BlockHeight, Round, Timestamp},
     hashed::Hashed,
     identifiers::{ChainId, Owner},
@@ -78,12 +78,12 @@ pub trait BlockTestExt: Sized {
 
     /// Returns a block proposal in the first round in a default ownership configuration
     /// (`Round::MultiLeader(0)`) without any hashed certificate values or validated block.
-    fn into_first_proposal(self, key_pair: &SigningKey) -> BlockProposal {
+    fn into_first_proposal(self, key_pair: &AccountSecretKey) -> BlockProposal {
         self.into_proposal_with_round(key_pair, Round::MultiLeader(0))
     }
 
     /// Returns a block proposal without any hashed certificate values or validated block.
-    fn into_proposal_with_round(self, key_pair: &SigningKey, round: Round) -> BlockProposal;
+    fn into_proposal_with_round(self, key_pair: &AccountSecretKey, round: Round) -> BlockProposal;
 }
 
 impl BlockTestExt for ProposedBlock {
@@ -124,7 +124,7 @@ impl BlockTestExt for ProposedBlock {
         self
     }
 
-    fn into_proposal_with_round(self, key_pair: &SigningKey, round: Round) -> BlockProposal {
+    fn into_proposal_with_round(self, key_pair: &AccountSecretKey, round: Round) -> BlockProposal {
         BlockProposal::new_initial(round, self, key_pair)
     }
 }
@@ -141,11 +141,11 @@ impl<T: CertificateValue> VoteTestExt<T> for Vote<T> {
             votes: 100,
         };
         let committee = Committee::new(
-            vec![(self.validator, state)].into_iter().collect(),
+            vec![(self.public_key, state)].into_iter().collect(),
             ResourceControlPolicy::only_fuel(),
         );
         SignatureAggregator::new(self.value, self.round, &committee)
-            .append(self.validator, self.signature)
+            .append(self.public_key, self.signature)
             .unwrap()
             .unwrap()
     }

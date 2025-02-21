@@ -26,6 +26,12 @@ pub(crate) enum Inner {
     LocalNode(#[from] linera_core::local_node::LocalNodeError),
     #[error("remote node operation failed: {0}")]
     RemoteNode(#[from] linera_core::node::NodeError),
+    #[cfg(feature = "benchmark")]
+    #[error("failed to send message: {0}")]
+    SendError(#[from] crossbeam_channel::SendError<()>),
+    #[cfg(feature = "benchmark")]
+    #[error("failed to join task: {0}")]
+    JoinError(#[from] tokio::task::JoinError),
 }
 
 thiserror_context::impl_context!(Error(Inner));

@@ -40,10 +40,11 @@ use linera_core::{
     JoinSetExt as _,
 };
 use linera_execution::{
-    committee::{Committee, ValidatorName, ValidatorState},
+    committee::{Committee, ValidatorState},
     Message, ResourceControlPolicy, SystemMessage,
 };
 use linera_faucet_server::FaucetService;
+use linera_sdk::base::ValidatorPublicKey;
 use linera_service::{
     cli_wrappers,
     node_service::NodeService,
@@ -359,7 +360,7 @@ impl Runnable for Job {
             QueryValidator {
                 address,
                 chain_id,
-                name,
+                public_key,
             } => {
                 use linera_core::node::ValidatorNode as _;
 
@@ -408,11 +409,11 @@ impl Runnable for Job {
                             response.info.next_block_height,
                             response.info.epoch,
                         );
-                        if let Some(name) = name {
-                            if response.check(&name).is_ok() {
-                                info!("Signature for public key {name} is OK.");
+                        if let Some(public_key) = public_key {
+                            if response.check(&public_key).is_ok() {
+                                info!("Signature for public key {public_key} is OK.");
                             } else {
-                                error!("Signature for public key {name} is NOT OK.");
+                                error!("Signature for public key {public_key} is NOT OK.");
                             }
                         }
                     }
@@ -521,7 +522,7 @@ impl Runnable for Job {
                 let context = Arc::new(Mutex::new(context));
                 let mut context = context.lock().await;
                 if let SetValidator {
-                    name,
+                    public_key,
                     address,
                     votes: _,
                     skip_online_check: false,
@@ -537,7 +538,7 @@ impl Runnable for Job {
                             linera_version::VERSION_INFO
                         ),
                         Err(error) => bail!(
-                            "Failed to get version information for validator {name:?} at {address}:\n{error}"
+                            "Failed to get version information for validator {public_key:?} at {address}:\n{error}"
                         ),
                     }
                     let genesis_config_hash = context.wallet().genesis_config().hash();
@@ -549,7 +550,7 @@ impl Runnable for Job {
                             genesis_config_hash
                         ),
                         Err(error) => bail!(
-                            "Failed to get genesis config hash for validator {name:?} at {address}:\n{error}"
+                            "Failed to get genesis config hash for validator {public_key:?} at {address}:\n{error}"
                         ),
                     }
                 }
@@ -574,21 +575,21 @@ impl Runnable for Job {
                             let mut validators = committee.validators().clone();
                             match command {
                                 SetValidator {
-                                    name,
+                                    public_key,
                                     address,
                                     votes,
                                     skip_online_check: _,
                                 } => {
                                     validators.insert(
-                                        name,
+                                        public_key,
                                         ValidatorState {
                                             network_address: address,
                                             votes,
                                         },
                                     );
                                 }
-                                RemoveValidator { name } => {
-                                    if validators.remove(&name).is_none() {
+                                RemoveValidator { public_key } => {
+                                    if validators.remove(&public_key).is_none() {
                                         warn!("Skipping removal of nonexistent validator");
                                         return Ok(ClientOutcome::Committed(None));
                                     }
@@ -748,81 +749,32 @@ impl Runnable for Job {
                 );
                 if let Some(bps) = bps {
                     assert!(bps > 0, "BPS must be greater than 0");
-                }
-                let start = Instant::now();
-                // Below all block proposals are supposed to succeed without retries, we
-                // must make sure that all incoming payments have been accepted on-chain
-                // and that no validator is missing user certificates.
-                context.process_inboxes_and_force_validator_updates().await;
-                info!(
-                    "Processed inboxes and forced validator updates in {} ms",
-                    start.elapsed().as_millis()
-                );
-
-                let start = Instant::now();
-                let key_pairs = context
-                    .make_benchmark_chains(num_chains, tokens_per_chain)
-                    .await?;
-                info!(
-                    "Got {} chains in {} ms",
-                    key_pairs.len(),
-                    start.elapsed().as_millis()
-                );
-
-                if let Some(id) = fungible_application_id {
-                    let start = Instant::now();
-                    context.supply_fungible_tokens(&key_pairs, id).await?;
-                    info!(
-                        "Supplied fungible tokens in {} ms",
-                        start.elapsed().as_millis()
+                    assert!(
+                        bps >= num_chains,
+                        "BPS must be greater than or equal to the number of chains"
                     );
                 }
 
-                let default_chain_id = context
-                    .wallet
-                    .default_chain()
-                    .expect("should have default chain");
-                let chain_client = context.make_chain_client(default_chain_id)?;
-                let (epoch, committees) =
-                    chain_client.epoch_and_committees(default_chain_id).await?;
-                let epoch = epoch.expect("default chain should have an epoch");
-                let committee = committees
-                    .get(&epoch)
-                    .expect("current epoch should have a committee");
-                let blocks_infos = context.make_benchmark_block_info(
-                    key_pairs,
-                    transactions_per_block,
-                    fungible_application_id,
-                );
+                let (chain_clients, epoch, blocks_infos, committee) = context
+                    .prepare_for_benchmark(
+                        num_chains,
+                        transactions_per_block,
+                        tokens_per_chain,
+                        fungible_application_id,
+                    )
+                    .await?;
 
-                let clients = context
-                    .make_node_provider()
-                    .make_nodes(committee)?
-                    .map(|(_, node)| node)
-                    .collect::<Vec<_>>();
-                let blocks_infos_iter = blocks_infos.iter();
-                if bps.is_some() {
-                    let blocks_infos_iter = blocks_infos_iter.cycle();
-                    context
-                        .run_benchmark(
-                            bps,
-                            blocks_infos_iter,
-                            clients,
-                            transactions_per_block,
-                            epoch,
-                        )
-                        .await?;
-                } else {
-                    context
-                        .run_benchmark(
-                            bps,
-                            blocks_infos_iter,
-                            clients,
-                            transactions_per_block,
-                            epoch,
-                        )
-                        .await?;
-                }
+                linera_client::benchmark::Benchmark::<S>::run_benchmark(
+                    num_chains,
+                    transactions_per_block,
+                    bps,
+                    chain_clients,
+                    epoch,
+                    blocks_infos,
+                    committee,
+                    context.client.local_node().clone(),
+                )
+                .await?;
             }
 
             Watch { chain_id, raw } => {
@@ -1208,7 +1160,7 @@ impl Job {
         chain_id: ChainId,
         message_id: MessageId,
         owner: Owner,
-        validators: Option<Vec<(ValidatorName, String)>>,
+        validators: Option<Vec<(ValidatorPublicKey, String)>>,
         context: &mut ClientContext<S, impl Persist<Target = Wallet>>,
     ) -> anyhow::Result<()>
     where
@@ -1228,7 +1180,7 @@ impl Job {
         let nodes: Vec<_> = if let Some(validators) = validators {
             node_provider
                 .make_nodes_from_list(validators)?
-                .map(|(name, node)| RemoteNode { name, node })
+                .map(|(public_key, node)| RemoteNode { public_key, node })
                 .collect()
         } else {
             let info = client.local_node().handle_chain_info_query(query).await?;
@@ -1237,7 +1189,7 @@ impl Job {
                 .context("Invalid chain info response; missing latest committee")?;
             node_provider
                 .make_nodes(committee)?
-                .map(|(name, node)| RemoteNode { name, node })
+                .map(|(public_key, node)| RemoteNode { public_key, node })
                 .collect()
         };
 
@@ -1756,13 +1708,13 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
                     info!("Blob IDs listed in {} ms", start_time.elapsed().as_millis());
                     println!("The list of blob IDs is {:?}", blob_ids);
                 }
-                DatabaseToolCommand::ListRootKeys { .. } => {
-                    let root_keys = Box::pin(full_storage_config.list_root_keys()).await?;
+                DatabaseToolCommand::ListChainIds { .. } => {
+                    let chain_ids = Box::pin(full_storage_config.list_chain_ids()).await?;
                     info!(
-                        "Root keys listed in {} ms",
+                        "Chain IDs listed in {} ms",
                         start_time.elapsed().as_millis()
                     );
-                    println!("The list of root keys is {:?}", root_keys);
+                    println!("The list of chain IDs is {:?}", chain_ids);
                 }
             }
             Ok(0)

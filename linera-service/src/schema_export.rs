@@ -3,7 +3,7 @@
 
 use async_trait::async_trait;
 use linera_base::{
-    crypto::{CryptoHash, SigningKey},
+    crypto::{AccountSecretKey, CryptoHash},
     data_types::{BlobContent, Timestamp},
     identifiers::{BlobId, ChainId},
 };
@@ -27,7 +27,8 @@ use linera_core::{
         ValidatorNodeProvider,
     },
 };
-use linera_execution::committee::{Committee, ValidatorName};
+use linera_execution::committee::Committee;
+use linera_sdk::base::ValidatorPublicKey;
 use linera_service::node_service::NodeService;
 use linera_storage::{DbStorage, Storage};
 use linera_version::VersionInfo;
@@ -150,7 +151,7 @@ impl ValidatorNodeProvider for DummyValidatorNodeProvider {
     fn make_nodes(
         &self,
         _committee: &Committee,
-    ) -> Result<impl Iterator<Item = (ValidatorName, Self::Node)> + '_, NodeError> {
+    ) -> Result<impl Iterator<Item = (ValidatorPublicKey, Self::Node)> + '_, NodeError> {
         Err::<std::iter::Empty<_>, _>(NodeError::UnexpectedMessage)
     }
 }
@@ -185,7 +186,7 @@ impl<P: ValidatorNodeProvider + Send, S: Storage + Clone + Send + Sync + 'static
     async fn update_wallet_for_new_chain(
         &mut self,
         _: ChainId,
-        _: Option<SigningKey>,
+        _: Option<AccountSecretKey>,
         _: Timestamp,
     ) -> Result<(), Error> {
         Ok(())

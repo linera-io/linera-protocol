@@ -13,7 +13,12 @@ version.workspace = true
 
 [features]
 test = ["linera-views/test", "linera-execution/test"]
-benchmark = ["linera-base/test", "dep:linera-sdk", "dep:tokio-util"]
+benchmark = [
+    "linera-base/test",
+    "dep:linera-sdk",
+    "dep:tokio-util",
+    "dep:crossbeam-channel",
+]
 wasmer = [
     "linera-core/wasmer",
     "linera-execution/wasmer",
@@ -55,6 +60,7 @@ bcs.workspace = true
 cfg-if.workspace = true
 chrono = { workspace = true, features = ["clock"] }
 clap.workspace = true
+crossbeam-channel = { workspace = true, optional = true }
 derive_more = { workspace = true, features = ["deref", "deref_mut"] }
 dirs.workspace = true
 futures.workspace = true

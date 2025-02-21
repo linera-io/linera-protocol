@@ -518,7 +518,7 @@ impl Block {
         blob_ids
     }
 
-    /// Returns set of blob ids that were a result of an oracle call.
+    /// Returns set of blob IDs that were a result of an oracle call.
     pub fn oracle_blob_ids(&self) -> BTreeSet<BlobId> {
         let mut required_blob_ids = BTreeSet::new();
         for responses in &self.body.oracle_responses {

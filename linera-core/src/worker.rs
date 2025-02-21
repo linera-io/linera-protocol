@@ -10,10 +10,8 @@ use std::{
 };
 
 use futures::future::Either;
-#[cfg(with_testing)]
-use linera_base::crypto::PublicKey;
 use linera_base::{
-    crypto::{CryptoError, CryptoHash, SigningKey},
+    crypto::{CryptoError, CryptoHash, ValidatorPublicKey, ValidatorSecretKey},
     data_types::{
         ArithmeticError, Blob, BlockHeight, DecompressionError, Round, UserApplicationDescription,
     },
@@ -33,10 +31,7 @@ use linera_chain::{
     },
     ChainError, ChainStateView,
 };
-use linera_execution::{
-    committee::{Epoch, ValidatorName},
-    ExecutionError, Query, QueryOutcome,
-};
+use linera_execution::{committee::Epoch, ExecutionError, Query, QueryOutcome};
 use linera_storage::Storage;
 use linera_views::views::ViewError;
 use lru::LruCache;
@@ -293,7 +288,7 @@ where
     #[instrument(level = "trace", skip(nickname, key_pair, storage))]
     pub fn new(
         nickname: String,
-        key_pair: Option<SigningKey>,
+        key_pair: Option<ValidatorSecretKey>,
         storage: StorageClient,
         chain_worker_limit: NonZeroUsize,
     ) -> Self {
@@ -389,7 +384,7 @@ where
 
     #[instrument(level = "trace", skip(self, key_pair))]
     #[cfg(test)]
-    pub(crate) async fn with_key_pair(mut self, key_pair: Option<Arc<SigningKey>>) -> Self {
+    pub(crate) async fn with_key_pair(mut self, key_pair: Option<Arc<ValidatorSecretKey>>) -> Self {
         self.chain_worker_config.key_pair = key_pair;
         self.chain_workers.lock().unwrap().clear();
         self
@@ -1038,7 +1033,7 @@ where
     pub async fn update_received_certificate_trackers(
         &self,
         chain_id: ChainId,
-        new_trackers: BTreeMap<ValidatorName, u64>,
+        new_trackers: BTreeMap<ValidatorPublicKey, u64>,
     ) -> Result<(), WorkerError> {
         self.query_chain_worker(chain_id, move |callback| {
             ChainWorkerRequest::UpdateReceivedCertificateTrackers {
@@ -1055,13 +1050,13 @@ impl<StorageClient> WorkerState<StorageClient>
 where
     StorageClient: Storage,
 {
-    /// Gets a reference to the validator's [`PublicKey`].
+    /// Gets a reference to the validator's [`ValidatorPublicKey`].
     ///
     /// # Panics
     ///
     /// If the validator doesn't have a key pair assigned to it.
     #[instrument(level = "trace", skip(self))]
-    pub fn public_key(&self) -> PublicKey {
+    pub fn public_key(&self) -> ValidatorPublicKey {
         self.chain_worker_config
             .key_pair()
             .expect(

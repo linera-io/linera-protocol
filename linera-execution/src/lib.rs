@@ -14,6 +14,8 @@ mod execution_state_actor;
 mod graphql;
 mod policy;
 mod resources;
+#[cfg(with_revm)]
+pub mod revm;
 mod runtime;
 pub mod system;
 #[cfg(with_testing)]
@@ -39,7 +41,7 @@ use linera_base::{
         Amount, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, DecompressionError,
         Resources, SendMessageRequest, Timestamp, UserApplicationDescription,
     },
-    doc_scalar, hex_debug,
+    doc_scalar, hex_debug, http,
     identifiers::{
         Account, AccountOwner, ApplicationId, BlobId, BytecodeId, ChainId, ChannelName,
         Destination, GenericApplicationId, MessageId, Owner, StreamName, UserApplicationId,
@@ -54,6 +56,8 @@ use thiserror::Error;
 
 #[cfg(with_testing)]
 pub use crate::applications::ApplicationRegistry;
+#[cfg(with_revm)]
+use crate::revm::EvmExecutionError;
 use crate::runtime::ContractSyncRuntime;
 #[cfg(all(with_testing, with_wasm_runtime))]
 pub use crate::wasm::test as wasm_test;
@@ -197,9 +201,12 @@ pub enum ExecutionError {
     SystemError(SystemExecutionError),
     #[error("User application reported an error: {0}")]
     UserError(String),
-    #[cfg(any(with_wasmer, with_wasmtime))]
+    #[cfg(with_wasm_runtime)]
     #[error(transparent)]
     WasmError(#[from] WasmExecutionError),
+    #[cfg(with_revm)]
+    #[error(transparent)]
+    EvmError(#[from] EvmExecutionError),
     #[error(transparent)]
     DecompressionError(#[from] DecompressionError),
     #[error("The given promise is invalid or was polled once already")]
@@ -275,6 +282,11 @@ pub enum ExecutionError {
     ServiceModuleSend(#[from] linera_base::task::SendError<UserServiceCode>),
     #[error("Blobs not found: {0:?}")]
     BlobsNotFound(Vec<BlobId>),
+
+    #[error("Invalid HTTP header name used for HTTP request")]
+    InvalidHeaderName(#[from] reqwest::header::InvalidHeaderName),
+    #[error("Invalid HTTP header value used for HTTP request")]
+    InvalidHeaderValue(#[from] reqwest::header::InvalidHeaderValue),
 }
 
 impl From<ViewError> for ExecutionError {
@@ -606,20 +618,11 @@ pub trait BaseRuntime {
         promise: &Self::FindKeyValuesByPrefix,
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError>;
 
-    /// Queries a service.
-    fn query_service(
+    /// Makes an HTTP request to the given URL and returns the answer, if any.
+    fn perform_http_request(
         &mut self,
-        application_id: ApplicationId,
-        query: Vec<u8>,
-    ) -> Result<Vec<u8>, ExecutionError>;
-
-    /// Makes a POST request to the given URL and returns the answer, if any.
-    fn http_post(
-        &mut self,
-        url: &str,
-        content_type: String,
-        payload: Vec<u8>,
-    ) -> Result<Vec<u8>, ExecutionError>;
+        request: http::Request,
+    ) -> Result<http::Response, ExecutionError>;
 
     /// Ensures that the current time at block validation is `< timestamp`. Note that block
     /// validation happens at or after the block timestamp, but isn't necessarily the same.
@@ -712,6 +715,13 @@ pub trait ContractRuntime: BaseRuntime {
         key: Vec<u8>,
         value: Vec<u8>,
     ) -> Result<(), ExecutionError>;
+
+    /// Queries a service.
+    fn query_service(
+        &mut self,
+        application_id: ApplicationId,
+        query: Vec<u8>,
+    ) -> Result<Vec<u8>, ExecutionError>;
 
     /// Opens a new chain.
     fn open_chain(
@@ -1317,6 +1327,15 @@ pub enum WasmRuntime {
     WasmerWithSanitizer,
     #[cfg(with_wasmtime)]
     WasmtimeWithSanitizer,
+}
+
+#[derive(Clone, Copy, Display)]
+#[cfg_attr(with_revm, derive(Debug, Default))]
+pub enum EvmRuntime {
+    #[cfg(with_revm)]
+    #[default]
+    #[display("revm")]
+    Revm,
 }
 
 /// Trait used to select a default `WasmRuntime`, if one is available.

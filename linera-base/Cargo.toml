@@ -12,8 +12,9 @@ repository.workspace = true
 version.workspace = true
 
 [features]
-test = ["test-strategy", "proptest"]
 metrics = ["prometheus"]
+reqwest = ["dep:reqwest"]
+test = ["test-strategy", "proptest"]
 web = [
     "getrandom/js",
     "rand/getrandom",
@@ -47,6 +48,7 @@ linera-witty = { workspace = true, features = ["macros"] }
 prometheus = { workspace = true, optional = true }
 proptest = { workspace = true, optional = true, features = ["alloc"] }
 rand.workspace = true
+reqwest = { workspace = true, optional = true }
 secp256k1.workspace = true
 serde.workspace = true
 serde-name.workspace = true

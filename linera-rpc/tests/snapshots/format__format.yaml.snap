@@ -147,8 +147,6 @@ BlockProposal:
   STRUCT:
     - content:
         TYPENAME: ProposalContent
-    - owner:
-        TYPENAME: Owner
     - public_key:
         TYPENAME: Ed25519PublicKey
     - signature:
@@ -342,7 +340,7 @@ Committee:
     - validators:
         MAP:
           KEY:
-            TYPENAME: ValidatorName
+            TYPENAME: Ed25519PublicKey
           VALUE:
             TYPENAME: ValidatorState
     - policy:
@@ -356,7 +354,7 @@ ConfirmedBlockCertificate:
     - signatures:
         SEQ:
           TUPLE:
-            - TYPENAME: ValidatorName
+            - TYPENAME: Ed25519PublicKey
             - TYPENAME: Ed25519Signature
 CrateVersion:
   STRUCT:
@@ -451,6 +449,10 @@ HandleValidatedCertificateRequest:
   STRUCT:
     - certificate:
         TYPENAME: ValidatedBlockCertificate
+Header:
+  STRUCT:
+    - name: STR
+    - value: BYTES
 IncomingBundle:
   STRUCT:
     - origin:
@@ -468,7 +470,7 @@ LiteCertificate:
     - signatures:
         SEQ:
           TUPLE:
-            - TYPENAME: ValidatorName
+            - TYPENAME: Ed25519PublicKey
             - TYPENAME: Ed25519Signature
 LiteValue:
   STRUCT:
@@ -484,8 +486,8 @@ LiteVote:
         TYPENAME: LiteValue
     - round:
         TYPENAME: Round
-    - validator:
-        TYPENAME: ValidatorName
+    - public_key:
+        TYPENAME: Ed25519PublicKey
     - signature:
         TYPENAME: Ed25519Signature
 LockingBlock:
@@ -684,8 +686,9 @@ OracleResponse:
       Service:
         NEWTYPE: BYTES
     1:
-      Post:
-        NEWTYPE: BYTES
+      Http:
+        NEWTYPE:
+          TYPENAME: Response
     2:
       Blob:
         NEWTYPE:
@@ -807,6 +810,13 @@ ResourceControlPolicy:
     - maximum_block_proposal_size: U64
     - maximum_bytes_read_per_block: U64
     - maximum_bytes_written_per_block: U64
+Response:
+  STRUCT:
+    - status: U16
+    - headers:
+        SEQ:
+          TYPENAME: Header
+    - body: BYTES
 Round:
   ENUM:
     0:
@@ -1135,7 +1145,7 @@ TimeoutCertificate:
     - signatures:
         SEQ:
           TUPLE:
-            - TYPENAME: ValidatorName
+            - TYPENAME: Ed25519PublicKey
             - TYPENAME: Ed25519Signature
 TimeoutConfig:
   STRUCT:
@@ -1169,11 +1179,8 @@ ValidatedBlockCertificate:
     - signatures:
         SEQ:
           TUPLE:
-            - TYPENAME: ValidatorName
+            - TYPENAME: Ed25519PublicKey
             - TYPENAME: Ed25519Signature
-ValidatorName:
-  NEWTYPESTRUCT:
-    TYPENAME: Ed25519PublicKey
 ValidatorState:
   STRUCT:
     - network_address: STR

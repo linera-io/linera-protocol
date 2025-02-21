@@ -120,14 +120,14 @@ where
     let mut responses: futures::stream::FuturesUnordered<_> = validator_clients
         .iter()
         .filter_map(|remote_node| {
-            if committee.weight(&remote_node.name) == 0 {
+            if committee.weight(&remote_node.public_key) == 0 {
                 // This should not happen but better prevent it because certificates
                 // are not allowed to include votes with weight 0.
                 return None;
             }
             let execute = execute.clone();
             let remote_node = remote_node.clone();
-            Some(async move { (remote_node.name, execute(remote_node).await) })
+            Some(async move { (remote_node.public_key, execute(remote_node).await) })
         })
         .collect();
 
@@ -463,7 +463,7 @@ where
             }
         };
         match vote {
-            Some(vote) if vote.validator == self.remote_node.name => {
+            Some(vote) if vote.public_key == self.remote_node.public_key => {
                 vote.check()?;
                 Ok(vote)
             }

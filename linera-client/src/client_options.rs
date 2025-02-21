@@ -10,7 +10,7 @@ use std::{
 
 use chrono::{DateTime, Utc};
 use linera_base::{
-    crypto::CryptoHash,
+    crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{Amount, ApplicationPermissions, TimeDelta},
     identifiers::{
         Account, ApplicationId, BytecodeId, ChainId, MessageId, Owner, UserApplicationId,
@@ -19,9 +19,7 @@ use linera_base::{
     time::Duration,
 };
 use linera_core::{client::BlanketMessagePolicy, DEFAULT_GRACE_PERIOD};
-use linera_execution::{
-    committee::ValidatorName, ResourceControlPolicy, WasmRuntime, WithWasmDefault as _,
-};
+use linera_execution::{ResourceControlPolicy, WasmRuntime, WithWasmDefault as _};
 use linera_views::store::CommonStoreConfig;
 
 #[cfg(feature = "fs")]
@@ -453,7 +451,7 @@ pub enum ClientCommand {
         /// The public key of the validator. If given, the signature of the chain query
         /// info will be checked.
         #[arg(long)]
-        name: Option<ValidatorName>,
+        public_key: Option<ValidatorPublicKey>,
     },
 
     /// Show the current set of validators for a chain. Also print some information about
@@ -477,7 +475,7 @@ pub enum ClientCommand {
     SetValidator {
         /// The public key of the validator.
         #[arg(long)]
-        name: ValidatorName,
+        public_key: ValidatorPublicKey,
 
         /// Network address
         #[arg(long)]
@@ -496,7 +494,7 @@ pub enum ClientCommand {
     RemoveValidator {
         /// The public key of the validator.
         #[arg(long)]
-        name: ValidatorName,
+        public_key: ValidatorPublicKey,
     },
 
     /// Deprecates all committees except the last one.
@@ -877,7 +875,7 @@ pub enum ClientCommand {
         requester_chain_id: Option<ChainId>,
     },
 
-    /// Create an unassigned key-pair.
+    /// Create an unassigned key pair.
     Keygen,
 
     /// Link an owner with a key pair in the wallet to a chain that was created for that owner.
@@ -944,7 +942,7 @@ pub static DEFAULT_PAUSE_AFTER_GQL_MUTATIONS_SECS: &str = "3";
 
 #[derive(Clone, clap::Parser)]
 pub enum DatabaseToolCommand {
-    /// Delete all the namespaces of the database
+    /// Delete all the namespaces in the database
     #[command(name = "delete_all")]
     DeleteAll {
         /// Storage configuration for the blockchain history.
@@ -984,7 +982,7 @@ pub enum DatabaseToolCommand {
         storage_config: String,
     },
 
-    /// List the namespaces of the database
+    /// List the namespaces in the database
     #[command(name = "list_namespaces")]
     ListNamespaces {
         /// Storage configuration for the blockchain history.
@@ -992,7 +990,7 @@ pub enum DatabaseToolCommand {
         storage_config: String,
     },
 
-    /// List the blobs of the database
+    /// List the blob IDs in the database
     #[command(name = "list_blob_ids")]
     ListBlobIds {
         /// Storage configuration for the blockchain history.
@@ -1000,9 +998,9 @@ pub enum DatabaseToolCommand {
         storage_config: String,
     },
 
-    /// List the root keys of the database
-    #[command(name = "list_root_keys")]
-    ListRootKeys {
+    /// List the chain IDs in the database
+    #[command(name = "list_chain_ids")]
+    ListChainIds {
         /// Storage configuration for the blockchain history.
         #[arg(long = "storage")]
         storage_config: String,
@@ -1019,7 +1017,7 @@ impl DatabaseToolCommand {
             DatabaseToolCommand::Initialize { storage_config } => storage_config,
             DatabaseToolCommand::ListNamespaces { storage_config } => storage_config,
             DatabaseToolCommand::ListBlobIds { storage_config } => storage_config,
-            DatabaseToolCommand::ListRootKeys { storage_config } => storage_config,
+            DatabaseToolCommand::ListChainIds { storage_config } => storage_config,
         };
         Ok(storage_config.parse::<StorageConfigNamespace>()?)
     }

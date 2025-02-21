@@ -8,12 +8,15 @@ use std::{
 };
 
 use linera_base::{
-    crypto::{BcsSignable, CryptoHash, CryptoRng, PublicKey, SigningKey},
+    crypto::{
+        AccountPublicKey, AccountSecretKey, BcsSignable, CryptoHash, CryptoRng, ValidatorPublicKey,
+        ValidatorSecretKey,
+    },
     data_types::{Amount, Timestamp},
     identifiers::{ChainDescription, ChainId},
 };
 use linera_execution::{
-    committee::{Committee, ValidatorName, ValidatorState},
+    committee::{Committee, ValidatorState},
     ResourceControlPolicy,
 };
 use linera_rpc::config::{ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig};
@@ -45,7 +48,7 @@ util::impl_from_dynamic!(Error:Persistence, persistent::file::Error);
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ValidatorConfig {
     /// The public key of the validator.
-    pub name: ValidatorName,
+    pub public_key: ValidatorPublicKey,
     /// The network configuration for the validator.
     pub network: ValidatorPublicNetworkConfig,
 }
@@ -54,7 +57,7 @@ pub struct ValidatorConfig {
 #[derive(Serialize, Deserialize)]
 pub struct ValidatorServerConfig {
     pub validator: ValidatorConfig,
-    pub key: SigningKey,
+    pub key: ValidatorSecretKey,
     pub internal_network: ValidatorInternalNetworkConfig,
 }
 
@@ -76,7 +79,7 @@ impl CommitteeConfig {
             .into_iter()
             .map(|v| {
                 (
-                    v.name,
+                    v.public_key,
                     ValidatorState {
                         network_address: v.network.to_string(),
                         votes: 100,
@@ -174,8 +177,8 @@ impl<W: Deref<Target = Wallet>> WalletState<W> {
         }
     }
 
-    pub fn generate_key_pair(&mut self) -> SigningKey {
-        SigningKey::generate_from(&mut self.prng)
+    pub fn generate_key_pair(&mut self) -> AccountSecretKey {
+        AccountSecretKey::generate_from(&mut self.prng)
     }
 }
 
@@ -184,7 +187,7 @@ pub struct GenesisConfig {
     pub committee: CommitteeConfig,
     pub admin_id: ChainId,
     pub timestamp: Timestamp,
-    pub chains: Vec<(PublicKey, Amount)>,
+    pub chains: Vec<(AccountPublicKey, Amount)>,
     pub policy: ResourceControlPolicy,
     pub network_name: String,
 }

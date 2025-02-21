@@ -28,7 +28,7 @@ use linera_base::data_types::Bytecode;
 use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     abi::Abi,
-    crypto::{CryptoHash, PublicKey, SigningKey},
+    crypto::{CryptoHash, ValidatorPublicKey, ValidatorSecretKey},
     data_types::{
         Amount, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, Round, Timestamp,
     },
@@ -53,7 +53,7 @@ use linera_chain::{
     ChainError, ChainExecutionContext, ChainStateView, ExecutionResultExt as _,
 };
 use linera_execution::{
-    committee::{Committee, Epoch, ValidatorName},
+    committee::{Committee, Epoch},
     system::{
         AdminOperation, OpenChainConfig, Recipient, SystemChannel, SystemOperation,
         CREATE_APPLICATION_MESSAGE_INDEX, OPEN_CHAIN_MESSAGE_INDEX,
@@ -285,7 +285,7 @@ impl<P, S: Storage + Clone> Client<P, S> {
     pub fn create_chain_client(
         self: &Arc<Self>,
         chain_id: ChainId,
-        known_key_pairs: Vec<SigningKey>,
+        known_key_pairs: Vec<ValidatorSecretKey>,
         admin_id: ChainId,
         block_hash: Option<CryptoHash>,
         timestamp: Timestamp,
@@ -684,10 +684,16 @@ impl<P: 'static, S: Storage> ChainClient<P, S> {
         )
     }
 
-    /// Gets the per-`ChainClient` options.
+    /// Gets a mutable reference to the per-`ChainClient` options.
     #[instrument(level = "trace", skip(self))]
     pub fn options_mut(&mut self) -> &mut ChainClientOptions {
         &mut self.options
+    }
+
+    /// Gets a reference to the per-`ChainClient` options.
+    #[instrument(level = "trace", skip(self))]
+    pub fn options(&self) -> &ChainClientOptions {
+        &self.options
     }
 
     /// Gets the ID of the associated chain.
@@ -921,7 +927,7 @@ where
             .client
             .validator_node_provider
             .make_nodes(committee)?
-            .map(|(name, node)| RemoteNode { name, node })
+            .map(|(public_key, node)| RemoteNode { public_key, node })
             .collect())
     }
 
@@ -976,7 +982,7 @@ where
 
     /// Obtains the key pair associated to the current identity.
     #[instrument(level = "trace")]
-    pub async fn key_pair(&self) -> Result<SigningKey, ChainClientError> {
+    pub async fn key_pair(&self) -> Result<ValidatorSecretKey, ChainClientError> {
         let id = self.identity().await?;
         Ok(self
             .state()
@@ -988,7 +994,7 @@ where
 
     /// Obtains the public key associated to the current identity.
     #[instrument(level = "trace")]
-    pub async fn public_key(&self) -> Result<PublicKey, ChainClientError> {
+    pub async fn public_key(&self) -> Result<ValidatorPublicKey, ChainClientError> {
         Ok(self.key_pair().await?.public())
     }
 
@@ -1070,7 +1076,7 @@ where
 
     /// Submits a block proposal to the validators.
     #[instrument(level = "trace", skip(committee, proposal, value))]
-    async fn submit_block_proposal<T: ProcessableCertificate>(
+    pub async fn submit_block_proposal<T: ProcessableCertificate>(
         &self,
         committee: &Committee,
         proposal: Box<BlockProposal>,
@@ -1123,7 +1129,7 @@ where
 
     /// Broadcasts certified blocks to validators.
     #[instrument(level = "trace", skip(committee, delivery))]
-    async fn communicate_chain_updates(
+    pub async fn communicate_chain_updates(
         &self,
         committee: &Committee,
         chain_id: ChainId,
@@ -1309,7 +1315,7 @@ where
             .await?
             .received_certificate_trackers
             .get()
-            .get(&remote_node.name)
+            .get(&remote_node.public_key)
             .copied()
             .unwrap_or(0);
         let (committees, max_epoch) = self.known_committees().await?;
@@ -1409,7 +1415,7 @@ where
         }
 
         Ok(ReceivedCertificatesFromValidator {
-            name: remote_node.name,
+            public_key: remote_node.public_key,
             tracker,
             certificates,
             other_sender_chains,
@@ -1456,7 +1462,7 @@ where
         let mut new_trackers = BTreeMap::new();
         for response in received_certificates_batches {
             other_sender_chains.extend(response.other_sender_chains);
-            new_trackers.insert(response.name, response.tracker);
+            new_trackers.insert(response.public_key, response.tracker);
             for certificate in response.certificates {
                 certificates
                     .entry(certificate.block().header.chain_id)
@@ -1634,7 +1640,7 @@ where
 
     /// Handles the certificate in the local node and the resulting notifications.
     #[instrument(level = "trace", skip(certificate))]
-    async fn process_certificate<T: ProcessableCertificate>(
+    pub async fn process_certificate<T: ProcessableCertificate>(
         &self,
         certificate: GenericCertificate<T>,
     ) -> Result<(), LocalNodeError> {
@@ -1771,14 +1777,14 @@ where
                     if let Err(err) = self.try_process_locking_block_from(remote_node, cert).await {
                         warn!(
                             "Skipping certificate {hash} from validator {}: {err}",
-                            remote_node.name
+                            remote_node.public_key
                         );
                     }
                 }
             }
         }
         for proposal in proposals {
-            let owner = proposal.owner;
+            let owner: Owner = proposal.public_key.into();
             if let Err(mut err) = self
                 .client
                 .local_node
@@ -1797,8 +1803,8 @@ where
                             {
                                 Ok(content) => content,
                                 Err(err) => {
-                                    let name = &remote_node.name;
-                                    warn!("Skipping proposal from {owner} and validator {name}: {err}");
+                                    let public_key = &remote_node.public_key;
+                                    warn!("Skipping proposal from {owner} and validator {public_key}: {err}");
                                     continue;
                                 }
                             };
@@ -1837,8 +1843,8 @@ where
                     }
                 }
 
-                let name = &remote_node.name;
-                warn!("Skipping proposal from {owner} and validator {name}: {err}");
+                let public_key = &remote_node.public_key;
+                warn!("Skipping proposal from {owner} and validator {public_key}: {err}");
             }
         }
         Ok(())
@@ -2690,7 +2696,7 @@ where
     #[instrument(level = "trace", skip(key_pair))]
     pub async fn rotate_key_pair(
         &self,
-        key_pair: SigningKey,
+        key_pair: ValidatorSecretKey,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         let new_public_key = self.state_mut().insert_known_key_pair(key_pair);
         self.transfer_ownership(new_public_key.into()).await
@@ -3330,7 +3336,7 @@ where
     #[instrument(level = "trace", skip(senders))]
     async fn update_streams(
         &self,
-        senders: &mut HashMap<ValidatorName, AbortHandle>,
+        senders: &mut HashMap<ValidatorPublicKey, AbortHandle>,
     ) -> Result<impl Future<Output = ()>, ChainClientError> {
         let (chain_id, nodes, local_node) = {
             let committee = self.local_committee().await?;
@@ -3342,16 +3348,16 @@ where
             (self.chain_id, nodes, self.client.local_node.clone())
         };
         // Drop removed validators.
-        senders.retain(|name, abort| {
-            if !nodes.contains_key(name) {
+        senders.retain(|validator, abort| {
+            if !nodes.contains_key(validator) {
                 abort.abort();
             }
             !abort.is_aborted()
         });
         // Add tasks for new validators.
         let validator_tasks = FuturesUnordered::new();
-        for (name, node) in nodes {
-            let hash_map::Entry::Vacant(entry) = senders.entry(name) else {
+        for (public_key, node) in nodes {
+            let hash_map::Entry::Vacant(entry) = senders.entry(public_key) else {
                 continue;
             };
             let stream = stream::once({
@@ -3360,9 +3366,9 @@ where
             })
             .filter_map(move |result| async move {
                 if let Err(error) = &result {
-                    warn!(?error, "Could not connect to validator {name}");
+                    warn!(?error, "Could not connect to validator {public_key}");
                 } else {
-                    info!("Connected to validator {name}");
+                    info!("Connected to validator {public_key}");
                 }
                 result.ok()
             })
@@ -3371,7 +3377,7 @@ where
             let mut stream = Box::pin(stream);
             let this = self.clone();
             let local_node = local_node.clone();
-            let remote_node = RemoteNode { name, node };
+            let remote_node = RemoteNode { public_key, node };
             validator_tasks.push(async move {
                 while let Some(notification) = stream.next().await {
                     this.process_notification(
@@ -3502,7 +3508,7 @@ impl Drop for AbortOnDrop {
 /// The result of `synchronize_received_certificates_from_validator`.
 struct ReceivedCertificatesFromValidator {
     /// The name of the validator we downloaded from.
-    name: ValidatorName,
+    public_key: ValidatorPublicKey,
     /// The new tracker value for that validator.
     tracker: u64,
     /// The downloaded certificates. The signatures were already checked and they are ready

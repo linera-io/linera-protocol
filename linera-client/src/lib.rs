@@ -16,6 +16,9 @@ pub mod storage;
 pub mod util;
 pub mod wallet;
 
+#[cfg(feature = "benchmark")]
+pub mod benchmark;
+
 #[cfg(test)]
 mod unit_tests;
 

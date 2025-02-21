@@ -9,6 +9,7 @@ use std::{
 
 use futures::{future::Either, stream, StreamExt as _, TryStreamExt as _};
 use linera_base::{
+    crypto::ValidatorPublicKey,
     data_types::{ArithmeticError, Blob, BlockHeight, UserApplicationDescription},
     identifiers::{BlobId, ChainId, MessageId, UserApplicationId},
 };
@@ -17,7 +18,7 @@ use linera_chain::{
     types::{ConfirmedBlockCertificate, GenericCertificate, LiteCertificate},
     ChainStateView,
 };
-use linera_execution::{committee::ValidatorName, Query, QueryOutcome};
+use linera_execution::{Query, QueryOutcome};
 use linera_storage::Storage;
 use linera_views::views::ViewError;
 use thiserror::Error;
@@ -354,7 +355,7 @@ where
     pub async fn update_received_certificate_trackers(
         &self,
         chain_id: ChainId,
-        new_trackers: BTreeMap<ValidatorName, u64>,
+        new_trackers: BTreeMap<ValidatorPublicKey, u64>,
     ) -> Result<(), LocalNodeError> {
         self.node
             .state

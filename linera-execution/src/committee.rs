@@ -6,7 +6,7 @@ use std::{borrow::Cow, collections::BTreeMap, str::FromStr};
 
 use async_graphql::InputObject;
 use linera_base::{
-    crypto::{CryptoError, PublicKey},
+    crypto::{CryptoError, ValidatorPublicKey},
     data_types::ArithmeticError,
 };
 use serde::{Deserialize, Serialize};
@@ -55,7 +55,7 @@ impl<'de> Deserialize<'de> for Epoch {
 
 /// The identity of a validator.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug)]
-pub struct ValidatorName(pub PublicKey);
+pub struct ValidatorName(pub ValidatorPublicKey);
 
 impl Serialize for ValidatorName {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -82,7 +82,7 @@ impl<'de> Deserialize<'de> for ValidatorName {
         } else {
             #[derive(Deserialize)]
             #[serde(rename = "ValidatorName")]
-            struct ValidatorNameDerived(PublicKey);
+            struct ValidatorNameDerived(ValidatorPublicKey);
 
             let value = ValidatorNameDerived::deserialize(deserializer)?;
             Ok(Self(value.0))
@@ -90,7 +90,7 @@ impl<'de> Deserialize<'de> for ValidatorName {
     }
 }
 
-/// Public state of validator.
+/// Public state of a validator.
 #[derive(Eq, PartialEq, Hash, Clone, Debug, Default, Serialize, Deserialize)]
 pub struct ValidatorState {
     /// The network address (in a string format understood by the networking layer).
@@ -103,7 +103,7 @@ pub struct ValidatorState {
 #[derive(Eq, PartialEq, Hash, Clone, Debug, Default, InputObject)]
 pub struct Committee {
     /// The validators in the committee.
-    validators: BTreeMap<ValidatorName, ValidatorState>,
+    validators: BTreeMap<ValidatorPublicKey, ValidatorState>,
     /// The sum of all voting rights.
     total_votes: u64,
     /// The threshold to form a quorum.
@@ -145,7 +145,7 @@ impl<'de> Deserialize<'de> for Committee {
 #[derive(Serialize, Deserialize)]
 #[serde(rename = "Committee")]
 struct CommitteeFull<'a> {
-    validators: Cow<'a, BTreeMap<ValidatorName, ValidatorState>>,
+    validators: Cow<'a, BTreeMap<ValidatorPublicKey, ValidatorState>>,
     total_votes: u64,
     quorum_threshold: u64,
     validity_threshold: u64,
@@ -155,7 +155,7 @@ struct CommitteeFull<'a> {
 #[derive(Serialize, Deserialize)]
 #[serde(rename = "Committee")]
 struct CommitteeMinimal<'a> {
-    validators: Cow<'a, BTreeMap<ValidatorName, ValidatorState>>,
+    validators: Cow<'a, BTreeMap<ValidatorPublicKey, ValidatorState>>,
     policy: Cow<'a, ResourceControlPolicy>,
 }
 
@@ -244,7 +244,7 @@ impl std::str::FromStr for ValidatorName {
     type Err = CryptoError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(ValidatorName(PublicKey::from_str(s)?))
+        Ok(ValidatorName(ValidatorPublicKey::from_str(s)?))
     }
 }
 
@@ -268,8 +268,8 @@ impl From<u32> for Epoch {
     }
 }
 
-impl From<PublicKey> for ValidatorName {
-    fn from(value: PublicKey) -> Self {
+impl From<ValidatorPublicKey> for ValidatorName {
+    fn from(value: ValidatorPublicKey) -> Self {
         Self(value)
     }
 }
@@ -290,7 +290,7 @@ impl Epoch {
 
 impl Committee {
     pub fn new(
-        validators: BTreeMap<ValidatorName, ValidatorState>,
+        validators: BTreeMap<ValidatorPublicKey, ValidatorState>,
         policy: ResourceControlPolicy,
     ) -> Self {
         let total_votes = validators.values().fold(0, |sum, state| sum + state.votes);
@@ -311,7 +311,7 @@ impl Committee {
     }
 
     #[cfg(with_testing)]
-    pub fn make_simple(keys: Vec<ValidatorName>) -> Self {
+    pub fn make_simple(keys: Vec<ValidatorPublicKey>) -> Self {
         let map = keys
             .into_iter()
             .map(|k| {
@@ -327,20 +327,20 @@ impl Committee {
         Committee::new(map, ResourceControlPolicy::default())
     }
 
-    pub fn weight(&self, author: &ValidatorName) -> u64 {
+    pub fn weight(&self, author: &ValidatorPublicKey) -> u64 {
         match self.validators.get(author) {
             Some(state) => state.votes,
             None => 0,
         }
     }
 
-    pub fn keys_and_weights(&self) -> impl Iterator<Item = (PublicKey, u64)> + '_ {
+    pub fn keys_and_weights(&self) -> impl Iterator<Item = (ValidatorPublicKey, u64)> + '_ {
         self.validators
             .iter()
-            .map(|(name, validator)| (name.0, validator.votes))
+            .map(|(name, validator)| (*name, validator.votes))
     }
 
-    pub fn network_address(&self, author: &ValidatorName) -> Option<&str> {
+    pub fn network_address(&self, author: &ValidatorPublicKey) -> Option<&str> {
         self.validators
             .get(author)
             .map(|state| state.network_address.as_ref())
@@ -354,11 +354,11 @@ impl Committee {
         self.validity_threshold
     }
 
-    pub fn validators(&self) -> &BTreeMap<ValidatorName, ValidatorState> {
+    pub fn validators(&self) -> &BTreeMap<ValidatorPublicKey, ValidatorState> {
         &self.validators
     }
 
-    pub fn validator_addresses(&self) -> impl Iterator<Item = (ValidatorName, &str)> {
+    pub fn validator_addresses(&self) -> impl Iterator<Item = (ValidatorPublicKey, &str)> {
         self.validators
             .iter()
             .map(|(name, validator)| (*name, &*validator.network_address))

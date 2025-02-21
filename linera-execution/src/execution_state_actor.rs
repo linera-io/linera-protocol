@@ -12,7 +12,7 @@ use futures::channel::mpsc;
 use linera_base::prometheus_util::{bucket_latencies, register_histogram_vec, MeasureLatency as _};
 use linera_base::{
     data_types::{Amount, ApplicationPermissions, BlobContent, Timestamp},
-    hex_debug, hex_vec_debug,
+    hex_debug, hex_vec_debug, http,
     identifiers::{Account, AccountOwner, BlobId, MessageId, Owner},
     ownership::ChainOwnership,
 };
@@ -20,7 +20,7 @@ use linera_views::{batch::Batch, context::Context, views::View};
 use oneshot::Sender;
 #[cfg(with_metrics)]
 use prometheus::HistogramVec;
-use reqwest::{header::CONTENT_TYPE, Client};
+use reqwest::{header::HeaderMap, Client};
 
 use crate::{
     system::{CreateApplicationResult, OpenChainConfig, Recipient},
@@ -329,21 +329,20 @@ where
                 callback.respond(bytes);
             }
 
-            HttpPost {
-                url,
-                content_type,
-                payload,
-                callback,
-            } => {
-                let res = Client::new()
-                    .post(url)
-                    .body(payload)
-                    .header(CONTENT_TYPE, content_type)
+            PerformHttpRequest { request, callback } => {
+                let headers = request
+                    .headers
+                    .into_iter()
+                    .map(|http::Header { name, value }| Ok((name.parse()?, value.try_into()?)))
+                    .collect::<Result<HeaderMap, ExecutionError>>()?;
+
+                let response = Client::new()
+                    .request(request.method.into(), request.url)
+                    .body(request.body)
+                    .headers(headers)
                     .send()
                     .await?;
-                let body = res.bytes().await?;
-                let bytes = body.as_ref().to_vec();
-                callback.respond(bytes);
+                callback.respond(http::Response::from_reqwest(response).await?);
             }
 
             ReadBlobContent { blob_id, callback } => {
@@ -524,13 +523,10 @@ pub enum ExecutionRequest {
         callback: Sender<Vec<u8>>,
     },
 
-    HttpPost {
-        url: String,
-        content_type: String,
-        #[debug(with = hex_debug)]
-        payload: Vec<u8>,
+    PerformHttpRequest {
+        request: http::Request,
         #[debug(skip)]
-        callback: Sender<Vec<u8>>,
+        callback: Sender<http::Response>,
     },
 
     ReadBlobContent {

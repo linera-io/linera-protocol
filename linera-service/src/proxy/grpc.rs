@@ -57,7 +57,7 @@ use tracing::{debug, info, instrument, Instrument as _, Level};
 #[cfg(with_metrics)]
 use {
     linera_base::prometheus_util::{
-        bucket_latencies, register_histogram_vec, register_int_counter_vec,
+        bucket_interval, register_histogram_vec, register_int_counter_vec,
     },
     prometheus::{HistogramVec, IntCounterVec},
 };
@@ -71,7 +71,7 @@ static PROXY_REQUEST_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
         "proxy_request_latency",
         "Proxy request latency",
         &[],
-        bucket_latencies(500.0),
+        bucket_interval(1.0, 500.0),
     )
 });
 
@@ -693,23 +693,19 @@ impl<T> GrpcMessageLimiter<T> {
 
 #[cfg(test)]
 mod proto_message_cap {
-    use linera_base::{
-        crypto::{Signature, SigningKey},
-        hashed::Hashed,
-    };
+    use linera_base::hashed::Hashed;
     use linera_chain::{
         data_types::{BlockExecutionOutcome, ExecutedBlock},
         types::{Certificate, ConfirmedBlock, ConfirmedBlockCertificate},
     };
-    use linera_execution::committee::ValidatorName;
-    use linera_sdk::base::{ChainId, TestString};
+    use linera_sdk::base::{ChainId, TestString, ValidatorSecretKey, ValidatorSignature};
 
     use super::{CertificatesBatchResponse, GrpcMessageLimiter};
 
     fn test_certificate() -> Certificate {
-        let keypair = SigningKey::generate();
-        let validator = ValidatorName(keypair.public());
-        let signature = Signature::new(&TestString::new("Test"), &keypair);
+        let keypair = ValidatorSecretKey::generate();
+        let validator = keypair.public();
+        let signature = ValidatorSignature::new(&TestString::new("Test"), &keypair);
         let executed_block = ExecutedBlock {
             block: linera_chain::test::make_first_block(ChainId::root(0)),
             outcome: BlockExecutionOutcome::default(),

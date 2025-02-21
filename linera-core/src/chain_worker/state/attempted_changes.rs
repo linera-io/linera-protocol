@@ -7,9 +7,10 @@ use std::{borrow::Cow, collections::BTreeMap};
 
 use futures::future::Either;
 use linera_base::{
+    crypto::ValidatorPublicKey,
     data_types::{Blob, BlockHeight, Timestamp},
     ensure,
-    identifiers::ChainId,
+    identifiers::{ChainId, Owner},
 };
 use linera_chain::{
     data_types::{
@@ -20,7 +21,7 @@ use linera_chain::{
     types::{ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
     ChainExecutionContext, ChainStateView, ExecutionResultExt as _,
 };
-use linera_execution::committee::{Committee, Epoch, ValidatorName};
+use linera_execution::committee::{Committee, Epoch};
 use linera_storage::{Clock as _, Storage};
 use linera_views::{
     context::Context,
@@ -128,12 +129,12 @@ where
                     round,
                     outcome: _,
                 },
-            public_key: _,
-            owner,
+            public_key,
             validated_block_certificate,
             signature: _,
         } = proposal;
 
+        let owner: Owner = public_key.into();
         let chain = &self.state.chain;
         // Check the epoch.
         let (epoch, committee) = chain.current_committee()?;
@@ -150,7 +151,7 @@ where
             lite_certificate.check(committee)?;
         } else if let Some(signer) = block.authenticated_signer {
             // Check the authentication of the operations in the new block.
-            ensure!(signer == *owner, WorkerError::InvalidSigner(signer));
+            ensure!(signer == owner, WorkerError::InvalidSigner(signer));
         }
         // Check if the chain is ready for this new block proposal.
         chain.tip_state.get().verify_block_chaining(block)?;
@@ -170,7 +171,7 @@ where
             }
             chain
                 .pending_proposed_blobs
-                .try_load_entry_mut(owner)
+                .try_load_entry_mut(&owner)
                 .await?
                 .update(*round, validated_block_certificate.is_some(), maybe_blobs)
                 .await?;
@@ -540,7 +541,7 @@ where
 
     pub async fn update_received_certificate_trackers(
         &mut self,
-        new_trackers: BTreeMap<ValidatorName, u64>,
+        new_trackers: BTreeMap<ValidatorPublicKey, u64>,
     ) -> Result<(), WorkerError> {
         self.state
             .chain

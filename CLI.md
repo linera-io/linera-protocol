@@ -57,7 +57,7 @@ This document contains the help content for the `linera` command-line program.
 * [`linera storage initialize`↴](#linera-storage-initialize)
 * [`linera storage list_namespaces`↴](#linera-storage-list_namespaces)
 * [`linera storage list_blob_ids`↴](#linera-storage-list_blob_ids)
-* [`linera storage list_root_keys`↴](#linera-storage-list_root_keys)
+* [`linera storage list_chain_ids`↴](#linera-storage-list_chain_ids)
 
 ## `linera`
 
@@ -95,7 +95,7 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 * `create-application` — Create an application
 * `publish-and-create` — Create an application, and publish the required bytecode
 * `request-application` — Request an application from another chain, so it can be used on this one
-* `keygen` — Create an unassigned key-pair
+* `keygen` — Create an unassigned key pair
 * `assign` — Link an owner with a key pair in the wallet to a chain that was created for that owner
 * `retry-pending-block` — Retry a block we unsuccessfully tried to propose earlier
 * `wallet` — Show the contents of the wallet
@@ -368,7 +368,7 @@ Show the version and genesis config hash of a new validator, and print a warning
 
 ###### **Options:**
 
-* `--name <NAME>` — The public key of the validator. If given, the signature of the chain query info will be checked
+* `--public-key <PUBLIC_KEY>` — The public key of the validator. If given, the signature of the chain query info will be checked
 
 
 
@@ -404,11 +404,11 @@ Synchronizes a validator with the local state of chains
 
 Add or modify a validator (admin only)
 
-**Usage:** `linera set-validator [OPTIONS] --name <NAME> --address <ADDRESS>`
+**Usage:** `linera set-validator [OPTIONS] --public-key <PUBLIC_KEY> --address <ADDRESS>`
 
 ###### **Options:**
 
-* `--name <NAME>` — The public key of the validator
+* `--public-key <PUBLIC_KEY>` — The public key of the validator
 * `--address <ADDRESS>` — Network address
 * `--votes <VOTES>` — Voting power
 
@@ -421,11 +421,11 @@ Add or modify a validator (admin only)
 
 Remove a validator (admin only)
 
-**Usage:** `linera remove-validator --name <NAME>`
+**Usage:** `linera remove-validator --public-key <PUBLIC_KEY>`
 
 ###### **Options:**
 
-* `--name <NAME>` — The public key of the validator
+* `--public-key <PUBLIC_KEY>` — The public key of the validator
 
 
 
@@ -700,7 +700,7 @@ Request an application from another chain, so it can be used on this one
 
 ## `linera keygen`
 
-Create an unassigned key-pair
+Create an unassigned key pair
 
 **Usage:** `linera keygen`
 
@@ -961,20 +961,20 @@ Operation on the storage
 
 ###### **Subcommands:**
 
-* `delete_all` — Delete all the namespaces of the database
+* `delete_all` — Delete all the namespaces in the database
 * `delete_namespace` — Delete a single namespace from the database
 * `check_existence` — Check existence of a namespace in the database
 * `check_absence` — Check absence of a namespace in the database
 * `initialize` — Initialize a namespace in the database
-* `list_namespaces` — List the namespaces of the database
-* `list_blob_ids` — List the blobs of the database
-* `list_root_keys` — List the root keys of the database
+* `list_namespaces` — List the namespaces in the database
+* `list_blob_ids` — List the blob IDs in the database
+* `list_chain_ids` — List the chain IDs in the database
 
 
 
 ## `linera storage delete_all`
 
-Delete all the namespaces of the database
+Delete all the namespaces in the database
 
 **Usage:** `linera storage delete_all --storage <STORAGE_CONFIG>`
 
@@ -1034,7 +1034,7 @@ Initialize a namespace in the database
 
 ## `linera storage list_namespaces`
 
-List the namespaces of the database
+List the namespaces in the database
 
 **Usage:** `linera storage list_namespaces --storage <STORAGE_CONFIG>`
 
@@ -1046,7 +1046,7 @@ List the namespaces of the database
 
 ## `linera storage list_blob_ids`
 
-List the blobs of the database
+List the blob IDs in the database
 
 **Usage:** `linera storage list_blob_ids --storage <STORAGE_CONFIG>`
 
@@ -1056,11 +1056,11 @@ List the blobs of the database
 
 
 
-## `linera storage list_root_keys`
+## `linera storage list_chain_ids`
 
-List the root keys of the database
+List the chain IDs in the database
 
-**Usage:** `linera storage list_root_keys --storage <STORAGE_CONFIG>`
+**Usage:** `linera storage list_chain_ids --storage <STORAGE_CONFIG>`
 
 ###### **Options:**
 

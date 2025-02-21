@@ -48,7 +48,7 @@ pub use bcs;
 pub use linera_base::{
     abi,
     data_types::{Resources, SendMessageRequest},
-    ensure,
+    ensure, http,
 };
 use linera_base::{
     abi::{ContractAbi, ServiceAbi, WithContractAbi, WithServiceAbi},
@@ -117,7 +117,7 @@ pub trait Contract: WithContractAbi + ContractAbi + Sized {
 
     /// Applies a message originating from a cross-chain message.
     ///
-    /// Messages are messages sent across chains. These messages are created and received by
+    /// Messages are sent across chains. These messages are created and received by
     /// the same application. Messages can be either single-sender and single-receiver, or
     /// single-sender and multiple-receivers. The former allows sending cross-chain messages to the
     /// application on some other specific chain, while the latter uses broadcast channels to

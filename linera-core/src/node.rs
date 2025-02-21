@@ -8,7 +8,7 @@ use futures::stream::BoxStream;
 use futures::stream::LocalBoxStream as BoxStream;
 use futures::stream::Stream;
 use linera_base::{
-    crypto::{CryptoError, CryptoHash},
+    crypto::{CryptoError, CryptoHash, ValidatorPublicKey},
     data_types::{ArithmeticError, BlobContent, BlockHeight},
     identifiers::{BlobId, ChainId},
 };
@@ -20,10 +20,7 @@ use linera_chain::{
     },
     ChainError,
 };
-use linera_execution::{
-    committee::{Committee, ValidatorName},
-    ExecutionError,
-};
+use linera_execution::{committee::Committee, ExecutionError};
 use linera_version::VersionInfo;
 use linera_views::views::ViewError;
 use serde::{Deserialize, Serialize};
@@ -136,7 +133,7 @@ pub trait ValidatorNode {
     /// Returns the hash of the `Certificate` that last used a blob.
     async fn blob_last_used_by(&self, blob_id: BlobId) -> Result<CryptoHash, NodeError>;
 
-    /// Returns the missing `Blob`s. by their ids.
+    /// Returns the missing `Blob`s. by their IDs.
     async fn missing_blob_ids(&self, blob_ids: Vec<BlobId>) -> Result<Vec<BlobId>, NodeError>;
 }
 
@@ -153,7 +150,7 @@ pub trait ValidatorNodeProvider: 'static {
     fn make_nodes(
         &self,
         committee: &Committee,
-    ) -> Result<impl Iterator<Item = (ValidatorName, Self::Node)> + '_, NodeError> {
+    ) -> Result<impl Iterator<Item = (ValidatorPublicKey, Self::Node)> + '_, NodeError> {
         let validator_addresses: Vec<_> = committee
             .validator_addresses()
             .map(|(node, name)| (node, name.to_owned()))
@@ -163,8 +160,8 @@ pub trait ValidatorNodeProvider: 'static {
 
     fn make_nodes_from_list<A>(
         &self,
-        validators: impl IntoIterator<Item = (ValidatorName, A)>,
-    ) -> Result<impl Iterator<Item = (ValidatorName, Self::Node)>, NodeError>
+        validators: impl IntoIterator<Item = (ValidatorPublicKey, A)>,
+    ) -> Result<impl Iterator<Item = (ValidatorPublicKey, Self::Node)>, NodeError>
     where
         A: AsRef<str>,
     {

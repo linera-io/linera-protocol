@@ -4,9 +4,8 @@
 //! The client component of the Linera faucet.
 
 use anyhow::{bail, Context, Result};
-use linera_base::identifiers::Owner;
+use linera_base::{crypto::ValidatorPublicKey, identifiers::Owner};
 use linera_client::config::GenesisConfig;
-use linera_execution::committee::ValidatorName;
 use linera_faucet::ClaimOutcome;
 use linera_version::VersionInfo;
 use serde_json::{json, Value};
@@ -170,8 +169,8 @@ impl Faucet {
         Ok(outcome)
     }
 
-    pub async fn current_validators(&self) -> Result<Vec<(ValidatorName, String)>> {
-        let query = "query { currentValidators { name networkAddress } }";
+    pub async fn current_validators(&self) -> Result<Vec<(ValidatorPublicKey, String)>> {
+        let query = "query { currentValidators { publicKey networkAddress } }";
         let client = reqwest_client();
         let response = client
             .post(&self.url)
@@ -199,8 +198,9 @@ impl Faucet {
         validators
             .into_iter()
             .map(|mut validator| {
-                let name = serde_json::from_value::<ValidatorName>(validator["name"].take())
-                    .context("could not parse current validators: invalid name")?;
+                let name =
+                    serde_json::from_value::<ValidatorPublicKey>(validator["publicKey"].take())
+                        .context("could not parse current validators: invalid name")?;
                 let addr = validator["networkAddress"]
                     .as_str()
                     .context("could not parse current validators: invalid address")?

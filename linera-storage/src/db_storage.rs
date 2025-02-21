@@ -25,7 +25,7 @@ use linera_views::{
     backends::dual::{DualStoreRootKeyAssignment, StoreInUse},
     batch::Batch,
     context::ViewContext,
-    store::{KeyIterable as _, KeyValueStore},
+    store::{AdminKeyValueStore, KeyIterable as _, KeyValueStore},
     views::{View, ViewError},
 };
 use serde::{Deserialize, Serialize};
@@ -277,17 +277,21 @@ enum BaseKey {
     Event(EventId),
 }
 
-const INDEX_BLOB: u8 = 3;
-const BLOB_LENGTH: usize = std::mem::size_of::<BlobId>();
+const INDEX_CHAIN_ID: u8 = 0;
+const INDEX_BLOB_ID: u8 = 3;
+const CHAIN_ID_LENGTH: usize = std::mem::size_of::<ChainId>();
+const BLOB_ID_LENGTH: usize = std::mem::size_of::<BlobId>();
 
 #[cfg(test)]
 mod tests {
     use linera_base::{
         crypto::CryptoHash,
-        identifiers::{BlobId, BlobType},
+        identifiers::{BlobId, BlobType, ChainId},
     };
 
-    use crate::db_storage::{BaseKey, INDEX_BLOB};
+    use crate::db_storage::{
+        BaseKey, BLOB_ID_LENGTH, CHAIN_ID_LENGTH, INDEX_BLOB_ID, INDEX_CHAIN_ID,
+    };
 
     #[test]
     fn test_base_key_serialization() {
@@ -296,22 +300,50 @@ mod tests {
         let blob_id = BlobId::new(hash, blob_type);
         let base_key = BaseKey::Blob(blob_id);
         let key = bcs::to_bytes(&base_key).expect("a key");
-        assert_eq!(key[0], INDEX_BLOB);
+        assert_eq!(key[0], INDEX_BLOB_ID);
+        assert_eq!(key.len(), 1 + BLOB_ID_LENGTH);
+    }
+
+    #[test]
+    fn test_chain_id_serialization() {
+        let hash = CryptoHash::default();
+        let chain_id = ChainId(hash);
+        let base_key = BaseKey::ChainState(chain_id);
+        let key = bcs::to_bytes(&base_key).expect("a key");
+        assert_eq!(key[0], INDEX_CHAIN_ID);
+        assert_eq!(key.len(), 1 + CHAIN_ID_LENGTH);
     }
 }
 
-/// Lists the blobs of the storage.
+/// Lists the blob IDs of the storage.
 pub async fn list_all_blob_ids<S: KeyValueStore>(store: &S) -> Result<Vec<BlobId>, ViewError> {
-    let prefix = &[INDEX_BLOB];
+    let prefix = &[INDEX_BLOB_ID];
     let keys = store.find_keys_by_prefix(prefix).await?;
     let mut blob_ids = Vec::new();
     for key in keys.iterator() {
         let key = key?;
-        let key_red = &key[..BLOB_LENGTH];
+        let key_red = &key[..BLOB_ID_LENGTH];
         let blob_id = bcs::from_bytes(key_red)?;
         blob_ids.push(blob_id);
     }
     Ok(blob_ids)
+}
+
+/// Lists the chain IDs of the storage.
+pub async fn list_all_chain_ids<S: AdminKeyValueStore>(
+    config: &S::Config,
+    namespace: &str,
+) -> Result<Vec<ChainId>, ViewError> {
+    let root_keys = S::list_root_keys(config, namespace).await?;
+    let mut chain_ids = Vec::new();
+    for root_key in root_keys {
+        if root_key.len() == 1 + CHAIN_ID_LENGTH && root_key[0] == INDEX_CHAIN_ID {
+            let root_key_red = &root_key[1..1 + CHAIN_ID_LENGTH];
+            let chain_id = bcs::from_bytes(root_key_red)?;
+            chain_ids.push(chain_id);
+        }
+    }
+    Ok(chain_ids)
 }
 
 /// An implementation of [`DualStoreRootKeyAssignment`] that stores the

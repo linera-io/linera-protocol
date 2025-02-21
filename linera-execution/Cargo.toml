@@ -13,6 +13,14 @@ version.workspace = true
 
 [features]
 test = ["tokio/macros", "linera-base/test", "linera-views/test", "proptest"]
+revm = [
+    "dep:revm",
+    "dep:revm-primitives",
+    "dep:alloy",
+    "dep:alloy-sol-types",
+    "dep:hex",
+    "dep:tempfile",
+]
 fs = ["tokio/fs"]
 metrics = ["prometheus", "linera-views/metrics"]
 unstable-oracles = []
@@ -33,6 +41,8 @@ wasmtime = [
 web = ["linera-base/web", "linera-views/web", "js-sys"]
 
 [dependencies]
+alloy = { workspace = true, default-features = false, optional = true, features = [ "rpc-types-eth" ] }
+alloy-sol-types = { workspace = true, optional = true }
 anyhow.workspace = true
 async-graphql.workspace = true
 async-trait.workspace = true
@@ -44,8 +54,9 @@ dashmap.workspace = true
 derive_more = { workspace = true, features = ["display"] }
 dyn-clone.workspace = true
 futures.workspace = true
+hex = { workspace = true, optional = true }
 js-sys = { workspace = true, optional = true }
-linera-base.workspace = true
+linera-base = { workspace = true, features = ["reqwest"] }
 linera-views.workspace = true
 linera-views-derive.workspace = true
 linera-witty = { workspace = true, features = ["log", "macros"] }
@@ -54,9 +65,12 @@ oneshot.workspace = true
 prometheus = { workspace = true, optional = true }
 proptest = { workspace = true, optional = true }
 reqwest = { workspace = true, features = ["blocking", "json"] }
+revm = { workspace = true, optional = true, features = ["serde"] }
+revm-primitives = { workspace = true, optional = true }
 serde.workspace = true
 serde_bytes.workspace = true
 serde_json.workspace = true
+tempfile = { workspace = true, optional = true }
 thiserror.workspace = true
 tracing = { workspace = true, features = ["log"] }
 wasm-encoder = { workspace = true, optional = true }

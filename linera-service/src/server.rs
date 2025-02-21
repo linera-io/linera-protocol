@@ -15,7 +15,7 @@ use anyhow::{bail, Context};
 use async_trait::async_trait;
 use futures::{stream::FuturesUnordered, FutureExt as _, StreamExt, TryFutureExt as _};
 use linera_base::{
-    crypto::{CryptoRng, SigningKey},
+    crypto::{CryptoRng, ValidatorSecretKey},
     listen_for_shutdown_signals,
 };
 use linera_client::{
@@ -24,7 +24,7 @@ use linera_client::{
     storage::{full_initialize_storage, run_with_storage, Runnable, StorageConfigNamespace},
 };
 use linera_core::{worker::WorkerState, JoinSetExt as _};
-use linera_execution::{committee::ValidatorName, WasmRuntime, WithWasmDefault};
+use linera_execution::{WasmRuntime, WithWasmDefault};
 use linera_rpc::{
     config::{
         CrossChainConfig, NetworkProtocol, NotificationConfig, ShardConfig, ShardId, TlsConfig,
@@ -283,15 +283,15 @@ fn make_server_config<R: CryptoRng>(
     rng: &mut R,
     options: ValidatorOptions,
 ) -> anyhow::Result<persistent::File<ValidatorServerConfig>> {
-    let key = SigningKey::generate_from(rng);
-    let name = ValidatorName(key.public());
+    let key = ValidatorSecretKey::generate_from(rng);
+    let public_key = key.public();
     let network = ValidatorPublicNetworkConfig {
         protocol: options.external_protocol,
         host: options.host,
         port: options.port,
     };
     let internal_network = ValidatorInternalNetworkConfig {
-        name,
+        public_key,
         protocol: options.internal_protocol,
         shards: options.shards,
         host: options.internal_host,
@@ -299,7 +299,10 @@ fn make_server_config<R: CryptoRng>(
         metrics_host: options.metrics_host,
         metrics_port: options.metrics_port,
     };
-    let validator = ValidatorConfig { network, name };
+    let validator = ValidatorConfig {
+        network,
+        public_key,
+    };
     Ok(persistent::File::new(
         path,
         ValidatorServerConfig {
@@ -475,12 +478,12 @@ fn log_file_name_for(command: &ServerCommand) -> Cow<'static, str> {
         } => {
             let server_config: ValidatorServerConfig =
                 util::read_json(server_config_path).expect("Failed to read server config");
-            let name = &server_config.validator.name;
+            let public_key = &server_config.validator.public_key;
 
             if let Some(shard) = shard {
-                format!("validator-{name}-shard-{shard}")
+                format!("validator-{public_key}-shard-{shard}")
             } else {
-                format!("validator-{name}")
+                format!("validator-{public_key}")
             }
             .into()
         }
@@ -565,7 +568,7 @@ async fn run(options: ServerOptions) {
                     .await
                     .expect("Unable to write server config file");
                 info!("Wrote server config {}", path.to_str().unwrap());
-                println!("{}", server.validator.name);
+                println!("{}", server.validator.public_key);
                 config_validators.push(Persist::into_value(server).validator);
             }
             if let Some(committee) = committee {

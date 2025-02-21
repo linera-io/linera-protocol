@@ -8,7 +8,7 @@ use std::{num::NonZeroUsize, sync::Arc, time::Duration};
 use async_trait::async_trait;
 use futures::{lock::Mutex, FutureExt as _};
 use linera_base::{
-    crypto::{PublicKey, SigningKey},
+    crypto::{AccountPublicKey, AccountSecretKey},
     data_types::{Amount, BlockHeight, TimeDelta, Timestamp},
     identifiers::ChainId,
     ownership::{ChainOwnership, TimeoutConfig},
@@ -77,7 +77,7 @@ impl chain_listener::ClientContext for ClientContext {
     async fn update_wallet_for_new_chain(
         &mut self,
         chain_id: ChainId,
-        key_pair: Option<SigningKey>,
+        key_pair: Option<AccountSecretKey>,
         timestamp: Timestamp,
     ) -> Result<(), Error> {
         if self.wallet.get(chain_id).is_none() {
@@ -136,7 +136,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
             Duration::from_secs(1),
         )),
     };
-    let key_pair = SigningKey::generate_from(&mut rng);
+    let key_pair = AccountSecretKey::generate_from(&mut rng);
     let owner = key_pair.public().into();
     context
         .update_wallet_for_new_chain(chain_id0, Some(key_pair), clock.current_time())
@@ -147,7 +147,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
 
     // Transfer ownership of chain 0 to the chain listener and some other key. The listener will
     // be leader in ~10% of the rounds.
-    let owners = [(owner, 1), (PublicKey::test_key(1).into(), 9)];
+    let owners = [(owner, 1), (AccountPublicKey::test_key(1).into(), 9)];
     let timeout_config = TimeoutConfig {
         base_timeout: TimeDelta::from_secs(1),
         timeout_increment: TimeDelta::ZERO,

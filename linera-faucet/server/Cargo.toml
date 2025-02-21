@@ -16,7 +16,6 @@ futures.workspace = true
 linera-base.workspace = true
 linera-client.workspace = true
 linera-core.workspace = true
-linera-execution.workspace = true
 linera-storage.workspace = true
 linera-version.workspace = true
 serde.workspace = true

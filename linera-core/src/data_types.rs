@@ -6,7 +6,10 @@ use std::{collections::BTreeMap, ops::Not};
 
 use custom_debug_derive::Debug;
 use linera_base::{
-    crypto::{BcsSignable, CryptoError, CryptoHash, Signature, SigningKey},
+    crypto::{
+        BcsSignable, CryptoError, CryptoHash, ValidatorPublicKey, ValidatorSecretKey,
+        ValidatorSignature,
+    },
     data_types::{Amount, BlockHeight, Round, Timestamp},
     identifiers::{AccountOwner, ChainDescription, ChainId},
 };
@@ -16,7 +19,7 @@ use linera_chain::{
     ChainStateView,
 };
 use linera_execution::{
-    committee::{Committee, Epoch, ValidatorName},
+    committee::{Committee, Epoch},
     ExecutionRuntimeContext,
 };
 use linera_storage::ChainRuntimeContext;
@@ -217,7 +220,7 @@ impl ChainInfo {
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct ChainInfoResponse {
     pub info: Box<ChainInfo>,
-    pub signature: Option<Signature>,
+    pub signature: Option<ValidatorSignature>,
 }
 
 /// An internal request between chains within a validator.
@@ -292,20 +295,20 @@ where
 }
 
 impl ChainInfoResponse {
-    pub fn new(info: impl Into<ChainInfo>, key_pair: Option<&SigningKey>) -> Self {
+    pub fn new(info: impl Into<ChainInfo>, key_pair: Option<&ValidatorSecretKey>) -> Self {
         let info = Box::new(info.into());
-        let signature = key_pair.map(|kp| Signature::new(&*info, kp));
+        let signature = key_pair.map(|kp| ValidatorSignature::new(&*info, kp));
         Self { info, signature }
     }
 
     /// Signs the [`ChainInfo`] stored inside this [`ChainInfoResponse`] with the provided
-    /// [`SigningKey`].
-    pub fn sign(&mut self, key_pair: &SigningKey) {
-        self.signature = Some(Signature::new(&*self.info, key_pair));
+    /// [`ValidatorSecretKey`].
+    pub fn sign(&mut self, key_pair: &ValidatorSecretKey) {
+        self.signature = Some(ValidatorSignature::new(&*self.info, key_pair));
     }
 
-    pub fn check(&self, name: &ValidatorName) -> Result<(), CryptoError> {
-        Signature::check_optional_signature(self.signature.as_ref(), &*self.info, &name.0)
+    pub fn check(&self, name: &ValidatorPublicKey) -> Result<(), CryptoError> {
+        ValidatorSignature::check_optional_signature(self.signature.as_ref(), &*self.info, name)
     }
 
     /// Returns the committee in the latest epoch.

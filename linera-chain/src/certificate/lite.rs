@@ -4,8 +4,12 @@
 
 use std::borrow::Cow;
 
-use linera_base::{crypto::Signature, data_types::Round, hashed::Hashed};
-use linera_execution::committee::{Committee, ValidatorName};
+use linera_base::{
+    crypto::{ValidatorPublicKey, ValidatorSignature},
+    data_types::Round,
+    hashed::Hashed,
+};
+use linera_execution::committee::Committee;
 use serde::{Deserialize, Serialize};
 
 use super::{CertificateValue, GenericCertificate};
@@ -23,14 +27,14 @@ pub struct LiteCertificate<'a> {
     /// The round in which the value was certified.
     pub round: Round,
     /// Signatures on the value.
-    pub signatures: Cow<'a, [(ValidatorName, Signature)]>,
+    pub signatures: Cow<'a, [(ValidatorPublicKey, ValidatorSignature)]>,
 }
 
 impl<'a> LiteCertificate<'a> {
     pub fn new(
         value: LiteValue,
         round: Round,
-        mut signatures: Vec<(ValidatorName, Signature)>,
+        mut signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
     ) -> Self {
         signatures.sort_by_key(|&(validator_name, _)| validator_name);
 
@@ -49,15 +53,15 @@ impl<'a> LiteCertificate<'a> {
         let LiteVote {
             value,
             round,
-            validator,
+            public_key,
             signature,
         } = votes.next()?;
-        let mut signatures = vec![(validator, signature)];
+        let mut signatures = vec![(public_key, signature)];
         for vote in votes {
             if vote.value.value_hash != value.value_hash || vote.round != round {
                 return None;
             }
-            signatures.push((vote.validator, vote.signature));
+            signatures.push((vote.public_key, vote.signature));
         }
         Some(LiteCertificate::new(value, round, signatures))
     }

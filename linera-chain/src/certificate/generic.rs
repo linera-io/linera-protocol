@@ -4,11 +4,11 @@
 
 use custom_debug_derive::Debug;
 use linera_base::{
-    crypto::{CryptoHash, Signature},
+    crypto::{CryptoHash, ValidatorPublicKey, ValidatorSignature},
     data_types::Round,
     hashed::Hashed,
 };
-use linera_execution::committee::{Committee, ValidatorName};
+use linera_execution::committee::Committee;
 
 use super::CertificateValue;
 use crate::{data_types::LiteValue, ChainError};
@@ -18,14 +18,14 @@ use crate::{data_types::LiteValue, ChainError};
 pub struct GenericCertificate<T> {
     value: Hashed<T>,
     pub round: Round,
-    signatures: Vec<(ValidatorName, Signature)>,
+    signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
 }
 
 impl<T> GenericCertificate<T> {
     pub fn new(
         value: Hashed<T>,
         round: Round,
-        mut signatures: Vec<(ValidatorName, Signature)>,
+        mut signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
     ) -> Self {
         signatures.sort_by_key(|&(validator_name, _)| validator_name);
 
@@ -61,16 +61,22 @@ impl<T> GenericCertificate<T> {
         self.value.hash()
     }
 
-    pub fn destructure(self) -> (Hashed<T>, Round, Vec<(ValidatorName, Signature)>) {
+    pub fn destructure(
+        self,
+    ) -> (
+        Hashed<T>,
+        Round,
+        Vec<(ValidatorPublicKey, ValidatorSignature)>,
+    ) {
         (self.value, self.round, self.signatures)
     }
 
-    pub fn signatures(&self) -> &Vec<(ValidatorName, Signature)> {
+    pub fn signatures(&self) -> &Vec<(ValidatorPublicKey, ValidatorSignature)> {
         &self.signatures
     }
 
     #[cfg(with_testing)]
-    pub fn signatures_mut(&mut self) -> &mut Vec<(ValidatorName, Signature)> {
+    pub fn signatures_mut(&mut self) -> &mut Vec<(ValidatorPublicKey, ValidatorSignature)> {
         &mut self.signatures
     }
 
@@ -78,8 +84,8 @@ impl<T> GenericCertificate<T> {
     /// It's the responsibility of the caller to not insert duplicates
     pub fn add_signature(
         &mut self,
-        signature: (ValidatorName, Signature),
-    ) -> &Vec<(ValidatorName, Signature)> {
+        signature: (ValidatorPublicKey, ValidatorSignature),
+    ) -> &Vec<(ValidatorPublicKey, ValidatorSignature)> {
         let index = self
             .signatures
             .binary_search_by(|(name, _)| name.cmp(&signature.0))
@@ -89,7 +95,7 @@ impl<T> GenericCertificate<T> {
     }
 
     /// Returns whether the validator is among the signatories of this certificate.
-    pub fn is_signed_by(&self, validator_name: &ValidatorName) -> bool {
+    pub fn is_signed_by(&self, validator_name: &ValidatorPublicKey) -> bool {
         self.signatures
             .binary_search_by(|(name, _)| name.cmp(validator_name))
             .is_ok()

@@ -5,10 +5,10 @@
 
 mod state;
 
-use ethereum_tracker::{EthereumTrackerAbi, InstantiationArgument, U256Cont};
+use alloy::primitives::U256;
+use ethereum_tracker::{EthereumTrackerAbi, InstantiationArgument};
 use linera_sdk::{
     base::WithContractAbi,
-    ethereum::{EthereumClient, EthereumDataType, EthereumQueries as _},
     views::{RootView, View},
     Contract, ContractRuntime,
 };
@@ -46,10 +46,16 @@ impl Contract for EthereumTrackerContract {
             contract_address,
             start_block,
         } = argument;
+
         self.state.ethereum_endpoint.set(ethereum_endpoint);
         self.state.contract_address.set(contract_address);
         self.state.start_block.set(start_block);
-        self.read_initial(start_block).await;
+        self.state
+            .save()
+            .await
+            .expect("Failed to write updated storage");
+
+        self.read_initial().await;
     }
 
     async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
@@ -69,69 +75,93 @@ impl Contract for EthereumTrackerContract {
 }
 
 impl EthereumTrackerContract {
-    fn get_endpoints(&self) -> (EthereumClient, String) {
-        let url = self.state.ethereum_endpoint.get().clone();
-        let contract_address = self.state.contract_address.get().clone();
-        let ethereum_client = EthereumClient { url };
-        (ethereum_client, contract_address)
+    /// Reads the initial event emitted by the Ethereum contract, with the initial account and its
+    /// balance.
+    async fn read_initial(&mut self) {
+        let request = async_graphql::Request::new("query { readInitialEvent }");
+
+        let application_id = self.runtime.application_id();
+        let response = self.runtime.query_service(application_id, request);
+
+        let async_graphql::Value::Object(data_object) = response.data else {
+            panic!("Unexpected response from `readInitialEvent`: {response:#?}");
+        };
+        let async_graphql::Value::Object(ref initial_event) = data_object["readInitialEvent"]
+        else {
+            panic!("Unexpected response data from `readInitialEvent`: {data_object:#?}");
+        };
+        let async_graphql::Value::String(ref address) = initial_event["address"] else {
+            panic!("Unexpected address in initial event: {initial_event:#?}");
+        };
+        let async_graphql::Value::String(ref balance_string) = initial_event["balance"] else {
+            panic!("Unexpected balance in initial event: {initial_event:#?}");
+        };
+
+        let balance = balance_string
+            .parse::<U256>()
+            .expect("Balance could not be parsed");
+
+        self.state
+            .accounts
+            .insert(address, balance.into())
+            .expect("Failed to insert initial balance");
     }
 
-    async fn read_initial(&mut self, start_block: u64) {
-        let event_name_expanded = "Initial(address,uint256)";
-        let (ethereum_client, contract_address) = self.get_endpoints();
-        let events = ethereum_client
-            .read_events(
-                &contract_address,
-                event_name_expanded,
-                start_block,
-                start_block + 1,
-            )
-            .await
-            .expect("Read the Initial event");
-        assert_eq!(events.len(), 1);
-        let event = events[0].clone();
-        let EthereumDataType::Address(address) = event.values[0].clone() else {
-            panic!("wrong type for the first entry");
-        };
-        let EthereumDataType::Uint256(value) = event.values[1] else {
-            panic!("wrong type for the second entry");
-        };
-        let value = U256Cont { value };
-        self.state.accounts.insert(&address, value).unwrap();
-    }
+    /// Updates the accounts based on the transfer events emitted up to the `end_block`.
+    async fn update(&mut self, end_block: u64) {
+        let request = async_graphql::Request::new(format!(
+            r#"query {{ readTransferEvents(endBlock: {end_block}) }}"#
+        ));
 
-    async fn update(&mut self, to_block: u64) {
-        let event_name_expanded = "Transfer(address indexed,address indexed,uint256)";
-        let (ethereum_client, contract_address) = self.get_endpoints();
-        let start_block = self.state.start_block.get_mut();
-        let events = ethereum_client
-            .read_events(
-                &contract_address,
-                event_name_expanded,
-                *start_block,
-                to_block,
-            )
-            .await
-            .expect("Read a transfer event");
-        *start_block = to_block;
-        for event in events {
-            let EthereumDataType::Address(from) = event.values[0].clone() else {
-                panic!("wrong type for the first entry");
+        let application_id = self.runtime.application_id();
+        let response = self.runtime.query_service(application_id, request);
+
+        let async_graphql::Value::Object(data_object) = response.data else {
+            panic!("Unexpected response from `readTransferEvents`: {response:#?}");
+        };
+        let async_graphql::Value::List(ref events) = data_object["readTransferEvents"] else {
+            panic!("Unexpected response data from `readTransferEvents`: {data_object:#?}");
+        };
+
+        for event_value in events {
+            let async_graphql::Value::Object(event) = event_value else {
+                panic!("Unexpected event returned from `readTransferEvents`: {event_value:#?}");
             };
-            let EthereumDataType::Address(to) = event.values[1].clone() else {
-                panic!("wrong type for the second entry");
+
+            let async_graphql::Value::String(ref source) = event["source"] else {
+                panic!("Unexpected source address in transfer event: {event:#?}");
             };
-            let EthereumDataType::Uint256(value) = event.values[2] else {
-                panic!("wrong type for the third entry");
+            let async_graphql::Value::String(ref destination) = event["destination"] else {
+                panic!("Unexpected destination address in transfer event: {event:#?}");
             };
+            let async_graphql::Value::String(ref value_string) = event["value"] else {
+                panic!("Unexpected balance in transfer event: {event:#?}");
+            };
+
+            let value = value_string
+                .parse::<U256>()
+                .expect("Balance could not be parsed");
+
             {
-                let value_from = self.state.accounts.get_mut_or_default(&from).await.unwrap();
-                value_from.value -= value;
+                let source_balance = self
+                    .state
+                    .accounts
+                    .get_mut_or_default(source)
+                    .await
+                    .expect("Failed to read account balance for source address");
+                source_balance.value -= value;
             }
             {
-                let value_to = self.state.accounts.get_mut_or_default(&to).await.unwrap();
-                value_to.value += value;
+                let destination_balance = self
+                    .state
+                    .accounts
+                    .get_mut_or_default(destination)
+                    .await
+                    .expect("Failed to read account balance for destination address");
+                destination_balance.value += value;
             }
         }
+
+        self.state.start_block.set(end_block);
     }
 }

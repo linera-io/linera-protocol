@@ -3,7 +3,7 @@
 # Docker image and possibly overwriting modules installed within your image.
 # ---------------------------------------------------------------------------------*
 node_modules
-npm-debug.log
+*.log
 # ignore .git and .cache folders
 .git
 .cache
