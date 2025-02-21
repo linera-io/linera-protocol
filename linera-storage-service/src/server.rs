@@ -553,7 +553,11 @@ impl StoreProcessor for ServiceStoreServer {
                     return stream;
                 }
 
-                stream.extend(value.drain(..MAX_PAYLOAD_SIZE - stream.len()));
+                stream.append(
+                    &mut value
+                        .drain(..MAX_PAYLOAD_SIZE - stream.len())
+                        .collect::<Vec<_>>(),
+                );
                 streamer(stream);
                 stream = Vec::new();
 
@@ -563,7 +567,7 @@ impl StoreProcessor for ServiceStoreServer {
                         break;
                     }
 
-                    stream.extend(value.drain(..MAX_PAYLOAD_SIZE));
+                    stream.append(&mut value.drain(..MAX_PAYLOAD_SIZE).collect::<Vec<_>>());
                     streamer(stream);
                     stream = Vec::new();
                 }
@@ -621,7 +625,11 @@ impl StoreProcessor for ServiceStoreServer {
                     }
 
                     3 if 3 == state[0] && 1 == state[1] => {
-                        value.extend(message.drain(..(state[2] - value.len()).min(message.len())));
+                        value.append(
+                            &mut message
+                                .drain(..(state[2] - value.len()).min(message.len()))
+                                .collect::<Vec<_>>(),
+                        );
                         if state[2] == value.len() {
                             batch.put_key_value_bytes(key, value);
                             key = Vec::new();
@@ -633,7 +641,11 @@ impl StoreProcessor for ServiceStoreServer {
                     }
 
                     3 => {
-                        key.extend(message.drain(..(state[2] - key.len()).min(message.len())));
+                        key.append(
+                            &mut message
+                                .drain(..(state[2] - key.len()).min(message.len()))
+                                .collect::<Vec<_>>(),
+                        );
                         match (state[0], state[2] == key.len()) {
                             (1, true) => {
                                 batch.delete_key(key);

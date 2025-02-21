@@ -32,7 +32,7 @@ message RequestContainsKeys {
 }
 
 message ReplyContainsKeys {
-  repeated bool tests = 1 [packed = true];
+  repeated bool tests = 1;
 }
 
 

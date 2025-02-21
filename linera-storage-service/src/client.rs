@@ -101,11 +101,11 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
 
         let mut reformed_value = Vec::new();
         while let Some(ReplyReadValue { value }) = incoming_stream.message().await? {
-            if value.is_none() {
+            let Some(value) = value else {
                 return Ok(None);
-            }
+            };
 
-            reformed_value.append(&mut value.unwrap());
+            reformed_value.extend(&mut value);
         }
 
         Ok(Some(reformed_value))
@@ -177,9 +177,9 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
             full_keys.push(full_key);
         }
 
-        let (tx, rx) = mpsc::unbounded_channel();
+        let (tx, rx) = mpsc::channel(4);
 
-        let spawner = move || {
+        let feeder = async move {
             let mut outgoing_message = Vec::new();
             let mut chunk_size = 0;
             for key in full_keys {
@@ -189,22 +189,26 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
                     continue;
                 }
 
-                let _ = tx.send(RequestReadMultiValues {
-                    keys: outgoing_message,
-                });
+                let _ = tx
+                    .send(RequestReadMultiValues {
+                        keys: outgoing_message,
+                    })
+                    .await;
                 outgoing_message = Vec::new();
                 chunk_size = key.len();
                 outgoing_message.push(key);
             }
 
             if !outgoing_message.is_empty() {
-                let _ = tx.send(RequestReadMultiValues {
-                    keys: outgoing_message,
-                });
+                let _ = tx
+                    .send(RequestReadMultiValues {
+                        keys: outgoing_message,
+                    })
+                    .await;
             }
         };
 
-        let _ = std::thread::spawn(spawner);
+        std::mem::drop(tokio::task::spawn(feeder));
 
         let request = tonic::Request::new(UnboundedReceiverStream::new(rx));
         let channel = self.channel.clone();
@@ -297,13 +301,7 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
         let _guard = self.acquire().await;
         let response = client.process_find_key_values_by_prefix(request).await?;
 
-        let is_zero = |buf: &[u8]| {
-            let (prefix, aligned, suffix) = unsafe { buf.align_to::<u128>() };
-
-            prefix.iter().all(|&x| x == 0)
-                && suffix.iter().all(|&x| x == 0)
-                && aligned.iter().all(|&x| x == 0)
-        };
+        let is_zero = |buf: &[u8]| buf.iter().max().is_some_and(|x| 0 == x);
 
         let mut key_values = Vec::new();
         let mut key = Vec::new();
@@ -329,7 +327,11 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
 
                 let expected_key_len = usize::from_be_bytes(key_len.clone().try_into().unwrap());
                 if expected_key_len != key.len() {
-                    key.extend(message.drain(..(expected_key_len - key.len()).min(message.len())));
+                    key.append(
+                        &mut message
+                            .drain(..(expected_key_len - key.len()).min(message.len()))
+                            .collect::<Vec<_>>(),
+                    );
                 }
 
                 if expected_key_len != key.len() {
@@ -339,8 +341,12 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
                 let expected_value_len =
                     usize::from_be_bytes(value_len.clone().try_into().unwrap());
                 if expected_value_len != value.len() {
-                    value.extend(
-                        message.drain(..(expected_value_len - value.len()).min(message.len())),
+                    value.append(
+                        &mut message.drain(
+                            ..(expected_value_len - value.len())
+                                .min(message.len())
+                                .collect::<Vec<_>>(),
+                        ),
                     );
                 }
 
@@ -403,17 +409,21 @@ impl WritableKeyValueStore for ServiceStoreClientInternal {
                 }
 
                 let mut value = VecDeque::from(value);
-                stream.extend(value.drain(..MAX_PAYLOAD_SIZE - stream.len()));
+                stream.append(
+                    &mut value
+                        .drain(..MAX_PAYLOAD_SIZE - stream.len())
+                        .collect::<Vec<_>>(),
+                );
                 streamer(stream);
                 stream = Vec::new();
 
                 loop {
                     if MAX_PAYLOAD_SIZE >= value.len() {
-                        stream.extend(value);
+                        stream.append(&mut value);
                         break;
                     }
 
-                    stream.extend(value.drain(..MAX_PAYLOAD_SIZE));
+                    stream.append(&mut value.drain(..MAX_PAYLOAD_SIZE).collect::<Vec<_>>());
                     streamer(stream);
                     stream = Vec::new();
                 }
