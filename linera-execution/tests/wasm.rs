@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use linera_base::{
-    data_types::{Amount, BlockHeight, Timestamp},
+    data_types::{Amount, Blob, BlockHeight, Timestamp},
     identifiers::{Account, ChainDescription, ChainId},
 };
 use linera_execution::{
@@ -59,7 +59,11 @@ async fn test_fuel_for_counter_wasm_application(
 
     view.context()
         .extra()
-        .add_blobs([contract_blob, service_blob])
+        .add_blobs([
+            contract_blob,
+            service_blob,
+            Blob::new_application_description(&app_desc),
+        ])
         .await?;
 
     let context = OperationContext {

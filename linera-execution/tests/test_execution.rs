@@ -46,7 +46,7 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
         .add_blobs([
             contract_blob.clone(),
             service_blob.clone(),
-            Blob::new_application_description(&app_desc),
+            Blob::new_application_description(app_desc),
         ])
         .await?;
 
