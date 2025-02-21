@@ -749,87 +749,32 @@ impl Runnable for Job {
                 );
                 if let Some(bps) = bps {
                     assert!(bps > 0, "BPS must be greater than 0");
-                }
-
-                let start = Instant::now();
-                // Below all block proposals are supposed to succeed without retries, we
-                // must make sure that all incoming payments have been accepted on-chain
-                // and that no validator is missing user certificates.
-                context.process_inboxes_and_force_validator_updates().await;
-                info!(
-                    "Processed inboxes and forced validator updates in {} ms",
-                    start.elapsed().as_millis()
-                );
-
-                let start = Instant::now();
-                let (key_pairs, chain_clients) = context
-                    .make_benchmark_chains(num_chains, tokens_per_chain)
-                    .await?;
-                info!(
-                    "Got {} chains in {} ms",
-                    key_pairs.len(),
-                    start.elapsed().as_millis()
-                );
-
-                if let Some(id) = fungible_application_id {
-                    let start = Instant::now();
-                    context
-                        .supply_fungible_tokens(&key_pairs, id, &chain_clients)
-                        .await?;
-                    info!(
-                        "Supplied fungible tokens in {} ms",
-                        start.elapsed().as_millis()
+                    assert!(
+                        bps >= num_chains,
+                        "BPS must be greater than or equal to the number of chains"
                     );
                 }
 
-                let default_chain_id = context
-                    .wallet
-                    .default_chain()
-                    .expect("should have default chain");
-                let default_chain_client = context.make_chain_client(default_chain_id)?;
-                let (epoch, committees) = default_chain_client
-                    .epoch_and_committees(default_chain_id)
+                let (chain_clients, epoch, blocks_infos, committee) = context
+                    .prepare_for_benchmark(
+                        num_chains,
+                        transactions_per_block,
+                        tokens_per_chain,
+                        fungible_application_id,
+                    )
                     .await?;
-                let epoch = epoch.expect("default chain should have an epoch");
-                let committee = committees
-                    .get(&epoch)
-                    .expect("current epoch should have a committee");
-                let blocks_infos = context.make_benchmark_block_info(
-                    key_pairs,
-                    transactions_per_block,
-                    fungible_application_id,
-                );
 
-                let clients = context
-                    .make_node_provider()
-                    .make_nodes(committee)?
-                    .map(|(_, node)| node)
-                    .collect::<Vec<_>>();
-                let blocks_infos_iter = blocks_infos.iter();
-                if bps.is_some() {
-                    let blocks_infos_iter = blocks_infos_iter.cycle();
-                    context
-                        .run_benchmark(
-                            bps,
-                            blocks_infos_iter,
-                            clients,
-                            transactions_per_block,
-                            epoch,
-                            chain_clients,
-                        )
-                        .await?;
-                } else {
-                    context
-                        .run_benchmark(
-                            bps,
-                            blocks_infos_iter,
-                            clients,
-                            transactions_per_block,
-                            epoch,
-                            chain_clients,
-                        )
-                        .await?;
-                }
+                linera_client::benchmark::Benchmark::<S>::run_benchmark(
+                    num_chains,
+                    transactions_per_block,
+                    bps,
+                    chain_clients,
+                    epoch,
+                    blocks_infos,
+                    committee,
+                    context.client.local_node().clone(),
+                )
+                .await?;
             }
 
             Watch { chain_id, raw } => {

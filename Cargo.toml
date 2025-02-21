@@ -71,6 +71,7 @@ colored = "2.1.0"
 comfy-table = "7.1.0"
 convert_case = "0.6.0"
 criterion = { version = "0.5.1", default-features = false }
+crossbeam-channel = "0.5.14"
 custom_debug_derive = "0.6.1"
 dashmap = "5.5.3"
 derive_more = "1.0.0"
