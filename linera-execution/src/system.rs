@@ -47,7 +47,7 @@ use crate::{
     ApplicationRegistryView, ChannelName, ChannelSubscription, Destination,
     ExecutionRuntimeContext, MessageContext, MessageKind, OperationContext, QueryContext,
     QueryOutcome, RawExecutionOutcome, RawOutgoingMessage, TransactionTracker,
-    UserApplicationDescription, UserApplicationId,
+    UserApplicationDescription, UserApplicationId, VmRuntime,
 };
 
 /// The relative index of the `OpenChain` message created by the `OpenChain` operation.
@@ -175,6 +175,7 @@ pub enum SystemOperation {
     /// Creates a new application.
     CreateApplication {
         bytecode_id: BytecodeId,
+        vm_runtime: VmRuntime,
         #[serde(with = "serde_bytes")]
         #[debug(with = "hex_debug")]
         parameters: Vec<u8>,
@@ -642,6 +643,7 @@ where
             }
             CreateApplication {
                 bytecode_id,
+                vm_runtime,
                 parameters,
                 instantiation_argument,
                 required_application_ids,
@@ -655,6 +657,7 @@ where
                     .create_application(
                         next_message_id,
                         bytecode_id,
+                        vm_runtime,
                         parameters,
                         required_application_ids,
                     )
@@ -1030,6 +1033,7 @@ where
         &mut self,
         next_message_id: MessageId,
         bytecode_id: BytecodeId,
+        vm_runtime: VmRuntime,
         parameters: Vec<u8>,
         required_application_ids: Vec<UserApplicationId>,
     ) -> Result<CreateApplicationResult, SystemExecutionError> {
@@ -1051,7 +1055,7 @@ where
             }
         }
         self.registry
-            .register_new_application(id, parameters, required_application_ids)
+            .register_new_application(id, vm_runtime, parameters, required_application_ids)
             .await?;
         // Send a message to ourself to increment the message ID.
         let message = RawOutgoingMessage {

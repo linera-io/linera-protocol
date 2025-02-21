@@ -9,8 +9,8 @@ fn main() {
         with_metrics: { all(not(target_arch = "wasm32"), feature = "metrics") },
         with_testing: { any(test, feature = "test") },
         with_tokio_multi_thread: { not(target_arch = "wasm32") },
-        with_wasmer: { feature = "wasmer" },
         with_revm: { feature = "revm" },
+        with_wasmer: { feature = "wasmer" },
         with_wasmtime: { all(not(target_arch = "wasm32"), feature = "wasmtime") },
 
         // If you change this, don't forget to update `WasmRuntime` and

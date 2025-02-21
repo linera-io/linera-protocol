@@ -5,7 +5,6 @@ use std::{fmt, str::FromStr};
 
 use async_trait::async_trait;
 use linera_base::identifiers::{BlobId, ChainId};
-use linera_execution::WasmRuntime;
 #[cfg(with_storage)]
 use linera_storage::{list_all_blob_ids, list_all_chain_ids};
 use linera_storage::{DbStorage, Storage};
@@ -637,7 +636,6 @@ pub trait Runnable {
 pub async fn run_with_storage<Job>(
     config: StoreConfig,
     genesis_config: &GenesisConfig,
-    wasm_runtime: Option<WasmRuntime>,
     job: Job,
 ) -> Result<Job::Output, Error>
 where
@@ -647,37 +645,29 @@ where
         StoreConfig::Memory(config, namespace) => {
             let store_config = MemoryStoreConfig::new(config.common_config.max_stream_queries);
             let mut storage =
-                DbStorage::<MemoryStore, _>::new(store_config, &namespace, ROOT_KEY, wasm_runtime)
-                    .await?;
+                DbStorage::<MemoryStore, _>::new(store_config, &namespace, ROOT_KEY).await?;
             genesis_config.initialize_storage(&mut storage).await?;
             Ok(job.run(storage).await)
         }
         #[cfg(feature = "storage-service")]
         StoreConfig::Service(config, namespace) => {
             let storage =
-                DbStorage::<ServiceStoreClient, _>::new(config, &namespace, ROOT_KEY, wasm_runtime)
-                    .await?;
+                DbStorage::<ServiceStoreClient, _>::new(config, &namespace, ROOT_KEY).await?;
             Ok(job.run(storage).await)
         }
         #[cfg(feature = "rocksdb")]
         StoreConfig::RocksDb(config, namespace) => {
-            let storage =
-                DbStorage::<RocksDbStore, _>::new(config, &namespace, ROOT_KEY, wasm_runtime)
-                    .await?;
+            let storage = DbStorage::<RocksDbStore, _>::new(config, &namespace, ROOT_KEY).await?;
             Ok(job.run(storage).await)
         }
         #[cfg(feature = "dynamodb")]
         StoreConfig::DynamoDb(config, namespace) => {
-            let storage =
-                DbStorage::<DynamoDbStore, _>::new(config, &namespace, ROOT_KEY, wasm_runtime)
-                    .await?;
+            let storage = DbStorage::<DynamoDbStore, _>::new(config, &namespace, ROOT_KEY).await?;
             Ok(job.run(storage).await)
         }
         #[cfg(feature = "scylladb")]
         StoreConfig::ScyllaDb(config, namespace) => {
-            let storage =
-                DbStorage::<ScyllaDbStore, _>::new(config, &namespace, ROOT_KEY, wasm_runtime)
-                    .await?;
+            let storage = DbStorage::<ScyllaDbStore, _>::new(config, &namespace, ROOT_KEY).await?;
             Ok(job.run(storage).await)
         }
     }
@@ -694,50 +684,27 @@ pub async fn full_initialize_storage(
         )),
         #[cfg(feature = "storage-service")]
         StoreConfig::Service(config, namespace) => {
-            let wasm_runtime = None;
-            let mut storage = DbStorage::<ServiceStoreClient, _>::initialize(
-                config,
-                &namespace,
-                ROOT_KEY,
-                wasm_runtime,
-            )
-            .await?;
+            let mut storage =
+                DbStorage::<ServiceStoreClient, _>::initialize(config, &namespace, ROOT_KEY)
+                    .await?;
             Ok(genesis_config.initialize_storage(&mut storage).await?)
         }
         #[cfg(feature = "rocksdb")]
         StoreConfig::RocksDb(config, namespace) => {
-            let wasm_runtime = None;
-            let mut storage = DbStorage::<RocksDbStore, _>::initialize(
-                config,
-                &namespace,
-                ROOT_KEY,
-                wasm_runtime,
-            )
-            .await?;
+            let mut storage =
+                DbStorage::<RocksDbStore, _>::initialize(config, &namespace, ROOT_KEY).await?;
             Ok(genesis_config.initialize_storage(&mut storage).await?)
         }
         #[cfg(feature = "dynamodb")]
         StoreConfig::DynamoDb(config, namespace) => {
-            let wasm_runtime = None;
-            let mut storage = DbStorage::<DynamoDbStore, _>::initialize(
-                config,
-                &namespace,
-                ROOT_KEY,
-                wasm_runtime,
-            )
-            .await?;
+            let mut storage =
+                DbStorage::<DynamoDbStore, _>::initialize(config, &namespace, ROOT_KEY).await?;
             Ok(genesis_config.initialize_storage(&mut storage).await?)
         }
         #[cfg(feature = "scylladb")]
         StoreConfig::ScyllaDb(config, namespace) => {
-            let wasm_runtime = None;
-            let mut storage = DbStorage::<ScyllaDbStore, _>::initialize(
-                config,
-                &namespace,
-                ROOT_KEY,
-                wasm_runtime,
-            )
-            .await?;
+            let mut storage =
+                DbStorage::<ScyllaDbStore, _>::initialize(config, &namespace, ROOT_KEY).await?;
             Ok(genesis_config.initialize_storage(&mut storage).await?)
         }
     }

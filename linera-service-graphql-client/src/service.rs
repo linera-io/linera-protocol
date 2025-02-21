@@ -60,16 +60,15 @@ mod types {
 
 #[cfg(not(target_arch = "wasm32"))]
 mod types {
-    pub use linera_base::{
-        data_types::UserApplicationDescription, identifiers::ChannelFullName,
-        ownership::ChainOwnership,
-    };
+    pub use linera_base::{identifiers::ChannelFullName, ownership::ChainOwnership};
     pub use linera_chain::{
         data_types::{MessageAction, MessageBundle, Origin, Target},
         manager::ChainManager,
     };
     pub use linera_core::worker::{Notification, Reason};
-    pub use linera_execution::{committee::Epoch, Message, MessageKind, Operation};
+    pub use linera_execution::{
+        committee::Epoch, Message, MessageKind, Operation, UserApplicationDescription,
+    };
 }
 
 pub use types::*;

@@ -15,9 +15,7 @@ use std::collections::BTreeSet;
 use assert_matches::assert_matches;
 use linera_base::{
     crypto::AccountSecretKey,
-    data_types::{
-        Amount, Blob, BlockHeight, Bytecode, OracleResponse, Timestamp, UserApplicationDescription,
-    },
+    data_types::{Amount, Blob, BlockHeight, Bytecode, OracleResponse, Timestamp},
     hashed::Hashed,
     identifiers::{
         BytecodeId, ChainDescription, ChainId, Destination, MessageId, UserApplicationId,
@@ -34,7 +32,7 @@ use linera_execution::{
     system::{SystemMessage, SystemOperation},
     test_utils::SystemExecutionState,
     Message, MessageKind, Operation, OperationContext, ResourceController, TransactionTracker,
-    WasmContractModule, WasmRuntime,
+    UserApplicationDescription, VmRuntime, WasmContractModule, WasmRuntime,
 };
 use linera_storage::{DbStorage, Storage};
 #[cfg(feature = "dynamodb")]
@@ -55,7 +53,7 @@ use crate::worker::WorkerError;
 async fn test_memory_handle_certificates_to_create_application(
     wasm_runtime: WasmRuntime,
 ) -> anyhow::Result<()> {
-    let storage = DbStorage::<MemoryStore, _>::make_test_storage(Some(wasm_runtime)).await;
+    let storage = DbStorage::<MemoryStore, _>::make_test_storage().await;
     run_test_handle_certificates_to_create_application(storage, wasm_runtime).await
 }
 
@@ -66,7 +64,7 @@ async fn test_memory_handle_certificates_to_create_application(
 async fn test_rocks_db_handle_certificates_to_create_application(
     wasm_runtime: WasmRuntime,
 ) -> anyhow::Result<()> {
-    let storage = DbStorage::<RocksDbStore, _>::make_test_storage(Some(wasm_runtime)).await;
+    let storage = DbStorage::<RocksDbStore, _>::make_test_storage().await;
     run_test_handle_certificates_to_create_application(storage, wasm_runtime).await
 }
 
@@ -77,7 +75,7 @@ async fn test_rocks_db_handle_certificates_to_create_application(
 async fn test_dynamo_db_handle_certificates_to_create_application(
     wasm_runtime: WasmRuntime,
 ) -> anyhow::Result<()> {
-    let storage = DbStorage::<DynamoDbStore, _>::make_test_storage(Some(wasm_runtime)).await;
+    let storage = DbStorage::<DynamoDbStore, _>::make_test_storage().await;
     run_test_handle_certificates_to_create_application(storage, wasm_runtime).await
 }
 
@@ -88,7 +86,7 @@ async fn test_dynamo_db_handle_certificates_to_create_application(
 async fn test_scylla_db_handle_certificates_to_create_application(
     wasm_runtime: WasmRuntime,
 ) -> anyhow::Result<()> {
-    let storage = DbStorage::<ScyllaDbStore, _>::make_test_storage(Some(wasm_runtime)).await;
+    let storage = DbStorage::<ScyllaDbStore, _>::make_test_storage().await;
     run_test_handle_certificates_to_create_application(storage, wasm_runtime).await
 }
 
@@ -99,6 +97,7 @@ async fn run_test_handle_certificates_to_create_application<S>(
 where
     S: Storage + Clone + Send + Sync + 'static,
 {
+    let vm_runtime = VmRuntime::Wasm(wasm_runtime);
     let admin_id = ChainDescription::Root(0);
     let publisher_owner = AccountSecretKey::generate().public().into();
     let publisher_chain = ChainDescription::Root(1);
@@ -189,6 +188,7 @@ where
     let parameters_bytes = serde_json::to_vec(&())?;
     let create_operation = SystemOperation::CreateApplication {
         bytecode_id,
+        vm_runtime,
         parameters: parameters_bytes.clone(),
         instantiation_argument: initial_value_bytes.clone(),
         required_application_ids: vec![],
@@ -203,6 +203,7 @@ where
     };
     let application_description = UserApplicationDescription {
         bytecode_id,
+        vm_runtime,
         creation: application_id.creation,
         required_application_ids: vec![],
         parameters: parameters_bytes,

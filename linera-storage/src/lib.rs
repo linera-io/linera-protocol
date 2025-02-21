@@ -13,7 +13,7 @@ use async_trait::async_trait;
 use dashmap::{mapref::entry::Entry, DashMap};
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Amount, Blob, BlockHeight, TimeDelta, Timestamp, UserApplicationDescription},
+    data_types::{Amount, Blob, BlockHeight, TimeDelta, Timestamp},
     hashed::Hashed,
     identifiers::{BlobId, ChainDescription, ChainId, EventId, Owner, UserApplicationId},
     ownership::ChainOwnership,
@@ -22,11 +22,15 @@ use linera_chain::{
     types::{ConfirmedBlock, ConfirmedBlockCertificate},
     ChainError, ChainStateView,
 };
+#[cfg(with_revm)]
+use linera_execution::revm::{EvmContractModule, EvmServiceModule};
+#[cfg(any(with_wasm_runtime, with_revm))]
+use linera_execution::VmRuntime;
 use linera_execution::{
     committee::{Committee, Epoch},
     system::SystemChannel,
     BlobState, ChannelSubscription, ExecutionError, ExecutionRuntimeConfig,
-    ExecutionRuntimeContext, UserContractCode, UserServiceCode, WasmRuntime,
+    ExecutionRuntimeContext, UserApplicationDescription, UserContractCode, UserServiceCode,
 };
 use linera_views::{
     context::Context,
@@ -257,19 +261,13 @@ pub trait Storage: Sized {
         Ok(())
     }
 
-    /// Selects the WebAssembly runtime to use for applications (if any).
-    fn wasm_runtime(&self) -> Option<WasmRuntime>;
-
     /// Creates a [`UserContractCode`] instance using the bytecode in storage referenced
     /// by the `application_description`.
-    #[cfg(with_wasm_runtime)]
+    #[cfg(any(with_wasm_runtime, with_revm))]
     async fn load_contract(
         &self,
         application_description: &UserApplicationDescription,
     ) -> Result<UserContractCode, ExecutionError> {
-        let Some(wasm_runtime) = self.wasm_runtime() else {
-            panic!("A Wasm runtime is required to load user applications.");
-        };
         let contract_bytecode_blob_id = BlobId::new(
             application_description.bytecode_id.contract_blob_hash,
             BlobType::ContractBytecode,
@@ -285,12 +283,22 @@ pub trait Storage: Sized {
             .await
             .join()
             .await?;
-        Ok(WasmContractModule::new(contract_bytecode, wasm_runtime)
-            .await?
-            .into())
+        match application_description.vm_runtime {
+            VmRuntime::Wasm(wasm_runtime) => {
+                Ok(WasmContractModule::new(contract_bytecode, wasm_runtime)
+                    .await?
+                    .into())
+            }
+            #[cfg(with_revm)]
+            VmRuntime::Evm(evm_runtime) => {
+                Ok(EvmContractModule::new(contract_bytecode, evm_runtime)
+                    .await?
+                    .into())
+            }
+        }
     }
 
-    #[cfg(not(with_wasm_runtime))]
+    #[cfg(not(any(with_wasm_runtime, with_revm)))]
     #[allow(clippy::diverging_sub_expression)]
     async fn load_contract(
         &self,
@@ -305,14 +313,11 @@ pub trait Storage: Sized {
 
     /// Creates a [`linera-sdk::UserContract`] instance using the bytecode in storage referenced
     /// by the `application_description`.
-    #[cfg(with_wasm_runtime)]
+    #[cfg(any(with_wasm_runtime, with_revm))]
     async fn load_service(
         &self,
         application_description: &UserApplicationDescription,
     ) -> Result<UserServiceCode, ExecutionError> {
-        let Some(wasm_runtime) = self.wasm_runtime() else {
-            panic!("A Wasm runtime is required to load user applications.");
-        };
         let service_bytecode_blob_id = BlobId::new(
             application_description.bytecode_id.service_blob_hash,
             BlobType::ServiceBytecode,
@@ -327,12 +332,20 @@ pub trait Storage: Sized {
         .await
         .join()
         .await?;
-        Ok(WasmServiceModule::new(service_bytecode, wasm_runtime)
-            .await?
-            .into())
+        match application_description.vm_runtime {
+            VmRuntime::Wasm(wasm_runtime) => {
+                Ok(WasmServiceModule::new(service_bytecode, wasm_runtime)
+                    .await?
+                    .into())
+            }
+            #[cfg(with_revm)]
+            VmRuntime::Evm(evm_runtime) => Ok(EvmServiceModule::new(service_bytecode, evm_runtime)
+                .await?
+                .into()),
+        }
     }
 
-    #[cfg(not(with_wasm_runtime))]
+    #[cfg(not(any(with_wasm_runtime, with_revm)))]
     #[allow(clippy::diverging_sub_expression)]
     async fn load_service(
         &self,

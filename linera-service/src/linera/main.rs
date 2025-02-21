@@ -41,7 +41,7 @@ use linera_core::{
 };
 use linera_execution::{
     committee::{Committee, ValidatorState},
-    Message, ResourceControlPolicy, SystemMessage,
+    Message, ResourceControlPolicy, SystemMessage, WithVmDefault as _,
 };
 use linera_faucet_server::FaucetService;
 use linera_sdk::base::ValidatorPublicKey;
@@ -934,6 +934,7 @@ impl Runnable for Job {
 
             CreateApplication {
                 bytecode_id,
+                vm_runtime,
                 creator,
                 json_parameters,
                 json_parameters_path,
@@ -948,6 +949,9 @@ impl Runnable for Job {
                 let parameters = read_json(json_parameters, json_parameters_path)?;
                 let argument = read_json(json_argument, json_argument_path)?;
 
+                let vm_runtime = vm_runtime
+                    .with_vm_default()
+                    .expect("A virtual machine to be available");
                 info!("Synchronizing");
                 let chain_client = chain_client;
                 context.process_inbox(&chain_client).await?;
@@ -962,6 +966,7 @@ impl Runnable for Job {
                             chain_client
                                 .create_application_untyped(
                                     bytecode_id,
+                                    vm_runtime,
                                     parameters,
                                     argument,
                                     required_application_ids.unwrap_or_default(),
@@ -982,6 +987,7 @@ impl Runnable for Job {
             PublishAndCreate {
                 contract,
                 service,
+                vm_runtime,
                 publisher,
                 json_parameters,
                 json_parameters_path,
@@ -995,6 +1001,9 @@ impl Runnable for Job {
                 let chain_client = context.make_chain_client(publisher)?;
                 let parameters = read_json(json_parameters, json_parameters_path)?;
                 let argument = read_json(json_argument, json_argument_path)?;
+                let vm_runtime = vm_runtime
+                    .with_vm_default()
+                    .expect("A virtual machine should be available");
 
                 let bytecode_id = context
                     .publish_bytecode(&chain_client, contract, service)
@@ -1010,6 +1019,7 @@ impl Runnable for Job {
                             chain_client
                                 .create_application_untyped(
                                     bytecode_id,
+                                    vm_runtime,
                                     parameters,
                                     argument,
                                     required_application_ids.unwrap_or_default(),
@@ -1076,6 +1086,7 @@ impl Runnable for Job {
                 ProjectCommand::PublishAndCreate {
                     path,
                     name,
+                    vm_runtime,
                     publisher,
                     json_parameters,
                     json_parameters_path,
@@ -1088,6 +1099,9 @@ impl Runnable for Job {
                     info!("Creating application on chain {}", publisher);
                     let chain_client = context.make_chain_client(publisher)?;
 
+                    let vm_runtime = vm_runtime
+                        .with_vm_default()
+                        .expect("A virtual machine should be available");
                     let parameters = read_json(json_parameters, json_parameters_path)?;
                     let argument = read_json(json_argument, json_argument_path)?;
                     let project_path = path.unwrap_or_else(|| env::current_dir().unwrap());
@@ -1109,6 +1123,7 @@ impl Runnable for Job {
                                 chain_client
                                     .create_application_untyped(
                                         bytecode_id,
+                                        vm_runtime,
                                         parameters,
                                         argument,
                                         required_application_ids.unwrap_or_default(),

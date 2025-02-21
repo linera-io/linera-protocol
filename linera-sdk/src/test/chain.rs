@@ -21,7 +21,7 @@ use linera_chain::{types::ConfirmedBlockCertificate, ChainError, ChainExecutionC
 use linera_core::{data_types::ChainInfoQuery, worker::WorkerError};
 use linera_execution::{
     system::{SystemExecutionError, SystemOperation, CREATE_APPLICATION_MESSAGE_INDEX},
-    ExecutionError, Query, QueryOutcome, QueryResponse,
+    ExecutionError, Query, QueryOutcome, QueryResponse, VmRuntime,
 };
 use linera_storage::Storage as _;
 use serde::Serialize;
@@ -353,6 +353,7 @@ impl ActiveChain {
     pub async fn create_application<Abi, Parameters, InstantiationArgument>(
         &mut self,
         bytecode_id: BytecodeId<Abi, Parameters, InstantiationArgument>,
+        vm_runtime: VmRuntime,
         parameters: Parameters,
         instantiation_argument: InstantiationArgument,
         required_application_ids: Vec<ApplicationId>,
@@ -373,6 +374,7 @@ impl ActiveChain {
             .add_block(|block| {
                 block.with_system_operation(SystemOperation::CreateApplication {
                     bytecode_id: bytecode_id.forget_abi(),
+                    vm_runtime,
                     parameters,
                     instantiation_argument,
                     required_application_ids,

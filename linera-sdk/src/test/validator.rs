@@ -20,7 +20,7 @@ use linera_core::worker::WorkerState;
 use linera_execution::{
     committee::{Committee, Epoch},
     system::{OpenChainConfig, SystemOperation, OPEN_CHAIN_MESSAGE_INDEX},
-    WasmRuntime,
+    VmRuntime,
 };
 use linera_storage::{DbStorage, Storage, TestClock};
 use linera_views::memory::MemoryStore;
@@ -69,8 +69,7 @@ impl TestValidator {
     pub async fn new() -> Self {
         let key_pair = ValidatorSecretKey::generate();
         let committee = Committee::make_simple(vec![key_pair.public()]);
-        let wasm_runtime = Some(WasmRuntime::default());
-        let storage = DbStorage::<MemoryStore, _>::make_test_storage(wasm_runtime)
+        let storage = DbStorage::<MemoryStore, _>::make_test_storage()
             .now_or_never()
             .expect("execution of DbStorage::new should not await anything");
         let clock = storage.clock().clone();
@@ -119,6 +118,7 @@ impl TestValidator {
     /// Returns the new [`TestValidator`], the [`ApplicationId`] of the created application, and
     /// the chain on which it was created.
     pub async fn with_current_application<Abi, Parameters, InstantiationArgument>(
+        vm_runtime: VmRuntime,
         parameters: Parameters,
         instantiation_argument: InstantiationArgument,
     ) -> (TestValidator, ApplicationId<Abi>, ActiveChain)
@@ -133,7 +133,13 @@ impl TestValidator {
         let mut creator = validator.new_chain().await;
 
         let application_id = creator
-            .create_application(bytecode_id, parameters, instantiation_argument, vec![])
+            .create_application(
+                bytecode_id,
+                vm_runtime,
+                parameters,
+                instantiation_argument,
+                vec![],
+            )
             .await;
 
         (validator, application_id, creator)

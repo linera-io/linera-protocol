@@ -19,7 +19,7 @@ use linera_base::{
     time::Duration,
 };
 use linera_core::{client::BlanketMessagePolicy, DEFAULT_GRACE_PERIOD};
-use linera_execution::{ResourceControlPolicy, WasmRuntime, WithWasmDefault as _};
+use linera_execution::{ResourceControlPolicy, VmRuntime};
 use linera_views::store::CommonStoreConfig;
 
 #[cfg(feature = "fs")]
@@ -95,10 +95,6 @@ pub struct ClientOptions {
     /// The maximum number of incoming message bundles to include in a block proposal.
     #[arg(long, default_value = "10")]
     pub max_pending_message_bundles: usize,
-
-    /// The WebAssembly runtime to use.
-    #[arg(long)]
-    pub wasm_runtime: Option<WasmRuntime>,
 
     /// The maximal number of chains loaded in memory at a given time.
     #[arg(long, default_value = "40")]
@@ -202,7 +198,6 @@ impl ClientOptions {
                 .add_common_config(self.common_config())
                 .await?,
             &genesis_config,
-            self.wasm_runtime.with_wasm_default(),
             job,
         ))
         .await?;
@@ -802,6 +797,10 @@ pub enum ClientCommand {
         /// The bytecode ID of the application to create.
         bytecode_id: BytecodeId,
 
+        /// The virtual machine runtime to use.
+        #[arg(long)]
+        vm_runtime: Option<VmRuntime>,
+
         /// An optional chain ID to host the application. The default chain of the wallet
         /// is used otherwise.
         creator: Option<ChainId>,
@@ -834,6 +833,10 @@ pub enum ClientCommand {
 
         /// Path to the Wasm file for the application "service" bytecode.
         service: PathBuf,
+
+        /// The virtual machine runtime to use.
+        #[arg(long)]
+        vm_runtime: Option<VmRuntime>,
 
         /// An optional chain ID to publish the bytecode. The default chain of the wallet
         /// is used otherwise.
@@ -1240,6 +1243,10 @@ pub enum ProjectCommand {
         /// An optional chain ID to publish the bytecode. The default chain of the wallet
         /// is used otherwise.
         publisher: Option<ChainId>,
+
+        /// The virtual machine runtime to use.
+        #[arg(long)]
+        vm_runtime: Option<VmRuntime>,
 
         /// The shared parameters as JSON string.
         #[arg(long)]

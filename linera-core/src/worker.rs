@@ -12,9 +12,7 @@ use std::{
 use futures::future::Either;
 use linera_base::{
     crypto::{CryptoError, CryptoHash, ValidatorPublicKey, ValidatorSecretKey},
-    data_types::{
-        ArithmeticError, Blob, BlockHeight, DecompressionError, Round, UserApplicationDescription,
-    },
+    data_types::{ArithmeticError, Blob, BlockHeight, DecompressionError, Round},
     doc_scalar,
     hashed::Hashed,
     identifiers::{BlobId, ChainId, Owner, UserApplicationId},
@@ -31,7 +29,7 @@ use linera_chain::{
     },
     ChainError, ChainStateView,
 };
-use linera_execution::{committee::Epoch, ExecutionError, Query, QueryOutcome};
+use linera_execution::{committee::Epoch, ExecutionError, Query, QueryOutcome, UserApplicationDescription};
 use linera_storage::Storage;
 use linera_views::views::ViewError;
 use lru::LruCache;

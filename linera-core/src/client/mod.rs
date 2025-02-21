@@ -59,7 +59,7 @@ use linera_execution::{
         CREATE_APPLICATION_MESSAGE_INDEX, OPEN_CHAIN_MESSAGE_INDEX,
     },
     ExecutionError, Operation, Query, QueryOutcome, QueryResponse, SystemExecutionError,
-    SystemQuery, SystemResponse,
+    SystemQuery, SystemResponse, VmRuntime,
 };
 use linera_storage::{Clock as _, Storage};
 use linera_views::views::ViewError;
@@ -2912,6 +2912,7 @@ where
     >(
         &self,
         bytecode_id: BytecodeId<A, Parameters, InstantiationArgument>,
+        vm_runtime: VmRuntime,
         parameters: &Parameters,
         instantiation_argument: &InstantiationArgument,
         required_application_ids: Vec<UserApplicationId>,
@@ -2922,6 +2923,7 @@ where
         Ok(self
             .create_application_untyped(
                 bytecode_id.forget_abi(),
+                vm_runtime,
                 parameters,
                 instantiation_argument,
                 required_application_ids,
@@ -2944,6 +2946,7 @@ where
     pub async fn create_application_untyped(
         &self,
         bytecode_id: BytecodeId,
+        vm_runtime: VmRuntime,
         parameters: Vec<u8>,
         instantiation_argument: Vec<u8>,
         required_application_ids: Vec<UserApplicationId>,
@@ -2951,6 +2954,7 @@ where
     {
         self.execute_operation(Operation::System(SystemOperation::CreateApplication {
             bytecode_id,
+            vm_runtime,
             parameters,
             instantiation_argument,
             required_application_ids,

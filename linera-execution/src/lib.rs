@@ -26,7 +26,7 @@ mod wasm;
 
 use std::{any::Any, fmt, str::FromStr, sync::Arc};
 
-use async_graphql::SimpleObject;
+use async_graphql::{scalar, SimpleObject};
 use async_trait::async_trait;
 use committee::Epoch;
 use custom_debug_derive::Debug;
@@ -39,7 +39,7 @@ use linera_base::{
     crypto::{BcsHashable, CryptoHash},
     data_types::{
         Amount, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, DecompressionError,
-        Resources, SendMessageRequest, Timestamp, UserApplicationDescription,
+        Resources, SendMessageRequest, Timestamp,
     },
     doc_scalar, hex_debug, http,
     identifiers::{
@@ -50,6 +50,8 @@ use linera_base::{
     task,
 };
 use linera_views::{batch::Batch, views::ViewError};
+#[cfg(any(with_wasm_runtime, with_revm))]
+use linera_witty::{WitLoad, WitType};
 use serde::{Deserialize, Serialize};
 use system::OpenChainConfig;
 use thiserror::Error;
@@ -744,6 +746,7 @@ pub trait ContractRuntime: BaseRuntime {
     fn create_application(
         &mut self,
         bytecode_id: BytecodeId,
+        vm_runtime: VmRuntime,
         parameters: Vec<u8>,
         argument: Vec<u8>,
         required_application_ids: Vec<UserApplicationId>,
@@ -1312,8 +1315,21 @@ pub struct BlobState {
 }
 
 /// The runtime to use for running the application.
-#[derive(Clone, Copy, Display)]
-#[cfg_attr(with_wasm_runtime, derive(Debug, Default))]
+#[cfg(with_wasm_runtime)]
+#[derive(
+    Clone,
+    Copy,
+    Display,
+    Hash,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    WitType,
+    WitLoad,
+    Debug,
+    Default,
+)]
 pub enum WasmRuntime {
     #[cfg(with_wasmer)]
     #[default]
@@ -1329,20 +1345,76 @@ pub enum WasmRuntime {
     WasmtimeWithSanitizer,
 }
 
-#[derive(Clone, Copy, Display)]
-#[cfg_attr(with_revm, derive(Debug, Default))]
+#[cfg(with_wasm_runtime)]
+scalar!(WasmRuntime);
+
+#[cfg(with_revm)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Display,
+    Hash,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    Default,
+    WitType,
+    WitLoad,
+)]
 pub enum EvmRuntime {
-    #[cfg(with_revm)]
     #[default]
     #[display("revm")]
     Revm,
 }
 
-/// Trait used to select a default `WasmRuntime`, if one is available.
-pub trait WithWasmDefault {
-    fn with_wasm_default(self) -> Self;
+#[cfg(with_revm)]
+scalar!(EvmRuntime);
+
+#[derive(Clone, Copy, Display, Hash, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(any(with_wasm_runtime, with_revm), derive(WitType, WitLoad))]
+pub enum VmRuntime {
+    #[cfg(with_wasm_runtime)]
+    Wasm(WasmRuntime),
+    #[cfg(with_revm)]
+    Evm(EvmRuntime),
 }
 
+impl fmt::Debug for VmRuntime {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            #[cfg(with_wasm_runtime)]
+            VmRuntime::Wasm(wasm_runtime) => write!(f, "{wasm_runtime:?}"),
+            #[cfg(with_revm)]
+            VmRuntime::Evm(evm_runtime) => write!(f, "{evm_runtime:?}"),
+            #[cfg(not(any(with_wasm_runtime, with_revm)))]
+            _ => write!(f, "No virtual machine selected"),
+        }
+    }
+}
+
+#[cfg(any(with_wasm_runtime, with_revm))]
+impl Default for VmRuntime {
+    #[cfg(with_wasm_runtime)]
+    fn default() -> Self {
+        VmRuntime::Wasm(WasmRuntime::default())
+    }
+
+    #[cfg(all(not(with_wasm_runtime), with_revm))]
+    fn default() -> Self {
+        VmRuntime::Evm(EvmRuntime::default())
+    }
+}
+
+scalar!(VmRuntime);
+
+/// Trait used to select a default `WasmRuntime`, if one is available.
+pub trait WithVmDefault {
+    fn with_vm_default(self) -> Self;
+}
+
+#[cfg(with_wasm_runtime)]
 impl WasmRuntime {
     #[cfg(with_wasm_runtime)]
     pub fn default_with_sanitizer() -> Self {
@@ -1369,21 +1441,25 @@ impl WasmRuntime {
     }
 }
 
-impl WithWasmDefault for Option<WasmRuntime> {
-    fn with_wasm_default(self) -> Self {
-        #[cfg(with_wasm_runtime)]
-        {
-            Some(self.unwrap_or_default())
-        }
-        #[cfg(not(with_wasm_runtime))]
-        {
-            None
-        }
+impl WithVmDefault for Option<VmRuntime> {
+    fn with_vm_default(self) -> Self {
+        let Some(vm_runtime) = self else {
+            #[cfg(any(with_wasm_runtime, with_revm))]
+            {
+                return Some(VmRuntime::default());
+            }
+            #[cfg(not(any(with_wasm_runtime, with_revm)))]
+            {
+                return None;
+            }
+        };
+        Some(vm_runtime)
     }
 }
 
+#[cfg(with_wasm_runtime)]
 impl FromStr for WasmRuntime {
-    type Err = InvalidWasmRuntime;
+    type Err = InvalidVmRuntime;
 
     fn from_str(string: &str) -> Result<Self, Self::Err> {
         match string {
@@ -1391,15 +1467,62 @@ impl FromStr for WasmRuntime {
             "wasmer" => Ok(WasmRuntime::Wasmer),
             #[cfg(with_wasmtime)]
             "wasmtime" => Ok(WasmRuntime::Wasmtime),
-            unknown => Err(InvalidWasmRuntime(unknown.to_owned())),
+            unknown => Err(InvalidVmRuntime(unknown.to_owned())),
         }
     }
 }
 
-/// Attempts to create an invalid [`WasmRuntime`] instance from a string.
+impl FromStr for VmRuntime {
+    type Err = InvalidVmRuntime;
+
+    fn from_str(string: &str) -> Result<Self, Self::Err> {
+        match string {
+            #[cfg(with_wasmer)]
+            "wasmer" => Ok(VmRuntime::Wasm(WasmRuntime::Wasmer)),
+            #[cfg(with_wasmtime)]
+            "wasmtime" => Ok(VmRuntime::Wasm(WasmRuntime::Wasmtime)),
+            #[cfg(with_revm)]
+            "revm" => Ok(VmRuntime::Evm(EvmRuntime::Revm)),
+            unknown => Err(InvalidVmRuntime(unknown.to_owned())),
+        }
+    }
+}
+
+/// Description of the necessary information to run a user application.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Hash, Serialize)]
+pub struct UserApplicationDescription {
+    /// The unique ID of the bytecode to use for the application.
+    pub bytecode_id: BytecodeId,
+    /// The unique ID of the application's creation.
+    pub creation: MessageId,
+    /// The virtual runtime being used
+    pub vm_runtime: VmRuntime,
+    /// The parameters of the application.
+    #[serde(with = "serde_bytes")]
+    #[debug(with = "hex_debug")]
+    pub parameters: Vec<u8>,
+    /// Required dependencies.
+    pub required_application_ids: Vec<UserApplicationId>,
+}
+
+impl From<&UserApplicationDescription> for UserApplicationId {
+    fn from(description: &UserApplicationDescription) -> Self {
+        UserApplicationId {
+            bytecode_id: description.bytecode_id,
+            creation: description.creation,
+        }
+    }
+}
+
+doc_scalar!(
+    UserApplicationDescription,
+    "Description of the necessary information to run a user application"
+);
+
+/// Attempts to create an invalid [`VmRuntime`] instance from a string.
 #[derive(Clone, Debug, Error)]
-#[error("{0:?} is not a valid WebAssembly runtime")]
-pub struct InvalidWasmRuntime(String);
+#[error("{0:?} is not a valid virtual machine runtime")]
+pub struct InvalidVmRuntime(String);
 
 doc_scalar!(Operation, "An operation to be executed in a block");
 doc_scalar!(

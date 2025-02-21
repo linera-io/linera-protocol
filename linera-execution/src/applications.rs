@@ -3,7 +3,7 @@
 
 use std::collections::HashSet;
 
-use linera_base::{data_types::UserApplicationDescription, identifiers::UserApplicationId};
+use linera_base::identifiers::UserApplicationId;
 use linera_views::{
     context::Context,
     map_view::HashedMapView,
@@ -16,7 +16,7 @@ use {
     std::collections::BTreeMap,
 };
 
-use crate::SystemExecutionError;
+use crate::{SystemExecutionError, UserApplicationDescription, VmRuntime};
 
 #[cfg(test)]
 #[path = "unit_tests/applications_tests.rs"]
@@ -66,6 +66,7 @@ where
     pub async fn register_new_application(
         &mut self,
         application_id: UserApplicationId,
+        vm_runtime: VmRuntime,
         parameters: Vec<u8>,
         required_application_ids: Vec<UserApplicationId>,
     ) -> Result<(), SystemExecutionError> {
@@ -81,6 +82,7 @@ where
         let description = UserApplicationDescription {
             bytecode_id,
             parameters,
+            vm_runtime,
             creation,
             required_application_ids,
         };

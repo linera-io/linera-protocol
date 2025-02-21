@@ -3006,7 +3006,6 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
         store_config,
         &namespace,
         root_key,
-        None,
         TestClock::new(),
     )
     .await?;

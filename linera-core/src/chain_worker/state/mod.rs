@@ -14,7 +14,7 @@ use std::{
 
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
-    data_types::{Blob, BlockHeight, UserApplicationDescription},
+    data_types::{Blob, BlockHeight},
     ensure,
     hashed::Hashed,
     identifiers::{BlobId, ChainId, UserApplicationId},
@@ -27,8 +27,9 @@ use linera_chain::{
     ChainError, ChainStateView,
 };
 use linera_execution::{
-    committee::Epoch, Message, Query, QueryContext, QueryOutcome, ServiceRuntimeEndpoint,
-    SystemMessage,
+    committee::{Epoch, ValidatorName},
+    Message, Query, QueryContext, QueryOutcome, ServiceRuntimeEndpoint, SystemMessage,
+    UserApplicationDescription,
 };
 use linera_storage::{Clock as _, Storage};
 use linera_views::views::{ClonableView, ViewError};

@@ -44,9 +44,11 @@ async fn application_message_index() -> anyhow::Result<()> {
     let contract_blob = Blob::new_contract_bytecode(contract.compress());
     let service_blob = Blob::new_service_bytecode(service.compress());
     let bytecode_id = BytecodeId::new(contract_blob.id().hash, service_blob.id().hash);
+    let vm_runtime = VmRuntime::default();
 
     let operation = SystemOperation::CreateApplication {
         bytecode_id,
+        vm_runtime,
         parameters: vec![],
         instantiation_argument: vec![],
         required_application_ids: vec![],

@@ -27,7 +27,7 @@ use crate::{
     util::RespondExt,
     BytecodeId, ExecutionError, ExecutionRuntimeContext, ExecutionStateView, RawExecutionOutcome,
     RawOutgoingMessage, SystemExecutionError, SystemMessage, UserApplicationDescription,
-    UserApplicationId, UserContractCode, UserServiceCode,
+    UserApplicationId, UserContractCode, UserServiceCode, VmRuntime,
 };
 
 #[cfg(with_metrics)]
@@ -308,6 +308,7 @@ where
             CreateApplication {
                 next_message_id,
                 bytecode_id,
+                vm_runtime,
                 parameters,
                 required_application_ids,
                 callback,
@@ -317,6 +318,7 @@ where
                     .create_application(
                         next_message_id,
                         bytecode_id,
+                        vm_runtime,
                         parameters,
                         required_application_ids,
                     )
@@ -511,6 +513,7 @@ pub enum ExecutionRequest {
     CreateApplication {
         next_message_id: MessageId,
         bytecode_id: BytecodeId,
+        vm_runtime: VmRuntime,
         parameters: Vec<u8>,
         required_application_ids: Vec<UserApplicationId>,
         #[debug(skip)]

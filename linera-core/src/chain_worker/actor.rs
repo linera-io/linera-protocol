@@ -12,7 +12,7 @@ use std::{
 use custom_debug_derive::Debug;
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
-    data_types::{Blob, BlockHeight, Timestamp, UserApplicationDescription},
+    data_types::{Blob, BlockHeight, Timestamp},
     hashed::Hashed,
     identifiers::{BlobId, ChainId, UserApplicationId},
 };
@@ -22,7 +22,9 @@ use linera_chain::{
     ChainStateView,
 };
 use linera_execution::{
-    committee::Epoch, Query, QueryContext, QueryOutcome, ServiceRuntimeEndpoint, ServiceSyncRuntime,
+    committee::{Epoch, ValidatorName},
+    Query, QueryContext, QueryOutcome, ServiceRuntimeEndpoint, ServiceSyncRuntime,
+    UserApplicationDescription,
 };
 use linera_storage::Storage;
 use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
