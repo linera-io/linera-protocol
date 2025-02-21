@@ -76,7 +76,7 @@ async fn collect_pledges() {
             })
             .await;
 
-        assert_eq!(pledge_certificate.outgoing_message_count(), 3);
+        assert_eq!(pledge_certificate.outgoing_message_count(), 2);
         pledges_and_transfers.push(pledge_certificate);
     }
 
@@ -178,7 +178,7 @@ async fn cancel_successful_campaign() {
             })
             .await;
 
-        assert_eq!(pledge_certificate.outgoing_message_count(), 3);
+        assert_eq!(pledge_certificate.outgoing_message_count(), 2);
         pledges_and_transfers.push(pledge_certificate);
     }
 

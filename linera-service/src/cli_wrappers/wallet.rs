@@ -1106,6 +1106,7 @@ impl NodeService {
         &self,
         chain_id: &ChainId,
     ) -> Result<HashMap<String, String>> {
+        // uh oh
         let query = format!("query {{ applications(chainId: \"{chain_id}\") {{ id link }}}}");
         let data = self.query_node(query).await?;
         data["applications"]
