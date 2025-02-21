@@ -39,6 +39,7 @@ use linera_base::{
         Owner, UserApplicationId,
     },
     ownership::{ChainOwnership, TimeoutConfig},
+    vm::VmRuntime,
 };
 use linera_chain::{
     data_types::{
@@ -59,7 +60,7 @@ use linera_execution::{
         CREATE_APPLICATION_MESSAGE_INDEX, OPEN_CHAIN_MESSAGE_INDEX,
     },
     ExecutionError, Operation, Query, QueryOutcome, QueryResponse, SystemExecutionError,
-    SystemQuery, SystemResponse, VmRuntime,
+    SystemQuery, SystemResponse,
 };
 use linera_storage::{Clock as _, Storage};
 use linera_views::views::ViewError;
@@ -737,6 +738,7 @@ enum CheckCertificateResult {
 pub async fn create_bytecode_blobs(
     contract: Bytecode,
     service: Bytecode,
+    vm_runtime: VmRuntime,
 ) -> (Blob, Blob, BytecodeId) {
     let (compressed_contract, compressed_service) =
         tokio::task::spawn_blocking(move || (contract.compress(), service.compress()))
@@ -744,7 +746,7 @@ pub async fn create_bytecode_blobs(
             .expect("Compression should not panic");
     let contract_blob = Blob::new_contract_bytecode(compressed_contract);
     let service_blob = Blob::new_service_bytecode(compressed_service);
-    let bytecode_id = BytecodeId::new(contract_blob.id().hash, service_blob.id().hash);
+    let bytecode_id = BytecodeId::new(contract_blob.id().hash, service_blob.id().hash, vm_runtime);
     (contract_blob, service_blob, bytecode_id)
 }
 
@@ -2846,9 +2848,10 @@ where
         &self,
         contract: Bytecode,
         service: Bytecode,
+        vm_runtime: VmRuntime,
     ) -> Result<ClientOutcome<(BytecodeId, ConfirmedBlockCertificate)>, ChainClientError> {
         let (contract_blob, service_blob, bytecode_id) =
-            create_bytecode_blobs(contract, service).await;
+            create_bytecode_blobs(contract, service, vm_runtime).await;
         self.publish_bytecode_blobs(contract_blob, service_blob, bytecode_id)
             .await
     }
@@ -2912,7 +2915,6 @@ where
     >(
         &self,
         bytecode_id: BytecodeId<A, Parameters, InstantiationArgument>,
-        vm_runtime: VmRuntime,
         parameters: &Parameters,
         instantiation_argument: &InstantiationArgument,
         required_application_ids: Vec<UserApplicationId>,
@@ -2923,7 +2925,6 @@ where
         Ok(self
             .create_application_untyped(
                 bytecode_id.forget_abi(),
-                vm_runtime,
                 parameters,
                 instantiation_argument,
                 required_application_ids,
@@ -2946,7 +2947,6 @@ where
     pub async fn create_application_untyped(
         &self,
         bytecode_id: BytecodeId,
-        vm_runtime: VmRuntime,
         parameters: Vec<u8>,
         instantiation_argument: Vec<u8>,
         required_application_ids: Vec<UserApplicationId>,
@@ -2954,7 +2954,6 @@ where
     {
         self.execute_operation(Operation::System(SystemOperation::CreateApplication {
             bytecode_id,
-            vm_runtime,
             parameters,
             instantiation_argument,
             required_application_ids,

@@ -17,9 +17,10 @@ use linera_base::{
     },
     ownership::{ChainOwnership, TimeoutConfig},
     time::Duration,
+    vm::VmRuntime,
 };
 use linera_core::{client::BlanketMessagePolicy, DEFAULT_GRACE_PERIOD};
-use linera_execution::{ResourceControlPolicy, VmRuntime};
+use linera_execution::ResourceControlPolicy;
 use linera_views::store::CommonStoreConfig;
 
 #[cfg(feature = "fs")]
@@ -768,6 +769,10 @@ pub enum ClientCommand {
         /// Path to the Wasm file for the application "service" bytecode.
         service: PathBuf,
 
+        /// The virtual machine runtime to use.
+        #[arg(long)]
+        vm_runtime: Option<VmRuntime>,
+
         /// An optional chain ID to publish the bytecode. The default chain of the wallet
         /// is used otherwise.
         publisher: Option<ChainId>,
@@ -796,10 +801,6 @@ pub enum ClientCommand {
     CreateApplication {
         /// The bytecode ID of the application to create.
         bytecode_id: BytecodeId,
-
-        /// The virtual machine runtime to use.
-        #[arg(long)]
-        vm_runtime: Option<VmRuntime>,
 
         /// An optional chain ID to host the application. The default chain of the wallet
         /// is used otherwise.

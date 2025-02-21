@@ -41,6 +41,15 @@ interface service-system-api {
     record bytecode-id {
         contract-blob-hash: crypto-hash,
         service-blob-hash: crypto-hash,
+        vm-runtime: vm-runtime,
+    }
+
+    enum vm-runtime {
+        wasmer,
+        wasmtime,
+        wasmerwithsanitizer,
+        wasmtimewithsanitizer,
+        revm,
     }
 
     record chain-id {

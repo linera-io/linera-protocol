@@ -18,6 +18,7 @@ use linera_base::{
         Owner,
     },
     ownership::ChainOwnership,
+    vm::VmRuntime,
 };
 use linera_execution::{
     test_utils::{
@@ -27,7 +28,7 @@ use linera_execution::{
     BaseRuntime, ContractRuntime, ExecutionError, ExecutionOutcome, Message, MessageContext,
     Operation, OperationContext, ResourceController, SystemExecutionError,
     SystemExecutionStateView, TestExecutionRuntimeContext, TransactionOutcome, TransactionTracker,
-    UserApplicationDescription, VmRuntime,
+    UserApplicationDescription,
 };
 use linera_views::context::MemoryContext;
 use test_case::test_matrix;
@@ -660,8 +661,7 @@ impl TransferTestEndpoint {
         let vm_runtime = VmRuntime::default();
 
         UserApplicationDescription {
-            bytecode_id: BytecodeId::new(contract_id, service_id),
-            vm_runtime,
+            bytecode_id: BytecodeId::new(contract_id, service_id, vm_runtime),
             creation: MessageId {
                 chain_id: ChainId::root(1000),
                 height: BlockHeight(0),
@@ -699,6 +699,7 @@ impl TransferTestEndpoint {
             bytecode_id: BytecodeId::new(
                 CryptoHash::test_hash("recipient contract bytecode"),
                 CryptoHash::test_hash("recipient service bytecode"),
+                VmRuntime::default(),
             ),
             creation: MessageId {
                 chain_id: ChainId::root(2000),

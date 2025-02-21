@@ -21,6 +21,7 @@ use linera_base::{
         BytecodeId, ChainDescription, ChainId, Destination, MessageId, UserApplicationId,
     },
     ownership::ChainOwnership,
+    vm::{VmRuntime, WasmRuntime},
 };
 use linera_chain::{
     data_types::{BlockExecutionOutcome, OutgoingMessage},
@@ -32,7 +33,7 @@ use linera_execution::{
     system::{SystemMessage, SystemOperation},
     test_utils::SystemExecutionState,
     Message, MessageKind, Operation, OperationContext, ResourceController, TransactionTracker,
-    UserApplicationDescription, VmRuntime, WasmContractModule, WasmRuntime,
+    UserApplicationDescription, WasmContractModule,
 };
 use linera_storage::{DbStorage, Storage};
 #[cfg(feature = "dynamodb")]
@@ -127,7 +128,7 @@ where
     let contract_blob_hash = contract_blob_id.hash;
     let service_blob_hash = service_blob_id.hash;
 
-    let bytecode_id = BytecodeId::new(contract_blob_hash, service_blob_hash);
+    let bytecode_id = BytecodeId::new(contract_blob_hash, service_blob_hash, vm_runtime);
     let contract = WasmContractModule::new(contract_bytecode, wasm_runtime).await?;
 
     // Publish some bytecode.
@@ -188,7 +189,6 @@ where
     let parameters_bytes = serde_json::to_vec(&())?;
     let create_operation = SystemOperation::CreateApplication {
         bytecode_id,
-        vm_runtime,
         parameters: parameters_bytes.clone(),
         instantiation_argument: initial_value_bytes.clone(),
         required_application_ids: vec![],
@@ -203,7 +203,6 @@ where
     };
     let application_description = UserApplicationDescription {
         bytecode_id,
-        vm_runtime,
         creation: application_id.creation,
         required_application_ids: vec![],
         parameters: parameters_bytes,

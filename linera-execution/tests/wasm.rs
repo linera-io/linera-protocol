@@ -8,13 +8,13 @@ use std::sync::Arc;
 use linera_base::{
     data_types::{Amount, BlockHeight, Timestamp},
     identifiers::{Account, ChainDescription, ChainId},
+    vm::WasmRuntime,
 };
 use linera_execution::{
     test_utils::{create_dummy_user_application_description, SystemExecutionState},
     ExecutionOutcome, ExecutionRuntimeConfig, ExecutionRuntimeContext, Operation, OperationContext,
     Query, QueryContext, QueryOutcome, QueryResponse, RawExecutionOutcome, ResourceControlPolicy,
-    ResourceController, ResourceTracker, TransactionTracker, WasmContractModule, WasmRuntime,
-    WasmServiceModule,
+    ResourceController, ResourceTracker, TransactionTracker, WasmContractModule, WasmServiceModule,
 };
 use linera_views::{context::Context as _, views::View};
 use serde_json::json;

@@ -890,14 +890,18 @@ impl Runnable for Job {
             PublishBytecode {
                 contract,
                 service,
+                vm_runtime,
                 publisher,
             } => {
                 let start_time = Instant::now();
                 let publisher = publisher.unwrap_or_else(|| context.default_chain());
                 info!("Publishing bytecode on chain {}", publisher);
                 let chain_client = context.make_chain_client(publisher)?;
+                let vm_runtime = vm_runtime
+                    .with_vm_default()
+                    .expect("A virtual machine to be available");
                 let bytecode_id = context
-                    .publish_bytecode(&chain_client, contract, service)
+                    .publish_bytecode(&chain_client, contract, service, vm_runtime)
                     .await?;
                 println!("{}", bytecode_id);
                 info!(
@@ -934,7 +938,6 @@ impl Runnable for Job {
 
             CreateApplication {
                 bytecode_id,
-                vm_runtime,
                 creator,
                 json_parameters,
                 json_parameters_path,
@@ -949,9 +952,6 @@ impl Runnable for Job {
                 let parameters = read_json(json_parameters, json_parameters_path)?;
                 let argument = read_json(json_argument, json_argument_path)?;
 
-                let vm_runtime = vm_runtime
-                    .with_vm_default()
-                    .expect("A virtual machine to be available");
                 info!("Synchronizing");
                 let chain_client = chain_client;
                 context.process_inbox(&chain_client).await?;
@@ -966,7 +966,6 @@ impl Runnable for Job {
                             chain_client
                                 .create_application_untyped(
                                     bytecode_id,
-                                    vm_runtime,
                                     parameters,
                                     argument,
                                     required_application_ids.unwrap_or_default(),
@@ -1006,7 +1005,7 @@ impl Runnable for Job {
                     .expect("A virtual machine should be available");
 
                 let bytecode_id = context
-                    .publish_bytecode(&chain_client, contract, service)
+                    .publish_bytecode(&chain_client, contract, service, vm_runtime)
                     .await?;
 
                 let (application_id, _) = context
@@ -1019,7 +1018,6 @@ impl Runnable for Job {
                             chain_client
                                 .create_application_untyped(
                                     bytecode_id,
-                                    vm_runtime,
                                     parameters,
                                     argument,
                                     required_application_ids.unwrap_or_default(),
@@ -1110,7 +1108,7 @@ impl Runnable for Job {
                     let (contract_path, service_path) = project.build(name)?;
 
                     let bytecode_id = context
-                        .publish_bytecode(&chain_client, contract_path, service_path)
+                        .publish_bytecode(&chain_client, contract_path, service_path, vm_runtime)
                         .await?;
 
                     let (application_id, _) = context
@@ -1123,7 +1121,6 @@ impl Runnable for Job {
                                 chain_client
                                     .create_application_untyped(
                                         bytecode_id,
-                                        vm_runtime,
                                         parameters,
                                         argument,
                                         required_application_ids.unwrap_or_default(),

@@ -13,6 +13,7 @@ use linera_base::{
     identifiers::{Account, ChainId},
     ownership::ChainOwnership,
     time::{Duration, Instant},
+    vm::VmRuntime,
 };
 use linera_chain::types::ConfirmedBlockCertificate;
 use linera_core::{
@@ -493,6 +494,7 @@ where
         chain_client: &ChainClient<NodeProvider, S>,
         contract: PathBuf,
         service: PathBuf,
+        vm_runtime: VmRuntime,
     ) -> Result<BytecodeId, Error> {
         info!("Loading bytecode files");
         let contract_bytecode = Bytecode::load_from_file(&contract)
@@ -504,7 +506,7 @@ where
 
         info!("Publishing bytecode");
         let (contract_blob, service_blob, bytecode_id) =
-            create_bytecode_blobs(contract_bytecode, service_bytecode).await;
+            create_bytecode_blobs(contract_bytecode, service_bytecode, vm_runtime).await;
         let (bytecode_id, _) = self
             .apply_client_command(chain_client, |chain_client| {
                 let contract_blob = contract_blob.clone();

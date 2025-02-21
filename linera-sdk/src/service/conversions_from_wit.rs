@@ -8,6 +8,7 @@ use linera_base::{
     data_types::{Amount, BlockHeight, Timestamp},
     http,
     identifiers::{AccountOwner, ApplicationId, BytecodeId, ChainId, MessageId, Owner},
+    vm::{EvmRuntime, VmRuntime, WasmRuntime},
 };
 
 use super::wit::service_system_api as wit_system_api;
@@ -90,7 +91,24 @@ impl From<wit_system_api::BytecodeId> for BytecodeId {
         BytecodeId::new(
             bytecode_id.contract_blob_hash.into(),
             bytecode_id.service_blob_hash.into(),
+            bytecode_id.vm_runtime.into(),
         )
+    }
+}
+
+impl From<wit_system_api::VmRuntime> for VmRuntime {
+    fn from(vm_runtime: wit_system_api::VmRuntime) -> Self {
+        match vm_runtime {
+            wit_system_api::VmRuntime::Wasmer => VmRuntime::Wasm(WasmRuntime::Wasmer),
+            wit_system_api::VmRuntime::Wasmtime => VmRuntime::Wasm(WasmRuntime::Wasmtime),
+            wit_system_api::VmRuntime::Wasmerwithsanitizer => {
+                VmRuntime::Wasm(WasmRuntime::WasmerWithSanitizer)
+            }
+            wit_system_api::VmRuntime::Wasmtimewithsanitizer => {
+                VmRuntime::Wasm(WasmRuntime::WasmtimeWithSanitizer)
+            }
+            wit_system_api::VmRuntime::Revm => VmRuntime::Evm(EvmRuntime::Revm),
+        }
     }
 }
 

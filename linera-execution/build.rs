@@ -12,9 +12,6 @@ fn main() {
         with_revm: { feature = "revm" },
         with_wasmer: { feature = "wasmer" },
         with_wasmtime: { all(not(target_arch = "wasm32"), feature = "wasmtime") },
-
-        // If you change this, don't forget to update `WasmRuntime` and
-        // `WasmRuntime::default_with_sanitizer`
         with_wasm_runtime: { any(with_wasmer, with_wasmtime) },
     }
 }

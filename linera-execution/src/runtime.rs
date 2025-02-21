@@ -34,7 +34,7 @@ use crate::{
     BaseRuntime, BytecodeId, ContractRuntime, ExecutionError, FinalizeContext, MessageContext,
     Operation, OperationContext, QueryContext, QueryOutcome, RawExecutionOutcome, ServiceRuntime,
     TransactionTracker, UserApplicationDescription, UserApplicationId, UserContractCode,
-    UserContractInstance, UserServiceCode, UserServiceInstance, VmRuntime, MAX_EVENT_KEY_LEN,
+    UserContractInstance, UserServiceCode, UserServiceInstance, MAX_EVENT_KEY_LEN,
     MAX_STREAM_NAME_LEN,
 };
 
@@ -1444,7 +1444,6 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
     fn create_application(
         &mut self,
         bytecode_id: BytecodeId,
-        vm_runtime: VmRuntime,
         parameters: Vec<u8>,
         argument: Vec<u8>,
         required_application_ids: Vec<UserApplicationId>,
@@ -1469,7 +1468,6 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
             .send_request(|callback| ExecutionRequest::CreateApplication {
                 next_message_id: message_id,
                 bytecode_id,
-                vm_runtime,
                 parameters,
                 required_application_ids,
                 callback,

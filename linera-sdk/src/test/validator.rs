@@ -20,7 +20,6 @@ use linera_core::worker::WorkerState;
 use linera_execution::{
     committee::{Committee, Epoch},
     system::{OpenChainConfig, SystemOperation, OPEN_CHAIN_MESSAGE_INDEX},
-    VmRuntime,
 };
 use linera_storage::{DbStorage, Storage, TestClock};
 use linera_views::memory::MemoryStore;
@@ -118,7 +117,6 @@ impl TestValidator {
     /// Returns the new [`TestValidator`], the [`ApplicationId`] of the created application, and
     /// the chain on which it was created.
     pub async fn with_current_application<Abi, Parameters, InstantiationArgument>(
-        vm_runtime: VmRuntime,
         parameters: Parameters,
         instantiation_argument: InstantiationArgument,
     ) -> (TestValidator, ApplicationId<Abi>, ActiveChain)
@@ -133,13 +131,7 @@ impl TestValidator {
         let mut creator = validator.new_chain().await;
 
         let application_id = creator
-            .create_application(
-                bytecode_id,
-                vm_runtime,
-                parameters,
-                instantiation_argument,
-                vec![],
-            )
+            .create_application(bytecode_id, parameters, instantiation_argument, vec![])
             .await;
 
         (validator, application_id, creator)

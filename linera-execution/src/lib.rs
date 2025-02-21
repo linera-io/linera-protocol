@@ -24,16 +24,17 @@ mod transaction_tracker;
 mod util;
 mod wasm;
 
-use std::{any::Any, fmt, str::FromStr, sync::Arc};
+use std::{any::Any, fmt, sync::Arc};
 
-use async_graphql::{scalar, SimpleObject};
+use async_graphql::SimpleObject;
 use async_trait::async_trait;
 use committee::Epoch;
 use custom_debug_derive::Debug;
 use dashmap::DashMap;
-use derive_more::Display;
 #[cfg(web)]
 use js_sys::wasm_bindgen::JsValue;
+#[cfg(with_wasm_runtime)]
+use linera_base::vm::WasmRuntime;
 use linera_base::{
     abi::Abi,
     crypto::{BcsHashable, CryptoHash},
@@ -48,10 +49,9 @@ use linera_base::{
     },
     ownership::ChainOwnership,
     task,
+    vm::VmRuntime,
 };
 use linera_views::{batch::Batch, views::ViewError};
-#[cfg(any(with_wasm_runtime, with_revm))]
-use linera_witty::{WitLoad, WitType};
 use serde::{Deserialize, Serialize};
 use system::OpenChainConfig;
 use thiserror::Error;
@@ -746,7 +746,6 @@ pub trait ContractRuntime: BaseRuntime {
     fn create_application(
         &mut self,
         bytecode_id: BytecodeId,
-        vm_runtime: VmRuntime,
         parameters: Vec<u8>,
         argument: Vec<u8>,
         required_application_ids: Vec<UserApplicationId>,
@@ -1314,176 +1313,28 @@ pub struct BlobState {
     pub epoch: Epoch,
 }
 
-/// The runtime to use for running the application.
-#[cfg(with_wasm_runtime)]
-#[derive(
-    Clone,
-    Copy,
-    Display,
-    Hash,
-    PartialEq,
-    Eq,
-    Serialize,
-    Deserialize,
-    WitType,
-    WitLoad,
-    Debug,
-    Default,
-)]
-pub enum WasmRuntime {
-    #[cfg(with_wasmer)]
-    #[default]
-    #[display("wasmer")]
-    Wasmer,
-    #[cfg(with_wasmtime)]
-    #[cfg_attr(not(with_wasmer), default)]
-    #[display("wasmtime")]
-    Wasmtime,
-    #[cfg(with_wasmer)]
-    WasmerWithSanitizer,
-    #[cfg(with_wasmtime)]
-    WasmtimeWithSanitizer,
-}
-
-#[cfg(with_wasm_runtime)]
-scalar!(WasmRuntime);
-
-#[cfg(with_revm)]
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    Display,
-    Hash,
-    PartialEq,
-    Eq,
-    Serialize,
-    Deserialize,
-    Default,
-    WitType,
-    WitLoad,
-)]
-pub enum EvmRuntime {
-    #[default]
-    #[display("revm")]
-    Revm,
-}
-
-#[cfg(with_revm)]
-scalar!(EvmRuntime);
-
-#[derive(Clone, Copy, Display, Hash, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(any(with_wasm_runtime, with_revm), derive(WitType, WitLoad))]
-pub enum VmRuntime {
-    #[cfg(with_wasm_runtime)]
-    Wasm(WasmRuntime),
-    #[cfg(with_revm)]
-    Evm(EvmRuntime),
-}
-
-impl fmt::Debug for VmRuntime {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            #[cfg(with_wasm_runtime)]
-            VmRuntime::Wasm(wasm_runtime) => write!(f, "{wasm_runtime:?}"),
-            #[cfg(with_revm)]
-            VmRuntime::Evm(evm_runtime) => write!(f, "{evm_runtime:?}"),
-            #[cfg(not(any(with_wasm_runtime, with_revm)))]
-            _ => write!(f, "No virtual machine selected"),
-        }
-    }
-}
-
-#[cfg(any(with_wasm_runtime, with_revm))]
-impl Default for VmRuntime {
-    #[cfg(with_wasm_runtime)]
-    fn default() -> Self {
-        VmRuntime::Wasm(WasmRuntime::default())
-    }
-
-    #[cfg(all(not(with_wasm_runtime), with_revm))]
-    fn default() -> Self {
-        VmRuntime::Evm(EvmRuntime::default())
-    }
-}
-
-scalar!(VmRuntime);
-
-/// Trait used to select a default `WasmRuntime`, if one is available.
+/// Trait used to select a default `VmRuntime`, if one is available.
 pub trait WithVmDefault {
     fn with_vm_default(self) -> Self;
 }
 
-#[cfg(with_wasm_runtime)]
-impl WasmRuntime {
-    #[cfg(with_wasm_runtime)]
-    pub fn default_with_sanitizer() -> Self {
-        cfg_if::cfg_if! {
-            if #[cfg(with_wasmer)] {
-                WasmRuntime::WasmerWithSanitizer
-            } else if #[cfg(with_wasmtime)] {
-                WasmRuntime::WasmtimeWithSanitizer
-            } else {
-                compile_error!("BUG: Wasm runtime unhandled in `WasmRuntime::default_with_sanitizer`")
-            }
-        }
-    }
-
-    pub fn needs_sanitizer(self) -> bool {
-        match self {
-            #[cfg(with_wasmer)]
-            WasmRuntime::WasmerWithSanitizer => true,
-            #[cfg(with_wasmtime)]
-            WasmRuntime::WasmtimeWithSanitizer => true,
-            #[cfg(with_wasm_runtime)]
-            _ => false,
-        }
-    }
-}
-
 impl WithVmDefault for Option<VmRuntime> {
     fn with_vm_default(self) -> Self {
-        let Some(vm_runtime) = self else {
-            #[cfg(any(with_wasm_runtime, with_revm))]
-            {
-                return Some(VmRuntime::default());
+        match self {
+            Some(vm_runtime) => Some(vm_runtime),
+            None => {
+                cfg_if::cfg_if! {
+                    if #[cfg(with_wasmer)] {
+                        Some(VmRuntime::Wasm(WasmRuntime::Wasmer))
+                    } else if #[cfg(with_wasmtime)] {
+                        Some(VmRuntime::Wasm(WasmRuntime::Wasmtime))
+                    } else if #[cfg(with_revm)] {
+                        Some(VmRuntime::Evm(EvmRuntime::Revm))
+                    } else {
+                        None
+                    }
+                }
             }
-            #[cfg(not(any(with_wasm_runtime, with_revm)))]
-            {
-                return None;
-            }
-        };
-        Some(vm_runtime)
-    }
-}
-
-#[cfg(with_wasm_runtime)]
-impl FromStr for WasmRuntime {
-    type Err = InvalidVmRuntime;
-
-    fn from_str(string: &str) -> Result<Self, Self::Err> {
-        match string {
-            #[cfg(with_wasmer)]
-            "wasmer" => Ok(WasmRuntime::Wasmer),
-            #[cfg(with_wasmtime)]
-            "wasmtime" => Ok(WasmRuntime::Wasmtime),
-            unknown => Err(InvalidVmRuntime(unknown.to_owned())),
-        }
-    }
-}
-
-impl FromStr for VmRuntime {
-    type Err = InvalidVmRuntime;
-
-    fn from_str(string: &str) -> Result<Self, Self::Err> {
-        match string {
-            #[cfg(with_wasmer)]
-            "wasmer" => Ok(VmRuntime::Wasm(WasmRuntime::Wasmer)),
-            #[cfg(with_wasmtime)]
-            "wasmtime" => Ok(VmRuntime::Wasm(WasmRuntime::Wasmtime)),
-            #[cfg(with_revm)]
-            "revm" => Ok(VmRuntime::Evm(EvmRuntime::Revm)),
-            unknown => Err(InvalidVmRuntime(unknown.to_owned())),
         }
     }
 }
@@ -1495,8 +1346,6 @@ pub struct UserApplicationDescription {
     pub bytecode_id: BytecodeId,
     /// The unique ID of the application's creation.
     pub creation: MessageId,
-    /// The virtual runtime being used
-    pub vm_runtime: VmRuntime,
     /// The parameters of the application.
     #[serde(with = "serde_bytes")]
     #[debug(with = "hex_debug")]
@@ -1518,11 +1367,6 @@ doc_scalar!(
     UserApplicationDescription,
     "Description of the necessary information to run a user application"
 );
-
-/// Attempts to create an invalid [`VmRuntime`] instance from a string.
-#[derive(Clone, Debug, Error)]
-#[error("{0:?} is not a valid virtual machine runtime")]
-pub struct InvalidVmRuntime(String);
 
 doc_scalar!(Operation, "An operation to be executed in a block");
 doc_scalar!(

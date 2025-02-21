@@ -16,12 +16,13 @@ use linera_base::{
     crypto::{AccountPublicKey, AccountSecretKey},
     data_types::{Blob, BlockHeight, Bytecode, CompressedBytecode},
     identifiers::{ApplicationId, BytecodeId, ChainDescription, ChainId, MessageId},
+    vm::VmRuntime,
 };
 use linera_chain::{types::ConfirmedBlockCertificate, ChainError, ChainExecutionContext};
 use linera_core::{data_types::ChainInfoQuery, worker::WorkerError};
 use linera_execution::{
     system::{SystemExecutionError, SystemOperation, CREATE_APPLICATION_MESSAGE_INDEX},
-    ExecutionError, Query, QueryOutcome, QueryResponse, VmRuntime,
+    ExecutionError, Query, QueryOutcome, QueryResponse,
 };
 use linera_storage::Storage as _;
 use serde::Serialize;
@@ -214,8 +215,9 @@ impl ActiveChain {
         let service_blob = Blob::new_service_bytecode(service);
         let contract_blob_hash = contract_blob.id().hash;
         let service_blob_hash = service_blob.id().hash;
+        let vm_runtime = VmRuntime::default();
 
-        let bytecode_id = BytecodeId::new(contract_blob_hash, service_blob_hash);
+        let bytecode_id = BytecodeId::new(contract_blob_hash, service_blob_hash, vm_runtime);
 
         let certificate = self
             .add_block_with_blobs(
@@ -353,7 +355,6 @@ impl ActiveChain {
     pub async fn create_application<Abi, Parameters, InstantiationArgument>(
         &mut self,
         bytecode_id: BytecodeId<Abi, Parameters, InstantiationArgument>,
-        vm_runtime: VmRuntime,
         parameters: Parameters,
         instantiation_argument: InstantiationArgument,
         required_application_ids: Vec<ApplicationId>,
@@ -374,7 +375,6 @@ impl ActiveChain {
             .add_block(|block| {
                 block.with_system_operation(SystemOperation::CreateApplication {
                     bytecode_id: bytecode_id.forget_abi(),
-                    vm_runtime,
                     parameters,
                     instantiation_argument,
                     required_application_ids,

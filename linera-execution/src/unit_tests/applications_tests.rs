@@ -5,11 +5,11 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::BlockHeight,
     identifiers::{BytecodeId, ChainId, MessageId},
+    vm::VmRuntime,
 };
 
 use super::{
     ApplicationRegistry, ApplicationRegistryView, UserApplicationDescription, UserApplicationId,
-    VmRuntime,
 };
 
 fn message_id(index: u32) -> MessageId {
@@ -24,6 +24,7 @@ fn bytecode_id() -> BytecodeId {
     BytecodeId::new(
         CryptoHash::test_hash("contract"),
         CryptoHash::test_hash("service"),
+        VmRuntime::default(),
     )
 }
 
@@ -35,10 +36,8 @@ fn app_id(index: u32) -> UserApplicationId {
 }
 
 fn app_description(index: u32, deps: Vec<u32>) -> UserApplicationDescription {
-    let vm_runtime = VmRuntime::default();
     UserApplicationDescription {
         bytecode_id: bytecode_id(),
-        vm_runtime,
         creation: message_id(index),
         parameters: vec![],
         required_application_ids: deps.into_iter().map(app_id).collect(),

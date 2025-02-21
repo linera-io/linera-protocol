@@ -19,7 +19,7 @@ use tracing::log;
 use super::WasmExecutionError;
 use crate::{
     BaseRuntime, BytecodeId, ContractRuntime, ContractSyncRuntimeHandle, ExecutionError,
-    ServiceRuntime, ServiceSyncRuntimeHandle, VmRuntime,
+    ServiceRuntime, ServiceSyncRuntimeHandle,
 };
 
 /// Common host data used as the `UserData` of the system API implementations.
@@ -326,7 +326,6 @@ where
     fn create_application(
         caller: &mut Caller,
         bytecode_id: BytecodeId,
-        vm_runtime: VmRuntime,
         parameters: Vec<u8>,
         argument: Vec<u8>,
         required_application_ids: Vec<ApplicationId>,
@@ -334,13 +333,7 @@ where
         caller
             .user_data_mut()
             .runtime
-            .create_application(
-                bytecode_id,
-                vm_runtime,
-                parameters,
-                argument,
-                required_application_ids,
-            )
+            .create_application(bytecode_id, parameters, argument, required_application_ids)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 

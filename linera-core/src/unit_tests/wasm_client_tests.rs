@@ -22,6 +22,7 @@ use linera_base::{
     data_types::{Amount, Bytecode, Event, OracleResponse},
     identifiers::{AccountOwner, ApplicationId, Destination, Owner, StreamId, StreamName},
     ownership::{ChainOwnership, TimeoutConfig},
+    vm::{VmRuntime, WasmRuntime},
 };
 use linera_chain::{
     data_types::{MessageAction, OutgoingMessage},
@@ -29,7 +30,7 @@ use linera_chain::{
 };
 use linera_execution::{
     ExecutionError, Message, MessageKind, Operation, QueryOutcome, ResourceControlPolicy,
-    SystemMessage, UserApplicationDescription, VmRuntime, WasmRuntime,
+    SystemMessage, UserApplicationDescription,
 };
 use serde_json::json;
 use test_case::test_case;
@@ -122,7 +123,7 @@ where
     let creator = builder.add_root_chain(1, Amount::ONE).await?;
 
     let (bytecode_id, _cert) = publisher
-        .publish_bytecode(contract_bytecode, service_bytecode)
+        .publish_bytecode(contract_bytecode, service_bytecode, vm_runtime)
         .await
         .unwrap()
         .unwrap();
@@ -137,7 +138,7 @@ where
 
     let initial_value = 10_u64;
     let (application_id, _) = creator
-        .create_application(bytecode_id, vm_runtime, &(), &initial_value, vec![])
+        .create_application(bytecode_id, &(), &initial_value, vec![])
         .await
         .unwrap()
         .unwrap();
@@ -170,7 +171,7 @@ where
     let small_bytecode = Bytecode::new(vec![]);
     // Publishing bytecode that exceeds the limit fails.
     let result = publisher
-        .publish_bytecode(large_bytecode.clone(), small_bytecode.clone())
+        .publish_bytecode(large_bytecode.clone(), small_bytecode.clone(), vm_runtime)
         .await;
     assert_matches!(
         result,
@@ -179,7 +180,7 @@ where
         ))) if matches!(*error, ExecutionError::BytecodeTooLarge)
     );
     let result = publisher
-        .publish_bytecode(small_bytecode, large_bytecode)
+        .publish_bytecode(small_bytecode, large_bytecode, vm_runtime)
         .await;
     assert_matches!(
         result,
@@ -295,6 +296,7 @@ where
             .publish_bytecode(
                 Bytecode::load_from_file(contract_path).await?,
                 Bytecode::load_from_file(service_path).await?,
+                vm_runtime,
             )
             .await
             .unwrap()
@@ -308,6 +310,7 @@ where
             .publish_bytecode(
                 Bytecode::load_from_file(contract_path).await?,
                 Bytecode::load_from_file(service_path).await?,
+                vm_runtime,
             )
             .await
             .unwrap()
@@ -320,14 +323,13 @@ where
     creator.synchronize_from_validators().await.unwrap();
     let initial_value = 10_u64;
     let (application_id1, _) = creator
-        .create_application(bytecode_id1, vm_runtime, &(), &initial_value, vec![])
+        .create_application(bytecode_id1, &(), &initial_value, vec![])
         .await
         .unwrap()
         .unwrap();
     let (application_id2, certificate) = creator
         .create_application(
             bytecode_id2,
-            vm_runtime,
             &application_id1,
             &(),
             vec![application_id1.forget_abi()],
@@ -557,6 +559,7 @@ where
             .publish_bytecode(
                 Bytecode::load_from_file(contract_path).await?,
                 Bytecode::load_from_file(service_path).await?,
+                vm_runtime,
             )
             .await
             .unwrap()
@@ -573,7 +576,7 @@ where
     let state = fungible::InitialState { accounts };
     let params = fungible::Parameters::new("FUN");
     let (application_id, _cert) = sender
-        .create_application(bytecode_id, vm_runtime, &params, &state, vec![])
+        .create_application(bytecode_id, &params, &state, vec![])
         .await
         .unwrap()
         .unwrap();
@@ -761,6 +764,7 @@ where
             .publish_bytecode(
                 Bytecode::load_from_file(contract_path).await?,
                 Bytecode::load_from_file(service_path).await?,
+                vm_runtime,
             )
             .await
             .unwrap()
@@ -769,7 +773,7 @@ where
     let bytecode_id = bytecode_id.with_abi::<social::SocialAbi, (), ()>();
 
     let (application_id, _cert) = receiver
-        .create_application(bytecode_id, vm_runtime, &(), &(), vec![])
+        .create_application(bytecode_id, &(), &(), vec![])
         .await
         .unwrap()
         .unwrap();
@@ -919,6 +923,7 @@ async fn test_memory_fuel_limit(wasm_runtime: WasmRuntime) -> anyhow::Result<()>
         .publish_bytecode(
             Bytecode::load_from_file(contract_path).await?,
             Bytecode::load_from_file(service_path).await?,
+            vm_runtime,
         )
         .await
         .unwrap()
@@ -927,7 +932,7 @@ async fn test_memory_fuel_limit(wasm_runtime: WasmRuntime) -> anyhow::Result<()>
 
     let initial_value = 10_u64;
     let (application_id, _) = publisher
-        .create_application(bytecode_id, vm_runtime, &(), &initial_value, vec![])
+        .create_application(bytecode_id, &(), &initial_value, vec![])
         .await
         .unwrap()
         .unwrap();

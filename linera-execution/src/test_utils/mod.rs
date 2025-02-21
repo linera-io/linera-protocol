@@ -50,8 +50,11 @@ pub fn create_dummy_user_application_description(
     let vm_runtime = VmRuntime::default();
     (
         UserApplicationDescription {
-            bytecode_id: BytecodeId::new(contract_blob.id().hash, service_blob.id().hash),
-            vm_runtime,
+            bytecode_id: BytecodeId::new(
+                contract_blob.id().hash,
+                service_blob.id().hash,
+                vm_runtime,
+            ),
             creation: MessageId {
                 chain_id,
                 height: BlockHeight(index),

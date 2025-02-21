@@ -12,6 +12,9 @@ repository.workspace = true
 version.workspace = true
 
 [features]
+wasmer = []
+wasmtime = []
+revm = []
 metrics = ["prometheus"]
 reqwest = ["dep:reqwest"]
 test = ["test-strategy", "proptest"]
@@ -39,6 +42,7 @@ bcs.workspace = true
 cfg-if.workspace = true
 chrono.workspace = true
 custom_debug_derive.workspace = true
+derive_more = { workspace = true, features = ["display"] }
 ed25519-dalek.workspace = true
 futures.workspace = true
 getrandom = { workspace = true, optional = true }
