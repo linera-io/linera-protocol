@@ -113,7 +113,6 @@ impl Faucet {
         );
 
         #[derive(serde::Deserialize)]
-        #[serde(rename_all = "camelCase")]
         struct Response {
             claim: ClaimOutcome,
         }
