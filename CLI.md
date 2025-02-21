@@ -40,6 +40,8 @@ This document contains the help content for the `linera` command-line program.
 * [`linera wallet show`↴](#linera-wallet-show)
 * [`linera wallet set-default`↴](#linera-wallet-set-default)
 * [`linera wallet init`↴](#linera-wallet-init)
+* [`linera wallet request-chain`↴](#linera-wallet-request-chain)
+* [`linera wallet follow-chain`↴](#linera-wallet-follow-chain)
 * [`linera wallet forget-keys`↴](#linera-wallet-forget-keys)
 * [`linera wallet forget-chain`↴](#linera-wallet-forget-chain)
 * [`linera project`↴](#linera-project)
@@ -744,7 +746,9 @@ Show the contents of the wallet
 * `show` — Show the contents of the wallet
 * `set-default` — Change the wallet default chain
 * `init` — Initialize a wallet from the genesis configuration
-* `forget-keys` — Forgets the specified chain's keys
+* `request-chain` — Request a chain from a faucet and add it to the wallet
+* `follow-chain` — Add a new followed chain (a chain without keypair) to the follow
+* `forget-keys` — Forgets the specified chain's keys. The chain will still be followed by the wallet
 * `forget-chain` — Forgets the specified chain, including the associated key pair
 
 
@@ -794,9 +798,34 @@ Initialize a wallet from the genesis configuration
 
 
 
+## `linera wallet request-chain`
+
+Request a chain from a faucet and add it to the wallet
+
+**Usage:** `linera wallet request-chain [OPTIONS] --faucet <FAUCET>`
+
+###### **Options:**
+
+* `--faucet <FAUCET>` — The address of a faucet
+* `--set-default` — Whether this chain should become the default chain
+
+
+
+## `linera wallet follow-chain`
+
+Add a new followed chain (a chain without keypair) to the follow
+
+**Usage:** `linera wallet follow-chain <CHAIN_ID>`
+
+###### **Arguments:**
+
+* `<CHAIN_ID>` — The chain ID
+
+
+
 ## `linera wallet forget-keys`
 
-Forgets the specified chain's keys
+Forgets the specified chain's keys. The chain will still be followed by the wallet
 
 **Usage:** `linera wallet forget-keys <CHAIN_ID>`
 
