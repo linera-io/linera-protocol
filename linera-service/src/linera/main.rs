@@ -164,9 +164,10 @@ impl Runnable for Job {
                     time_total.as_millis()
                 );
                 debug!("{:?}", certificate);
-                // Print the new chain ID and message ID on stdout for scripting purposes.
+                // Print the new chain ID, message ID, and owner on stdout for scripting purposes.
                 println!("{}", message_id);
                 println!("{}", ChainId::child(message_id));
+                println!("{}", new_owner);
             }
 
             OpenMultiOwnerChain {
