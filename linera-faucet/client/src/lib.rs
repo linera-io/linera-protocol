@@ -92,15 +92,12 @@ impl Faucet {
 
     pub async fn version_info(&self) -> Result<VersionInfo, Error> {
         #[derive(serde::Deserialize)]
-        #[serde(rename_all = "camelCase")]
         struct Response {
             version: VersionInfo,
         }
 
         Ok(self
-            .query::<Response>(
-                "query { version { crateVersion gitCommit gitDirty rpcHash graphqlHash witHash } }",
-            )
+            .query::<Response>("query { version }")
             .await?
             .version)
     }
