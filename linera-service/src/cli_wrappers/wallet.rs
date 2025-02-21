@@ -359,7 +359,7 @@ impl ClientWrapper {
     /// Runs `linera wallet request-chain`.
     pub async fn request_chain(&self, faucet: &Faucet, set_default: bool) -> Result<ClaimOutcome> {
         let mut command = self.command().await?;
-        command.args(["wallet", "request_chain", "--faucet", faucet.url()]);
+        command.args(["wallet", "request-chain", "--faucet", faucet.url()]);
         if set_default {
             command.arg("--set-default");
         }
