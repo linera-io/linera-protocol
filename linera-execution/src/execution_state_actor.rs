@@ -397,6 +397,7 @@ where
                     .headers(headers)
                     .send()
                     .await?;
+
                 callback.respond(http::Response::from_reqwest(response).await?);
             }
 
@@ -427,7 +428,7 @@ where
         let this = tokio::sync::RwLock::with_max_readers(self, 4);
         let mut tasks = FuturesUnordered::new();
 
-        'it: loop {
+        loop {
             tokio::select! {
 
                 biased;
@@ -437,10 +438,10 @@ where
                 },
 
                 Some(res) = tasks.next() => {
-                    if let Err(e) = res { return Err(e) }
+                    res?;
                 },
 
-                else => break 'it,
+                else => break,
             }
         }
 

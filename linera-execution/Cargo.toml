@@ -79,12 +79,12 @@ wasmparser = { workspace = true, optional = true }
 wasmtime = { workspace = true, optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-tokio = { workspace = true, features = ["rt-multi-thread"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 wasmer = { workspace = true, optional = true, features = ["cranelift", "singlepass"] }
 wasmer-compiler-singlepass.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-tokio = { workspace = true, features = ["rt"] }
+tokio = { workspace = true, features = ["rt", "macros"] }
 wasmer = { workspace = true, optional = true, features = ["js-default"] }
 
 [dev-dependencies]
@@ -98,7 +98,7 @@ proptest.workspace = true
 test-case.workspace = true
 test-log = { workspace = true, features = ["trace"] }
 test-strategy.workspace = true
-tokio = { workspace = true, features = ["rt", "test-util"] }
+tokio = { workspace = true, features = ["rt", "test-util", "macros"] }
 tracing-subscriber = { workspace = true, features = ["fmt"] }
 wasmer = { workspace = true, features = ["singlepass", "wat"] }
 
