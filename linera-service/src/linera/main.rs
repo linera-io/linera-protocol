@@ -1676,7 +1676,7 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
             NetCommand::Helper => {
                 info!("You may append the following script to your `~/.bash_profile` or `source` it when needed.");
                 info!(
-                    "This will install a function `linera_spawn_and_read_wallet_variables` to facilitate \
+                    "This will install several functions to facilitate \
                        testing with a local Linera network"
                 );
                 println!("{}", include_str!("../../template/linera_net_helper.sh"));
