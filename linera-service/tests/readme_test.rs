@@ -33,7 +33,7 @@ use tokio::process::Command;
 #[test_case::test_case("../examples/rfq" ; "requests for quotes")]
 #[test_case::test_case("../examples/social" ; "social")]
 #[test_log::test(tokio::test)]
-async fn test_script_in_readme_with_storage_service(path: &str) -> std::io::Result<()> {
+async fn test_script_in_readme(path: &str) -> std::io::Result<()> {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {} for path {}", test_name!(), path);
 
