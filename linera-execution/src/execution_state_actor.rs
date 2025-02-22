@@ -24,10 +24,7 @@ use linera_views::{batch::Batch, context::Context, views::View};
 use oneshot::Sender;
 #[cfg(with_metrics)]
 use prometheus::HistogramVec;
-use reqwest::{
-    header::{HeaderMap, CONTENT_TYPE},
-    Client,
-};
+use reqwest::{header::HeaderMap, Client};
 use tokio::sync::RwLock;
 
 use crate::{
@@ -285,8 +282,7 @@ where
                 batch,
                 callback,
             } => {
-                let _view = this
-                    .write()
+                this.write()
                     .await
                     .users
                     .try_load_entry_mut(&id)
@@ -441,13 +437,10 @@ where
                 },
 
                 Some(res) = tasks.next() => {
-                    match res {
-                        Err(e) => return Err(e),
-                        Ok(_) => {()},
-                    }
+                    if let Err(e) = res { return Err(e) }
                 },
 
-                else => break 'it (),
+                else => break 'it,
             }
         }
 
