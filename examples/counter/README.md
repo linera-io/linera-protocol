@@ -18,7 +18,7 @@ application would give us 4 (1+3 = 4).
 
 Before getting started, make sure that the binary tools `linera*` corresponding to
 your version of `linera-sdk` are in your PATH. For scripting purposes, we also assume
-that the BASH function `linera_spawn_and_read_wallet_variables` is defined.
+that the BASH function `linera_spawn` is defined.
 
 From the root of Linera repository, this can be achieved as follows:
 
@@ -27,18 +27,29 @@ export PATH="$PWD/target/debug:$PATH"
 source /dev/stdin <<<"$(linera net helper 2>/dev/null)"
 ```
 
-To start the local Linera network:
+Next, start the local Linera network and run a faucet:
 
 ```bash
-linera_spawn_and_read_wallet_variables linera net up --testing-prng-seed 37
+FAUCET_PORT=8079
+FAUCET_URL=http://localhost:$FAUCET_PORT
+linera_spawn linera net up --with-faucet --faucet-port $FAUCET_PORT
+
+# If you're using a testnet, run this instead:
+#   LINERA_TMP_DIR=$(mktemp -d)
+#   FAUCET_URL=https://faucet.testnet-XXX.linera.net  # for some value XXX
 ```
 
-We use the test-only CLI option `--testing-prng-seed` to make keys deterministic and simplify our
-explanation.
+Create the user wallet and add chains to it:
 
 ```bash
-CHAIN_1=aee928d4bf3880353b4a3cd9b6f88e6cc6e5ed050860abae439e7782e9b2dfe8
-OWNER_1=de166237331a2966d8cf6778e81a8c007b4084be80dc1e0409d51f216c1deaa1
+export LINERA_WALLET="$LINERA_TMP_DIR/wallet.json"
+export LINERA_STORAGE="rocksdb:$LINERA_TMP_DIR/client.db"
+
+linera wallet init --faucet $FAUCET_URL
+
+INFO_1=($(linera wallet request-chain --faucet $FAUCET_URL))
+CHAIN_1="${INFO_1[0]}"
+OWNER_1="${INFO_1[3]}"
 ```
 
 Now, compile the `counter` application WebAssembly binaries, publish and create an application instance.
