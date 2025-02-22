@@ -24,7 +24,10 @@ use linera_views::{batch::Batch, context::Context, views::View};
 use oneshot::Sender;
 #[cfg(with_metrics)]
 use prometheus::HistogramVec;
-use reqwest::{header::CONTENT_TYPE, header::HeaderMap, Client};
+use reqwest::{
+    header::{HeaderMap, CONTENT_TYPE},
+    Client,
+};
 use tokio::sync::RwLock;
 
 use crate::{
