@@ -351,9 +351,9 @@ impl<'de> Deserialize<'de> for Ed25519Signature {
         } else {
             #[derive(Deserialize)]
             #[serde(rename = "Ed25519Signature")]
-            struct Foo(dalek::Signature);
+            struct Signature(dalek::Signature);
 
-            let value = Foo::deserialize(deserializer)?;
+            let value = Signature::deserialize(deserializer)?;
             Ok(Self(value.0))
         }
     }
