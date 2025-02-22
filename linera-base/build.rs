@@ -8,7 +8,9 @@ fn main() {
         with_metrics: { all(not(target_arch = "wasm32"), feature = "metrics") },
         with_reqwest: { feature = "reqwest" },
         with_testing: { any(test, feature = "test") },
-
+        with_revm: { feature = "revm" },
+        with_wasmer: { feature = "wasmer" },
+        with_wasmtime: { all(not(target_arch = "wasm32"), feature = "wasmtime") },
         // the old version of `getrandom` we pin here is available on all targets, but
         // using it will panic if no suitable source of entropy is found
         with_getrandom: { any(web, not(target_arch = "wasm32")) },

@@ -13,29 +13,29 @@ use async_trait::async_trait;
 use dashmap::{mapref::entry::Entry, DashMap};
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Amount, Blob, BlockHeight, TimeDelta, Timestamp, UserApplicationDescription},
+    data_types::{Amount, Blob, BlockHeight, CompressedBytecode, TimeDelta, Timestamp},
     hashed::Hashed,
-    identifiers::{BlobId, ChainDescription, ChainId, EventId, Owner, UserApplicationId},
+    identifiers::{BlobId, BlobType, ChainDescription, ChainId, EventId, Owner, UserApplicationId},
     ownership::ChainOwnership,
+    vm::VmRuntime,
 };
 use linera_chain::{
     types::{ConfirmedBlock, ConfirmedBlockCertificate},
     ChainError, ChainStateView,
 };
+#[cfg(with_revm)]
+use linera_execution::revm::{EvmContractModule, EvmServiceModule};
 use linera_execution::{
     committee::{Committee, Epoch},
     system::SystemChannel,
     BlobState, ChannelSubscription, ExecutionError, ExecutionRuntimeConfig,
-    ExecutionRuntimeContext, UserContractCode, UserServiceCode, WasmRuntime,
+    ExecutionRuntimeContext, UserApplicationDescription, UserContractCode, UserServiceCode,
 };
+#[cfg(with_wasm_runtime)]
+use linera_execution::{WasmContractModule, WasmServiceModule};
 use linera_views::{
     context::Context,
     views::{CryptoHashView, RootView, ViewError},
-};
-#[cfg(with_wasm_runtime)]
-use {
-    linera_base::{data_types::CompressedBytecode, identifiers::BlobType},
-    linera_execution::{WasmContractModule, WasmServiceModule},
 };
 
 #[cfg(with_testing)]
@@ -257,19 +257,12 @@ pub trait Storage: Sized {
         Ok(())
     }
 
-    /// Selects the WebAssembly runtime to use for applications (if any).
-    fn wasm_runtime(&self) -> Option<WasmRuntime>;
-
     /// Creates a [`UserContractCode`] instance using the bytecode in storage referenced
     /// by the `application_description`.
-    #[cfg(with_wasm_runtime)]
     async fn load_contract(
         &self,
         application_description: &UserApplicationDescription,
     ) -> Result<UserContractCode, ExecutionError> {
-        let Some(wasm_runtime) = self.wasm_runtime() else {
-            panic!("A Wasm runtime is required to load user applications.");
-        };
         let contract_bytecode_blob_id = BlobId::new(
             application_description.bytecode_id.contract_blob_hash,
             BlobType::ContractBytecode,
@@ -278,41 +271,53 @@ pub trait Storage: Sized {
         let compressed_contract_bytecode = CompressedBytecode {
             compressed_bytes: contract_blob.into_bytes().to_vec(),
         };
-        let contract_bytecode =
+        let _contract_bytecode =
             linera_base::task::Blocking::<linera_base::task::NoInput, _>::spawn(
                 move |_| async move { compressed_contract_bytecode.decompress() },
             )
             .await
             .join()
             .await?;
-        Ok(WasmContractModule::new(contract_bytecode, wasm_runtime)
-            .await?
-            .into())
-    }
-
-    #[cfg(not(with_wasm_runtime))]
-    #[allow(clippy::diverging_sub_expression)]
-    async fn load_contract(
-        &self,
-        _application_description: &UserApplicationDescription,
-    ) -> Result<UserContractCode, ExecutionError> {
-        panic!(
-            "A Wasm runtime is required to load user applications. \
-            Please enable the `wasmer` or the `wasmtime` feature flags \
-            when compiling `linera-storage`."
-        );
+        match application_description.bytecode_id.vm_runtime {
+            VmRuntime::Wasm(_wasm_runtime) => {
+                cfg_if::cfg_if! {
+                    if #[cfg(with_wasm_runtime)] {
+                        Ok(WasmContractModule::new(_contract_bytecode, _wasm_runtime)
+                           .await?
+                           .into())
+                    } else {
+                        panic!(
+                            "A Wasm runtime is required to load user applications. \
+                             Please enable the `wasmer` or the `wasmtime` feature flags \
+                             when compiling `linera-storage`."
+                        );
+                    }
+                }
+            }
+            VmRuntime::Evm(_evm_runtime) => {
+                cfg_if::cfg_if! {
+                    if #[cfg(with_revm)] {
+                        Ok(EvmContractModule::new(_contract_bytecode, _evm_runtime)
+                           .await?
+                           .into())
+                    } else {
+                        panic!(
+                            "An Evm runtime is required to load user applications. \
+                             Please enable the `revm` feature flags \
+                             when compiling `linera-storage`."
+                        );
+                    }
+                }
+            }
+        }
     }
 
     /// Creates a [`linera-sdk::UserContract`] instance using the bytecode in storage referenced
     /// by the `application_description`.
-    #[cfg(with_wasm_runtime)]
     async fn load_service(
         &self,
         application_description: &UserApplicationDescription,
     ) -> Result<UserServiceCode, ExecutionError> {
-        let Some(wasm_runtime) = self.wasm_runtime() else {
-            panic!("A Wasm runtime is required to load user applications.");
-        };
         let service_bytecode_blob_id = BlobId::new(
             application_description.bytecode_id.service_blob_hash,
             BlobType::ServiceBytecode,
@@ -321,28 +326,45 @@ pub trait Storage: Sized {
         let compressed_service_bytecode = CompressedBytecode {
             compressed_bytes: service_blob.into_bytes().to_vec(),
         };
-        let service_bytecode = linera_base::task::Blocking::<linera_base::task::NoInput, _>::spawn(
-            move |_| async move { compressed_service_bytecode.decompress() },
-        )
-        .await
-        .join()
-        .await?;
-        Ok(WasmServiceModule::new(service_bytecode, wasm_runtime)
-            .await?
-            .into())
-    }
-
-    #[cfg(not(with_wasm_runtime))]
-    #[allow(clippy::diverging_sub_expression)]
-    async fn load_service(
-        &self,
-        _application_description: &UserApplicationDescription,
-    ) -> Result<UserServiceCode, ExecutionError> {
-        panic!(
-            "A Wasm runtime is required to load user applications. \
-            Please enable the `wasmer` or the `wasmtime` feature flags \
-            when compiling `linera-storage`."
-        );
+        let _service_bytecode =
+            linera_base::task::Blocking::<linera_base::task::NoInput, _>::spawn(
+                move |_| async move { compressed_service_bytecode.decompress() },
+            )
+            .await
+            .join()
+            .await?;
+        match application_description.bytecode_id.vm_runtime {
+            VmRuntime::Wasm(_wasm_runtime) => {
+                cfg_if::cfg_if! {
+                    if #[cfg(with_wasm_runtime)] {
+                        Ok(WasmServiceModule::new(_service_bytecode, _wasm_runtime)
+                           .await?
+                           .into())
+                    } else {
+                        panic!(
+                            "A Wasm runtime is required to load user applications. \
+                             Please enable the `wasmer` or the `wasmtime` feature flags \
+                             when compiling `linera-storage`."
+                        );
+                    }
+                }
+            }
+            VmRuntime::Evm(_evm_runtime) => {
+                cfg_if::cfg_if! {
+                    if #[cfg(with_revm)] {
+                        Ok(EvmServiceModule::new(_service_bytecode, _evm_runtime)
+                           .await?
+                           .into())
+                    } else {
+                        panic!(
+                            "An Evm runtime is required to load user applications. \
+                             Please enable the `revm` feature flags \
+                             when compiling `linera-storage`."
+                        );
+                    }
+                }
+            }
+        }
     }
 }
 

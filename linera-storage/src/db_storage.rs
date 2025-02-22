@@ -19,7 +19,6 @@ use linera_chain::{
 };
 use linera_execution::{
     committee::Epoch, BlobState, ExecutionRuntimeConfig, UserContractCode, UserServiceCode,
-    WasmRuntime,
 };
 use linera_views::{
     backends::dual::{DualStoreRootKeyAssignment, StoreInUse},
@@ -261,7 +260,6 @@ impl BatchExt for Batch {
 pub struct DbStorage<Store, Clock> {
     store: Arc<Store>,
     clock: Clock,
-    wasm_runtime: Option<WasmRuntime>,
     user_contracts: Arc<DashMap<UserApplicationId, UserContractCode>>,
     user_services: Arc<DashMap<UserApplicationId, UserServiceCode>>,
     execution_runtime_config: ExecutionRuntimeConfig,
@@ -824,10 +822,6 @@ where
         }
         self.write_batch(batch).await
     }
-
-    fn wasm_runtime(&self) -> Option<WasmRuntime> {
-        self.wasm_runtime
-    }
 }
 
 impl<Store, C> DbStorage<Store, C>
@@ -870,11 +864,10 @@ where
         Ok(())
     }
 
-    fn create(store: Store, wasm_runtime: Option<WasmRuntime>, clock: C) -> Self {
+    fn create(store: Store, clock: C) -> Self {
         Self {
             store: Arc::new(store),
             clock,
-            wasm_runtime,
             user_contracts: Arc::new(DashMap::new()),
             user_services: Arc::new(DashMap::new()),
             execution_runtime_config: ExecutionRuntimeConfig::default(),
@@ -891,20 +884,18 @@ where
         config: Store::Config,
         namespace: &str,
         root_key: &[u8],
-        wasm_runtime: Option<WasmRuntime>,
     ) -> Result<Self, Store::Error> {
         let store = Store::maybe_create_and_connect(&config, namespace, root_key).await?;
-        Ok(Self::create(store, wasm_runtime, WallClock))
+        Ok(Self::create(store, WallClock))
     }
 
     pub async fn new(
         config: Store::Config,
         namespace: &str,
         root_key: &[u8],
-        wasm_runtime: Option<WasmRuntime>,
     ) -> Result<Self, Store::Error> {
         let store = Store::connect(&config, namespace, root_key).await?;
-        Ok(Self::create(store, wasm_runtime, WallClock))
+        Ok(Self::create(store, WallClock))
     }
 }
 
@@ -914,7 +905,7 @@ where
     Store: TestKeyValueStore + Clone + Send + Sync + 'static,
     Store::Error: Send + Sync,
 {
-    pub async fn make_test_storage(wasm_runtime: Option<WasmRuntime>) -> Self {
+    pub async fn make_test_storage() -> Self {
         let config = Store::new_test_config().await.unwrap();
         let namespace = generate_test_namespace();
         let root_key = &[];
@@ -922,7 +913,6 @@ where
             config,
             &namespace,
             root_key,
-            wasm_runtime,
             TestClock::new(),
         )
         .await
@@ -933,10 +923,9 @@ where
         config: Store::Config,
         namespace: &str,
         root_key: &[u8],
-        wasm_runtime: Option<WasmRuntime>,
         clock: TestClock,
     ) -> Result<Self, Store::Error> {
         let store = Store::recreate_and_connect(&config, namespace, root_key).await?;
-        Ok(Self::create(store, wasm_runtime, clock))
+        Ok(Self::create(store, clock))
     }
 }

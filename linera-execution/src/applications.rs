@@ -3,7 +3,7 @@
 
 use std::collections::HashSet;
 
-use linera_base::{data_types::UserApplicationDescription, identifiers::UserApplicationId};
+use linera_base::identifiers::UserApplicationId;
 use linera_views::{
     context::Context,
     map_view::HashedMapView,
@@ -16,7 +16,7 @@ use {
     std::collections::BTreeMap,
 };
 
-use crate::SystemExecutionError;
+use crate::{SystemExecutionError, UserApplicationDescription};
 
 #[cfg(test)]
 #[path = "unit_tests/applications_tests.rs"]

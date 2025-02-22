@@ -41,7 +41,7 @@ use linera_core::{
 };
 use linera_execution::{
     committee::{Committee, ValidatorState},
-    Message, ResourceControlPolicy, SystemMessage,
+    Message, ResourceControlPolicy, SystemMessage, WithVmDefault as _,
 };
 use linera_faucet_server::FaucetService;
 use linera_sdk::base::ValidatorPublicKey;
@@ -835,14 +835,18 @@ impl Runnable for Job {
             PublishBytecode {
                 contract,
                 service,
+                vm_runtime,
                 publisher,
             } => {
                 let start_time = Instant::now();
                 let publisher = publisher.unwrap_or_else(|| context.default_chain());
                 info!("Publishing bytecode on chain {}", publisher);
                 let chain_client = context.make_chain_client(publisher)?;
+                let vm_runtime = vm_runtime
+                    .with_vm_default()
+                    .expect("A virtual machine to be available");
                 let bytecode_id = context
-                    .publish_bytecode(&chain_client, contract, service)
+                    .publish_bytecode(&chain_client, contract, service, vm_runtime)
                     .await?;
                 println!("{}", bytecode_id);
                 info!(
@@ -927,6 +931,7 @@ impl Runnable for Job {
             PublishAndCreate {
                 contract,
                 service,
+                vm_runtime,
                 publisher,
                 json_parameters,
                 json_parameters_path,
@@ -940,9 +945,12 @@ impl Runnable for Job {
                 let chain_client = context.make_chain_client(publisher)?;
                 let parameters = read_json(json_parameters, json_parameters_path)?;
                 let argument = read_json(json_argument, json_argument_path)?;
+                let vm_runtime = vm_runtime
+                    .with_vm_default()
+                    .expect("A virtual machine should be available");
 
                 let bytecode_id = context
-                    .publish_bytecode(&chain_client, contract, service)
+                    .publish_bytecode(&chain_client, contract, service, vm_runtime)
                     .await?;
 
                 let (application_id, _) = context
@@ -1021,6 +1029,7 @@ impl Runnable for Job {
                 ProjectCommand::PublishAndCreate {
                     path,
                     name,
+                    vm_runtime,
                     publisher,
                     json_parameters,
                     json_parameters_path,
@@ -1033,6 +1042,9 @@ impl Runnable for Job {
                     info!("Creating application on chain {}", publisher);
                     let chain_client = context.make_chain_client(publisher)?;
 
+                    let vm_runtime = vm_runtime
+                        .with_vm_default()
+                        .expect("A virtual machine should be available");
                     let parameters = read_json(json_parameters, json_parameters_path)?;
                     let argument = read_json(json_argument, json_argument_path)?;
                     let project_path = path.unwrap_or_else(|| env::current_dir().unwrap());
@@ -1041,7 +1053,7 @@ impl Runnable for Job {
                     let (contract_path, service_path) = project.build(name)?;
 
                     let bytecode_id = context
-                        .publish_bytecode(&chain_client, contract_path, service_path)
+                        .publish_bytecode(&chain_client, contract_path, service_path, vm_runtime)
                         .await?;
 
                     let (application_id, _) = context

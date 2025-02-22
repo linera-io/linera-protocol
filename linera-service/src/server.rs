@@ -24,7 +24,6 @@ use linera_client::{
     storage::{full_initialize_storage, run_with_storage, Runnable, StorageConfigNamespace},
 };
 use linera_core::{worker::WorkerState, JoinSetExt as _};
-use linera_execution::{WasmRuntime, WithWasmDefault};
 use linera_rpc::{
     config::{
         CrossChainConfig, NetworkProtocol, NotificationConfig, ShardConfig, ShardId, TlsConfig,
@@ -347,10 +346,6 @@ enum ServerCommand {
         #[arg(long = "grace-period-ms", default_value = "500", value_parser = util::parse_millis)]
         grace_period: Duration,
 
-        /// The WebAssembly runtime to use.
-        #[arg(long)]
-        wasm_runtime: Option<WasmRuntime>,
-
         /// The maximal number of chains loaded in memory at a given time.
         #[arg(long, default_value = "400")]
         max_loaded_chains: NonZeroUsize,
@@ -503,7 +498,6 @@ async fn run(options: ServerOptions) {
             genesis_config_path,
             shard,
             grace_period,
-            wasm_runtime,
             max_loaded_chains,
             max_concurrent_queries,
             max_stream_queries,
@@ -531,7 +525,6 @@ async fn run(options: ServerOptions) {
                 grace_period,
                 max_loaded_chains,
             };
-            let wasm_runtime = wasm_runtime.with_wasm_default();
             let common_config = CommonStoreConfig {
                 max_concurrent_queries,
                 max_stream_queries,
@@ -541,7 +534,7 @@ async fn run(options: ServerOptions) {
                 .add_common_config(common_config)
                 .await
                 .unwrap();
-            run_with_storage(full_storage_config, &genesis_config, wasm_runtime, job)
+            run_with_storage(full_storage_config, &genesis_config, job)
                 .boxed()
                 .await
                 .unwrap()

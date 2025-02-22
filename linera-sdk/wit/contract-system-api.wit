@@ -67,6 +67,7 @@ interface contract-system-api {
     record bytecode-id {
         contract-blob-hash: crypto-hash,
         service-blob-hash: crypto-hash,
+        vm-runtime: vm-runtime,
     }
 
     record chain-id {
@@ -103,6 +104,10 @@ interface contract-system-api {
     variant destination {
         recipient(chain-id),
         subscribers(channel-name),
+    }
+
+    enum evm-runtime {
+        revm,
     }
 
     record http-header {
@@ -192,4 +197,16 @@ interface contract-system-api {
     }
 
     type u128 = tuple<u64, u64>;
+
+    variant vm-runtime {
+        wasm(wasm-runtime),
+        evm(evm-runtime),
+    }
+
+    enum wasm-runtime {
+        wasmer,
+        wasmtime,
+        wasmer-with-sanitizer,
+        wasmtime-with-sanitizer,
+    }
 }

@@ -20,7 +20,7 @@ mod wasmer;
 #[cfg(with_wasmtime)]
 mod wasmtime;
 
-use linera_base::data_types::Bytecode;
+use linera_base::{data_types::Bytecode, vm::WasmRuntime};
 use thiserror::Error;
 #[cfg(with_wasmer)]
 use wasmer::{WasmerContractInstance, WasmerServiceInstance};
@@ -40,7 +40,7 @@ pub use self::{
 };
 use crate::{
     ContractSyncRuntimeHandle, ExecutionError, ServiceSyncRuntimeHandle, UserContractInstance,
-    UserContractModule, UserServiceInstance, UserServiceModule, WasmRuntime,
+    UserContractModule, UserServiceInstance, UserServiceModule,
 };
 
 #[cfg(with_metrics)]
@@ -89,13 +89,23 @@ impl WasmContractModule {
             contract_bytecode
         };
         match runtime {
-            #[cfg(with_wasmer)]
             WasmRuntime::Wasmer | WasmRuntime::WasmerWithSanitizer => {
-                Self::from_wasmer(contract_bytecode).await
+                cfg_if::cfg_if! {
+                    if #[cfg(with_wasmer)] {
+                        Self::from_wasmer(contract_bytecode).await
+                    } else {
+                        panic!("Cannot use WasmRuntime::Wasmer when feature wasmer has not been used");
+                    }
+                }
             }
-            #[cfg(with_wasmtime)]
             WasmRuntime::Wasmtime | WasmRuntime::WasmtimeWithSanitizer => {
-                Self::from_wasmtime(contract_bytecode).await
+                cfg_if::cfg_if! {
+                    if #[cfg(with_wasmtime)] {
+                        Self::from_wasmtime(contract_bytecode).await
+                    } else {
+                        panic!("Cannot use WasmRuntime::Wasmtime when feature wasmtime has not been used");
+                    }
+                }
             }
         }
     }
@@ -156,13 +166,23 @@ impl WasmServiceModule {
         runtime: WasmRuntime,
     ) -> Result<Self, WasmExecutionError> {
         match runtime {
-            #[cfg(with_wasmer)]
             WasmRuntime::Wasmer | WasmRuntime::WasmerWithSanitizer => {
-                Self::from_wasmer(service_bytecode).await
+                cfg_if::cfg_if! {
+                    if #[cfg(with_wasmer)] {
+                        Self::from_wasmer(service_bytecode).await
+                    } else {
+                        panic!("Cannot use WasmRuntime::Wasmer when feature wasmer has not been used");
+                    }
+                }
             }
-            #[cfg(with_wasmtime)]
             WasmRuntime::Wasmtime | WasmRuntime::WasmtimeWithSanitizer => {
-                Self::from_wasmtime(service_bytecode).await
+                cfg_if::cfg_if! {
+                    if #[cfg(with_wasmtime)] {
+                        Self::from_wasmtime(service_bytecode).await
+                    } else {
+                        panic!("Cannot use WasmRuntime::Wasmtime when feature wasmtime has not been used");
+                    }
+                }
             }
         }
     }
@@ -346,7 +366,18 @@ pub mod test {
         wasm_runtime: impl Into<Option<WasmRuntime>>,
     ) -> Result<(WasmContractModule, WasmServiceModule), anyhow::Error> {
         let (contract_path, service_path) = get_example_bytecode_paths(name)?;
-        let wasm_runtime = wasm_runtime.into().unwrap_or_default();
+        let wasm_runtime = match wasm_runtime.into() {
+            Some(wasm_runtime) => wasm_runtime,
+            None => {
+                cfg_if::cfg_if! {
+                    if #[cfg(with_wasmer)] {
+                        WasmRuntime::Wasmer
+                    } else {
+                        WasmRuntime::Wasmtime
+                    }
+                }
+            }
+        };
         let contract = WasmContractModule::from_file(&contract_path, wasm_runtime).await?;
         let service = WasmServiceModule::from_file(&service_path, wasm_runtime).await?;
         Ok((contract, service))

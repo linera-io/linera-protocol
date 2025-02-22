@@ -22,12 +22,14 @@ targets = ["wasm32-unknown-unknown", "x86_64-unknown-linux-gnu"]
 ethereum = ["async-trait", "linera-ethereum"]
 unstable-oracles = ["linera-core/unstable-oracles", "linera-execution/unstable-oracles"]
 wasmer = [
+    "linera-base/wasmer",
     "linera-core/wasmer",
     "linera-execution/wasmer",
     "linera-storage/wasmer",
     "linera-witty/wasmer",
 ]
 wasmtime = [
+    "linera-base/wasmtime",
     "linera-core/wasmtime",
     "linera-execution/wasmtime",
     "linera-storage/wasmtime",

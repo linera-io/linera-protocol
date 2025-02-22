@@ -15,11 +15,12 @@ use axum::{extract::Path, http::StatusCode, response, response::IntoResponse, Ex
 use futures::{lock::Mutex, Future};
 use linera_base::{
     crypto::{CryptoError, CryptoHash},
-    data_types::{Amount, ApplicationPermissions, Bytecode, TimeDelta, UserApplicationDescription},
+    data_types::{Amount, ApplicationPermissions, Bytecode, TimeDelta},
     ensure,
     hashed::Hashed,
     identifiers::{ApplicationId, BytecodeId, ChainId, Owner, UserApplicationId},
     ownership::{ChainOwnership, TimeoutConfig},
+    vm::VmRuntime,
     BcsHexParseError,
 };
 use linera_chain::{
@@ -35,7 +36,7 @@ use linera_core::{
 use linera_execution::{
     committee::{Committee, Epoch},
     system::{AdminOperation, Recipient, SystemChannel},
-    Operation, Query, QueryOutcome, QueryResponse, SystemOperation,
+    Operation, Query, QueryOutcome, QueryResponse, SystemOperation, UserApplicationDescription,
 };
 use linera_sdk::base::BlobContent;
 use linera_storage::Storage;
@@ -563,13 +564,14 @@ where
         chain_id: ChainId,
         contract: Bytecode,
         service: Bytecode,
+        vm_runtime: VmRuntime,
     ) -> Result<BytecodeId, Error> {
         self.apply_client_command(&chain_id, move |client| {
             let contract = contract.clone();
             let service = service.clone();
             async move {
                 let result = client
-                    .publish_bytecode(contract, service)
+                    .publish_bytecode(contract, service, vm_runtime)
                     .await
                     .map_err(Error::from)
                     .map(|outcome| outcome.map(|(bytecode_id, _)| bytecode_id));
@@ -597,6 +599,7 @@ where
     }
 
     /// Creates a new application.
+    #[allow(clippy::too_many_arguments)]
     async fn create_application(
         &self,
         chain_id: ChainId,

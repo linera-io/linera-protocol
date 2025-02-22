@@ -32,7 +32,7 @@ use crate::{
     ApplicationRegistryView, ExecutionRequest, ExecutionRuntimeContext, ExecutionStateView,
     MessageContext, OperationContext, QueryContext, ServiceRuntimeEndpoint, ServiceRuntimeRequest,
     ServiceSyncRuntime, SystemExecutionStateView, TestExecutionRuntimeContext,
-    UserApplicationDescription, UserApplicationId,
+    UserApplicationDescription, UserApplicationId, VmRuntime,
 };
 
 /// Creates a dummy [`UserApplicationDescription`] for use in tests.
@@ -47,9 +47,14 @@ pub fn create_dummy_user_application_description(
         compressed_bytes: b"service".to_vec(),
     });
 
+    let vm_runtime = VmRuntime::default();
     (
         UserApplicationDescription {
-            bytecode_id: BytecodeId::new(contract_blob.id().hash, service_blob.id().hash),
+            bytecode_id: BytecodeId::new(
+                contract_blob.id().hash,
+                service_blob.id().hash,
+                vm_runtime,
+            ),
             creation: MessageId {
                 chain_id,
                 height: BlockHeight(index),

@@ -392,7 +392,6 @@ impl ProxyOptions {
         run_with_storage(
             full_storage_config,
             &genesis_config,
-            None,
             ProxyContext::from_options(self)?,
         )
         .boxed()

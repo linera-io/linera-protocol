@@ -12,14 +12,13 @@ use anyhow::bail;
 use assert_matches::assert_matches;
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{
-        Amount, Blob, BlockHeight, CompressedBytecode, Timestamp, UserApplicationDescription,
-    },
+    data_types::{Amount, Blob, BlockHeight, CompressedBytecode, Timestamp},
     identifiers::{
         Account, AccountOwner, ApplicationId, BytecodeId, ChainDescription, ChainId, MessageId,
         Owner,
     },
     ownership::ChainOwnership,
+    vm::VmRuntime,
 };
 use linera_execution::{
     test_utils::{
@@ -29,6 +28,7 @@ use linera_execution::{
     BaseRuntime, ContractRuntime, ExecutionError, ExecutionOutcome, Message, MessageContext,
     Operation, OperationContext, ResourceController, SystemExecutionError,
     SystemExecutionStateView, TestExecutionRuntimeContext, TransactionOutcome, TransactionTracker,
+    UserApplicationDescription,
 };
 use linera_views::context::MemoryContext;
 use test_case::test_matrix;
@@ -654,13 +654,14 @@ impl TransferTestEndpoint {
         ApplicationId::from(&Self::sender_application_description())
     }
 
-    /// Returns the [`ApplicationDescription`] used to represent a sender that's an application.
+    /// Returns the [`UserApplicationDescription`] used to represent a sender that's an application.
     fn sender_application_description() -> UserApplicationDescription {
         let contract_id = Self::sender_application_contract_blob().id().hash;
         let service_id = Self::sender_application_service_blob().id().hash;
+        let vm_runtime = VmRuntime::default();
 
         UserApplicationDescription {
-            bytecode_id: BytecodeId::new(contract_id, service_id),
+            bytecode_id: BytecodeId::new(contract_id, service_id, vm_runtime),
             creation: MessageId {
                 chain_id: ChainId::root(1000),
                 height: BlockHeight(0),
@@ -698,6 +699,7 @@ impl TransferTestEndpoint {
             bytecode_id: BytecodeId::new(
                 CryptoHash::test_hash("recipient contract bytecode"),
                 CryptoHash::test_hash("recipient service bytecode"),
+                VmRuntime::default(),
             ),
             creation: MessageId {
                 chain_id: ChainId::root(2000),

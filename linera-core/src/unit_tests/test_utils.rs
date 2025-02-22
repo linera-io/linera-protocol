@@ -29,7 +29,7 @@ use linera_chain::{
         LiteCertificate, Timeout, ValidatedBlock,
     },
 };
-use linera_execution::{committee::Committee, ResourceControlPolicy, WasmRuntime};
+use linera_execution::{committee::Committee, ResourceControlPolicy};
 use linera_storage::{DbStorage, Storage, TestClock};
 #[cfg(all(not(target_arch = "wasm32"), feature = "storage-service"))]
 use linera_storage_service::client::ServiceStoreClient;
@@ -1008,7 +1008,6 @@ static ROCKS_DB_SEMAPHORE: Semaphore = Semaphore::const_new(5);
 pub struct MemoryStorageBuilder {
     namespace: String,
     instance_counter: usize,
-    wasm_runtime: Option<WasmRuntime>,
     clock: TestClock,
 }
 
@@ -1024,14 +1023,7 @@ impl StorageBuilder for MemoryStorageBuilder {
         }
         let namespace = format!("{}_{}", self.namespace, self.instance_counter);
         let root_key = &[];
-        Ok(DbStorage::new_for_testing(
-            config,
-            &namespace,
-            root_key,
-            self.wasm_runtime,
-            self.clock.clone(),
-        )
-        .await?)
+        Ok(DbStorage::new_for_testing(config, &namespace, root_key, self.clock.clone()).await?)
     }
 
     fn clock(&self) -> &TestClock {
@@ -1039,23 +1031,10 @@ impl StorageBuilder for MemoryStorageBuilder {
     }
 }
 
-impl MemoryStorageBuilder {
-    /// Creates a [`MemoryStorageBuilder`] that uses the specified [`WasmRuntime`] to run Wasm
-    /// applications.
-    #[allow(dead_code)]
-    pub fn with_wasm_runtime(wasm_runtime: impl Into<Option<WasmRuntime>>) -> Self {
-        MemoryStorageBuilder {
-            wasm_runtime: wasm_runtime.into(),
-            ..MemoryStorageBuilder::default()
-        }
-    }
-}
-
 #[cfg(feature = "rocksdb")]
 pub struct RocksDbStorageBuilder {
     namespace: String,
     instance_counter: usize,
-    wasm_runtime: Option<WasmRuntime>,
     clock: TestClock,
     _permit: SemaphorePermit<'static>,
 }
@@ -1066,19 +1045,8 @@ impl RocksDbStorageBuilder {
         RocksDbStorageBuilder {
             namespace: String::new(),
             instance_counter: 0,
-            wasm_runtime: None,
             clock: TestClock::default(),
             _permit: ROCKS_DB_SEMAPHORE.acquire().await.unwrap(),
-        }
-    }
-
-    /// Creates a [`RocksDbStorageBuilder`] that uses the specified [`WasmRuntime`] to run Wasm
-    /// applications.
-    #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
-    pub async fn with_wasm_runtime(wasm_runtime: impl Into<Option<WasmRuntime>>) -> Self {
-        RocksDbStorageBuilder {
-            wasm_runtime: wasm_runtime.into(),
-            ..RocksDbStorageBuilder::new().await
         }
     }
 }
@@ -1096,14 +1064,7 @@ impl StorageBuilder for RocksDbStorageBuilder {
         }
         let namespace = format!("{}_{}", self.namespace, self.instance_counter);
         let root_key = &[];
-        Ok(DbStorage::new_for_testing(
-            config,
-            &namespace,
-            root_key,
-            self.wasm_runtime,
-            self.clock.clone(),
-        )
-        .await?)
+        Ok(DbStorage::new_for_testing(config, &namespace, root_key, self.clock.clone()).await?)
     }
 
     fn clock(&self) -> &TestClock {
@@ -1116,24 +1077,7 @@ impl StorageBuilder for RocksDbStorageBuilder {
 pub struct ServiceStorageBuilder {
     namespace: String,
     instance_counter: usize,
-    wasm_runtime: Option<WasmRuntime>,
     clock: TestClock,
-}
-
-#[cfg(all(not(target_arch = "wasm32"), feature = "storage-service"))]
-impl ServiceStorageBuilder {
-    /// Creates a `ServiceStorage`.
-    pub async fn new() -> Self {
-        Self::with_wasm_runtime(None).await
-    }
-
-    /// Creates a `ServiceStorage` with the given Wasm runtime.
-    pub async fn with_wasm_runtime(wasm_runtime: impl Into<Option<WasmRuntime>>) -> Self {
-        ServiceStorageBuilder {
-            wasm_runtime: wasm_runtime.into(),
-            ..ServiceStorageBuilder::default()
-        }
-    }
 }
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "storage-service"))]
@@ -1149,14 +1093,7 @@ impl StorageBuilder for ServiceStorageBuilder {
         }
         let namespace = format!("{}_{}", self.namespace, self.instance_counter);
         let root_key = &[];
-        Ok(DbStorage::new_for_testing(
-            config,
-            &namespace,
-            root_key,
-            self.wasm_runtime,
-            self.clock.clone(),
-        )
-        .await?)
+        Ok(DbStorage::new_for_testing(config, &namespace, root_key, self.clock.clone()).await?)
     }
 
     fn clock(&self) -> &TestClock {
@@ -1169,21 +1106,7 @@ impl StorageBuilder for ServiceStorageBuilder {
 pub struct DynamoDbStorageBuilder {
     namespace: String,
     instance_counter: usize,
-    wasm_runtime: Option<WasmRuntime>,
     clock: TestClock,
-}
-
-#[cfg(feature = "dynamodb")]
-impl DynamoDbStorageBuilder {
-    /// Creates a [`DynamoDbStorageBuilder`] that uses the specified [`WasmRuntime`] to run Wasm
-    /// applications.
-    #[allow(dead_code)]
-    pub fn with_wasm_runtime(wasm_runtime: impl Into<Option<WasmRuntime>>) -> Self {
-        DynamoDbStorageBuilder {
-            wasm_runtime: wasm_runtime.into(),
-            ..DynamoDbStorageBuilder::default()
-        }
-    }
 }
 
 #[cfg(feature = "dynamodb")]
@@ -1199,14 +1122,7 @@ impl StorageBuilder for DynamoDbStorageBuilder {
         }
         let namespace = format!("{}_{}", self.namespace, self.instance_counter);
         let root_key = &[];
-        Ok(DbStorage::new_for_testing(
-            config,
-            &namespace,
-            root_key,
-            self.wasm_runtime,
-            self.clock.clone(),
-        )
-        .await?)
+        Ok(DbStorage::new_for_testing(config, &namespace, root_key, self.clock.clone()).await?)
     }
 
     fn clock(&self) -> &TestClock {
@@ -1219,21 +1135,7 @@ impl StorageBuilder for DynamoDbStorageBuilder {
 pub struct ScyllaDbStorageBuilder {
     namespace: String,
     instance_counter: usize,
-    wasm_runtime: Option<WasmRuntime>,
     clock: TestClock,
-}
-
-#[cfg(feature = "scylladb")]
-impl ScyllaDbStorageBuilder {
-    /// Creates a [`ScyllaDbStorageBuilder`] that uses the specified [`WasmRuntime`] to run Wasm
-    /// applications.
-    #[allow(dead_code)]
-    pub fn with_wasm_runtime(wasm_runtime: impl Into<Option<WasmRuntime>>) -> Self {
-        ScyllaDbStorageBuilder {
-            wasm_runtime: wasm_runtime.into(),
-            ..ScyllaDbStorageBuilder::default()
-        }
-    }
 }
 
 #[cfg(feature = "scylladb")]
@@ -1249,14 +1151,7 @@ impl StorageBuilder for ScyllaDbStorageBuilder {
         }
         let namespace = format!("{}_{}", self.namespace, self.instance_counter);
         let root_key = &[];
-        Ok(DbStorage::new_for_testing(
-            config,
-            &namespace,
-            root_key,
-            self.wasm_runtime,
-            self.clock.clone(),
-        )
-        .await?)
+        Ok(DbStorage::new_for_testing(config, &namespace, root_key, self.clock.clone()).await?)
     }
 
     fn clock(&self) -> &TestClock {

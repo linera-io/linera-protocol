@@ -8,13 +8,11 @@ use std::{collections::BTreeMap, iter};
 use assert_matches::assert_matches;
 use linera_base::{
     crypto::{AccountPublicKey, CryptoHash, ValidatorPublicKey},
-    data_types::{
-        Amount, ApplicationPermissions, Blob, BlockHeight, Bytecode, Timestamp,
-        UserApplicationDescription,
-    },
+    data_types::{Amount, ApplicationPermissions, Blob, BlockHeight, Bytecode, Timestamp},
     hashed::Hashed,
     identifiers::{ApplicationId, BytecodeId, ChainId, MessageId},
     ownership::ChainOwnership,
+    vm::VmRuntime,
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorState},
@@ -22,6 +20,7 @@ use linera_execution::{
     test_utils::{ExpectedCall, MockApplication},
     ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext, Message, MessageKind,
     Operation, ResourceControlPolicy, SystemMessage, SystemOperation, TestExecutionRuntimeContext,
+    UserApplicationDescription,
 };
 use linera_views::{
     context::{Context as _, MemoryContext},
@@ -66,8 +65,9 @@ fn make_app_description() -> (UserApplicationDescription, Blob, Blob) {
     let service = Bytecode::new(b"service".into());
     let contract_blob = Blob::new_contract_bytecode(contract.compress());
     let service_blob = Blob::new_service_bytecode(service.compress());
+    let vm_runtime = VmRuntime::default();
 
-    let bytecode_id = BytecodeId::new(contract_blob.id().hash, service_blob.id().hash);
+    let bytecode_id = BytecodeId::new(contract_blob.id().hash, service_blob.id().hash, vm_runtime);
     (
         UserApplicationDescription {
             bytecode_id,
