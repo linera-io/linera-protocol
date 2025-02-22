@@ -14,10 +14,7 @@ use std::{
 use anyhow::{bail, Context};
 use async_trait::async_trait;
 use futures::{stream::FuturesUnordered, FutureExt as _, StreamExt, TryFutureExt as _};
-use linera_base::{
-    crypto::{CryptoRng, ValidatorSecretKey},
-    listen_for_shutdown_signals,
-};
+use linera_base::{crypto::CryptoRng, listen_for_shutdown_signals};
 use linera_client::{
     config::{CommitteeConfig, GenesisConfig, ValidatorConfig, ValidatorServerConfig},
     persistent::{self, Persist},
@@ -32,6 +29,7 @@ use linera_rpc::{
     },
     grpc, simple,
 };
+use linera_sdk::base::{AccountSecretKey, ValidatorKeypair};
 #[cfg(with_metrics)]
 use linera_service::prometheus_server;
 use linera_service::util;
@@ -63,10 +61,16 @@ impl ServerContext {
     {
         let shard = self.server_config.internal_network.shard(shard_id);
         info!("Shard booted on {}", shard.host);
-        info!("Public key: {}", self.server_config.key.public());
+        info!(
+            "Public key: {}",
+            self.server_config.validator_secret.public()
+        );
         let state = WorkerState::new(
             format!("Shard {} @ {}:{}", shard_id, local_ip_addr, shard.port),
-            Some(self.server_config.key.copy()),
+            Some((
+                self.server_config.validator_secret.copy(),
+                self.server_config.account_secret.copy(),
+            )),
             storage,
             self.max_loaded_chains,
         )
@@ -283,8 +287,9 @@ fn make_server_config<R: CryptoRng>(
     rng: &mut R,
     options: ValidatorOptions,
 ) -> anyhow::Result<persistent::File<ValidatorServerConfig>> {
-    let key = ValidatorSecretKey::generate_from(rng);
-    let public_key = key.public();
+    let validator_keypair = ValidatorKeypair::generate_from(rng);
+    let account_secret = AccountSecretKey::generate_from(rng);
+    let public_key = validator_keypair.public_key;
     let network = ValidatorPublicNetworkConfig {
         protocol: options.external_protocol,
         host: options.host,
@@ -302,12 +307,14 @@ fn make_server_config<R: CryptoRng>(
     let validator = ValidatorConfig {
         network,
         public_key,
+        account_key: account_secret.public(),
     };
     Ok(persistent::File::new(
         path,
         ValidatorServerConfig {
             validator,
-            key,
+            validator_secret: validator_keypair.secret_key,
+            account_secret,
             internal_network,
         },
     )?)
@@ -568,7 +575,10 @@ async fn run(options: ServerOptions) {
                     .await
                     .expect("Unable to write server config file");
                 info!("Wrote server config {}", path.to_str().unwrap());
-                println!("{}", server.validator.public_key);
+                println!(
+                    "{},{}",
+                    server.validator.public_key, server.validator.account_key
+                );
                 config_validators.push(Persist::into_value(server).validator);
             }
             if let Some(committee) = committee {

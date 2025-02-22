@@ -222,7 +222,7 @@ pub trait Storage: Sized {
             ChainOwnership::single(owner),
             BlockHeight(0),
             self.clock().current_time(),
-            committee.keys_and_weights(),
+            committee.account_keys_and_weights(),
         )?;
         let system_state = &mut chain.execution_state.system;
         system_state.description.set(Some(description));

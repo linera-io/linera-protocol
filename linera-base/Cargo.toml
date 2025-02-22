@@ -54,6 +54,7 @@ serde.workspace = true
 serde-name.workspace = true
 serde_bytes.workspace = true
 serde_json.workspace = true
+serde_with.workspace = true
 test-strategy = { workspace = true, optional = true }
 thiserror.workspace = true
 tokio = { workspace = true, features = ["time"] }
@@ -81,6 +82,7 @@ port-selector.workspace = true
 zstd.workspace = true
 
 [dev-dependencies]
+bcs.workspace = true
 linera-base = { path = ".", default-features = false, features = ["test"] }
 linera-witty = { workspace = true, features = ["test"] }
 test-case.workspace = true

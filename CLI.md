@@ -406,11 +406,12 @@ Synchronizes a validator with the local state of chains
 
 Add or modify a validator (admin only)
 
-**Usage:** `linera set-validator [OPTIONS] --public-key <PUBLIC_KEY> --address <ADDRESS>`
+**Usage:** `linera set-validator [OPTIONS] --public-key <PUBLIC_KEY> --account-key <ACCOUNT_KEY> --address <ADDRESS>`
 
 ###### **Options:**
 
 * `--public-key <PUBLIC_KEY>` — The public key of the validator
+* `--account-key <ACCOUNT_KEY>` — The public key of the account controlled by the validator
 * `--address <ADDRESS>` — Network address
 * `--votes <VOTES>` — Voting power
 

@@ -93,7 +93,10 @@ fn make_admin_message_id(height: BlockHeight) -> MessageId {
 }
 
 fn make_open_chain_config() -> OpenChainConfig {
-    let committee = Committee::make_simple(vec![ValidatorPublicKey::test_key(1)]);
+    let committee = Committee::make_simple(vec![(
+        ValidatorPublicKey::test_key(1),
+        AccountPublicKey::test_key(1),
+    )]);
     OpenChainConfig {
         ownership: ChainOwnership::single(AccountPublicKey::test_key(0).into()),
         admin_id: admin_id(),
@@ -112,7 +115,7 @@ async fn test_block_size_limit() {
     let mut chain = ChainStateView::new(chain_id).await;
 
     // The size of the executed valid block below.
-    let maximum_executed_block_size = 685;
+    let maximum_executed_block_size = 720;
 
     // Initialize the chain.
     let mut config = make_open_chain_config();
@@ -124,6 +127,7 @@ async fn test_block_size_limit() {
                 ValidatorState {
                     network_address: ValidatorPublicKey::test_key(1).to_string(),
                     votes: 1,
+                    account_public_key: AccountPublicKey::test_key(1),
                 },
             )]),
             ResourceControlPolicy {

@@ -17,7 +17,7 @@ use futures::{
 };
 use linera_base::{
     crypto::{
-        AccountPublicKey, AccountSecretKey, CryptoHash, ValidatorPublicKey, ValidatorSecretKey,
+        AccountPublicKey, AccountSecretKey, CryptoHash, ValidatorKeypair, ValidatorPublicKey,
     },
     data_types::*,
     identifiers::{BlobId, ChainDescription, ChainId},
@@ -733,33 +733,33 @@ where
         let mut key_pairs = Vec::new();
         let mut validators = Vec::new();
         for _ in 0..count {
-            let key_pair = ValidatorSecretKey::generate();
-            let name = key_pair.public();
-            validators.push(name);
-            key_pairs.push(key_pair);
+            let validator_keypair = ValidatorKeypair::generate();
+            let account_secret = AccountSecretKey::generate();
+            validators.push((validator_keypair.public_key, account_secret.public()));
+            key_pairs.push((validator_keypair.secret_key, account_secret));
         }
         let initial_committee = Committee::make_simple(validators);
         let mut validator_clients = Vec::new();
         let mut validator_storages = HashMap::new();
         let mut faulty_validators = HashSet::new();
-        for (i, key_pair) in key_pairs.into_iter().enumerate() {
-            let name = key_pair.public();
+        for (i, (validator_secret, account_secret)) in key_pairs.into_iter().enumerate() {
+            let validator_public_key = validator_secret.public();
             let storage = storage_builder.build().await?;
             let state = WorkerState::new(
                 format!("Node {}", i),
-                Some(key_pair),
+                Some((validator_secret, account_secret)),
                 storage.clone(),
                 NonZeroUsize::new(100).expect("Chain worker limit should not be zero"),
             )
             .with_allow_inactive_chains(false)
             .with_allow_messages_from_deprecated_epochs(false);
-            let validator = LocalValidatorClient::new(name, state);
+            let validator = LocalValidatorClient::new(validator_public_key, state);
             if i < with_faulty_validators {
-                faulty_validators.insert(name);
+                faulty_validators.insert(validator_public_key);
                 validator.set_fault_type(FaultType::Malicious).await;
             }
             validator_clients.push(validator);
-            validator_storages.insert(name, storage);
+            validator_storages.insert(validator_public_key, storage);
         }
         tracing::info!(
             "Test will use the following faulty validators: {:?}",
@@ -894,7 +894,7 @@ where
     pub async fn make_client(
         &mut self,
         chain_id: ChainId,
-        key_pair: ValidatorSecretKey,
+        key_pair: AccountSecretKey,
         block_hash: Option<CryptoHash>,
         block_height: BlockHeight,
     ) -> Result<ChainClient<NodeProvider<B::Storage>, B::Storage>, anyhow::Error> {

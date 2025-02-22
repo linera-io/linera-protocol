@@ -17,11 +17,13 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 /// The public key of a validator.
-pub type ValidatorPublicKey = ed25519::Ed25519PublicKey;
+pub type ValidatorPublicKey = secp256k1::Secp256k1PublicKey;
 /// The private key of a validator.
-pub type ValidatorSecretKey = ed25519::Ed25519SecretKey;
+pub type ValidatorSecretKey = secp256k1::Secp256k1SecretKey;
 /// The signature of a validator.
-pub type ValidatorSignature = ed25519::Ed25519Signature;
+pub type ValidatorSignature = secp256k1::Secp256k1Signature;
+/// The key pair of a validator.
+pub type ValidatorKeypair = secp256k1::Secp256k1KeyPair;
 
 /// The public key of a chain owner.
 /// The corresponding private key is allowed to propose blocks
@@ -38,8 +40,8 @@ pub type AccountSignature = ed25519::Ed25519Signature;
 pub enum CryptoError {
     #[error("Signature for object {type_name} is not valid: {error}")]
     InvalidSignature { error: String, type_name: String },
-    #[error("Signature for object {type_name} is missing")]
-    MissingSignature { type_name: String },
+    #[error("Signature from validator is missing")]
+    MissingValidatorSignature,
     #[error(transparent)]
     NonHexDigits(#[from] hex::FromHexError),
     #[error(
