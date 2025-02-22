@@ -25,7 +25,7 @@ use linera_views::{
 };
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
-use tokio_stream::wrappers::UnboundedReceiverStream;
+use tokio_stream::wrappers::{ReceiverStream, UnboundedReceiverStream};
 use tonic::transport::{Channel, Endpoint};
 
 #[cfg(with_testing)]
@@ -101,11 +101,11 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
 
         let mut reformed_value = Vec::new();
         while let Some(ReplyReadValue { value }) = incoming_stream.message().await? {
-            let Some(value) = value else {
+            let Some(mut value) = value else {
                 return Ok(None);
             };
 
-            reformed_value.extend(&mut value);
+            reformed_value.append(&mut value);
         }
 
         Ok(Some(reformed_value))
@@ -210,7 +210,7 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
 
         std::mem::drop(tokio::task::spawn(feeder));
 
-        let request = tonic::Request::new(UnboundedReceiverStream::new(rx));
+        let request = tonic::Request::new(ReceiverStream::new(rx));
         let channel = self.channel.clone();
         let mut client = StoreProcessorClient::new(channel);
         let _guard = self.acquire().await;
@@ -301,7 +301,7 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
         let _guard = self.acquire().await;
         let response = client.process_find_key_values_by_prefix(request).await?;
 
-        let is_zero = |buf: &[u8]| buf.iter().max().is_some_and(|x| 0 == x);
+        let is_zero = |buf: &[u8]| buf.iter().max().is_some_and(|x| 0 == *x);
 
         let mut key_values = Vec::new();
         let mut key = Vec::new();
@@ -342,11 +342,9 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
                     usize::from_be_bytes(value_len.clone().try_into().unwrap());
                 if expected_value_len != value.len() {
                     value.append(
-                        &mut message.drain(
-                            ..(expected_value_len - value.len())
-                                .min(message.len())
-                                .collect::<Vec<_>>(),
-                        ),
+                        &mut message
+                            .drain(..(expected_value_len - value.len()).min(message.len()))
+                            .collect::<Vec<_>>(),
                     );
                 }
 
@@ -419,7 +417,7 @@ impl WritableKeyValueStore for ServiceStoreClientInternal {
 
                 loop {
                     if MAX_PAYLOAD_SIZE >= value.len() {
-                        stream.append(&mut value);
+                        stream.append(&mut Vec::from(value));
                         break;
                     }
 
