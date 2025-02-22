@@ -26,6 +26,7 @@ use tokio::process::Command;
 #[test_case::test_case("../examples/fungible" ; "fungible")]
 #[test_case::test_case("../examples/gen-nft" ; "gen-nft")]
 #[test_case::test_case("../examples/hex-game" ; "hex-game")]
+#[test_case::test_case("../examples/lmm" ; "lmm")]
 #[test_case::test_case("../examples/native-fungible" ; "native-fungible")]
 #[test_case::test_case("../examples/non-fungible" ; "non-fungible")]
 #[test_case::test_case("../examples/matching-engine" ; "matching engine")]
