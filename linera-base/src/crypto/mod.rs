@@ -40,8 +40,8 @@ pub type AccountSignature = ed25519::Ed25519Signature;
 pub enum CryptoError {
     #[error("Signature for object {type_name} is not valid: {error}")]
     InvalidSignature { error: String, type_name: String },
-    #[error("Signature for object {type_name} is missing")]
-    MissingSignature { type_name: String },
+    #[error("Signature from validator is missing")]
+    MissingValidatorSignature,
     #[error(transparent)]
     NonHexDigits(#[from] hex::FromHexError),
     #[error(

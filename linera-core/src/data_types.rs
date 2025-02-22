@@ -310,9 +310,7 @@ impl ChainInfoResponse {
     pub fn check(&self, public_key: &ValidatorPublicKey) -> Result<(), CryptoError> {
         match self.signature.as_ref() {
             Some(sig) => sig.check(&*self.info, public_key),
-            None => Err(CryptoError::MissingSignature {
-                type_name: "ValidatorSignature".to_string(),
-            }),
+            None => Err(CryptoError::MissingValidatorSignature),
         }
     }
 

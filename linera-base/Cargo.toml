@@ -81,7 +81,7 @@ port-selector.workspace = true
 zstd.workspace = true
 
 [dev-dependencies]
-bincode.workspace = true
+bcs.workspace = true
 linera-base = { path = ".", default-features = false, features = ["test"] }
 linera-witty = { workspace = true, features = ["test"] }
 test-case.workspace = true

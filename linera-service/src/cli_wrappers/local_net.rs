@@ -395,7 +395,7 @@ impl LocalNet {
     }
 
     fn configuration_string(&self, server_number: usize) -> Result<String> {
-        let n: usize = server_number;
+        let n = server_number;
         let path = self
             .path_provider
             .path()
@@ -464,9 +464,9 @@ impl LocalNet {
             .map(|keys| keys.split(',').map(str::to_string).collect::<Vec<_>>())
             .enumerate()
             .map(|(i, keys)| {
-                let public_key = keys[0].to_string();
-                let secret_key = keys[1].to_string();
-                (i, (public_key, secret_key))
+                let validator_key = keys[0].to_string();
+                let account_key = keys[1].to_string();
+                (i, (validator_key, account_key))
             })
             .collect();
         Ok(())
@@ -665,6 +665,7 @@ impl LocalNet {
 
 #[cfg(with_testing)]
 impl LocalNet {
+    /// Returns the validating key and an account key of the validator.
     pub fn validator_keys(&self, validator: usize) -> Option<&(String, String)> {
         self.validator_keys.get(&validator)
     }

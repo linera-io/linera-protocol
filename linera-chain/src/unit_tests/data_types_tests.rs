@@ -12,8 +12,8 @@ use crate::{
 
 #[test]
 fn test_signed_values() {
-    let validator1_keypair = ValidatorKeypair::generate();
-    let validator2_keypair = ValidatorKeypair::generate();
+    let validator1_key_pair = ValidatorKeypair::generate();
+    let validator2_key_pair = ValidatorKeypair::generate();
 
     let block =
         make_first_block(ChainId::root(1)).with_simple_transfer(ChainId::root(2), Amount::ONE);
@@ -29,7 +29,7 @@ fn test_signed_values() {
     let confirmed_vote = LiteVote::new(
         LiteValue::new(&confirmed_value),
         Round::Fast,
-        &validator1_keypair.secret_key,
+        &validator1_key_pair.secret_key,
     );
     assert!(confirmed_vote.check().is_ok());
 
@@ -37,7 +37,7 @@ fn test_signed_values() {
     let validated_vote = LiteVote::new(
         LiteValue::new(&validated_value),
         Round::Fast,
-        &validator1_keypair.secret_key,
+        &validator1_key_pair.secret_key,
     );
     assert_ne!(
         confirmed_vote.value, validated_vote.value,
@@ -47,9 +47,9 @@ fn test_signed_values() {
     let mut v = LiteVote::new(
         LiteValue::new(&confirmed_value),
         Round::Fast,
-        &validator2_keypair.secret_key,
+        &validator2_key_pair.secret_key,
     );
-    v.public_key = validator1_keypair.public_key;
+    v.public_key = validator1_key_pair.public_key;
     assert!(v.check().is_err());
 
     assert!(validated_vote.check().is_ok());
@@ -92,15 +92,15 @@ fn test_hashes() {
 
 #[test]
 fn test_certificates() {
-    let validator1_keypair = ValidatorKeypair::generate();
+    let validator1_key_pair = ValidatorKeypair::generate();
     let account1_secret = AccountSecretKey::generate();
-    let validator2_keypair = ValidatorKeypair::generate();
+    let validator2_key_pair = ValidatorKeypair::generate();
     let account2_secret = AccountSecretKey::generate();
-    let validator3_keypair = ValidatorKeypair::generate();
+    let validator3_key_pair = ValidatorKeypair::generate();
 
     let committee = Committee::make_simple(vec![
-        (validator1_keypair.public_key, account1_secret.public()),
-        (validator2_keypair.public_key, account2_secret.public()),
+        (validator1_key_pair.public_key, account1_secret.public()),
+        (validator2_key_pair.public_key, account2_secret.public()),
     ]);
 
     let block =
@@ -117,17 +117,17 @@ fn test_certificates() {
     let v1 = LiteVote::new(
         LiteValue::new(&value),
         Round::Fast,
-        &validator1_keypair.secret_key,
+        &validator1_key_pair.secret_key,
     );
     let v2 = LiteVote::new(
         LiteValue::new(&value),
         Round::Fast,
-        &validator2_keypair.secret_key,
+        &validator2_key_pair.secret_key,
     );
     let v3 = LiteVote::new(
         LiteValue::new(&value),
         Round::Fast,
-        &validator3_keypair.secret_key,
+        &validator3_key_pair.secret_key,
     );
 
     let mut builder = SignatureAggregator::new(value.clone(), Round::Fast, &committee);

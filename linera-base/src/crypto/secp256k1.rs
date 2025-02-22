@@ -89,8 +89,8 @@ impl Serialize for Secp256k1PublicKey {
         } else {
             #[derive(Serialize)]
             #[serde(rename = "Secp256k1PublicKey")]
-            struct Foo<'a>(&'a secp256k1::PublicKey);
-            Foo(&self.0).serialize(serializer)
+            struct PublicKey<'a>(&'a secp256k1::PublicKey);
+            PublicKey(&self.0).serialize(serializer)
         }
     }
 }
@@ -108,8 +108,8 @@ impl<'de> Deserialize<'de> for Secp256k1PublicKey {
         } else {
             #[derive(Deserialize)]
             #[serde(rename = "Secp256k1PublicKey")]
-            struct Foo(secp256k1::PublicKey);
-            let value = Foo::deserialize(deserializer)?;
+            struct PublicKey(secp256k1::PublicKey);
+            let value = PublicKey::deserialize(deserializer)?;
             Ok(Self(value.0))
         }
     }
@@ -221,7 +221,7 @@ impl Secp256k1Signature {
         Ok(())
     }
 
-    /// Converts the signature to a byte array.
+    /// Creates a signature from the bytes.
     /// Expects the signature to be serialized in compact form.
     pub fn from_slice<A: AsRef<[u8]>>(bytes: A) -> Result<Self, CryptoError> {
         let sig = secp256k1::ecdsa::Signature::from_compact(bytes.as_ref())
@@ -312,20 +312,20 @@ mod tests {
     }
 
     #[test]
-    fn test_publickey_serialization() {
+    fn test_public_key_serialization() {
         use crate::crypto::secp256k1::Secp256k1PublicKey;
         let key_in = Secp256k1PublicKey::test_key(0);
         let s = serde_json::to_string(&key_in).unwrap();
         let key_out: Secp256k1PublicKey = serde_json::from_str(&s).unwrap();
         assert_eq!(key_out, key_in);
 
-        let s = bincode::serialize(&key_in).unwrap();
-        let key_out: Secp256k1PublicKey = bincode::deserialize(&s).unwrap();
+        let s = bcs::to_bytes(&key_in).unwrap();
+        let key_out: Secp256k1PublicKey = bcs::from_bytes(&s).unwrap();
         assert_eq!(key_out, key_in);
     }
 
     #[test]
-    fn test_secretkey_deserialization() {
+    fn test_secret_key_serialization() {
         use crate::crypto::secp256k1::{Secp256k1KeyPair, Secp256k1SecretKey};
         let key_in = Secp256k1KeyPair::generate().secret_key;
         let s = serde_json::to_string(&key_in).unwrap();
