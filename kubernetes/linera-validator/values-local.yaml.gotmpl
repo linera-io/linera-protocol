@@ -57,9 +57,9 @@ kube-prometheus-stack:
               action: drop
             - regex: endpoint|instance|namespace|pod|prometheus|prometheus_replica|service|name|resource|id
               action: labeldrop
+      {{- end }}
       externalLabels:
         validator: {{ .Values.validatorLabel }}
-      {{- end }}
       retention: 2d
       retentionSize: 1GB
       storageSpec:
