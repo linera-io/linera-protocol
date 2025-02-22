@@ -238,7 +238,8 @@ impl Serialize for Secp256k1Signature {
         if serializer.is_human_readable() {
             serializer.serialize_str(&hex::encode(self.0.serialize_der()))
         } else {
-            serializer.serialize_newtype_struct("Secp256k1Signature", &self.0)
+            let compact = serde_utils::CompactSignature(self.0.serialize_compact());
+            serializer.serialize_newtype_struct("Secp256k1Signature", &compact)
         }
     }
 }
@@ -257,10 +258,10 @@ impl<'de> Deserialize<'de> for Secp256k1Signature {
         } else {
             #[derive(Deserialize)]
             #[serde(rename = "Secp256k1Signature")]
-            struct Foo(secp256k1::ecdsa::Signature);
+            struct Signature(serde_utils::CompactSignature);
 
-            let value = Foo::deserialize(deserializer)?;
-            Ok(Self(value.0))
+            let value = Signature::deserialize(deserializer)?;
+            Self::from_slice(value.0 .0.as_ref()).map_err(serde::de::Error::custom)
         }
     }
 }
@@ -280,6 +281,22 @@ impl fmt::Debug for Secp256k1Signature {
 
 doc_scalar!(Secp256k1Signature, "A secp256k1 signature value");
 doc_scalar!(Secp256k1PublicKey, "A secp256k1 public key value");
+
+mod serde_utils {
+    use serde::{Deserialize, Serialize};
+    use serde_with::serde_as;
+
+    /// Wrapper around compact signature serialization
+    /// so that we can implement custom serializer for it that uses fixed length.
+    // Serde treats arrays larger than 32 as variable length arrays, and adds the length as a prefix.
+    // Since we want a fixed size representation, we wrap it in this helper struct and use serde_as.
+    #[serde_as]
+    #[derive(Serialize, Deserialize)]
+    #[serde(transparent)]
+    pub struct CompactSignature(
+        #[serde_as(as = "[_; 64]")] pub [u8; secp256k1::constants::COMPACT_SIGNATURE_SIZE],
+    );
+}
 
 #[cfg(with_testing)]
 mod tests {
