@@ -356,6 +356,28 @@ impl ClientWrapper {
         }
     }
 
+    /// Runs `linera wallet request-chain`.
+    pub async fn request_chain(&self, faucet: &Faucet, set_default: bool) -> Result<ClaimOutcome> {
+        let mut command = self.command().await?;
+        command.args(["wallet", "request-chain", "--faucet", faucet.url()]);
+        if set_default {
+            command.arg("--set-default");
+        }
+        let stdout = command.spawn_and_wait_for_stdout().await?;
+        let mut lines = stdout.split_whitespace();
+        let chain_id_str = lines.next().context("missing chain ID")?;
+        let message_id_str = lines.next().context("missing message ID")?;
+        let certificate_hash_str = lines.next().context("missing certificate hash")?;
+        let outcome = ClaimOutcome {
+            chain_id: chain_id_str.parse().context("invalid chain ID")?,
+            message_id: message_id_str.parse().context("invalid message ID")?,
+            certificate_hash: certificate_hash_str
+                .parse()
+                .context("invalid certificate hash")?,
+        };
+        Ok(outcome)
+    }
+
     /// Runs `linera wallet publish-and-create`.
     pub async fn publish_and_create<
         A: ContractAbi,
@@ -797,6 +819,16 @@ impl ClientWrapper {
                 .arg("--owners")
                 .args(owners.iter().map(Owner::to_string));
         }
+        command.spawn_and_wait_for_stdout().await?;
+        Ok(())
+    }
+
+    /// Runs `linera wallet follow-chain CHAIN_ID`.
+    pub async fn follow_chain(&self, chain_id: ChainId) -> Result<()> {
+        let mut command = self.command().await?;
+        command
+            .args(["wallet", "follow-chain"])
+            .arg(chain_id.to_string());
         command.spawn_and_wait_for_stdout().await?;
         Ok(())
     }

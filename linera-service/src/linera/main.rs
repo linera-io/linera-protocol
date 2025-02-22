@@ -1141,6 +1141,47 @@ impl Runnable for Job {
                 );
             }
 
+            Wallet(WalletCommand::RequestChain {
+                faucet: faucet_url,
+                set_default,
+            }) => {
+                let start_time = Instant::now();
+                let key_pair = context.wallet.generate_key_pair();
+                let owner = key_pair.public().into();
+                info!(
+                    "Requesting a new chain for owner {owner} using the faucet at address \
+                    {faucet_url}",
+                );
+                context
+                    .wallet_mut()
+                    .mutate(|w| w.add_unassigned_key_pair(key_pair))
+                    .await?;
+                let faucet = cli_wrappers::Faucet::new(faucet_url);
+                let outcome = faucet.claim(&owner).await?;
+                let validators = faucet.current_validators().await?;
+                println!("{}", outcome.chain_id);
+                println!("{}", outcome.message_id);
+                println!("{}", outcome.certificate_hash);
+                Self::assign_new_chain_to_key(
+                    outcome.chain_id,
+                    outcome.message_id,
+                    owner,
+                    Some(validators),
+                    &mut context,
+                )
+                .await?;
+                if set_default {
+                    context
+                        .wallet_mut()
+                        .mutate(|w| w.set_default_chain(outcome.chain_id))
+                        .await??;
+                }
+                info!(
+                    "New chain requested and added in {} ms",
+                    start_time.elapsed().as_millis()
+                );
+            }
+
             CreateGenesisConfig { .. }
             | Keygen
             | Net(_)
@@ -1774,6 +1815,22 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
                 Ok(0)
             }
 
+            WalletCommand::FollowChain { chain_id } => {
+                let start_time = Instant::now();
+                options
+                    .wallet()
+                    .await?
+                    .mutate(|wallet| {
+                        wallet.extend([UserChain::make_other(*chain_id, Timestamp::now())])
+                    })
+                    .await?;
+                info!(
+                    "Chain followed and added in {} ms",
+                    start_time.elapsed().as_millis()
+                );
+                Ok(0)
+            }
+
             WalletCommand::ForgetChain { chain_id } => {
                 let start_time = Instant::now();
                 options
@@ -1782,6 +1839,11 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
                     .mutate(|w| w.forget_chain(chain_id))
                     .await??;
                 info!("Chain forgotten in {} ms", start_time.elapsed().as_millis());
+                Ok(0)
+            }
+
+            WalletCommand::RequestChain { .. } => {
+                options.run_with_storage(Job(options.clone())).await??;
                 Ok(0)
             }
 

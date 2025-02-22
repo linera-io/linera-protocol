@@ -1199,7 +1199,25 @@ pub enum WalletCommand {
         testing_prng_seed: Option<u64>,
     },
 
-    /// Forgets the specified chain's keys.
+    /// Request a new chain from a faucet and add it to the wallet.
+    RequestChain {
+        /// The address of a faucet.
+        #[arg(long)]
+        faucet: String,
+
+        /// Whether this chain should become the default chain.
+        #[arg(long)]
+        set_default: bool,
+    },
+
+    /// Add a new followed chain (i.e. a chain without keypair) to the wallet.
+    FollowChain {
+        /// The chain ID.
+        chain_id: ChainId,
+    },
+
+    /// Forgets the specified chain's keys. The chain will still be followed by the
+    /// wallet.
     ForgetKeys { chain_id: ChainId },
 
     /// Forgets the specified chain, including the associated key pair.
