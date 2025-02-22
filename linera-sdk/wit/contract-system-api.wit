@@ -70,22 +70,6 @@ interface contract-system-api {
         vm-runtime: vm-runtime,
     }
 
-    variant vm-runtime {
-        wasm(wasm-runtime),
-        evm(evm-runtime),
-    }
-
-    enum wasm-runtime {
-        wasmer,
-        wasmtime,
-        wasmerwithsanitizer,
-        wasmtimewithsanitizer,
-    }
-
-    enum evm-runtime {
-        revm,
-    }
-
     record chain-id {
         inner0: crypto-hash,
     }
@@ -120,6 +104,10 @@ interface contract-system-api {
     variant destination {
         recipient(chain-id),
         subscribers(channel-name),
+    }
+
+    enum evm-runtime {
+        revm,
     }
 
     record http-header {
@@ -209,4 +197,16 @@ interface contract-system-api {
     }
 
     type u128 = tuple<u64, u64>;
+
+    variant vm-runtime {
+        wasm(wasm-runtime),
+        evm(evm-runtime),
+    }
+
+    enum wasm-runtime {
+        wasmer,
+        wasmtime,
+        wasmer-with-sanitizer,
+        wasmtime-with-sanitizer,
+    }
 }

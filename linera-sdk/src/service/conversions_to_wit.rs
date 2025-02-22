@@ -106,9 +106,9 @@ impl From<WasmRuntime> for wit_system_api::WasmRuntime {
         match wasm_runtime {
             WasmRuntime::Wasmer => wit_system_api::WasmRuntime::Wasmer,
             WasmRuntime::Wasmtime => wit_system_api::WasmRuntime::Wasmtime,
-            WasmRuntime::WasmerWithSanitizer => wit_system_api::WasmRuntime::Wasmerwithsanitizer,
+            WasmRuntime::WasmerWithSanitizer => wit_system_api::WasmRuntime::WasmerWithSanitizer,
             WasmRuntime::WasmtimeWithSanitizer => {
-                wit_system_api::WasmRuntime::Wasmtimewithsanitizer
+                wit_system_api::WasmRuntime::WasmtimeWithSanitizer
             }
         }
     }
