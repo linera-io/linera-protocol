@@ -2568,7 +2568,7 @@ async fn test_end_to_end_multiple_wallets(config: impl LineraNetConfig) -> Resul
     let owner2 = client2.keygen().await?;
 
     // Open chain on behalf of Client 2.
-    let (message_id, chain2) = client1
+    let (message_id, chain2, _) = client1
         .open_chain(chain1, Some(owner2), Amount::ZERO)
         .await?;
 
@@ -2722,11 +2722,11 @@ async fn test_end_to_end_assign_greatgrandchild_chain(config: impl LineraNetConf
     let owner2 = client2.keygen().await?;
 
     // Open a great-grandchild chain on behalf of client 2.
-    let (_, grandparent) = client1
+    let (_, grandparent, _) = client1
         .open_chain(chain1, None, Amount::from_tokens(2))
         .await?;
-    let (_, parent) = client1.open_chain(grandparent, None, Amount::ONE).await?;
-    let (message_id, chain2) = client1
+    let (_, parent, _) = client1.open_chain(grandparent, None, Amount::ONE).await?;
+    let (message_id, chain2, _) = client1
         .open_chain(parent, Some(owner2), Amount::ZERO)
         .await?;
     client2.assign(owner2, message_id).await?;
@@ -2815,18 +2815,18 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) -> Result<()> {
     // Use the faucet directly to initialize client 3.
     let client3 = net.make_client().await;
     client3.wallet_init(&[], FaucetOption::None).await?;
-    let outcome = client3.request_chain(&faucet, false).await?;
+    let (outcome, _) = client3.request_chain(&faucet, false).await?;
     assert_eq!(
         outcome.chain_id,
         client3.load_wallet()?.default_chain().unwrap()
     );
 
-    let outcome = client3.request_chain(&faucet, false).await?;
+    let (outcome, _) = client3.request_chain(&faucet, false).await?;
     assert!(outcome.chain_id != client3.load_wallet()?.default_chain().unwrap());
     client3.forget_chain(outcome.chain_id).await?;
     client3.follow_chain(outcome.chain_id).await?;
 
-    let outcome = client3.request_chain(&faucet, true).await?;
+    let (outcome, _) = client3.request_chain(&faucet, true).await?;
     assert_eq!(
         outcome.chain_id,
         client3.load_wallet()?.default_chain().unwrap()
@@ -2887,7 +2887,7 @@ async fn test_end_to_end_faucet_with_long_chains(config: impl LineraNetConfig) -
 
     // Use the faucet directly to initialize many chains
     for _ in 0..chain_count {
-        let (_, new_chain_id) = faucet_client
+        let (_, new_chain_id, _) = faucet_client
             .open_chain(faucet_chain, None, Amount::ONE)
             .await?;
         faucet_client.forget_chain(new_chain_id).await?;
@@ -2899,11 +2899,12 @@ async fn test_end_to_end_faucet_with_long_chains(config: impl LineraNetConfig) -
 
     // Create a new wallet using the faucet
     let client = net.make_client().await;
-    let outcome = client
+    let (outcome, _) = client
         .wallet_init(&[], FaucetOption::NewChain(&faucet))
-        .await?;
+        .await?
+        .unwrap();
 
-    let chain = outcome.unwrap().chain_id;
+    let chain = outcome.chain_id;
     assert_eq!(chain, client.load_wallet()?.default_chain().unwrap());
 
     let initial_balance = client.query_balance(Account::chain(chain)).await?;

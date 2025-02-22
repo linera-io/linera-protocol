@@ -41,7 +41,7 @@ return each batch of tokens to the other owner and close the temporary chain aut
 
 Before getting started, make sure that the binary tools `linera*` corresponding to
 your version of `linera-sdk` are in your PATH. For scripting purposes, we also assume
-that the BASH function `linera_spawn_and_read_wallet_variables` is defined.
+that the BASH function `linera_spawn` is defined.
 
 From the root of the Linera repository, this can be achieved as follows:
 
@@ -50,26 +50,41 @@ export PATH="$PWD/target/debug:$PATH"
 source /dev/stdin <<<"$(linera net helper 2>/dev/null)"
 ```
 
-To start the local Linera network:
+Next, start the local Linera network and run a faucet:
 
 ```bash
-linera_spawn_and_read_wallet_variables linera net up --extra-wallets 1 --testing-prng-seed 37
+FAUCET_PORT=8079
+FAUCET_URL=http://localhost:$FAUCET_PORT
+linera_spawn linera net up --with-faucet --faucet-port $FAUCET_PORT
+
+# If you're using a testnet, run this instead:
+#   LINERA_TMP_DIR=$(mktemp -d)
+#   FAUCET_URL=https://faucet.testnet-XXX.linera.net  # for some value XXX
 ```
 
-We use the test-only CLI option `--testing-prng-seed` to make keys deterministic and simplify our
-explanation.
+Create the user wallets and add chains to them:
 
 ```bash
-export CHAIN_0=aee928d4bf3880353b4a3cd9b6f88e6cc6e5ed050860abae439e7782e9b2dfe8
-export CHAIN_1=582843bc9322ed1928239ce3f6a855f6cd9ea94c8690907f113d6d7a8296a119
-export OWNER_0=de166237331a2966d8cf6778e81a8c007b4084be80dc1e0409d51f216c1deaa1
-export OWNER_1=849baa540589d95e167d2622018fa341553bf2aff9f328d760443282c6654deb
+export LINERA_WALLET_0="$LINERA_TMP_DIR/wallet_0.json"
+export LINERA_STORAGE_0="rocksdb:$LINERA_TMP_DIR/client_0.db"
+export LINERA_WALLET_1="$LINERA_TMP_DIR/wallet_1.json"
+export LINERA_STORAGE_1="rocksdb:$LINERA_TMP_DIR/client_1.db"
+
+linera --with-wallet 0 wallet init --faucet $FAUCET_URL
+linera --with-wallet 1 wallet init --faucet $FAUCET_URL
+
+INFO_0=($(linera --with-wallet 0 wallet request-chain --faucet $FAUCET_URL))
+INFO_1=($(linera --with-wallet 1 wallet request-chain --faucet $FAUCET_URL))
+CHAIN_0="${INFO_0[0]}"
+CHAIN_1="${INFO_1[0]}"
+OWNER_0="${INFO_0[3]}"
+OWNER_1="${INFO_1[3]}"
 ```
 
-The `--extra-wallets 1` option creates an additional user chain and wallet - we will use it for the
-user requesting a quote.
+Note that `linera --with-wallet 0` is equivalent to `linera --wallet "$LINERA_WALLET_0"
+--storage "$LINERA_STORAGE_0"`.
 
-Now we have to publish and create the fungible applications.
+Now, we can publish the fungible bytecode and create the fungible applications.
 
 ```bash
 (cd examples/fungible && cargo build --release --target wasm32-unknown-unknown)

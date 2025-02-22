@@ -316,7 +316,7 @@ impl ClientWrapper {
         &self,
         chain_ids: &[ChainId],
         faucet: FaucetOption<'_>,
-    ) -> Result<Option<ClaimOutcome>> {
+    ) -> Result<Option<(ClaimOutcome, Owner)>> {
         let mut command = self.command().await?;
         command.args(["wallet", "init"]);
         match faucet {
@@ -350,14 +350,23 @@ impl ClientWrapper {
                     .parse()
                     .context("invalid certificate hash")?,
             };
-            Ok(Some(outcome))
+            let owner = lines
+                .next()
+                .context("missing chain owner")?
+                .parse()
+                .context("invalid chain owner")?;
+            Ok(Some((outcome, owner)))
         } else {
             Ok(None)
         }
     }
 
     /// Runs `linera wallet request-chain`.
-    pub async fn request_chain(&self, faucet: &Faucet, set_default: bool) -> Result<ClaimOutcome> {
+    pub async fn request_chain(
+        &self,
+        faucet: &Faucet,
+        set_default: bool,
+    ) -> Result<(ClaimOutcome, Owner)> {
         let mut command = self.command().await?;
         command.args(["wallet", "request-chain", "--faucet", faucet.url()]);
         if set_default {
@@ -375,7 +384,12 @@ impl ClientWrapper {
                 .parse()
                 .context("invalid certificate hash")?,
         };
-        Ok(outcome)
+        let owner = lines
+            .next()
+            .context("missing chain owner")?
+            .parse()
+            .context("invalid chain owner")?;
+        Ok((outcome, owner))
     }
 
     /// Runs `linera wallet publish-and-create`.
@@ -729,7 +743,7 @@ impl ClientWrapper {
         from: ChainId,
         owner: Option<Owner>,
         initial_balance: Amount,
-    ) -> Result<(MessageId, ChainId)> {
+    ) -> Result<(MessageId, ChainId, Owner)> {
         let mut command = self.command().await?;
         command
             .arg("open-chain")
@@ -744,8 +758,11 @@ impl ClientWrapper {
         let mut split = stdout.split('\n');
         let message_id: MessageId = split.next().context("no message ID in output")?.parse()?;
         let chain_id = ChainId::from_str(split.next().context("no chain ID in output")?)?;
-
-        Ok((message_id, chain_id))
+        let new_owner = Owner::from_str(split.next().context("no owner in output")?)?;
+        if let Some(owner) = owner {
+            assert_eq!(owner, new_owner);
+        }
+        Ok((message_id, chain_id, new_owner))
     }
 
     /// Runs `linera open-chain` then `linera assign`.
@@ -759,7 +776,7 @@ impl ClientWrapper {
             .default_chain()
             .context("no default chain found")?;
         let owner = client.keygen().await?;
-        let (message_id, new_chain) = self
+        let (message_id, new_chain, _) = self
             .open_chain(our_chain, Some(owner), initial_balance)
             .await?;
         assert_eq!(new_chain, client.assign(owner, message_id).await?);

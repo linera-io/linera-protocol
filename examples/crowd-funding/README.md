@@ -42,40 +42,50 @@ The WebAssembly binaries for the bytecode can be built and published using [step
 book](https://linera.dev/developers/getting_started.html),
 summarized below.
 
-Set up the path and the helper function.
+Set up the path and the helper function. From the root of Linera repository, this can be
+achieved as follows:
 
 ```bash
-export PATH=$PWD/target/debug:$PATH
+export PATH="$PWD/target/debug:$PATH"
 source /dev/stdin <<<"$(linera net helper 2>/dev/null)"
 ```
 
-Using the helper function defined by `linera net helper`, set up a local network with two
-wallets, and define variables holding their wallet paths (`$LINERA_WALLET_0`,
-`$LINERA_WALLET_1`) and storage paths (`$LINERA_STORAGE_0`, `$LINERA_STORAGE_1`). These
-variables are named according to a convention that we can access using `--with-wallet $n`
-to use the variable `LINERA_WALLET_$n` and `LINERA_STORAGE_$n`; e.g.
-`linera --with-wallet 0` is equivalent to
-`linera --wallet "$LINERA_WALLET_0" --storage "$LINERA_STORAGE_0"`.
+Start the local Linera network and run a faucet:
 
 ```bash
-linera_spawn_and_read_wallet_variables \
-    linera net up \
-        --extra-wallets 1 \
-        --testing-prng-seed 37
+FAUCET_PORT=8079
+FAUCET_URL=http://localhost:$FAUCET_PORT
+linera_spawn linera net up --with-faucet --faucet-port $FAUCET_PORT
+
+# If you're using a testnet, run this instead:
+#   LINERA_TMP_DIR=$(mktemp -d)
+#   FAUCET_URL=https://faucet.testnet-XXX.linera.net  # for some value XXX
 ```
 
-We use the `--testing-prng-seed` argument to ensure that the chain and owner IDs are
-predictable.
+Create the user wallets and add chains to them:
 
 ```bash
-CHAIN_0=aee928d4bf3880353b4a3cd9b6f88e6cc6e5ed050860abae439e7782e9b2dfe8
-OWNER_0=de166237331a2966d8cf6778e81a8c007b4084be80dc1e0409d51f216c1deaa1
-CHAIN_1=582843bc9322ed1928239ce3f6a855f6cd9ea94c8690907f113d6d7a8296a119
-OWNER_1=849baa540589d95e167d2622018fa341553bf2aff9f328d760443282c6654deb
+export LINERA_WALLET_0="$LINERA_TMP_DIR/wallet_0.json"
+export LINERA_STORAGE_0="rocksdb:$LINERA_TMP_DIR/client_0.db"
+export LINERA_WALLET_1="$LINERA_TMP_DIR/wallet_1.json"
+export LINERA_STORAGE_1="rocksdb:$LINERA_TMP_DIR/client_1.db"
+
+linera --with-wallet 0 wallet init --faucet $FAUCET_URL
+linera --with-wallet 1 wallet init --faucet $FAUCET_URL
+
+INFO_0=($(linera --with-wallet 0 wallet request-chain --faucet $FAUCET_URL))
+INFO_1=($(linera --with-wallet 1 wallet request-chain --faucet $FAUCET_URL))
+CHAIN_0="${INFO_0[0]}"
+CHAIN_1="${INFO_1[0]}"
+OWNER_0="${INFO_0[3]}"
+OWNER_1="${INFO_1[3]}"
 ```
 
-Alternatively, the command below can be used to list the chains created for the test as
-known by each wallet:
+Note that `linera --with-wallet 0` is equivalent to `linera --wallet "$LINERA_WALLET_0"
+--storage "$LINERA_STORAGE_0"`.
+
+The command below can be used to list the chains created for the test as known by each
+wallet:
 
 ```bash
 linera --with-wallet 0 wallet show

@@ -799,7 +799,7 @@ async fn test_sync_validator(config: LocalNetConfig) -> Result<()> {
 
     // Create some blocks
     let sender_chain = client.default_chain().expect("Client has no default chain");
-    let (_, receiver_chain) = client
+    let (_, receiver_chain, _) = client
         .open_chain(sender_chain, None, Amount::from_tokens(1_000))
         .await?;
 

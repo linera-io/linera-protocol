@@ -29,7 +29,7 @@ It supports the following operations. All operations need to be executed remotel
 
 Before getting started, make sure that the binary tools `linera*` corresponding to
 your version of `linera-sdk` are in your PATH. For scripting purposes, we also assume
-that the BASH function `linera_spawn_and_read_wallet_variables` is defined.
+that the BASH function `linera_spawn` is defined.
 
 From the root of Linera repository, this can be achieved as follows:
 
@@ -38,22 +38,35 @@ export PATH="$PWD/target/debug:$PATH"
 source /dev/stdin <<<"$(linera net helper 2>/dev/null)"
 ```
 
-To start the local Linera network:
+Next, start the local Linera network and run a faucet:
 
 ```bash
-linera_spawn_and_read_wallet_variables linera net up --testing-prng-seed 37
+FAUCET_PORT=8079
+FAUCET_URL=http://localhost:$FAUCET_PORT
+linera_spawn linera net up --with-faucet --faucet-port $FAUCET_PORT
+
+# If you're using a testnet, run this instead:
+#   LINERA_TMP_DIR=$(mktemp -d)
+#   FAUCET_URL=https://faucet.testnet-XXX.linera.net  # for some value XXX
 ```
 
-We use the test-only CLI option `--testing-prng-seed` to make keys deterministic and simplify our
-explanation.
+Create the user wallet and add chains to it:
 
 ```bash
-OWNER_1=789dcf5afb0afb9c5c473568bab33c68b83005bf7b964dc2a93e5d4368a9da1f
-OWNER_2=38e7f6b6d1887b0ea1511e04a08382577aaf551bb440ee6011966d73d19b8150
-CHAIN_1=678e9f66507069d38955b593e93ddf192a23a4087225fd307eadad44e5544ae3
-CHAIN_2=a3edc33d8e951a1139333be8a4b56646b5598a8f51216e86592d881808972b07
-CHAIN_AMM=aee928d4bf3880353b4a3cd9b6f88e6cc6e5ed050860abae439e7782e9b2dfe8
-OWNER_AMM=de166237331a2966d8cf6778e81a8c007b4084be80dc1e0409d51f216c1deaa1
+export LINERA_WALLET="$LINERA_TMP_DIR/wallet.json"
+export LINERA_STORAGE="rocksdb:$LINERA_TMP_DIR/client.db"
+
+linera wallet init --faucet $FAUCET_URL
+
+INFO_1=($(linera wallet request-chain --faucet $FAUCET_URL))
+INFO_2=($(linera wallet request-chain --faucet $FAUCET_URL))
+INFO_AMM=($(linera wallet request-chain --faucet $FAUCET_URL))
+CHAIN_1="${INFO_1[0]}"
+CHAIN_2="${INFO_2[0]}"
+CHAIN_AMM="${INFO_AMM[0]}"
+OWNER_1="${INFO_1[3]}"
+OWNER_2="${INFO_2[3]}"
+OWNER_AMM="${INFO_AMM[3]}"
 ```
 
 Now we have to publish and create the fungible applications. The flag `--wait-for-outgoing-messages` waits until a quorum of validators has confirmed that all sent cross-chain messages have been delivered.
