@@ -13,7 +13,6 @@ use linera_base::{
     identifiers::{Account, ChainId},
     ownership::ChainOwnership,
     time::{Duration, Instant},
-    vm::VmRuntime,
 };
 use linera_chain::types::ConfirmedBlockCertificate;
 use linera_core::{
@@ -57,6 +56,7 @@ use {
     linera_base::{
         data_types::{BlobContent, Bytecode},
         identifiers::BytecodeId,
+        vm::VmRuntime,
     },
     linera_core::client::create_bytecode_blobs,
     std::{fs, path::PathBuf},
