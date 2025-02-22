@@ -520,7 +520,7 @@ async fn run(options: ServerOptions) {
             if server_config.internal_network.shards.len() > 1
                 && storage_config.storage_config.is_rocks_db()
             {
-                panic!("Multiple shards not supported with RocksDB");
+                panic!("Multiple shards are not supported with RocksDB");
             }
 
             let job = ServerContext {
