@@ -28,7 +28,9 @@ use wasmer::{WasmerContractInstance, WasmerServiceInstance};
 use wasmtime::{WasmtimeContractInstance, WasmtimeServiceInstance};
 #[cfg(with_metrics)]
 use {
-    linera_base::prometheus_util::{bucket_latencies, register_histogram_vec, MeasureLatency as _},
+    linera_base::prometheus_util::{
+        exponential_bucket_latencies, register_histogram_vec, MeasureLatency as _,
+    },
     prometheus::HistogramVec,
     std::sync::LazyLock,
 };
@@ -49,7 +51,7 @@ static CONTRACT_INSTANTIATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(||
         "wasm_contract_instantiation_latency",
         "Wasm contract instantiation latency",
         &[],
-        bucket_latencies(1.0),
+        exponential_bucket_latencies(1.0),
     )
 });
 
@@ -59,7 +61,7 @@ static SERVICE_INSTANTIATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| 
         "wasm_service_instantiation_latency",
         "Wasm service instantiation latency",
         &[],
-        bucket_latencies(1.0),
+        exponential_bucket_latencies(1.0),
     )
 });
 
