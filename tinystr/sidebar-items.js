@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["TinyStrError"],"macro":["tinystr"],"struct":["TinyAsciiStr","UnvalidatedTinyAsciiStr"],"type":["TinyStr16","TinyStr4","TinyStr8"]};

@@ -1,0 +1,105 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Facility to emit dummy implementations (or whatever) in case an error happen."><title>proc_macro_error2::dummy - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="proc_macro_error2" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../proc_macro_error2/index.html">proc_macro_error2</a><span class="version">2.0.1</span></h2></div><h2 class="location"><a href="#">Module dummy</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#functions">Functions</a></li></ul></section><h2><a href="../index.html">In crate proc_macro_error2</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">proc_macro_error2</a>::<wbr><a class="mod" href="#">dummy</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/proc_macro_error2/dummy.rs.html#1-151">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Facility to emit dummy implementations (or whatever) in case
+an error happen.</p>
+<p><code>compile_error!</code> does not abort a compilation right away. This means
+<code>rustc</code> doesn’t just show you the error and abort, it carries on the
+compilation process looking for other errors to report.</p>
+<p>Let’s consider an example:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>proc_macro::TokenStream;
+<span class="kw">use </span>proc_macro_error2::<span class="kw-2">*</span>;
+
+<span class="kw">trait </span>MyTrait {
+    <span class="kw">fn </span>do_thing();
+}
+
+<span class="comment">// this proc macro is supposed to generate MyTrait impl
+</span><span class="attr">#[proc_macro_derive(MyTrait)]
+#[proc_macro_error]
+</span><span class="kw">fn </span>example(input: TokenStream) -&gt; TokenStream {
+    <span class="comment">// somewhere deep inside
+    </span><span class="macro">abort!</span>(span, <span class="string">"something's wrong"</span>);
+
+    <span class="comment">// this implementation will be generated if no error happened
+    </span><span class="macro">quote!</span> {
+        <span class="kw">impl </span>MyTrait <span class="kw">for </span>#name {
+            <span class="kw">fn </span>do_thing() {<span class="comment">/* whatever */</span>}
+        }
+    }
+}
+
+<span class="comment">// ================
+// in main.rs
+
+// this derive triggers an error
+</span><span class="attr">#[derive(MyTrait)] </span><span class="comment">// first BOOM!
+</span><span class="kw">struct </span>Foo;
+
+<span class="kw">fn </span>main() {
+    Foo::do_thing(); <span class="comment">// second BOOM!
+</span>}</code></pre></div>
+<p>The problem is: the generated token stream contains only <code>compile_error!</code>
+invocation, the impl was not generated. That means user will see two compilation
+errors:</p>
+<div class="example-wrap"><pre class="language-text"><code>error: something&#39;s wrong
+ --&gt; $DIR/probe.rs:9:10
+  |
+9 |#[proc_macro_derive(MyTrait)]
+  |                    ^^^^^^^
+
+error[E0599]: no function or associated item named `do_thing` found for type `Foo` in the current scope
+ --&gt; src\main.rs:3:10
+  |
+1 | struct Foo;
+  | ----------- function or associated item `do_thing` not found for this
+2 | fn main() {
+3 |     Foo::do_thing(); // second BOOM!
+  |          ^^^^^^^^ function or associated item not found in `Foo`
+</code></pre></div>
+<p>But the second error is meaningless! We definitely need to fix this.</p>
+<p>Most used approach in cases like this is “dummy implementation” -
+omit <code>impl MyTrait for #name</code> and fill functions bodies with <code>unimplemented!()</code>.</p>
+<p>This is how you do it:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>proc_macro::TokenStream;
+<span class="kw">use </span>proc_macro_error2::<span class="kw-2">*</span>;
+
+ <span class="kw">trait </span>MyTrait {
+     <span class="kw">fn </span>do_thing();
+ }
+
+ <span class="comment">// this proc macro is supposed to generate MyTrait impl
+ </span><span class="attr">#[proc_macro_derive(MyTrait)]
+ #[proc_macro_error]
+ </span><span class="kw">fn </span>example(input: TokenStream) -&gt; TokenStream {
+     <span class="comment">// first of all - we set a dummy impl which will be appended to
+     // `compile_error!` invocations in case a trigger does happen
+     </span>set_dummy(<span class="macro">quote!</span> {
+         <span class="kw">impl </span>MyTrait <span class="kw">for </span>#name {
+             <span class="kw">fn </span>do_thing() { <span class="macro">unimplemented!</span>() }
+         }
+     });
+
+     <span class="comment">// somewhere deep inside
+     </span><span class="macro">abort!</span>(span, <span class="string">"something's wrong"</span>);
+
+     <span class="comment">// this implementation will be generated if no error happened
+     </span><span class="macro">quote!</span> {
+         <span class="kw">impl </span>MyTrait <span class="kw">for </span>#name {
+             <span class="kw">fn </span>do_thing() {<span class="comment">/* whatever */</span>}
+         }
+     }
+ }
+
+ <span class="comment">// ================
+ // in main.rs
+
+ // this derive triggers an error
+ </span><span class="attr">#[derive(MyTrait)] </span><span class="comment">// first BOOM!
+ </span><span class="kw">struct </span>Foo;
+
+ <span class="kw">fn </span>main() {
+     Foo::do_thing(); <span class="comment">// no more errors!
+ </span>}</code></pre></div>
+</div></details><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.append_dummy.html" title="fn proc_macro_error2::dummy::append_dummy">append_dummy</a></div><div class="desc docblock-short">Same as <a href="fn.set_dummy.html" title="fn proc_macro_error2::dummy::set_dummy"><code>set_dummy</code></a> but, instead of resetting, appends tokens to the
+existing dummy (if any). Behaves as <code>set_dummy</code> if no dummy is present.</div></li><li><div class="item-name"><a class="fn" href="fn.set_dummy.html" title="fn proc_macro_error2::dummy::set_dummy">set_dummy</a></div><div class="desc docblock-short">Sets dummy token stream which will be appended to <code>compile_error!(msg);...</code>
+invocations in case you’ll emit any errors.</div></li></ul></section></div></main></body></html>

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["fatal_precompile"],"struct":["FatalPrecompile"]};

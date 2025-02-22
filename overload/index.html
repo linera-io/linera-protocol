@@ -1,0 +1,128 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Provides a macro to simplify operator overloading."><title>overload - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="overload" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../overload/index.html">overload</a><span class="version">0.1.1</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#macros">Macros</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">overload</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/overload/lib.rs.html#1-257">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Provides a macro to simplify operator overloading.</p>
+<p>To use, include the following:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">extern crate </span>overload;
+<span class="kw">use </span>overload::overload;
+<span class="kw">use </span>std::ops; <span class="comment">// &lt;- don't forget this or you'll get nasty errors</span></code></pre></div>
+<h2 id="introduction"><a class="doc-anchor" href="#introduction">§</a>Introduction</h2>
+<p>Suppose we have the following <code>struct</code> definition:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(PartialEq, Debug)]
+</span><span class="kw">struct </span>Val {
+    v: i32
+}</code></pre></div>
+<p>We can overload the addition of <code>Val</code>s like so:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">overload!</span>((a: Val) + (b: Val) -&gt; Val { Val { v: a.v + b.v } });</code></pre></div>
+<p>The macro call above generates the following code:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">impl </span>ops::Add&lt;Val&gt; <span class="kw">for </span>Val {
+    <span class="kw">type </span>Output = Val;
+    <span class="kw">fn </span>add(<span class="self">self</span>, b: Val) -&gt; <span class="self">Self</span>::Output {
+        <span class="kw">let </span>a = <span class="self">self</span>;
+        Val { v: a.v + b.v }
+    }
+}</code></pre></div>
+<p>We are now able to add <code>Val</code>s:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">assert_eq!</span>(Val{v:<span class="number">3</span>} + Val{v:<span class="number">5</span>}, Val{v:<span class="number">8</span>});</code></pre></div>
+<h2 id="owned-and-borrowed-types"><a class="doc-anchor" href="#owned-and-borrowed-types">§</a>Owned and borrowed types</h2>
+<p>If we also wanted to overload addition for the borrowed type <code>&amp;Val</code> we could write:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">overload!</span>((a: <span class="kw-2">&amp;</span>Val) + (b: <span class="kw-2">&amp;</span>Val) -&gt; Val { Val { v: a.v + b.v } });</code></pre></div>
+<p>We might also want to overload addition between the owned and borrowed types:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">overload!</span>((a: Val) + (b: <span class="kw-2">&amp;</span>Val) -&gt; Val { Val { v: a.v + b.v } });
+<span class="macro">overload!</span>((a: <span class="kw-2">&amp;</span>Val) + (b: Val) -&gt; Val { Val { v: a.v + b.v } });</code></pre></div>
+<p>Let’s see how we can write these combinations more concisely.</p>
+<p>We can include a <code>?</code> in front of a type to indicate that it should stand in for both the owned and borrowed type.</p>
+<p>To overload addition for all four combinations between <code>Val</code> and <code>&amp;Val</code> we can therefore simply include a <code>?</code> in front of both types:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">overload!</span>((a: <span class="question-mark">?</span>Val) + (b: <span class="question-mark">?</span>Val) -&gt; Val { Val { v: a.v + b.v } });</code></pre></div>
+<p>The macro call above generates the following code:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">impl </span>ops::Add&lt;Val&gt; <span class="kw">for </span>Val {
+    <span class="kw">type </span>Output = Val;
+    <span class="kw">fn </span>add(<span class="self">self</span>, b: Val) -&gt; <span class="self">Self</span>::Output {
+        <span class="kw">let </span>a = <span class="self">self</span>;
+        Val { v: a.v + b.v }
+    }
+}
+ 
+<span class="kw">impl </span>ops::Add&lt;<span class="kw-2">&amp;</span>Val&gt; <span class="kw">for </span>Val {
+    <span class="kw">type </span>Output = Val;
+    <span class="kw">fn </span>add(<span class="self">self</span>, b: <span class="kw-2">&amp;</span>Val) -&gt; <span class="self">Self</span>::Output {
+        <span class="kw">let </span>a = <span class="self">self</span>;
+        Val { v: a.v + b.v }
+    }
+}
+ 
+<span class="kw">impl </span>ops::Add&lt;Val&gt; <span class="kw">for </span><span class="kw-2">&amp;</span>Val {
+    <span class="kw">type </span>Output = Val;
+    <span class="kw">fn </span>add(<span class="self">self</span>, b: Val) -&gt; <span class="self">Self</span>::Output {
+        <span class="kw">let </span>a = <span class="self">self</span>;
+        Val { v: a.v + b.v }
+    }
+}
+ 
+<span class="kw">impl </span>ops::Add&lt;<span class="kw-2">&amp;</span>Val&gt; <span class="kw">for </span><span class="kw-2">&amp;</span>Val {
+    <span class="kw">type </span>Output = Val;
+    <span class="kw">fn </span>add(<span class="self">self</span>, b: <span class="kw-2">&amp;</span>Val) -&gt; <span class="self">Self</span>::Output {
+        <span class="kw">let </span>a = <span class="self">self</span>;
+        Val { v: a.v + b.v }
+    }
+}</code></pre></div>
+<p>We are now able to add <code>Val</code>s and <code>&amp;Val</code>s in any combination:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">assert_eq!</span>(Val{v:<span class="number">3</span>} + Val{v:<span class="number">5</span>}, Val{v:<span class="number">8</span>});
+<span class="macro">assert_eq!</span>(Val{v:<span class="number">3</span>} + <span class="kw-2">&amp;</span>Val{v:<span class="number">5</span>}, Val{v:<span class="number">8</span>});
+<span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span>Val{v:<span class="number">3</span>} + Val{v:<span class="number">5</span>}, Val{v:<span class="number">8</span>});
+<span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span>Val{v:<span class="number">3</span>} + <span class="kw-2">&amp;</span>Val{v:<span class="number">5</span>}, Val{v:<span class="number">8</span>});</code></pre></div>
+<h2 id="binary-operators"><a class="doc-anchor" href="#binary-operators">§</a>Binary operators</h2>
+<p>The general syntax to overload a binary operator between types <code>&lt;a_type&gt;</code> and <code>&lt;b_type&gt;</code> is:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="macro">overload!</span>((&lt;a_ident&gt;: &lt;a_type&gt;) &lt;op&gt; (&lt;b_ident&gt;: &lt;b_type&gt;) -&gt; &lt;out_type&gt; { <span class="comment">/*body*/ </span>});</code></pre></div>
+<p>Inside the body you can use <code>&lt;a_ident&gt;</code> and <code>&lt;b_ident&gt;</code> freely to perform any computation.</p>
+<p>The last line of the body needs to be an expression (i.e. no <code>;</code> at the end of the line) of type <code>&lt;out_type&gt;</code>.</p>
+<div><table><thead><tr><th>Operator</th><th>Example</th><th>Trait</th></tr></thead><tbody>
+<tr><td>+</td><td><code>overload!((a: A) + (b: B) -&gt; C { /*...*/ );</code></td><td>Add</td></tr>
+<tr><td>-</td><td><code>overload!((a: A) - (b: B) -&gt; C { /*...*/ );</code></td><td>Sub</td></tr>
+<tr><td>*</td><td><code>overload!((a: A) * (b: B) -&gt; C { /*...*/ );</code></td><td>Mul</td></tr>
+<tr><td>/</td><td><code>overload!((a: A) / (b: B) -&gt; C { /*...*/ );</code></td><td>Div</td></tr>
+<tr><td>%</td><td><code>overload!((a: A) % (b: B) -&gt; C { /*...*/ );</code></td><td>Rem</td></tr>
+<tr><td>&amp;</td><td><code>overload!((a: A) &amp; (b: B) -&gt; C { /*...*/ );</code></td><td>BitAnd</td></tr>
+<tr><td>|</td><td><code>overload!((a: A) | (b: B) -&gt; C { /*…*/ );</code></td><td>BitOr</td></tr>
+<tr><td>^</td><td><code>overload!((a: A) ^ (b: B) -&gt; C { /*...*/ );</code></td><td>BitXor</td></tr>
+<tr><td>&lt;&lt;</td><td><code>overload!((a: A) &lt;&lt; (b: B) -&gt; C { /*...*/ );</code></td><td>Shl</td></tr>
+<tr><td>&gt;&gt;</td><td><code>overload!((a: A) &gt;&gt; (b: B) -&gt; C { /*...*/ );</code></td><td>Shr</td></tr>
+</tbody></table>
+</div><h2 id="assignment-operators"><a class="doc-anchor" href="#assignment-operators">§</a>Assignment operators</h2>
+<p>The general syntax to overload an assignment operator between types <code>&lt;a_type&gt;</code> and <code>&lt;b_type&gt;</code> is:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="macro">overload!</span>((&lt;a_ident&gt;: <span class="kw-2">&amp;mut </span>&lt;a_type&gt;) &lt;op&gt; (&lt;b_ident&gt;: &lt;b_type&gt;) { <span class="comment">/*body*/ </span>});</code></pre></div>
+<p>Inside the body you can use <code>&lt;a_ident&gt;</code> and <code>&lt;b_ident&gt;</code> freely to perform any computation and mutate <code>&lt;a_ident&gt;</code> as desired.</p>
+<div><table><thead><tr><th>Operator</th><th>Example</th><th>Trait</th></tr></thead><tbody>
+<tr><td>+=</td><td><code>overload!((a: &amp;mut A) += (b: B) { /*...*/ );</code></td><td>AddAssign</td></tr>
+<tr><td>-=</td><td><code>overload!((a: &amp;mut A) -= (b: B) { /*...*/ );</code></td><td>SubAssign</td></tr>
+<tr><td>*=</td><td><code>overload!((a: &amp;mut A) *= (b: B) { /*...*/ );</code></td><td>MulAssign</td></tr>
+<tr><td>/=</td><td><code>overload!((a: &amp;mut A) /= (b: B) { /*...*/ );</code></td><td>DivAssign</td></tr>
+<tr><td>%=</td><td><code>overload!((a: &amp;mut A) %= (b: B) { /*...*/ );</code></td><td>RemAssign</td></tr>
+<tr><td>&amp;=</td><td><code>overload!((a: &amp;mut A) &amp;= (b: B) { /*...*/ );</code></td><td>BitAndAssign</td></tr>
+<tr><td>|=</td><td><code>overload!((a: &amp;mut A) |= (b: B) { /*…*/ );</code></td><td>BitOrAssign</td></tr>
+<tr><td>^=</td><td><code>overload!((a: &amp;mut A) ^= (b: B) { /*...*/ );</code></td><td>BitXorAssign</td></tr>
+<tr><td>&lt;&lt;=</td><td><code>overload!((a: &amp;mut A) &lt;&lt;= (b: B) { /*...*/ );</code></td><td>ShlAssign</td></tr>
+<tr><td>&gt;&gt;=</td><td><code>overload!((a: &amp;mut A) &gt;&gt;= (b: B) { /*...*/ );</code></td><td>ShrAssign</td></tr>
+</tbody></table>
+</div><h2 id="unary-operators"><a class="doc-anchor" href="#unary-operators">§</a>Unary operators</h2>
+<p>The general syntax to overload a unary operator for type <code>&lt;a_type&gt;</code> is:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="macro">overload!</span>(&lt;op&gt; (&lt;a_ident&gt;: &lt;a_type&gt;) -&gt; &lt;out_type&gt; { <span class="comment">/*body*/ </span>});</code></pre></div>
+<p>Inside the body you can use <code>&lt;a_ident&gt;</code> freely to perform any computation.</p>
+<p>The last line of the body needs to be an expression (i.e. no <code>;</code> at the end of the line) of type <code>&lt;out_type&gt;</code>.</p>
+<div><table><thead><tr><th>Operator</th><th>Example</th><th>Trait</th></tr></thead><tbody>
+<tr><td>-</td><td><code>overload!(- (a: A) -&gt; B { /*...*/ );</code></td><td>Neg</td></tr>
+<tr><td>!</td><td><code>overload!(! (a: A) -&gt; B { /*...*/ );</code></td><td>Not</td></tr>
+</tbody></table>
+</div><h2 id="notes"><a class="doc-anchor" href="#notes">§</a>Notes</h2>
+<p>Remember that you can only overload operators between one or more types if at least one of the types is defined in the current crate.</p>
+</div></details><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="macro" href="macro.overload.html" title="macro overload::overload">overload</a></div><div class="desc docblock-short">Overloads an operator. See the <a href="index.html">module level documentation</a> for more information.</div></li></ul></section></div></main></body></html>

@@ -1,0 +1,134 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="What `#[derive(Into)]` generates"><title>Into in derive_more_impl - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="derive_more_impl" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc derive"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../derive_more_impl/index.html">derive_more_impl</a><span class="version">1.0.0</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Derive Macro <a href="index.html">derive_more_impl</a>::<wbr><a class="derive" href="#">Into</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/derive_more_impl/lib.rs.html#203">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>#[derive(Into)]
+{
+    <span class="comment">// Attributes available to this derive:</span>
+    #[into]
+}
+</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="what-deriveinto-generates"><a class="doc-anchor" href="#what-deriveinto-generates">§</a>What <code>#[derive(Into)]</code> generates</h2>
+<p>This derive creates the exact opposite of <code>#[derive(From)]</code>.
+Instead of allowing you to create a new instance of the struct from the values
+it should contain, it allows you to extract the values from the struct. One
+thing to note is that this derive doesn’t actually generate an implementation
+for the <code>Into</code> trait. Instead, it derives <code>From</code> for the values contained in
+the struct and thus has an indirect implementation of <code>Into</code> as
+<a href="https://doc.rust-lang.org/core/convert/trait.Into.html">recommended by the docs</a>.</p>
+<h3 id="structs"><a class="doc-anchor" href="#structs">§</a>Structs</h3>
+<p>For structs with a single field you can call <code>.into()</code> to extract the inner type.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Debug, Into, PartialEq)]
+</span><span class="kw">struct </span>Int(i32);
+
+<span class="macro">assert_eq!</span>(<span class="number">2</span>, Int(<span class="number">2</span>).into());</code></pre></div>
+<p>For structs having multiple fields, <code>.into()</code> extracts a tuple containing the
+desired content for each field.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Debug, Into, PartialEq)]
+</span><span class="kw">struct </span>Point(i32, i32);
+
+<span class="macro">assert_eq!</span>((<span class="number">1</span>, <span class="number">2</span>), Point(<span class="number">1</span>, <span class="number">2</span>).into());</code></pre></div>
+<p>To specify concrete types for deriving conversions into, use <code>#[into(&lt;types&gt;)]</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Debug, Into, PartialEq)]
+#[into(Cow&lt;<span class="lifetime">'static</span>, str&gt;, String)]
+</span><span class="kw">struct </span>Str(Cow&lt;<span class="lifetime">'static</span>, str&gt;);
+
+<span class="macro">assert_eq!</span>(<span class="string">"String"</span>.to_owned(), String::from(Str(<span class="string">"String"</span>.into())));
+<span class="macro">assert_eq!</span>(Cow::Borrowed(<span class="string">"Cow"</span>), &lt;Cow&lt;<span class="kw">_</span>&gt;&gt;::from(Str(<span class="string">"Cow"</span>.into())));
+
+<span class="attr">#[derive(Debug, Into, PartialEq)]
+#[into((i64, i64), (i32, i32))]
+</span><span class="kw">struct </span>Point {
+    x: i32,
+    y: i32,
+}
+
+<span class="macro">assert_eq!</span>((<span class="number">1_i64</span>, <span class="number">2_i64</span>), Point { x: <span class="number">1_i32</span>, y: <span class="number">2_i32 </span>}.into());
+<span class="macro">assert_eq!</span>((<span class="number">3_i32</span>, <span class="number">4_i32</span>), Point { x: <span class="number">3_i32</span>, y: <span class="number">4_i32 </span>}.into());</code></pre></div>
+<p>In addition to converting to owned types, this macro supports deriving into
+reference (mutable or not) via <code>#[into(ref(...))]</code>/<code>#[into(ref_mut(...))]</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Debug, Into, PartialEq)]
+#[into(owned, <span class="kw-2">ref</span>(i32), ref_mut)]
+</span><span class="kw">struct </span>Int(i32);
+
+<span class="macro">assert_eq!</span>(<span class="number">2</span>, Int(<span class="number">2</span>).into());
+<span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span><span class="number">2</span>, &lt;<span class="kw-2">&amp;</span>i32&gt;::from(<span class="kw-2">&amp;</span>Int(<span class="number">2</span>)));
+<span class="macro">assert_eq!</span>(<span class="kw-2">&amp;mut </span><span class="number">2</span>, &lt;<span class="kw-2">&amp;mut </span>i32&gt;::from(<span class="kw-2">&amp;mut </span>Int(<span class="number">2</span>)));</code></pre></div>
+<p>In case there are fields, that shouldn’t be included in the conversion, use the
+<code>#[into(skip)]</code> (or <code>#[into(ignore)]</code>) attribute.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Debug, Into, PartialEq)]
+#[into(i32, i64, i128)]
+</span><span class="kw">struct </span>Mass&lt;Unit&gt; {
+    value: i32,
+    <span class="attr">#[into(skip)] </span><span class="comment">// or #[into(ignore)]
+    </span>_unit: PhantomData&lt;Unit&gt;,
+}
+
+<span class="macro">assert_eq!</span>(<span class="number">5</span>, Mass::&lt;Gram&gt;::new(<span class="number">5</span>).into());
+<span class="macro">assert_eq!</span>(<span class="number">5_i64</span>, Mass::&lt;Gram&gt;::new(<span class="number">5</span>).into());
+<span class="macro">assert_eq!</span>(<span class="number">5_i128</span>, Mass::&lt;Gram&gt;::new(<span class="number">5</span>).into());</code></pre></div>
+<h4 id="fields-1"><a class="doc-anchor" href="#fields-1">§</a>Fields</h4>
+<p>The <code>#[into]</code> attribute can also be applied to specific fields of a struct.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Into)]
+</span><span class="kw">struct </span>Data {
+    id: i32,
+    <span class="attr">#[into]
+    </span>raw: f64
+}
+
+<span class="macro">assert_eq!</span>(<span class="number">42.0</span>, Data { id: <span class="number">1</span>, raw: <span class="number">42.0 </span>}.into());</code></pre></div>
+<p>In such cases, no conversion into a tuple of all fields is generated, unless
+an explicit struct attribute is present.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Into)]
+#[into]
+</span><span class="kw">struct </span>Data {
+    id: i32,
+    <span class="attr">#[into]
+    </span>raw: f64
+}
+
+<span class="macro">assert_eq!</span>(<span class="number">42.0</span>, Data { id: <span class="number">1</span>, raw: <span class="number">42.0 </span>}.into());
+<span class="macro">assert_eq!</span>((<span class="number">1</span>, <span class="number">42.0</span>), Data { id: <span class="number">1</span>, raw: <span class="number">42.0 </span>}.into());</code></pre></div>
+<p>The <code>#[into(&lt;types&gt;)]</code> syntax can be used on fields as well.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Into, Clone)]
+#[into(owned, <span class="kw-2">ref</span>((u8, str)), ref_mut)]
+</span><span class="kw">struct </span>Foo {
+   <span class="attr">#[into(owned(u64), <span class="kw-2">ref</span>)]
+   </span>a: u8,
+   b: String,
+   <span class="attr">#[into(skip)]
+   </span>_c: PhantomData&lt;Whatever&gt;,
+}
+
+<span class="kw">let </span><span class="kw-2">mut </span>foo = Foo { a: <span class="number">1</span>, b: <span class="string">"string"</span>.to_owned(), _c: PhantomData };
+
+<span class="macro">assert_eq!</span>((<span class="number">1_u8</span>, <span class="string">"string"</span>.to_owned()), foo.clone().into());
+<span class="macro">assert_eq!</span>((<span class="kw-2">&amp;</span><span class="number">1_u8</span>, <span class="string">"string"</span>), &lt;(<span class="kw-2">&amp;</span>u8, <span class="kw-2">&amp;</span>str)&gt;::from(<span class="kw-2">&amp;</span>foo));
+<span class="macro">assert_eq!</span>((<span class="kw-2">&amp;mut </span><span class="number">1_u8</span>, <span class="kw-2">&amp;mut </span><span class="string">"string"</span>.to_owned()), &lt;(<span class="kw-2">&amp;mut </span>u8, <span class="kw-2">&amp;mut </span>String)&gt;::from(<span class="kw-2">&amp;mut </span>foo));
+<span class="macro">assert_eq!</span>(<span class="number">1_u64</span>, foo.clone().into());
+<span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span><span class="number">1_u8</span>, &lt;<span class="kw-2">&amp;</span>u8&gt;::from(<span class="kw-2">&amp;</span>foo));</code></pre></div>
+<p>Fields, having specific conversions into them, can also be skipped for top-level
+tuple conversions.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code>
+<span class="attr">#[derive(Into)]
+#[into(<span class="kw-2">ref</span>((str, f64)))]
+</span><span class="kw">struct </span>Foo {
+    <span class="attr">#[into(<span class="kw-2">ref</span>)]
+    #[into(skip)]
+    </span>a: u8,
+    b: String,
+    c: f64,
+}
+
+<span class="kw">let </span>foo = Foo { a: <span class="number">1</span>, b: <span class="string">"string"</span>.to_owned(), c: <span class="number">3.0 </span>};
+
+<span class="macro">assert_eq!</span>((<span class="string">"string"</span>, <span class="kw-2">&amp;</span><span class="number">3.0</span>), (<span class="kw-2">&amp;</span>foo).into());
+<span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span><span class="number">1_u8</span>, &lt;<span class="kw-2">&amp;</span>u8&gt;::from(<span class="kw-2">&amp;</span>foo));</code></pre></div>
+<h3 id="enums"><a class="doc-anchor" href="#enums">§</a>Enums</h3>
+<p>Deriving <code>Into</code> for enums is not supported as it would not always be successful,
+so <code>TryInto</code> should be used instead.</p>
+</div></details></section></div></main></body></html>

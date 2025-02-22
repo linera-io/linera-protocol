@@ -1,0 +1,340 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A lock-free concurrent object pool."><title>Pool in sharded_slab::pool - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="sharded_slab" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc struct"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../sharded_slab/index.html">sharded_slab</a><span class="version">0.1.7</span></h2></div><h2 class="location"><a href="#">Pool</a></h2><div class="sidebar-elems"><section><h3><a href="#implementations">Associated Constants</a></h3><ul class="block associatedconstant"><li><a href="#associatedconstant.USED_BITS">USED_BITS</a></li></ul><h3><a href="#implementations">Methods</a></h3><ul class="block method"><li><a href="#method.clear">clear</a></li><li><a href="#method.create">create</a></li><li><a href="#method.create_owned">create_owned</a></li><li><a href="#method.create_with">create_with</a></li><li><a href="#method.get">get</a></li><li><a href="#method.get_owned">get_owned</a></li><li><a href="#method.new">new</a></li><li><a href="#method.new_with_config">new_with_config</a></li></ul><h3><a href="#trait-implementations">Trait Implementations</a></h3><ul class="block trait-implementation"><li><a href="#impl-Debug-for-Pool%3CT,+C%3E">Debug</a></li><li><a href="#impl-Default-for-Pool%3CT%3E">Default</a></li><li><a href="#impl-Send-for-Pool%3CT,+C%3E">Send</a></li><li><a href="#impl-Sync-for-Pool%3CT,+C%3E">Sync</a></li></ul><h3><a href="#synthetic-implementations">Auto Trait Implementations</a></h3><ul class="block synthetic-implementation"><li><a href="#impl-Freeze-for-Pool%3CT,+C%3E">!Freeze</a></li><li><a href="#impl-UnwindSafe-for-Pool%3CT,+C%3E">!UnwindSafe</a></li><li><a href="#impl-RefUnwindSafe-for-Pool%3CT,+C%3E">RefUnwindSafe</a></li><li><a href="#impl-Unpin-for-Pool%3CT,+C%3E">Unpin</a></li></ul><h3><a href="#blanket-implementations">Blanket Implementations</a></h3><ul class="block blanket-implementation"><li><a href="#impl-Any-for-T">Any</a></li><li><a href="#impl-Borrow%3CT%3E-for-T">Borrow&lt;T&gt;</a></li><li><a href="#impl-BorrowMut%3CT%3E-for-T">BorrowMut&lt;T&gt;</a></li><li><a href="#impl-From%3CT%3E-for-T">From&lt;T&gt;</a></li><li><a href="#impl-Into%3CU%3E-for-T">Into&lt;U&gt;</a></li><li><a href="#impl-TryFrom%3CU%3E-for-T">TryFrom&lt;U&gt;</a></li><li><a href="#impl-TryInto%3CU%3E-for-T">TryInto&lt;U&gt;</a></li></ul></section><h2><a href="index.html">In sharded_slab::pool</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Struct <a href="../index.html">sharded_slab</a>::<wbr><a href="index.html">pool</a>::<wbr><a class="struct" href="#">Pool</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/sharded_slab/pool.rs.html#84-91">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub struct Pool&lt;T, C = <a class="struct" href="../struct.DefaultConfig.html" title="struct sharded_slab::DefaultConfig">DefaultConfig</a>&gt;<div class="where">where
+    T: <a class="trait" href="../trait.Clear.html" title="trait sharded_slab::Clear">Clear</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/default/trait.Default.html" title="trait core::default::Default">Default</a>,
+    C: <a class="trait" href="../trait.Config.html" title="trait sharded_slab::Config">Config</a>,</div>{ <span class="comment">/* private fields */</span> }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A lock-free concurrent object pool.</p>
+<p>Slabs provide pre-allocated storage for many instances of a single type. But, when working with
+heap allocated objects, the advantages of a slab are lost, as the memory allocated for the
+object is freed when the object is removed from the slab. With a pool, we can instead reuse
+this memory for objects being added to the pool in the future, therefore reducing memory
+fragmentation and avoiding additional allocations.</p>
+<p>This type implements a lock-free concurrent pool, indexed by <code>usize</code>s. The items stored in this
+type need to implement <a href="../trait.Clear.html" title="trait sharded_slab::Clear"><code>Clear</code></a> and <code>Default</code>.</p>
+<p>The <code>Pool</code> type shares similar semantics to <a href="../struct.Slab.html" title="struct sharded_slab::Slab"><code>Slab</code></a> when it comes to sharing across threads
+and storing mutable shared data. The biggest difference is there are no <a href="../struct.Slab.html#method.insert" title="method sharded_slab::Slab::insert"><code>Slab::insert</code></a> and
+<a href="../struct.Slab.html#method.take" title="method sharded_slab::Slab::take"><code>Slab::take</code></a> analouges for the <code>Pool</code> type. Instead new items are added to the pool by using
+the <a href="../struct.Pool.html#method.create" title="method sharded_slab::Pool::create"><code>Pool::create</code></a> method, and marked for clearing by the <a href="../struct.Pool.html#method.clear" title="method sharded_slab::Pool::clear"><code>Pool::clear</code></a> method.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Add an entry to the pool, returning an index:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>pool: Pool&lt;String&gt; = Pool::new();
+
+<span class="kw">let </span>key = pool.create_with(|item| item.push_str(<span class="string">"hello world"</span>)).unwrap();
+<span class="macro">assert_eq!</span>(pool.get(key).unwrap(), String::from(<span class="string">"hello world"</span>));</code></pre></div>
+<p>Create a new pooled item, returning a guard that allows mutable access:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>pool: Pool&lt;String&gt; = Pool::new();
+
+<span class="kw">let </span><span class="kw-2">mut </span>guard = pool.create().unwrap();
+<span class="kw">let </span>key = guard.key();
+guard.push_str(<span class="string">"hello world"</span>);
+
+drop(guard); <span class="comment">// release the guard, allowing immutable access.
+</span><span class="macro">assert_eq!</span>(pool.get(key).unwrap(), String::from(<span class="string">"hello world"</span>));</code></pre></div>
+<p>Pool entries can be cleared by calling <a href="../struct.Pool.html#method.clear" title="method sharded_slab::Pool::clear"><code>Pool::clear</code></a>. This marks the entry to
+be cleared when the guards referencing to it are dropped.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>pool: Pool&lt;String&gt; = Pool::new();
+
+<span class="kw">let </span>key = pool.create_with(|item| item.push_str(<span class="string">"hello world"</span>)).unwrap();
+
+<span class="comment">// Mark this entry to be cleared.
+</span>pool.clear(key);
+
+<span class="comment">// The cleared entry is no longer available in the pool
+</span><span class="macro">assert!</span>(pool.get(key).is_none());</code></pre></div>
+<h2 id="configuration"><a class="doc-anchor" href="#configuration">§</a>Configuration</h2>
+<p>Both <code>Pool</code> and <a href="../struct.Slab.html" title="struct sharded_slab::Slab"><code>Slab</code></a> share the same configuration mechanism. See <a href="../index.html#configuration" title="mod sharded_slab">crate level documentation</a>
+for more details.</p>
+</div></details><h2 id="implementations" class="section-header">Implementations<a href="#implementations" class="anchor">§</a></h2><div id="implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-Pool%3CT%3E" class="impl"><a class="src rightside" href="../../src/sharded_slab/pool.rs.html#381-398">source</a><a href="#impl-Pool%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="struct" href="../struct.Pool.html" title="struct sharded_slab::Pool">Pool</a>&lt;T&gt;<div class="where">where
+    T: <a class="trait" href="../trait.Clear.html" title="trait sharded_slab::Clear">Clear</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/default/trait.Default.html" title="trait core::default::Default">Default</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.new" class="method"><a class="src rightside" href="../../src/sharded_slab/pool.rs.html#386-388">source</a><h4 class="code-header">pub fn <a href="#method.new" class="fn">new</a>() -&gt; Self</h4></section></summary><div class="docblock"><p>Returns a new <code>Pool</code> with the default configuration parameters.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.new_with_config" class="method"><a class="src rightside" href="../../src/sharded_slab/pool.rs.html#391-397">source</a><h4 class="code-header">pub fn <a href="#method.new_with_config" class="fn">new_with_config</a>&lt;C: <a class="trait" href="../trait.Config.html" title="trait sharded_slab::Config">Config</a>&gt;() -&gt; <a class="struct" href="../struct.Pool.html" title="struct sharded_slab::Pool">Pool</a>&lt;T, C&gt;</h4></section></summary><div class="docblock"><p>Returns a new <code>Pool</code> with the provided configuration parameters.</p>
+</div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Pool%3CT,+C%3E" class="impl"><a class="src rightside" href="../../src/sharded_slab/pool.rs.html#400-834">source</a><a href="#impl-Pool%3CT,+C%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T, C&gt; <a class="struct" href="../struct.Pool.html" title="struct sharded_slab::Pool">Pool</a>&lt;T, C&gt;<div class="where">where
+    T: <a class="trait" href="../trait.Clear.html" title="trait sharded_slab::Clear">Clear</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/default/trait.Default.html" title="trait core::default::Default">Default</a>,
+    C: <a class="trait" href="../trait.Config.html" title="trait sharded_slab::Config">Config</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedconstant.USED_BITS" class="associatedconstant"><a class="src rightside" href="../../src/sharded_slab/pool.rs.html#418">source</a><h4 class="code-header">pub const <a href="#associatedconstant.USED_BITS" class="constant">USED_BITS</a>: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a> = C::USED_BITS</h4></section></summary><div class="docblock"><p>The number of bits in each index which are used by the pool.</p>
+<p>If other data is packed into the <code>usize</code> indices returned by
+<a href="../struct.Pool.html#method.create" title="method sharded_slab::Pool::create"><code>Pool::create</code></a>, user code is free to use any bits higher than the
+<code>USED_BITS</code>-th bit freely.</p>
+<p>This is determined by the <a href="trait.Config.html"><code>Config</code></a> type that configures the pool’s
+parameters. By default, all bits are used; this can be changed by
+overriding the <a href="trait.Config.html#associatedconstant.RESERVED_BITS"><code>Config::RESERVED_BITS</code></a> constant.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.create" class="method"><a class="src rightside" href="../../src/sharded_slab/pool.rs.html#451-464">source</a><h4 class="code-header">pub fn <a href="#method.create" class="fn">create</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="struct.RefMut.html" title="struct sharded_slab::pool::RefMut">RefMut</a>&lt;'_, T, C&gt;&gt;</h4></section></summary><div class="docblock"><p>Creates a new object in the pool, returning an <a href="struct.RefMut.html" title="struct sharded_slab::pool::RefMut"><code>RefMut</code></a> guard that
+may be used to mutate the new object.</p>
+<p>If this function returns <code>None</code>, then the shard for the current thread is full and no items
+can be added until some are removed, or the maximum number of shards has been reached.</p>
+<h5 id="examples-1"><a class="doc-anchor" href="#examples-1">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>pool: Pool&lt;String&gt; = Pool::new();
+
+<span class="comment">// Create a new pooled item, returning a guard that allows mutable
+// access to the new item.
+</span><span class="kw">let </span><span class="kw-2">mut </span>item = pool.create().unwrap();
+<span class="comment">// Return a key that allows indexing the created item once the guard
+// has been dropped.
+</span><span class="kw">let </span>key = item.key();
+
+<span class="comment">// Mutate the item.
+</span>item.push_str(<span class="string">"Hello"</span>);
+<span class="comment">// Drop the guard, releasing mutable access to the new item.
+</span>drop(item);
+
+<span class="doccomment">/// Other threads may now (immutably) access the item using the returned key.
+</span>thread::spawn(<span class="kw">move </span>|| {
+   <span class="macro">assert_eq!</span>(pool.get(key).unwrap(), String::from(<span class="string">"Hello"</span>));
+}).join().unwrap();</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.create_owned" class="method"><a class="src rightside" href="../../src/sharded_slab/pool.rs.html#619-632">source</a><h4 class="code-header">pub fn <a href="#method.create_owned" class="fn">create_owned</a>(self: <a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/sync/struct.Arc.html" title="struct alloc::sync::Arc">Arc</a>&lt;Self&gt;) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="struct.OwnedRefMut.html" title="struct sharded_slab::pool::OwnedRefMut">OwnedRefMut</a>&lt;T, C&gt;&gt;</h4></section></summary><div class="docblock"><p>Creates a new object in the pool, returning an <a href="struct.OwnedRefMut.html" title="struct sharded_slab::pool::OwnedRefMut"><code>OwnedRefMut</code></a> guard that
+may be used to mutate the new object.</p>
+<p>If this function returns <code>None</code>, then the shard for the current thread
+is full and no items can be added until some are removed, or the maximum
+number of shards has been reached.</p>
+<p>Unlike <a href="../struct.Pool.html#method.create" title="method sharded_slab::Pool::create"><code>create</code></a>, which borrows the pool, this method <em>clones</em> the <code>Arc</code>
+around the pool if a value exists for the given key. This means that the
+returned <a href="struct.OwnedRefMut.html" title="struct sharded_slab::pool::OwnedRefMut"><code>OwnedRefMut</code></a> can be held for an arbitrary lifetime. However,
+this method requires that the pool itself be wrapped in an <code>Arc</code>.</p>
+<p>An <code>OwnedRefMut&lt;T&gt;</code> functions more or less identically to an owned
+<code>Box&lt;T&gt;</code>: it can be passed to functions, stored in structure fields, and
+borrowed mutably or immutably, and can be owned for arbitrary lifetimes.
+The difference is that, unlike a <code>Box&lt;T&gt;</code>, the memory allocation for the
+<code>T</code> lives in the <code>Pool</code>; when an <code>OwnedRefMut</code> is created, it may reuse
+memory that was allocated for a previous pooled object that has been
+cleared. Additionally, the <code>OwnedRefMut</code> may be <a href="struct.OwnedRefMut.html#method.downgrade" title="method sharded_slab::pool::OwnedRefMut::downgrade">downgraded</a> to an
+<a href="struct.OwnedRef.html" title="struct sharded_slab::pool::OwnedRef"><code>OwnedRef</code></a> which may be shared freely, essentially turning the <code>Box</code>
+into an <code>Arc</code>.</p>
+<h5 id="examples-2"><a class="doc-anchor" href="#examples-2">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::sync::Arc;
+
+<span class="kw">let </span>pool: Arc&lt;Pool&lt;String&gt;&gt; = Arc::new(Pool::new());
+
+<span class="comment">// Create a new pooled item, returning an owned guard that allows mutable
+// access to the new item.
+</span><span class="kw">let </span><span class="kw-2">mut </span>item = pool.clone().create_owned().unwrap();
+<span class="comment">// Return a key that allows indexing the created item once the guard
+// has been dropped.
+</span><span class="kw">let </span>key = item.key();
+
+<span class="comment">// Mutate the item.
+</span>item.push_str(<span class="string">"Hello"</span>);
+<span class="comment">// Drop the guard, releasing mutable access to the new item.
+</span>drop(item);
+
+<span class="doccomment">/// Other threads may now (immutably) access the item using the returned key.
+</span>thread::spawn(<span class="kw">move </span>|| {
+   <span class="macro">assert_eq!</span>(pool.get(key).unwrap(), String::from(<span class="string">"Hello"</span>));
+}).join().unwrap();</code></pre></div>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::sync::Arc;
+
+<span class="kw">let </span>pool: Arc&lt;Pool&lt;String&gt;&gt; = Arc::new(Pool::new());
+
+<span class="comment">// Create a new item, returning an owned, mutable guard.
+</span><span class="kw">let </span><span class="kw-2">mut </span>value = pool.clone().create_owned().unwrap();
+
+<span class="comment">// Now, the original `Arc` clone of the pool may be dropped, but the
+// returned `OwnedRefMut` can still access the value.
+</span>drop(pool);
+
+value.push_str(<span class="string">"hello world"</span>);
+<span class="macro">assert_eq!</span>(value, String::from(<span class="string">"hello world"</span>));</code></pre></div>
+<p>Unlike <a href="struct.RefMut.html" title="struct sharded_slab::pool::RefMut"><code>RefMut</code></a>, an <code>OwnedRefMut</code> may be stored in a struct which must live
+for the <code>'static</code> lifetime:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>sharded_slab::pool::OwnedRefMut;
+<span class="kw">use </span>std::sync::Arc;
+
+<span class="kw">pub struct </span>MyStruct {
+    pool_ref: OwnedRefMut&lt;String&gt;,
+    <span class="comment">// ... other fields ...
+</span>}
+
+<span class="comment">// Suppose this is some arbitrary function which requires a value that
+// lives for the 'static lifetime...
+</span><span class="kw">fn </span>function_requiring_static&lt;T: <span class="lifetime">'static</span>&gt;(t: <span class="kw-2">&amp;</span>T) {
+    <span class="comment">// ... do something extremely important and interesting ...
+</span>}
+
+<span class="kw">let </span>pool: Arc&lt;Pool&lt;String&gt;&gt; = Arc::new(Pool::new());
+
+<span class="comment">// Create a new item, returning a mutable owned reference.
+</span><span class="kw">let </span>pool_ref = pool.clone().create_owned().unwrap();
+
+<span class="kw">let </span>my_struct = MyStruct {
+    pool_ref,
+    <span class="comment">// ...
+</span>};
+
+<span class="comment">// We can use `my_struct` anywhere where it is required to have the
+// `'static` lifetime:
+</span>function_requiring_static(<span class="kw-2">&amp;</span>my_struct);</code></pre></div>
+<p><code>OwnedRefMut</code>s may be sent between threads:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::{thread, sync::Arc};
+
+<span class="kw">let </span>pool: Arc&lt;Pool&lt;String&gt;&gt; = Arc::new(Pool::new());
+
+<span class="kw">let </span><span class="kw-2">mut </span>value = pool.clone().create_owned().unwrap();
+<span class="kw">let </span>key = value.key();
+
+thread::spawn(<span class="kw">move </span>|| {
+    value.push_str(<span class="string">"hello world"</span>);
+    <span class="comment">// ...
+</span>}).join().unwrap();
+
+<span class="comment">// Once the `OwnedRefMut` has been dropped by the other thread, we may
+// now access the value immutably on this thread.
+
+</span><span class="macro">assert_eq!</span>(pool.get(key).unwrap(), String::from(<span class="string">"hello world"</span>));</code></pre></div>
+<p>Downgrading from a mutable to an immutable reference:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::{thread, sync::Arc};
+
+<span class="kw">let </span>pool: Arc&lt;Pool&lt;String&gt;&gt; = Arc::new(Pool::new());
+
+<span class="kw">let </span><span class="kw-2">mut </span>value = pool.clone().create_owned().unwrap();
+<span class="kw">let </span>key = value.key();
+value.push_str(<span class="string">"hello world"</span>);
+
+<span class="comment">// Downgrade the mutable owned ref to an immutable owned ref.
+</span><span class="kw">let </span>value = value.downgrade();
+
+<span class="comment">// Once the `OwnedRefMut` has been downgraded, other threads may
+// immutably access the pooled value:
+</span>thread::spawn(<span class="kw">move </span>|| {
+    <span class="macro">assert_eq!</span>(pool.get(key).unwrap(), String::from(<span class="string">"hello world"</span>));
+}).join().unwrap();
+
+<span class="comment">// This thread can still access the pooled value through the
+// immutable owned ref:
+</span><span class="macro">assert_eq!</span>(value, String::from(<span class="string">"hello world"</span>));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.create_with" class="method"><a class="src rightside" href="../../src/sharded_slab/pool.rs.html#654-659">source</a><h4 class="code-header">pub fn <a href="#method.create_with" class="fn">create_with</a>(&amp;self, init: impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnOnce.html" title="trait core::ops::function::FnOnce">FnOnce</a>(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a>)) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>&gt;</h4></section></summary><div class="docblock"><p>Creates a new object in the pool with the provided initializer,
+returning a key that may be used to access the new object.</p>
+<p>If this function returns <code>None</code>, then the shard for the current thread is full and no items
+can be added until some are removed, or the maximum number of shards has been reached.</p>
+<h5 id="examples-3"><a class="doc-anchor" href="#examples-3">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>pool: Pool&lt;String&gt; = Pool::new();
+
+<span class="comment">// Create a new pooled item, returning its integer key.
+</span><span class="kw">let </span>key = pool.create_with(|s| s.push_str(<span class="string">"Hello"</span>)).unwrap();
+
+<span class="doccomment">/// Other threads may now (immutably) access the item using the key.
+</span>thread::spawn(<span class="kw">move </span>|| {
+   <span class="macro">assert_eq!</span>(pool.get(key).unwrap(), String::from(<span class="string">"Hello"</span>));
+}).join().unwrap();</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get" class="method"><a class="src rightside" href="../../src/sharded_slab/pool.rs.html#675-682">source</a><h4 class="code-header">pub fn <a href="#method.get" class="fn">get</a>(&amp;self, key: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="struct.Ref.html" title="struct sharded_slab::pool::Ref">Ref</a>&lt;'_, T, C&gt;&gt;</h4></section></summary><div class="docblock"><p>Return a borrowed reference to the value associated with the given key.</p>
+<p>If the pool does not contain a value for the given key, <code>None</code> is returned instead.</p>
+<h5 id="examples-4"><a class="doc-anchor" href="#examples-4">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>pool: Pool&lt;String&gt; = Pool::new();
+<span class="kw">let </span>key = pool.create_with(|item| item.push_str(<span class="string">"hello world"</span>)).unwrap();
+
+<span class="macro">assert_eq!</span>(pool.get(key).unwrap(), String::from(<span class="string">"hello world"</span>));
+<span class="macro">assert!</span>(pool.get(<span class="number">12345</span>).is_none());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_owned" class="method"><a class="src rightside" href="../../src/sharded_slab/pool.rs.html#766-777">source</a><h4 class="code-header">pub fn <a href="#method.get_owned" class="fn">get_owned</a>(self: <a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/sync/struct.Arc.html" title="struct alloc::sync::Arc">Arc</a>&lt;Self&gt;, key: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="struct.OwnedRef.html" title="struct sharded_slab::pool::OwnedRef">OwnedRef</a>&lt;T, C&gt;&gt;</h4></section></summary><div class="docblock"><p>Return an owned reference to the value associated with the given key.</p>
+<p>If the pool does not contain a value for the given key, <code>None</code> is
+returned instead.</p>
+<p>Unlike <a href="../struct.Pool.html#method.get" title="method sharded_slab::Pool::get"><code>get</code></a>, which borrows the pool, this method <em>clones</em> the <code>Arc</code>
+around the pool if a value exists for the given key. This means that the
+returned <a href="struct.OwnedRef.html" title="struct sharded_slab::pool::OwnedRef"><code>OwnedRef</code></a> can be held for an arbitrary lifetime. However,
+this method requires that the pool itself be wrapped in an <code>Arc</code>.</p>
+<h5 id="examples-5"><a class="doc-anchor" href="#examples-5">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::sync::Arc;
+
+<span class="kw">let </span>pool: Arc&lt;Pool&lt;String&gt;&gt; = Arc::new(Pool::new());
+<span class="kw">let </span>key = pool.create_with(|item| item.push_str(<span class="string">"hello world"</span>)).unwrap();
+
+<span class="comment">// Look up the created `Key`, returning an `OwnedRef`.
+</span><span class="kw">let </span>value = pool.clone().get_owned(key).unwrap();
+
+<span class="comment">// Now, the original `Arc` clone of the pool may be dropped, but the
+// returned `OwnedRef` can still access the value.
+</span><span class="macro">assert_eq!</span>(value, String::from(<span class="string">"hello world"</span>));</code></pre></div>
+<p>Unlike <a href="struct.Ref.html" title="struct sharded_slab::pool::Ref"><code>Ref</code></a>, an <code>OwnedRef</code> may be stored in a struct which must live
+for the <code>'static</code> lifetime:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>sharded_slab::pool::OwnedRef;
+<span class="kw">use </span>std::sync::Arc;
+
+<span class="kw">pub struct </span>MyStruct {
+    pool_ref: OwnedRef&lt;String&gt;,
+    <span class="comment">// ... other fields ...
+</span>}
+
+<span class="comment">// Suppose this is some arbitrary function which requires a value that
+// lives for the 'static lifetime...
+</span><span class="kw">fn </span>function_requiring_static&lt;T: <span class="lifetime">'static</span>&gt;(t: <span class="kw-2">&amp;</span>T) {
+    <span class="comment">// ... do something extremely important and interesting ...
+</span>}
+
+<span class="kw">let </span>pool: Arc&lt;Pool&lt;String&gt;&gt; = Arc::new(Pool::new());
+<span class="kw">let </span>key = pool.create_with(|item| item.push_str(<span class="string">"hello world"</span>)).unwrap();
+
+<span class="comment">// Look up the created `Key`, returning an `OwnedRef`.
+</span><span class="kw">let </span>pool_ref = pool.clone().get_owned(key).unwrap();
+<span class="kw">let </span>my_struct = MyStruct {
+    pool_ref,
+    <span class="comment">// ...
+</span>};
+
+<span class="comment">// We can use `my_struct` anywhere where it is required to have the
+// `'static` lifetime:
+</span>function_requiring_static(<span class="kw-2">&amp;</span>my_struct);</code></pre></div>
+<p><code>OwnedRef</code>s may be sent between threads:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::{thread, sync::Arc};
+
+<span class="kw">let </span>pool: Arc&lt;Pool&lt;String&gt;&gt; = Arc::new(Pool::new());
+<span class="kw">let </span>key = pool.create_with(|item| item.push_str(<span class="string">"hello world"</span>)).unwrap();
+
+<span class="comment">// Look up the created `Key`, returning an `OwnedRef`.
+</span><span class="kw">let </span>value = pool.clone().get_owned(key).unwrap();
+
+thread::spawn(<span class="kw">move </span>|| {
+    <span class="macro">assert_eq!</span>(value, String::from(<span class="string">"hello world"</span>));
+    <span class="comment">// ...
+</span>}).join().unwrap();</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.clear" class="method"><a class="src rightside" href="../../src/sharded_slab/pool.rs.html#820-833">source</a><h4 class="code-header">pub fn <a href="#method.clear" class="fn">clear</a>(&amp;self, key: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Remove the value using the storage associated with the given key from the pool, returning
+<code>true</code> if the value was removed.</p>
+<p>This method does <em>not</em> block the current thread until the value can be
+cleared. Instead, if another thread is currently accessing that value, this marks it to be
+cleared by that thread when it is done accessing that value.</p>
+<h5 id="examples-6"><a class="doc-anchor" href="#examples-6">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>pool: Pool&lt;String&gt; = Pool::new();
+
+<span class="comment">// Check out an item from the pool.
+</span><span class="kw">let </span><span class="kw-2">mut </span>item = pool.create().unwrap();
+<span class="kw">let </span>key = item.key();
+item.push_str(<span class="string">"hello world"</span>);
+drop(item);
+
+<span class="macro">assert_eq!</span>(pool.get(key).unwrap(), String::from(<span class="string">"hello world"</span>));
+
+pool.clear(key);
+<span class="macro">assert!</span>(pool.get(key).is_none());</code></pre></div>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>pool: Pool&lt;String&gt; = Pool::new();
+
+<span class="kw">let </span>key = pool.create_with(|item| item.push_str(<span class="string">"Hello world!"</span>)).unwrap();
+
+<span class="comment">// Clearing a key that doesn't exist in the `Pool` will return `false`
+</span><span class="macro">assert_eq!</span>(pool.clear(key + <span class="number">69420</span>), <span class="bool-val">false</span>);
+
+<span class="comment">// Clearing a key that does exist returns `true`
+</span><span class="macro">assert!</span>(pool.clear(key));
+
+<span class="comment">// Clearing a key that has previously been cleared will return `false`
+</span><span class="macro">assert_eq!</span>(pool.clear(key), <span class="bool-val">false</span>);</code></pre></div>
+</div></details></div></details></div><h2 id="trait-implementations" class="section-header">Trait Implementations<a href="#trait-implementations" class="anchor">§</a></h2><div id="trait-implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-Debug-for-Pool%3CT,+C%3E" class="impl"><a class="src rightside" href="../../src/sharded_slab/pool.rs.html#858-869">source</a><a href="#impl-Debug-for-Pool%3CT,+C%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T, C&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html" title="trait core::fmt::Debug">Debug</a> for <a class="struct" href="../struct.Pool.html" title="struct sharded_slab::Pool">Pool</a>&lt;T, C&gt;<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html" title="trait core::fmt::Debug">Debug</a> + <a class="trait" href="../trait.Clear.html" title="trait sharded_slab::Clear">Clear</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/default/trait.Default.html" title="trait core::default::Default">Default</a>,
+    C: <a class="trait" href="../trait.Config.html" title="trait sharded_slab::Config">Config</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.fmt" class="method trait-impl"><a class="src rightside" href="../../src/sharded_slab/pool.rs.html#863-868">source</a><a href="#method.fmt" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html#tymethod.fmt" class="fn">fmt</a>(&amp;self, f: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/fmt/struct.Formatter.html" title="struct core::fmt::Formatter">Formatter</a>&lt;'_&gt;) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a></h4></section></summary><div class='docblock'>Formats the value using the given formatter. <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html#tymethod.fmt">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Default-for-Pool%3CT%3E" class="impl"><a class="src rightside" href="../../src/sharded_slab/pool.rs.html#849-856">source</a><a href="#impl-Default-for-Pool%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/default/trait.Default.html" title="trait core::default::Default">Default</a> for <a class="struct" href="../struct.Pool.html" title="struct sharded_slab::Pool">Pool</a>&lt;T&gt;<div class="where">where
+    T: <a class="trait" href="../trait.Clear.html" title="trait sharded_slab::Clear">Clear</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/default/trait.Default.html" title="trait core::default::Default">Default</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.default" class="method trait-impl"><a class="src rightside" href="../../src/sharded_slab/pool.rs.html#853-855">source</a><a href="#method.default" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/default/trait.Default.html#tymethod.default" class="fn">default</a>() -&gt; Self</h4></section></summary><div class='docblock'>Returns the “default value” for a type. <a href="https://doc.rust-lang.org/1.81.0/core/default/trait.Default.html#tymethod.default">Read more</a></div></details></div></details><section id="impl-Send-for-Pool%3CT,+C%3E" class="impl"><a class="src rightside" href="../../src/sharded_slab/pool.rs.html#836-841">source</a><a href="#impl-Send-for-Pool%3CT,+C%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T, C&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> for <a class="struct" href="../struct.Pool.html" title="struct sharded_slab::Pool">Pool</a>&lt;T, C&gt;<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + <a class="trait" href="../trait.Clear.html" title="trait sharded_slab::Clear">Clear</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/default/trait.Default.html" title="trait core::default::Default">Default</a>,
+    C: <a class="trait" href="../trait.Config.html" title="trait sharded_slab::Config">Config</a>,</div></h3></section><section id="impl-Sync-for-Pool%3CT,+C%3E" class="impl"><a class="src rightside" href="../../src/sharded_slab/pool.rs.html#842-847">source</a><a href="#impl-Sync-for-Pool%3CT,+C%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T, C&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> for <a class="struct" href="../struct.Pool.html" title="struct sharded_slab::Pool">Pool</a>&lt;T, C&gt;<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + <a class="trait" href="../trait.Clear.html" title="trait sharded_slab::Clear">Clear</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/default/trait.Default.html" title="trait core::default::Default">Default</a>,
+    C: <a class="trait" href="../trait.Config.html" title="trait sharded_slab::Config">Config</a>,</div></h3></section></div><h2 id="synthetic-implementations" class="section-header">Auto Trait Implementations<a href="#synthetic-implementations" class="anchor">§</a></h2><div id="synthetic-implementations-list"><section id="impl-Freeze-for-Pool%3CT,+C%3E" class="impl"><a href="#impl-Freeze-for-Pool%3CT,+C%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T, C = <a class="struct" href="../struct.DefaultConfig.html" title="struct sharded_slab::DefaultConfig">DefaultConfig</a>&gt; !<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Freeze.html" title="trait core::marker::Freeze">Freeze</a> for <a class="struct" href="../struct.Pool.html" title="struct sharded_slab::Pool">Pool</a>&lt;T, C&gt;</h3></section><section id="impl-RefUnwindSafe-for-Pool%3CT,+C%3E" class="impl"><a href="#impl-RefUnwindSafe-for-Pool%3CT,+C%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T, C&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/panic/unwind_safe/trait.RefUnwindSafe.html" title="trait core::panic::unwind_safe::RefUnwindSafe">RefUnwindSafe</a> for <a class="struct" href="../struct.Pool.html" title="struct sharded_slab::Pool">Pool</a>&lt;T, C&gt;<div class="where">where
+    C: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/panic/unwind_safe/trait.RefUnwindSafe.html" title="trait core::panic::unwind_safe::RefUnwindSafe">RefUnwindSafe</a>,</div></h3></section><section id="impl-Unpin-for-Pool%3CT,+C%3E" class="impl"><a href="#impl-Unpin-for-Pool%3CT,+C%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T, C&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a> for <a class="struct" href="../struct.Pool.html" title="struct sharded_slab::Pool">Pool</a>&lt;T, C&gt;<div class="where">where
+    C: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a>,</div></h3></section><section id="impl-UnwindSafe-for-Pool%3CT,+C%3E" class="impl"><a href="#impl-UnwindSafe-for-Pool%3CT,+C%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T, C = <a class="struct" href="../struct.DefaultConfig.html" title="struct sharded_slab::DefaultConfig">DefaultConfig</a>&gt; !<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/panic/unwind_safe/trait.UnwindSafe.html" title="trait core::panic::unwind_safe::UnwindSafe">UnwindSafe</a> for <a class="struct" href="../struct.Pool.html" title="struct sharded_slab::Pool">Pool</a>&lt;T, C&gt;</h3></section></div><h2 id="blanket-implementations" class="section-header">Blanket Implementations<a href="#blanket-implementations" class="anchor">§</a></h2><div id="blanket-implementations-list"><details class="toggle implementors-toggle"><summary><section id="impl-Any-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#140">source</a><a href="#impl-Any-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html" title="trait core::any::Any">Any</a> for T<div class="where">where
+    T: 'static + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.type_id" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#141">source</a><a href="#method.type_id" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html#tymethod.type_id" class="fn">type_id</a>(&amp;self) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/any/struct.TypeId.html" title="struct core::any::TypeId">TypeId</a></h4></section></summary><div class='docblock'>Gets the <code>TypeId</code> of <code>self</code>. <a href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html#tymethod.type_id">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Borrow%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#209">source</a><a href="#impl-Borrow%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html" title="trait core::borrow::Borrow">Borrow</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#211">source</a><a href="#method.borrow" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html#tymethod.borrow" class="fn">borrow</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a></h4></section></summary><div class='docblock'>Immutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html#tymethod.borrow">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-BorrowMut%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#217">source</a><a href="#impl-BorrowMut%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html" title="trait core::borrow::BorrowMut">BorrowMut</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow_mut" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#218">source</a><a href="#method.borrow_mut" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut" class="fn">borrow_mut</a>(&amp;mut self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a></h4></section></summary><div class='docblock'>Mutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-From%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#765">source</a><a href="#impl-From%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for T</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#768">source</a><a href="#method.from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html#tymethod.from" class="fn">from</a>(t: T) -&gt; T</h4></section></summary><div class="docblock"><p>Returns the argument unchanged.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Into%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#748-750">source</a><a href="#impl-Into%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#758">source</a><a href="#method.into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html#tymethod.into" class="fn">into</a>(self) -&gt; U</h4></section></summary><div class="docblock"><p>Calls <code>U::from(self)</code>.</p>
+<p>That is, this conversion is whatever the implementation of
+<code><a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for U</code> chooses to do.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryFrom%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#805-807">source</a><a href="#impl-TryFrom%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error" class="associatedtype trait-impl"><a href="#associatedtype.Error" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" class="associatedtype">Error</a> = <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/convert/enum.Infallible.html" title="enum core::convert::Infallible">Infallible</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#812">source</a><a href="#method.try_from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#tymethod.try_from" class="fn">try_from</a>(value: U) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, &lt;T as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryInto%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#790-792">source</a><a href="#impl-TryInto%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html" title="trait core::convert::TryInto">TryInto</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error-1" class="associatedtype trait-impl"><a href="#associatedtype.Error-1" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html#associatedtype.Error" class="associatedtype">Error</a> = &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#797">source</a><a href="#method.try_into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html#tymethod.try_into" class="fn">try_into</a>(self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;U, &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details></div></section></div></main></body></html>

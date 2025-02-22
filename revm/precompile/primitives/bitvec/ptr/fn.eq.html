@@ -1,0 +1,33 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Bit-Pointer Equality"><title>eq in revm::precompile::primitives::bitvec::ptr - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../../../" data-static-root-path="../../../../../static.files/" data-current-crate="revm" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../../../revm/index.html">revm</a><span class="version">19.4.0</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In revm::precompile::primitives::bitvec::ptr</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../../../../index.html">revm</a>::<wbr><a href="../../../index.html">precompile</a>::<wbr><a href="../../index.html">primitives</a>::<wbr><a href="../index.html">bitvec</a>::<wbr><a href="index.html">ptr</a>::<wbr><a class="fn" href="#">eq</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../../../src/bitvec/ptr.rs.html#105-112">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn eq&lt;T1, T2, O&gt;(
+    this: <a class="struct" href="../prelude/struct.BitPtr.html" title="struct revm::precompile::primitives::bitvec::prelude::BitPtr">BitPtr</a>&lt;<a class="struct" href="struct.Const.html" title="struct revm::precompile::primitives::bitvec::ptr::Const">Const</a>, T1, O&gt;,
+    that: <a class="struct" href="../prelude/struct.BitPtr.html" title="struct revm::precompile::primitives::bitvec::prelude::BitPtr">BitPtr</a>&lt;<a class="struct" href="struct.Const.html" title="struct revm::precompile::primitives::bitvec::ptr::Const">Const</a>, T2, O&gt;,
+) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a><div class="where">where
+    T1: <a class="trait" href="../prelude/trait.BitStore.html" title="trait revm::precompile::primitives::bitvec::prelude::BitStore">BitStore</a>,
+    T2: <a class="trait" href="../prelude/trait.BitStore.html" title="trait revm::precompile::primitives::bitvec::prelude::BitStore">BitStore</a>,
+    O: <a class="trait" href="../prelude/trait.BitOrder.html" title="trait revm::precompile::primitives::bitvec::prelude::BitOrder">BitOrder</a>,</div></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="bit-pointer-equality"><a class="doc-anchor" href="#bit-pointer-equality">§</a>Bit-Pointer Equality</h2>
+<p>This compares two bit-pointers for equality by their address value, not by the
+value of their referent bit. This does not dereference either.</p>
+<h3 id="original"><a class="doc-anchor" href="#original">§</a>Original</h3>
+<p><a href="https://doc.rust-lang.org/1.81.0/core/ptr/fn.eq.html" title="fn core::ptr::eq"><code>ptr::eq</code></a></p>
+<h3 id="api-differences"><a class="doc-anchor" href="#api-differences">§</a>API Differences</h3>
+<p>The two bit-pointers can differ in their storage type parameters. <code>bitvec</code>
+defines pointer equality only between pointers with the same underlying
+<a href="../prelude/trait.BitStore.html#associatedtype.Mem" title="associated type revm::precompile::primitives::bitvec::prelude::BitStore::Mem"><code>BitStore::Mem</code></a> element type. Numerically-equal bit-pointers with different
+integer types <em>will not</em> compare equal, though this function will compile and
+accept them.</p>
+<p>This cannot compare encoded span poiters. <code>*const BitSlice</code> can be used in the
+standard-library <code>ptr::eq</code>, and does not need an override.</p>
+<h3 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>bitvec::prelude::<span class="kw-2">*</span>;
+<span class="kw">use </span>bitvec::ptr <span class="kw">as </span>bv_ptr;
+<span class="kw">use </span>core::cell::Cell;
+
+<span class="kw">let </span>data = <span class="number">0u16</span>;
+<span class="kw">let </span>bare_ptr = BitPtr::&lt;<span class="kw">_</span>, <span class="kw">_</span>, Lsb0&gt;::from_ref(<span class="kw-2">&amp;</span>data);
+<span class="kw">let </span>cell_ptr = bare_ptr.cast::&lt;Cell&lt;u16&gt;&gt;();
+
+<span class="macro">assert!</span>(bv_ptr::eq(bare_ptr, cell_ptr));
+
+<span class="kw">let </span>byte_ptr = bare_ptr.cast::&lt;u8&gt;();
+<span class="macro">assert!</span>(!bv_ptr::eq(bare_ptr, byte_ptr));</code></pre></div>
+</div></details></section></div></main></body></html>

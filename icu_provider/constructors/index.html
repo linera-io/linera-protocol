@@ -1,0 +1,81 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="📚 This module documents ICU4X constructor signatures."><title>icu_provider::constructors - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="icu_provider" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../icu_provider/index.html">icu_provider</a><span class="version">1.5.0</span></h2></div><h2 class="location"><a href="#">Module constructors</a></h2><div class="sidebar-elems"><h2><a href="../index.html">In crate icu_provider</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">icu_provider</a>::<wbr><a class="mod" href="#">constructors</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/icu_provider/constructors.rs.html#5-373">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>📚 <em>This module documents ICU4X constructor signatures.</em></p>
+<p>One of the key differences between ICU4X and its parent projects, ICU4C and ICU4J, is in how
+it deals with locale data.</p>
+<p>In ICU4X, data can always be explicitly passed to any function that requires data.
+This enables ICU4X to achieve the following value propositions:</p>
+<ol>
+<li>Configurable data sources (machine-readable data file, baked into code, JSON, etc).</li>
+<li>Dynamic data loading at runtime (load data on demand).</li>
+<li>Reduced overhead and code size (data is resolved locally at each call site).</li>
+<li>Explicit support for multiple ICU4X instances sharing data.</li>
+</ol>
+<p>However, as manual data management can be tedious, ICU4X also has a <code>compiled_data</code>
+default Cargo feature that includes data and makes ICU4X work out-of-the box.</p>
+<p>Subsequently, there are 4 versions of all Rust ICU4X functions that use data:</p>
+<ol>
+<li><code>*</code></li>
+<li><code>*_unstable</code></li>
+<li><code>*_with_any_provider</code></li>
+<li><code>*_with_buffer_provider</code></li>
+</ol>
+<h2 id="which-constructor-should-i-use"><a class="doc-anchor" href="#which-constructor-should-i-use">§</a>Which constructor should I use?</h2><h3 id="when-to-use-"><a class="doc-anchor" href="#when-to-use-">§</a>When to use <code>*</code></h3>
+<p>If you don’t want to customize data at runtime (i.e. if you don’t care about code size,
+updating your data, etc.) you can use the <code>compiled_data</code> Cargo feature and don’t have to think
+about where your data comes from.</p>
+<p>These constructors are sometimes <code>const</code> functions, this way Rust can most effectively optimize
+your usage of ICU4X.</p>
+<h3 id="when-to-use-_unstable"><a class="doc-anchor" href="#when-to-use-_unstable">§</a>When to use <code>*_unstable</code></h3>
+<p>Use this constructor if your data provider implements the <a href="../trait.DataProvider.html" title="trait icu_provider::DataProvider"><code>DataProvider</code></a> trait for all
+data structs in <em>current and future</em> ICU4X versions. Examples:</p>
+<ol>
+<li><code>BakedDataProvider</code> generated for the specific ICU4X minor version</li>
+<li>Anything with a <em>blanket</em> <a href="../trait.DataProvider.html" title="trait icu_provider::DataProvider"><code>DataProvider</code></a> impl</li>
+</ol>
+<p>Since the exact set of bounds may change at any time, including in minor SemVer releases,
+it is the client’s responsibility to guarantee that the requirement is upheld.</p>
+<h3 id="when-to-use-_with_any_provider"><a class="doc-anchor" href="#when-to-use-_with_any_provider">§</a>When to use <code>*_with_any_provider</code></h3>
+<p>Use this constructor if you need to use a provider that implements <a href="../any/trait.AnyProvider.html" title="trait icu_provider::any::AnyProvider"><code>AnyProvider</code></a> but not
+<a href="../trait.DataProvider.html" title="trait icu_provider::DataProvider"><code>DataProvider</code></a>. Examples:</p>
+<ol>
+<li><a href="../../icu_provider_adapters/any_payload/struct.AnyPayloadProvider.html"><code>AnyPayloadProvider</code></a></li>
+<li><a href="../../icu_provider_adapters/fork/struct.ForkByKeyProvider.html"><code>ForkByKeyProvider</code></a> between two providers implementing <a href="../any/trait.AnyProvider.html" title="trait icu_provider::any::AnyProvider"><code>AnyProvider</code></a></li>
+<li>Providers that cache or override certain keys but not others and therefore
+can’t implement <a href="../trait.DataProvider.html" title="trait icu_provider::DataProvider"><code>DataProvider</code></a></li>
+</ol>
+<h3 id="when-to-use-_with_buffer_provider"><a class="doc-anchor" href="#when-to-use-_with_buffer_provider">§</a>When to use <code>*_with_buffer_provider</code></h3>
+<p>Use this constructor if your data originates as byte buffers that need to be deserialized.
+All such providers should implement <a href="../buf/trait.BufferProvider.html" title="trait icu_provider::buf::BufferProvider"><code>BufferProvider</code></a>. Examples:</p>
+<ol>
+<li><a href="../../icu_provider_blob/struct.BlobDataProvider.html"><code>BlobDataProvider</code></a></li>
+<li><a href="../../icu_provider_blob/struct.FsDataProvider.html"><code>FsDataProvider</code></a></li>
+<li><a href="../../icu_provider_adapters/fork/struct.ForkByKeyProvider.html"><code>ForkByKeyProvider</code></a> between two providers implementing <a href="../buf/trait.BufferProvider.html" title="trait icu_provider::buf::BufferProvider"><code>BufferProvider</code></a></li>
+</ol>
+<p>Please note that you must enable the <code>serde</code> Cargo feature on each crate in which you use the
+<code>*_with_buffer_provider</code> constructor.</p>
+<h2 id="data-versioning-policy"><a class="doc-anchor" href="#data-versioning-policy">§</a>Data Versioning Policy</h2>
+<p>The <code>*_with_any_provider</code> and <code>*_with_buffer_provider</code> functions will succeed to compile and
+run if given a data provider supporting all of the keys required for the object being
+constructed, either the current or any previous version within the same SemVer major release.
+For example, if a data file is built to support FooFormatter version 1.1, then FooFormatter
+version 1.2 will be able to read the same data file. Likewise, backwards-compatible keys can
+always be included by <code>icu_datagen</code> to support older library versions.</p>
+<p>The <code>*_unstable</code> functions are only guaranteed to work on data built for the exact same minor version
+of ICU4X. The advantage of the <code>*_unstable</code> functions is that they result in the smallest code
+size and allow for automatic data slicing when <code>BakedDataProvider</code> is used. However, the type
+bounds of this function may change over time, breaking SemVer guarantees. These functions
+should therefore only be used when you have full control over your data lifecycle at compile
+time.</p>
+<h2 id="data-providers-over-ffi"><a class="doc-anchor" href="#data-providers-over-ffi">§</a>Data Providers Over FFI</h2>
+<p>Over FFI, there is only one data provider type: <a href="../../icu_capi/provider/ffi/struct.ICU4XDataProvider.html"><code>ICU4XDataProvider</code></a>. Internally, it is an
+<code>enum</code> between<code>dyn </code><a href="../buf/trait.BufferProvider.html" title="trait icu_provider::buf::BufferProvider"><code>BufferProvider</code></a> and a unit compiled data variant.</p>
+<p>To control for code size, there are two Cargo features, <code>compiled_data</code> and <code>buffer_provider</code>,
+that enable the corresponding items in the enum.</p>
+<p>In Rust ICU4X, a similar enum approach was not taken because:</p>
+<ol>
+<li>Feature-gating the enum branches gets complex across crates.</li>
+<li>Without feature gating, users need to carry Serde code even if they’re not using it,
+violating one of the core value propositions of ICU4X.</li>
+<li>We could reduce the number of constructors from 4 to 2 but not to 1, so the educational
+benefit is limited.</li>
+</ol>
+</div></details></section></div></main></body></html>

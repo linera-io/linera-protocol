@@ -1,0 +1,26 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Puts the current thread to sleep for at least the specified amount of time."><title>sleep in wasm_thread - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="wasm_thread" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../wasm_thread/index.html">wasm_thread</a><span class="version">0.3.0</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="index.html">wasm_thread</a>::<wbr><a class="fn" href="#">sleep</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><span class="since" title="Stable since Rust version 1.4.0">1.4.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/std/thread/mod.rs.html#929">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn sleep(dur: <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/time/struct.Duration.html" title="struct core::time::Duration">Duration</a>)</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Puts the current thread to sleep for at least the specified amount of time.</p>
+<p>The thread may sleep longer than the duration specified due to scheduling
+specifics or platform-dependent functionality. It will never sleep less.</p>
+<p>This function is blocking, and should not be used in <code>async</code> functions.</p>
+<h2 id="platform-specific-behavior"><a class="doc-anchor" href="#platform-specific-behavior">§</a>Platform-specific behavior</h2>
+<p>On Unix platforms, the underlying syscall may be interrupted by a
+spurious wakeup or signal handler. To ensure the sleep occurs for at least
+the specified duration, this function may invoke that system call multiple
+times.
+Platforms which do not support nanosecond precision for sleeping will
+have <code>dur</code> rounded up to the nearest granularity of time they can sleep for.</p>
+<p>Currently, specifying a zero duration on Unix platforms returns immediately
+without invoking the underlying <a href="https://linux.die.net/man/2/nanosleep"><code>nanosleep</code></a> syscall, whereas on Windows
+platforms the underlying <a href="https://docs.microsoft.com/en-us/windows/win32/api/synchapi/nf-synchapi-sleep"><code>Sleep</code></a> syscall is always invoked.
+If the intention is to yield the current time-slice you may want to use
+<a href="fn.yield_now.html" title="fn wasm_thread::yield_now"><code>yield_now</code></a> instead.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::{thread, time};
+
+<span class="kw">let </span>ten_millis = time::Duration::from_millis(<span class="number">10</span>);
+<span class="kw">let </span>now = time::Instant::now();
+
+thread::sleep(ten_millis);
+
+<span class="macro">assert!</span>(now.elapsed() &gt;= ten_millis);</code></pre></div>
+</div></details></section></div></main></body></html>

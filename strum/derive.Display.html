@@ -1,0 +1,73 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Converts enum variants to strings."><title>Display in strum - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="strum" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc derive"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../strum/index.html">strum</a><span class="version">0.26.3</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Derive Macro <a href="index.html">strum</a>::<wbr><a class="derive" href="#">Display</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>#[derive(Display)]
+{
+    <span class="comment">// Attributes available to this derive:</span>
+    #[strum]
+}
+</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Converts enum variants to strings.</p>
+<p>Deriving <code>Display</code> on an enum prints out the given enum. This enables you to perform round
+trip style conversions from enum into string and back again for unit style variants. <code>Display</code>
+choose which serialization to used based on the following criteria:</p>
+<ol>
+<li>
+<p>If there is a <code>to_string</code> property, this value will be used. There can only be one per variant.</p>
+</li>
+<li>
+<p>Of the various <code>serialize</code> properties, the value with the longest length is chosen. If that
+behavior isn’t desired, you should use <code>to_string</code>.</p>
+</li>
+<li>
+<p>The name of the variant will be used if there are no <code>serialize</code> or <code>to_string</code> attributes.</p>
+</li>
+<li>
+<p>If the enum has a <code>strum(prefix = "some_value_")</code>, every variant will have that prefix prepended
+to the serialization.</p>
+</li>
+<li>
+<p>Enums with fields support string interpolation.
+Note this means the variant will not “round trip” if you then deserialize the string.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(strum_macros::Display)]
+</span><span class="kw">pub enum </span>Color {
+    <span class="attr">#[strum(to_string = <span class="string">"saturation is {sat}"</span>)]
+    </span>Red { sat: usize },
+    <span class="attr">#[strum(to_string = <span class="string">"hue is {1}, saturation is {0}"</span>)]
+    </span>Blue(usize, usize),
+}</code></pre></div>
+</li>
+</ol>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// You need to bring the ToString trait into scope to use it
+</span><span class="kw">use </span>std::string::ToString;
+<span class="kw">use </span>strum_macros::Display;
+
+<span class="attr">#[derive(Display, Debug)]
+</span><span class="kw">enum </span>Color {
+    <span class="attr">#[strum(serialize = <span class="string">"redred"</span>)]
+    </span>Red,
+    Green {
+        range: usize,
+    },
+    Blue(usize),
+    Yellow,
+    <span class="attr">#[strum(to_string = <span class="string">"purple with {sat} saturation"</span>)]
+    </span>Purple {
+        sat: usize,
+    },
+}
+
+<span class="comment">// uses the serialize string for Display
+</span><span class="kw">let </span>red = Color::Red;
+<span class="macro">assert_eq!</span>(String::from(<span class="string">"redred"</span>), <span class="macro">format!</span>(<span class="string">"{}"</span>, red));
+<span class="comment">// by default the variants Name
+</span><span class="kw">let </span>yellow = Color::Yellow;
+<span class="macro">assert_eq!</span>(String::from(<span class="string">"Yellow"</span>), yellow.to_string());
+<span class="comment">// or for string formatting
+</span><span class="macro">println!</span>(
+    <span class="string">"blue: {} green: {}"</span>,
+    Color::Blue(<span class="number">10</span>),
+    Color::Green { range: <span class="number">42 </span>}
+);
+<span class="comment">// you can also use named fields in message
+</span><span class="kw">let </span>purple = Color::Purple { sat: <span class="number">10 </span>};
+<span class="macro">assert_eq!</span>(String::from(<span class="string">"purple with 10 saturation"</span>), purple.to_string());</code></pre></div>
+</div></details></section></div></main></body></html>

@@ -1,0 +1,190 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="What `#[derive(AsRef)]` generates"><title>AsRef in derive_more_impl - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="derive_more_impl" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc derive"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../derive_more_impl/index.html">derive_more_impl</a><span class="version">1.0.0</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Derive Macro <a href="index.html">derive_more_impl</a>::<wbr><a class="derive" href="#">AsRef</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/derive_more_impl/lib.rs.html#138">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>#[derive(AsRef)]
+{
+    <span class="comment">// Attributes available to this derive:</span>
+    #[as_ref]
+}
+</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="what-deriveasref-generates"><a class="doc-anchor" href="#what-deriveasref-generates">§</a>What <code>#[derive(AsRef)]</code> generates</h2>
+<p>Deriving <code>AsRef</code> generates one or more implementations of <code>AsRef</code>, each
+corresponding to one of the fields of the decorated type.
+This allows types which contain some <code>T</code> to be passed anywhere that an
+<code>AsRef&lt;T&gt;</code> is accepted.</p>
+<h3 id="newtypes-and-structs-with-one-field"><a class="doc-anchor" href="#newtypes-and-structs-with-one-field">§</a>Newtypes and Structs with One Field</h3>
+<p>When <code>AsRef</code> is derived for a newtype or struct with one field, a single
+implementation is generated to expose the underlying field.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(AsRef)]
+</span><span class="kw">struct </span>MyWrapper(String);</code></pre></div>
+<p>Generates:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">impl </span>derive_more::AsRef&lt;String&gt; <span class="kw">for </span>MyWrapper {
+    <span class="kw">fn </span>as_ref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>String {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0
+    </span>}
+}</code></pre></div>
+<p>It’s also possible to use the <code>#[as_ref(forward)]</code> attribute to forward
+to the <code>as_ref</code> implementation of the field. So here <code>SingleFieldForward</code>
+implements all <code>AsRef</code> for all types that <code>Vec&lt;i32&gt;</code> implements <code>AsRef</code> for.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(AsRef)]
+#[as_ref(forward)]
+</span><span class="kw">struct </span>SingleFieldForward(Vec&lt;i32&gt;);
+
+<span class="kw">let </span>item = SingleFieldForward(<span class="macro">vec!</span>[]);
+<span class="kw">let _</span>: <span class="kw-2">&amp;</span>[i32] = (<span class="kw-2">&amp;</span>item).as_ref();</code></pre></div>
+<p>This generates code equivalent to:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">impl</span>&lt;T: <span class="question-mark">?</span>Sized&gt; derive_more::AsRef&lt;T&gt; <span class="kw">for </span>SingleFieldForward
+<span class="kw">where
+    </span>Vec&lt;i32&gt;: derive_more::AsRef&lt;T&gt;,
+{
+    <span class="attr">#[inline]
+    </span><span class="kw">fn </span>as_ref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>T {
+        <span class="self">self</span>.<span class="number">0</span>.as_ref()
+    }
+}</code></pre></div>
+<p>Specifying concrete types, to derive impls for, is also supported via
+<code>#[as_ref(&lt;types&gt;)]</code> attribute. These types can include both the type
+of the field itself, and types for which the field type implements <code>AsRef</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(AsRef)]
+#[as_ref(str, [u8]</span>, String)]
+<span class="kw">struct </span>Types(String);
+
+<span class="kw">let </span>item = Types(<span class="string">"test"</span>.to_owned());
+<span class="kw">let _</span>: <span class="kw-2">&amp;</span>str = item.as_ref();
+<span class="kw">let _</span>: <span class="kw-2">&amp;</span>[u8] = item.as_ref();
+<span class="kw">let _</span>: <span class="kw-2">&amp;</span>String = item.as_ref();</code></pre></div>
+<blockquote>
+<p><strong>WARNING</strong>: When either the field type, or the specified conversion type,
+contains generic parameters, they are considered as the same type only if
+are named string-equally, otherwise are assumed as different types even
+when represent the same type in fact (type aliases, for example).</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(AsRef)]
+#[as_ref(i32)] </span><span class="comment">// generates `impl&lt;T: AsRef&lt;i32&gt;&gt; AsRef&lt;i32&gt; for Generic&lt;T&gt;`
+</span><span class="kw">struct </span>Generic&lt;T&gt;(T);
+
+<span class="attr">#[derive(AsRef)]
+#[as_ref(T)] </span><span class="comment">// generates `impl&lt;T&gt; AsRef&lt;T&gt; for Transparent&lt;T&gt;`
+</span><span class="kw">struct </span>Transparent&lt;T&gt;(T);
+
+<span class="attr">#[derive(AsRef)]
+</span><span class="comment">// #[as_ref(RenamedVec&lt;T&gt;)] // not supported, as types are not named string-equally
+</span><span class="kw">struct </span>Foo&lt;T&gt;(Vec&lt;T&gt;);
+<span class="kw">type </span>RenamedVec&lt;T&gt; = Vec&lt;T&gt;;
+
+<span class="attr">#[derive(AsRef)]
+#[as_ref(RenamedString)] </span><span class="comment">// generates `impl AsRef&lt;RenamedString&gt; for Bar`,
+</span><span class="kw">struct </span>Bar(String);      <span class="comment">// as generics are not involved
+</span><span class="kw">type </span>RenamedString = String;</code></pre></div>
+</blockquote>
+<p>Generating code like this is not supported:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">struct </span>Generic&lt;T&gt;(T);
+
+<span class="kw">impl </span>AsRef&lt;i32&gt; <span class="kw">for </span>Generic&lt;i32&gt; {
+    <span class="kw">fn </span>as_ref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>i32 {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0
+    </span>}
+}</code></pre></div>
+<h3 id="structs-with-multiple-fields"><a class="doc-anchor" href="#structs-with-multiple-fields">§</a>Structs with Multiple Fields</h3>
+<p>When <code>AsRef</code> is derived for a struct with more than one field (including tuple
+structs), you must also mark one or more fields with the <code>#[as_ref]</code> attribute.
+An implementation will be generated for each indicated field.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(AsRef)]
+</span><span class="kw">struct </span>MyWrapper {
+    <span class="attr">#[as_ref(str)]
+    </span>name: String,
+    <span class="attr">#[as_ref]
+    </span>num: i32,
+    valid: bool,
+}</code></pre></div>
+<p>Generates:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">impl </span>AsRef&lt;str&gt; <span class="kw">for </span>MyWrapper {
+    <span class="kw">fn </span>as_ref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>str {
+        <span class="self">self</span>.name.as_ref()
+    }
+}
+
+<span class="kw">impl </span>AsRef&lt;i32&gt; <span class="kw">for </span>MyWrapper {
+    <span class="kw">fn </span>as_ref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>i32 {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.num
+    }
+}</code></pre></div>
+<h4 id="tuples-not-supported"><a class="doc-anchor" href="#tuples-not-supported">§</a>Tuples (not supported)</h4>
+<p>Only conversions that use a single field are possible with this derive.
+Something like this wouldn’t work, due to the nature of the <code>AsRef</code> trait
+itself:</p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(AsRef)]
+#[as_ref((str, [u8]</span>))]
+<span class="kw">struct </span>MyWrapper(String, Vec&lt;u8&gt;)</code></pre></div>
+<p>If you need to convert into a tuple of references, consider using the
+<a href="derive.Into.html" title="derive derive_more_impl::Into"><code>Into</code></a> derive with <code>#[into(ref)]</code>.</p>
+<h4 id="skipping"><a class="doc-anchor" href="#skipping">§</a>Skipping</h4>
+<p>Or vice versa: you can exclude a specific field by using <code>#[as_ref(skip)]</code> (or
+<code>#[as_ref(ignore)]</code>). Then, implementations will be generated for non-indicated fields.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(AsRef)]
+</span><span class="kw">struct </span>MyWrapper {
+    <span class="attr">#[as_ref(skip)]
+    </span>name: String,
+    <span class="attr">#[as_ref(ignore)]
+    </span>num: i32,
+    valid: bool,
+}</code></pre></div>
+<p>Generates:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">impl </span>AsRef&lt;bool&gt; <span class="kw">for </span>MyWrapper {
+    <span class="kw">fn </span>as_ref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>bool {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.valid
+    }
+}</code></pre></div>
+<h4 id="coherence"><a class="doc-anchor" href="#coherence">§</a>Coherence</h4>
+<p>Note that <code>AsRef&lt;T&gt;</code> may only be implemented once for any given type <code>T</code>.
+This means any attempt to mark more than one field of the same type with
+<code>#[as_ref]</code> will result in a compilation error.</p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="comment">// Error! Conflicting implementations of AsRef&lt;String&gt;
+</span><span class="attr">#[derive(AsRef)]
+</span><span class="kw">struct </span>MyWrapper {
+    <span class="attr">#[as_ref]
+    </span>str1: String,
+    <span class="attr">#[as_ref]
+    </span>str2: String,
+}</code></pre></div>
+<p>Similarly, if some field is annotated with <code>#[as_ref(forward)]</code>, no other
+field can be marked.</p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="comment">// Error! Conflicting implementations of `AsRef&lt;i32&gt;`
+// note: upstream crates may add a new impl of trait `AsRef&lt;i32&gt;`
+// for type `String` in future versions
+</span><span class="attr">#[derive(AsRef)]
+</span><span class="kw">struct </span>ForwardWithOther {
+    <span class="attr">#[as_ref(forward)]
+    </span>str: String,
+    <span class="attr">#[as_ref]
+    </span>number: i32,
+}</code></pre></div>
+<p>Multiple forwarded impls with different concrete types, however, can be used.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(AsRef)]
+</span><span class="kw">struct </span>Types {
+    <span class="attr">#[as_ref(str)]
+    </span>str: String,
+    <span class="attr">#[as_ref([u8]</span>)]
+    vec: Vec&lt;u8&gt;,
+}
+
+<span class="kw">let </span>item = Types {
+    str: <span class="string">"test"</span>.to_owned(),
+    vec: <span class="macro">vec!</span>[<span class="number">0u8</span>],
+};
+
+<span class="kw">let _</span>: <span class="kw-2">&amp;</span>str = item.as_ref();
+<span class="kw">let _</span>: <span class="kw-2">&amp;</span>[u8] = item.as_ref();</code></pre></div>
+<h3 id="enums"><a class="doc-anchor" href="#enums">§</a>Enums</h3>
+<p>Deriving <code>AsRef</code> for enums is not supported.</p>
+</div></details></section></div></main></body></html>

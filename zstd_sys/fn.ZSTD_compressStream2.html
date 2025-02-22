@@ -1,0 +1,34 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="ZSTD_compressStream2() : Requires v1.4.0+ Behaves about the same as ZSTD_compressStream, with additional control on end directive."><title>ZSTD_compressStream2 in zstd_sys - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="zstd_sys" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../zstd_sys/index.html">zstd_sys</a><span class="version">2.0.13+zstd.1.5.6</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="index.html">zstd_sys</a>::<wbr><a class="fn" href="#">ZSTD_compressStream2</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/zstd_sys/bindings_zstd.rs.html#339-344">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub unsafe extern &quot;C&quot; fn ZSTD_compressStream2(
+    cctx: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.pointer.html">*mut </a><a class="type" href="type.ZSTD_CCtx.html" title="type zstd_sys::ZSTD_CCtx">ZSTD_CCtx</a>,
+    output: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.pointer.html">*mut </a><a class="type" href="type.ZSTD_outBuffer.html" title="type zstd_sys::ZSTD_outBuffer">ZSTD_outBuffer</a>,
+    input: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.pointer.html">*mut </a><a class="type" href="type.ZSTD_inBuffer.html" title="type zstd_sys::ZSTD_inBuffer">ZSTD_inBuffer</a>,
+    endOp: <a class="enum" href="enum.ZSTD_EndDirective.html" title="enum zstd_sys::ZSTD_EndDirective">ZSTD_EndDirective</a>,
+) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.usize.html">usize</a></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>ZSTD_compressStream2() : Requires v1.4.0+
+Behaves about the same as ZSTD_compressStream, with additional control on end directive.</p>
+<ul>
+<li>Compression parameters are pushed into CCtx before starting compression, using ZSTD_CCtx_set*()</li>
+<li>Compression parameters cannot be changed once compression is started (save a list of exceptions in multi-threading mode)</li>
+<li>output-&gt;pos must be &lt;= dstCapacity, input-&gt;pos must be &lt;= srcSize</li>
+<li>output-&gt;pos and input-&gt;pos will be updated. They are guaranteed to remain below their respective limit.</li>
+<li>endOp must be a valid directive</li>
+<li>When nbWorkers==0 (default), function is blocking : it completes its job before returning to caller.</li>
+<li>When nbWorkers&gt;=1, function is non-blocking : it copies a portion of input, distributes jobs to internal worker threads, flush to output whatever is available,
+and then immediately returns, just indicating that there is some data remaining to be flushed.
+The function nonetheless guarantees forward progress : it will return only after it reads or write at least 1+ byte.</li>
+<li>Exception : if the first call requests a ZSTD_e_end directive and provides enough dstCapacity, the function delegates to ZSTD_compress2() which is always blocking.</li>
+<li>@return provides a minimum amount of data remaining to be flushed from internal buffers
+or an error code, which can be tested using ZSTD_isError().
+if @return != 0, flush is not fully completed, there is still some data left within internal buffers.
+This is useful for ZSTD_e_flush, since in this case more flushes are necessary to empty all buffers.
+For ZSTD_e_end, @return == 0 when internal buffers are fully flushed and frame is completed.</li>
+<li>after a ZSTD_e_end directive, if internal buffer is not fully flushed (@return != 0),
+only ZSTD_e_end or ZSTD_e_flush operations are allowed.
+Before starting a new compression job, or changing compression parameters,
+it is required to fully flush internal buffers.</li>
+<li>note: if an operation ends with an error, it may leave @cctx in an undefined state.
+Therefore, it’s UB to invoke ZSTD_compressStream2() of ZSTD_compressStream() on such a state.
+In order to be re-employed after an error, a state must be reset,
+which can be done explicitly (ZSTD_CCtx_reset()),
+or is sometimes implied by methods starting a new compression job (ZSTD_initCStream(), ZSTD_compressCCtx())</li>
+</ul>
+</div></details></section></div></main></body></html>

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["credential_fn","provider","token_fn"],"struct":["Credentials"],"type":["Token"]};

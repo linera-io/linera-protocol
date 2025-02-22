@@ -1,0 +1,90 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="`tap` – Syntactical Plumb-Lines"><title>tap - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="tap" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../tap/index.html">tap</a><span class="version">1.0.1</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#traits">Traits</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">tap</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/tap/lib.rs.html#1-147">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="tap--syntactical-plumb-lines"><a class="doc-anchor" href="#tap--syntactical-plumb-lines">§</a><code>tap</code> – Syntactical Plumb-Lines</h2>
+<p>Rust permits functions that take a <code>self</code> receiver to be written in “dot-call”
+suffix position, rather than the more traditional prefix-position function call
+syntax. These functions are restricted to <code>impl [Trait for] Type</code> blocks, and
+functions anywhere else cannot take advantage of this syntax.</p>
+<p>This crate provides universally-implemented extension traits that permit smooth
+suffix-position calls for a handful of common operations: transparent inspection
+or modification (tapping), transformation (piping), and type conversion.</p>
+<h3 id="tapping"><a class="doc-anchor" href="#tapping">§</a>Tapping</h3>
+<p>The <a href="tap/trait.Tap.html"><code>tap</code></a> module provides the <a href="tap/trait.Tap.html"><code>Tap</code></a>, <a href="tap/trait.TapOptional.html"><code>TapOptional</code></a>, and <a href="tap/trait.TapFallible.html"><code>TapFallible</code></a>
+traits. Each of these traits provides methods that take and return a value, and
+expose it as a borrow to an effect function. They look like this:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tap::prelude::<span class="kw-2">*</span>;
+
+<span class="kw">let </span>end = make_value()
+  .tap(|v| <span class="macro">log!</span>(<span class="string">"Produced value: {:?}"</span>, v))
+  .process_value();</code></pre></div>
+<p>These methods are <code>self -&gt; Self</code>, and return the value they received without
+any transformation. This enables them to be placed anywhere in a larger
+expression witohut changing its shape, or causing any semantic changes to the
+code. The effect function receives a borrow of the tapped value, optionally run
+through the <code>Borrow</code>, <code>AsRef</code>, or <code>Deref</code> view conversions, for the duration of
+its execution.</p>
+<p>The effect function cannot return a value, as the tap is incapable of handling
+it.</p>
+<h3 id="piping"><a class="doc-anchor" href="#piping">§</a>Piping</h3>
+<p>The <a href="pipe/trait.Pipe.html"><code>pipe</code></a> module provides the <a href="pipe/trait.Pipe.html"><code>Pipe</code></a> trait. This trait provides methods
+that take and transform a value, returning the result of the transformation.
+They look like this:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tap::prelude::<span class="kw-2">*</span>;
+
+<span class="kw">struct </span>One;
+<span class="kw">fn </span>start() -&gt; One { One }
+<span class="kw">struct </span>Two;
+<span class="kw">fn </span>end(<span class="kw">_</span>: One) -&gt; Two { Two }
+
+<span class="kw">let </span>val: Two = start().pipe(end);
+
+<span class="comment">// without pipes, this would be written as
+</span><span class="kw">let _</span>: Two = end(start());</code></pre></div>
+<p>These methods are <code>self -&gt; Other</code>, and return the value produced by the effect
+function. As the methods are always available in suffix position, they can take
+as arguments methods that are <em>not</em> eligible for dot-call syntax and still place
+them as expression suffices. The effect function receives the piped value,
+optionally run through the <code>Borrow</code>, <code>AsRef</code>, or <code>Deref</code> view conversions, as
+its input, and its output is returned from the pipe.</p>
+<p>For <code>.pipe()</code>, the input value is <em>moved</em> into the pipe and the effect function,
+so the effect function <em>cannot</em> return a value whose lifetime depends on the
+input value. The other pipe methods all borrow the input value, and may return a
+value whose lifetime is tied to it.</p>
+<h3 id="converting"><a class="doc-anchor" href="#converting">§</a>Converting</h3>
+<p>The <a href="conv/trait.Conv.html"><code>conv</code></a> module provides the <a href="conv/trait.Conv.html"><code>Conv</code></a> and <a href="conv/trait.TryConv.html"><code>TryConv</code></a> traits. These provide
+methods that accept a type parameter on the method name, and forward to the
+appropriate <code>Into</code> or <code>TryInto</code> trait implementation when called. The difference
+between <code>Conv</code> and <code>Into</code> is that <code>Conv</code> is declared as <code>Conv::conv::&lt;T&gt;</code>, while
+<code>Into</code> is declared as <code>Into::&lt;T&gt;::into</code>. The location of the destination type
+parameter makes <code>.into()</code> unusable as a non-terminal method call of an
+expression, while <code>.conv::&lt;T&gt;()</code> can be used as a method call anywhere.</p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">let </span>upper = <span class="string">"hello, world"
+  </span>.into()
+  .tap_mut(|s| s.make_ascii_uppercase());</code></pre></div>
+<p>The above snippet is illegal, because the Rust type solver cannot determine the
+type of the sub-expression <code>"hello, world".into()</code>, and it will not attempt to
+search all available <code>impl Into&lt;X&gt; for str</code> implementations to find an <code>X</code> which
+has a
+<code>fn tap_mut({self, &amp;self, &amp;mut self, Box&lt;Self&gt;, Rc&lt;Self&gt;, Arc&lt;Self&gt;}, _) -&gt; Y</code>
+declared, either as an inherent method or in a trait implemented by <code>X</code>, to
+resolve the expression.</p>
+<p>Instead, you can write it as</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tap::prelude::<span class="kw-2">*</span>;
+
+<span class="kw">let </span>upper = <span class="string">"hello, world"
+  </span>.conv::&lt;String&gt;()
+  .tap_mut(|s| s.make_ascii_uppercase());</code></pre></div>
+<p>The trait implementation is</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">pub trait </span>Conv: Sized {
+ <span class="kw">fn </span>conv&lt;T: Sized&gt;(<span class="self">self</span>) -&gt; T
+ <span class="kw">where </span><span class="self">Self</span>: Into&lt;T&gt; {
+  <span class="self">self</span>.into()
+ }
+}</code></pre></div>
+<p>Each monomorphization of <code>.conv::&lt;T&gt;()</code> expands to the appropriate <code>Into&lt;T&gt;</code>
+implementation, and does nothing else.</p>
+<p>!</p>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="conv/index.html" title="mod tap::conv">conv</a></div><div class="desc docblock-short">Method-Directed Type Conversion</div></li><li><div class="item-name"><a class="mod" href="pipe/index.html" title="mod tap::pipe">pipe</a></div><div class="desc docblock-short">Universal Suffix Calls</div></li><li><div class="item-name"><a class="mod" href="prelude/index.html" title="mod tap::prelude">prelude</a></div><div class="desc docblock-short">Reëxports all traits in one place, for easy import.</div></li><li><div class="item-name"><a class="mod" href="tap/index.html" title="mod tap::tap">tap</a></div><div class="desc docblock-short">Point-Free Inspection</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.Conv.html" title="trait tap::Conv">Conv</a></div><div class="desc docblock-short">Wraps <code>Into::&lt;T&gt;::into</code> as a method that can be placed in pipelines.</div></li><li><div class="item-name"><a class="trait" href="trait.Pipe.html" title="trait tap::Pipe">Pipe</a></div><div class="desc docblock-short">Provides universal suffix-position call syntax for any function.</div></li><li><div class="item-name"><a class="trait" href="trait.Tap.html" title="trait tap::Tap">Tap</a></div><div class="desc docblock-short">Point-free value inspection and modification.</div></li><li><div class="item-name"><a class="trait" href="trait.TapFallible.html" title="trait tap::TapFallible">TapFallible</a></div><div class="desc docblock-short">Fallible tapping, conditional on the optional success of an expression.</div></li><li><div class="item-name"><a class="trait" href="trait.TapOptional.html" title="trait tap::TapOptional">TapOptional</a></div><div class="desc docblock-short">Optional tapping, conditional on the optional presence of a value.</div></li><li><div class="item-name"><a class="trait" href="trait.TryConv.html" title="trait tap::TryConv">TryConv</a></div><div class="desc docblock-short">Wraps <code>TryInto::&lt;T&gt;::try_into</code> as a method that can be placed in pipelines.</div></li></ul></section></div></main></body></html>

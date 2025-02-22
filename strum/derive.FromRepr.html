@@ -1,0 +1,67 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Add a function to enum that allows accessing variants by its discriminant"><title>FromRepr in strum - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="strum" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc derive"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../strum/index.html">strum</a><span class="version">0.26.3</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Derive Macro <a href="index.html">strum</a>::<wbr><a class="derive" href="#">FromRepr</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>#[derive(FromRepr)]
+{
+    <span class="comment">// Attributes available to this derive:</span>
+    #[strum]
+}
+</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Add a function to enum that allows accessing variants by its discriminant</p>
+<p>This macro adds a standalone function to obtain an enum variant by its discriminant. The macro adds
+<code>from_repr(discriminant: usize) -&gt; Option&lt;YourEnum&gt;</code> as a standalone function on the enum. For
+variants with additional data, the returned variant will use the <code>Default</code> trait to fill the
+data. The discriminant follows the same rules as <code>rustc</code>. The first discriminant is zero and each
+successive variant has a discriminant of one greater than the previous variant, except where an
+explicit discriminant is specified. The type of the discriminant will match the <code>repr</code> type if
+it is specified.</p>
+<p>When the macro is applied using rustc &gt;= 1.46 and when there is no additional data on any of
+the variants, the <code>from_repr</code> function is marked <code>const</code>. rustc &gt;= 1.46 is required
+to allow <code>match</code> statements in <code>const fn</code>. The no additional data requirement is due to the
+inability to use <code>Default::default()</code> in a <code>const fn</code>.</p>
+<p>You cannot derive <code>FromRepr</code> on any type with a lifetime bound (<code>&lt;'a&gt;</code>) because the function would surely
+create <a href="https://doc.rust-lang.org/nightly/nomicon/unbounded-lifetimes.html">unbounded lifetimes</a>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code>
+<span class="kw">use </span>strum_macros::FromRepr;
+
+<span class="attr">#[derive(FromRepr, Debug, PartialEq)]
+</span><span class="kw">enum </span>Color {
+    Red,
+    Green { range: usize },
+    Blue(usize),
+    Yellow,
+}
+
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Color::Red), Color::from_repr(<span class="number">0</span>));
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Color::Green {range: <span class="number">0</span>}), Color::from_repr(<span class="number">1</span>));
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Color::Blue(<span class="number">0</span>)), Color::from_repr(<span class="number">2</span>));
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Color::Yellow), Color::from_repr(<span class="number">3</span>));
+<span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, Color::from_repr(<span class="number">4</span>));
+
+<span class="comment">// Custom discriminant tests
+</span><span class="attr">#[derive(FromRepr, Debug, PartialEq)]
+#[repr(u8)]
+</span><span class="kw">enum </span>Vehicle {
+    Car = <span class="number">1</span>,
+    Truck = <span class="number">3</span>,
+}
+
+<span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, Vehicle::from_repr(<span class="number">0</span>));</code></pre></div>
+<p>On versions of rust &gt;= 1.46, the <code>from_repr</code> function is marked <code>const</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>strum_macros::FromRepr;
+
+<span class="attr">#[derive(FromRepr, Debug, PartialEq)]
+#[repr(u8)]
+</span><span class="kw">enum </span>Number {
+    One = <span class="number">1</span>,
+    Three = <span class="number">3</span>,
+}
+
+<span class="kw">const fn </span>number_from_repr(d: u8) -&gt; <span class="prelude-ty">Option</span>&lt;Number&gt; {
+    Number::from_repr(d)
+}
+
+<span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, number_from_repr(<span class="number">0</span>));
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Number::One), number_from_repr(<span class="number">1</span>));
+<span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, number_from_repr(<span class="number">2</span>));
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Number::Three), number_from_repr(<span class="number">3</span>));
+<span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, number_from_repr(<span class="number">4</span>));</code></pre></div>
+</div></details></section></div></main></body></html>

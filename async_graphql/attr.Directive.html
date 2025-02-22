@@ -1,0 +1,63 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Define a directive for query."><title>Directive in async_graphql - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="async_graphql" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc attr"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../async_graphql/index.html">async_graphql</a><span class="version">7.0.2</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Attribute Macro <a href="index.html">async_graphql</a>::<wbr><a class="attr" href="#">Directive</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/async_graphql_derive/lib.rs.html#214">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>#[Directive]</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Define a directive for query.</p>
+<p><em><a href="https://async-graphql.github.io/async-graphql/en/custom_directive.html">See also the Book</a>.</em></p>
+<h2 id="macro-attributes"><a class="doc-anchor" href="#macro-attributes">§</a>Macro attributes</h2><div><table><thead><tr><th>Attribute</th><th>description</th><th>Type</th><th>Optional</th></tr></thead><tbody>
+<tr><td>name</td><td>Object name</td><td>string</td><td>Y</td></tr>
+<tr><td>name_type</td><td>If <code>true</code>, the directive name will be specified from <a href="https://docs.rs/async-graphql/latest/async_graphql/trait.TypeName.html"><code>async_graphql::TypeName</code></a> trait</td><td>bool</td><td>Y</td></tr>
+<tr><td>visible</td><td>If <code>false</code>, it will not be displayed in introspection. <em><a href="https://async-graphql.github.io/async-graphql/en/visibility.html">See also the Book</a>.</em></td><td>bool</td><td>Y</td></tr>
+<tr><td>visible</td><td>Call the specified function. If the return value is <code>false</code>, it will not be displayed in introspection.</td><td>string</td><td>Y</td></tr>
+<tr><td>repeatable</td><td>It means that the directive can be used multiple times in the same location.</td><td>bool</td><td>Y</td></tr>
+<tr><td>rename_args</td><td>Rename all the arguments according to the given case convention. The possible values are “lowercase”, “UPPERCASE”, “PascalCase”, “camelCase”, “snake_case”, “SCREAMING_SNAKE_CASE”.</td><td>string</td><td>Y</td></tr>
+<tr><td>locations</td><td>Specify the location where the directive is available, multiples are allowed. The possible values is “field”, …</td><td>string</td><td>N</td></tr>
+</tbody></table>
+</div><h2 id="directive-attributes"><a class="doc-anchor" href="#directive-attributes">§</a>Directive attributes</h2><div><table><thead><tr><th>Attribute</th><th>description</th><th>Type</th><th>Optional</th></tr></thead><tbody>
+<tr><td>name</td><td>Argument name</td><td>string</td><td>Y</td></tr>
+<tr><td>desc</td><td>Argument description</td><td>string</td><td>Y</td></tr>
+<tr><td>default</td><td>Use <code>Default::default</code> for default value</td><td>none</td><td>Y</td></tr>
+<tr><td>default</td><td>Argument default value</td><td>literal</td><td>Y</td></tr>
+<tr><td>default_with</td><td>Expression to generate default value</td><td>code string</td><td>Y</td></tr>
+<tr><td>validator</td><td>Input value validator <em><a href="https://async-graphql.github.io/async-graphql/en/input_value_validators.html">See also the Book</a></em></td><td>object</td><td>Y</td></tr>
+<tr><td>visible</td><td>If <code>false</code>, it will not be displayed in introspection. <em><a href="https://async-graphql.github.io/async-graphql/en/visibility.html">See also the Book</a>.</em></td><td>bool</td><td>Y</td></tr>
+<tr><td>visible</td><td>Call the specified function. If the return value is <code>false</code>, it will not be displayed in introspection.</td><td>string</td><td>Y</td></tr>
+<tr><td>secret</td><td>Mark this field as a secret, it will not output the actual value in the log.</td><td>bool</td><td>Y</td></tr>
+</tbody></table>
+</div><h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>async_graphql::<span class="kw-2">*</span>;
+
+<span class="kw">struct </span>ConcatDirective {
+    value: String,
+}
+
+<span class="attr">#[async_trait::async_trait]
+</span><span class="kw">impl </span>CustomDirective <span class="kw">for </span>ConcatDirective {
+    <span class="kw">async fn </span>resolve_field(<span class="kw-2">&amp;</span><span class="self">self</span>, _ctx: <span class="kw-2">&amp;</span>Context&lt;<span class="lifetime">'_</span>&gt;, resolve: ResolveFut&lt;<span class="lifetime">'_</span>&gt;) -&gt; ServerResult&lt;<span class="prelude-ty">Option</span>&lt;Value&gt;&gt; {
+        resolve.<span class="kw">await</span>.map(|value| {
+            value.map(|value| <span class="kw">match </span>value {
+                Value::String(str) =&gt; Value::String(str + <span class="kw-2">&amp;</span><span class="self">self</span>.value),
+                <span class="kw">_ </span>=&gt; value,
+            })
+        })
+    }
+}
+
+<span class="attr">#[Directive(location = <span class="string">"Field"</span>)]
+</span><span class="kw">fn </span>concat(value: String) -&gt; <span class="kw">impl </span>CustomDirective {
+    ConcatDirective { value }
+}
+
+<span class="kw">struct </span>Query;
+
+<span class="attr">#[Object]
+</span><span class="kw">impl </span>Query {
+    <span class="kw">async fn </span>value(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str {
+        <span class="string">"abc"
+    </span>}
+}
+
+<span class="kw">let </span>schema = Schema::build(Query, EmptyMutation, EmptySubscription)
+    .directive(concat)
+    .finish();
+<span class="kw">let </span>res = schema.execute(<span class="string">r#"{ value @concat(value: "def") }"#</span>).<span class="kw">await</span>.into_result().unwrap().data;
+<span class="macro">assert_eq!</span>(res, <span class="macro">value!</span>({
+    <span class="string">"value"</span>: <span class="string">"abcdef"</span>,
+}));</code></pre></div>
+</div></details></section></div></main></body></html>

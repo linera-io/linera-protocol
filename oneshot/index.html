@@ -1,0 +1,84 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Oneshot spsc (single producer, single consumer) channel. Meaning each channel instance can only transport a single message. This has a few nice outcomes. One thing is that the implementation can be very efficient, utilizing the knowledge that there will only be one message. But more importantly, it allows the API to be expressed in such a way that certain edge cases that you don’t want to care about when only sending a single message on a channel does not exist. For example: The sender can’t be copied or cloned, and the send method takes ownership and consumes the sender. So you are guaranteed, at the type level, that there can only be one message sent."><title>oneshot - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="oneshot" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../oneshot/index.html">oneshot</a><span class="version">0.1.8</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#functions">Functions</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">oneshot</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/oneshot/lib.rs.html#1-1257">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Oneshot spsc (single producer, single consumer) channel. Meaning each channel instance
+can only transport a single message. This has a few nice outcomes. One thing is that
+the implementation can be very efficient, utilizing the knowledge that there will
+only be one message. But more importantly, it allows the API to be expressed in such
+a way that certain edge cases that you don’t want to care about when only sending a
+single message on a channel does not exist. For example: The sender can’t be copied
+or cloned, and the send method takes ownership and consumes the sender.
+So you are guaranteed, at the type level, that there can only be one message sent.</p>
+<p>The sender’s send method is non-blocking, and potentially lock- and wait-free.
+See documentation on <a href="struct.Sender.html#method.send" title="method oneshot::Sender::send">Sender::send</a> for situations where it might not be fully wait-free.
+The receiver supports both lock- and wait-free <code>try_recv</code> as well as indefinite and time
+limited thread blocking receive operations. The receiver also implements <code>Future</code> and
+supports asynchronously awaiting the message.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>This example sets up a background worker that processes requests coming in on a standard
+mpsc channel and replies on a oneshot channel provided with each request. The worker can
+be interacted with both from sync and async contexts since the oneshot receiver
+can receive both blocking and async.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::sync::mpsc;
+<span class="kw">use </span>std::thread;
+<span class="kw">use </span>std::time::Duration;
+
+<span class="kw">type </span>Request = String;
+
+<span class="comment">// Starts a background thread performing some computation on requests sent to it.
+// Delivers the response back over a oneshot channel.
+</span><span class="kw">fn </span>spawn_processing_thread() -&gt; mpsc::Sender&lt;(Request, oneshot::Sender&lt;usize&gt;)&gt; {
+    <span class="kw">let </span>(request_sender, request_receiver) = mpsc::channel::&lt;(Request, oneshot::Sender&lt;usize&gt;)&gt;();
+    thread::spawn(<span class="kw">move </span>|| {
+        <span class="kw">for </span>(request_data, response_sender) <span class="kw">in </span>request_receiver.iter() {
+            <span class="kw">let </span>compute_operation = || request_data.len();
+            <span class="kw">let _ </span>= response_sender.send(compute_operation()); <span class="comment">// &lt;- Send on the oneshot channel
+        </span>}
+    });
+    request_sender
+}
+
+<span class="kw">let </span>processor = spawn_processing_thread();
+
+<span class="comment">// If compiled with `std` the library can receive messages with timeout on regular threads
+</span><span class="attr">#[cfg(feature = <span class="string">"std"</span>)] </span>{
+    <span class="kw">let </span>(response_sender, response_receiver) = oneshot::channel();
+    <span class="kw">let </span>request = Request::from(<span class="string">"data from sync thread"</span>);
+
+    processor.send((request, response_sender)).expect(<span class="string">"Processor down"</span>);
+    <span class="kw">match </span>response_receiver.recv_timeout(Duration::from_secs(<span class="number">1</span>)) { <span class="comment">// &lt;- Receive on the oneshot channel
+        </span><span class="prelude-val">Ok</span>(result) =&gt; <span class="macro">println!</span>(<span class="string">"Processor returned {}"</span>, result),
+        <span class="prelude-val">Err</span>(oneshot::RecvTimeoutError::Timeout) =&gt; <span class="macro">eprintln!</span>(<span class="string">"Processor was too slow"</span>),
+        <span class="prelude-val">Err</span>(oneshot::RecvTimeoutError::Disconnected) =&gt; <span class="macro">panic!</span>(<span class="string">"Processor exited"</span>),
+    }
+}
+
+<span class="comment">// If compiled with the `async` feature, the `Receiver` can be awaited in an async context
+</span><span class="attr">#[cfg(feature = <span class="string">"async"</span>)] </span>{
+    tokio::runtime::Runtime::new()
+        .unwrap()
+        .block_on(<span class="kw">async move </span>{
+            <span class="kw">let </span>(response_sender, response_receiver) = oneshot::channel();
+            <span class="kw">let </span>request = Request::from(<span class="string">"data from sync thread"</span>);
+
+            processor.send((request, response_sender)).expect(<span class="string">"Processor down"</span>);
+            <span class="kw">match </span>response_receiver.<span class="kw">await </span>{ <span class="comment">// &lt;- Receive on the oneshot channel asynchronously
+                </span><span class="prelude-val">Ok</span>(result) =&gt; <span class="macro">println!</span>(<span class="string">"Processor returned {}"</span>, result),
+                <span class="prelude-val">Err</span>(_e) =&gt; <span class="macro">panic!</span>(<span class="string">"Processor exited"</span>),
+            }
+        });
+}</code></pre></div>
+<h2 id="sync-vs-async"><a class="doc-anchor" href="#sync-vs-async">§</a>Sync vs async</h2>
+<p>The main motivation for writing this library was that there were no (known to me) channel
+implementations allowing you to seamlessly send messages between a normal thread and an async
+task, or the other way around. If message passing is the way you are communicating, of course
+that should work smoothly between the sync and async parts of the program!</p>
+<p>This library achieves that by having a fast and cheap send operation that can
+be used in both sync threads and async tasks. The receiver has both thread blocking
+receive methods for synchronous usage, and implements <code>Future</code> for asynchronous usage.</p>
+<p>The receiving endpoint of this channel implements Rust’s <code>Future</code> trait and can be waited on
+in an asynchronous task. This implementation is completely executor/runtime agnostic. It should
+be possible to use this library with any executor.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Receiver.html" title="struct oneshot::Receiver">Receiver</a></div></li><li><div class="item-name"><a class="struct" href="struct.RecvError.html" title="struct oneshot::RecvError">RecvError</a></div><div class="desc docblock-short">An error returned from receiving methods that block/wait until a message is available.</div></li><li><div class="item-name"><a class="struct" href="struct.SendError.html" title="struct oneshot::SendError">SendError</a></div><div class="desc docblock-short">An error returned when trying to send on a closed channel. Returned from
+<a href="struct.Sender.html#method.send" title="method oneshot::Sender::send"><code>Sender::send</code></a> if the corresponding <a href="struct.Receiver.html" title="struct oneshot::Receiver"><code>Receiver</code></a>
+has already been dropped.</div></li><li><div class="item-name"><a class="struct" href="struct.Sender.html" title="struct oneshot::Sender">Sender</a></div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.RecvTimeoutError.html" title="enum oneshot::RecvTimeoutError">RecvTimeoutError</a></div><div class="desc docblock-short">An error returned when failing to receive a message in a method that block/wait for a message
+for a while, but has a timeout after which it gives up.</div></li><li><div class="item-name"><a class="enum" href="enum.TryRecvError.html" title="enum oneshot::TryRecvError">TryRecvError</a></div><div class="desc docblock-short">An error returned when failing to receive a message in the non-blocking
+<a href="struct.Receiver.html#method.try_recv" title="method oneshot::Receiver::try_recv"><code>Receiver::try_recv</code></a>.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.channel.html" title="fn oneshot::channel">channel</a></div><div class="desc docblock-short">Creates a new oneshot channel and returns the two endpoints, <a href="struct.Sender.html" title="struct oneshot::Sender"><code>Sender</code></a> and <a href="struct.Receiver.html" title="struct oneshot::Receiver"><code>Receiver</code></a>.</div></li></ul></section></div></main></body></html>

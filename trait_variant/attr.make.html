@@ -1,0 +1,29 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Creates a specialized version of a base trait that adds bounds to `async fn` and/or `-&gt; impl Trait` return types."><title>make in trait_variant - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="trait_variant" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc attr"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../trait_variant/index.html">trait_variant</a><span class="version">0.1.2</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Attribute Macro <a href="index.html">trait_variant</a>::<wbr><a class="attr" href="#">make</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/trait_variant/lib.rs.html#55-60">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>#[make]</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Creates a specialized version of a base trait that adds bounds to <code>async fn</code> and/or <code>-&gt; impl Trait</code> return types.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[trait_variant::make(Send)]
+</span><span class="kw">trait </span>IntFactory {
+    <span class="kw">async fn </span>make(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; i32;
+    <span class="kw">fn </span>stream(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = i32&gt;;
+    <span class="kw">fn </span>call(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u32;
+}</code></pre></div>
+<p>The above example causes the trait to be rewritten as:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">trait </span>IntFactory: Send {
+    <span class="kw">fn </span>make(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Future&lt;Output = i32&gt; + Send;
+    <span class="kw">fn </span>stream(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = i32&gt; + Send;
+    <span class="kw">fn </span>call(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u32;
+}</code></pre></div>
+<p>Note that ordinary methods such as <code>call</code> are not affected.</p>
+<p>If you want to preserve an original trait untouched, <code>make</code> can be used to create a new trait with bounds on <code>async fn</code> and/or <code>-&gt; impl Trait</code> return types.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[trait_variant::make(IntFactory: Send)]
+</span><span class="kw">trait </span>LocalIntFactory {
+    <span class="kw">async fn </span>make(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; i32;
+    <span class="kw">fn </span>stream(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = i32&gt;;
+    <span class="kw">fn </span>call(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u32;
+}</code></pre></div>
+<p>The example causes a second trait called <code>IntFactory</code> to be created.
+Implementers of the trait can choose to implement the variant instead of the
+original trait. The macro creates a blanket impl which ensures that any type
+which implements the variant also implements the original trait.</p>
+</div></details></section></div></main></body></html>

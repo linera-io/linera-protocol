@@ -1,0 +1,53 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Custom `#[derive(...)]` macro for implementing `fmt::Display` via doc comment attributes."><title>Display in displaydoc - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="displaydoc" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc derive"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../displaydoc/index.html">displaydoc</a><span class="version">0.2.5</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Derive Macro <a href="index.html">displaydoc</a>::<wbr><a class="derive" href="#">Display</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/displaydoc/lib.rs.html#181-186">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>#[derive(Display)]
+{
+    <span class="comment">// Attributes available to this derive:</span>
+    #[ignore_extra_doc_attributes]
+    #[prefix_enum_doc_attributes]
+    #[displaydoc]
+}
+</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><a href="https://doc.rust-lang.org/edition-guide/rust-2018/macros/custom-derive.html">Custom <code>#[derive(...)]</code> macro</a>
+for implementing <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Display.html" title="trait core::fmt::Display"><code>fmt::Display</code></a> via doc comment attributes.</p>
+<h4 id="generic-type-parameters"><a class="doc-anchor" href="#generic-type-parameters">§</a>Generic Type Parameters</h4>
+<p>Type parameters to an enum or struct using this macro should <em>not</em> need to
+have an explicit <code>Display</code> constraint at the struct or enum definition
+site. A <code>Display</code> implementation for the <code>derive</code>d struct or enum is
+generated assuming each type parameter implements <code>Display</code>, but that should
+be possible without adding the constraint to the struct definition itself:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>displaydoc::Display;
+
+<span class="doccomment">/// oh no, an error: {0}
+</span><span class="attr">#[derive(Display)]
+</span><span class="kw">pub struct </span>Error&lt;E&gt;(<span class="kw">pub </span>E);
+
+<span class="comment">// No need to require `E: Display`, since `displaydoc::Display` adds that implicitly.
+</span><span class="kw">fn </span>generate_error&lt;E&gt;(e: E) -&gt; Error&lt;E&gt; { Error(e) }
+
+<span class="macro">assert!</span>(<span class="string">"oh no, an error: muahaha" </span>== <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"{}"</span>, generate_error(<span class="string">"muahaha"</span>)));</code></pre></div>
+<h4 id="using-debug-implementations-with-type-parameters"><a class="doc-anchor" href="#using-debug-implementations-with-type-parameters">§</a>Using <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html" title="trait core::fmt::Debug"><code>Debug</code></a> Implementations with Type Parameters</h4>
+<p>However, if a type parameter must instead be constrained with the
+<a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html" title="trait core::fmt::Debug"><code>Debug</code></a> trait so that some field may be printed with
+<code>{:?}</code>, that constraint must currently still also be specified redundantly
+at the struct or enum definition site. If a struct or enum field is being
+formatted with <code>{:?}</code> via <a href="index.html" title="mod displaydoc"><code>displaydoc</code></a>, and a generic type
+parameter must implement <code>Debug</code> to do that, then that struct or enum
+definition will need to propagate the <code>Debug</code> constraint to every type
+parameter it’s instantiated with:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>core::fmt::Debug;
+<span class="kw">use </span>displaydoc::Display;
+
+<span class="doccomment">/// oh no, an error: {0:?}
+</span><span class="attr">#[derive(Display)]
+</span><span class="kw">pub struct </span>Error&lt;E: Debug&gt;(<span class="kw">pub </span>E);
+
+<span class="comment">// `E: Debug` now has to propagate to callers.
+</span><span class="kw">fn </span>generate_error&lt;E: Debug&gt;(e: E) -&gt; Error&lt;E&gt; { Error(e) }
+
+<span class="macro">assert!</span>(<span class="string">"oh no, an error: \"cool\"" </span>== <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"{}"</span>, generate_error(<span class="string">"cool"</span>)));
+
+<span class="comment">// Try this with a struct that doesn't impl `Display` at all, unlike `str`.
+</span><span class="attr">#[derive(Debug)]
+</span><span class="kw">pub struct </span>Oh;
+<span class="macro">assert!</span>(<span class="string">"oh no, an error: Oh" </span>== <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"{}"</span>, generate_error(Oh)));</code></pre></div>
+</div></details></section></div></main></body></html>
