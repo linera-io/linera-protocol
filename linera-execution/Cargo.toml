@@ -20,6 +20,7 @@ revm = [
     "dep:alloy-sol-types",
     "dep:hex",
     "dep:tempfile",
+    "linera-base/revm",
 ]
 fs = ["tokio/fs"]
 metrics = ["prometheus", "linera-views/metrics"]
@@ -28,6 +29,7 @@ wasmer = [
     "dep:wasmer",
     "wasmer/enable-serde",
     "linera-witty/wasmer",
+    "linera-base/wasmer",
     "wasm-encoder",
     "wasm-instrument",
     "wasmparser",
@@ -35,6 +37,7 @@ wasmer = [
 wasmtime = [
     "dep:wasmtime",
     "linera-witty/wasmtime",
+    "linera-base/wasmtime",
     "wasm-encoder",
     "wasmparser",
 ]

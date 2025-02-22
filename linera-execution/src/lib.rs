@@ -60,6 +60,8 @@ use thiserror::Error;
 pub use crate::applications::ApplicationRegistry;
 #[cfg(with_revm)]
 use crate::revm::EvmExecutionError;
+#[cfg(all(with_revm, not(with_wasmer), not(with_wasmtime)))]
+use linera_base::vm::EvmRuntime;
 use crate::runtime::ContractSyncRuntime;
 #[cfg(all(with_testing, with_wasm_runtime))]
 pub use crate::wasm::test as wasm_test;
