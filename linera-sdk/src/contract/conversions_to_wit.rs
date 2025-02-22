@@ -15,7 +15,7 @@ use linera_base::{
         MessageId, Owner, StreamName,
     },
     ownership::{ChainOwnership, TimeoutConfig},
-    vm::{VmRuntime, WasmRuntime},
+    vm::{EvmRuntime, VmRuntime, WasmRuntime},
 };
 
 use super::wit::contract_system_api as wit_system_api;
@@ -113,15 +113,29 @@ impl From<BytecodeId> for wit_system_api::BytecodeId {
 impl From<VmRuntime> for wit_system_api::VmRuntime {
     fn from(vm_runtime: VmRuntime) -> Self {
         match vm_runtime {
-            VmRuntime::Wasm(wasm_runtime) => match wasm_runtime {
-                WasmRuntime::Wasmer => wit_system_api::VmRuntime::Wasmer,
-                WasmRuntime::Wasmtime => wit_system_api::VmRuntime::Wasmtime,
-                WasmRuntime::WasmerWithSanitizer => wit_system_api::VmRuntime::Wasmerwithsanitizer,
-                WasmRuntime::WasmtimeWithSanitizer => {
-                    wit_system_api::VmRuntime::Wasmtimewithsanitizer
-                }
-            },
-            VmRuntime::Evm(_) => wit_system_api::VmRuntime::Revm,
+            VmRuntime::Wasm(wasm_runtime) => wit_system_api::VmRuntime::Wasm(wasm_runtime.into()),
+            VmRuntime::Evm(evm_runtime) => wit_system_api::VmRuntime::Evm(evm_runtime.into()),
+        }
+    }
+}
+
+impl From<WasmRuntime> for wit_system_api::WasmRuntime {
+    fn from(wasm_runtime: WasmRuntime) -> Self {
+        match wasm_runtime {
+            WasmRuntime::Wasmer => wit_system_api::WasmRuntime::Wasmer,
+            WasmRuntime::Wasmtime => wit_system_api::WasmRuntime::Wasmtime,
+            WasmRuntime::WasmerWithSanitizer => wit_system_api::WasmRuntime::Wasmerwithsanitizer,
+            WasmRuntime::WasmtimeWithSanitizer => {
+                wit_system_api::WasmRuntime::Wasmtimewithsanitizer
+            }
+        }
+    }
+}
+
+impl From<EvmRuntime> for wit_system_api::EvmRuntime {
+    fn from(evm_runtime: EvmRuntime) -> Self {
+        match evm_runtime {
+            EvmRuntime::Revm => wit_system_api::EvmRuntime::Revm,
         }
     }
 }

@@ -44,11 +44,19 @@ interface service-system-api {
         vm-runtime: vm-runtime,
     }
 
-    enum vm-runtime {
+    variant vm-runtime {
+        wasm(wasm-runtime),
+        evm(evm-runtime),
+    }
+
+    enum wasm-runtime {
         wasmer,
         wasmtime,
         wasmerwithsanitizer,
         wasmtimewithsanitizer,
+    }
+
+    enum evm-runtime {
         revm,
     }
 

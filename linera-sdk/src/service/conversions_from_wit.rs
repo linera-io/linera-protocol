@@ -99,15 +99,29 @@ impl From<wit_system_api::BytecodeId> for BytecodeId {
 impl From<wit_system_api::VmRuntime> for VmRuntime {
     fn from(vm_runtime: wit_system_api::VmRuntime) -> Self {
         match vm_runtime {
-            wit_system_api::VmRuntime::Wasmer => VmRuntime::Wasm(WasmRuntime::Wasmer),
-            wit_system_api::VmRuntime::Wasmtime => VmRuntime::Wasm(WasmRuntime::Wasmtime),
-            wit_system_api::VmRuntime::Wasmerwithsanitizer => {
-                VmRuntime::Wasm(WasmRuntime::WasmerWithSanitizer)
+            wit_system_api::VmRuntime::Wasm(wasm_runtime) => VmRuntime::Wasm(wasm_runtime.into()),
+            wit_system_api::VmRuntime::Evm(evm_runtime) => VmRuntime::Evm(evm_runtime.into()),
+        }
+    }
+}
+
+impl From<wit_system_api::WasmRuntime> for WasmRuntime {
+    fn from(wasm_runtime: wit_system_api::WasmRuntime) -> Self {
+        match wasm_runtime {
+            wit_system_api::WasmRuntime::Wasmer => WasmRuntime::Wasmer,
+            wit_system_api::WasmRuntime::Wasmtime => WasmRuntime::Wasmtime,
+            wit_system_api::WasmRuntime::Wasmerwithsanitizer => WasmRuntime::WasmerWithSanitizer,
+            wit_system_api::WasmRuntime::Wasmtimewithsanitizer => {
+                WasmRuntime::WasmtimeWithSanitizer
             }
-            wit_system_api::VmRuntime::Wasmtimewithsanitizer => {
-                VmRuntime::Wasm(WasmRuntime::WasmtimeWithSanitizer)
-            }
-            wit_system_api::VmRuntime::Revm => VmRuntime::Evm(EvmRuntime::Revm),
+        }
+    }
+}
+
+impl From<wit_system_api::EvmRuntime> for EvmRuntime {
+    fn from(evm_runtime: wit_system_api::EvmRuntime) -> Self {
+        match evm_runtime {
+            wit_system_api::EvmRuntime::Revm => EvmRuntime::Revm,
         }
     }
 }
