@@ -316,13 +316,13 @@ impl Committee {
     pub fn make_simple(keys: Vec<(ValidatorPublicKey, AccountPublicKey)>) -> Self {
         let map = keys
             .into_iter()
-            .map(|k| {
+            .map(|(validator_key, account_key)| {
                 (
-                    k.0,
+                    validator_key,
                     ValidatorState {
-                        network_address: k.0.to_string(),
+                        network_address: validator_key.to_string(),
                         votes: 1,
-                        account_public_key: k.1,
+                        account_public_key: account_key,
                     },
                 )
             })
@@ -343,7 +343,7 @@ impl Committee {
             .map(|(name, validator)| (*name, validator.votes))
     }
 
-    pub fn fallback_keys_and_weights(&self) -> impl Iterator<Item = (AccountPublicKey, u64)> + '_ {
+    pub fn account_keys_and_weights(&self) -> impl Iterator<Item = (AccountPublicKey, u64)> + '_ {
         self.validators
             .values()
             .map(|validator| (validator.account_public_key, validator.votes))

@@ -93,9 +93,9 @@ impl<'de> Deserialize<'de> for Ed25519PublicKey {
         } else {
             #[derive(Deserialize)]
             #[serde(rename = "Ed25519PublicKey")]
-            struct Foo([u8; dalek::PUBLIC_KEY_LENGTH]);
+            struct PublicKey([u8; dalek::PUBLIC_KEY_LENGTH]);
 
-            let value = Foo::deserialize(deserializer)?;
+            let value = PublicKey::deserialize(deserializer)?;
             Ok(Self(value.0))
         }
     }
@@ -420,20 +420,20 @@ mod tests {
     }
 
     #[test]
-    fn test_publickey_serialization() {
+    fn test_public_key_serialization() {
         use crate::crypto::ed25519::Ed25519PublicKey;
         let key_in = Ed25519PublicKey::test_key(0);
         let s = serde_json::to_string(&key_in).unwrap();
         let key_out: Ed25519PublicKey = serde_json::from_str(&s).unwrap();
         assert_eq!(key_out, key_in);
 
-        let s = bincode::serialize(&key_in).unwrap();
-        let key_out: Ed25519PublicKey = bincode::deserialize(&s).unwrap();
+        let s = bcs::to_bytes(&key_in).unwrap();
+        let key_out: Ed25519PublicKey = bcs::from_bytes(&s).unwrap();
         assert_eq!(key_out, key_in);
     }
 
     #[test]
-    fn test_secretkey_serialization() {
+    fn test_secret_key_serialization() {
         use crate::crypto::ed25519::Ed25519SecretKey;
         let key_in = Ed25519SecretKey::generate();
         let s = serde_json::to_string(&key_in).unwrap();
