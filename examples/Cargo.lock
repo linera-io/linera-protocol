@@ -3503,6 +3503,7 @@ dependencies = [
  "cfg_aliases",
  "chrono",
  "custom_debug_derive",
+ "derive_more",
  "ed25519-dalek",
  "futures",
  "hex",
@@ -3620,7 +3621,6 @@ dependencies = [
  "clap",
  "custom_debug_derive",
  "dashmap 5.5.3",
- "derive_more",
  "dyn-clone",
  "futures",
  "linera-base",
@@ -3691,6 +3691,7 @@ version = "0.14.0"
 dependencies = [
  "async-trait",
  "bcs",
+ "cfg-if",
  "cfg_aliases",
  "dashmap 5.5.3",
  "futures",

@@ -22,8 +22,6 @@ use futures::{
     future::{self, try_join_all, Either, FusedFuture, Future},
     stream::{self, AbortHandle, FusedStream, FuturesUnordered, StreamExt},
 };
-#[cfg(not(target_arch = "wasm32"))]
-use linera_base::data_types::Bytecode;
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
@@ -39,8 +37,9 @@ use linera_base::{
         Owner, UserApplicationId,
     },
     ownership::{ChainOwnership, TimeoutConfig},
-    vm::VmRuntime,
 };
+#[cfg(not(target_arch = "wasm32"))]
+use linera_base::{data_types::Bytecode, vm::VmRuntime};
 use linera_chain::{
     data_types::{
         BlockProposal, ChainAndHeight, ExecutedBlock, IncomingBundle, LiteVote, MessageAction,
