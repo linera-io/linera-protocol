@@ -8,7 +8,10 @@ use std::{collections::BTreeMap, iter};
 use assert_matches::assert_matches;
 use linera_base::{
     crypto::{AccountPublicKey, CryptoHash, ValidatorPublicKey},
-    data_types::{Amount, ApplicationPermissions, Blob, BlockHeight, Bytecode, Timestamp},
+    data_types::{
+        Amount, ApplicationPermissions, Blob, BlockHeight, Bytecode, Timestamp,
+        UserApplicationDescription,
+    },
     hashed::Hashed,
     identifiers::{ApplicationId, BytecodeId, ChainId, MessageId},
     ownership::ChainOwnership,
@@ -20,7 +23,6 @@ use linera_execution::{
     test_utils::{ExpectedCall, MockApplication},
     ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext, Message, MessageKind,
     Operation, ResourceControlPolicy, SystemMessage, SystemOperation, TestExecutionRuntimeContext,
-    UserApplicationDescription,
 };
 use linera_views::{
     context::{Context as _, MemoryContext},

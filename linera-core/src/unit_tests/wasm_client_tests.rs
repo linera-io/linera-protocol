@@ -19,7 +19,7 @@ use assert_matches::assert_matches;
 use async_graphql::Request;
 use counter::CounterAbi;
 use linera_base::{
-    data_types::{Amount, Bytecode, Event, OracleResponse},
+    data_types::{Amount, Bytecode, Event, OracleResponse, UserApplicationDescription},
     identifiers::{AccountOwner, ApplicationId, Destination, Owner, StreamId, StreamName},
     ownership::{ChainOwnership, TimeoutConfig},
     vm::{VmRuntime, WasmRuntime},
@@ -30,7 +30,7 @@ use linera_chain::{
 };
 use linera_execution::{
     ExecutionError, Message, MessageKind, Operation, QueryOutcome, ResourceControlPolicy,
-    SystemMessage, UserApplicationDescription,
+    SystemMessage,
 };
 use serde_json::json;
 use test_case::test_case;

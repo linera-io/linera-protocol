@@ -10,7 +10,7 @@ use std::{
 use futures::{future::Either, stream, StreamExt as _, TryStreamExt as _};
 use linera_base::{
     crypto::ValidatorPublicKey,
-    data_types::{ArithmeticError, Blob, BlockHeight},
+    data_types::{ArithmeticError, Blob, BlockHeight, UserApplicationDescription},
     identifiers::{BlobId, ChainId, MessageId, UserApplicationId},
 };
 use linera_chain::{
@@ -18,7 +18,7 @@ use linera_chain::{
     types::{ConfirmedBlockCertificate, GenericCertificate, LiteCertificate},
     ChainStateView,
 };
-use linera_execution::{Query, QueryOutcome, UserApplicationDescription};
+use linera_execution::{Query, QueryOutcome};
 use linera_storage::Storage;
 use linera_views::views::ViewError;
 use thiserror::Error;

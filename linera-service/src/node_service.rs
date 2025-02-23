@@ -15,7 +15,7 @@ use axum::{extract::Path, http::StatusCode, response, response::IntoResponse, Ex
 use futures::{lock::Mutex, Future};
 use linera_base::{
     crypto::{CryptoError, CryptoHash},
-    data_types::{Amount, ApplicationPermissions, Bytecode, TimeDelta},
+    data_types::{Amount, ApplicationPermissions, Bytecode, TimeDelta, UserApplicationDescription},
     ensure,
     hashed::Hashed,
     identifiers::{ApplicationId, BytecodeId, ChainId, Owner, UserApplicationId},
@@ -36,7 +36,7 @@ use linera_core::{
 use linera_execution::{
     committee::{Committee, Epoch},
     system::{AdminOperation, Recipient, SystemChannel},
-    Operation, Query, QueryOutcome, QueryResponse, SystemOperation, UserApplicationDescription,
+    Operation, Query, QueryOutcome, QueryResponse, SystemOperation,
 };
 use linera_sdk::base::BlobContent;
 use linera_storage::Storage;

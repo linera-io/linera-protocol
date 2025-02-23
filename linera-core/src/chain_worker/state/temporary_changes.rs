@@ -4,7 +4,7 @@
 //! Operations that don't persist any changes to the chain state.
 
 use linera_base::{
-    data_types::{ArithmeticError, Timestamp},
+    data_types::{ArithmeticError, Timestamp, UserApplicationDescription},
     ensure,
     identifiers::{AccountOwner, ChannelFullName, GenericApplicationId, UserApplicationId},
 };
@@ -12,7 +12,7 @@ use linera_chain::data_types::{
     BlockExecutionOutcome, ExecutedBlock, IncomingBundle, Medium, MessageAction, ProposalContent,
     ProposedBlock,
 };
-use linera_execution::{ChannelSubscription, Query, QueryOutcome, UserApplicationDescription};
+use linera_execution::{ChannelSubscription, Query, QueryOutcome};
 use linera_storage::{Clock as _, Storage};
 use linera_views::views::View;
 #[cfg(with_testing)]

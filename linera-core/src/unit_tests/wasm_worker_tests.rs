@@ -15,7 +15,9 @@ use std::collections::BTreeSet;
 use assert_matches::assert_matches;
 use linera_base::{
     crypto::AccountSecretKey,
-    data_types::{Amount, Blob, BlockHeight, Bytecode, OracleResponse, Timestamp},
+    data_types::{
+        Amount, Blob, BlockHeight, Bytecode, OracleResponse, Timestamp, UserApplicationDescription,
+    },
     hashed::Hashed,
     identifiers::{
         BytecodeId, ChainDescription, ChainId, Destination, MessageId, UserApplicationId,
@@ -33,7 +35,7 @@ use linera_execution::{
     system::{SystemMessage, SystemOperation},
     test_utils::SystemExecutionState,
     Message, MessageKind, Operation, OperationContext, ResourceController, TransactionTracker,
-    UserApplicationDescription, WasmContractModule,
+    WasmContractModule,
 };
 use linera_storage::{DbStorage, Storage};
 #[cfg(feature = "dynamodb")]

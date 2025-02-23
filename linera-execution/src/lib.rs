@@ -42,7 +42,7 @@ use linera_base::{
     crypto::{BcsHashable, CryptoHash},
     data_types::{
         Amount, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, DecompressionError,
-        Resources, SendMessageRequest, Timestamp,
+        Resources, SendMessageRequest, Timestamp, UserApplicationDescription,
     },
     doc_scalar, hex_debug, http,
     identifiers::{
@@ -1340,35 +1340,6 @@ impl WithVmDefault for Option<VmRuntime> {
         }
     }
 }
-
-/// Description of the necessary information to run a user application.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Hash, Serialize)]
-pub struct UserApplicationDescription {
-    /// The unique ID of the bytecode to use for the application.
-    pub bytecode_id: BytecodeId,
-    /// The unique ID of the application's creation.
-    pub creation: MessageId,
-    /// The parameters of the application.
-    #[serde(with = "serde_bytes")]
-    #[debug(with = "hex_debug")]
-    pub parameters: Vec<u8>,
-    /// Required dependencies.
-    pub required_application_ids: Vec<UserApplicationId>,
-}
-
-impl From<&UserApplicationDescription> for UserApplicationId {
-    fn from(description: &UserApplicationDescription) -> Self {
-        UserApplicationId {
-            bytecode_id: description.bytecode_id,
-            creation: description.creation,
-        }
-    }
-}
-
-doc_scalar!(
-    UserApplicationDescription,
-    "Description of the necessary information to run a user application"
-);
 
 doc_scalar!(Operation, "An operation to be executed in a block");
 doc_scalar!(

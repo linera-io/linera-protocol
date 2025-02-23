@@ -13,7 +13,10 @@ use async_trait::async_trait;
 use dashmap::{mapref::entry::Entry, DashMap};
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Amount, Blob, BlockHeight, CompressedBytecode, TimeDelta, Timestamp},
+    data_types::{
+        Amount, Blob, BlockHeight, CompressedBytecode, TimeDelta, Timestamp,
+        UserApplicationDescription,
+    },
     hashed::Hashed,
     identifiers::{BlobId, BlobType, ChainDescription, ChainId, EventId, Owner, UserApplicationId},
     ownership::ChainOwnership,
@@ -29,7 +32,7 @@ use linera_execution::{
     committee::{Committee, Epoch},
     system::SystemChannel,
     BlobState, ChannelSubscription, ExecutionError, ExecutionRuntimeConfig,
-    ExecutionRuntimeContext, UserApplicationDescription, UserContractCode, UserServiceCode,
+    ExecutionRuntimeContext, UserContractCode, UserServiceCode,
 };
 #[cfg(with_wasm_runtime)]
 use linera_execution::{WasmContractModule, WasmServiceModule};

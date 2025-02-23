@@ -32,8 +32,8 @@ use crate::{
     crypto::{BcsHashable, CryptoHash},
     doc_scalar, hex_debug, http,
     identifiers::{
-        ApplicationId, BlobId, BlobType, ChainId, Destination, EventId, GenericApplicationId,
-        StreamId,
+        ApplicationId, BlobId, BlobType, BytecodeId, ChainId, Destination, EventId,
+        GenericApplicationId, MessageId, StreamId, UserApplicationId,
     },
     limited_writer::{LimitedWriter, LimitedWriterError},
     time::{Duration, SystemTime},
@@ -782,6 +782,30 @@ pub enum OracleResponse {
 
 impl<'de> BcsHashable<'de> for OracleResponse {}
 
+/// Description of the necessary information to run a user application.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Hash, Serialize)]
+pub struct UserApplicationDescription {
+    /// The unique ID of the bytecode to use for the application.
+    pub bytecode_id: BytecodeId,
+    /// The unique ID of the application's creation.
+    pub creation: MessageId,
+    /// The parameters of the application.
+    #[serde(with = "serde_bytes")]
+    #[debug(with = "hex_debug")]
+    pub parameters: Vec<u8>,
+    /// Required dependencies.
+    pub required_application_ids: Vec<UserApplicationId>,
+}
+
+impl From<&UserApplicationDescription> for UserApplicationId {
+    fn from(description: &UserApplicationDescription) -> Self {
+        UserApplicationId {
+            bytecode_id: description.bytecode_id,
+            creation: description.creation,
+        }
+    }
+}
+
 /// A WebAssembly module's bytecode.
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct Bytecode {
@@ -1131,6 +1155,10 @@ doc_scalar!(BlobContent, "A blob of binary data.");
 doc_scalar!(
     Blob,
     "A blob of binary data, with its content-addressed blob ID."
+);
+doc_scalar!(
+    UserApplicationDescription,
+    "Description of the necessary information to run a user application"
 );
 
 /// The time it takes to compress a bytecode.

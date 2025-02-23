@@ -12,7 +12,9 @@ use anyhow::bail;
 use assert_matches::assert_matches;
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Amount, Blob, BlockHeight, CompressedBytecode, Timestamp},
+    data_types::{
+        Amount, Blob, BlockHeight, CompressedBytecode, Timestamp, UserApplicationDescription,
+    },
     identifiers::{
         Account, AccountOwner, ApplicationId, BytecodeId, ChainDescription, ChainId, MessageId,
         Owner,
@@ -28,7 +30,6 @@ use linera_execution::{
     BaseRuntime, ContractRuntime, ExecutionError, ExecutionOutcome, Message, MessageContext,
     Operation, OperationContext, ResourceController, SystemExecutionError,
     SystemExecutionStateView, TestExecutionRuntimeContext, TransactionOutcome, TransactionTracker,
-    UserApplicationDescription,
 };
 use linera_views::context::MemoryContext;
 use test_case::test_matrix;
