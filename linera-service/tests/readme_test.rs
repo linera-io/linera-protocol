@@ -26,6 +26,7 @@ use tokio::process::Command;
 #[test_case::test_case("../examples/fungible" ; "fungible")]
 #[test_case::test_case("../examples/gen-nft" ; "gen-nft")]
 #[test_case::test_case("../examples/hex-game" ; "hex-game")]
+#[test_case::test_case("../examples/lmm" ; "lmm")]
 #[test_case::test_case("../examples/native-fungible" ; "native-fungible")]
 #[test_case::test_case("../examples/non-fungible" ; "non-fungible")]
 #[test_case::test_case("../examples/matching-engine" ; "matching engine")]
@@ -33,7 +34,7 @@ use tokio::process::Command;
 #[test_case::test_case("../examples/rfq" ; "requests for quotes")]
 #[test_case::test_case("../examples/social" ; "social")]
 #[test_log::test(tokio::test)]
-async fn test_script_in_readme_with_storage_service(path: &str) -> std::io::Result<()> {
+async fn test_script_in_readme(path: &str) -> std::io::Result<()> {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {} for path {}", test_name!(), path);
 
