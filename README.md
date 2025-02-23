@@ -60,7 +60,7 @@ from low to high levels in the dependency graph)
 * [`examples`](./examples) Examples of Linera applications written in Rust.
 
 
-## Quickstart with the Linera service CLI
+## Quickstart with the Linera CLI tool
 
 The following commands set up a local test network and run some transfers between the
 microchains owned by a single wallet.
