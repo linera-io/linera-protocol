@@ -134,7 +134,7 @@ impl<W: Persist<Target = Wallet>> Persist for WalletState<W> {
         self.wallet
             .mutate(|w| w.refresh_prng_seed(&mut self.prng))
             .await?;
-        tracing::debug!("Persisted user chains");
+        tracing::trace!("Persisted user chains");
         Ok(())
     }
 
