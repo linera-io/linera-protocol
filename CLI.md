@@ -936,8 +936,7 @@ Start a Local Linera Network
 
 ###### **Options:**
 
-* `--extra-wallets <EXTRA_WALLETS>` — The number of extra wallets and user chains to initialize. Default is 0
-* `--other-initial-chains <OTHER_INITIAL_CHAINS>` — The number of initial "root" chains created in the genesis config on top of the default "admin" chain. All initial chains belong to the first "admin" wallet
+* `--other-initial-chains <OTHER_INITIAL_CHAINS>` — The number of initial "root" chains created in the genesis config on top of the default "admin" chain. All initial chains belong to the first "admin" wallet. It is recommended to use at least one other initial chain for the faucet
 
   Default value: `2`
 * `--initial-amount <INITIAL_AMOUNT>` — The initial amount of native tokens credited in the initial "root" chains, including the default "admin" chain

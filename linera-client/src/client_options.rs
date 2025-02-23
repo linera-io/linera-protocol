@@ -1028,13 +1028,10 @@ impl DatabaseToolCommand {
 pub enum NetCommand {
     /// Start a Local Linera Network
     Up {
-        /// The number of extra wallets and user chains to initialize. Default is 0.
-        #[arg(long)]
-        extra_wallets: Option<usize>,
-
         /// The number of initial "root" chains created in the genesis config on top of
         /// the default "admin" chain. All initial chains belong to the first "admin"
-        /// wallet.
+        /// wallet. It is recommended to use at least one other initial chain for the
+        /// faucet.
         #[arg(long, default_value = "2")]
         other_initial_chains: u32,
 
