@@ -775,8 +775,8 @@ pub enum ClientCommand {
         service: PathBuf,
 
         /// The virtual machine runtime to use.
-        #[arg(long)]
-        vm_runtime: Option<VmRuntime>,
+        #[arg(long, default_value = "wasm")]
+        vm_runtime: VmRuntime,
 
         /// An optional chain ID to publish the bytecode. The default chain of the wallet
         /// is used otherwise.
@@ -841,8 +841,8 @@ pub enum ClientCommand {
         service: PathBuf,
 
         /// The virtual machine runtime to use.
-        #[arg(long)]
-        vm_runtime: Option<VmRuntime>,
+        #[arg(long, default_value = "wasm")]
+        vm_runtime: VmRuntime,
 
         /// An optional chain ID to publish the bytecode. The default chain of the wallet
         /// is used otherwise.
@@ -1251,8 +1251,8 @@ pub enum ProjectCommand {
         publisher: Option<ChainId>,
 
         /// The virtual machine runtime to use.
-        #[arg(long)]
-        vm_runtime: Option<VmRuntime>,
+        #[arg(long, default_value = "wasm")]
+        vm_runtime: VmRuntime,
 
         /// The shared parameters as JSON string.
         #[arg(long)]

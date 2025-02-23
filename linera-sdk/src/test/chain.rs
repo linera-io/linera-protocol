@@ -215,7 +215,7 @@ impl ActiveChain {
         let service_blob = Blob::new_service_bytecode(service);
         let contract_blob_hash = contract_blob.id().hash;
         let service_blob_hash = service_blob.id().hash;
-        let vm_runtime = VmRuntime::default();
+        let vm_runtime = VmRuntime::Wasm;
 
         let bytecode_id = BytecodeId::new(contract_blob_hash, service_blob_hash, vm_runtime);
 

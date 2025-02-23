@@ -104,7 +104,7 @@ fn application_id_test_case() -> ApplicationId {
         bytecode_id: BytecodeId::new(
             CryptoHash::test_hash("contract bytecode"),
             CryptoHash::test_hash("service bytecode"),
-            VmRuntime::default(),
+            VmRuntime::Wasm,
         ),
         creation: MessageId {
             chain_id: ChainId::root(0),
@@ -119,7 +119,7 @@ fn bytecode_id_test_case() -> BytecodeId {
     BytecodeId::new(
         CryptoHash::test_hash("another contract bytecode"),
         CryptoHash::test_hash("another service bytecode"),
-        VmRuntime::default(),
+        VmRuntime::Wasm,
     )
 }
 

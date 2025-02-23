@@ -24,7 +24,7 @@ fn bytecode_id() -> BytecodeId {
     BytecodeId::new(
         CryptoHash::test_hash("contract"),
         CryptoHash::test_hash("service"),
-        VmRuntime::default(),
+        VmRuntime::Wasm,
     )
 }
 

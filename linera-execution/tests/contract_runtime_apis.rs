@@ -659,7 +659,7 @@ impl TransferTestEndpoint {
     fn sender_application_description() -> UserApplicationDescription {
         let contract_id = Self::sender_application_contract_blob().id().hash;
         let service_id = Self::sender_application_service_blob().id().hash;
-        let vm_runtime = VmRuntime::default();
+        let vm_runtime = VmRuntime::Wasm;
 
         UserApplicationDescription {
             bytecode_id: BytecodeId::new(contract_id, service_id, vm_runtime),
@@ -700,7 +700,7 @@ impl TransferTestEndpoint {
             bytecode_id: BytecodeId::new(
                 CryptoHash::test_hash("recipient contract bytecode"),
                 CryptoHash::test_hash("recipient service bytecode"),
-                VmRuntime::default(),
+                VmRuntime::Wasm,
             ),
             creation: MessageId {
                 chain_id: ChainId::root(2000),

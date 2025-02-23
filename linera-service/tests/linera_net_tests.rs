@@ -1401,7 +1401,7 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
-    let vm_runtime = VmRuntime::default();
+    let vm_runtime = VmRuntime::Wasm;
     let (mut net, client_admin) = config.instantiate().await?;
 
     let client_a = net.make_client().await;
@@ -1694,7 +1694,7 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
-    let vm_runtime = VmRuntime::default();
+    let vm_runtime = VmRuntime::Wasm;
     let (mut net, client_amm) = config.instantiate().await?;
 
     let client0 = net.make_client().await;

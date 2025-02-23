@@ -48,7 +48,7 @@ pub fn create_dummy_user_application_description(
         compressed_bytes: b"service".to_vec(),
     });
 
-    let vm_runtime = VmRuntime::default();
+    let vm_runtime = VmRuntime::Wasm;
     (
         UserApplicationDescription {
             bytecode_id: BytecodeId::new(

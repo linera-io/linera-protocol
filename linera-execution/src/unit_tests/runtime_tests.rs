@@ -211,7 +211,7 @@ fn create_dummy_application_id() -> ApplicationId {
         bytecode_id: BytecodeId::new(
             CryptoHash::test_hash("contract"),
             CryptoHash::test_hash("service"),
-            VmRuntime::default(),
+            VmRuntime::Wasm,
         ),
         creation: MessageId {
             chain_id,
