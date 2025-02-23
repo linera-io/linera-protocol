@@ -1595,7 +1595,6 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
         ClientCommand::Net(net_command) => match net_command {
             #[cfg(feature = "kubernetes")]
             NetCommand::Up {
-                extra_wallets,
                 other_initial_chains,
                 initial_amount,
                 validators,
@@ -1615,7 +1614,6 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
                 faucet_amount,
             } => {
                 net_up_utils::handle_net_up_kubernetes(
-                    *extra_wallets,
                     *other_initial_chains,
                     *initial_amount,
                     *validators,
@@ -1636,7 +1634,6 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
             }
 
             NetCommand::Up {
-                extra_wallets,
                 other_initial_chains,
                 initial_amount,
                 validators,
@@ -1653,7 +1650,6 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
                 ..
             } => {
                 net_up_utils::handle_net_up_service(
-                    *extra_wallets,
                     *other_initial_chains,
                     *initial_amount,
                     *validators,
