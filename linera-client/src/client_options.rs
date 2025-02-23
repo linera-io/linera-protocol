@@ -78,11 +78,12 @@ pub struct ClientOptions {
     #[arg(long = "storage")]
     pub storage_config: Option<String>,
 
-    /// Given an integer value `N`, read the wallet state and the wallet storage config from the
-    /// environment variables `LINERA_WALLET_{N}` and `LINERA_STORAGE_{N}` instead of
-    /// `LINERA_WALLET` and `LINERA_STORAGE`.
-    #[arg(long, short = 'w')]
-    pub with_wallet: Option<u32>,
+    /// Given an ASCII alphanumeric parameter `X`, read the wallet state and the wallet
+    /// storage config from the environment variables `LINERA_WALLET_{X}` and
+    /// `LINERA_STORAGE_{X}` instead of `LINERA_WALLET` and
+    /// `LINERA_STORAGE`.
+    #[arg(long, short = 'w', value_parser = util::parse_ascii_alphanumeric_string)]
+    pub with_wallet: Option<String>,
 
     /// Timeout for sending queries (milliseconds)
     #[arg(long = "send-timeout-ms", default_value = "4000", value_parser = util::parse_millis)]
@@ -174,7 +175,8 @@ impl ClientOptions {
         let mut options = <ClientOptions as clap::Parser>::parse();
         let suffix = options
             .with_wallet
-            .map(|n| format!("_{}", n))
+            .as_ref()
+            .map(|x| format!("_{}", x))
             .unwrap_or_default();
         let wallet_env_var = env::var(format!("LINERA_WALLET{suffix}")).ok();
         let storage_env_var = env::var(format!("LINERA_STORAGE{suffix}")).ok();

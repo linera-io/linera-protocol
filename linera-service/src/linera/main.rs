@@ -1353,7 +1353,7 @@ fn main() -> anyhow::Result<()> {
     };
 
     let span = tracing::info_span!("linera::main");
-    if let Some(wallet_id) = options.with_wallet {
+    if let Some(wallet_id) = &options.with_wallet {
         span.record("wallet_id", wallet_id);
     }
 
