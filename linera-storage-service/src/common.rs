@@ -8,6 +8,7 @@ use linera_views::{
     lru_caching::LruCachingConfig,
     store::{CommonStoreInternalConfig, KeyValueStoreError},
 };
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tonic::Status;
 
@@ -70,7 +71,7 @@ pub fn storage_service_test_endpoint() -> Result<String, ServiceStoreError> {
     Ok(std::env::var("LINERA_STORAGE_SERVICE")?)
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ServiceStoreInternalConfig {
     /// The endpoint used by the shared store
     pub endpoint: String,

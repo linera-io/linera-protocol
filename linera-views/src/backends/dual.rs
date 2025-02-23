@@ -3,6 +3,7 @@
 
 //! Implements [`crate::store::KeyValueStore`] by combining two existing stores.
 
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 #[cfg(with_testing)]
@@ -16,7 +17,7 @@ use crate::{
 };
 
 /// The initial configuration of the system.
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DualStoreConfig<C1, C2> {
     /// The first config.
     pub first_config: C1,

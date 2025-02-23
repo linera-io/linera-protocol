@@ -36,6 +36,7 @@ use aws_sdk_dynamodb::{
 use aws_smithy_types::error::operation::BuildError;
 use futures::future::{join_all, FutureExt as _};
 use linera_base::ensure;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 #[cfg(with_metrics)]
@@ -56,9 +57,6 @@ use crate::{
 
 /// Name of the environment variable with the address to a LocalStack instance.
 const LOCALSTACK_ENDPOINT: &str = "LOCALSTACK_ENDPOINT";
-
-/// The configuration to connect to DynamoDB.
-pub type Config = aws_sdk_dynamodb::Config;
 
 /// Gets the AWS configuration from the environment
 async fn get_base_config() -> Result<aws_sdk_dynamodb::Config, DynamoDbStoreInternalError> {
@@ -334,13 +332,21 @@ pub struct DynamoDbStoreInternal {
     root_key_written: Arc<AtomicBool>,
 }
 
-/// The initial configuration of the system
-#[derive(Debug)]
+/// The initial configuration of the system.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DynamoDbStoreInternalConfig {
-    /// The AWS configuration
-    config: aws_sdk_dynamodb::Config,
+    /// Whether to use local stack or not.
+    use_localstack: bool,
     /// The common configuration of the key value store
     common_config: CommonStoreInternalConfig,
+}
+
+impl DynamoDbStoreInternalConfig {
+    async fn client(&self) -> Result<Client, DynamoDbStoreInternalError> {
+        Ok(Client::from_conf(
+            get_config_internal(self.use_localstack).await?,
+        ))
+    }
 }
 
 impl AdminKeyValueStore for DynamoDbStoreInternal {
@@ -356,7 +362,7 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
         root_key: &[u8],
     ) -> Result<Self, DynamoDbStoreInternalError> {
         Self::check_namespace(namespace)?;
-        let client = Client::from_conf(config.config.clone());
+        let client = config.client().await?;
         let semaphore = config
             .common_config
             .max_concurrent_queries
@@ -392,7 +398,7 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
     }
 
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, DynamoDbStoreInternalError> {
-        let client = Client::from_conf(config.config.clone());
+        let client = config.client().await?;
         let mut namespaces = Vec::new();
         let mut start_table = None;
         loop {
@@ -432,7 +438,7 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
     }
 
     async fn delete_all(config: &Self::Config) -> Result<(), DynamoDbStoreInternalError> {
-        let client = Client::from_conf(config.config.clone());
+        let client = config.client().await?;
         let tables = Self::list_all(config).await?;
         for table in tables {
             client
@@ -450,7 +456,7 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
         namespace: &str,
     ) -> Result<bool, DynamoDbStoreInternalError> {
         Self::check_namespace(namespace)?;
-        let client = Client::from_conf(config.config.clone());
+        let client = config.client().await?;
         let key_db = build_key(EMPTY_ROOT_KEY, DB_KEY.to_vec());
         let response = client
             .get_item()
@@ -484,8 +490,8 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
         namespace: &str,
     ) -> Result<(), DynamoDbStoreInternalError> {
         Self::check_namespace(namespace)?;
-        let client = Client::from_conf(config.config.clone());
-        let _result = client
+        let client = config.client().await?;
+        client
             .create_table()
             .table_name(namespace)
             .attribute_definitions(
@@ -529,7 +535,7 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
         namespace: &str,
     ) -> Result<(), DynamoDbStoreInternalError> {
         Self::check_namespace(namespace)?;
-        let client = Client::from_conf(config.config.clone());
+        let client = config.client().await?;
         client
             .delete_table()
             .table_name(namespace)
@@ -1166,10 +1172,8 @@ impl TestKeyValueStore for JournalingKeyValueStore<DynamoDbStoreInternal> {
             max_concurrent_queries: Some(TEST_DYNAMO_DB_MAX_CONCURRENT_QUERIES),
             max_stream_queries: TEST_DYNAMO_DB_MAX_STREAM_QUERIES,
         };
-        let use_localstack = true;
-        let config = get_config_internal(use_localstack).await?;
         Ok(DynamoDbStoreInternalConfig {
-            config,
+            use_localstack: true,
             common_config,
         })
     }
@@ -1196,19 +1200,14 @@ pub type DynamoDbStoreError = ValueSplittingError<DynamoDbStoreInternalError>;
 /// The config type for [`DynamoDbStore`]`
 pub type DynamoDbStoreConfig = LruCachingConfig<DynamoDbStoreInternalConfig>;
 
-/// Getting a configuration for the system
-pub async fn get_config(use_localstack: bool) -> Result<Config, DynamoDbStoreError> {
-    Ok(get_config_internal(use_localstack).await?)
-}
-
 impl DynamoDbStoreConfig {
     /// Creates a `DynamoDbStoreConfig` from the input.
     pub fn new(
-        config: Config,
+        use_localstack: bool,
         common_config: crate::store::CommonStoreConfig,
     ) -> DynamoDbStoreConfig {
         let inner_config = DynamoDbStoreInternalConfig {
-            config,
+            use_localstack,
             common_config: common_config.reduced(),
         };
         DynamoDbStoreConfig {

@@ -15,7 +15,7 @@ use linera_storage_service::{
     common::{ServiceStoreConfig, ServiceStoreInternalConfig},
 };
 #[cfg(feature = "dynamodb")]
-use linera_views::dynamo_db::{get_config, DynamoDbStore, DynamoDbStoreConfig};
+use linera_views::dynamo_db::{DynamoDbStore, DynamoDbStoreConfig};
 #[cfg(with_storage)]
 use linera_views::store::LocalAdminKeyValueStore as _;
 use linera_views::{
@@ -23,6 +23,7 @@ use linera_views::{
     store::CommonStoreConfig,
     views::ViewError,
 };
+use serde::{Deserialize, Serialize};
 use tracing::error;
 #[cfg(feature = "rocksdb")]
 use {
@@ -63,6 +64,7 @@ util::impl_from_dynamic!(Error:Backend, linera_views::dynamo_db::DynamoDbStoreEr
 util::impl_from_dynamic!(Error:Backend, linera_views::scylla_db::ScyllaDbStoreError);
 
 /// The configuration of the key value store in use.
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum StoreConfig {
     /// The storage service key-value store
     #[cfg(feature = "storage-service")]
@@ -366,8 +368,7 @@ impl StorageConfigNamespace {
             }
             #[cfg(feature = "dynamodb")]
             StorageConfig::DynamoDb { use_localstack } => {
-                let aws_config = get_config(*use_localstack).await?;
-                let config = DynamoDbStoreConfig::new(aws_config, common_config);
+                let config = DynamoDbStoreConfig::new(*use_localstack, common_config);
                 Ok(StoreConfig::DynamoDb(config, namespace))
             }
             #[cfg(feature = "scylladb")]
