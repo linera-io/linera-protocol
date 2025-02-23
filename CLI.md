@@ -614,6 +614,8 @@ Publish bytecode
 
 * `--vm-runtime <VM_RUNTIME>` — The virtual machine runtime to use
 
+  Default value: `wasm`
+
 
 
 ## `linera publish-data-blob`
@@ -678,6 +680,8 @@ Create an application, and publish the required bytecode
 ###### **Options:**
 
 * `--vm-runtime <VM_RUNTIME>` — The virtual machine runtime to use
+
+  Default value: `wasm`
 * `--json-parameters <JSON_PARAMETERS>` — The shared parameters as JSON string
 * `--json-parameters-path <JSON_PARAMETERS_PATH>` — Path to a JSON file containing the shared parameters
 * `--json-argument <JSON_ARGUMENT>` — The instantiation argument as a JSON string
@@ -884,6 +888,8 @@ Build and publish a Linera project
 ###### **Options:**
 
 * `--vm-runtime <VM_RUNTIME>` — The virtual machine runtime to use
+
+  Default value: `wasm`
 * `--json-parameters <JSON_PARAMETERS>` — The shared parameters as JSON string
 * `--json-parameters-path <JSON_PARAMETERS_PATH>` — Path to a JSON file containing the shared parameters
 * `--json-argument <JSON_ARGUMENT>` — The instantiation argument as a JSON string
