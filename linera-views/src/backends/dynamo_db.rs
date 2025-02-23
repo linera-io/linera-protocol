@@ -86,17 +86,6 @@ async fn get_localstack_config() -> Result<aws_sdk_dynamodb::Config, DynamoDbSto
     Ok(config)
 }
 
-/// Getting a configuration for the system
-async fn get_config_internal(
-    use_localstack: bool,
-) -> Result<aws_sdk_dynamodb::Config, DynamoDbStoreInternalError> {
-    if use_localstack {
-        get_localstack_config().await
-    } else {
-        get_base_config().await
-    }
-}
-
 /// DynamoDB forbids the iteration over the partition keys.
 /// Therefore we use a special partition key named `[1]` for storing
 /// the root keys. For normal root keys, we simply put a `[0]` in
@@ -343,9 +332,12 @@ pub struct DynamoDbStoreInternalConfig {
 
 impl DynamoDbStoreInternalConfig {
     async fn client(&self) -> Result<Client, DynamoDbStoreInternalError> {
-        Ok(Client::from_conf(
-            get_config_internal(self.use_localstack).await?,
-        ))
+        let config = if self.use_localstack {
+            get_localstack_config().await?
+        } else {
+            get_base_config().await?
+        };
+        Ok(Client::from_conf(config))
     }
 }
 
