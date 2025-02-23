@@ -425,10 +425,6 @@ Event:
         TYPENAME: StreamId
     - key: BYTES
     - value: BYTES
-EvmRuntime:
-  ENUM:
-    0:
-      Revm: UNIT
 GenericApplicationId:
   ENUM:
     0:
@@ -1203,20 +1199,6 @@ VersionInfo:
 VmRuntime:
   ENUM:
     0:
-      Wasm:
-        NEWTYPE:
-          TYPENAME: WasmRuntime
+      Wasm: UNIT
     1:
-      Evm:
-        NEWTYPE:
-          TYPENAME: EvmRuntime
-WasmRuntime:
-  ENUM:
-    0:
-      Wasmer: UNIT
-    1:
-      Wasmtime: UNIT
-    2:
-      WasmerWithSanitizer: UNIT
-    3:
-      WasmtimeWithSanitizer: UNIT
+      Evm: UNIT

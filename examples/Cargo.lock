@@ -3621,6 +3621,7 @@ dependencies = [
  "clap",
  "custom_debug_derive",
  "dashmap 5.5.3",
+ "derive_more",
  "dyn-clone",
  "futures",
  "linera-base",

@@ -24,19 +24,16 @@ mod transaction_tracker;
 mod util;
 mod wasm;
 
-use std::{any::Any, fmt, sync::Arc};
+use std::{any::Any, fmt, str::FromStr, sync::Arc};
 
 use async_graphql::SimpleObject;
 use async_trait::async_trait;
 use committee::Epoch;
 use custom_debug_derive::Debug;
 use dashmap::DashMap;
+use derive_more::Display;
 #[cfg(web)]
 use js_sys::wasm_bindgen::JsValue;
-#[cfg(all(with_revm, not(with_wasmer), not(with_wasmtime)))]
-use linera_base::vm::EvmRuntime;
-#[cfg(with_wasm_runtime)]
-use linera_base::vm::WasmRuntime;
 use linera_base::{
     abi::Abi,
     crypto::{BcsHashable, CryptoHash},
@@ -51,7 +48,6 @@ use linera_base::{
     },
     ownership::ChainOwnership,
     task,
-    vm::VmRuntime,
 };
 use linera_views::{batch::Batch, views::ViewError};
 use serde::{Deserialize, Serialize};
@@ -1315,31 +1311,82 @@ pub struct BlobState {
     pub epoch: Epoch,
 }
 
-/// Trait used to select a default `VmRuntime`, if one is available.
-pub trait WithVmDefault {
-    fn with_vm_default(self) -> Self;
+/// The runtime to use for running the application.
+#[derive(Clone, Copy, Display)]
+#[cfg_attr(with_wasm_runtime, derive(Debug, Default))]
+pub enum WasmRuntime {
+    #[cfg(with_wasmer)]
+    #[default]
+    #[display("wasmer")]
+    Wasmer,
+    #[cfg(with_wasmtime)]
+    #[cfg_attr(not(with_wasmer), default)]
+    #[display("wasmtime")]
+    Wasmtime,
+    #[cfg(with_wasmer)]
+    WasmerWithSanitizer,
+    #[cfg(with_wasmtime)]
+    WasmtimeWithSanitizer,
 }
 
-impl WithVmDefault for Option<VmRuntime> {
-    fn with_vm_default(self) -> Self {
+#[derive(Clone, Copy, Display)]
+#[cfg_attr(with_revm, derive(Debug, Default))]
+pub enum EvmRuntime {
+    #[cfg(with_revm)]
+    #[default]
+    #[display("revm")]
+    Revm,
+}
+
+/// Trait used to select a default `WasmRuntime`, if one is available.
+pub trait WithWasmDefault {
+    fn with_wasm_default(self) -> Self;
+}
+
+impl WasmRuntime {
+    pub fn needs_sanitizer(self) -> bool {
         match self {
-            Some(vm_runtime) => Some(vm_runtime),
-            None => {
-                cfg_if::cfg_if! {
-                    if #[cfg(with_wasmer)] {
-                        Some(VmRuntime::Wasm(WasmRuntime::Wasmer))
-                    } else if #[cfg(with_wasmtime)] {
-                        Some(VmRuntime::Wasm(WasmRuntime::Wasmtime))
-                    } else if #[cfg(with_revm)] {
-                        Some(VmRuntime::Evm(EvmRuntime::Revm))
-                    } else {
-                        None
-                    }
-                }
-            }
+            #[cfg(with_wasmer)]
+            WasmRuntime::WasmerWithSanitizer => true,
+            #[cfg(with_wasmtime)]
+            WasmRuntime::WasmtimeWithSanitizer => true,
+            #[cfg(with_wasm_runtime)]
+            _ => false,
         }
     }
 }
+
+impl WithWasmDefault for Option<WasmRuntime> {
+    fn with_wasm_default(self) -> Self {
+        #[cfg(with_wasm_runtime)]
+        {
+            Some(self.unwrap_or_default())
+        }
+        #[cfg(not(with_wasm_runtime))]
+        {
+            None
+        }
+    }
+}
+
+impl FromStr for WasmRuntime {
+    type Err = InvalidWasmRuntime;
+
+    fn from_str(string: &str) -> Result<Self, Self::Err> {
+        match string {
+            #[cfg(with_wasmer)]
+            "wasmer" => Ok(WasmRuntime::Wasmer),
+            #[cfg(with_wasmtime)]
+            "wasmtime" => Ok(WasmRuntime::Wasmtime),
+            unknown => Err(InvalidWasmRuntime(unknown.to_owned())),
+        }
+    }
+}
+
+/// Attempts to create an invalid [`WasmRuntime`] instance from a string.
+#[derive(Clone, Debug, Error)]
+#[error("{0:?} is not a valid WebAssembly runtime")]
+pub struct InvalidWasmRuntime(String);
 
 doc_scalar!(Operation, "An operation to be executed in a block");
 doc_scalar!(

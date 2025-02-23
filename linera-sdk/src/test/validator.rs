@@ -20,6 +20,7 @@ use linera_core::worker::WorkerState;
 use linera_execution::{
     committee::{Committee, Epoch},
     system::{OpenChainConfig, SystemOperation, OPEN_CHAIN_MESSAGE_INDEX},
+    WasmRuntime,
 };
 use linera_storage::{DbStorage, Storage, TestClock};
 use linera_views::memory::MemoryStore;
@@ -68,7 +69,8 @@ impl TestValidator {
     pub async fn new() -> Self {
         let key_pair = ValidatorSecretKey::generate();
         let committee = Committee::make_simple(vec![key_pair.public()]);
-        let storage = DbStorage::<MemoryStore, _>::make_test_storage()
+        let wasm_runtime = Some(WasmRuntime::default());
+        let storage = DbStorage::<MemoryStore, _>::make_test_storage(wasm_runtime)
             .now_or_never()
             .expect("execution of DbStorage::new should not await anything");
         let clock = storage.clock().clone();

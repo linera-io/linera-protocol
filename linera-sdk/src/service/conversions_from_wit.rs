@@ -8,7 +8,7 @@ use linera_base::{
     data_types::{Amount, BlockHeight, Timestamp},
     http,
     identifiers::{AccountOwner, ApplicationId, BytecodeId, ChainId, MessageId, Owner},
-    vm::{EvmRuntime, VmRuntime, WasmRuntime},
+    vm::VmRuntime,
 };
 
 use super::wit::service_system_api as wit_system_api;
@@ -99,29 +99,8 @@ impl From<wit_system_api::BytecodeId> for BytecodeId {
 impl From<wit_system_api::VmRuntime> for VmRuntime {
     fn from(vm_runtime: wit_system_api::VmRuntime) -> Self {
         match vm_runtime {
-            wit_system_api::VmRuntime::Wasm(wasm_runtime) => VmRuntime::Wasm(wasm_runtime.into()),
-            wit_system_api::VmRuntime::Evm(evm_runtime) => VmRuntime::Evm(evm_runtime.into()),
-        }
-    }
-}
-
-impl From<wit_system_api::WasmRuntime> for WasmRuntime {
-    fn from(wasm_runtime: wit_system_api::WasmRuntime) -> Self {
-        match wasm_runtime {
-            wit_system_api::WasmRuntime::Wasmer => WasmRuntime::Wasmer,
-            wit_system_api::WasmRuntime::Wasmtime => WasmRuntime::Wasmtime,
-            wit_system_api::WasmRuntime::WasmerWithSanitizer => WasmRuntime::WasmerWithSanitizer,
-            wit_system_api::WasmRuntime::WasmtimeWithSanitizer => {
-                WasmRuntime::WasmtimeWithSanitizer
-            }
-        }
-    }
-}
-
-impl From<wit_system_api::EvmRuntime> for EvmRuntime {
-    fn from(evm_runtime: wit_system_api::EvmRuntime) -> Self {
-        match evm_runtime {
-            wit_system_api::EvmRuntime::Revm => EvmRuntime::Revm,
+            wit_system_api::VmRuntime::Wasm => VmRuntime::Wasm,
+            wit_system_api::VmRuntime::Evm => VmRuntime::Evm,
         }
     }
 }

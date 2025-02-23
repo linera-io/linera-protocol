@@ -16,6 +16,7 @@ use linera_base::{
     identifiers::{
         AccountOwner, ApplicationId, BlobId, BlobType, BytecodeId, ChainId, MessageId, Owner,
     },
+    vm::VmRuntime,
 };
 use linera_views::{
     context::Context,
@@ -32,7 +33,7 @@ use crate::{
     ApplicationRegistryView, ExecutionRequest, ExecutionRuntimeContext, ExecutionStateView,
     MessageContext, OperationContext, QueryContext, ServiceRuntimeEndpoint, ServiceRuntimeRequest,
     ServiceSyncRuntime, SystemExecutionStateView, TestExecutionRuntimeContext,
-    UserApplicationDescription, UserApplicationId, VmRuntime,
+    UserApplicationDescription, UserApplicationId,
 };
 
 /// Creates a dummy [`UserApplicationDescription`] for use in tests.

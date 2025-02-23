@@ -7,7 +7,7 @@ use linera_base::{
     hashed::Hashed,
     identifiers::{AccountOwner, BlobType, ChainDescription, Destination, GenericApplicationId},
     ownership::ChainOwnership,
-    vm::{EvmRuntime, VmRuntime, WasmRuntime},
+    vm::VmRuntime,
 };
 use linera_chain::{
     data_types::{Medium, MessageAction},
@@ -41,8 +41,6 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<Operation>(&samples)?;
     tracer.trace_type::<Message>(&samples)?;
     tracer.trace_type::<VmRuntime>(&samples)?;
-    tracer.trace_type::<WasmRuntime>(&samples)?;
-    tracer.trace_type::<EvmRuntime>(&samples)?;
     tracer.trace_type::<MessageAction>(&samples)?;
     tracer.trace_type::<MessageKind>(&samples)?;
     tracer.trace_type::<CertificateKind>(&samples)?;

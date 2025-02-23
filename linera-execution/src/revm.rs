@@ -9,7 +9,7 @@ use std::{
 };
 
 use alloy::primitives::{Address, B256, U256};
-use linera_base::{data_types::Bytecode, ensure, identifiers::StreamName, vm::EvmRuntime};
+use linera_base::{data_types::Bytecode, ensure, identifiers::StreamName};
 use linera_views::common::from_bytes_option;
 use revm::{
     db::AccountState,
@@ -30,7 +30,7 @@ use {
 };
 
 use crate::{
-    BaseRuntime, Batch, ContractRuntime, ContractSyncRuntimeHandle, ExecutionError,
+    BaseRuntime, Batch, ContractRuntime, ContractSyncRuntimeHandle, EvmRuntime, ExecutionError,
     FinalizeContext, MessageContext, OperationContext, QueryContext, ServiceRuntime,
     ServiceSyncRuntimeHandle, UserContract, UserContractInstance, UserContractModule, UserService,
     UserServiceInstance, UserServiceModule, ViewError,

@@ -106,10 +106,6 @@ interface contract-system-api {
         subscribers(channel-name),
     }
 
-    enum evm-runtime {
-        revm,
-    }
-
     record http-header {
         name: string,
         value: list<u8>,
@@ -198,15 +194,8 @@ interface contract-system-api {
 
     type u128 = tuple<u64, u64>;
 
-    variant vm-runtime {
-        wasm(wasm-runtime),
-        evm(evm-runtime),
-    }
-
-    enum wasm-runtime {
-        wasmer,
-        wasmtime,
-        wasmer-with-sanitizer,
-        wasmtime-with-sanitizer,
+    enum vm-runtime {
+        wasm,
+        evm,
     }
 }

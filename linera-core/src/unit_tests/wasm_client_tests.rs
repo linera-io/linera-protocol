@@ -22,7 +22,7 @@ use linera_base::{
     data_types::{Amount, Bytecode, Event, OracleResponse, UserApplicationDescription},
     identifiers::{AccountOwner, ApplicationId, Destination, Owner, StreamId, StreamName},
     ownership::{ChainOwnership, TimeoutConfig},
-    vm::{VmRuntime, WasmRuntime},
+    vm::VmRuntime,
 };
 use linera_chain::{
     data_types::{MessageAction, OutgoingMessage},
@@ -30,7 +30,7 @@ use linera_chain::{
 };
 use linera_execution::{
     ExecutionError, Message, MessageKind, Operation, QueryOutcome, ResourceControlPolicy,
-    SystemMessage,
+    SystemMessage, WasmRuntime,
 };
 use serde_json::json;
 use test_case::test_case;
@@ -52,8 +52,7 @@ use crate::client::{
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn test_memory_create_application(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
-    let vm_runtime = VmRuntime::Wasm(wasm_runtime);
-    run_test_create_application(MemoryStorageBuilder::default(), vm_runtime).await
+    run_test_create_application(MemoryStorageBuilder::with_wasm_runtime(wasm_runtime)).await
 }
 
 #[ignore]
@@ -62,8 +61,7 @@ async fn test_memory_create_application(wasm_runtime: WasmRuntime) -> anyhow::Re
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn test_service_create_application(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
-    let vm_runtime = VmRuntime::Wasm(wasm_runtime);
-    run_test_create_application(ServiceStorageBuilder::default(), vm_runtime).await
+    run_test_create_application(ServiceStorageBuilder::with_wasm_runtime(wasm_runtime).await).await
 }
 
 #[ignore]
@@ -72,8 +70,7 @@ async fn test_service_create_application(wasm_runtime: WasmRuntime) -> anyhow::R
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn test_rocks_db_create_application(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
-    let vm_runtime = VmRuntime::Wasm(wasm_runtime);
-    run_test_create_application(RocksDbStorageBuilder::new().await, vm_runtime).await
+    run_test_create_application(RocksDbStorageBuilder::with_wasm_runtime(wasm_runtime).await).await
 }
 
 #[ignore]
@@ -82,8 +79,7 @@ async fn test_rocks_db_create_application(wasm_runtime: WasmRuntime) -> anyhow::
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn test_dynamo_db_create_application(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
-    let vm_runtime = VmRuntime::Wasm(wasm_runtime);
-    run_test_create_application(DynamoDbStorageBuilder::default(), vm_runtime).await
+    run_test_create_application(DynamoDbStorageBuilder::with_wasm_runtime(wasm_runtime)).await
 }
 
 #[ignore]
@@ -92,17 +88,14 @@ async fn test_dynamo_db_create_application(wasm_runtime: WasmRuntime) -> anyhow:
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn test_scylla_db_create_application(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
-    let vm_runtime = VmRuntime::Wasm(wasm_runtime);
-    run_test_create_application(ScyllaDbStorageBuilder::default(), vm_runtime).await
+    run_test_create_application(ScyllaDbStorageBuilder::with_wasm_runtime(wasm_runtime)).await
 }
 
-async fn run_test_create_application<B>(
-    storage_builder: B,
-    vm_runtime: VmRuntime,
-) -> anyhow::Result<()>
+async fn run_test_create_application<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
 {
+    let vm_runtime = VmRuntime::Wasm;
     let (contract_path, service_path) =
         linera_execution::wasm_test::get_example_bytecode_paths("counter")?;
     let contract_bytecode = Bytecode::load_from_file(contract_path).await?;
@@ -198,8 +191,8 @@ where
 async fn test_memory_run_application_with_dependency(
     wasm_runtime: WasmRuntime,
 ) -> anyhow::Result<()> {
-    let vm_runtime = VmRuntime::Wasm(wasm_runtime);
-    run_test_run_application_with_dependency(MemoryStorageBuilder::default(), vm_runtime).await
+    run_test_run_application_with_dependency(MemoryStorageBuilder::with_wasm_runtime(wasm_runtime))
+        .await
 }
 
 #[ignore]
@@ -210,8 +203,10 @@ async fn test_memory_run_application_with_dependency(
 async fn test_service_run_application_with_dependency(
     wasm_runtime: WasmRuntime,
 ) -> anyhow::Result<()> {
-    let vm_runtime = VmRuntime::Wasm(wasm_runtime);
-    run_test_run_application_with_dependency(ServiceStorageBuilder::default(), vm_runtime).await
+    run_test_run_application_with_dependency(
+        ServiceStorageBuilder::with_wasm_runtime(wasm_runtime).await,
+    )
+    .await
 }
 
 #[ignore]
@@ -222,8 +217,10 @@ async fn test_service_run_application_with_dependency(
 async fn test_rocks_db_run_application_with_dependency(
     wasm_runtime: WasmRuntime,
 ) -> anyhow::Result<()> {
-    let vm_runtime = VmRuntime::Wasm(wasm_runtime);
-    run_test_run_application_with_dependency(RocksDbStorageBuilder::new().await, vm_runtime).await
+    run_test_run_application_with_dependency(
+        RocksDbStorageBuilder::with_wasm_runtime(wasm_runtime).await,
+    )
+    .await
 }
 
 #[ignore]
@@ -234,8 +231,10 @@ async fn test_rocks_db_run_application_with_dependency(
 async fn test_dynamo_db_run_application_with_dependency(
     wasm_runtime: WasmRuntime,
 ) -> anyhow::Result<()> {
-    let vm_runtime = VmRuntime::Wasm(wasm_runtime);
-    run_test_run_application_with_dependency(DynamoDbStorageBuilder::default(), vm_runtime).await
+    run_test_run_application_with_dependency(DynamoDbStorageBuilder::with_wasm_runtime(
+        wasm_runtime,
+    ))
+    .await
 }
 
 #[ignore]
@@ -246,17 +245,17 @@ async fn test_dynamo_db_run_application_with_dependency(
 async fn test_scylla_db_run_application_with_dependency(
     wasm_runtime: WasmRuntime,
 ) -> anyhow::Result<()> {
-    let vm_runtime = VmRuntime::Wasm(wasm_runtime);
-    run_test_run_application_with_dependency(ScyllaDbStorageBuilder::default(), vm_runtime).await
+    run_test_run_application_with_dependency(ScyllaDbStorageBuilder::with_wasm_runtime(
+        wasm_runtime,
+    ))
+    .await
 }
 
-async fn run_test_run_application_with_dependency<B>(
-    storage_builder: B,
-    vm_runtime: VmRuntime,
-) -> anyhow::Result<()>
+async fn run_test_run_application_with_dependency<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
 {
+    let vm_runtime = VmRuntime::Wasm;
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
         .with_policy(ResourceControlPolicy::all_categories());
@@ -492,8 +491,7 @@ where
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test)]
 async fn test_memory_cross_chain_message(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
-    let vm_runtime = VmRuntime::Wasm(wasm_runtime);
-    run_test_cross_chain_message(MemoryStorageBuilder::default(), vm_runtime).await
+    run_test_cross_chain_message(MemoryStorageBuilder::with_wasm_runtime(wasm_runtime)).await
 }
 
 #[ignore]
@@ -502,8 +500,7 @@ async fn test_memory_cross_chain_message(wasm_runtime: WasmRuntime) -> anyhow::R
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test)]
 async fn test_service_cross_chain_message(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
-    let vm_runtime = VmRuntime::Wasm(wasm_runtime);
-    run_test_cross_chain_message(ServiceStorageBuilder::default(), vm_runtime).await
+    run_test_cross_chain_message(ServiceStorageBuilder::with_wasm_runtime(wasm_runtime).await).await
 }
 
 #[ignore]
@@ -512,8 +509,7 @@ async fn test_service_cross_chain_message(wasm_runtime: WasmRuntime) -> anyhow::
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test)]
 async fn test_rocks_db_cross_chain_message(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
-    let vm_runtime = VmRuntime::Wasm(wasm_runtime);
-    run_test_cross_chain_message(RocksDbStorageBuilder::new().await, vm_runtime).await
+    run_test_cross_chain_message(RocksDbStorageBuilder::with_wasm_runtime(wasm_runtime).await).await
 }
 
 #[ignore]
@@ -522,8 +518,7 @@ async fn test_rocks_db_cross_chain_message(wasm_runtime: WasmRuntime) -> anyhow:
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test)]
 async fn test_dynamo_db_cross_chain_message(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
-    let vm_runtime = VmRuntime::Wasm(wasm_runtime);
-    run_test_cross_chain_message(DynamoDbStorageBuilder::default(), vm_runtime).await
+    run_test_cross_chain_message(DynamoDbStorageBuilder::with_wasm_runtime(wasm_runtime)).await
 }
 
 #[ignore]
@@ -532,17 +527,14 @@ async fn test_dynamo_db_cross_chain_message(wasm_runtime: WasmRuntime) -> anyhow
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test)]
 async fn test_scylla_db_cross_chain_message(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
-    let vm_runtime = VmRuntime::Wasm(wasm_runtime);
-    run_test_cross_chain_message(ScyllaDbStorageBuilder::default(), vm_runtime).await
+    run_test_cross_chain_message(ScyllaDbStorageBuilder::with_wasm_runtime(wasm_runtime)).await
 }
 
-async fn run_test_cross_chain_message<B>(
-    storage_builder: B,
-    vm_runtime: VmRuntime,
-) -> anyhow::Result<()>
+async fn run_test_cross_chain_message<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
 {
+    let vm_runtime = VmRuntime::Wasm;
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
         .with_policy(ResourceControlPolicy::all_categories());
@@ -700,8 +692,7 @@ where
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime; "wasmtime"))]
 #[test_log::test(tokio::test)]
 async fn test_memory_user_pub_sub_channels(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
-    let vm_runtime = VmRuntime::Wasm(wasm_runtime);
-    run_test_user_pub_sub_channels(MemoryStorageBuilder::default(), vm_runtime).await
+    run_test_user_pub_sub_channels(MemoryStorageBuilder::with_wasm_runtime(wasm_runtime)).await
 }
 
 #[ignore]
@@ -710,8 +701,8 @@ async fn test_memory_user_pub_sub_channels(wasm_runtime: WasmRuntime) -> anyhow:
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime; "wasmtime"))]
 #[test_log::test(tokio::test)]
 async fn test_service_user_pub_sub_channels(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
-    let vm_runtime = VmRuntime::Wasm(wasm_runtime);
-    run_test_user_pub_sub_channels(ServiceStorageBuilder::default(), vm_runtime).await
+    run_test_user_pub_sub_channels(ServiceStorageBuilder::with_wasm_runtime(wasm_runtime).await)
+        .await
 }
 
 #[ignore]
@@ -720,8 +711,8 @@ async fn test_service_user_pub_sub_channels(wasm_runtime: WasmRuntime) -> anyhow
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime; "wasmtime"))]
 #[test_log::test(tokio::test)]
 async fn test_rocks_db_user_pub_sub_channels(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
-    let vm_runtime = VmRuntime::Wasm(wasm_runtime);
-    run_test_user_pub_sub_channels(RocksDbStorageBuilder::new().await, vm_runtime).await
+    run_test_user_pub_sub_channels(RocksDbStorageBuilder::with_wasm_runtime(wasm_runtime).await)
+        .await
 }
 
 #[ignore]
@@ -730,8 +721,7 @@ async fn test_rocks_db_user_pub_sub_channels(wasm_runtime: WasmRuntime) -> anyho
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime; "wasmtime"))]
 #[test_log::test(tokio::test)]
 async fn test_dynamo_db_user_pub_sub_channels(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
-    let vm_runtime = VmRuntime::Wasm(wasm_runtime);
-    run_test_user_pub_sub_channels(DynamoDbStorageBuilder::default(), vm_runtime).await
+    run_test_user_pub_sub_channels(DynamoDbStorageBuilder::with_wasm_runtime(wasm_runtime)).await
 }
 
 #[ignore]
@@ -740,17 +730,14 @@ async fn test_dynamo_db_user_pub_sub_channels(wasm_runtime: WasmRuntime) -> anyh
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime; "wasmtime"))]
 #[test_log::test(tokio::test)]
 async fn test_scylla_db_user_pub_sub_channels(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
-    let vm_runtime = VmRuntime::Wasm(wasm_runtime);
-    run_test_user_pub_sub_channels(ScyllaDbStorageBuilder::default(), vm_runtime).await
+    run_test_user_pub_sub_channels(ScyllaDbStorageBuilder::with_wasm_runtime(wasm_runtime)).await
 }
 
-async fn run_test_user_pub_sub_channels<B>(
-    storage_builder: B,
-    vm_runtime: VmRuntime,
-) -> anyhow::Result<()>
+async fn run_test_user_pub_sub_channels<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
 {
+    let vm_runtime = VmRuntime::Wasm;
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
         .with_policy(ResourceControlPolicy::all_categories());
@@ -903,8 +890,8 @@ where
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn test_memory_fuel_limit(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
-    let vm_runtime = VmRuntime::Wasm(wasm_runtime);
-    let storage_builder = MemoryStorageBuilder::default();
+    let vm_runtime = VmRuntime::Wasm;
+    let storage_builder = MemoryStorageBuilder::with_wasm_runtime(wasm_runtime);
     // Set a fuel limit that is enough to instantiate the application and do one increment
     // operation, but not ten.
     let mut builder =

@@ -12,9 +12,6 @@ repository.workspace = true
 version.workspace = true
 
 [features]
-wasmer = []
-wasmtime = []
-revm = []
 metrics = ["prometheus"]
 reqwest = ["dep:reqwest"]
 test = ["test-strategy", "proptest"]

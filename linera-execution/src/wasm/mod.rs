@@ -20,7 +20,7 @@ mod wasmer;
 #[cfg(with_wasmtime)]
 mod wasmtime;
 
-use linera_base::{data_types::Bytecode, vm::WasmRuntime};
+use linera_base::data_types::Bytecode;
 use thiserror::Error;
 #[cfg(with_wasmer)]
 use wasmer::{WasmerContractInstance, WasmerServiceInstance};
@@ -40,7 +40,7 @@ pub use self::{
 };
 use crate::{
     ContractSyncRuntimeHandle, ExecutionError, ServiceSyncRuntimeHandle, UserContractInstance,
-    UserContractModule, UserServiceInstance, UserServiceModule,
+    UserContractModule, UserServiceInstance, UserServiceModule, WasmRuntime,
 };
 
 #[cfg(with_metrics)]
@@ -89,23 +89,13 @@ impl WasmContractModule {
             contract_bytecode
         };
         match runtime {
+            #[cfg(with_wasmer)]
             WasmRuntime::Wasmer | WasmRuntime::WasmerWithSanitizer => {
-                cfg_if::cfg_if! {
-                    if #[cfg(with_wasmer)] {
-                        Self::from_wasmer(contract_bytecode).await
-                    } else {
-                        panic!("Cannot use WasmRuntime::Wasmer when feature wasmer has not been used");
-                    }
-                }
+                Self::from_wasmer(contract_bytecode).await
             }
+            #[cfg(with_wasmtime)]
             WasmRuntime::Wasmtime | WasmRuntime::WasmtimeWithSanitizer => {
-                cfg_if::cfg_if! {
-                    if #[cfg(with_wasmtime)] {
-                        Self::from_wasmtime(contract_bytecode).await
-                    } else {
-                        panic!("Cannot use WasmRuntime::Wasmtime when feature wasmtime has not been used");
-                    }
-                }
+                Self::from_wasmtime(contract_bytecode).await
             }
         }
     }
@@ -166,23 +156,13 @@ impl WasmServiceModule {
         runtime: WasmRuntime,
     ) -> Result<Self, WasmExecutionError> {
         match runtime {
+            #[cfg(with_wasmer)]
             WasmRuntime::Wasmer | WasmRuntime::WasmerWithSanitizer => {
-                cfg_if::cfg_if! {
-                    if #[cfg(with_wasmer)] {
-                        Self::from_wasmer(service_bytecode).await
-                    } else {
-                        panic!("Cannot use WasmRuntime::Wasmer when feature wasmer has not been used");
-                    }
-                }
+                Self::from_wasmer(service_bytecode).await
             }
+            #[cfg(with_wasmtime)]
             WasmRuntime::Wasmtime | WasmRuntime::WasmtimeWithSanitizer => {
-                cfg_if::cfg_if! {
-                    if #[cfg(with_wasmtime)] {
-                        Self::from_wasmtime(service_bytecode).await
-                    } else {
-                        panic!("Cannot use WasmRuntime::Wasmtime when feature wasmtime has not been used");
-                    }
-                }
+                Self::from_wasmtime(service_bytecode).await
             }
         }
     }

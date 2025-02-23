@@ -41,7 +41,7 @@ use linera_core::{
 };
 use linera_execution::{
     committee::{Committee, ValidatorState},
-    Message, ResourceControlPolicy, SystemMessage, WithVmDefault as _,
+    Message, ResourceControlPolicy, SystemMessage,
 };
 use linera_faucet_server::FaucetService;
 use linera_sdk::base::ValidatorPublicKey;
@@ -897,9 +897,7 @@ impl Runnable for Job {
                 let publisher = publisher.unwrap_or_else(|| context.default_chain());
                 info!("Publishing bytecode on chain {}", publisher);
                 let chain_client = context.make_chain_client(publisher)?;
-                let vm_runtime = vm_runtime
-                    .with_vm_default()
-                    .expect("A virtual machine to be available");
+                let vm_runtime = vm_runtime.unwrap_or_default();
                 let bytecode_id = context
                     .publish_bytecode(&chain_client, contract, service, vm_runtime)
                     .await?;
@@ -1000,10 +998,7 @@ impl Runnable for Job {
                 let chain_client = context.make_chain_client(publisher)?;
                 let parameters = read_json(json_parameters, json_parameters_path)?;
                 let argument = read_json(json_argument, json_argument_path)?;
-                let vm_runtime = vm_runtime
-                    .with_vm_default()
-                    .expect("A virtual machine should be available");
-
+                let vm_runtime = vm_runtime.unwrap_or_default();
                 let bytecode_id = context
                     .publish_bytecode(&chain_client, contract, service, vm_runtime)
                     .await?;
@@ -1097,9 +1092,7 @@ impl Runnable for Job {
                     info!("Creating application on chain {}", publisher);
                     let chain_client = context.make_chain_client(publisher)?;
 
-                    let vm_runtime = vm_runtime
-                        .with_vm_default()
-                        .expect("A virtual machine should be available");
+                    let vm_runtime = vm_runtime.unwrap_or_default();
                     let parameters = read_json(json_parameters, json_parameters_path)?;
                     let argument = read_json(json_argument, json_argument_path)?;
                     let project_path = path.unwrap_or_else(|| env::current_dir().unwrap());

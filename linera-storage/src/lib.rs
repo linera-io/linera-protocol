@@ -26,13 +26,16 @@ use linera_chain::{
     types::{ConfirmedBlock, ConfirmedBlockCertificate},
     ChainError, ChainStateView,
 };
-#[cfg(with_revm)]
-use linera_execution::revm::{EvmContractModule, EvmServiceModule};
 use linera_execution::{
     committee::{Committee, Epoch},
     system::SystemChannel,
     BlobState, ChannelSubscription, ExecutionError, ExecutionRuntimeConfig,
-    ExecutionRuntimeContext, UserContractCode, UserServiceCode,
+    ExecutionRuntimeContext, UserContractCode, UserServiceCode, WasmRuntime,
+};
+#[cfg(with_revm)]
+use linera_execution::{
+    revm::{EvmContractModule, EvmServiceModule},
+    EvmRuntime,
 };
 #[cfg(with_wasm_runtime)]
 use linera_execution::{WasmContractModule, WasmServiceModule};
@@ -260,6 +263,9 @@ pub trait Storage: Sized {
         Ok(())
     }
 
+    /// Selects the WebAssembly runtime to use for applications (if any).
+    fn wasm_runtime(&self) -> Option<WasmRuntime>;
+
     /// Creates a [`UserContractCode`] instance using the bytecode in storage referenced
     /// by the `application_description`.
     async fn load_contract(
@@ -282,10 +288,13 @@ pub trait Storage: Sized {
             .join()
             .await?;
         match application_description.bytecode_id.vm_runtime {
-            VmRuntime::Wasm(_wasm_runtime) => {
+            VmRuntime::Wasm => {
                 cfg_if::cfg_if! {
                     if #[cfg(with_wasm_runtime)] {
-                        Ok(WasmContractModule::new(_contract_bytecode, _wasm_runtime)
+                        let Some(wasm_runtime) = self.wasm_runtime() else {
+                            panic!("A Wasm runtime is required to load user applications.");
+                        };
+                        Ok(WasmContractModule::new(_contract_bytecode, wasm_runtime)
                            .await?
                            .into())
                     } else {
@@ -297,10 +306,11 @@ pub trait Storage: Sized {
                     }
                 }
             }
-            VmRuntime::Evm(_evm_runtime) => {
+            VmRuntime::Evm => {
                 cfg_if::cfg_if! {
                     if #[cfg(with_revm)] {
-                        Ok(EvmContractModule::new(_contract_bytecode, _evm_runtime)
+                        let evm_runtime = EvmRuntime::Revm;
+                        Ok(EvmContractModule::new(_contract_bytecode, evm_runtime)
                            .await?
                            .into())
                     } else {
@@ -337,10 +347,13 @@ pub trait Storage: Sized {
             .join()
             .await?;
         match application_description.bytecode_id.vm_runtime {
-            VmRuntime::Wasm(_wasm_runtime) => {
+            VmRuntime::Wasm => {
                 cfg_if::cfg_if! {
                     if #[cfg(with_wasm_runtime)] {
-                        Ok(WasmServiceModule::new(_service_bytecode, _wasm_runtime)
+                        let Some(wasm_runtime) = self.wasm_runtime() else {
+                            panic!("A Wasm runtime is required to load user applications.");
+                        };
+                        Ok(WasmServiceModule::new(_service_bytecode, wasm_runtime)
                            .await?
                            .into())
                     } else {
@@ -352,10 +365,11 @@ pub trait Storage: Sized {
                     }
                 }
             }
-            VmRuntime::Evm(_evm_runtime) => {
+            VmRuntime::Evm => {
                 cfg_if::cfg_if! {
                     if #[cfg(with_revm)] {
-                        Ok(EvmServiceModule::new(_service_bytecode, _evm_runtime)
+                        let evm_runtime = EvmRuntime::Revm;
+                        Ok(EvmServiceModule::new(_service_bytecode, evm_runtime)
                            .await?
                            .into())
                     } else {
