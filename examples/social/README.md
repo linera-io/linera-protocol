@@ -58,19 +58,19 @@ export LINERA_STORAGE_0="rocksdb:$LINERA_TMP_DIR/client_0.db"
 export LINERA_WALLET_1="$LINERA_TMP_DIR/wallet_1.json"
 export LINERA_STORAGE_1="rocksdb:$LINERA_TMP_DIR/client_1.db"
 
-linera --with-wallet 0 wallet init --faucet $FAUCET_URL
 linera --with-wallet 1 wallet init --faucet $FAUCET_URL
+linera --with-wallet 2 wallet init --faucet $FAUCET_URL
 
-INFO_1=($(linera --with-wallet 0 wallet request-chain --faucet $FAUCET_URL))
-INFO_2=($(linera --with-wallet 1 wallet request-chain --faucet $FAUCET_URL))
+INFO_1=($(linera --with-wallet 1 wallet request-chain --faucet $FAUCET_URL))
+INFO_2=($(linera --with-wallet 2 wallet request-chain --faucet $FAUCET_URL))
 CHAIN_1="${INFO_1[0]}"
 CHAIN_2="${INFO_2[0]}"
 OWNER_1="${INFO_1[3]}"
 OWNER_2="${INFO_2[3]}"
 ```
 
-Note that `linera --with-wallet 0` is equivalent to `linera --wallet "$LINERA_WALLET_0"
---storage "$LINERA_STORAGE_0"`.
+Note that `linera --with-wallet 1` is equivalent to `linera --wallet "$LINERA_WALLET_1"
+--storage "$LINERA_STORAGE_1"`.
 
 Compile the `social` example and create an application with it:
 
