@@ -346,18 +346,7 @@ pub mod test {
         wasm_runtime: impl Into<Option<WasmRuntime>>,
     ) -> Result<(WasmContractModule, WasmServiceModule), anyhow::Error> {
         let (contract_path, service_path) = get_example_bytecode_paths(name)?;
-        let wasm_runtime = match wasm_runtime.into() {
-            Some(wasm_runtime) => wasm_runtime,
-            None => {
-                cfg_if::cfg_if! {
-                    if #[cfg(with_wasmer)] {
-                        WasmRuntime::Wasmer
-                    } else {
-                        WasmRuntime::Wasmtime
-                    }
-                }
-            }
-        };
+        let wasm_runtime = wasm_runtime.into().unwrap_or_default();
         let contract = WasmContractModule::from_file(&contract_path, wasm_runtime).await?;
         let service = WasmServiceModule::from_file(&service_path, wasm_runtime).await?;
         Ok((contract, service))

@@ -13,10 +13,7 @@ version.workspace = true
 
 [features]
 wasmer = ["linera-execution/wasmer", "linera-storage/wasmer"]
-wasmtime = [
-    "linera-execution/wasmtime",
-    "linera-storage/wasmtime",
-]
+wasmtime = ["linera-execution/wasmtime", "linera-storage/wasmtime"]
 test = [
     "anyhow",
     "linera-base/test",
