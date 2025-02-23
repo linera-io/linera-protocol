@@ -51,9 +51,6 @@ async-trait = "0.1.77"
 async-tungstenite = { version = "0.22", features = ["tokio-runtime"] }
 aws-config = "1.1.7"
 aws-sdk-dynamodb = "1.60.0"
-aws-sdk-s3 = "1.17.0"
-aws-smithy-http = "0.60.6"
-aws-types = "1.1.7"
 aws-smithy-types = "1.1.7"
 axum = "0.7.4"
 base64 = "0.22.0"
@@ -98,7 +95,6 @@ hex = "0.4.3"
 http = "1.1.0"
 humantime = "2.1.0"
 glob = "0.3.1"
-gloo-storage = "0.3.0"
 gloo-utils = "0.2.0"
 indexed_db_futures = "0.4.1"
 insta = "1.36.1"
@@ -200,7 +196,6 @@ wasmtime = { version = "25.0.0", default-features = false, features = [
     "std",
 ] }
 wasmtimer = "0.2.0"
-webassembly-test = "0.1.0"
 web-sys = "0.3.69"
 js-sys = "0.3.70"
 web-time = "1.1.0"
@@ -228,7 +223,6 @@ linera-views = { version = "0.14.0", path = "./linera-views", default-features =
 linera-views-derive = { version = "0.14.0", path = "./linera-views-derive" }
 linera-witty = { version = "0.14.0", path = "./linera-witty" }
 linera-witty-macros = { version = "0.14.0", path = "./linera-witty-macros" }
-linera-witty-test-modules = { version = "0.14.0", path = "./linera-witty/test-modules" }
 linera-sdk-derive = { version = "0.14.0", path = "./linera-sdk-derive" }
 linera-service = { version = "0.14.0", path = "./linera-service", default-features = false }
 linera-service-graphql-client = { version = "0.14.0", path = "./linera-service-graphql-client" }
