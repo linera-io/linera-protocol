@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{fmt::Debug, marker::PhantomData};
+use std::marker::PhantomData;
 
 #[cfg(with_dynamodb)]
 use linera_views::dynamo_db::DynamoDbStore;
@@ -21,11 +21,7 @@ use test_case::test_case;
 #[cfg_attr(with_dynamodb, test_case(PhantomData::<DynamoDbStore>; "DynamoDbStore"))]
 #[cfg_attr(with_scylladb, test_case(PhantomData::<ScyllaDbStore>; "ScyllaDbStore"))]
 #[tokio::test]
-async fn namespace_admin_test_cases<K>(_view_type: PhantomData<K>)
-where
-    K: TestKeyValueStore,
-    K::Error: Debug,
-{
+async fn namespace_admin_test_cases<K: TestKeyValueStore>(_view_type: PhantomData<K>) {
     namespace_admin_test::<K>().await;
 }
 
@@ -34,10 +30,6 @@ where
 #[cfg_attr(with_dynamodb, test_case(PhantomData::<DynamoDbStore>; "DynamoDbStore"))]
 #[cfg_attr(with_scylladb, test_case(PhantomData::<ScyllaDbStore>; "ScyllaDbStore"))]
 #[tokio::test]
-async fn root_key_admin_test_cases<K>(_view_type: PhantomData<K>)
-where
-    K: TestKeyValueStore,
-    K::Error: Debug,
-{
+async fn root_key_admin_test_cases<K: TestKeyValueStore>(_view_type: PhantomData<K>) {
     root_key_admin_test::<K>().await;
 }

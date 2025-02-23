@@ -276,26 +276,17 @@ pub type MemoryContext<E> = ViewContext<E, MemoryStore>;
 /// Provides a `MemoryContext<()>` that can be used for tests.
 #[cfg(with_testing)]
 pub fn create_test_memory_context() -> MemoryContext<()> {
-    let namespace = crate::random::generate_test_namespace();
-    let root_key = &[];
-    MemoryContext::new_for_testing(
-        crate::memory::TEST_MEMORY_MAX_STREAM_QUERIES,
-        &namespace,
-        root_key,
-        (),
-    )
+    MemoryContext::new_for_testing(())
 }
 
 impl<E> MemoryContext<E> {
     /// Creates a [`Context`] instance in memory for testing.
     #[cfg(with_testing)]
-    pub fn new_for_testing(
-        max_stream_queries: usize,
-        namespace: &str,
-        root_key: &[u8],
-        extra: E,
-    ) -> Self {
-        let store = MemoryStore::new_for_testing(max_stream_queries, namespace, root_key).unwrap();
+    pub fn new_for_testing(extra: E) -> Self {
+        let max_stream_queries = crate::memory::TEST_MEMORY_MAX_STREAM_QUERIES;
+        let namespace = crate::random::generate_test_namespace();
+        let root_key = &[];
+        let store = MemoryStore::new_for_testing(max_stream_queries, &namespace, root_key).unwrap();
         let base_key = Vec::new();
         Self {
             store,

@@ -3,7 +3,7 @@
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use linera_storage_service::client::ServiceStoreClient;
-use linera_views::{store::TestKeyValueStore as _, test_utils::performance};
+use linera_views::test_utils::performance;
 use tokio::runtime::Runtime;
 
 fn bench_storage_service(criterion: &mut Criterion) {
@@ -11,8 +11,7 @@ fn bench_storage_service(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                let store = ServiceStoreClient::new_test_store().await.unwrap();
-                performance::contains_key(store, iterations, black_box).await
+                performance::contains_key::<ServiceStoreClient, _>(iterations, black_box).await
             })
     });
 
@@ -20,8 +19,7 @@ fn bench_storage_service(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                let store = ServiceStoreClient::new_test_store().await.unwrap();
-                performance::contains_keys(store, iterations, black_box).await
+                performance::contains_keys::<ServiceStoreClient, _>(iterations, black_box).await
             })
     });
 
@@ -29,8 +27,8 @@ fn bench_storage_service(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                let store = ServiceStoreClient::new_test_store().await.unwrap();
-                performance::find_keys_by_prefix(store, iterations, black_box).await
+                performance::find_keys_by_prefix::<ServiceStoreClient, _>(iterations, black_box)
+                    .await
             })
     });
 
@@ -40,8 +38,10 @@ fn bench_storage_service(criterion: &mut Criterion) {
             bencher
                 .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
                 .iter_custom(|iterations| async move {
-                    let store = ServiceStoreClient::new_test_store().await.unwrap();
-                    performance::find_key_values_by_prefix(store, iterations, black_box).await
+                    performance::find_key_values_by_prefix::<ServiceStoreClient, _>(
+                        iterations, black_box,
+                    )
+                    .await
                 })
         },
     );
@@ -50,8 +50,7 @@ fn bench_storage_service(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                let store = ServiceStoreClient::new_test_store().await.unwrap();
-                performance::read_value_bytes(store, iterations, black_box).await
+                performance::read_value_bytes::<ServiceStoreClient, _>(iterations, black_box).await
             })
     });
 
@@ -59,8 +58,8 @@ fn bench_storage_service(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                let store = ServiceStoreClient::new_test_store().await.unwrap();
-                performance::read_multi_values_bytes(store, iterations, black_box).await
+                performance::read_multi_values_bytes::<ServiceStoreClient, _>(iterations, black_box)
+                    .await
             })
     });
 
@@ -68,8 +67,7 @@ fn bench_storage_service(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                let store = ServiceStoreClient::new_test_store().await.unwrap();
-                performance::write_batch(store, iterations).await
+                performance::write_batch::<ServiceStoreClient>(iterations).await
             })
     });
 }
