@@ -1412,6 +1412,7 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
             maximum_bytes_written_per_block,
             testing_prng_seed,
             network_name,
+            http_allow_list: _,
         } => {
             let start_time = Instant::now();
             let committee_config: CommitteeConfig = util::read_json(committee_config_path)

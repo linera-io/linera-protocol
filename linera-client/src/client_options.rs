@@ -757,6 +757,10 @@ pub enum ClientCommand {
         #[arg(long)]
         maximum_bytes_written_per_block: Option<u64>,
 
+        /// Set the list of hosts that contracts and services can send HTTP requests to.
+        #[arg(long)]
+        http_allow_list: Option<Vec<String>>,
+
         /// Force this wallet to generate keys using a PRNG and a given seed. USE FOR
         /// TESTING ONLY.
         #[arg(long)]
