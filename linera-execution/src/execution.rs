@@ -3,10 +3,16 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet},
-    mem, vec,
+    mem,
+    pin::pin,
+    vec,
 };
 
-use futures::{stream::FuturesOrdered, FutureExt, StreamExt, TryStreamExt};
+use futures::{
+    future::{self, Either},
+    stream::FuturesOrdered,
+    StreamExt, TryStreamExt,
+};
 use linera_base::{
     data_types::{Amount, BlockHeight, Timestamp},
     identifiers::{Account, AccountOwner, ChainId, Destination, Owner},
@@ -237,9 +243,7 @@ where
 
         contract_runtime_task.send(code)?;
 
-        while let Some(request) = execution_state_receiver.next().await {
-            self.handle_request(request).await?;
-        }
+        self.handle_requests(&mut execution_state_receiver).await?;
 
         let (controller, txn_tracker_moved) = contract_runtime_task.join().await?;
         *txn_tracker = txn_tracker_moved;
@@ -539,9 +543,7 @@ where
 
         service_runtime_task.send(code)?;
 
-        while let Some(request) = execution_state_receiver.next().await {
-            self.handle_request(request).await?;
-        }
+        self.handle_requests(&mut execution_state_receiver).await?;
 
         service_runtime_task.join().await
     }
@@ -557,7 +559,6 @@ where
         runtime_request_sender: &mut std::sync::mpsc::Sender<ServiceRuntimeRequest>,
     ) -> Result<QueryOutcome<Vec<u8>>, ExecutionError> {
         let (outcome_sender, outcome_receiver) = oneshot::channel();
-        let mut outcome_receiver = outcome_receiver.fuse();
 
         runtime_request_sender
             .send(ServiceRuntimeRequest::Query {
@@ -568,18 +569,17 @@ where
             })
             .expect("Service runtime thread should only stop when `request_sender` is dropped");
 
-        loop {
-            futures::select! {
-                maybe_request = incoming_execution_requests.next() => {
-                    if let Some(request) = maybe_request {
-                        self.handle_request(request).await?;
-                    }
-                }
-                outcome = &mut outcome_receiver => {
-                    return outcome.map_err(|_| ExecutionError::MissingRuntimeResponse)?;
-                }
+        let request_handler = pin!(self.handle_requests(incoming_execution_requests));
+
+        let outcome = match future::select(outcome_receiver, request_handler).await {
+            Either::Left((outcome, _)) => outcome,
+            Either::Right((result, outcome_receiver)) => {
+                result?;
+                outcome_receiver.await
             }
-        }
+        };
+
+        outcome.map_err(|_| ExecutionError::MissingRuntimeResponse)?
     }
 
     pub async fn list_applications(
