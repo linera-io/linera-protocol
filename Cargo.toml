@@ -144,6 +144,7 @@ serde_yaml = "0.8.26"
 serde-name = "0.2.1"
 serde-reflection = "0.3.6"
 serde-wasm-bindgen = "0.6.5"
+serde_with = { version = "3", default-features = false, features = ["alloc", "macros"] }
 sha3 = "0.10.8"
 similar-asserts = "1.5.0"
 static_assertions = "1.1.0"

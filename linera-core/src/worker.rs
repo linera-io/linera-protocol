@@ -10,8 +10,10 @@ use std::{
 };
 
 use futures::future::Either;
+#[cfg(with_testing)]
+use linera_base::crypto::AccountPublicKey;
 use linera_base::{
-    crypto::{CryptoError, CryptoHash, ValidatorPublicKey, ValidatorSecretKey},
+    crypto::{AccountSecretKey, CryptoError, CryptoHash, ValidatorPublicKey, ValidatorSecretKey},
     data_types::{
         ArithmeticError, Blob, BlockHeight, DecompressionError, Round, UserApplicationDescription,
     },
@@ -288,7 +290,7 @@ where
     #[instrument(level = "trace", skip(nickname, key_pair, storage))]
     pub fn new(
         nickname: String,
-        key_pair: Option<ValidatorSecretKey>,
+        key_pair: Option<(ValidatorSecretKey, AccountSecretKey)>,
         storage: StorageClient,
         chain_worker_limit: NonZeroUsize,
     ) -> Self {
@@ -1062,6 +1064,22 @@ where
             .expect(
                 "Test validator should have a key pair assigned to it \
                 in order to obtain it's public key",
+            )
+            .public()
+    }
+
+    /// Gets a reference to the validator's [`AccountPublicKey`].
+    ///
+    /// # Panics
+    ///
+    /// If the validator doesn't have an account secret key assigned to it.
+    #[instrument(level = "trace", skip(self))]
+    pub fn account_key(&self) -> AccountPublicKey {
+        self.chain_worker_config
+            .account_key()
+            .expect(
+                "Test validator should have a key pair assigned to it \
+                in order to obtain it's account key",
             )
             .public()
     }

@@ -4,7 +4,7 @@
 //! Test utilities
 
 use linera_base::{
-    crypto::AccountSecretKey,
+    crypto::{AccountPublicKey, AccountSecretKey},
     data_types::{Amount, BlockHeight, Round, Timestamp},
     hashed::Hashed,
     identifiers::{ChainId, Owner},
@@ -139,6 +139,7 @@ impl<T: CertificateValue> VoteTestExt<T> for Vote<T> {
         let state = ValidatorState {
             network_address: "".to_string(),
             votes: 100,
+            account_public_key: AccountPublicKey::test_key(1),
         };
         let committee = Committee::new(
             vec![(self.public_key, state)].into_iter().collect(),

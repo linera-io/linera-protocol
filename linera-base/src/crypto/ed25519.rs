@@ -93,9 +93,9 @@ impl<'de> Deserialize<'de> for Ed25519PublicKey {
         } else {
             #[derive(Deserialize)]
             #[serde(rename = "Ed25519PublicKey")]
-            struct Foo([u8; dalek::PUBLIC_KEY_LENGTH]);
+            struct PublicKey([u8; dalek::PUBLIC_KEY_LENGTH]);
 
-            let value = Foo::deserialize(deserializer)?;
+            let value = PublicKey::deserialize(deserializer)?;
             Ok(Self(value.0))
         }
     }
@@ -288,23 +288,6 @@ impl Ed25519Signature {
             })
     }
 
-    /// Checks an optional signature.
-    pub fn check_optional_signature<'de, T>(
-        signature: Option<&Self>,
-        value: &T,
-        author: &Ed25519PublicKey,
-    ) -> Result<(), CryptoError>
-    where
-        T: BcsSignable<'de> + fmt::Debug,
-    {
-        match signature {
-            Some(sig) => sig.check(value, *author),
-            None => Err(CryptoError::MissingSignature {
-                type_name: T::type_name().to_string(),
-            }),
-        }
-    }
-
     fn verify_batch_internal<'a, 'de, T, I>(
         value: &'a T,
         votes: I,
@@ -368,9 +351,9 @@ impl<'de> Deserialize<'de> for Ed25519Signature {
         } else {
             #[derive(Deserialize)]
             #[serde(rename = "Ed25519Signature")]
-            struct Foo(dalek::Signature);
+            struct Signature(dalek::Signature);
 
-            let value = Foo::deserialize(deserializer)?;
+            let value = Signature::deserialize(deserializer)?;
             Ok(Self(value.0))
         }
     }
@@ -434,5 +417,27 @@ mod tests {
         assert!(s.check(&ts, addr2).is_err());
         assert!(s.check(&tsx, addr1).is_err());
         assert!(s.check(&foo, addr1).is_err());
+    }
+
+    #[test]
+    fn test_public_key_serialization() {
+        use crate::crypto::ed25519::Ed25519PublicKey;
+        let key_in = Ed25519PublicKey::test_key(0);
+        let s = serde_json::to_string(&key_in).unwrap();
+        let key_out: Ed25519PublicKey = serde_json::from_str(&s).unwrap();
+        assert_eq!(key_out, key_in);
+
+        let s = bcs::to_bytes(&key_in).unwrap();
+        let key_out: Ed25519PublicKey = bcs::from_bytes(&s).unwrap();
+        assert_eq!(key_out, key_in);
+    }
+
+    #[test]
+    fn test_secret_key_serialization() {
+        use crate::crypto::ed25519::Ed25519SecretKey;
+        let key_in = Ed25519SecretKey::generate();
+        let s = serde_json::to_string(&key_in).unwrap();
+        let key_out: Ed25519SecretKey = serde_json::from_str(&s).unwrap();
+        assert_eq!(key_out.0.to_bytes(), key_in.0.to_bytes());
     }
 }

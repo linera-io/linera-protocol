@@ -4419,6 +4419,7 @@ dependencies = [
  "serde-name",
  "serde_bytes",
  "serde_json",
+ "serde_with",
  "test-case",
  "test-strategy",
  "thiserror 1.0.69",
