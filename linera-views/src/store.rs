@@ -5,14 +5,14 @@
 
 use std::{fmt::Debug, future::Future};
 
-use serde::de::DeserializeOwned;
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 #[cfg(with_testing)]
 use crate::random::generate_test_namespace;
 use crate::{batch::Batch, common::from_bytes_option, views::ViewError};
 
 /// The common initialization parameters for the `KeyValueStore`
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CommonStoreInternalConfig {
     /// The number of concurrent to a database
     pub max_concurrent_queries: Option<usize>,
@@ -21,7 +21,7 @@ pub struct CommonStoreInternalConfig {
 }
 
 /// The common initialization parameters for the `KeyValueStore`
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CommonStoreConfig {
     /// The number of concurrent to a database
     pub max_concurrent_queries: Option<usize>,

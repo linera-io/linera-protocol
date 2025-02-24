@@ -13,6 +13,7 @@ use std::{
 };
 
 use linera_base::ensure;
+use serde::{Deserialize, Serialize};
 use tempfile::TempDir;
 use thiserror::Error;
 
@@ -59,7 +60,7 @@ type DB = rocksdb::DBWithThreadMode<rocksdb::MultiThreaded>;
 /// One way to select that is to select BlockInPlace when
 /// `tokio::runtime::Handle::current().metrics().num_workers() > 1`
 /// `BlockInPlace` is documented in <https://docs.rs/tokio/latest/tokio/task/fn.block_in_place.html>
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub enum RocksDbSpawnMode {
     /// This uses the `spawn_blocking` function of Tokio.
     SpawnBlocking,
@@ -253,7 +254,7 @@ pub struct RocksDbStoreInternal {
 }
 
 /// The initial configuration of the system
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct RocksDbStoreInternalConfig {
     /// The path to the storage containing the namespaces
     path_with_guard: PathWithGuard,
@@ -577,11 +578,12 @@ pub enum RocksDbStoreInternalError {
 }
 
 /// A path and the guard for the temporary directory if needed
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct PathWithGuard {
     /// The path to the data
     pub path_buf: PathBuf,
     /// The guard for the directory if one is needed
+    #[serde(skip)]
     _dir: Option<Arc<TempDir>>,
 }
 
@@ -596,7 +598,7 @@ impl PathWithGuard {
 
     /// Returns the test path for RocksDB without common config.
     #[cfg(with_testing)]
-    pub fn new_testing() -> PathWithGuard {
+    fn new_testing() -> PathWithGuard {
         let dir = TempDir::new().unwrap();
         let path_buf = dir.path().to_path_buf();
         let _dir = Some(Arc::new(dir));

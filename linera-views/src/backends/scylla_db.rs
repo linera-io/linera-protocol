@@ -24,6 +24,7 @@ use scylla::{
     transport::errors::{DbError, QueryError},
     Session, SessionBuilder,
 };
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 #[cfg(with_metrics)]
@@ -625,7 +626,7 @@ fn get_big_root_key(root_key: &[u8]) -> Vec<u8> {
 }
 
 /// The type for building a new ScyllaDB Key Value Store
-#[derive(Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ScyllaDbStoreInternalConfig {
     /// The URL to which the requests have to be sent
     pub uri: String,
