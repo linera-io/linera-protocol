@@ -207,12 +207,12 @@ impl WitType for Ed25519PublicKey {
     type Dependencies = HList![];
 
     fn wit_type_name() -> Cow<'static, str> {
-        "public-key".into()
+        "ed25519-public-key".into()
     }
 
     fn wit_type_declaration() -> Cow<'static, str> {
         concat!(
-            "    record public-key {\n",
+            "    record ed25519-public-key {\n",
             "        part1: u64,\n",
             "        part2: u64,\n",
             "        part3: u64,\n",
@@ -233,7 +233,7 @@ impl WitLoad for Ed25519PublicKey {
         <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
     {
         let (part1, part2, part3, part4) = WitLoad::load(memory, location)?;
-        Ok(Ed25519PublicKey::from([part1, part2, part3, part4]))
+        Ok(Self::from([part1, part2, part3, part4]))
     }
 
     fn lift_from<Instance>(
@@ -245,7 +245,7 @@ impl WitLoad for Ed25519PublicKey {
         <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
     {
         let (part1, part2, part3, part4) = WitLoad::lift_from(flat_layout, memory)?;
-        Ok(Ed25519PublicKey::from([part1, part2, part3, part4]))
+        Ok(Self::from([part1, part2, part3, part4]))
     }
 }
 
@@ -365,6 +365,11 @@ impl Ed25519Signature {
                 type_name: T::type_name().to_string(),
             }
         })
+    }
+
+    /// Returns bytes of the signature.
+    pub fn as_bytes(&self) -> Vec<u8> {
+        self.0.to_bytes().to_vec()
     }
 }
 

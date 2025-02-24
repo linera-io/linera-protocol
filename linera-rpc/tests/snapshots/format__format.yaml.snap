@@ -20,11 +20,25 @@ AccountOwner:
         NEWTYPE:
           TYPENAME: ApplicationId
 AccountPublicKey:
-  NEWTYPESTRUCT:
-    TYPENAME: Ed25519PublicKey
+  ENUM:
+    0:
+      Ed25519:
+        NEWTYPE:
+          TYPENAME: Ed25519PublicKey
+    1:
+      Secp256k1:
+        NEWTYPE:
+          TYPENAME: Secp256k1PublicKey
 AccountSignature:
-  NEWTYPESTRUCT:
-    TYPENAME: Ed25519Signature
+  ENUM:
+    0:
+      Ed25519:
+        NEWTYPE:
+          TYPENAME: Ed25519Signature
+    1:
+      Secp256k1:
+        NEWTYPE:
+          TYPENAME: Secp256k1Signature
 AdminOperation:
   ENUM:
     0:

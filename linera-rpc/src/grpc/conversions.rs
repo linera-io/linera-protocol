@@ -620,7 +620,7 @@ impl TryFrom<api::ChainId> for ChainId {
 impl From<AccountPublicKey> for api::AccountPublicKey {
     fn from(public_key: AccountPublicKey) -> Self {
         Self {
-            bytes: public_key.to_bytes(),
+            bytes: public_key.as_bytes(),
         }
     }
 }
@@ -1039,7 +1039,7 @@ pub mod tests {
         round_trip_check::<_, api::ValidatorSignature>(validator_signature);
 
         let account_key_pair = AccountSecretKey::generate();
-        let account_signature = AccountSignature::new(&Foo("test".into()), &account_key_pair);
+        let account_signature = account_key_pair.sign(&Foo("test".into()));
         round_trip_check::<_, api::AccountSignature>(account_signature);
     }
 
@@ -1240,7 +1240,7 @@ pub mod tests {
                 outcome: Some(outcome),
             },
             public_key: key_pair.public(),
-            signature: AccountSignature::new(&Foo("test".into()), &key_pair),
+            signature: key_pair.sign(&Foo("test".into())),
             validated_block_certificate: Some(cert),
         };
 

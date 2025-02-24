@@ -449,8 +449,7 @@ where
         .into_first_proposal(&sender_key_pair);
     let unknown_key_pair = AccountSecretKey::generate();
     let mut bad_signature_block_proposal = block_proposal.clone();
-    bad_signature_block_proposal.signature =
-        linera_base::crypto::AccountSignature::new(&block_proposal.content, &unknown_key_pair);
+    bad_signature_block_proposal.signature = unknown_key_pair.sign(&block_proposal.content);
     assert_matches!(
         worker
             .handle_block_proposal(bad_signature_block_proposal)
