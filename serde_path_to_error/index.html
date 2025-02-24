@@ -1,0 +1,43 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="github crates-io docs-rs"><title>serde_path_to_error - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="serde_path_to_error" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../serde_path_to_error/index.html">serde_path_to_error</a><span class="version">0.1.16</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#functions">Functions</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">serde_path_to_error</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/serde_path_to_error/lib.rs.html#1-193">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><a href="https://github.com/dtolnay/path-to-error"><img src="https://img.shields.io/badge/github-8da0cb?style=for-the-badge&amp;labelColor=555555&amp;logo=github" alt="github" /></a> <a href="https://crates.io/crates/serde_path_to_error"><img src="https://img.shields.io/badge/crates.io-fc8d62?style=for-the-badge&amp;labelColor=555555&amp;logo=rust" alt="crates-io" /></a> <a href="https://docs.rs/serde_path_to_error"><img src="https://img.shields.io/badge/docs.rs-66c2a5?style=for-the-badge&amp;labelColor=555555&amp;logo=docs.rs" alt="docs-rs" /></a></p>
+<br>
+<p>Find out the path at which a deserialization error occurred. This crate
+provides a wrapper that works with any existing Serde <code>Deserializer</code> and
+exposes the chain of field names leading to the error.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>serde::Deserialize;
+<span class="kw">use </span>std::collections::BTreeMap <span class="kw">as </span>Map;
+
+<span class="attr">#[derive(Deserialize)]
+</span><span class="kw">struct </span>Package {
+    name: String,
+    dependencies: Map&lt;String, Dependency&gt;,
+}
+
+<span class="attr">#[derive(Deserialize)]
+</span><span class="kw">struct </span>Dependency {
+    version: String,
+}
+
+<span class="kw">fn </span>main() {
+    <span class="kw">let </span>j = <span class="string">r#"{
+        "name": "demo",
+        "dependencies": {
+            "serde": {
+                "version": 1
+            }
+        }
+    }"#</span>;
+
+    <span class="comment">// Some Deserializer.
+    </span><span class="kw">let </span>jd = <span class="kw-2">&amp;mut </span>serde_json::Deserializer::from_str(j);
+
+    <span class="kw">let </span>result: <span class="prelude-ty">Result</span>&lt;Package, <span class="kw">_</span>&gt; = serde_path_to_error::deserialize(jd);
+    <span class="kw">match </span>result {
+        <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="macro">panic!</span>(<span class="string">"expected a type error"</span>),
+        <span class="prelude-val">Err</span>(err) =&gt; {
+            <span class="kw">let </span>path = err.path().to_string();
+            <span class="macro">assert_eq!</span>(path, <span class="string">"dependencies.serde.version"</span>);
+        }
+    }
+}</code></pre></div>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Deserializer.html" title="struct serde_path_to_error::Deserializer">Deserializer</a></div><div class="desc docblock-short">Deserializer adapter that records path to deserialization errors.</div></li><li><div class="item-name"><a class="struct" href="struct.Error.html" title="struct serde_path_to_error::Error">Error</a></div><div class="desc docblock-short">Original deserializer error together with the path at which it occurred.</div></li><li><div class="item-name"><a class="struct" href="struct.Path.html" title="struct serde_path_to_error::Path">Path</a></div><div class="desc docblock-short">Path to the error value in the input, like <code>dependencies.serde.typo1</code>.</div></li><li><div class="item-name"><a class="struct" href="struct.Segments.html" title="struct serde_path_to_error::Segments">Segments</a></div><div class="desc docblock-short">Iterator over segments of a path.</div></li><li><div class="item-name"><a class="struct" href="struct.Serializer.html" title="struct serde_path_to_error::Serializer">Serializer</a></div><div class="desc docblock-short">Serializer adapter that records path to serialization errors.</div></li><li><div class="item-name"><a class="struct" href="struct.Track.html" title="struct serde_path_to_error::Track">Track</a></div><div class="desc docblock-short">State for bookkeeping across nested deserializer calls.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.Segment.html" title="enum serde_path_to_error::Segment">Segment</a></div><div class="desc docblock-short">Single segment of a path.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.deserialize.html" title="fn serde_path_to_error::deserialize">deserialize</a></div><div class="desc docblock-short">Entry point. See <a href="index.html" title="mod serde_path_to_error">crate documentation</a> for an example.</div></li><li><div class="item-name"><a class="fn" href="fn.serialize.html" title="fn serde_path_to_error::serialize">serialize</a></div><div class="desc docblock-short">Entry point for tracking path to Serialize error.</div></li></ul></section></div></main></body></html>

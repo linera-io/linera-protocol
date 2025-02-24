@@ -1,0 +1,1 @@
+searchState.loadedDescShard("rustversion", 0, "github crates-io docs-rs")

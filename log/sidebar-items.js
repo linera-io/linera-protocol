@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["STATIC_MAX_LEVEL"],"enum":["Level","LevelFilter"],"fn":["logger","max_level","set_logger","set_logger_racy","set_max_level","set_max_level_racy"],"macro":["debug","error","info","log","log_enabled","trace","warn"],"struct":["Metadata","MetadataBuilder","ParseLevelError","Record","RecordBuilder","SetLoggerError"],"trait":["Log"]};

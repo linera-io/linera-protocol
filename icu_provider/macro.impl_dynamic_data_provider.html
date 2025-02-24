@@ -1,0 +1,61 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Implements `DynamicDataProvider` for a marker type `S` on a type that already implements `DynamicDataProvider` or `DataProvider` for one or more `M`, where `M` is a concrete type that is convertible to `S` via `UpcastDataPayload`."><title>impl_dynamic_data_provider in icu_provider - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="icu_provider" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../icu_provider/index.html">icu_provider</a><span class="version">1.5.0</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="index.html">icu_provider</a>::<wbr><a class="macro" href="#">impl_dynamic_data_provider</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/icu_provider/dynutil.rs.html#168-256">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><span class="macro">macro_rules!</span> impl_dynamic_data_provider {
+    (<span class="macro-nonterminal">$provider</span>:ty, <span class="macro-nonterminal">$arms</span>:tt, <span class="macro-nonterminal">$one</span>:path, $(<span class="macro-nonterminal">$rest</span>:path),+) =&gt; { ... };
+    (<span class="macro-nonterminal">$provider</span>:ty, { $(<span class="macro-nonterminal">$ident</span>:ident = <span class="macro-nonterminal">$key</span>:path =&gt; <span class="macro-nonterminal">$struct_m</span>:ty),+, $(<span class="kw">_ </span>=&gt; <span class="macro-nonterminal">$struct_d</span>:ty,)<span class="question-mark">?</span>}, <span class="macro-nonterminal">$dyn_m</span>:ty) =&gt; { ... };
+    (<span class="macro-nonterminal">$provider</span>:ty, [ $($(<span class="attr">#[<span class="macro-nonterminal">$cfg</span>:meta]</span>)<span class="question-mark">? </span><span class="macro-nonterminal">$struct_m</span>:ty),+, ], <span class="macro-nonterminal">$dyn_m</span>:path) =&gt; { ... };
+}</pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Implements <a href="trait.DynamicDataProvider.html" title="trait icu_provider::DynamicDataProvider"><code>DynamicDataProvider</code></a> for a marker type <code>S</code> on a type that already implements
+<a href="trait.DynamicDataProvider.html" title="trait icu_provider::DynamicDataProvider"><code>DynamicDataProvider</code></a> or <a href="trait.DataProvider.html" title="trait icu_provider::DataProvider"><code>DataProvider</code></a> for one or more <code>M</code>, where <code>M</code> is a concrete type
+that is convertible to <code>S</code> via <a href="dynutil/trait.UpcastDataPayload.html" title="trait icu_provider::dynutil::UpcastDataPayload"><code>UpcastDataPayload</code></a>.</p>
+<p>Use this macro to add support to your data provider for:</p>
+<ul>
+<li><a href="(crate::any::AnyPayload)"><code>AnyPayload</code></a> if your provider can return typed objects as <a href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html" title="trait core::any::Any"><code>Any</code></a>.</li>
+</ul>
+<h3 id="wrapping-dataprovider"><a class="doc-anchor" href="#wrapping-dataprovider">§</a>Wrapping DataProvider</h3>
+<p>If your type implements <a href="trait.DataProvider.html" title="trait icu_provider::DataProvider"><code>DataProvider</code></a>, pass a list of markers as the second argument.
+This results in a <code>DynamicDataProvider</code> that delegates to a specific marker if the key
+matches or else returns <a href="(crate::DataErrorKind::MissingDataKey)"><code>DataErrorKind::MissingDataKey</code></a>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>icu_provider::prelude::<span class="kw-2">*</span>;
+<span class="kw">use </span>icu_provider::hello_world::<span class="kw-2">*</span>;
+
+<span class="comment">// Implement DynamicDataProvider&lt;AnyMarker&gt; on HelloWorldProvider: DataProvider&lt;HelloWorldV1Marker&gt;
+</span><span class="macro">icu_provider::impl_dynamic_data_provider!</span>(HelloWorldProvider, [HelloWorldV1Marker,], AnyMarker);
+
+<span class="kw">let </span>req = DataRequest {
+    locale: <span class="kw-2">&amp;</span><span class="macro">icu_locid::langid!</span>(<span class="string">"de"</span>).into(),
+    metadata: Default::default(),
+};
+
+<span class="comment">// Successful because the key matches:
+</span>HelloWorldProvider.load_data(HelloWorldV1Marker::KEY, req).unwrap();
+
+<span class="comment">// MissingDataKey error as the key does not match:
+</span><span class="macro">assert_eq!</span>(
+    HelloWorldProvider.load_data(<span class="macro">icu_provider::data_key!</span>(<span class="string">"dummy@1"</span>), req).unwrap_err().kind,
+    DataErrorKind::MissingDataKey,
+);</code></pre></div>
+<h3 id="wrapping-dynamicdataprovider"><a class="doc-anchor" href="#wrapping-dynamicdataprovider">§</a>Wrapping DynamicDataProvider</h3>
+<p>It is also possible to wrap a <a href="trait.DynamicDataProvider.html" title="trait icu_provider::DynamicDataProvider"><code>DynamicDataProvider</code></a> to create another <a href="trait.DynamicDataProvider.html" title="trait icu_provider::DynamicDataProvider"><code>DynamicDataProvider</code></a>. To do this,
+pass a match-like statement for keys as the second argument:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>icu_provider::prelude::<span class="kw-2">*</span>;
+<span class="kw">use </span>icu_provider::hello_world::<span class="kw-2">*</span>;
+
+<span class="comment">// Implement DataProvider&lt;AnyMarker&gt; on HelloWorldProvider: DynamicDataProvider&lt;HelloWorldV1Marker&gt;
+</span><span class="macro">icu_provider::impl_dynamic_data_provider!</span>(HelloWorldProvider, {
+    <span class="comment">// Match HelloWorldV1Marker::KEY and delegate to DynamicDataProvider&lt;HelloWorldV1Marker&gt;.
+    </span>HW = HelloWorldV1Marker::KEY =&gt; HelloWorldV1Marker,
+    <span class="comment">// Send the wildcard match also to DynamicDataProvider&lt;HelloWorldV1Marker&gt;.
+    </span><span class="kw">_ </span>=&gt; HelloWorldV1Marker,
+}, AnyMarker);
+
+<span class="kw">let </span>req = DataRequest {
+    locale: <span class="kw-2">&amp;</span><span class="macro">icu_locid::langid!</span>(<span class="string">"de"</span>).into(),
+    metadata: Default::default(),
+};
+
+<span class="comment">// Successful because the key matches:
+</span>HelloWorldProvider.as_any_provider().load_any(HelloWorldV1Marker::KEY, req).unwrap();
+
+<span class="comment">// Because of the wildcard, any key actually works:
+</span>HelloWorldProvider.as_any_provider().load_any(<span class="macro">icu_provider::data_key!</span>(<span class="string">"dummy@1"</span>), req).unwrap();</code></pre></div>
+</div></details></section></div></main></body></html>

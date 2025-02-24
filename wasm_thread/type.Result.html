@@ -1,0 +1,38 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A specialized `Result` type for threads."><title>Result in wasm_thread - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="wasm_thread" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc type"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../wasm_thread/index.html">wasm_thread</a><span class="version">0.3.0</span></h2></div><h2 class="location"><a href="#">Result</a></h2><div class="sidebar-elems"><section><h3><a href="#aliased-type">Aliased type</a></h3><h3><a href="#variants">Variants</a></h3><ul class="block variant"><li><a href="#variant.Err">Err</a></li><li><a href="#variant.Ok">Ok</a></li></ul></section><h2><a href="index.html">In crate wasm_thread</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Type Alias <a href="index.html">wasm_thread</a>::<wbr><a class="type" href="#">Result</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/std/thread/mod.rs.html#1583">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub type Result&lt;T&gt; = <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, <a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html" title="trait core::any::Any">Any</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a>&gt;&gt;;</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A specialized <a href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result"><code>Result</code></a> type for threads.</p>
+<p>Indicates the manner in which a thread exited.</p>
+<p>The value contained in the <code>Result::Err</code> variant
+is the value the thread panicked with;
+that is, the argument the <code>panic!</code> macro was called with.
+Unlike with normal errors, this value doesn’t implement
+the <a href="https://doc.rust-lang.org/1.81.0/core/error/trait.Error.html" title="trait core::error::Error"><code>Error</code></a> trait.</p>
+<p>Thus, a sensible way to handle a thread panic is to either:</p>
+<ol>
+<li>propagate the panic with <a href="https://doc.rust-lang.org/1.81.0/std/panic/fn.resume_unwind.html" title="fn std::panic::resume_unwind"><code>std::panic::resume_unwind</code></a></li>
+<li>or in case the thread is intended to be a subsystem boundary
+that is supposed to isolate system-level failures,
+match on the <code>Err</code> variant and handle the panic in an appropriate way</li>
+</ol>
+<p>A thread that completes without panicking is considered to exit successfully.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Matching on the result of a joined thread:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::{fs, thread, panic};
+
+<span class="kw">fn </span>copy_in_thread() -&gt; thread::Result&lt;()&gt; {
+    thread::spawn(|| {
+        fs::copy(<span class="string">"foo.txt"</span>, <span class="string">"bar.txt"</span>).unwrap();
+    }).join()
+}
+
+<span class="kw">fn </span>main() {
+    <span class="kw">match </span>copy_in_thread() {
+        <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="macro">println!</span>(<span class="string">"copy succeeded"</span>),
+        <span class="prelude-val">Err</span>(e) =&gt; panic::resume_unwind(e),
+    }
+}</code></pre></div>
+</div></details><h2 id="aliased-type" class="section-header">Aliased Type<a href="#aliased-type" class="anchor">§</a></h2><pre class="rust item-decl"><code>enum Result&lt;T&gt; {
+    Ok(T),
+    Err(<a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html" title="trait core::any::Any">Any</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a>&gt;),
+}</code></pre><h2 id="variants" class="variants section-header">Variants<a href="#variants" class="anchor">§</a></h2><div class="variants"><section id="variant.Ok" class="variant"><a href="#variant.Ok" class="anchor">§</a><span class="since rightside" title="Stable since Rust version 1.0.0">1.0.0</span><h3 class="code-header">Ok(T)</h3></section><div class="docblock"><p>Contains the success value</p>
+</div><section id="variant.Err" class="variant"><a href="#variant.Err" class="anchor">§</a><span class="since rightside" title="Stable since Rust version 1.0.0">1.0.0</span><h3 class="code-header">Err(<a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html" title="trait core::any::Any">Any</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a>&gt;)</h3></section><div class="docblock"><p>Contains the error value</p>
+</div></div><script src="../type.impl/core/result/enum.Result.js" data-self-path="wasm_thread::Result" async></script></section></div></main></body></html>

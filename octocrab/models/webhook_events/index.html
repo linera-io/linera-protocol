@@ -1,0 +1,59 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Serde mappings from GitHub’s Webhook payloads to structs."><title>octocrab::models::webhook_events - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="octocrab" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../octocrab/index.html">octocrab</a><span class="version">0.42.1</span></h2></div><h2 class="location"><a href="#">Module webhook_events</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li></ul></section><h2><a href="../index.html">In octocrab::models</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../../index.html">octocrab</a>::<wbr><a href="../index.html">models</a>::<wbr><a class="mod" href="#">webhook_events</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/octocrab/models/webhook_events.rs.html#1-1233">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Serde mappings from GitHub’s Webhook payloads to structs.</p>
+<p>Github Applications can be written as simple servers (using e.g. Axum), and then
+deserialize the webhook payloads it receives thanks to the models included in
+this module.</p>
+<p>The main entry point is to read the “event type” from the HTTP request header sent by github (at
+time of writing, the header is named
+<a href="https://docs.github.com/en/webhooks-and-events/webhooks/webhook-events-and-payloads#delivery-headers"><code>X-GitHub-Event</code></a>)
+and then pass the value, along with the payload, to <a href="struct.WebhookEvent.html#method.try_from_header_and_body" title="associated function octocrab::models::webhook_events::WebhookEvent::try_from_header_and_body"><code>WebhookEvent::try_from_header_and_body</code></a>
+which will validate the payload and return a valid <a href="struct.WebhookEvent.html" title="struct octocrab::models::webhook_events::WebhookEvent"><code>WebhookEvent</code></a>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>octocrab::models::{AppId, webhook_events::{WebhookEvent, WebhookEventPayload, WebhookEventType}};
+
+<span class="kw">let </span>json = <span class="string">r#"{
+  "zen": "Design for failure.",
+  "hook_id": 423885699,
+  "hook": {
+    "type": "App",
+    "id": 423885699,
+    "name": "web",
+    "active": true,
+    "events": [
+      "issues",
+      "issue_comment",
+      "meta",
+      "pull_request",
+      "pull_request_review",
+      "pull_request_review_comment",
+      "pull_request_review_thread",
+      "repository"
+    ],
+    "config": {
+      "content_type": "json",
+      "insecure_ssl": "0",
+      "secret": "********",
+      "url": "https://smee.io/R"
+    },
+    "updated_at": "2023-07-13T09:30:45Z",
+    "created_at": "2023-07-13T09:30:45Z",
+    "app_id": 360617,
+    "deliveries_url": "https://api.github.com/app/hook/deliveries"
+  }
+}"#</span>;
+
+<span class="comment">// Value picked from the `X-GitHub-Event` header
+</span><span class="kw">let </span>event_name = <span class="string">"ping"</span>;
+
+<span class="kw">let </span>event = WebhookEvent::try_from_header_and_body(event_name, json)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(event.kind, WebhookEventType::Ping);
+<span class="kw">let </span>WebhookEventPayload::Ping(ping_event) = event.specific <span class="kw">else </span>{ <span class="macro">panic!</span>(<span class="string">"checked for event.kind type before unwrapping"</span>) };
+<span class="macro">assert_eq!</span>(ping_event.hook.unwrap().app_id.unwrap(), AppId(<span class="number">360617</span>));</code></pre></div>
+<h4 id="stability"><a class="doc-anchor" href="#stability">§</a>Stability</h4>
+<p>The GitHub API for webhooks is not stable, nor specified <a href="https://github.com/orgs/community/discussions/61453">as far as we
+know</a>. Therefore, any contribution to
+provide more precise structures for payloads, with some actual example values to test, is very
+welcome.</p>
+<p>This also means you should consider octocrab’s support for webhooks in beta state: it is usable,
+but the API needs to change according to actual usage in order to refine the different payloads
+received.</p>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.WebhookEventPayload"><code>pub use payload::<a class="enum" href="payload/enum.WebhookEventPayload.html" title="enum octocrab::models::webhook_events::payload::WebhookEventPayload">WebhookEventPayload</a>;</code></div></li></ul><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="payload/index.html" title="mod octocrab::models::webhook_events::payload">payload</a></div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.EventInstallationId.html" title="struct octocrab::models::webhook_events::EventInstallationId">EventInstallationId</a></div></li><li><div class="item-name"><a class="struct" href="struct.InstallationEventRepository.html" title="struct octocrab::models::webhook_events::InstallationEventRepository">InstallationEventRepository</a></div><div class="desc docblock-short">A repository in installation related webhook events.</div></li><li><div class="item-name"><a class="struct" href="struct.WebhookEvent.html" title="struct octocrab::models::webhook_events::WebhookEvent">WebhookEvent</a></div><div class="desc docblock-short">A GitHub webhook event.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.EventInstallation.html" title="enum octocrab::models::webhook_events::EventInstallation">EventInstallation</a></div></li><li><div class="item-name"><a class="enum" href="enum.WebhookEventType.html" title="enum octocrab::models::webhook_events::WebhookEventType">WebhookEventType</a></div><div class="desc docblock-short">Kind of webhook event.</div></li></ul></section></div></main></body></html>

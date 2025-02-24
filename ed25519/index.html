@@ -1,0 +1,191 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="RustCrypto: Ed25519"><title>ed25519 - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="ed25519" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../ed25519/index.html"><img src="https://raw.githubusercontent.com/RustCrypto/meta/master/logo_small.png" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../ed25519/index.html"><img src="https://raw.githubusercontent.com/RustCrypto/meta/master/logo_small.png" alt="logo"></a><h2><a href="../ed25519/index.html">ed25519</a><span class="version">2.2.3</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#structs">Structs</a></li><li><a href="#traits">Traits</a></li><li><a href="#types">Type Aliases</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">ed25519</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/ed25519/lib.rs.html#1-419">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="rustcrypto-ed25519"><a class="doc-anchor" href="#rustcrypto-ed25519">§</a><a href="https://github.com/RustCrypto">RustCrypto</a>: Ed25519</h2>
+<p><a href="https://crates.io/crates/ed25519"><img src="https://buildstats.info/crate/ed25519" alt="crate" /></a>
+<a href="https://docs.rs/ed25519/"><img src="https://docs.rs/ed25519/badge.svg" alt="Docs" /></a>
+<a href="https://github.com/RustCrypto/signatures/actions/workflows/ed25519.yml"><img src="https://github.com/RustCrypto/signatures/actions/workflows/ed25519.yml/badge.svg" alt="Build Status" /></a>
+<img src="https://img.shields.io/badge/license-Apache2.0/MIT-blue.svg" alt="Apache2/MIT licensed" />
+<img src="https://img.shields.io/badge/rustc-1.60+-blue.svg" alt="Rust Version" />
+<a href="https://rustcrypto.zulipchat.com/#narrow/stream/260048-signatures"><img src="https://img.shields.io/badge/zulip-join_chat-blue.svg" alt="Project Chat" /></a></p>
+<p><a href="https://en.wikipedia.org/wiki/EdDSA#Ed25519">Edwards Digital Signature Algorithm (EdDSA)</a> over Curve25519 as specified
+in <a href="https://tools.ietf.org/html/rfc8032">RFC 8032</a>.</p>
+<p><a href="https://docs.rs/ed25519/">Documentation</a></p>
+<h3 id="about"><a class="doc-anchor" href="#about">§</a>About</h3>
+<p>This crate doesn’t contain an implementation of Ed25519, but instead
+contains an <a href="https://docs.rs/ed25519/latest/ed25519/struct.Signature.html"><code>ed25519::Signature</code></a> type which other crates can use in
+conjunction with the <a href="https://docs.rs/signature/latest/signature/trait.Signer.html"><code>signature::Signer</code></a> and <a href="https://docs.rs/signature/latest/signature/trait.Verifier.html"><code>signature::Verifier</code></a>
+traits.</p>
+<p>These traits allow crates which produce and consume Ed25519 signatures
+to be written abstractly in such a way that different signer/verifier
+providers can be plugged in, enabling support for using different
+Ed25519 implementations, including HSMs or Cloud KMS services.</p>
+<h3 id="minimum-supported-rust-version"><a class="doc-anchor" href="#minimum-supported-rust-version">§</a>Minimum Supported Rust Version</h3>
+<p>This crate requires <strong>Rust 1.60</strong> at a minimum.</p>
+<p>Our policy is to allow MSRV to be raised in future released without that
+qualifing as a SemVer-breaking change, but it will be accompanied by a minor
+version bump, ensuring if you lock to a minor version MSRV will be preserved
+for the default feature set.</p>
+<h3 id="semver-policy"><a class="doc-anchor" href="#semver-policy">§</a>SemVer Policy</h3>
+<ul>
+<li>All on-by-default features of this library are covered by SemVer</li>
+<li>MSRV is considered exempt from SemVer as noted above</li>
+<li>The <code>pkcs8</code> module is exempted as it uses a pre-1.0 dependency, however,
+breaking changes to this module will be accompanied by a minor version bump.</li>
+</ul>
+<h3 id="license"><a class="doc-anchor" href="#license">§</a>License</h3>
+<p>All crates licensed under either of</p>
+<ul>
+<li><a href="http://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a></li>
+<li><a href="http://opensource.org/licenses/MIT">MIT license</a></li>
+</ul>
+<p>at your option.</p>
+<h4 id="contribution"><a class="doc-anchor" href="#contribution">§</a>Contribution</h4>
+<p>Unless you explicitly state otherwise, any contribution intentionally submitted
+for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
+dual licensed as above, without any additional terms or conditions.</p>
+<h2 id="using-ed25519-generically-over-algorithm-implementationsproviders"><a class="doc-anchor" href="#using-ed25519-generically-over-algorithm-implementationsproviders">§</a>Using Ed25519 generically over algorithm implementations/providers</h2>
+<p>By using the <code>ed25519</code> crate, you can write code which signs and verifies
+messages using the Ed25519 signature algorithm generically over any
+supported Ed25519 implementation (see the next section for available
+providers).</p>
+<p>This allows consumers of your code to plug in whatever implementation they
+want to use without having to add all potential Ed25519 libraries you’d
+like to support as optional dependencies.</p>
+<h3 id="example"><a class="doc-anchor" href="#example">§</a>Example</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>ed25519::signature::{Signer, Verifier};
+
+<span class="kw">pub struct </span>HelloSigner&lt;S&gt;
+<span class="kw">where
+    </span>S: Signer&lt;ed25519::Signature&gt;
+{
+    <span class="kw">pub </span>signing_key: S
+}
+
+<span class="kw">impl</span>&lt;S&gt; HelloSigner&lt;S&gt;
+<span class="kw">where
+    </span>S: Signer&lt;ed25519::Signature&gt;
+{
+    <span class="kw">pub fn </span>sign(<span class="kw-2">&amp;</span><span class="self">self</span>, person: <span class="kw-2">&amp;</span>str) -&gt; ed25519::Signature {
+        <span class="comment">// NOTE: use `try_sign` if you'd like to be able to handle
+        // errors from external signing services/devices (e.g. HSM/KMS)
+        // &lt;https://docs.rs/signature/latest/signature/trait.Signer.html#tymethod.try_sign&gt;
+        </span><span class="self">self</span>.signing_key.sign(format_message(person).as_bytes())
+    }
+}
+
+<span class="kw">pub struct </span>HelloVerifier&lt;V&gt; {
+    <span class="kw">pub </span>verifying_key: V
+}
+
+<span class="kw">impl</span>&lt;V&gt; HelloVerifier&lt;V&gt;
+<span class="kw">where
+    </span>V: Verifier&lt;ed25519::Signature&gt;
+{
+    <span class="kw">pub fn </span>verify(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        person: <span class="kw-2">&amp;</span>str,
+        signature: <span class="kw-2">&amp;</span>ed25519::Signature
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), ed25519::Error&gt; {
+        <span class="self">self</span>.verifying_key.verify(format_message(person).as_bytes(), signature)
+    }
+}
+
+<span class="kw">fn </span>format_message(person: <span class="kw-2">&amp;</span>str) -&gt; String {
+    <span class="macro">format!</span>(<span class="string">"Hello, {}!"</span>, person)
+}</code></pre></div>
+<h3 id="using-above-example-with-ed25519-dalek"><a class="doc-anchor" href="#using-above-example-with-ed25519-dalek">§</a>Using above example with <code>ed25519-dalek</code></h3>
+<p>The <a href="https://docs.rs/ed25519-dalek"><code>ed25519-dalek</code></a> crate natively supports the <a href="struct.Signature.html" title="struct ed25519::Signature"><code>ed25519::Signature</code></a>
+type defined in this crate along with the <a href="../signature/signer/trait.Signer.html" title="trait signature::signer::Signer"><code>signature::Signer</code></a> and
+<a href="../signature/verifier/trait.Verifier.html" title="trait signature::verifier::Verifier"><code>signature::Verifier</code></a> traits.</p>
+<p>Below is an example of how a hypothetical consumer of the code above can
+instantiate and use the previously defined <code>HelloSigner</code> and <code>HelloVerifier</code>
+types with <a href="https://docs.rs/ed25519-dalek"><code>ed25519-dalek</code></a> as the signing/verification provider:</p>
+<p><em>NOTE: requires <a href="https://docs.rs/ed25519-dalek"><code>ed25519-dalek</code></a> v2 or newer for compatibility with
+<code>ed25519</code> v2.2+</em>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>ed25519_dalek::{Signer, Verifier, Signature};
+<span class="kw">use </span>rand_core::OsRng; <span class="comment">// Requires the `std` feature of `rand_core`
+
+</span><span class="doccomment">/// `HelloSigner` defined above instantiated with `ed25519-dalek` as
+/// the signing provider.
+</span><span class="kw">pub type </span>DalekHelloSigner = HelloSigner&lt;ed25519_dalek::SigningKey&gt;;
+
+<span class="kw">let </span>signing_key = ed25519_dalek::SigningKey::generate(<span class="kw-2">&amp;mut </span>OsRng);
+<span class="kw">let </span>signer = DalekHelloSigner { signing_key };
+<span class="kw">let </span>person = <span class="string">"Joe"</span>; <span class="comment">// Message to sign
+</span><span class="kw">let </span>signature = signer.sign(person);
+
+<span class="doccomment">/// `HelloVerifier` defined above instantiated with `ed25519-dalek`
+/// as the signature verification provider.
+</span><span class="kw">pub type </span>DalekHelloVerifier = HelloVerifier&lt;ed25519_dalek::VerifyingKey&gt;;
+
+<span class="kw">let </span>verifying_key: ed25519_dalek::VerifyingKey = signer.signing_key.verifying_key();
+<span class="kw">let </span>verifier = DalekHelloVerifier { verifying_key };
+<span class="macro">assert!</span>(verifier.verify(person, <span class="kw-2">&amp;</span>signature).is_ok());</code></pre></div>
+<h3 id="using-above-example-with-ring-compat"><a class="doc-anchor" href="#using-above-example-with-ring-compat">§</a>Using above example with <code>ring-compat</code></h3>
+<p>The <a href="https://docs.rs/ring-compat"><code>ring-compat</code></a> crate provides wrappers for <a href="https://github.com/briansmith/ring"><em>ring</em></a> which implement
+the <a href="../signature/signer/trait.Signer.html" title="trait signature::signer::Signer"><code>signature::Signer</code></a> and <a href="../signature/verifier/trait.Verifier.html" title="trait signature::verifier::Verifier"><code>signature::Verifier</code></a> traits for
+<a href="struct.Signature.html" title="struct ed25519::Signature"><code>ed25519::Signature</code></a>.</p>
+<p>Below is an example of how a hypothetical consumer of the code above can
+instantiate and use the previously defined <code>HelloSigner</code> and <code>HelloVerifier</code>
+types with <a href="https://docs.rs/ring-compat"><code>ring-compat</code></a> as the signing/verification provider:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>ring_compat::signature::{
+    ed25519::{Signature, SigningKey, VerifyingKey},
+    Signer, Verifier
+};
+<span class="kw">use </span>rand_core::{OsRng, RngCore}; <span class="comment">// Requires the `std` feature of `rand_core`
+
+</span><span class="doccomment">/// `HelloSigner` defined above instantiated with *ring* as
+/// the signing provider.
+</span><span class="kw">pub type </span>RingHelloSigner = HelloSigner&lt;SigningKey&gt;;
+
+<span class="kw">let </span><span class="kw-2">mut </span>ed25519_seed = [<span class="number">0u8</span>; <span class="number">32</span>];
+OsRng.fill_bytes(<span class="kw-2">&amp;mut </span>ed25519_seed);
+
+<span class="kw">let </span>signing_key = SigningKey::from_bytes(<span class="kw-2">&amp;</span>ed25519_seed);
+<span class="kw">let </span>verifying_key = signing_key.verifying_key();
+
+<span class="kw">let </span>signer = RingHelloSigner { signing_key };
+<span class="kw">let </span>person = <span class="string">"Joe"</span>; <span class="comment">// Message to sign
+</span><span class="kw">let </span>signature = signer.sign(person);
+
+<span class="doccomment">/// `HelloVerifier` defined above instantiated with *ring*
+/// as the signature verification provider.
+</span><span class="kw">pub type </span>RingHelloVerifier = HelloVerifier&lt;VerifyingKey&gt;;
+
+<span class="kw">let </span>verifier = RingHelloVerifier { verifying_key };
+<span class="macro">assert!</span>(verifier.verify(person, <span class="kw-2">&amp;</span>signature).is_ok());</code></pre></div>
+<h2 id="available-ed25519-providers"><a class="doc-anchor" href="#available-ed25519-providers">§</a>Available Ed25519 providers</h2>
+<p>The following libraries support the types/traits from the <code>ed25519</code> crate:</p>
+<ul>
+<li><a href="https://docs.rs/ed25519-dalek"><code>ed25519-dalek</code></a> - mature pure Rust implementation of Ed25519</li>
+<li><a href="https://docs.rs/ring-compat"><code>ring-compat</code></a> - compatibility wrapper for <a href="https://github.com/briansmith/ring"><em>ring</em></a></li>
+<li><a href="https://github.com/iqlusioninc/yubihsm.rs/blob/develop/README.md"><code>yubihsm</code></a> - host-side client library for YubiHSM2 devices from Yubico</li>
+</ul>
+<h2 id="features"><a class="doc-anchor" href="#features">§</a>Features</h2>
+<p>The following features are presently supported:</p>
+<ul>
+<li>
+<p><code>pkcs8</code>: support for decoding/encoding PKCS#8-formatted private keys using the
+[<code>KeypairBytes</code>] type.</p>
+</li>
+<li>
+<p><code>std</code> <em>(default)</em>: Enable <code>std</code> support in <a href="../signature/index.html" title="mod signature"><code>signature</code></a>, which currently only affects whether
+<a href="struct.Error.html" title="struct ed25519::Error"><code>signature::Error</code></a> implements <code>std::error::Error</code>.</p>
+</li>
+<li>
+<p><code>serde</code>: Implement <code>serde::Deserialize</code> and <code>serde::Serialize</code> for <a href="struct.Signature.html" title="struct ed25519::Signature"><code>Signature</code></a>. Signatures
+are serialized as their bytes.</p>
+</li>
+<li>
+<p><code>serde_bytes</code>: Implement <code>serde_bytes::Deserialize</code> and <code>serde_bytes::Serialize</code> for
+<a href="struct.Signature.html" title="struct ed25519::Signature"><code>Signature</code></a>. This enables more compact representations for formats with an efficient byte
+array representation. As per the <code>serde_bytes</code> documentation, this can most easily be realised
+using the <code>#[serde(with = "serde_bytes")]</code> annotation, e.g.:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Deserialize, Serialize)]
+#[serde(transparent)]
+</span><span class="kw">struct </span>SignatureAsBytes(<span class="attr">#[serde(with = <span class="string">"serde_bytes"</span>)] </span>Signature);</code></pre></div>
+</li>
+</ul>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.signature"><code>pub use <a class="mod" href="../signature/index.html" title="mod signature">signature</a>;</code></div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Error.html" title="struct ed25519::Error">Error</a></div><div class="desc docblock-short">Signature errors.</div></li><li><div class="item-name"><a class="struct" href="struct.Signature.html" title="struct ed25519::Signature">Signature</a></div><div class="desc docblock-short">Ed25519 signature.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.SignatureEncoding.html" title="trait ed25519::SignatureEncoding">SignatureEncoding</a></div><div class="desc docblock-short">Support for decoding/encoding signatures as bytes.</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.ComponentBytes.html" title="type ed25519::ComponentBytes">ComponentBytes</a></div><div class="desc docblock-short">Size of an <code>R</code> or <code>s</code> component of an Ed25519 signature when serialized
+as bytes.</div></li><li><div class="item-name"><a class="type" href="type.SignatureBytes.html" title="type ed25519::SignatureBytes">SignatureBytes</a></div><div class="desc docblock-short">Ed25519 signature serialized as a byte array.</div></li></ul></section></div></main></body></html>

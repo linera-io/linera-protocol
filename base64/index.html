@@ -1,0 +1,141 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Correct, fast, and configurable base64 decoding and encoding. Base64 transports binary data efficiently in contexts where only plain text is allowed."><title>base64 - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="base64" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../base64/index.html">base64</a><span class="version">0.22.1</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li><li><a href="#enums">Enums</a></li><li><a href="#functions">Functions</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">base64</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/base64/lib.rs.html#1-277">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Correct, fast, and configurable <a href="https://developer.mozilla.org/en-US/docs/Glossary/Base64">base64</a> decoding and encoding. Base64
+transports binary data efficiently in contexts where only plain text is
+allowed.</p>
+<h2 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h2>
+<p>Use an <a href="engine/trait.Engine.html" title="trait base64::engine::Engine"><code>Engine</code></a> to decode or encode base64, configured with the base64
+alphabet and padding behavior best suited to your application.</p>
+<h3 id="engine-setup"><a class="doc-anchor" href="#engine-setup">§</a>Engine setup</h3>
+<p>There is more than one way to encode a stream of bytes as “base64”.
+Different applications use different encoding
+<a href="alphabet/struct.Alphabet.html" title="struct base64::alphabet::Alphabet">alphabets</a> and
+<a href="engine/general_purpose/struct.GeneralPurposeConfig.html" title="struct base64::engine::general_purpose::GeneralPurposeConfig">padding behaviors</a>.</p>
+<h4 id="encoding-alphabet"><a class="doc-anchor" href="#encoding-alphabet">§</a>Encoding alphabet</h4>
+<p>Almost all base64 <a href="alphabet/struct.Alphabet.html" title="struct base64::alphabet::Alphabet">alphabets</a> use <code>A-Z</code>, <code>a-z</code>, and
+<code>0-9</code>, which gives nearly 64 characters (26 + 26 + 10 = 62), but they differ
+in their choice of their final 2.</p>
+<p>Most applications use the <a href="alphabet/constant.STANDARD.html" title="constant base64::alphabet::STANDARD">standard</a> alphabet specified
+in <a href="https://datatracker.ietf.org/doc/html/rfc4648#section-4">RFC 4648</a>.  If that’s all you need, you can get started
+quickly by using the pre-configured
+<a href="engine/general_purpose/constant.STANDARD.html" title="constant base64::engine::general_purpose::STANDARD"><code>STANDARD</code></a> engine, which is also available
+in the <a href="prelude/index.html" title="mod base64::prelude"><code>prelude</code></a> module as shown here, if you prefer a minimal <code>use</code>
+footprint.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>base64::prelude::<span class="kw-2">*</span>;
+
+<span class="macro">assert_eq!</span>(BASE64_STANDARD.decode(<span class="string">b"+uwgVQA="</span>)<span class="question-mark">?</span>, <span class="string">b"\xFA\xEC\x20\x55\0"</span>);
+<span class="macro">assert_eq!</span>(BASE64_STANDARD.encode(<span class="string">b"\xFF\xEC\x20\x55\0"</span>), <span class="string">"/+wgVQA="</span>);</code></pre></div>
+<p>Other common alphabets are available in the <a href="alphabet/index.html" title="mod base64::alphabet"><code>alphabet</code></a> module.</p>
+<h5 id="url-safe-alphabet"><a class="doc-anchor" href="#url-safe-alphabet">§</a>URL-safe alphabet</h5>
+<p>The standard alphabet uses <code>+</code> and <code>/</code> as its two non-alphanumeric tokens,
+which cannot be safely used in URL’s without encoding them as <code>%2B</code> and
+<code>%2F</code>.</p>
+<p>To avoid that, some applications use a <a href="alphabet/constant.URL_SAFE.html" title="constant base64::alphabet::URL_SAFE">“URL-safe” alphabet</a>,
+which uses <code>-</code> and <code>_</code> instead. To use that alternative alphabet, use the
+<a href="engine/general_purpose/constant.URL_SAFE.html" title="constant base64::engine::general_purpose::URL_SAFE"><code>URL_SAFE</code></a> engine. This example doesn’t
+use <a href="prelude/index.html" title="mod base64::prelude"><code>prelude</code></a> to show what a more explicit <code>use</code> would look like.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>base64::{engine::general_purpose::URL_SAFE, Engine <span class="kw">as _</span>};
+
+<span class="macro">assert_eq!</span>(URL_SAFE.decode(<span class="string">b"-uwgVQA="</span>)<span class="question-mark">?</span>, <span class="string">b"\xFA\xEC\x20\x55\0"</span>);
+<span class="macro">assert_eq!</span>(URL_SAFE.encode(<span class="string">b"\xFF\xEC\x20\x55\0"</span>), <span class="string">"_-wgVQA="</span>);</code></pre></div>
+<h4 id="padding-characters"><a class="doc-anchor" href="#padding-characters">§</a>Padding characters</h4>
+<p>Each base64 character represents 6 bits (2⁶ = 64) of the original binary
+data, and every 3 bytes of input binary data will encode to 4 base64
+characters (8 bits × 3 = 6 bits × 4 = 24 bits).</p>
+<p>When the input is not an even multiple of 3 bytes in length, <a href="https://datatracker.ietf.org/doc/html/rfc4648#section-3.5">canonical</a>
+base64 encoders insert padding characters at the end, so that the output
+length is always a multiple of 4:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>base64::{engine::general_purpose::STANDARD, Engine <span class="kw">as _</span>};
+
+<span class="macro">assert_eq!</span>(STANDARD.encode(<span class="string">b""</span>),    <span class="string">""</span>);
+<span class="macro">assert_eq!</span>(STANDARD.encode(<span class="string">b"f"</span>),   <span class="string">"Zg=="</span>);
+<span class="macro">assert_eq!</span>(STANDARD.encode(<span class="string">b"fo"</span>),  <span class="string">"Zm8="</span>);
+<span class="macro">assert_eq!</span>(STANDARD.encode(<span class="string">b"foo"</span>), <span class="string">"Zm9v"</span>);</code></pre></div>
+<p>Canonical encoding ensures that base64 encodings will be exactly the same,
+byte-for-byte, regardless of input length. But the <code>=</code> padding characters
+aren’t necessary for decoding, and they may be omitted by using a
+<a href="engine/general_purpose/constant.NO_PAD.html" title="constant base64::engine::general_purpose::NO_PAD"><code>NO_PAD</code></a> configuration:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>base64::{engine::general_purpose::STANDARD_NO_PAD, Engine <span class="kw">as _</span>};
+
+<span class="macro">assert_eq!</span>(STANDARD_NO_PAD.encode(<span class="string">b""</span>),    <span class="string">""</span>);
+<span class="macro">assert_eq!</span>(STANDARD_NO_PAD.encode(<span class="string">b"f"</span>),   <span class="string">"Zg"</span>);
+<span class="macro">assert_eq!</span>(STANDARD_NO_PAD.encode(<span class="string">b"fo"</span>),  <span class="string">"Zm8"</span>);
+<span class="macro">assert_eq!</span>(STANDARD_NO_PAD.encode(<span class="string">b"foo"</span>), <span class="string">"Zm9v"</span>);</code></pre></div>
+<p>The pre-configured <code>NO_PAD</code> engines will reject inputs containing padding
+<code>=</code> characters. To encode without padding and still accept padding while
+decoding, create an <a href="engine/general_purpose/struct.GeneralPurpose.html" title="struct base64::engine::general_purpose::GeneralPurpose">engine</a> with
+that <a href="engine/enum.DecodePaddingMode.html" title="enum base64::engine::DecodePaddingMode">padding mode</a>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">assert_eq!</span>(STANDARD_NO_PAD.decode(<span class="string">b"Zm8="</span>), <span class="prelude-val">Err</span>(base64::DecodeError::InvalidPadding));</code></pre></div>
+<h4 id="further-customization"><a class="doc-anchor" href="#further-customization">§</a>Further customization</h4>
+<p>Decoding and encoding behavior can be customized by creating an
+<a href="engine/general_purpose/struct.GeneralPurpose.html" title="struct base64::engine::general_purpose::GeneralPurpose">engine</a> with an <a href="alphabet/struct.Alphabet.html" title="struct base64::alphabet::Alphabet">alphabet</a> and
+<a href="engine/general_purpose/struct.GeneralPurposeConfig.html" title="struct base64::engine::general_purpose::GeneralPurposeConfig">padding configuration</a>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>base64::{engine, alphabet, Engine <span class="kw">as _</span>};
+
+<span class="comment">// bizarro-world base64: +/ as the first symbols instead of the last
+</span><span class="kw">let </span>alphabet =
+    alphabet::Alphabet::new(<span class="string">"+/ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"</span>)
+    .unwrap();
+
+<span class="comment">// a very weird config that encodes with padding but requires no padding when decoding...?
+</span><span class="kw">let </span>crazy_config = engine::GeneralPurposeConfig::new()
+    .with_decode_allow_trailing_bits(<span class="bool-val">true</span>)
+    .with_encode_padding(<span class="bool-val">true</span>)
+    .with_decode_padding_mode(engine::DecodePaddingMode::RequireNone);
+
+<span class="kw">let </span>crazy_engine = engine::GeneralPurpose::new(<span class="kw-2">&amp;</span>alphabet, crazy_config);
+
+<span class="kw">let </span>encoded = crazy_engine.encode(<span class="string">b"abc 123"</span>);
+</code></pre></div>
+<h3 id="memory-allocation"><a class="doc-anchor" href="#memory-allocation">§</a>Memory allocation</h3>
+<p>The <a href="engine/trait.Engine.html#method.decode" title="method base64::engine::Engine::decode">decode</a> and <a href="engine/trait.Engine.html#method.encode" title="method base64::engine::Engine::encode">encode</a> engine methods
+allocate memory for their results – <code>decode</code> returns a <code>Vec&lt;u8&gt;</code> and
+<code>encode</code> returns a <code>String</code>. To instead decode or encode into a buffer that
+you allocated, use one of the alternative methods:</p>
+<h5 id="decoding"><a class="doc-anchor" href="#decoding">§</a>Decoding</h5><div><table><thead><tr><th>Method</th><th>Output</th><th>Allocates memory</th></tr></thead><tbody>
+<tr><td><a href="engine/trait.Engine.html#method.decode" title="method base64::engine::Engine::decode"><code>Engine::decode</code></a></td><td>returns a new <code>Vec&lt;u8&gt;</code></td><td>always</td></tr>
+<tr><td><a href="engine/trait.Engine.html#method.decode_vec" title="method base64::engine::Engine::decode_vec"><code>Engine::decode_vec</code></a></td><td>appends to provided <code>Vec&lt;u8&gt;</code></td><td>if <code>Vec</code> lacks capacity</td></tr>
+<tr><td><a href="engine/trait.Engine.html#method.decode_slice" title="method base64::engine::Engine::decode_slice"><code>Engine::decode_slice</code></a></td><td>writes to provided <code>&amp;[u8]</code></td><td>never</td></tr>
+</tbody></table>
+</div><h5 id="encoding"><a class="doc-anchor" href="#encoding">§</a>Encoding</h5><div><table><thead><tr><th>Method</th><th>Output</th><th>Allocates memory</th></tr></thead><tbody>
+<tr><td><a href="engine/trait.Engine.html#method.encode" title="method base64::engine::Engine::encode"><code>Engine::encode</code></a></td><td>returns a new <code>String</code></td><td>always</td></tr>
+<tr><td><a href="engine/trait.Engine.html#method.encode_string" title="method base64::engine::Engine::encode_string"><code>Engine::encode_string</code></a></td><td>appends to provided <code>String</code></td><td>if <code>String</code> lacks capacity</td></tr>
+<tr><td><a href="engine/trait.Engine.html#method.encode_slice" title="method base64::engine::Engine::encode_slice"><code>Engine::encode_slice</code></a></td><td>writes to provided <code>&amp;[u8]</code></td><td>never</td></tr>
+</tbody></table>
+</div><h3 id="input-and-output"><a class="doc-anchor" href="#input-and-output">§</a>Input and output</h3>
+<p>The <code>base64</code> crate can <a href="engine/trait.Engine.html#method.decode" title="method base64::engine::Engine::decode">decode</a> and
+<a href="engine/trait.Engine.html#method.encode" title="method base64::engine::Engine::encode">encode</a> values in memory, or
+<a href="read/struct.DecoderReader.html" title="struct base64::read::DecoderReader"><code>DecoderReader</code></a> and
+<a href="write/struct.EncoderWriter.html" title="struct base64::write::EncoderWriter"><code>EncoderWriter</code></a> provide streaming decoding and
+encoding for any <a href="https://doc.rust-lang.org/1.81.0/std/io/trait.Read.html" title="trait std::io::Read">readable</a> or <a href="https://doc.rust-lang.org/1.81.0/std/io/trait.Write.html" title="trait std::io::Write">writable</a>
+byte stream.</p>
+<h5 id="decoding-1"><a class="doc-anchor" href="#decoding-1">§</a>Decoding</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>base64::{engine::general_purpose::STANDARD, read::DecoderReader};
+
+<span class="kw">let </span><span class="kw-2">mut </span>input = io::stdin();
+<span class="kw">let </span><span class="kw-2">mut </span>decoder = DecoderReader::new(<span class="kw-2">&amp;mut </span>input, <span class="kw-2">&amp;</span>STANDARD);
+io::copy(<span class="kw-2">&amp;mut </span>decoder, <span class="kw-2">&amp;mut </span>io::stdout())<span class="question-mark">?</span>;</code></pre></div>
+<h5 id="encoding-1"><a class="doc-anchor" href="#encoding-1">§</a>Encoding</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>base64::{engine::general_purpose::STANDARD, write::EncoderWriter};
+
+<span class="kw">let </span><span class="kw-2">mut </span>output = io::stdout();
+<span class="kw">let </span><span class="kw-2">mut </span>encoder = EncoderWriter::new(<span class="kw-2">&amp;mut </span>output, <span class="kw-2">&amp;</span>STANDARD);
+io::copy(<span class="kw-2">&amp;mut </span>io::stdin(), <span class="kw-2">&amp;mut </span>encoder)<span class="question-mark">?</span>;</code></pre></div>
+<h5 id="display"><a class="doc-anchor" href="#display">§</a>Display</h5>
+<p>If you only need a base64 representation for implementing the
+<a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Display.html" title="trait core::fmt::Display"><code>Display</code></a> trait, use
+<a href="display/struct.Base64Display.html" title="struct base64::display::Base64Display"><code>Base64Display</code></a>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>base64::{display::Base64Display, engine::general_purpose::STANDARD};
+
+<span class="kw">let </span>value = Base64Display::new(<span class="string">b"\0\x01\x02\x03"</span>, <span class="kw-2">&amp;</span>STANDARD);
+<span class="macro">assert_eq!</span>(<span class="string">"base64: AAECAw=="</span>, <span class="macro">format!</span>(<span class="string">"base64: {}"</span>, value));</code></pre></div>
+<h2 id="panics"><a class="doc-anchor" href="#panics">§</a>Panics</h2>
+<p>If length calculations result in overflowing <code>usize</code>, a panic will result.</p>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.Engine"><code>pub use engine::<a class="trait" href="engine/trait.Engine.html" title="trait base64::engine::Engine">Engine</a>;</code></div></li></ul><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="alphabet/index.html" title="mod base64::alphabet">alphabet</a></div><div class="desc docblock-short">Provides <a href="alphabet/struct.Alphabet.html" title="struct base64::alphabet::Alphabet">Alphabet</a> and constants for alphabets commonly used in the wild.</div></li><li><div class="item-name"><a class="mod" href="display/index.html" title="mod base64::display">display</a></div><div class="desc docblock-short">Enables base64’d output anywhere you might use a <code>Display</code> implementation, like a format string.</div></li><li><div class="item-name"><a class="mod" href="engine/index.html" title="mod base64::engine">engine</a></div><div class="desc docblock-short">Provides the <a href="engine/trait.Engine.html" title="trait base64::engine::Engine">Engine</a> abstraction and out of the box implementations.</div></li><li><div class="item-name"><a class="mod" href="prelude/index.html" title="mod base64::prelude">prelude</a></div><div class="desc docblock-short">Preconfigured engines for common use cases.</div></li><li><div class="item-name"><a class="mod" href="read/index.html" title="mod base64::read">read</a></div><div class="desc docblock-short">Implementations of <code>io::Read</code> to transparently decode base64.</div></li><li><div class="item-name"><a class="mod" href="write/index.html" title="mod base64::write">write</a></div><div class="desc docblock-short">Implementations of <code>io::Write</code> to transparently handle base64.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.DecodeError.html" title="enum base64::DecodeError">DecodeError</a></div><div class="desc docblock-short">Errors that can occur while decoding.</div></li><li><div class="item-name"><a class="enum" href="enum.DecodeSliceError.html" title="enum base64::DecodeSliceError">DecodeSliceError</a></div><div class="desc docblock-short">Errors that can occur while decoding into a slice.</div></li><li><div class="item-name"><a class="enum" href="enum.EncodeSliceError.html" title="enum base64::EncodeSliceError">EncodeSliceError</a></div><div class="desc docblock-short">Errors that can occur while encoding into a slice.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.decode.html" title="fn base64::decode">decode</a><span class="stab deprecated" title="">Deprecated</span></div><div class="desc docblock-short">Decode base64 using the <a href="engine/general_purpose/constant.STANDARD.html" title="constant base64::engine::general_purpose::STANDARD"><code>STANDARD</code> engine</a>.</div></li><li><div class="item-name"><a class="fn" href="fn.decode_engine.html" title="fn base64::decode_engine">decode_engine</a><span class="stab deprecated" title="">Deprecated</span></div><div class="desc docblock-short">Decode from string reference as octets using the specified <a href="engine/trait.Engine.html" title="trait base64::engine::Engine">Engine</a>.</div></li><li><div class="item-name"><a class="fn" href="fn.decode_engine_slice.html" title="fn base64::decode_engine_slice">decode_engine_slice</a><span class="stab deprecated" title="">Deprecated</span></div><div class="desc docblock-short">Decode the input into the provided output slice.</div></li><li><div class="item-name"><a class="fn" href="fn.decode_engine_vec.html" title="fn base64::decode_engine_vec">decode_engine_vec</a><span class="stab deprecated" title="">Deprecated</span></div><div class="desc docblock-short">Decode from string reference as octets.</div></li><li><div class="item-name"><a class="fn" href="fn.decoded_len_estimate.html" title="fn base64::decoded_len_estimate">decoded_len_estimate</a></div><div class="desc docblock-short">Returns a conservative estimate of the decoded size of <code>encoded_len</code> base64 symbols (rounded up
+to the next group of 3 decoded bytes).</div></li><li><div class="item-name"><a class="fn" href="fn.encode.html" title="fn base64::encode">encode</a><span class="stab deprecated" title="">Deprecated</span></div><div class="desc docblock-short">Encode arbitrary octets as base64 using the <a href="engine/general_purpose/constant.STANDARD.html" title="constant base64::engine::general_purpose::STANDARD"><code>STANDARD</code> engine</a>.</div></li><li><div class="item-name"><a class="fn" href="fn.encode_engine.html" title="fn base64::encode_engine">encode_engine</a><span class="stab deprecated" title="">Deprecated</span></div><div class="desc docblock-short">Encode arbitrary octets as base64 using the provided <code>Engine</code> into a new <code>String</code>.</div></li><li><div class="item-name"><a class="fn" href="fn.encode_engine_slice.html" title="fn base64::encode_engine_slice">encode_engine_slice</a><span class="stab deprecated" title="">Deprecated</span></div><div class="desc docblock-short">Encode arbitrary octets as base64 into a supplied slice.</div></li><li><div class="item-name"><a class="fn" href="fn.encode_engine_string.html" title="fn base64::encode_engine_string">encode_engine_string</a><span class="stab deprecated" title="">Deprecated</span></div><div class="desc docblock-short">Encode arbitrary octets as base64 into a supplied <code>String</code>.</div></li><li><div class="item-name"><a class="fn" href="fn.encoded_len.html" title="fn base64::encoded_len">encoded_len</a></div><div class="desc docblock-short">Calculate the base64 encoded length for a given input length, optionally including any
+appropriate padding bytes.</div></li></ul></section></div></main></body></html>

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Format"],"struct":["ConversionError","DateTime","DateTimeFormatError","DateTimeParseError"]};

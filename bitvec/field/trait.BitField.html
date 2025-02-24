@@ -1,0 +1,673 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="C-Style Bit-Field Access"><title>BitField in bitvec::field - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="bitvec" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../bitvec/index.html">bitvec</a><span class="version">1.0.1</span></h2></div><h2 class="location"><a href="#">BitField</a></h2><div class="sidebar-elems"><section><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.load_be">load_be</a></li><li><a href="#tymethod.load_le">load_le</a></li><li><a href="#tymethod.store_be">store_be</a></li><li><a href="#tymethod.store_le">store_le</a></li></ul><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.load">load</a></li><li><a href="#method.store">store</a></li></ul><h3><a href="#object-safety">Object Safety</a></h3><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In bitvec::field</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="../index.html">bitvec</a>::<wbr><a href="index.html">field</a>::<wbr><a class="trait" href="#">BitField</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/bitvec/field.rs.html#42-110">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub trait BitField {
+    // Required methods
+    fn <a href="#tymethod.load_le" class="fn">load_le</a>&lt;I&gt;(&amp;self) -&gt; I
+       <span class="where">where I: <a class="trait" href="../../funty/trait.Integral.html" title="trait funty::Integral">Integral</a></span>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.load_be" class="fn">load_be</a>&lt;I&gt;(&amp;self) -&gt; I
+       <span class="where">where I: <a class="trait" href="../../funty/trait.Integral.html" title="trait funty::Integral">Integral</a></span>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.store_le" class="fn">store_le</a>&lt;I&gt;(&amp;mut self, value: I)
+       <span class="where">where I: <a class="trait" href="../../funty/trait.Integral.html" title="trait funty::Integral">Integral</a></span>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.store_be" class="fn">store_be</a>&lt;I&gt;(&amp;mut self, value: I)
+       <span class="where">where I: <a class="trait" href="../../funty/trait.Integral.html" title="trait funty::Integral">Integral</a></span>;
+
+    // Provided methods
+    fn <a href="#method.load" class="fn">load</a>&lt;I&gt;(&amp;self) -&gt; I
+       <span class="where">where I: <a class="trait" href="../../funty/trait.Integral.html" title="trait funty::Integral">Integral</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.store" class="fn">store</a>&lt;I&gt;(&amp;mut self, value: I)
+       <span class="where">where I: <a class="trait" href="../../funty/trait.Integral.html" title="trait funty::Integral">Integral</a></span> { ... }
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="c-style-bit-field-access"><a class="doc-anchor" href="#c-style-bit-field-access">§</a>C-Style Bit-Field Access</h2>
+<p>This trait describes data transfer between a <a href="../slice/struct.BitSlice.html" title="struct bitvec::slice::BitSlice"><code>BitSlice</code></a> region and an ordinary
+integer. It is not intended for use by any other types than the data structures
+in this crate.</p>
+<p>The methods in this trait always operate on the <code>bitslice.len()</code> least
+significant bits of an integer, and ignore any remaining high bits. When
+loading, any excess high bits not copied out of a bit-slice are cleared to zero.</p>
+<h3 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h3>
+<p>The trait methods all panic if called on a bit-slice that is wider than the
+integer type being transferred. As such, the first step is generally to subslice
+a larger data structure into exactly the region used for storage, with
+<code>bits[start .. end]</code>. Then, call the desired method on the narrowed bit-slice.</p>
+<h3 id="target-specific-behavior"><a class="doc-anchor" href="#target-specific-behavior">§</a>Target-Specific Behavior</h3>
+<p>If you do not care about the details of the memory layout of stored values, you
+can use the <a href="trait.BitField.html#method.load"><code>.load()</code></a> and <a href="trait.BitField.html#method.store"><code>.store()</code></a> unadorned methods. These each forward
+to their <code>_le</code> variant on little-endian targets, and their <code>_be</code> variant on
+big-endian. These will provide a reasonable default behavior, but do not
+guarantee a stable memory layout, and their buffers are not suitable for
+de/serialization.</p>
+<p>If you require a stable memory layout, you will need to choose a <code>BitSlice</code>
+with a fixed <code>O: BitOrder</code> type parameter (not <code>LocalBits</code>), and use a fixed
+method suffix (<code>_le</code> or <code>_be</code>). You should <em>probably</em> also use <code>u8</code> as your
+<code>T: BitStore</code> parameter, in order to avoid any byte-ordering issues. <code>bitvec</code>
+never interferes with processor concepts of wide-integer layout, and always
+relies on the target machine’s behavior for this work.</p>
+<h3 id="element--and-bit--ordering-combinations"><a class="doc-anchor" href="#element--and-bit--ordering-combinations">§</a>Element- and Bit- Ordering Combinations</h3>
+<p>Remember: the <code>_le</code> and <code>_be</code> method suffixes are completely independent of the
+<code>Lsb0</code> and <code>Msb0</code> types! <code>_le</code> and <code>_be</code> refer to the order in which successive
+memory elements are considered to gain numerical significance, while <code>BitOrder</code>
+refers only to the order of successive bits in <em>one</em> memory element.</p>
+<p>The <code>BitField</code> and <code>BitOrder</code> traits are <em><strong>not</strong></em> related.</p>
+<p>When a load or store operation is contained in only one memory element, then the
+<code>_le</code> and <code>_be</code> methods have the same behavior: they exchange an integer value
+with the segment of the element that its governing <code>BitSlice</code> considers live.
+Only when a <code>BitSlice</code> covers multiple elements does the distinction come into
+play.</p>
+<p>The <code>_le</code> methods consider numerical significance to start low and increase with
+increasing memory address, while the <code>_be</code> methods consider numerical
+significance to start high and <em>decrease</em> with increasing memory address. This
+distinction affects the order in which memory elements are used to load or store
+segments of the exchanged integer value.</p>
+<p>Each trait method has detailed visual diagrams in its documentation.
+Additionally, each <em>implementation</em>’s documentation has diagrams that show what
+the governed bit-sections of elements are! Be sure to check each, or to run the
+demonstration with <code>cargo run --example bitfield</code>.</p>
+<h3 id="bitfield-value-types"><a class="doc-anchor" href="#bitfield-value-types">§</a>Bitfield Value Types</h3>
+<p>When interacting with a bit-slice as a C-style bitfield, it can <em>only</em> store the
+signed or unsigned integer types. No other type is permitted, as the
+implementation relies on the 2’s-complement significance behavior of processor
+integers. Record types and floating-point numbers do not have this property, and
+thus have no sensible default protocol for truncation and un/marshalling that
+<code>bitvec</code> can use.</p>
+<p>If you have such a protocol, you may implement it yourself by providing a
+de/serialization transform between your type and the integers. For instance, a
+numerically-correct protocol to store floating-point numbers in bitfields might
+look like this:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>bitvec::mem::bits_of;
+<span class="kw">use </span>funty::Floating;
+
+<span class="kw">fn </span>to_storage&lt;F&gt;(num: F, width: usize) -&gt; F::Raw
+<span class="kw">where </span>F: Floating {
+  num.to_bits() &gt;&gt; (bits_of::&lt;F&gt;() - width)
+}
+
+<span class="kw">fn </span>from_storage&lt;F&gt;(val: F::Raw, width: usize) -&gt; F
+<span class="kw">where </span>F: Floating {
+  F::from_bits(val &lt;&lt; (bits_of::&lt;F&gt;() - width))
+}</code></pre></div>
+<p>This implements truncation in the least-significant bits, where floating-point
+numbers store disposable bits in the mantissa, rather than in the
+most-significant bits which contain the sign, exponent, and most significant
+portion of the mantissa.</p>
+</div></details><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.load_le" class="method"><a class="src rightside" href="../../src/bitvec/field.rs.html#96-97">source</a><h4 class="code-header">fn <a href="#tymethod.load_le" class="fn">load_le</a>&lt;I&gt;(&amp;self) -&gt; I<div class="where">where
+    I: <a class="trait" href="../../funty/trait.Integral.html" title="trait funty::Integral">Integral</a>,</div></h4></section></summary><div class="docblock"><h5 id="little-endian-integer-loading"><a class="doc-anchor" href="#little-endian-integer-loading">§</a>Little-Endian Integer Loading</h5>
+<p>This method loads an integer value from a bit-slice, using little-endian
+significance ordering when the bit-slice spans more than one <code>T</code> element in
+memory.</p>
+<p>Little-endian significance ordering means that if a bit-slice occupies an array
+<code>[A, B, C]</code>, then the bits stored in <code>A</code> are considered to contain the least
+significant segment of the loaded integer, then <code>B</code> contains the middle segment,
+and then <code>C</code> contains the most significant segment.</p>
+<p>The segments are combined in order, that is, as the raw bit-pattern
+<code>0b&lt;padding&gt;&lt;C&gt;&lt;B&gt;&lt;A&gt;</code>. If the destination type is signed, the loaded value is
+sign-extended according to the most-significant bit in the <code>C</code> segment.</p>
+<p>It is important to note that the <code>O: BitOrder</code> parameter of the bit-slice from
+which the value is loaded <strong>does not</strong> affect the bit-pattern of the stored
+segments. They are always stored exactly as they exist in an ordinary integer.
+The ordering parameter only affects <em>which</em> bits in an element are available for
+storage.</p>
+<h6 id="type-parameters"><a class="doc-anchor" href="#type-parameters">§</a>Type Parameters</h6>
+<ul>
+<li><code>I</code>: The integer type being loaded. This can be any of the signed or unsigned
+integers.</li>
+</ul>
+<h6 id="parameters"><a class="doc-anchor" href="#parameters">§</a>Parameters</h6>
+<ul>
+<li><code>&amp;self</code>: A bit-slice region whose length is in the range <code>1 ..= I::BITS</code>.</li>
+</ul>
+<h6 id="returns"><a class="doc-anchor" href="#returns">§</a>Returns</h6>
+<p>The contents of the bit-slice, interpreted as an integer.</p>
+<h6 id="panics"><a class="doc-anchor" href="#panics">§</a>Panics</h6>
+<p>This panics if <code>self.len()</code> is 0, or greater than <code>I::BITS</code>.</p>
+<h6 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h6>
+<p>Let us consider an <code>i32</code> value stored in 24 bits of a <code>BitSlice&lt;u8, Msb0&gt;</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>bitvec::prelude::<span class="kw-2">*</span>;
+
+<span class="kw">let </span><span class="kw-2">mut </span>raw = [<span class="number">0u8</span>; <span class="number">4</span>];
+<span class="kw">let </span>bits = raw.view_bits_mut::&lt;Msb0&gt;();
+
+<span class="kw">let </span>integer = <span class="number">0x00__B4_96_3Cu32 </span><span class="kw">as </span>i32;
+bits[<span class="number">4 </span>.. <span class="number">28</span>].store_le::&lt;i32&gt;(integer);
+<span class="kw">let </span>loaded = bits[<span class="number">4 </span>.. <span class="number">28</span>].load_le::&lt;i32&gt;();
+<span class="macro">assert_eq!</span>(loaded, <span class="number">0xFF__B4_96_3Cu32 </span><span class="kw">as </span>i32);</code></pre></div>
+<p>Observe that, because the lowest 24 bits began with the pattern <code>0b1101…</code>, the
+value was considered to be negative when interpreted as an <code>i24</code> and was
+sign-extended through the highest byte.</p>
+<p>Let us now look at the memory representation of this value:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">assert_eq!</span>(raw, [
+  <span class="number">0b0000_1100</span>,
+<span class="comment">//  dead 0xC
+  </span><span class="number">0b0110_0011</span>,
+<span class="comment">//  0x6  0x3
+  </span><span class="number">0b0100_1001</span>,
+<span class="comment">//  0x4  0x9
+  </span><span class="number">0b1011_0000</span>,
+<span class="comment">//  0xB  dead
+</span>]);</code></pre></div>
+<p>Notice how while the <code>Msb0</code> bit-ordering means that indexing within the
+bit-slice proceeds left-to-right in each element, and the bit-patterns in each
+element proceed left-to-right in the aggregate and the decomposed literals, the
+ordering of the elements is reversed from how the literal was written.</p>
+<p>In the sequence <code>B496</code>, <code>B</code> is the most significant, and so it gets placed
+highest in memory. <code>49</code> fits in one byte, and is stored directly as written.
+Lastly, <code>6</code> is the least significant nibble of the four, and is placed lowest
+in memory.</p>
+<p>Now let’s look at the way different <code>BitOrder</code> parameters interpret the
+placement of bit indices within memory:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>bitvec::prelude::<span class="kw-2">*</span>;
+
+<span class="kw">let </span>raw = [
+<span class="comment">// Bit index   14 ←
+//     Lsb0:  ─┤
+            </span><span class="number">0b0100_0000_0000_0011u16</span>,
+<span class="comment">//     Msb0:                   ├─
+//                           → 14
+
+// Bit index               ← 19 16
+//     Lsb0:                 ├──┤
+            </span><span class="number">0b0001_0000_0000_1110u16</span>,
+<span class="comment">//     Msb0:  ├──┤
+//            16 19 →
+</span>];
+
+<span class="macro">assert_eq!</span>(
+  raw.view_bits::&lt;Lsb0&gt;()
+     [<span class="number">14 </span>.. <span class="number">20</span>]
+     .load_le::&lt;u8&gt;(),
+  <span class="number">0b00_1110_01</span>,
+);
+<span class="macro">assert_eq!</span>(
+  raw.view_bits::&lt;Msb0&gt;()
+     [<span class="number">14 </span>.. <span class="number">20</span>]
+     .load_le::&lt;u8&gt;(),
+  <span class="number">0b00_0001_11</span>,
+);</code></pre></div>
+<p>Notice how the bit-orderings change which <em>parts</em> of the memory are loaded, but
+in both cases the segment in <code>raw[0]</code> is less significant than the segment in
+<code>raw[1]</code>, and the ordering of bits <em>within</em> each segment are unaffected by the
+bit-ordering.</p>
+<h6 id="notes"><a class="doc-anchor" href="#notes">§</a>Notes</h6>
+<p>Be sure to see the documentation for
+<a href="https://docs.rs/bitvec/latest/bitvec/field/trait.BitField.html#method.load_le-3"><code>&lt;BitSlice&lt;_, Lsb0&gt; as BitField&gt;::load_le</code></a> and
+<a href="https://docs.rs/bitvec/latest/bitvec/field/trait.BitField.html#method.load_le-4"><code>&lt;BitSlice&lt;_, Msb0&gt; as Bitfield&gt;::load_le</code></a> for more detailed information
+on the memory views!</p>
+<p>You can view the mask of all <em>storage regions</em> of a bit-slice by using its
+<a href="../slice/struct.BitSlice.html#method.domain" title="method bitvec::slice::BitSlice::domain"><code>.domain()</code></a> method to view the breakdown of its memory region, then print the
+<a href="../domain/struct.PartialElement.html#method.mask" title="method bitvec::domain::PartialElement::mask"><code>.mask()</code></a> of any <a href="../domain/struct.PartialElement.html" title="struct bitvec::domain::PartialElement"><code>PartialElement</code></a> the domain contains. Whole elements are
+always used in their entirety. You should use the <code>domain</code> module’s types
+whenever you are uncertain of the exact locations in memory that a particular
+bit-slice governs.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.load_be" class="method"><a class="src rightside" href="../../src/bitvec/field.rs.html#100-101">source</a><h4 class="code-header">fn <a href="#tymethod.load_be" class="fn">load_be</a>&lt;I&gt;(&amp;self) -&gt; I<div class="where">where
+    I: <a class="trait" href="../../funty/trait.Integral.html" title="trait funty::Integral">Integral</a>,</div></h4></section></summary><div class="docblock"><h5 id="big-endian-integer-loading"><a class="doc-anchor" href="#big-endian-integer-loading">§</a>Big-Endian Integer Loading</h5>
+<p>This method loads an integer value from a bit-slice, using big-endian
+significance ordering when the bit-slice spans more than one <code>T</code> element in
+memory.</p>
+<p>Big-endian significance ordering means that if a bit-slice occupies an array
+<code>[A, B, C]</code>, then the bits stored in <code>A</code> are considered to be the most
+significant segment of the loaded integer, then <code>B</code> contains the middle segment,
+then <code>C</code> contains the least significant segment.</p>
+<p>The segments are combined in order, that is, as the raw bit-pattern
+<code>0b&lt;padding&gt;&lt;A&gt;&lt;B&gt;&lt;C&gt;</code>. If the destination type is signed, the loaded value is
+sign-extended according to the most-significant bit in the <code>A</code> segment.</p>
+<p>It is important to note that the <code>O: BitOrder</code> parameter of the bit-slice from
+which the value is loaded <strong>does not</strong> affect the bit-pattern of the stored
+segments. They are always stored exactly as they exist in an ordinary integer.
+The ordering parameter only affects <em>which</em> bits in an element are available for
+storage.</p>
+<h6 id="type-parameters-1"><a class="doc-anchor" href="#type-parameters-1">§</a>Type Parameters</h6>
+<ul>
+<li><code>I</code>: The integer type being loaded. This can be any of the signed or unsigned
+integers.</li>
+</ul>
+<h6 id="parameters-1"><a class="doc-anchor" href="#parameters-1">§</a>Parameters</h6>
+<ul>
+<li><code>&amp;self</code>: A bit-slice region whose length is in the range <code>1 ..= I::BITS</code>.</li>
+</ul>
+<h6 id="returns-1"><a class="doc-anchor" href="#returns-1">§</a>Returns</h6>
+<p>The contents of the bit-slice, interpreted as an integer.</p>
+<h6 id="panics-1"><a class="doc-anchor" href="#panics-1">§</a>Panics</h6>
+<p>This panics if <code>self.len()</code> is 0, or greater than <code>I::BITS</code>.</p>
+<h6 id="examples-1"><a class="doc-anchor" href="#examples-1">§</a>Examples</h6>
+<p>Let us consider an <code>i32</code> value stored in 24 bits of a <code>BitSlice&lt;u8, Lsb0&gt;</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>bitvec::prelude::<span class="kw-2">*</span>;
+
+<span class="kw">let </span><span class="kw-2">mut </span>raw = [<span class="number">0u8</span>; <span class="number">4</span>];
+<span class="kw">let </span>bits = raw.view_bits_mut::&lt;Lsb0&gt;();
+
+<span class="kw">let </span>integer = <span class="number">0x00__B4_96_3Cu32 </span><span class="kw">as </span>i32;
+bits[<span class="number">4 </span>.. <span class="number">28</span>].store_be::&lt;i32&gt;(integer);
+<span class="kw">let </span>loaded = bits[<span class="number">4 </span>.. <span class="number">28</span>].load_be::&lt;i32&gt;();
+<span class="macro">assert_eq!</span>(loaded, <span class="number">0xFF__B4_96_3Cu32 </span><span class="kw">as </span>i32);</code></pre></div>
+<p>Observe that, because the lowest 24 bits began with the pattern <code>0b1101…</code>, the
+value was considered to be negative when interpreted as an <code>i24</code> and was
+sign-extended through the highest byte.</p>
+<p>Let us now look at the memory representation of this value:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">assert_eq!</span>(raw, [
+  <span class="number">0b1011_0000</span>,
+<span class="comment">//  0xB  dead
+  </span><span class="number">0b0100_1001</span>,
+<span class="comment">//  0x4  0x9
+  </span><span class="number">0b0110_0011</span>,
+<span class="comment">//  0x6  0x3
+  </span><span class="number">0b0000_1100</span>,
+<span class="comment">//  dead 0xC
+</span>]);</code></pre></div>
+<p>Notice how while the <code>Lsb0</code> bit-ordering means that indexing within the
+bit-slice proceeds right-to-left in each element, the actual bit-patterns stored
+in memory are not affected. Element <code>[0]</code> is more numerically significant than
+element <code>[1]</code>, but bit <code>[4]</code> is not more numerically significant than bit <code>[5]</code>.</p>
+<p>In the sequence <code>B496</code>, <code>B</code> is the most significant, and so it gets placed
+lowest in memory. <code>49</code> fits in one byte, and is stored directly as written.
+Lastly, <code>6</code> is the least significant nibble of the four, and is placed highest
+in memory.</p>
+<p>Now let’s look at the way different <code>BitOrder</code> parameters interpret the
+placement of bit indices within memory:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>bitvec::prelude::<span class="kw-2">*</span>;
+
+<span class="kw">let </span>raw = [
+<span class="comment">// Bit index   14 ←
+//     Lsb0:  ─┤
+            </span><span class="number">0b0100_0000_0000_0011u16</span>,
+<span class="comment">//     Msb0:                   ├─
+//                           → 14
+
+// Bit index               ← 19 16
+//     Lsb0:                 ├──┤
+            </span><span class="number">0b0001_0000_0000_1110u16</span>,
+<span class="comment">//     Msb0:  ├──┤
+//            16 19 →
+</span>];
+
+<span class="macro">assert_eq!</span>(
+  raw.view_bits::&lt;Lsb0&gt;()
+     [<span class="number">14 </span>.. <span class="number">20</span>]
+     .load_be::&lt;u8&gt;(),
+  <span class="number">0b00_01_1110</span>,
+);
+<span class="macro">assert_eq!</span>(
+  raw.view_bits::&lt;Msb0&gt;()
+     [<span class="number">14 </span>.. <span class="number">20</span>]
+     .load_be::&lt;u8&gt;(),
+  <span class="number">0b00_11_0001</span>,
+);</code></pre></div>
+<p>Notice how the bit-orderings change which <em>parts</em> of the memory are loaded, but
+in both cases the segment in <code>raw[0]</code> is more significant than the segment in
+<code>raw[1]</code>, and the ordering of bits <em>within</em> each segment are unaffected by the
+bit-ordering.</p>
+<h6 id="notes-1"><a class="doc-anchor" href="#notes-1">§</a>Notes</h6>
+<p>Be sure to see the documentation for
+<a href="https://docs.rs/bitvec/latest/bitvec/field/trait.BitField.html#method.load_be-3"><code>&lt;BitSlice&lt;_, Lsb0&gt; as BitField&gt;::load_be</code></a> and
+<a href="https://docs.rs/bitvec/latest/bitvec/field/trait.BitField.html#method.load_be-4"><code>&lt;BitSlice&lt;_, Msb0&gt; as Bitfield&gt;::load_be</code></a> for more detailed information
+on the memory views!</p>
+<p>You can view the mask of all <em>storage regions</em> of a bit-slice by using its
+<a href="../slice/struct.BitSlice.html#method.domain" title="method bitvec::slice::BitSlice::domain"><code>.domain()</code></a> method to view the breakdown of its memory region, then print the
+<a href="../domain/struct.PartialElement.html#method.mask" title="method bitvec::domain::PartialElement::mask"><code>.mask()</code></a> of any <a href="../domain/struct.PartialElement.html" title="struct bitvec::domain::PartialElement"><code>PartialElement</code></a> the domain contains. Whole elements are
+always used in their entirety. You should use the <code>domain</code> module’s types
+whenever you are uncertain of the exact locations in memory that a particular
+bit-slice governs.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.store_le" class="method"><a class="src rightside" href="../../src/bitvec/field.rs.html#104-105">source</a><h4 class="code-header">fn <a href="#tymethod.store_le" class="fn">store_le</a>&lt;I&gt;(&amp;mut self, value: I)<div class="where">where
+    I: <a class="trait" href="../../funty/trait.Integral.html" title="trait funty::Integral">Integral</a>,</div></h4></section></summary><div class="docblock"><h5 id="little-endian-integer-storing"><a class="doc-anchor" href="#little-endian-integer-storing">§</a>Little-Endian Integer Storing</h5>
+<p>This method stores an integer value into a bit-slice, using little-endian
+significance ordering when the bit-slice spans more than one <code>T</code> element in
+memory.</p>
+<p>Little-endian significance ordering means that if a bit-slice occupies an array
+<code>[A, B, C]</code>, then the bits stored in <code>A</code> are considered to contain the least
+significant segment of the stored integer, then <code>B</code> contains the middle segment,
+and then <code>C</code> contains the most significant segment.</p>
+<p>An integer is broken into segments in order, that is, the raw bit-pattern is
+fractured into <code>0b&lt;padding&gt;&lt;C&gt;&lt;B&gt;&lt;A&gt;</code>. High bits beyond the length of the
+bit-slice into which the integer is stored are truncated.</p>
+<p>It is important to note that the <code>O: BitOrder</code> parameter of the bit-slice into
+which the value is stored <strong>does not</strong> affect the bit-pattern of the stored
+segments. They are always stored exactly as they exist in an ordinary integer.
+The ordering parameter only affects <em>which</em> bits in an element are available for
+storage.</p>
+<h6 id="type-parameters-2"><a class="doc-anchor" href="#type-parameters-2">§</a>Type Parameters</h6>
+<ul>
+<li><code>I</code>: The integer type being stored. This can be any of the signed or unsigned
+integers.</li>
+</ul>
+<h6 id="parameters-2"><a class="doc-anchor" href="#parameters-2">§</a>Parameters</h6>
+<ul>
+<li><code>&amp;mut self</code>: A bit-slice region whose length is in the range <code>1 ..= I::BITS</code>.</li>
+<li><code>value</code>: An integer value whose <code>self.len()</code> least numerically significant
+bits will be written into <code>self</code>.</li>
+</ul>
+<h6 id="panics-2"><a class="doc-anchor" href="#panics-2">§</a>Panics</h6>
+<p>This panics if <code>self.len()</code> is 0, or greater than <code>I::BITS</code>.</p>
+<h6 id="examples-2"><a class="doc-anchor" href="#examples-2">§</a>Examples</h6>
+<p>Let us consider an <code>i32</code> value stored in 24 bits of a <code>BitSlice&lt;u8, Msb0&gt;</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>bitvec::prelude::<span class="kw-2">*</span>;
+
+<span class="kw">let </span><span class="kw-2">mut </span>raw = [<span class="number">0u8</span>; <span class="number">4</span>];
+<span class="kw">let </span>bits = raw.view_bits_mut::&lt;Msb0&gt;();
+
+<span class="kw">let </span>integer = <span class="number">0x00__B4_96_3Cu32 </span><span class="kw">as </span>i32;
+bits[<span class="number">4 </span>.. <span class="number">28</span>].store_le::&lt;i32&gt;(integer);
+<span class="kw">let </span>loaded = bits[<span class="number">4 </span>.. <span class="number">28</span>].load_le::&lt;i32&gt;();
+<span class="macro">assert_eq!</span>(loaded, <span class="number">0xFF__B4_96_3Cu32 </span><span class="kw">as </span>i32);</code></pre></div>
+<p>Observe that, because the lowest 24 bits began with the pattern <code>0b1101…</code>, the
+value was considered to be negative when interpreted as an <code>i24</code> and was
+sign-extended through the highest byte.</p>
+<p>Let us now look at the memory representation of this value:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">assert_eq!</span>(raw, [
+  <span class="number">0b0000_1100</span>,
+<span class="comment">//  dead 0xC
+  </span><span class="number">0b0110_0011</span>,
+<span class="comment">//  0x6  0x3
+  </span><span class="number">0b0100_1001</span>,
+<span class="comment">//  0x4  0x9
+  </span><span class="number">0b1011_0000</span>,
+<span class="comment">//  0xB  dead
+</span>]);</code></pre></div>
+<p>Notice how while the <code>Msb0</code> bit-ordering means that indexing within the
+bit-slice proceeds left-to-right in each element, and the bit-patterns in each
+element proceed left-to-right in the aggregate and the decomposed literals, the
+ordering of the elements is reversed from how the literal was written.</p>
+<p>In the sequence <code>B496</code>, <code>B</code> is the most significant, and so it gets placed
+highest in memory. <code>49</code> fits in one byte, and is stored directly as written.
+Lastly, <code>6</code> is the least significant nibble of the four, and is placed lowest
+in memory.</p>
+<p>Now let’s look at the way different <code>BitOrder</code> parameters interpret the
+placement of bit indices within memory:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>bitvec::prelude::<span class="kw-2">*</span>;
+
+<span class="kw">let </span>raw = [
+<span class="comment">// Bit index   14 ←
+//     Lsb0:  ─┤
+            </span><span class="number">0b0100_0000_0000_0011u16</span>,
+<span class="comment">//     Msb0:                   ├─
+//                           → 14
+
+// Bit index               ← 19 16
+//     Lsb0:                 ├──┤
+            </span><span class="number">0b0001_0000_0000_1110u16</span>,
+<span class="comment">//     Msb0:  ├──┤
+//            16 19 →
+</span>];
+
+<span class="macro">assert_eq!</span>(
+  raw.view_bits::&lt;Lsb0&gt;()
+     [<span class="number">14 </span>.. <span class="number">20</span>]
+     .load_le::&lt;u8&gt;(),
+  <span class="number">0b00_1110_01</span>,
+);
+<span class="macro">assert_eq!</span>(
+  raw.view_bits::&lt;Msb0&gt;()
+     [<span class="number">14 </span>.. <span class="number">20</span>]
+     .load_le::&lt;u8&gt;(),
+  <span class="number">0b00_0001_11</span>,
+);</code></pre></div>
+<p>Notice how the bit-orderings change which <em>parts</em> of the memory are loaded, but
+in both cases the segment in <code>raw[0]</code> is less significant than the segment in
+<code>raw[1]</code>, and the ordering of bits <em>within</em> each segment are unaffected by the
+bit-ordering.</p>
+<h6 id="notes-2"><a class="doc-anchor" href="#notes-2">§</a>Notes</h6>
+<p>Be sure to see the documentation for
+<a href="https://docs.rs/bitvec/latest/bitvec/field/trait.BitField.html#method.store_le-3"><code>&lt;BitSlice&lt;_, Lsb0&gt; as BitField&gt;::store_le</code></a> and
+<a href="https://docs.rs/bitvec/latest/bitvec/field/trait.BitField.html#method.store_le-4"><code>&lt;BitSlice&lt;_, Msb0&gt; as Bitfield&gt;::store_le</code></a> for more detailed information
+on the memory views!</p>
+<p>You can view the mask of all <em>storage regions</em> of a bit-slice by using its
+<a href="../slice/struct.BitSlice.html#method.domain" title="method bitvec::slice::BitSlice::domain"><code>.domain()</code></a> method to view the breakdown of its memory region, then print the
+<a href="../domain/struct.PartialElement.html#method.mask" title="method bitvec::domain::PartialElement::mask"><code>.mask()</code></a> of any <a href="../domain/struct.PartialElement.html" title="struct bitvec::domain::PartialElement"><code>PartialElement</code></a> the domain contains. Whole elements are
+always used in their entirety. You should use the <code>domain</code> module’s types
+whenever you are uncertain of the exact locations in memory that a particular
+bit-slice governs.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.store_be" class="method"><a class="src rightside" href="../../src/bitvec/field.rs.html#108-109">source</a><h4 class="code-header">fn <a href="#tymethod.store_be" class="fn">store_be</a>&lt;I&gt;(&amp;mut self, value: I)<div class="where">where
+    I: <a class="trait" href="../../funty/trait.Integral.html" title="trait funty::Integral">Integral</a>,</div></h4></section></summary><div class="docblock"><h5 id="big-endian-integer-storing"><a class="doc-anchor" href="#big-endian-integer-storing">§</a>Big-Endian Integer Storing</h5>
+<p>This method stores an integer value into a bit-slice, using big-endian
+significance ordering when the bit-slice spans more than one <code>T</code> element in
+memory.</p>
+<p>Big-endian significance ordering means that if a bit-slice occupies an array
+<code>[A, B, C]</code>, then the bits stored in <code>A</code> are considered to contain the most
+significant segment of the stored integer, then <code>B</code> contains the middle segment,
+and then <code>C</code> contains the least significant segment.</p>
+<p>An integer is broken into segments in order, that is, the raw bit-pattern is
+fractured into <code>0b&lt;padding&gt;&lt;A&gt;&lt;B&gt;&lt;C&gt;</code>. High bits beyond the length of the
+bit-slice into which the integer is stored are truncated.</p>
+<p>It is important to note that the <code>O: BitOrder</code> parameter of the bit-slice into
+which the value is stored <strong>does not</strong> affect the bit-pattern of the stored
+segments. They are always stored exactly as they exist in an ordinary integer.
+The ordering parameter only affects <em>which</em> bits in an element are available for
+storage.</p>
+<h6 id="type-parameters-3"><a class="doc-anchor" href="#type-parameters-3">§</a>Type Parameters</h6>
+<ul>
+<li><code>I</code>: The integer type being stored. This can be any of the signed or unsigned
+integers.</li>
+</ul>
+<h6 id="parameters-3"><a class="doc-anchor" href="#parameters-3">§</a>Parameters</h6>
+<ul>
+<li><code>&amp;mut self</code>: A bit-slice region whose length is in the range <code>1 ..= I::BITS</code>.</li>
+<li><code>value</code>: An integer value whose <code>self.len()</code> least numerically significant
+bits will be written into <code>self</code>.</li>
+</ul>
+<h6 id="panics-3"><a class="doc-anchor" href="#panics-3">§</a>Panics</h6>
+<p>This panics if <code>self.len()</code> is 0, or greater than <code>I::BITS</code>.</p>
+<h6 id="examples-3"><a class="doc-anchor" href="#examples-3">§</a>Examples</h6>
+<p>Let us consider an <code>i32</code> value stored in 24 bits of a <code>BitSlice&lt;u8, Lsb0&gt;</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>bitvec::prelude::<span class="kw-2">*</span>;
+
+<span class="kw">let </span><span class="kw-2">mut </span>raw = [<span class="number">0u8</span>; <span class="number">4</span>];
+<span class="kw">let </span>bits = raw.view_bits_mut::&lt;Lsb0&gt;();
+
+<span class="kw">let </span>integer = <span class="number">0x00__B4_96_3Cu32 </span><span class="kw">as </span>i32;
+bits[<span class="number">4 </span>.. <span class="number">28</span>].store_be::&lt;i32&gt;(integer);
+<span class="kw">let </span>loaded = bits[<span class="number">4 </span>.. <span class="number">28</span>].load_be::&lt;i32&gt;();
+<span class="macro">assert_eq!</span>(loaded, <span class="number">0xFF__B4_96_3Cu32 </span><span class="kw">as </span>i32);</code></pre></div>
+<p>Observe that, because the lowest 24 bits began with the pattern <code>0b1101…</code>, the
+value was considered to be negative when interpreted as an <code>i24</code> and was
+sign-extended through the highest byte.</p>
+<p>Let us now look at the memory representation of this value:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">assert_eq!</span>(raw, [
+  <span class="number">0b1011_0000</span>,
+<span class="comment">//  0xB  dead
+  </span><span class="number">0b0100_1001</span>,
+<span class="comment">//  0x4  0x9
+  </span><span class="number">0b0110_0011</span>,
+<span class="comment">//  0x6  0x3
+  </span><span class="number">0b0000_1100</span>,
+<span class="comment">//  dead 0xC
+</span>]);</code></pre></div>
+<p>Notice how while the <code>Lsb0</code> bit-ordering means that indexing within the
+bit-slice proceeds right-to-left in each element, the actual bit-patterns stored
+in memory are not affected. Element <code>[0]</code> is more numerically significant than
+element <code>[1]</code>, but bit <code>[4]</code> is not more numerically significant than bit <code>[5]</code>.</p>
+<p>In the sequence <code>B496</code>, <code>B</code> is the most significant, and so it gets placed
+lowest in memory. <code>49</code> fits in one byte, and is stored directly as written.
+Lastly, <code>6</code> is the least significant nibble of the four, and is placed highest
+in memory.</p>
+<p>Now let’s look at the way different <code>BitOrder</code> parameters interpret the
+placement of bit indices within memory:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>bitvec::prelude::<span class="kw-2">*</span>;
+
+<span class="kw">let </span>raw = [
+<span class="comment">// Bit index   14 ←
+//     Lsb0:  ─┤
+            </span><span class="number">0b0100_0000_0000_0011u16</span>,
+<span class="comment">//     Msb0:                   ├─
+//                           → 14
+
+// Bit index               ← 19 16
+//     Lsb0:                 ├──┤
+            </span><span class="number">0b0001_0000_0000_1110u16</span>,
+<span class="comment">//     Msb0:  ├──┤
+//            16 19 →
+</span>];
+
+<span class="macro">assert_eq!</span>(
+  raw.view_bits::&lt;Lsb0&gt;()
+     [<span class="number">14 </span>.. <span class="number">20</span>]
+     .load_be::&lt;u8&gt;(),
+  <span class="number">0b00_01_1110</span>,
+);
+<span class="macro">assert_eq!</span>(
+  raw.view_bits::&lt;Msb0&gt;()
+     [<span class="number">14 </span>.. <span class="number">20</span>]
+     .load_be::&lt;u8&gt;(),
+  <span class="number">0b00_11_0001</span>,
+);</code></pre></div>
+<p>Notice how the bit-orderings change which <em>parts</em> of the memory are loaded, but
+in both cases the segment in <code>raw[0]</code> is more significant than the segment in
+<code>raw[1]</code>, and the ordering of bits <em>within</em> each segment are unaffected by the
+bit-ordering.</p>
+<h6 id="notes-3"><a class="doc-anchor" href="#notes-3">§</a>Notes</h6>
+<p>Be sure to see the documentation for
+<a href="https://docs.rs/bitvec/latest/bitvec/field/trait.BitField.html#method.store_be-3"><code>&lt;BitSlice&lt;_, Lsb0&gt; as BitField&gt;::store_be</code></a> and
+<a href="https://docs.rs/bitvec/latest/bitvec/field/trait.BitField.html#method.store_be-4"><code>&lt;BitSlice&lt;_, Msb0&gt; as Bitfield&gt;::store_be</code></a> for more detailed information
+on the memory views!</p>
+<p>You can view the mask of all <em>storage regions</em> of a bit-slice by using its
+<a href="../slice/struct.BitSlice.html#method.domain" title="method bitvec::slice::BitSlice::domain"><code>.domain()</code></a> method to view the breakdown of its memory region, then print the
+<a href="../domain/struct.PartialElement.html#method.mask" title="method bitvec::domain::PartialElement::mask"><code>.mask()</code></a> of any <a href="../domain/struct.PartialElement.html" title="struct bitvec::domain::PartialElement"><code>PartialElement</code></a> the domain contains. Whole elements are
+always used in their entirety. You should use the <code>domain</code> module’s types
+whenever you are uncertain of the exact locations in memory that a particular
+bit-slice governs.</p>
+</div></details></div><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.load" class="method"><a class="src rightside" href="../../src/bitvec/field.rs.html#46-67">source</a><h4 class="code-header">fn <a href="#method.load" class="fn">load</a>&lt;I&gt;(&amp;self) -&gt; I<div class="where">where
+    I: <a class="trait" href="../../funty/trait.Integral.html" title="trait funty::Integral">Integral</a>,</div></h4></section></summary><div class="docblock"><h5 id="integer-loading"><a class="doc-anchor" href="#integer-loading">§</a>Integer Loading</h5>
+<p>This method reads the contents of a bit-slice region as an integer. The region
+may be shorter than the destination integer type, in which case the loaded value
+will be zero-extended (when <code>I: Unsigned</code>) or sign-extended from the most
+significant loaded bit (when <code>I: Signed</code>).</p>
+<p>The region may not be zero bits, nor wider than the destination type. Attempting
+to load a <code>u32</code> from a bit-slice of length 33 will panic the program.</p>
+<h6 id="operation-and-endianness-handling"><a class="doc-anchor" href="#operation-and-endianness-handling">§</a>Operation and Endianness Handling</h6>
+<p>Each element in the bit-slice contains a segment of the value to be loaded. If
+the bit-slice contains more than one element, then the numerical significance of
+each loaded segment is interpreted according to the target’s endianness:</p>
+<ul>
+<li>little-endian targets consider each <em><code>T</code> element</em> to have increasing numerical
+significance, starting with the least-significant segment at the low address
+and ending with the most-significant segment at the high address.</li>
+<li>big-endian targets consider each <em><code>T</code> element</em> to have decreasing numerical
+significance, starting with the most-significant segment at the high address
+and ending with the least-significant segment at the low address.</li>
+</ul>
+<p>See the documentation for <a href="trait.BitField.html#tymethod.load_le"><code>.load_le()</code></a> and <a href="trait.BitField.html#tymethod.load_be"><code>.load_be()</code></a> for more detail on
+what this means for how the in-memory representation of bit-slices translates to
+loaded values.</p>
+<p>You must always use the loading method that exactly corresponds to the storing
+method previously used to insert data into the bit-slice: same suffix on the
+method name (none, <code>_le</code>, <code>_be</code>) and same integer type. <code>bitvec</code> is not required
+to, and will not, guarantee round-trip consistency if you change any of these
+parameters.</p>
+<h6 id="type-parameters-4"><a class="doc-anchor" href="#type-parameters-4">§</a>Type Parameters</h6>
+<ul>
+<li><code>I</code>: The integer type being loaded. This can be any of the signed or unsigned
+integers.</li>
+</ul>
+<h6 id="parameters-4"><a class="doc-anchor" href="#parameters-4">§</a>Parameters</h6>
+<ul>
+<li><code>&amp;self</code>: A bit-slice region whose length is in the range <code>1 ..= I::BITS</code>.</li>
+</ul>
+<h6 id="returns-2"><a class="doc-anchor" href="#returns-2">§</a>Returns</h6>
+<p>The contents of the bit-slice, interpreted as an integer.</p>
+<h6 id="panics-4"><a class="doc-anchor" href="#panics-4">§</a>Panics</h6>
+<p>This panics if <code>self.len()</code> is 0, or greater than <code>I::BITS</code>.</p>
+<h6 id="examples-4"><a class="doc-anchor" href="#examples-4">§</a>Examples</h6>
+<p>This method is inherently non-portable, and changes behavior depending on the
+target characteristics. If your target is little-endian, see <a href="trait.BitField.html#tymethod.load_le"><code>.load_le()</code></a>; if
+your target is big-endian, see <a href="trait.BitField.html#tymethod.load_be"><code>.load_be()</code></a>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.store" class="method"><a class="src rightside" href="../../src/bitvec/field.rs.html#72-93">source</a><h4 class="code-header">fn <a href="#method.store" class="fn">store</a>&lt;I&gt;(&amp;mut self, value: I)<div class="where">where
+    I: <a class="trait" href="../../funty/trait.Integral.html" title="trait funty::Integral">Integral</a>,</div></h4></section></summary><div class="docblock"><h5 id="integer-storing"><a class="doc-anchor" href="#integer-storing">§</a>Integer Storing</h5>
+<p>This method writes an integer into the contents of a bit-slice region. The
+region may be shorter than the source integer type, in which case the stored
+value will be truncated. On load, it may be zero-extended (unsigned destination)
+or sign-extended from the most significant <strong>stored</strong> bit (signed destination).</p>
+<p>The region may not be zero bits, nor wider than the source type. Attempting
+to store a <code>u32</code> into a bit-slice of length 33 will panic the program.</p>
+<h6 id="operation-and-endianness-handling-1"><a class="doc-anchor" href="#operation-and-endianness-handling-1">§</a>Operation and Endianness Handling</h6>
+<p>The value to be stored is broken into segments according to the elements of the
+bit-slice receiving it. If the bit-slice contains more than one element, then
+the numerical significance of each segment routes to a storage element according
+to the target’s endianness:</p>
+<ul>
+<li>little-endian targets consider each <em><code>T</code> element</em> to have increasing numerical
+significance, starting with the least-significant segment at the low address
+and ending with the most-significant segment at the high address.</li>
+<li>big-endian targets consider each <em><code>T</code> element</em> to have decreasing numerical
+significance, starting with the most-significant segment at the high address
+and ending with the least-significant segment at the low address.</li>
+</ul>
+<p>See the documentation for <a href="trait.BitField.html#tymethod.store_le"><code>.store_le()</code></a> and <a href="trait.BitField.html#tymethod.store_be"><code>.store_be()</code></a> for more detail on
+what this means for how the in-memory representation of bit-slices translates to
+stored values.</p>
+<p>You must always use the loading method that exactly corresponds to the storing
+method previously used to insert data into the bit-slice: same suffix on the
+method name (none, <code>_le</code>, <code>_be</code>) and same integer type. <code>bitvec</code> is not required
+to, and will not, guarantee round-trip consistency if you change any of these
+parameters.</p>
+<h6 id="type-parameters-5"><a class="doc-anchor" href="#type-parameters-5">§</a>Type Parameters</h6>
+<ul>
+<li><code>I</code>: The integer type being stored. This can be any of the signed or unsigned
+integers.</li>
+</ul>
+<h6 id="parameters-5"><a class="doc-anchor" href="#parameters-5">§</a>Parameters</h6>
+<ul>
+<li><code>&amp;self</code>: A bit-slice region whose length is in the range <code>1 ..= I::BITS</code>.</li>
+<li><code>value</code>: An integer value whose <code>self.len()</code> least numerically significant
+bits will be written into <code>self</code>.</li>
+</ul>
+<h6 id="panics-5"><a class="doc-anchor" href="#panics-5">§</a>Panics</h6>
+<p>This panics if <code>self.len()</code> is 0, or greater than <code>I::BITS</code>.</p>
+<h6 id="examples-5"><a class="doc-anchor" href="#examples-5">§</a>Examples</h6>
+<p>This method is inherently non-portable, and changes behavior depending on the
+target characteristics. If your target is little-endian, see <a href="trait.BitField.html#tymethod.store_le"><code>.store_le()</code></a>; if
+your target is big-endian, see <a href="trait.BitField.html#tymethod.store_be"><code>.store_be()</code></a>.</p>
+</div></details></div><h2 id="object-safety" class="section-header">Object Safety<a href="#object-safety" class="anchor">§</a></h2><div class="object-safety-info">This trait is <b>not</b> <a href="https://doc.rust-lang.org/1.81.0/reference/items/traits.html#object-safety">object safe</a>.</div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><section id="impl-BitField-for-BitArray%3CA,+O%3E" class="impl"><a class="src rightside" href="../../src/bitvec/field.rs.html#392-441">source</a><a href="#impl-BitField-for-BitArray%3CA,+O%3E" class="anchor">§</a><h3 class="code-header">impl&lt;A, O&gt; <a class="trait" href="trait.BitField.html" title="trait bitvec::field::BitField">BitField</a> for <a class="struct" href="../array/struct.BitArray.html" title="struct bitvec::array::BitArray">BitArray</a>&lt;A, O&gt;<div class="where">where
+    O: <a class="trait" href="../order/trait.BitOrder.html" title="trait bitvec::order::BitOrder">BitOrder</a>,
+    A: <a class="trait" href="../view/trait.BitViewSized.html" title="trait bitvec::view::BitViewSized">BitViewSized</a>,
+    <a class="struct" href="../slice/struct.BitSlice.html" title="struct bitvec::slice::BitSlice">BitSlice</a>&lt;A::<a class="associatedtype" href="../view/trait.BitView.html#associatedtype.Store" title="type bitvec::view::BitView::Store">Store</a>, O&gt;: <a class="trait" href="trait.BitField.html" title="trait bitvec::field::BitField">BitField</a>,</div></h3></section><div class="docblock"><h4 id="bit-array-implementation-of-bitfield"><a class="doc-anchor" href="#bit-array-implementation-of-bitfield">§</a>Bit-Array Implementation of <code>BitField</code></h4>
+<p>The <code>BitArray</code> implementation is only ever called when the entire bit-array is
+available for use, which means it can skip the bit-slice memory detection and
+instead use the underlying storage elements directly.</p>
+<p>The implementation still performs the segmentation for each element contained in
+the array, in order to maintain value consistency so that viewing the array as a
+bit-slice is still able to correctly interact with data contained in it.</p>
+</div><section id="impl-BitField-for-BitSlice%3CT%3E" class="impl"><a class="src rightside" href="../../src/bitvec/field.rs.html#113-247">source</a><a href="#impl-BitField-for-BitSlice%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="trait.BitField.html" title="trait bitvec::field::BitField">BitField</a> for <a class="struct" href="../slice/struct.BitSlice.html" title="struct bitvec::slice::BitSlice">BitSlice</a>&lt;T, <a class="struct" href="../order/struct.Lsb0.html" title="struct bitvec::order::Lsb0">Lsb0</a>&gt;<div class="where">where
+    T: <a class="trait" href="../store/trait.BitStore.html" title="trait bitvec::store::BitStore">BitStore</a>,</div></h3></section><div class="docblock"><h4 id="lsb0-bit-field-behavior"><a class="doc-anchor" href="#lsb0-bit-field-behavior">§</a><code>Lsb0</code> Bit-Field Behavior</h4>
+<p><code>BitField</code> has no requirements about the in-memory representation or layout of
+stored integers within a bit-slice, only that round-tripping an integer through
+a store and a load of the same element suffix on the same bit-slice is
+idempotent (with respect to sign truncation).</p>
+<p><code>Lsb0</code> provides a contiguous translation from bit-index to real memory: for any
+given bit index <code>n</code> and its position <code>P(n)</code>, <code>P(n + 1)</code> is <code>P(n) + 1</code>. This
+allows it to provide batched behavior: since the section of contiguous indices
+used within an element translates to a section of contiguous bits in real
+memory, the transaction is always a single shift/mask operation.</p>
+<p>Each implemented method contains documentation and examples showing exactly how
+the abstract integer space is mapped to real memory.</p>
+</div><section id="impl-BitField-for-BitSlice%3CT,+Msb0%3E" class="impl"><a class="src rightside" href="../../src/bitvec/field.rs.html#250-389">source</a><a href="#impl-BitField-for-BitSlice%3CT,+Msb0%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="trait.BitField.html" title="trait bitvec::field::BitField">BitField</a> for <a class="struct" href="../slice/struct.BitSlice.html" title="struct bitvec::slice::BitSlice">BitSlice</a>&lt;T, <a class="struct" href="../order/struct.Msb0.html" title="struct bitvec::order::Msb0">Msb0</a>&gt;<div class="where">where
+    T: <a class="trait" href="../store/trait.BitStore.html" title="trait bitvec::store::BitStore">BitStore</a>,</div></h3></section><div class="docblock"><h4 id="msb0-bit-field-behavior"><a class="doc-anchor" href="#msb0-bit-field-behavior">§</a><code>Msb0</code> Bit-Field Behavior</h4>
+<p><code>BitField</code> has no requirements about the in-memory representation or layout of
+stored integers within a bit-slice, only that round-tripping an integer through
+a store and a load of the same element suffix on the same bit-slice is
+idempotent (with respect to sign truncation).</p>
+<p><code>Msb0</code> provides a contiguous translation from bit-index to real memory: for any
+given bit index <code>n</code> and its position <code>P(n)</code>, <code>P(n + 1)</code> is <code>P(n) - 1</code>. This
+allows it to provide batched behavior: since the section of contiguous indices
+used within an element translates to a section of contiguous bits in real
+memory, the transaction is always a single shift-mask operation.</p>
+<p>Each implemented method contains documentation and examples showing exactly how
+the abstract integer space is mapped to real memory.</p>
+<h5 id="notes-4"><a class="doc-anchor" href="#notes-4">§</a>Notes</h5>
+<p>In particular, note that while <code>Msb0</code> indexes bits from the most significant
+down to the least, and integers index from the least up to the most, this
+<strong>does not</strong> reörder any bits of the integer value! This ordering only finds a
+region in real memory; it does <em>not</em> affect the partial-integer contents stored
+in that region.</p>
+</div><section id="impl-BitField-for-BitBox%3CT,+O%3E" class="impl"><a class="src rightside" href="../../src/bitvec/field.rs.html#445-474">source</a><a href="#impl-BitField-for-BitBox%3CT,+O%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T, O&gt; <a class="trait" href="trait.BitField.html" title="trait bitvec::field::BitField">BitField</a> for <a class="struct" href="../boxed/struct.BitBox.html" title="struct bitvec::boxed::BitBox">BitBox</a>&lt;T, O&gt;<div class="where">where
+    T: <a class="trait" href="../store/trait.BitStore.html" title="trait bitvec::store::BitStore">BitStore</a>,
+    O: <a class="trait" href="../order/trait.BitOrder.html" title="trait bitvec::order::BitOrder">BitOrder</a>,
+    <a class="struct" href="../slice/struct.BitSlice.html" title="struct bitvec::slice::BitSlice">BitSlice</a>&lt;T, O&gt;: <a class="trait" href="trait.BitField.html" title="trait bitvec::field::BitField">BitField</a>,</div></h3></section><section id="impl-BitField-for-BitVec%3CT,+O%3E" class="impl"><a class="src rightside" href="../../src/bitvec/field.rs.html#478-507">source</a><a href="#impl-BitField-for-BitVec%3CT,+O%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T, O&gt; <a class="trait" href="trait.BitField.html" title="trait bitvec::field::BitField">BitField</a> for <a class="struct" href="../vec/struct.BitVec.html" title="struct bitvec::vec::BitVec">BitVec</a>&lt;T, O&gt;<div class="where">where
+    T: <a class="trait" href="../store/trait.BitStore.html" title="trait bitvec::store::BitStore">BitStore</a>,
+    O: <a class="trait" href="../order/trait.BitOrder.html" title="trait bitvec::order::BitOrder">BitOrder</a>,
+    <a class="struct" href="../slice/struct.BitSlice.html" title="struct bitvec::slice::BitSlice">BitSlice</a>&lt;T, O&gt;: <a class="trait" href="trait.BitField.html" title="trait bitvec::field::BitField">BitField</a>,</div></h3></section></div><script src="../../trait.impl/bitvec/field/trait.BitField.js" async></script></section></div></main></body></html>

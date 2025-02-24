@@ -1,0 +1,74 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="URI and IRI resolvers."><title>iri_string::resolve - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="iri_string" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../iri_string/index.html">iri_string</a><span class="version">0.7.7</span></h2></div><h2 class="location"><a href="#">Module resolve</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#structs">Structs</a></li></ul></section><h2><a href="../index.html">In crate iri_string</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">iri_string</a>::<wbr><a class="mod" href="#">resolve</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/iri_string/resolve.rs.html#1-344">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>URI and IRI resolvers.</p>
+<h2 id="iri-resolution-can-fail-without-whatwg-url-standard-serialization"><a class="doc-anchor" href="#iri-resolution-can-fail-without-whatwg-url-standard-serialization">§</a>IRI resolution can fail without WHATWG URL Standard serialization</h2><h3 id="pure-rfc-3986-algorithm"><a class="doc-anchor" href="#pure-rfc-3986-algorithm">§</a>Pure RFC 3986 algorithm</h3>
+<p>Though this is not explicitly stated in RFC 3986, IRI resolution can fail.
+Below are examples:</p>
+<ul>
+<li>base=<code>scheme:</code>, ref=<code>.///bar</code>.
+<ul>
+<li>Resulting IRI should have scheme <code>scheme</code> and path <code>//bar</code>, but does not have authority.</li>
+</ul>
+</li>
+<li>base=<code>scheme:foo</code>, ref=<code>.///bar</code>.
+<ul>
+<li>Resulting IRI should have scheme <code>scheme</code> and path <code>//bar</code>, but does not have authority.</li>
+</ul>
+</li>
+<li>base=<code>scheme:</code>, ref=<code>/..//baz</code>.
+<ul>
+<li>Resulting IRI should have scheme <code>scheme</code> and path <code>//bar</code>, but does not have authority.</li>
+</ul>
+</li>
+<li>base=<code>scheme:foo/bar</code>, ref=<code>..//baz</code>.
+<ul>
+<li>Resulting IRI should have scheme <code>scheme</code> and path <code>//bar</code>, but does not have authority.</li>
+</ul>
+</li>
+</ul>
+<p>IRI without authority (note that this is different from “with empty authority”)
+cannot have a path starting with <code>//</code>, since it is ambiguous and can be
+interpreted as an IRI with authority. For the above examples, <code>scheme://bar</code>
+is not valid output, as <code>bar</code> in <code>scheme://bar</code> will be interpreted as an
+authority, not a path.</p>
+<p>Thus, IRI resolution by pure RFC 3986 algorithm can fail for some abnormal
+cases.</p>
+<p>Note that this kind of failure can happen only when the base IRI has no
+authority and empty path. This would be rare in the wild, since many people
+would use an IRI with authority part, such as <code>http://</code>.</p>
+<p>If you are handling <code>scheme://</code>-style URIs and IRIs, don’t worry about the
+failure. Currently no cases are known to fail when at least one of the base
+IRI or the relative IRI contains authorities.</p>
+<p>If you want this kind of abnormal IRI resolution to succeed and to be
+idempotent, check the resolution result using
+<a href="../normalize/struct.Normalized.html#method.ensure_rfc3986_normalizable" title="method iri_string::normalize::Normalized::ensure_rfc3986_normalizable"><code>Normalized::ensure_rfc3986_normalizable</code></a> (see the section below).</p>
+<h3 id="whatwg-serialization"><a class="doc-anchor" href="#whatwg-serialization">§</a>WHATWG serialization</h3>
+<p>To handle IRI resolution failure, WHATWG URL Standard defines serialization
+algorithm for this kind of result, and it makes IRI resolution (and even
+normalization) infallible and idempotent.</p>
+<p>IRI resolution and normalization provided by this crate automatically
+applies this special rule if necessary, so they are infallible. If you want
+to detect resolution/normalization failure, use
+<a href="../normalize/struct.Normalized.html#method.ensure_rfc3986_normalizable" title="method iri_string::normalize::Normalized::ensure_rfc3986_normalizable"><code>Normalized::ensure_rfc3986_normalizable</code></a> method.</p>
+<h3 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>iri_string::format::ToDedicatedString;
+<span class="kw">use </span>iri_string::types::{IriAbsoluteStr, IriReferenceStr};
+
+<span class="kw">let </span>base = IriAbsoluteStr::new(<span class="string">"scheme:"</span>)<span class="question-mark">?</span>;
+{
+    <span class="kw">let </span>reference = IriReferenceStr::new(<span class="string">".///not-a-host"</span>)<span class="question-mark">?</span>;
+    <span class="kw">let </span>result = reference.resolve_against(base);
+    <span class="macro">assert!</span>(result.ensure_rfc3986_normalizable().is_err());
+    <span class="macro">assert_eq!</span>(result.to_dedicated_string(), <span class="string">"scheme:/.//not-a-host"</span>);
+}
+
+{
+    <span class="kw">let </span>reference2 = IriReferenceStr::new(<span class="string">"/..//not-a-host"</span>)<span class="question-mark">?</span>;
+    <span class="comment">// Resulting string will be `scheme://not-a-host`, but `not-a-host`
+    // should be a path segment, not a host. So, the semantically correct
+    // target IRI cannot be represented by RFC 3986 IRI resolution.
+    </span><span class="kw">let </span>result2 = reference2.resolve_against(base);
+    <span class="macro">assert!</span>(result2.ensure_rfc3986_normalizable().is_err());
+
+    <span class="comment">// Algorithm defined in WHATWG URL Standard addresses this case.
+    </span><span class="macro">assert_eq!</span>(result2.to_dedicated_string(), <span class="string">"scheme:/.//not-a-host"</span>);
+}</code></pre></div>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.FixedBaseResolver.html" title="struct iri_string::resolve::FixedBaseResolver">FixedBaseResolver</a></div><div class="desc docblock-short">A resolver against the fixed base.</div></li></ul></section></div></main></body></html>

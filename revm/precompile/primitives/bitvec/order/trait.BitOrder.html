@@ -1,0 +1,144 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="In-Element Bit Ordering"><title>BitOrder in revm::precompile::primitives::bitvec::order - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../../../" data-static-root-path="../../../../../static.files/" data-current-crate="revm" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../../../revm/index.html">revm</a><span class="version">19.4.0</span></h2></div><h2 class="location"><a href="#">BitOrder</a></h2><div class="sidebar-elems"><section><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.at">at</a></li></ul><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.mask">mask</a></li><li><a href="#method.select">select</a></li></ul><h3><a href="#object-safety">Object Safety</a></h3><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In revm::precompile::primitives::bitvec::order</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="../../../../index.html">revm</a>::<wbr><a href="../../../index.html">precompile</a>::<wbr><a href="../../index.html">primitives</a>::<wbr><a href="../index.html">bitvec</a>::<wbr><a href="index.html">order</a>::<wbr><a class="trait" href="#">BitOrder</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../../../src/bitvec/order.rs.html#18">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub unsafe trait BitOrder: 'static {
+    // Required method
+    fn <a href="#tymethod.at" class="fn">at</a>&lt;R&gt;(index: <a class="struct" href="../index/struct.BitIdx.html" title="struct revm::precompile::primitives::bitvec::index::BitIdx">BitIdx</a>&lt;R&gt;) -&gt; <a class="struct" href="../index/struct.BitPos.html" title="struct revm::precompile::primitives::bitvec::index::BitPos">BitPos</a>&lt;R&gt;
+       <span class="where">where R: <a class="trait" href="../mem/trait.BitRegister.html" title="trait revm::precompile::primitives::bitvec::mem::BitRegister">BitRegister</a></span>;
+
+    // Provided methods
+    fn <a href="#method.select" class="fn">select</a>&lt;R&gt;(index: <a class="struct" href="../index/struct.BitIdx.html" title="struct revm::precompile::primitives::bitvec::index::BitIdx">BitIdx</a>&lt;R&gt;) -&gt; <a class="struct" href="../index/struct.BitSel.html" title="struct revm::precompile::primitives::bitvec::index::BitSel">BitSel</a>&lt;R&gt;
+       <span class="where">where R: <a class="trait" href="../mem/trait.BitRegister.html" title="trait revm::precompile::primitives::bitvec::mem::BitRegister">BitRegister</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.mask" class="fn">mask</a>&lt;R&gt;(
+        from: impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../index/struct.BitIdx.html" title="struct revm::precompile::primitives::bitvec::index::BitIdx">BitIdx</a>&lt;R&gt;&gt;&gt;,
+        upto: impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../index/struct.BitEnd.html" title="struct revm::precompile::primitives::bitvec::index::BitEnd">BitEnd</a>&lt;R&gt;&gt;&gt;,
+    ) -&gt; <a class="struct" href="../index/struct.BitMask.html" title="struct revm::precompile::primitives::bitvec::index::BitMask">BitMask</a>&lt;R&gt;
+       <span class="where">where R: <a class="trait" href="../mem/trait.BitRegister.html" title="trait revm::precompile::primitives::bitvec::mem::BitRegister">BitRegister</a></span> { ... }
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="in-element-bit-ordering"><a class="doc-anchor" href="#in-element-bit-ordering">§</a>In-Element Bit Ordering</h2>
+<p>This trait manages the translation of semantic bit indices into electrical
+positions within storage elements of a memory region.</p>
+<h3 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h3>
+<p><code>bitvec</code> APIs operate on semantic index counters that exist in an abstract
+memory space independently of the real memory that underlies them. In order to
+affect real memory, <code>bitvec</code> must translate these indices into real values. The
+<a href="../prelude/trait.BitOrder.html#tymethod.at" title="associated function bitvec::order::BitOrder::at::at"><code>at</code></a> function maps abstract index values into their corresponding real
+positions that can then be used to access memory.</p>
+<p>You will likely never call any of the trait functions yourself. They are used by
+<code>bitvec</code> internals to operate on memory regions; all you need to do is provide
+an implementation of this trait as a type parameter to <code>bitvec</code> data structures.</p>
+<h3 id="safety"><a class="doc-anchor" href="#safety">§</a>Safety</h3>
+<p><code>BitOrder</code> is unsafe to implement because its translation of index to position
+cannot be forcibly checked by <code>bitvec</code> itself, and an improper implementation
+will lead to memory unsafety errors and unexpected collisions. The trait has
+strict requirements for each function. If these are not upheld, then the
+implementation is considered undefined at the library level and its use may
+produce incorrect or undefined behavior during compilation.</p>
+<p>You are responsible for running <a href="fn.verify_for_type.html" title="fn revm::precompile::primitives::bitvec::order::verify_for_type"><code>verify_for_type</code></a> or <a href="fn.verify.html" title="fn revm::precompile::primitives::bitvec::order::verify"><code>verify</code></a> in your test
+suite if you implement <code>BitOrder</code>.</p>
+<h3 id="implementation-rules"><a class="doc-anchor" href="#implementation-rules">§</a>Implementation Rules</h3>
+<p>Values of this type are never constructed or passed to <code>bitvec</code> functions. Your
+implementation does not need to be zero-sized, but it will never have access to
+an instance to view its state. It <em>may</em> refer to other global state, but per the
+rules of <code>at</code>, that state may not change while any <code>bitvec</code> data structures are
+alive.</p>
+<p>The only function you <em>need</em> to provide is <code>at</code>. Its requirements are listed in
+its trait documentation.</p>
+<p>You <em>may</em> also choose to provide implementations of <code>select</code> and <code>mask</code>. These
+have a default implementation that is correct, but may be unoptimized for your
+implementation. As such, you may replace them with a better version, but your
+implementation of these functions must be exactly equal to the default
+implementation for all possible inputs.</p>
+<p>This requirement is checked by the <code>verify_for_type</code> function.</p>
+<h3 id="verification"><a class="doc-anchor" href="#verification">§</a>Verification</h3>
+<p>The <code>verify_for_type</code> function verifies that a <code>BitOrder</code> implementation is
+correct for a single <code>BitStore</code> implementor, and the <code>verify</code> function runs
+<code>verify_for_type</code> on all unsigned integers that implement <code>BitStore</code> on a
+target. If you run these functions in your test suite, they will provide
+detailed information if your implementation is incorrect.</p>
+<h3 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h3>
+<p>Implementations are not required to remain contiguous over a register, and may
+have any mapping they wish as long as it is total and bijective. This example
+swizzles the high and low halves of each byte.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>bitvec::{
+  order::BitOrder,
+  index::{BitIdx, BitPos},
+  mem::BitRegister,
+};
+
+<span class="kw">pub struct </span>HiLo;
+
+<span class="kw">unsafe impl </span>BitOrder <span class="kw">for </span>HiLo {
+  <span class="kw">fn </span>at&lt;R&gt;(index: BitIdx&lt;R&gt;) -&gt; BitPos&lt;R&gt;
+  <span class="kw">where </span>R: BitRegister {
+    <span class="kw">unsafe </span>{ BitPos::new_unchecked(index.into_inner() ^ <span class="number">4</span>) }
+  }
+}
+
+<span class="attr">#[test]
+#[cfg(test)]
+</span><span class="kw">fn </span>prove_hilo() {
+  bitvec::order::verify::&lt;HiLo&gt;();
+}</code></pre></div>
+<p>Once a <code>BitOrder</code> implementation passes the test suite, it can be freely used as
+a type parameter in <code>bitvec</code> data structures. The translation takes place
+automatically, and you never need to look at this trait again.</p>
+</div></details><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.at" class="method"><a class="src rightside" href="../../../../../src/bitvec/order.rs.html#61-62">source</a><h4 class="code-header">fn <a href="#tymethod.at" class="fn">at</a>&lt;R&gt;(index: <a class="struct" href="../index/struct.BitIdx.html" title="struct revm::precompile::primitives::bitvec::index::BitIdx">BitIdx</a>&lt;R&gt;) -&gt; <a class="struct" href="../index/struct.BitPos.html" title="struct revm::precompile::primitives::bitvec::index::BitPos">BitPos</a>&lt;R&gt;<div class="where">where
+    R: <a class="trait" href="../mem/trait.BitRegister.html" title="trait revm::precompile::primitives::bitvec::mem::BitRegister">BitRegister</a>,</div></h4></section></summary><div class="docblock"><p>Translates a semantic bit index into a real bit position.</p>
+<p>This function is the basis of the trait, and must adhere to a number of
+requirements in order for an implementation to be correct.</p>
+<h6 id="type-parameters"><a class="doc-anchor" href="#type-parameters">§</a>Type Parameters</h6>
+<ul>
+<li><code>R</code>: The memory element type that the index and position govern.</li>
+</ul>
+<h6 id="parameters"><a class="doc-anchor" href="#parameters">§</a>Parameters</h6>
+<ul>
+<li><code>index</code>: A semantic bit-index within some <code>R</code> element.</li>
+</ul>
+<h6 id="returns"><a class="doc-anchor" href="#returns">§</a>Returns</h6>
+<p>The real position of the indexed bit within an <code>R</code> element. See the
+<code>BitPos</code> documentation for what these positions are considered to mean.</p>
+<h6 id="requirements"><a class="doc-anchor" href="#requirements">§</a>Requirements</h6>
+<p>This function must satisfy the following requirements for all possible
+input and output values, for all possible <code>R</code> type parameters:</p>
+<ul>
+<li>Totality: The implementation must be able to accept every input in
+<a href="../index/struct.BitIdx.html#method.range_all" title="associated function revm::precompile::primitives::bitvec::index::BitIdx::range_all"><code>BitIdx::&lt;R&gt;::range_all()</code></a>, and produce some <code>BitPos</code> value for
+each.</li>
+<li>Bijection: There must be an exactly one-to-one correspondence between
+input and output values. No input index may choose its output from a
+set of more than one position, and no output position may be produced
+by more than one input index.</li>
+<li>Purity: The translation from index to position must be consistent for
+the lifetime of <em>at least</em> all data structures in the program. This
+function <em>may</em> refer to global state, but that state <strong>must</strong> be
+immutable while any <code>bitvec</code> data structures exist, and must not be
+used to violate the totality or bijection requirements.</li>
+<li>Validity: The produced <code>BitPos</code> value must be within the valid range
+of its type. This is enforced by <a href="../index/struct.BitPos.html#method.new" title="associated function revm::precompile::primitives::bitvec::index::BitPos::new"><code>BitPos::new</code></a>, but not by the
+unsafe constructor <a href="../index/struct.BitPos.html#method.new_unchecked" title="associated function revm::precompile::primitives::bitvec::index::BitPos::new_unchecked"><code>BitPos::new_unchecked</code></a>.</li>
+</ul>
+</div></details></div><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.select" class="method"><a class="src rightside" href="../../../../../src/bitvec/order.rs.html#71-72">source</a><h4 class="code-header">fn <a href="#method.select" class="fn">select</a>&lt;R&gt;(index: <a class="struct" href="../index/struct.BitIdx.html" title="struct revm::precompile::primitives::bitvec::index::BitIdx">BitIdx</a>&lt;R&gt;) -&gt; <a class="struct" href="../index/struct.BitSel.html" title="struct revm::precompile::primitives::bitvec::index::BitSel">BitSel</a>&lt;R&gt;<div class="where">where
+    R: <a class="trait" href="../mem/trait.BitRegister.html" title="trait revm::precompile::primitives::bitvec::mem::BitRegister">BitRegister</a>,</div></h4></section></summary><div class="docblock"><p>Produces a single-bit selection mask from a bit-index.</p>
+<p>This is an optional function: it is implemented as, and must always be
+exactly identical to, <code>BitOrder::at(index).select()</code>. If your ordering
+has a faster implementation, you may provide it, but it must be exactly
+numerically equivalent.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.mask" class="method"><a class="src rightside" href="../../../../../src/bitvec/order.rs.html#99-104">source</a><h4 class="code-header">fn <a href="#method.mask" class="fn">mask</a>&lt;R&gt;(
+    from: impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../index/struct.BitIdx.html" title="struct revm::precompile::primitives::bitvec::index::BitIdx">BitIdx</a>&lt;R&gt;&gt;&gt;,
+    upto: impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../index/struct.BitEnd.html" title="struct revm::precompile::primitives::bitvec::index::BitEnd">BitEnd</a>&lt;R&gt;&gt;&gt;,
+) -&gt; <a class="struct" href="../index/struct.BitMask.html" title="struct revm::precompile::primitives::bitvec::index::BitMask">BitMask</a>&lt;R&gt;<div class="where">where
+    R: <a class="trait" href="../mem/trait.BitRegister.html" title="trait revm::precompile::primitives::bitvec::mem::BitRegister">BitRegister</a>,</div></h4></section></summary><div class="docblock"><p>Produces a multi-bit selection mask from a range of bit-indices.</p>
+<p>This is an optional function: it is implemented as, and must always be
+exactly identical to,
+<code>BitIdx::range(from, upto).map(BitOrder::select).sum()</code>. If your
+ordering has a faster implementation, you may provide it, but it must be
+exactly numerically equivalent.</p>
+<h6 id="parameters-1"><a class="doc-anchor" href="#parameters-1">§</a>Parameters</h6>
+<ul>
+<li><code>from</code>: The inclusive starting value of the indices being selected.
+Defaults to <a href="../index/struct.BitIdx.html#associatedconstant.MIN" title="associated constant revm::precompile::primitives::bitvec::index::BitIdx::MIN"><code>BitIdx::MIN</code></a>.</li>
+<li><code>upto</code>: The exclusive ending value of the indices being selected.
+Defaults to <a href="../index/struct.BitEnd.html#associatedconstant.MAX" title="associated constant revm::precompile::primitives::bitvec::index::BitEnd::MAX"><code>BitEnd::MAX</code></a>.</li>
+</ul>
+<h6 id="returns-1"><a class="doc-anchor" href="#returns-1">§</a>Returns</h6>
+<p>A selection mask with all bit-positions corresponding to <code>from .. upto</code>
+selected.</p>
+</div></details></div><h2 id="object-safety" class="section-header">Object Safety<a href="#object-safety" class="anchor">§</a></h2><div class="object-safety-info">This trait is <b>not</b> <a href="https://doc.rust-lang.org/1.81.0/reference/items/traits.html#object-safety">object safe</a>.</div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><section id="impl-BitOrder-for-Lsb0" class="impl"><a class="src rightside" href="../../../../../src/bitvec/order.rs.html#124">source</a><a href="#impl-BitOrder-for-Lsb0" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="../prelude/trait.BitOrder.html" title="trait revm::precompile::primitives::bitvec::prelude::BitOrder">BitOrder</a> for <a class="struct" href="../prelude/struct.Lsb0.html" title="struct revm::precompile::primitives::bitvec::prelude::Lsb0">Lsb0</a></h3></section><section id="impl-BitOrder-for-Msb0" class="impl"><a class="src rightside" href="../../../../../src/bitvec/order.rs.html#171">source</a><a href="#impl-BitOrder-for-Msb0" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="../prelude/trait.BitOrder.html" title="trait revm::precompile::primitives::bitvec::prelude::BitOrder">BitOrder</a> for <a class="struct" href="../prelude/struct.Msb0.html" title="struct revm::precompile::primitives::bitvec::prelude::Msb0">Msb0</a></h3></section></div><script src="../../../../../trait.impl/bitvec/order/trait.BitOrder.js" data-ignore-extern-crates="bitvec" async></script></section></div></main></body></html>

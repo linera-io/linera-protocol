@@ -1,0 +1,56 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A library for defining enums that can be used in compact bit sets. It supports arbitrarily large enums, and has very basic support for using them in constants."><title>enumset - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="enumset" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../enumset/index.html">enumset</a><span class="version">1.1.5</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#macros">Macros</a></li><li><a href="#structs">Structs</a></li><li><a href="#traits">Traits</a></li><li><a href="#derives">Derive Macros</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">enumset</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/enumset/lib.rs.html#1-203">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A library for defining enums that can be used in compact bit sets. It supports arbitrarily
+large enums, and has very basic support for using them in constants.</p>
+<h2 id="cargo-features"><a class="doc-anchor" href="#cargo-features">§</a>Cargo Features</h2>
+<p>The following cargo features are available for this crate:</p>
+<ul>
+<li><code>serde</code>: Allows serialization and deserialization of the types in this crate.</li>
+<li><code>alloc</code>: Enables the use of functions that requires an allocator.</li>
+<li><code>proc-macro-crate</code>: Enable the use of the <code>proc-macro-crate</code> crate to allow the renaming of
+the <code>enumset</code> crate in your user crate. This feature increases the MSRV to 1.69.0</li>
+</ul>
+<h2 id="defining-enums-for-use-with-enumset"><a class="doc-anchor" href="#defining-enums-for-use-with-enumset">§</a>Defining enums for use with EnumSet</h2>
+<p>Enums to be used with <a href="struct.EnumSet.html" title="struct enumset::EnumSet"><code>EnumSet</code></a> should be defined using <code>#[derive(EnumSetType)]</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(EnumSetType, Debug)]
+</span><span class="kw">pub enum </span>Enum {
+   A, B, C, D, E, F, G,
+}</code></pre></div>
+<p>For more information on more advanced use cases, see the documentation for
+<a href="./derive.EnumSetType.html"><code>#[derive(EnumSetType)]</code></a>.</p>
+<h2 id="working-with-enumsets"><a class="doc-anchor" href="#working-with-enumsets">§</a>Working with EnumSets</h2>
+<p>EnumSets can be constructed via <a href="struct.EnumSet.html#method.new" title="associated function enumset::EnumSet::new"><code>EnumSet::new()</code></a> like a normal set. In addition,
+<code>#[derive(EnumSetType)]</code> creates operator overloads that allow you to create EnumSets like so:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>new_set = Enum::A | Enum::C | Enum::G;
+<span class="macro">assert_eq!</span>(new_set.len(), <span class="number">3</span>);</code></pre></div>
+<p>All bitwise operations you would expect to work on bitsets also work on both EnumSets and
+enums with <code>#[derive(EnumSetType)]</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// Intersection of sets
+</span><span class="macro">assert_eq!</span>((Enum::A | Enum::B) &amp; Enum::C, EnumSet::empty());
+<span class="macro">assert_eq!</span>((Enum::A | Enum::B) &amp; Enum::A, Enum::A);
+<span class="macro">assert_eq!</span>(Enum::A &amp; Enum::B, EnumSet::empty());
+
+<span class="comment">// Symmetric difference of sets
+</span><span class="macro">assert_eq!</span>((Enum::A | Enum::B) ^ (Enum::B | Enum::C), Enum::A | Enum::C);
+<span class="macro">assert_eq!</span>(Enum::A ^ Enum::C, Enum::A | Enum::C);
+
+<span class="comment">// Difference of sets
+</span><span class="macro">assert_eq!</span>((Enum::A | Enum::B | Enum::C) - Enum::B, Enum::A | Enum::C);
+
+<span class="comment">// Complement of sets
+</span><span class="macro">assert_eq!</span>(!(Enum::E | Enum::G), Enum::A | Enum::B | Enum::C | Enum::D | Enum::F);</code></pre></div>
+<p>The <a href="macro.enum_set.html" title="macro enumset::enum_set"><code>enum_set!</code></a> macro allows you to create EnumSets in constant contexts:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">const </span>CONST_SET: EnumSet&lt;Enum&gt; = <span class="macro">enum_set!</span>(Enum::A | Enum::B);
+<span class="macro">assert_eq!</span>(CONST_SET, Enum::A | Enum::B);</code></pre></div>
+<p>Mutable operations on the <a href="struct.EnumSet.html" title="struct enumset::EnumSet"><code>EnumSet</code></a> otherwise similarly to Rust’s builtin sets:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span><span class="kw-2">mut </span>set = EnumSet::new();
+set.insert(Enum::A);
+set.insert_all(Enum::E | Enum::G);
+<span class="macro">assert!</span>(set.contains(Enum::A));
+<span class="macro">assert!</span>(!set.contains(Enum::B));
+<span class="macro">assert_eq!</span>(set, Enum::A | Enum::E | Enum::G);</code></pre></div>
+</div></details><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="macro" href="macro.enum_set.html" title="macro enumset::enum_set">enum_set</a></div><div class="desc docblock-short">Creates a EnumSet literal, which can be used in const contexts.</div></li><li><div class="item-name"><a class="macro" href="macro.enum_set_complement.html" title="macro enumset::enum_set_complement">enum_set_complement</a></div><div class="desc docblock-short">Computes the complement of an enums or constants enumset at compile time.</div></li><li><div class="item-name"><a class="macro" href="macro.enum_set_difference.html" title="macro enumset::enum_set_difference">enum_set_difference</a></div><div class="desc docblock-short">Computes the difference of multiple enums or constants enumset at compile time.</div></li><li><div class="item-name"><a class="macro" href="macro.enum_set_intersection.html" title="macro enumset::enum_set_intersection">enum_set_intersection</a></div><div class="desc docblock-short">Computes the intersection of multiple enums or constants enumset at compile time.</div></li><li><div class="item-name"><a class="macro" href="macro.enum_set_symmetric_difference.html" title="macro enumset::enum_set_symmetric_difference">enum_set_symmetric_difference</a></div><div class="desc docblock-short">Computes the symmetric difference of multiple enums or constants enumset at compile time.</div></li><li><div class="item-name"><a class="macro" href="macro.enum_set_union.html" title="macro enumset::enum_set_union">enum_set_union</a></div><div class="desc docblock-short">Computes the union of multiple enums or constants enumset at compile time.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.EnumSet.html" title="struct enumset::EnumSet">EnumSet</a></div><div class="desc docblock-short">An efficient set type for enums.</div></li><li><div class="item-name"><a class="struct" href="struct.EnumSetIter.html" title="struct enumset::EnumSetIter">EnumSetIter</a></div><div class="desc docblock-short">The iterator used by <a href="struct.EnumSet.html" title="struct enumset::EnumSet"><code>EnumSet</code></a>s.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.EnumSetType.html" title="trait enumset::EnumSetType">EnumSetType</a></div><div class="desc docblock-short">The trait used to define enum types that may be used with <a href="struct.EnumSet.html" title="struct enumset::EnumSet"><code>EnumSet</code></a>.</div></li><li><div class="item-name"><a class="trait" href="trait.EnumSetTypeWithRepr.html" title="trait enumset::EnumSetTypeWithRepr">EnumSetTypeWithRepr</a></div><div class="desc docblock-short">An <a href="trait.EnumSetType.html" title="trait enumset::EnumSetType"><code>EnumSetType</code></a> for which <a href="struct.EnumSet.html" title="struct enumset::EnumSet"><code>EnumSet</code></a>s have a guaranteed in-memory representation.</div></li></ul><h2 id="derives" class="section-header">Derive Macros<a href="#derives" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="derive" href="derive.EnumSetType.html" title="derive enumset::EnumSetType">EnumSetType</a></div><div class="desc docblock-short">The procedural macro used to derive <a href="trait.EnumSetType.html" title="trait enumset::EnumSetType"><code>EnumSetType</code></a>, and allow enums to be used with
+<a href="struct.EnumSet.html" title="struct enumset::EnumSet"><code>EnumSet</code></a>.</div></li></ul></section></div></main></body></html>

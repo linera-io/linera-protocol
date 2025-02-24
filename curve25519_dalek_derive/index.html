@@ -1,0 +1,161 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A more convenient `#[target_feature]` replacement"><title>curve25519_dalek_derive - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="curve25519_dalek_derive" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../curve25519_dalek_derive/index.html">curve25519_dalek_derive</a><span class="version">0.1.1</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#attributes">Attribute Macros</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">curve25519_dalek_derive</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/curve25519_dalek_derive/lib.rs.html#1-466">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="a-more-convenient-target_feature-replacement"><a class="doc-anchor" href="#a-more-convenient-target_feature-replacement">§</a>A more convenient <code>#[target_feature]</code> replacement</h2>
+<p>To get good performance out of SIMD everything on the SIMD codepath must be inlined.
+With how SIMD is currently implemented in Rust one of two things have to be true for
+a function using SIMD to be inlinable: (and this includes the SIMD intrinsics themselves)</p>
+<p>a) The whole program has to be compiled with the relevant <code>-C target-cpu</code> or <code>-C target-feature</code> flags.</p>
+<p>b) SIMD support must be automatically detected at runtime, and every function on the SIMD codepath must be marked with <code>#[target_feature]</code>.</p>
+<p>Both have their downsides. Setting the <code>target-cpu</code> or <code>target-features</code> makes the resulting binary
+incompatible with older CPUs, while using <code>#[target_feature]</code> is incredibly inconvenient.</p>
+<p>This crate is meant to make <code>#[target_feature]</code> less painful to use.</p>
+<h3 id="problems-with-target_feature"><a class="doc-anchor" href="#problems-with-target_feature">§</a>Problems with <code>#[target_feature]</code></h3>
+<p>When we’re not compiling with the relevant <code>target-cpu</code>/<code>target-feature</code> flags everything on
+the SIMD codepath must be marked with the <code>#[target_feature]</code> attribute. This is not a problem
+when all of your SIMD code is neatly encapsulated inside of a single function, but once you start
+to build out more elaborate abstractions it starts to become painful to use.</p>
+<ul>
+<li>
+<p>It can only be used on <code>unsafe</code> functions, so everything on your SIMD codepath now has to be <code>unsafe</code>.</p>
+<p>In theory this is nice - these functions require the relevant SIMD instructions to be present at runtime,
+so calling them without checking is obviously unsafe! But in practice this is rarely what you want. When
+you build an abstraction over SIMD code you usually want to assume that <em>internally</em> within your module
+all of the necessary SIMD instructions are available, and you only want to check this at the boundaries
+when you’re first entering your module. You do <em>not</em> want to infect everything <em>inside</em> of the module with
+<code>unsafe</code> since you’ve already checked this invariant at the module’s API boundary.</p>
+</li>
+<li>
+<p>It cannot be used on non-<code>unsafe</code> trait methods.</p>
+<p>If you’re implementing a trait, say for example <code>std::ops::Add</code>, then you cannot mark the method <code>unsafe</code>
+unless the original trait also has it marked as <code>unsafe</code>, and usually it doesn’t.</p>
+</li>
+<li>
+<p>It makes it impossible to abstract over a given SIMD instruction set using a trait.</p>
+<p>For example, let’s assume you want to abstract over which SIMD instructions you use using a trait in the following way:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">trait </span>Backend {
+    <span class="kw">unsafe fn </span>sum(input: <span class="kw-2">&amp;</span>[u32]) -&gt; u32;
+}
+
+<span class="kw">struct </span>AVX;
+<span class="kw">impl </span>Backend <span class="kw">for </span>AVX {
+    <span class="attr">#[target_feature(enable = <span class="string">"avx"</span>)]
+    </span><span class="kw">unsafe fn </span>sum(xs: <span class="kw-2">&amp;</span>[u32]) -&gt; u32 {
+        <span class="comment">// ...
+        </span><span class="macro">todo!</span>();
+    }
+}
+
+<span class="kw">struct </span>AVX2;
+<span class="kw">impl </span>Backend <span class="kw">for </span>AVX2 {
+    <span class="attr">#[target_feature(enable = <span class="string">"avx2"</span>)]
+    </span><span class="kw">unsafe fn </span>sum(xs: <span class="kw-2">&amp;</span>[u32]) -&gt; u32 {
+        <span class="comment">// ...
+        </span><span class="macro">todo!</span>();
+    }
+}
+
+<span class="comment">// And now you want a have function which calls into that trait:
+</span><span class="kw">unsafe fn </span>do_calculations&lt;B&gt;(xs: <span class="kw-2">&amp;</span>[u32]) -&gt; u32 <span class="kw">where </span>B: Backend {
+    <span class="kw">let </span>value = B::sum(xs);
+    <span class="comment">// ...do some more calculations here...
+    </span>value
+}</code></pre></div>
+<p>We have a problem here. This has to be marked with <code>#[target_feature]</code>, and that has to specify the concrete
+feature flag for a given SIMD instruction set, but this function is generic so we can’t do that!</p>
+</li>
+</ul>
+<h3 id="how-does-this-crate-make-it-better"><a class="doc-anchor" href="#how-does-this-crate-make-it-better">§</a>How does this crate make it better?</h3><h4 id="you-can-now-mark-safe-functions-with-target_feature"><a class="doc-anchor" href="#you-can-now-mark-safe-functions-with-target_feature">§</a>You can now mark safe functions with <code>#[target_feature]</code></h4>
+<p>This crate exposes an <code>#[unsafe_target_feature]</code> macro which works just like <code>#[target_feature]</code> except
+it moves the <code>unsafe</code> from the function prototype into the macro name, and can be used on safe functions.</p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="comment">// ERROR: `#[target_feature(..)]` can only be applied to `unsafe` functions
+</span><span class="attr">#[target_feature(enable = <span class="string">"avx2"</span>)]
+</span><span class="kw">fn </span>func() {}</code></pre></div>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// It works, but must be `unsafe`
+</span><span class="attr">#[target_feature(enable = <span class="string">"avx2"</span>)]
+</span><span class="kw">unsafe fn </span>func() {}</code></pre></div>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>curve25519_dalek_derive::unsafe_target_feature;
+
+<span class="comment">// No `unsafe` on the function itself!
+</span><span class="attr">#[unsafe_target_feature(<span class="string">"avx2"</span>)]
+</span><span class="kw">fn </span>func() {}</code></pre></div>
+<p>It can also be used to mark functions inside of impls:</p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">struct </span>S;
+
+<span class="kw">impl </span>core::ops::Add <span class="kw">for </span>S {
+    <span class="kw">type </span>Output = S;
+    <span class="comment">// ERROR: method `add` has an incompatible type for trait
+    </span><span class="attr">#[target_feature(enable = <span class="string">"avx2"</span>)]
+    </span><span class="kw">unsafe fn </span>add(<span class="self">self</span>, rhs: S) -&gt; S {
+        S
+    }
+}</code></pre></div>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>curve25519_dalek_derive::unsafe_target_feature;
+
+<span class="kw">struct </span>S;
+
+<span class="attr">#[unsafe_target_feature(<span class="string">"avx2"</span>)]
+</span><span class="kw">impl </span>core::ops::Add <span class="kw">for </span>S {
+    <span class="kw">type </span>Output = S;
+    <span class="comment">// No `unsafe` on the function itself!
+    </span><span class="kw">fn </span>add(<span class="self">self</span>, rhs: S) -&gt; S {
+        S
+    }
+}
+</code></pre></div>
+<h4 id="you-can-generate-specialized-copies-of-a-module-for-each-target-feature"><a class="doc-anchor" href="#you-can-generate-specialized-copies-of-a-module-for-each-target-feature">§</a>You can generate specialized copies of a module for each target feature</h4>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>curve25519_dalek_derive::unsafe_target_feature_specialize;
+
+<span class="attr">#[unsafe_target_feature_specialize(<span class="string">"sse2"</span>, <span class="string">"avx2"</span>, conditional(<span class="string">"avx512ifma"</span>, nightly))]
+</span><span class="kw">mod </span>simd {
+    <span class="attr">#[for_target_feature(<span class="string">"sse2"</span>)]
+    </span><span class="kw">pub const </span>CONSTANT: u32 = <span class="number">1</span>;
+
+    <span class="attr">#[for_target_feature(<span class="string">"avx2"</span>)]
+    </span><span class="kw">pub const </span>CONSTANT: u32 = <span class="number">2</span>;
+
+    <span class="attr">#[for_target_feature(<span class="string">"avx512ifma"</span>)]
+    </span><span class="kw">pub const </span>CONSTANT: u32 = <span class="number">3</span>;
+
+    <span class="kw">pub fn </span>func() { <span class="comment">/* ... */ </span>}
+}
+
+<span class="kw">fn </span>entry_point() {
+    <span class="attr">#[cfg(nightly)]
+    </span><span class="kw">if </span><span class="macro">std::is_x86_feature_detected!</span>(<span class="string">"avx512ifma"</span>) {
+        <span class="kw">return </span>simd_avx512ifma::func();
+    }
+
+    <span class="kw">if </span><span class="macro">std::is_x86_feature_detected!</span>(<span class="string">"avx2"</span>) {
+        <span class="kw">return </span>simd_avx2::func();
+    }
+
+    <span class="kw">if </span><span class="macro">std::is_x86_feature_detected!</span>(<span class="string">"sse2"</span>) {
+        <span class="kw">return </span>simd_sse2::func();
+    }
+
+    <span class="macro">unimplemented!</span>();
+}</code></pre></div>
+<h3 id="how-to-use-unsafe_target_feature"><a class="doc-anchor" href="#how-to-use-unsafe_target_feature">§</a>How to use <code>#[unsafe_target_feature]</code>?</h3>
+<ul>
+<li>Can be used on <code>fn</code>s, <code>impl</code>s and <code>mod</code>s.</li>
+<li>When used on a function will only apply to that function; it won’t apply to any nested functions, traits, mods, etc.</li>
+<li>When used on an <code>impl</code> will only apply to all of the functions directly defined inside of that <code>impl</code>.</li>
+<li>When used on a <code>mod</code> will only apply to all of the <code>fn</code>s and <code>impl</code>s directly defined inside of that <code>mod</code>.</li>
+<li>Cannot be used on methods which use <code>self</code> or <code>Self</code>; instead use it on the <code>impl</code> in which the method is defined.</li>
+</ul>
+<h3 id="license"><a class="doc-anchor" href="#license">§</a>License</h3>
+<p>Licensed under either of</p>
+<ul>
+<li>Apache License, Version 2.0, <a href="LICENSE-APACHE">LICENSE-APACHE</a></li>
+<li>MIT license (<a href="LICENSE-MIT">LICENSE-MIT</a>)</li>
+</ul>
+<p>at your option.</p>
+<h4 id="contribution"><a class="doc-anchor" href="#contribution">§</a>Contribution</h4>
+<p>Unless you explicitly state otherwise, any contribution intentionally submitted
+for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
+dual licensed as above, without any additional terms or conditions.</p>
+</div></details><h2 id="attributes" class="section-header">Attribute Macros<a href="#attributes" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="attr" href="attr.unsafe_target_feature.html" title="attr curve25519_dalek_derive::unsafe_target_feature">unsafe_target_feature</a></div></li><li><div class="item-name"><a class="attr" href="attr.unsafe_target_feature_specialize.html" title="attr curve25519_dalek_derive::unsafe_target_feature_specialize">unsafe_target_feature_specialize</a></div></li></ul></section></div></main></body></html>

@@ -1,0 +1,64 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="This Rust library implements a wrapper type called `SendWrapper` which allows you to move around non-`Send` types between threads, as long as you access the contained value only from within the original thread. You also have to make sure that the wrapper is dropped from within the original thread. If any of these constraints is violated, a panic occurs. `SendWrapper&lt;T&gt;` implements `Send` and `Sync` for any type `T`."><title>send_wrapper - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="send_wrapper" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../send_wrapper/index.html">send_wrapper</a><span class="version">0.6.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#structs">Structs</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">send_wrapper</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/send_wrapper/lib.rs.html#9-410">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>This <a href="https://www.rust-lang.org">Rust</a> library implements a wrapper type called <a href="struct.SendWrapper.html" title="struct send_wrapper::SendWrapper"><code>SendWrapper</code></a> which allows you to move around non-<a href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send"><code>Send</code></a> types
+between threads, as long as you access the contained value only from within the original thread. You also have to
+make sure that the wrapper is dropped from within the original thread. If any of these constraints is violated,
+a panic occurs. <a href="struct.SendWrapper.html" title="struct send_wrapper::SendWrapper"><code>SendWrapper&lt;T&gt;</code></a> implements <a href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send"><code>Send</code></a> and <a href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync"><code>Sync</code></a> for any type <code>T</code>.</p>
+<p>The idea for this library was born in the context of a <a href="https://www.gtk.org/"><code>GTK+</code></a>/<a href="http://gtk-rs.org/"><code>gtk-rs</code></a>-based application. <a href="https://www.gtk.org/"><code>GTK+</code></a> applications
+are strictly single-threaded. It is not allowed to call any <a href="https://www.gtk.org/"><code>GTK+</code></a> method from a thread different to the main
+thread. Consequently, all <a href="http://gtk-rs.org/"><code>gtk-rs</code></a> structs are non-<a href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send"><code>Send</code></a>.</p>
+<p>Sometimes you still want to do some work in background. It is possible to enqueue <a href="https://www.gtk.org/"><code>GTK+</code></a> calls from there to be
+executed in the main thread <a href="http://gtk-rs.org/docs/glib/source/fn.idle_add.html">using <code>Glib</code></a>. This way you can know, that the <a href="http://gtk-rs.org/"><code>gtk-rs</code></a> structs involved are only
+accessed in the main thread and will also be dropped there. This library makes it possible that <a href="http://gtk-rs.org/"><code>gtk-rs</code></a> structs
+can leave the main thread at all.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>send_wrapper::SendWrapper;
+<span class="kw">use </span>std::rc::Rc;
+<span class="kw">use </span>std::thread;
+<span class="kw">use </span>std::sync::mpsc::channel;
+
+<span class="comment">// This import is important if you want to use deref() or
+// deref_mut() instead of Deref coercion.
+</span><span class="kw">use </span>std::ops::{Deref, DerefMut};
+
+<span class="comment">// Rc is a non-Send type.
+</span><span class="kw">let </span>value = Rc::new(<span class="number">42</span>);
+
+<span class="comment">// We now wrap the value with `SendWrapper` (value is moved inside).
+</span><span class="kw">let </span>wrapped_value = SendWrapper::new(value);
+
+<span class="comment">// A channel allows us to move the wrapped value between threads.
+</span><span class="kw">let </span>(sender, receiver) = channel();
+
+<span class="kw">let </span>t = thread::spawn(<span class="kw">move </span>|| {
+
+    <span class="comment">// This would panic (because of dereferencing in wrong thread):
+    // let value = wrapped_value.deref();
+
+	// Move SendWrapper back to main thread, so it can be dropped from there.
+	// If you leave this out the thread will panic because of dropping from wrong thread.
+	</span>sender.send(wrapped_value).unwrap();
+
+});
+
+<span class="kw">let </span>wrapped_value = receiver.recv().unwrap();
+
+<span class="comment">// Now you can use the value again.
+</span><span class="kw">let </span>value = wrapped_value.deref();
+
+<span class="comment">// alternatives for dereferencing:
+</span><span class="kw">let </span>value = <span class="kw-2">&amp;*</span>wrapped_value;
+<span class="kw">let </span>value: <span class="kw-2">&amp;</span>Rc&lt;<span class="kw">_</span>&gt; = <span class="kw-2">&amp;</span>wrapped_value;
+
+<span class="kw">let </span><span class="kw-2">mut </span>wrapped_value = wrapped_value;
+<span class="comment">// alternatives for mutable dereferencing:
+</span><span class="kw">let </span>value = wrapped_value.deref_mut();
+<span class="kw">let </span>value = <span class="kw-2">&amp;mut *</span>wrapped_value;
+<span class="kw">let </span>value: <span class="kw-2">&amp;mut </span>Rc&lt;<span class="kw">_</span>&gt; = <span class="kw-2">&amp;mut </span>wrapped_value;</code></pre></div>
+<h2 id="features"><a class="doc-anchor" href="#features">§</a>Features</h2>
+<p>This crate has a single feature called <code>futures</code> that enables <a href="https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html" title="trait core::future::future::Future"><code>Future</code></a> and <a href="futures_core::Stream"><code>Stream</code></a> implementations for <a href="struct.SendWrapper.html" title="struct send_wrapper::SendWrapper"><code>SendWrapper</code></a>.
+You can enable it in <code>Cargo.toml</code> like so:</p>
+<div class="example-wrap"><pre class="language-toml"><code>send_wrapper = { version = &quot;...&quot;, features = [&quot;futures&quot;] }
+</code></pre></div><h2 id="license"><a class="doc-anchor" href="#license">§</a>License</h2>
+<p><code>send_wrapper</code> is distributed under the terms of both the MIT license and the Apache License (Version 2.0).</p>
+<p>See LICENSE-APACHE.txt, and LICENSE-MIT.txt for details.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.SendWrapper.html" title="struct send_wrapper::SendWrapper">SendWrapper</a></div><div class="desc docblock-short">A wrapper which allows you to move around non-<a href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send"><code>Send</code></a>-types between threads, as long as you access the contained
+value only from within the original thread and make sure that it is dropped from within the original thread.</div></li></ul></section></div></main></body></html>

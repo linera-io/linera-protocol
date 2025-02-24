@@ -1,0 +1,74 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Using `#[derive(IntoIterator)]`"><title>IntoIterator in derive_more::derive - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="derive_more" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc derive"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../derive_more/index.html">derive_more</a><span class="version">1.0.0</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In derive_more::derive</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Derive Macro <a href="../index.html">derive_more</a>::<wbr><a href="index.html">derive</a>::<wbr><a class="derive" href="#">IntoIterator</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/derive_more_impl/lib.rs.html#103">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>#[derive(IntoIterator)]
+{
+    <span class="comment">// Attributes available to this derive:</span>
+    #[into_iterator]
+}
+</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="using-deriveintoiterator"><a class="doc-anchor" href="#using-deriveintoiterator">§</a>Using <code>#[derive(IntoIterator)]</code></h2>
+<p>Deriving <code>IntoIterator</code> only works for a single field of a struct.
+The result is that you will call <code>.into_iter()</code> on this field directly.</p>
+<p>With <code>#[into_iterator]</code> or <code>#[into_iterator(ignore)]</code> it’s possible to indicate
+the field that you want to derive <code>IntoIterator</code> for.</p>
+<p>By using <code>#[into_iterator(owned, ref, ref_mut)]</code> it’s possible to derive an
+<code>IntoIterator</code> implementation for reference types as well.
+You can pick any combination of <code>owned</code>, <code>ref</code> and <code>ref_mut</code>.
+If that’s not provided the default is <code>#[IntoIterator(owned)]</code>.</p>
+<h3 id="example-usage"><a class="doc-anchor" href="#example-usage">§</a>Example usage</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(IntoIterator)]
+</span><span class="kw">struct </span>MyVec(Vec&lt;i32&gt;);
+
+<span class="comment">// You can specify the field you want to derive `IntoIterator` for
+</span><span class="attr">#[derive(IntoIterator)]
+</span><span class="kw">struct </span>Numbers {
+    <span class="attr">#[into_iterator(owned, <span class="kw-2">ref</span>,  ref_mut)]
+    </span>numbers: Vec&lt;i32&gt;,
+    useless: bool,
+}
+
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="number">5</span>), MyVec(<span class="macro">vec!</span>[<span class="number">5</span>, <span class="number">8</span>]).into_iter().next());
+
+<span class="kw">let </span><span class="kw-2">mut </span>nums = Numbers{numbers: <span class="macro">vec!</span>[<span class="number">100</span>, <span class="number">200</span>], useless: <span class="bool-val">false</span>};
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span><span class="number">100</span>), (<span class="kw-2">&amp;</span>nums).into_iter().next());
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="kw-2">&amp;mut </span><span class="number">100</span>), (<span class="kw-2">&amp;mut </span>nums).into_iter().next());
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="number">100</span>), nums.into_iter().next());</code></pre></div>
+<h3 id="structs"><a class="doc-anchor" href="#structs">§</a>Structs</h3>
+<p>When deriving <code>IntoIterator</code> for a struct:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(IntoIterator)]
+</span><span class="kw">struct </span>Numbers {
+    <span class="attr">#[into_iterator(owned, <span class="kw-2">ref</span>,  ref_mut)]
+    </span>numbers: Vec&lt;i32&gt;,
+    useless: bool,
+}</code></pre></div>
+<p>Code like this will be generated:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">impl </span>derive_more::IntoIterator <span class="kw">for </span>Numbers {
+    <span class="kw">type </span>Item = &lt;Vec&lt;i32&gt; <span class="kw">as </span>derive_more::IntoIterator&gt;::Item;
+    <span class="kw">type </span>IntoIter = &lt;Vec&lt;i32&gt; <span class="kw">as </span>derive_more::IntoIterator&gt;::IntoIter;
+    <span class="attr">#[inline]
+    </span><span class="kw">fn </span>into_iter(<span class="self">self</span>) -&gt; <span class="self">Self</span>::IntoIter {
+        &lt;Vec&lt;i32&gt; <span class="kw">as </span>derive_more::IntoIterator&gt;::into_iter(<span class="self">self</span>.numbers)
+    }
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">'__deriveMoreLifetime</span>&gt; derive_more::IntoIterator <span class="kw">for </span><span class="kw-2">&amp;</span><span class="lifetime">'__deriveMoreLifetime </span>Numbers {
+    <span class="kw">type </span>Item = &lt;<span class="kw-2">&amp;</span><span class="lifetime">'__deriveMoreLifetime </span>Vec&lt;i32&gt; <span class="kw">as </span>derive_more::IntoIterator&gt;::Item;
+    <span class="kw">type </span>IntoIter = &lt;<span class="kw-2">&amp;</span><span class="lifetime">'__deriveMoreLifetime </span>Vec&lt;i32&gt; <span class="kw">as </span>derive_more::IntoIterator&gt;::IntoIter;
+    <span class="attr">#[inline]
+    </span><span class="kw">fn </span>into_iter(<span class="self">self</span>) -&gt; <span class="self">Self</span>::IntoIter {
+        &lt;<span class="kw-2">&amp;</span><span class="lifetime">'__deriveMoreLifetime </span>Vec&lt;i32&gt; <span class="kw">as </span>derive_more::IntoIterator&gt;::into_iter(<span class="kw-2">&amp;</span><span class="self">self</span>.numbers)
+    }
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">'__deriveMoreLifetime</span>&gt; derive_more::IntoIterator <span class="kw">for </span><span class="kw-2">&amp;</span><span class="lifetime">'__deriveMoreLifetime </span><span class="kw-2">mut </span>Numbers {
+    <span class="kw">type </span>Item = &lt;<span class="kw-2">&amp;</span><span class="lifetime">'__deriveMoreLifetime </span><span class="kw-2">mut </span>Vec&lt;i32&gt; <span class="kw">as </span>derive_more::IntoIterator&gt;::Item;
+    <span class="kw">type </span>IntoIter = &lt;<span class="kw-2">&amp;</span><span class="lifetime">'__deriveMoreLifetime </span><span class="kw-2">mut </span>Vec&lt;i32&gt; <span class="kw">as </span>derive_more::IntoIterator&gt;::IntoIter;
+    <span class="attr">#[inline]
+    </span><span class="kw">fn </span>into_iter(<span class="self">self</span>) -&gt; <span class="self">Self</span>::IntoIter {
+        &lt;<span class="kw-2">&amp;</span><span class="lifetime">'__deriveMoreLifetime </span><span class="kw-2">mut </span>Vec&lt;i32&gt; <span class="kw">as </span>derive_more::IntoIterator&gt;::into_iter(
+            <span class="kw-2">&amp;mut </span><span class="self">self</span>.numbers,
+        )
+    }
+}</code></pre></div>
+<h3 id="enums"><a class="doc-anchor" href="#enums">§</a>Enums</h3>
+<p>Deriving <code>IntoIterator</code> is not supported for enums.</p>
+</div></details></section></div></main></body></html>

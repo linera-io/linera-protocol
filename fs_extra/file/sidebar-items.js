@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["copy","copy_with_progress","move_file","move_file_with_progress","read_to_string","remove","write_all"],"struct":["CopyOptions","TransitProcess"]};

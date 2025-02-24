@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["handle_net_up_kubernetes","handle_net_up_service","print_messages_and_create_faucet","wait_for_shutdown"],"struct":["StorageConfigProvider"]};
