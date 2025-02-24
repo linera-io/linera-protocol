@@ -27,7 +27,7 @@ use crate::{
     context::Context,
     hashable_wrapper::WrappedHashableContainerView,
     store::KeyIterable,
-    views::{ClonableView, HashableView, Hasher, View, ViewError, MIN_VIEW_TAG},
+    views::{CloneableView, HashableView, Hasher, View, ViewError, MIN_VIEW_TAG},
 };
 
 #[cfg(with_metrics)]
@@ -185,11 +185,11 @@ where
     }
 }
 
-impl<C, W> ClonableView<C> for ReentrantByteCollectionView<C, W>
+impl<C, W> CloneableView<C> for ReentrantByteCollectionView<C, W>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    W: ClonableView<C> + Send + Sync,
+    W: CloneableView<C> + Send + Sync,
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
         let cloned_updates = self
@@ -1108,12 +1108,12 @@ where
     }
 }
 
-impl<C, I, W> ClonableView<C> for ReentrantCollectionView<C, I, W>
+impl<C, I, W> CloneableView<C> for ReentrantCollectionView<C, I, W>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
     I: Send + Sync + Serialize + DeserializeOwned,
-    W: ClonableView<C> + Send + Sync,
+    W: CloneableView<C> + Send + Sync,
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
         Ok(ReentrantCollectionView {
@@ -1627,12 +1627,12 @@ where
     }
 }
 
-impl<C, I, W> ClonableView<C> for ReentrantCustomCollectionView<C, I, W>
+impl<C, I, W> CloneableView<C> for ReentrantCustomCollectionView<C, I, W>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
     I: Send + Sync + CustomSerialize,
-    W: ClonableView<C> + Send + Sync,
+    W: CloneableView<C> + Send + Sync,
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
         Ok(ReentrantCustomCollectionView {
