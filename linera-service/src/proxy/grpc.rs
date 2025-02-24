@@ -57,7 +57,7 @@ use tracing::{debug, info, instrument, Instrument as _, Level};
 #[cfg(with_metrics)]
 use {
     linera_base::prometheus_util::{
-        bucket_interval, register_histogram_vec, register_int_counter_vec,
+        linear_bucket_interval, register_histogram_vec, register_int_counter_vec,
     },
     prometheus::{HistogramVec, IntCounterVec},
 };
@@ -71,7 +71,7 @@ static PROXY_REQUEST_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
         "proxy_request_latency",
         "Proxy request latency",
         &[],
-        bucket_interval(1.0, 500.0),
+        linear_bucket_interval(1.0, 50.0, 500.0),
     )
 });
 

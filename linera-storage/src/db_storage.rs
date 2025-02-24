@@ -38,7 +38,8 @@ use {
 #[cfg(with_metrics)]
 use {
     linera_base::prometheus_util::{
-        bucket_latencies, register_histogram_vec, register_int_counter_vec, MeasureLatency,
+        exponential_bucket_latencies, register_histogram_vec, register_int_counter_vec,
+        MeasureLatency,
     },
     prometheus::{HistogramVec, IntCounterVec},
 };
@@ -181,7 +182,7 @@ pub static LOAD_CHAIN_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
         "load_chain_latency",
         "The latency to load a chain state",
         &[],
-        bucket_latencies(1.0),
+        exponential_bucket_latencies(1.0),
     )
 });
 

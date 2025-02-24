@@ -8,7 +8,9 @@ use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 #[cfg(with_metrics)]
 use {
-    linera_base::prometheus_util::{bucket_latencies, register_histogram_vec, MeasureLatency},
+    linera_base::prometheus_util::{
+        exponential_bucket_latencies, register_histogram_vec, MeasureLatency,
+    },
     prometheus::HistogramVec,
 };
 
@@ -27,7 +29,7 @@ static REGISTER_VIEW_HASH_RUNTIME: LazyLock<HistogramVec> = LazyLock::new(|| {
         "register_view_hash_runtime",
         "RegisterView hash runtime",
         &[],
-        bucket_latencies(5.0),
+        exponential_bucket_latencies(5.0),
     )
 });
 
