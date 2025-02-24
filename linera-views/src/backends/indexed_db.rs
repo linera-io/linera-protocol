@@ -7,6 +7,7 @@ use std::rc::Rc;
 
 use futures::future;
 use indexed_db_futures::{js_sys, prelude::*, web_sys};
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
@@ -19,7 +20,7 @@ use crate::{
 };
 
 /// The initial configuration of the system
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IndexedDbStoreConfig {
     /// The common configuration of the key value store
     pub common_config: CommonStoreConfig,

@@ -14,6 +14,7 @@ use std::{
 };
 
 use linked_hash_map::LinkedHashMap;
+use serde::{Deserialize, Serialize};
 #[cfg(with_metrics)]
 use {linera_base::prometheus_util::register_int_counter_vec, prometheus::IntCounterVec};
 
@@ -275,6 +276,7 @@ where
 }
 
 /// The configuration type for the `LruCachingStore`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LruCachingConfig<C> {
     /// The inner configuration of the `LruCachingStore`.
     pub inner_config: C,

@@ -8,6 +8,7 @@ use std::{
     sync::{Arc, LazyLock, Mutex, RwLock},
 };
 
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 #[cfg(with_testing)]
@@ -24,7 +25,7 @@ use crate::{
 };
 
 /// The initial configuration of the system
-#[derive(Debug)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct MemoryStoreConfig {
     /// The common configuration of the key value store
     pub common_config: CommonStoreInternalConfig,
