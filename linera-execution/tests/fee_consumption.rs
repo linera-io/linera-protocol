@@ -5,7 +5,7 @@
 
 #![allow(clippy::items_after_test_module)]
 
-use std::{sync::Arc, vec};
+use std::{collections::BTreeSet, sync::Arc, vec};
 
 use linera_base::{
     crypto::{AccountPublicKey, CryptoHash},
@@ -153,6 +153,7 @@ async fn test_fee_consumption(
         maximum_block_proposal_size: 53,
         maximum_bytes_read_per_block: 59,
         maximum_bytes_written_per_block: 61,
+        http_request_allow_list: BTreeSet::new(),
     };
 
     let consumed_fees = spends

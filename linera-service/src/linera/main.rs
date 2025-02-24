@@ -6,7 +6,13 @@
 #![deny(clippy::large_futures)]
 
 use std::{
-    borrow::Cow, collections::HashMap, env, path::PathBuf, process, sync::Arc, time::Instant,
+    borrow::Cow,
+    collections::{BTreeSet, HashMap},
+    env,
+    path::PathBuf,
+    process,
+    sync::Arc,
+    time::Instant,
 };
 
 use anyhow::{anyhow, bail, ensure, Context};
@@ -1412,7 +1418,7 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
             maximum_bytes_written_per_block,
             testing_prng_seed,
             network_name,
-            http_allow_list: _,
+            http_allow_list,
         } => {
             let start_time = Instant::now();
             let committee_config: CommitteeConfig = util::read_json(committee_config_path)
@@ -1474,6 +1480,9 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
             }
             if let Some(maximum_bytes_written_per_block) = maximum_bytes_written_per_block {
                 policy.maximum_bytes_written_per_block = *maximum_bytes_written_per_block;
+            }
+            if let Some(http_allow_list) = http_allow_list {
+                policy.http_request_allow_list = BTreeSet::from_iter(http_allow_list.clone());
             }
             let timestamp = start_timestamp
                 .map(|st| {
