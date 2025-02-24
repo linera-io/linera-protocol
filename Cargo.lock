@@ -4513,6 +4513,7 @@ dependencies = [
  "native-fungible",
  "non-fungible",
  "num-format",
+ "prometheus-parse",
  "proptest",
  "rand",
  "reqwest 0.11.27",
@@ -6320,6 +6321,18 @@ dependencies = [
  "parking_lot",
  "protobuf",
  "thiserror 1.0.69",
+]
+
+[[package]]
+name = "prometheus-parse"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "811031bea65e5a401fb2e1f37d802cca6601e204ac463809a3189352d13b78a5"
+dependencies = [
+ "chrono",
+ "itertools 0.12.1",
+ "once_cell",
+ "regex",
 ]
 
 [[package]]

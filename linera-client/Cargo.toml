@@ -19,6 +19,9 @@ benchmark = [
     "dep:tokio-util",
     "dep:crossbeam-channel",
     "dep:num-format",
+    "dep:reqwest",
+    "dep:anyhow",
+    "dep:prometheus-parse",
 ]
 wasmer = [
     "linera-core/wasmer",
@@ -56,6 +59,7 @@ indexed-db = ["web", "indexed_db_futures", "serde-wasm-bindgen", "gloo-utils"]
 web-default = ["web", "wasmer", "indexed-db"]
 
 [dependencies]
+anyhow = { workspace = true, optional = true }
 async-trait.workspace = true
 bcs.workspace = true
 cfg-if.workspace = true
@@ -76,7 +80,9 @@ linera-storage-service = { workspace = true, optional = true }
 linera-version.workspace = true
 linera-views.workspace = true
 num-format = { workspace = true, optional = true }
+prometheus-parse = { workspace = true, optional = true }
 rand.workspace = true
+reqwest = { workspace = true, optional = true }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

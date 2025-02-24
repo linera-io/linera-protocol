@@ -738,6 +738,7 @@ impl Runnable for Job {
                 fungible_application_id,
                 bps,
                 close_chains,
+                health_check_endpoints,
             } => {
                 assert!(num_chains > 0, "Number of chains must be greater than 0");
                 assert!(
@@ -771,6 +772,7 @@ impl Runnable for Job {
                     committee,
                     context.client.local_node().clone(),
                     close_chains,
+                    health_check_endpoints,
                 )
                 .await?;
 
@@ -794,8 +796,13 @@ impl Runnable for Job {
 
                     info!("Updating wallet from chain clients...");
                     for chain_client in chain_clients.values() {
-                        context.update_wallet_from_client(chain_client).await?;
+                        context
+                            .wallet
+                            .as_mut()
+                            .update_from_state(chain_client)
+                            .await;
                     }
+                    context.save_wallet().await?;
                 }
             }
 
