@@ -817,7 +817,7 @@ type MutationRoot {
 	"""
 	Publishes a new application bytecode.
 	"""
-	publishBytecode(chainId: ChainId!, contract: Bytecode!, service: Bytecode!): BytecodeId!
+	publishBytecode(chainId: ChainId!, contract: Bytecode!, service: Bytecode!, vmRuntime: VmRuntime!): BytecodeId!
 	"""
 	Publishes a new data blob.
 	"""
@@ -1181,6 +1181,8 @@ Description of the necessary information to run a user application
 scalar UserApplicationDescription
 
 scalar VersionInfo
+
+scalar VmRuntime
 
 directive @include(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
 directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT

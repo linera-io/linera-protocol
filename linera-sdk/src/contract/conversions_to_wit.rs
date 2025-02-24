@@ -15,6 +15,7 @@ use linera_base::{
         MessageId, Owner, StreamName,
     },
     ownership::{ChainOwnership, TimeoutConfig},
+    vm::VmRuntime,
 };
 
 use super::wit::contract_system_api as wit_system_api;
@@ -104,6 +105,16 @@ impl From<BytecodeId> for wit_system_api::BytecodeId {
         wit_system_api::BytecodeId {
             contract_blob_hash: bytecode_id.contract_blob_hash.into(),
             service_blob_hash: bytecode_id.service_blob_hash.into(),
+            vm_runtime: bytecode_id.vm_runtime.into(),
+        }
+    }
+}
+
+impl From<VmRuntime> for wit_system_api::VmRuntime {
+    fn from(vm_runtime: VmRuntime) -> Self {
+        match vm_runtime {
+            VmRuntime::Wasm => wit_system_api::VmRuntime::Wasm,
+            VmRuntime::Evm => wit_system_api::VmRuntime::Evm,
         }
     }
 }

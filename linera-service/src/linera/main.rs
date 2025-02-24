@@ -836,6 +836,7 @@ impl Runnable for Job {
             PublishBytecode {
                 contract,
                 service,
+                vm_runtime,
                 publisher,
             } => {
                 let start_time = Instant::now();
@@ -843,7 +844,7 @@ impl Runnable for Job {
                 info!("Publishing bytecode on chain {}", publisher);
                 let chain_client = context.make_chain_client(publisher)?;
                 let bytecode_id = context
-                    .publish_bytecode(&chain_client, contract, service)
+                    .publish_bytecode(&chain_client, contract, service, vm_runtime)
                     .await?;
                 println!("{}", bytecode_id);
                 info!(
@@ -928,6 +929,7 @@ impl Runnable for Job {
             PublishAndCreate {
                 contract,
                 service,
+                vm_runtime,
                 publisher,
                 json_parameters,
                 json_parameters_path,
@@ -941,9 +943,8 @@ impl Runnable for Job {
                 let chain_client = context.make_chain_client(publisher)?;
                 let parameters = read_json(json_parameters, json_parameters_path)?;
                 let argument = read_json(json_argument, json_argument_path)?;
-
                 let bytecode_id = context
-                    .publish_bytecode(&chain_client, contract, service)
+                    .publish_bytecode(&chain_client, contract, service, vm_runtime)
                     .await?;
 
                 let (application_id, _) = context
@@ -1022,6 +1023,7 @@ impl Runnable for Job {
                 ProjectCommand::PublishAndCreate {
                     path,
                     name,
+                    vm_runtime,
                     publisher,
                     json_parameters,
                     json_parameters_path,
@@ -1042,7 +1044,7 @@ impl Runnable for Job {
                     let (contract_path, service_path) = project.build(name)?;
 
                     let bytecode_id = context
-                        .publish_bytecode(&chain_client, contract_path, service_path)
+                        .publish_bytecode(&chain_client, contract_path, service_path, vm_runtime)
                         .await?;
 
                     let (application_id, _) = context

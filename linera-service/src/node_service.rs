@@ -20,6 +20,7 @@ use linera_base::{
     hashed::Hashed,
     identifiers::{ApplicationId, BytecodeId, ChainId, Owner, UserApplicationId},
     ownership::{ChainOwnership, TimeoutConfig},
+    vm::VmRuntime,
     BcsHexParseError,
 };
 use linera_chain::{
@@ -563,13 +564,14 @@ where
         chain_id: ChainId,
         contract: Bytecode,
         service: Bytecode,
+        vm_runtime: VmRuntime,
     ) -> Result<BytecodeId, Error> {
         self.apply_client_command(&chain_id, move |client| {
             let contract = contract.clone();
             let service = service.clone();
             async move {
                 let result = client
-                    .publish_bytecode(contract, service)
+                    .publish_bytecode(contract, service, vm_runtime)
                     .await
                     .map_err(Error::from)
                     .map(|outcome| outcome.map(|(bytecode_id, _)| bytecode_id));

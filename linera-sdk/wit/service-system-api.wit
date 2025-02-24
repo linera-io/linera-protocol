@@ -41,6 +41,7 @@ interface service-system-api {
     record bytecode-id {
         contract-blob-hash: crypto-hash,
         service-blob-hash: crypto-hash,
+        vm-runtime: vm-runtime,
     }
 
     record chain-id {
@@ -107,4 +108,9 @@ interface service-system-api {
     }
 
     type u128 = tuple<u64, u64>;
+
+    enum vm-runtime {
+        wasm,
+        evm,
+    }
 }
