@@ -237,6 +237,7 @@ mod from {
                 operations_hash,
                 oracle_responses_hash,
                 events_hash,
+                blobs_hash,
             } = header;
             let block::BlockBlockValueBlockBody {
                 incoming_bundles,
@@ -260,6 +261,7 @@ mod from {
                 operations_hash,
                 oracle_responses_hash,
                 events_hash,
+                blobs_hash,
             };
             let block_body = BlockBody {
                 incoming_bundles: incoming_bundles

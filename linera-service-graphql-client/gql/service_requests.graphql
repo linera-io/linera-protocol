@@ -239,6 +239,7 @@ query Block($hash: CryptoHash, $chainId: ChainId!) {
           messagesHash
           oracleResponsesHash
           eventsHash
+          blobsHash
         }
         body {
           incomingBundles {
@@ -303,6 +304,7 @@ query Blocks($from: CryptoHash, $chainId: ChainId!, $limit: Int) {
           messagesHash
           oracleResponsesHash
           eventsHash
+          blobsHash
         }
         body {
           incomingBundles {

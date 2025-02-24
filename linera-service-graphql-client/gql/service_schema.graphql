@@ -166,6 +166,10 @@ type BlockHeader {
 	Cryptographic hash of all the events in the block.
 	"""
 	eventsHash: CryptoHash!
+	"""
+	Cryptographic hash of all the created blobs in the block.
+	"""
+	blobsHash: CryptoHash!
 }
 
 """

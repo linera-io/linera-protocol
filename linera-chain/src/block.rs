@@ -288,6 +288,7 @@ impl<'de> Deserialize<'de> for Block {
         let operations_hash = hashing::hash_vec(&inner.body.operations);
         let oracle_responses_hash = hashing::hash_vec_vec(&inner.body.oracle_responses);
         let events_hash = hashing::hash_vec_vec(&inner.body.events);
+        let blobs_hash = hashing::hash_vec_vec(&inner.body.blobs);
 
         let header = BlockHeader {
             chain_id: inner.header.chain_id,
@@ -302,6 +303,7 @@ impl<'de> Deserialize<'de> for Block {
             messages_hash,
             oracle_responses_hash,
             events_hash,
+            blobs_hash,
         };
 
         Ok(Self {
@@ -347,6 +349,8 @@ pub struct BlockHeader {
     pub oracle_responses_hash: CryptoHash,
     /// Cryptographic hash of all the events in the block.
     pub events_hash: CryptoHash,
+    /// Cryptographic hash of all the created blobs in the block.
+    pub blobs_hash: CryptoHash,
 }
 
 /// The body of a block containing all the data included in the block.
@@ -374,6 +378,7 @@ impl Block {
         let operations_hash = hashing::hash_vec(&block.operations);
         let oracle_responses_hash = hashing::hash_vec_vec(&outcome.oracle_responses);
         let events_hash = hashing::hash_vec_vec(&outcome.events);
+        let blobs_hash = hashing::hash_vec_vec(&outcome.blobs);
 
         let header = BlockHeader {
             chain_id: block.chain_id,
@@ -388,6 +393,7 @@ impl Block {
             messages_hash,
             oracle_responses_hash,
             events_hash,
+            blobs_hash,
         };
 
         let body = BlockBody {
@@ -584,6 +590,7 @@ impl From<Block> for ExecutedBlock {
                     messages_hash: _,
                     oracle_responses_hash: _,
                     events_hash: _,
+                    blobs_hash: _,
                 },
             body:
                 BlockBody {

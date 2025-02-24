@@ -1139,6 +1139,8 @@ impl<'a> Deserialize<'a> for Blob {
     }
 }
 
+impl<'de> BcsHashable<'de> for Blob {}
+
 /// An event recorded in an executed block.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
 pub struct Event {
