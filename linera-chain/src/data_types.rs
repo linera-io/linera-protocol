@@ -774,7 +774,7 @@ impl BlockProposal {
     }
 
     pub fn check_signature(&self) -> Result<(), CryptoError> {
-        self.signature.check(&self.content, self.public_key)
+        self.signature.verify(&self.content, self.public_key)
     }
 
     pub fn required_blob_ids(&self) -> impl Iterator<Item = BlobId> + '_ {
