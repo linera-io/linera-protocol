@@ -194,7 +194,7 @@ async fn create_populated_reentrant_collection_view(
     view
 }
 
-/// Creates a populated [`ReentrantCollectionView`] with its contents completed flushed to
+/// Creates a populated [`ReentrantCollectionView`] with its contents completely flushed to
 /// the storage.
 async fn create_and_store_populated_reentrant_collection_view(
 ) -> ReentrantCollectionView<MemoryContext<()>, ComplexIndex, RegisterView<MemoryContext<()>, String>>
