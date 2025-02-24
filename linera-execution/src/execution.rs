@@ -91,7 +91,11 @@ where
 
         self.context()
             .extra()
-            .add_blobs([contract_blob, service_blob])
+            .add_blobs([
+                contract_blob,
+                service_blob,
+                Blob::new_application_description(&application_description),
+            ])
             .await?;
 
         let tracker = ResourceTracker::default();
@@ -102,7 +106,6 @@ where
             account: None,
         };
         let mut txn_tracker = TransactionTracker::new(next_message_index, next_message_index, None);
-        txn_tracker.add_created_blob(Blob::new_application_description(&application_description));
         self.run_user_action(
             application_id,
             chain_id,

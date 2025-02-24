@@ -19,14 +19,11 @@ use assert_matches::assert_matches;
 use async_graphql::Request;
 use counter::CounterAbi;
 use linera_base::{
-    data_types::{Amount, Bytecode, Event, OracleResponse, UserApplicationDescription},
-    identifiers::{AccountOwner, ApplicationId, Destination, Owner, StreamId, StreamName},
+    data_types::{Amount, Bytecode, Event, OracleResponse},
+    identifiers::{AccountOwner, ApplicationId, Owner, StreamId, StreamName},
     ownership::{ChainOwnership, TimeoutConfig},
 };
-use linera_chain::{
-    data_types::{MessageAction, OutgoingMessage},
-    ChainError, ChainExecutionContext,
-};
+use linera_chain::{data_types::MessageAction, ChainError, ChainExecutionContext};
 use linera_execution::{
     ExecutionError, Message, MessageKind, Operation, QueryOutcome, ResourceControlPolicy,
     SystemMessage, WasmRuntime,
@@ -333,17 +330,14 @@ where
         .unwrap();
     assert_eq!(
         certificate.block().body.events,
-        vec![
-            Vec::new(),
-            vec![Event {
-                stream_id: StreamId {
-                    application_id: application_id2.forget_abi().into(),
-                    stream_name: StreamName(b"announcements".to_vec()),
-                },
-                key: b"updates".to_vec(),
-                value: b"instantiated".to_vec(),
-            }]
-        ]
+        vec![vec![Event {
+            stream_id: StreamId {
+                application_id: application_id2.forget_abi().into(),
+                stream_name: StreamName(b"announcements".to_vec()),
+            },
+            key: b"updates".to_vec(),
+            value: b"instantiated".to_vec(),
+        }]]
     );
 
     let query_service = cfg!(feature = "unstable-oracles");
@@ -439,10 +433,6 @@ where
     assert_eq!(incoming_bundles[0].action, MessageAction::Reject);
     assert_eq!(
         incoming_bundles[0].bundle.messages[0].kind,
-        MessageKind::Simple
-    );
-    assert_eq!(
-        incoming_bundles[0].bundle.messages[1].kind,
         MessageKind::Tracked
     );
     let messages = cert.block().messages();
@@ -471,11 +461,11 @@ where
     // Second message is the bounced message.
     assert_eq!(incoming_bundles[1].action, MessageAction::Accept);
     assert_eq!(
-        incoming_bundles[1].bundle.messages[1].kind,
+        incoming_bundles[1].bundle.messages[0].kind,
         MessageKind::Bouncing
     );
     assert_matches!(
-        incoming_bundles[1].bundle.messages[1].message,
+        incoming_bundles[1].bundle.messages[0].message,
         Message::User { .. }
     );
 
@@ -581,23 +571,6 @@ where
         .unwrap()
         .unwrap();
 
-    let messages = cert.block().messages();
-    {
-        let OutgoingMessage {
-            destination,
-            message,
-            ..
-        } = &messages[1][0];
-        assert_matches!(
-            message, Message::System(SystemMessage::RegisterApplications { applications })
-            if applications.len() == 1 && matches!(
-                applications[0], UserApplicationDescription{ bytecode_id: b_id, .. }
-                if b_id == bytecode_id.forget_abi()
-            ),
-            "Unexpected message"
-        );
-        assert_eq!(*destination, Destination::Recipient(receiver.chain_id()));
-    }
     receiver.synchronize_from_validators().await.unwrap();
     receiver
         .receive_certificate_and_update_validators(cert)
@@ -606,11 +579,6 @@ where
     let certs = receiver.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
     let messages = &certs[0].block().body.incoming_bundles;
-    assert!(messages.iter().any(|msg| matches!(
-        &msg.bundle.messages[0].message,
-        Message::System(SystemMessage::RegisterApplications { applications })
-        if applications.iter().any(|app| app.bytecode_id == bytecode_id.forget_abi())
-    )));
     assert!(messages
         .iter()
         .flat_map(|msg| &msg.bundle.messages)

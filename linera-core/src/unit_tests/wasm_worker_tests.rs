@@ -197,6 +197,7 @@ where
         required_application_ids: vec![],
         parameters: parameters_bytes,
     };
+    let application_description_blob = Blob::new_application_description(&application_description);
     let application_id = From::from(&application_description);
     let create_block = make_first_block(creator_chain.into())
         .with_timestamp(2)
@@ -222,14 +223,13 @@ where
                 OracleResponse::Blob(contract_blob_id),
                 OracleResponse::Blob(service_blob_id),
             ]],
-            blobs: vec![vec![Blob::new_application_description(
-                &application_description,
-            )]],
+            blobs: vec![vec![application_description_blob.clone()]],
         }
         .with(create_block),
     ));
     let create_certificate = make_certificate(&committee, &worker, create_block_proposal);
 
+    storage.write_blobs(&[application_description_blob]).await?;
     let info = worker
         .fully_handle_certificate_with_notifications(create_certificate.clone(), &())
         .await
