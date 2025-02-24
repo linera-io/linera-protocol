@@ -8,8 +8,8 @@ use std::fmt::{Display, Formatter};
 use async_graphql::{InputObject, Request, Response, SimpleObject};
 use fungible::Account;
 use linera_sdk::{
-    base::{AccountOwner, ApplicationId, ChainId, ContractAbi, ServiceAbi},
     graphql::GraphQLMutationRoot,
+    linera_base_types::{AccountOwner, ApplicationId, ChainId, ContractAbi, ServiceAbi},
     DataBlobHash, ToBcsBytes,
 };
 use serde::{Deserialize, Serialize};

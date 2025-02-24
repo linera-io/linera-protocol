@@ -3,7 +3,7 @@
 
 use fungible::InitialState;
 use linera_sdk::{
-    base::{AccountOwner, Amount},
+    linera_base_types::{AccountOwner, Amount},
     views::{linera_views, MapView, RootView, ViewStorageContext},
 };
 

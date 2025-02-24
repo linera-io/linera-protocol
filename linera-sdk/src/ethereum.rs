@@ -15,7 +15,9 @@ pub use linera_ethereum::{
 use linera_ethereum::{client::JsonRpcClient, common::EthereumServiceError};
 use serde::{Deserialize, Serialize};
 
-use crate::{contract::wit::contract_system_api, service::wit::service_system_api};
+use crate::{
+    contract::wit::base_runtime_api as contract_wit, service::wit::base_runtime_api as service_wit,
+};
 
 // TODO(#3143): Unify the two types into a single `EthereumClient` type.
 
@@ -43,7 +45,7 @@ impl JsonRpcClient for ContractEthereumClient {
     }
 
     async fn request_inner(&self, payload: Vec<u8>) -> Result<Vec<u8>, Self::Error> {
-        let response = contract_system_api::perform_http_request(
+        let response = contract_wit::perform_http_request(
             &http::Request {
                 method: http::Method::Post,
                 url: self.url.clone(),
@@ -81,7 +83,7 @@ impl JsonRpcClient for ServiceEthereumClient {
     }
 
     async fn request_inner(&self, payload: Vec<u8>) -> Result<Vec<u8>, Self::Error> {
-        let response = service_system_api::perform_http_request(
+        let response = service_wit::perform_http_request(
             &http::Request {
                 method: http::Method::Post,
                 url: self.url.clone(),

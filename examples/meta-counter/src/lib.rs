@@ -4,7 +4,7 @@
 /*! ABI of the Meta-Counter Example Application */
 
 use async_graphql::{Request, Response};
-use linera_sdk::base::{ChainId, ContractAbi, ServiceAbi};
+use linera_sdk::linera_base_types::{ChainId, ContractAbi, ServiceAbi};
 use serde::{Deserialize, Serialize};
 
 pub struct MetaCounterAbi;

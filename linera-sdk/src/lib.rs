@@ -30,12 +30,13 @@
 pub mod util;
 
 pub mod abis;
-pub mod base;
+mod base;
 pub mod contract;
 #[cfg(feature = "ethereum")]
 pub mod ethereum;
 mod extensions;
 pub mod graphql;
+pub mod linera_base_types;
 mod log;
 pub mod service;
 #[cfg(with_testing)]
@@ -44,13 +45,15 @@ pub mod views;
 
 use std::fmt::Debug;
 
+extern crate linera_base as linera_base_crate;
+
 pub use bcs;
-pub use linera_base::{
+pub use linera_base_crate::{
     abi,
     data_types::{Resources, SendMessageRequest},
     ensure, http,
 };
-use linera_base::{
+use linera_base_crate::{
     abi::{ContractAbi, ServiceAbi, WithContractAbi, WithServiceAbi},
     crypto::CryptoHash,
     doc_scalar,

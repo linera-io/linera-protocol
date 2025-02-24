@@ -10,8 +10,8 @@ use std::sync::Arc;
 use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
 use fungible::{Operation, Parameters};
 use linera_sdk::{
-    base::{AccountOwner, Amount, WithServiceAbi},
     graphql::GraphQLMutationRoot,
+    linera_base_types::{AccountOwner, Amount, WithServiceAbi},
     views::{MapView, View},
     Service, ServiceRuntime,
 };

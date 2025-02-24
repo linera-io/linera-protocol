@@ -12,4 +12,4 @@ wit_bindgen::generate!({
     pub_export_macro: true,
 });
 
-pub use self::linera::app::{service_system_api, view_system_api};
+pub use self::linera::app::{base_runtime_api, service_runtime_api};

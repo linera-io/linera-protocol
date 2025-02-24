@@ -5,8 +5,8 @@
 
 use async_graphql::{Request, Response, SimpleObject};
 use linera_sdk::{
-    base::{AccountOwner, Amount, ContractAbi, ServiceAbi, Timestamp},
     graphql::GraphQLMutationRoot,
+    linera_base_types::{AccountOwner, Amount, ContractAbi, ServiceAbi, Timestamp},
 };
 use serde::{Deserialize, Serialize};
 

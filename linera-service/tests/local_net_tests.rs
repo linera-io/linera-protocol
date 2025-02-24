@@ -21,7 +21,7 @@ use linera_base::{
 };
 use linera_core::{data_types::ChainInfoQuery, node::ValidatorNode};
 use linera_faucet::ClaimOutcome;
-use linera_sdk::base::AccountSecretKey;
+use linera_sdk::linera_base_types::AccountSecretKey;
 use linera_service::{
     cli_wrappers::{
         local_net::{get_node_port, Database, LocalNet, LocalNetConfig, ProcessInbox},

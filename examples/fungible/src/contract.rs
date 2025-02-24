@@ -11,7 +11,7 @@ use fungible::{
     Account, FungibleResponse, FungibleTokenAbi, InitialState, Message, Operation, Parameters,
 };
 use linera_sdk::{
-    base::{AccountOwner, Amount, WithContractAbi},
+    linera_base_types::{AccountOwner, Amount, WithContractAbi},
     views::{RootView, View},
     Contract, ContractRuntime,
 };

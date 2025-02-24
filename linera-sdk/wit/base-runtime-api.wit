@@ -1,0 +1,140 @@
+package linera:app;
+
+interface base-runtime-api {
+    get-chain-id: func() -> chain-id;
+    get-block-height: func() -> block-height;
+    get-application-id: func() -> application-id;
+    get-application-creator-chain-id: func() -> chain-id;
+    get-chain-ownership: func() -> chain-ownership;
+    application-parameters: func() -> list<u8>;
+    read-chain-balance: func() -> amount;
+    read-owner-balance: func(owner: account-owner) -> amount;
+    read-system-timestamp: func() -> timestamp;
+    read-owner-balances: func() -> list<tuple<account-owner, amount>>;
+    read-balance-owners: func() -> list<account-owner>;
+    perform-http-request: func(request: http-request) -> http-response;
+    read-data-blob: func(hash: crypto-hash) -> list<u8>;
+    assert-data-blob-exists: func(hash: crypto-hash);
+    assert-before: func(timestamp: timestamp);
+    log: func(message: string, level: log-level);
+
+    contains-key-new: func(key: list<u8>) -> u32;
+    contains-key-wait: func(promise-id: u32) -> bool;
+    contains-keys-new: func(keys: list<list<u8>>) -> u32;
+    contains-keys-wait: func(promise-id: u32) -> list<bool>;
+    read-multi-values-bytes-new: func(keys: list<list<u8>>) -> u32;
+    read-multi-values-bytes-wait: func(promise-id: u32) -> list<option<list<u8>>>;
+    read-value-bytes-new: func(key: list<u8>) -> u32;
+    read-value-bytes-wait: func(promise-id: u32) -> option<list<u8>>;
+    find-keys-new: func(key-prefix: list<u8>) -> u32;
+    find-keys-wait: func(promise-id: u32) -> list<list<u8>>;
+    find-key-values-new: func(key-prefix: list<u8>) -> u32;
+    find-key-values-wait: func(promise-id: u32) -> list<tuple<list<u8>, list<u8>>>;
+
+    record block-height {
+        inner0: u64,
+    }
+
+    record crypto-hash {
+        part1: u64,
+        part2: u64,
+        part3: u64,
+        part4: u64,
+    }
+
+    record owner {
+        inner0: crypto-hash,
+    }
+
+    record chain-id {
+        inner0: crypto-hash,
+    }
+
+    record amount {
+        inner0: u128,
+    }
+
+    variant account-owner {
+        user(owner),
+        application(application-id),
+    }
+
+    record message-id {
+        chain-id: chain-id,
+        height: block-height,
+        index: u32,
+    }
+    
+    record bytecode-id {
+        contract-blob-hash: crypto-hash,
+        service-blob-hash: crypto-hash,
+    }
+
+    record application-id {
+        bytecode-id: bytecode-id,
+        creation: message-id,
+    }
+
+    record timestamp {
+        inner0: u64,
+    }
+
+    record time-delta {
+        inner0: u64,
+    }
+
+    record timeout-config {
+        fast-round-duration: option<time-delta>,
+        base-timeout: time-delta,
+        timeout-increment: time-delta,
+        fallback-duration: time-delta,
+    }
+    
+    record chain-ownership {
+        super-owners: list<owner>,
+        owners: list<tuple<owner, u64>>,
+        multi-leader-rounds: u32,
+        open-multi-leader-rounds: bool,
+        timeout-config: timeout-config,
+    }
+
+    record http-header {
+        name: string,
+        value: list<u8>,
+    }
+
+    enum http-method {
+        get,
+        post,
+        put,
+        delete,
+        head,
+        options,
+        connect,
+        patch,
+        trace,
+    }
+
+    record http-request {
+        method: http-method,
+        url: string,
+        headers: list<http-header>,
+        body: list<u8>,
+    }
+
+    record http-response {
+        status: u16,
+        headers: list<http-header>,
+        body: list<u8>,
+    }
+
+    enum log-level {
+        error,
+        warn,
+        info,
+        debug,
+        trace,
+    }
+
+    type u128 = tuple<u64, u64>;
+}

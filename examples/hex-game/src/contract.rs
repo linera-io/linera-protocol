@@ -8,7 +8,7 @@ mod state;
 use async_graphql::ComplexObject;
 use hex_game::{Board, Clock, HexAbi, HexOutcome, Operation, Timeouts};
 use linera_sdk::{
-    base::{
+    linera_base_types::{
         Amount, ApplicationPermissions, ChainId, ChainOwnership, Owner, TimeoutConfig,
         WithContractAbi,
     },

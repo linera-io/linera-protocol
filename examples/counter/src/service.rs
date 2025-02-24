@@ -8,7 +8,7 @@ mod state;
 use std::sync::Arc;
 
 use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
-use linera_sdk::{base::WithServiceAbi, views::View, Service, ServiceRuntime};
+use linera_sdk::{linera_base_types::WithServiceAbi, views::View, Service, ServiceRuntime};
 
 use self::state::CounterState;
 

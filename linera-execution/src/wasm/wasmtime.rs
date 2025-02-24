@@ -12,7 +12,7 @@ use wasmtime::{AsContextMut, Config, Engine, Linker, Module, Store};
 
 use super::{
     module_cache::ModuleCache,
-    system_api::{ContractSystemApi, ServiceSystemApi, SystemApiData, ViewSystemApi, WriteBatch},
+    runtime_api::{BaseRuntimeApi, ContractRuntimeApi, RuntimeApiData, ServiceRuntimeApi},
     ContractEntrypoints, ServiceEntrypoints, WasmExecutionError,
 };
 use crate::{
@@ -49,7 +49,7 @@ where
     Runtime: ContractRuntime + 'static,
 {
     /// The Wasm module instance.
-    instance: EntrypointInstance<SystemApiData<Runtime>>,
+    instance: EntrypointInstance<RuntimeApiData<Runtime>>,
 
     /// The starting amount of fuel.
     initial_fuel: u64,
@@ -91,7 +91,7 @@ where
 /// Type representing a running [Wasmtime](https://wasmtime.dev/) service.
 pub struct WasmtimeServiceInstance<Runtime> {
     /// The Wasm module instance.
-    instance: EntrypointInstance<SystemApiData<Runtime>>,
+    instance: EntrypointInstance<RuntimeApiData<Runtime>>,
 }
 
 impl WasmContractModule {
@@ -109,16 +109,16 @@ impl WasmContractModule {
 
 impl<Runtime> WasmtimeContractInstance<Runtime>
 where
-    Runtime: ContractRuntime + WriteBatch + 'static,
+    Runtime: ContractRuntime + 'static,
 {
     /// Prepares a runtime instance to call into the Wasm contract.
     pub fn prepare(contract_module: &Module, runtime: Runtime) -> Result<Self, WasmExecutionError> {
         let mut linker = Linker::new(&CONTRACT_ENGINE);
 
-        ContractSystemApi::export_to(&mut linker)?;
-        ViewSystemApi::export_to(&mut linker)?;
+        BaseRuntimeApi::export_to(&mut linker)?;
+        ContractRuntimeApi::export_to(&mut linker)?;
 
-        let user_data = SystemApiData::new(runtime);
+        let user_data = RuntimeApiData::new(runtime);
         let mut store = Store::new(&CONTRACT_ENGINE, user_data);
         let instance = linker
             .instantiate(&mut store, contract_module)
@@ -146,16 +146,16 @@ impl WasmServiceModule {
 
 impl<Runtime> WasmtimeServiceInstance<Runtime>
 where
-    Runtime: ServiceRuntime + WriteBatch + 'static,
+    Runtime: ServiceRuntime + 'static,
 {
     /// Prepares a runtime instance to call into the Wasm service.
     pub fn prepare(service_module: &Module, runtime: Runtime) -> Result<Self, WasmExecutionError> {
         let mut linker = Linker::new(&SERVICE_ENGINE);
 
-        ServiceSystemApi::export_to(&mut linker)?;
-        ViewSystemApi::export_to(&mut linker)?;
+        BaseRuntimeApi::export_to(&mut linker)?;
+        ServiceRuntimeApi::export_to(&mut linker)?;
 
-        let user_data = SystemApiData::new(runtime);
+        let user_data = RuntimeApiData::new(runtime);
         let mut store = Store::new(&SERVICE_ENGINE, user_data);
         let instance = linker
             .instantiate(&mut store, service_module)

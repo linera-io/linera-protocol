@@ -29,7 +29,7 @@ use linera_rpc::{
     },
     grpc, simple,
 };
-use linera_sdk::base::{AccountSecretKey, ValidatorKeypair};
+use linera_sdk::linera_base_types::{AccountSecretKey, ValidatorKeypair};
 #[cfg(with_metrics)]
 use linera_service::prometheus_server;
 use linera_service::util;
