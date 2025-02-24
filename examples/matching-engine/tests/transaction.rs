@@ -7,7 +7,7 @@
 
 use async_graphql::InputType;
 use linera_sdk::{
-    base::{AccountOwner, Amount, ApplicationId, ApplicationPermissions},
+    linera_base_types::{AccountOwner, Amount, ApplicationId, ApplicationPermissions},
     test::{ActiveChain, QueryOutcome, TestValidator},
 };
 use matching_engine::{

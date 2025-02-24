@@ -3,7 +3,7 @@
 
 use fungible::Account;
 use linera_sdk::{
-    base::Amount,
+    linera_base_types::Amount,
     views::{linera_views, MapView, RegisterView, RootView, ViewStorageContext},
 };
 

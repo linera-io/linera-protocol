@@ -63,8 +63,8 @@ use crate::runtime::ContractSyncRuntime;
 pub use crate::wasm::test as wasm_test;
 #[cfg(with_wasm_runtime)]
 pub use crate::wasm::{
-    ContractEntrypoints, ContractSystemApi, ServiceEntrypoints, ServiceSystemApi, SystemApiData,
-    ViewSystemApi, WasmContractModule, WasmExecutionError, WasmServiceModule,
+    BaseRuntimeApi, ContractEntrypoints, ContractRuntimeApi, RuntimeApiData, ServiceEntrypoints,
+    ServiceRuntimeApi, WasmContractModule, WasmExecutionError, WasmServiceModule,
 };
 pub use crate::{
     applications::ApplicationRegistryView,
@@ -749,11 +749,11 @@ pub trait ContractRuntime: BaseRuntime {
         required_application_ids: Vec<UserApplicationId>,
     ) -> Result<UserApplicationId, ExecutionError>;
 
-    /// Writes a batch of changes.
-    fn write_batch(&mut self, batch: Batch) -> Result<(), ExecutionError>;
-
     /// Returns the round in which this block was validated.
     fn validation_round(&mut self) -> Result<Option<u32>, ExecutionError>;
+
+    /// Writes a batch of changes.
+    fn write_batch(&mut self, batch: Batch) -> Result<(), ExecutionError>;
 }
 
 /// An operation to be executed in a block.

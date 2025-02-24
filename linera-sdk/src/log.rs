@@ -8,7 +8,9 @@ use std::{
 
 use log::{LevelFilter, Log, Metadata, Record};
 
-use crate::{contract::wit::contract_system_api, service::wit::service_system_api};
+use crate::{
+    contract::wit::base_runtime_api as contract_wit, service::wit::base_runtime_api as service_wit,
+};
 
 static CONTRACT_LOGGER: ContractLogger = ContractLogger;
 static SERVICE_LOGGER: ServiceLogger = ServiceLogger;
@@ -36,7 +38,7 @@ impl Log for ContractLogger {
     }
 
     fn log(&self, record: &Record) {
-        contract_system_api::log(&record.args().to_string(), record.level().into());
+        contract_wit::log(&record.args().to_string(), record.level().into());
     }
 
     fn flush(&self) {}
@@ -63,7 +65,7 @@ impl Log for ServiceLogger {
     }
 
     fn log(&self, record: &Record) {
-        service_system_api::log(&record.args().to_string(), record.level().into());
+        service_wit::log(&record.args().to_string(), record.level().into());
     }
 
     fn flush(&self) {}

@@ -4,7 +4,7 @@
 /*! ABI of the LLM Example Application */
 
 use async_graphql::{Request, Response};
-use linera_sdk::base::{ContractAbi, ServiceAbi};
+use linera_sdk::linera_base_types::{ContractAbi, ServiceAbi};
 
 pub struct LlmAbi;
 

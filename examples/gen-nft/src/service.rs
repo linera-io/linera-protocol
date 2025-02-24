@@ -18,7 +18,7 @@ use base64::engine::{general_purpose::STANDARD_NO_PAD, Engine as _};
 use fungible::Account;
 use gen_nft::{NftOutput, Operation, TokenId};
 use linera_sdk::{
-    base::{AccountOwner, WithServiceAbi},
+    linera_base_types::{AccountOwner, WithServiceAbi},
     views::View,
     Service, ServiceRuntime,
 };

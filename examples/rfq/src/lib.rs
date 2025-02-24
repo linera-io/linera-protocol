@@ -6,8 +6,8 @@
 use async_graphql::{scalar, InputObject, Request, Response, SimpleObject};
 use fungible::Account;
 use linera_sdk::{
-    base::{Amount, ApplicationId, ChainId, ContractAbi, Owner, ServiceAbi},
     graphql::GraphQLMutationRoot,
+    linera_base_types::{Amount, ApplicationId, ChainId, ContractAbi, Owner, ServiceAbi},
 };
 use serde::{Deserialize, Serialize};
 

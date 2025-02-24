@@ -34,7 +34,7 @@ use linera_base::{
 use linera_chain::data_types::{Medium, Origin};
 use linera_core::worker::{Notification, Reason};
 use linera_sdk::{
-    base::{BlobContent, BlockHeight, Owner},
+    linera_base_types::{BlobContent, BlockHeight, Owner},
     DataBlobHash,
 };
 #[cfg(any(

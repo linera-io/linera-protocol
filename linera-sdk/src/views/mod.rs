@@ -4,7 +4,6 @@
 //! Helper types for using [`linera_views`] to store application state.
 
 mod aliases;
-mod conversions_to_wit;
 #[cfg(with_testing)]
 mod mock_key_value_store;
 mod system_api;
