@@ -60,7 +60,7 @@ pub enum CryptoError {
     ParseIntError(#[from] ParseIntError),
     #[error("secp256k1 error: {0}")]
     Secp256k1Error(k256::ecdsa::Error),
-    #[error("Could not parse public key: {0}. Public key point at inifinity.")]
+    #[error("could not parse public key: {0}: key point at inifinity.")]
     Secp256k1PointAtIfinity(String),
 }
 
