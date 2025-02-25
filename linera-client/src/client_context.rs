@@ -620,12 +620,12 @@ where
             .default_chain()
             .expect("should have default chain");
         let default_chain_client = self.make_chain_client(default_chain_id)?;
-        let (epoch, committees) = default_chain_client
+        let (epoch, mut committees) = default_chain_client
             .epoch_and_committees(default_chain_id)
             .await?;
         let epoch = epoch.expect("default chain should have an epoch");
         let committee = committees
-            .get(&epoch)
+            .remove(&epoch)
             .expect("current epoch should have a committee");
         let blocks_infos = Benchmark::<S>::make_benchmark_block_info(
             key_pairs,
@@ -633,7 +633,7 @@ where
             fungible_application_id,
         );
 
-        Ok((chain_clients, epoch, blocks_infos, committee.clone()))
+        Ok((chain_clients, epoch, blocks_infos, committee))
     }
 
     async fn process_inboxes_and_force_validator_updates(&mut self) {
