@@ -637,7 +637,7 @@ impl TryFrom<api::ValidatorPublicKey> for ValidatorPublicKey {
     type Error = GrpcProtoConversionError;
 
     fn try_from(public_key: api::ValidatorPublicKey) -> Result<Self, Self::Error> {
-        Ok(ValidatorPublicKey::from_bytes(public_key.bytes.as_slice()))
+        Ok(ValidatorPublicKey::from_bytes(public_key.bytes.as_slice())?)
     }
 }
 

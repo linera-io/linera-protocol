@@ -141,7 +141,11 @@ impl TryFrom<&[u8]> for Ed25519PublicKey {
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
         if value.len() != dalek::PUBLIC_KEY_LENGTH {
-            return Err(CryptoError::IncorrectPublicKeySize(value.len()));
+            return Err(CryptoError::IncorrectPublicKeySize {
+                scheme: "Ed25519".to_string(),
+                len: value.len(),
+                expected: dalek::PUBLIC_KEY_LENGTH,
+            });
         }
         let mut pubkey = [0u8; dalek::PUBLIC_KEY_LENGTH];
         pubkey.copy_from_slice(value);
