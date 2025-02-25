@@ -69,8 +69,8 @@ static PROXY_REQUEST_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
         "Proxy request latency",
         &[],
         Some(vec![
-            0.001, 0.002_5, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 25.0,
-            50.0, 100.0, 200.0, 300.0, 400.0,
+            1.0, 2.5, 5.0, 10.0, 25.0, 50.0, 100.0, 150.0, 200.0, 250.0, 300.0, 350.0, 400.0,
+            450.0, 500.0,
         ]),
     )
     .expect("Counter creation should not fail")
