@@ -44,12 +44,12 @@ futures.workspace = true
 getrandom = { workspace = true, optional = true }
 hex.workspace = true
 is-terminal.workspace = true
+k256.workspace = true
 linera-witty = { workspace = true, features = ["macros"] }
 prometheus = { workspace = true, optional = true }
 proptest = { workspace = true, optional = true, features = ["alloc"] }
 rand.workspace = true
 reqwest = { workspace = true, optional = true }
-secp256k1.workspace = true
 serde.workspace = true
 serde-name.workspace = true
 serde_bytes.workspace = true

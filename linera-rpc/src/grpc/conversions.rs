@@ -628,7 +628,7 @@ impl From<AccountPublicKey> for api::AccountPublicKey {
 impl From<ValidatorPublicKey> for api::ValidatorPublicKey {
     fn from(public_key: ValidatorPublicKey) -> Self {
         Self {
-            bytes: public_key.0.serialize().to_vec(),
+            bytes: public_key.as_bytes(),
         }
     }
 }
@@ -637,7 +637,7 @@ impl TryFrom<api::ValidatorPublicKey> for ValidatorPublicKey {
     type Error = GrpcProtoConversionError;
 
     fn try_from(public_key: api::ValidatorPublicKey) -> Result<Self, Self::Error> {
-        Ok(ValidatorPublicKey::try_from(public_key.bytes.as_slice())?)
+        Ok(ValidatorPublicKey::from_bytes(public_key.bytes.as_slice()))
     }
 }
 
@@ -660,7 +660,7 @@ impl From<AccountSignature> for api::AccountSignature {
 impl From<ValidatorSignature> for api::ValidatorSignature {
     fn from(signature: ValidatorSignature) -> Self {
         Self {
-            bytes: signature.0.serialize_compact().to_vec(),
+            bytes: signature.as_bytes().to_vec(),
         }
     }
 }

@@ -4,24 +4,35 @@
 
 //! Defines secp256k1 signature primitives used by the Linera protocol.
 
-use std::{fmt, str::FromStr, sync::LazyLock};
+use std::{
+    fmt,
+    hash::{Hash, Hasher},
+    str::FromStr,
+};
 
-use secp256k1::{self, All, Message, Secp256k1};
+use k256::{
+    ecdsa::{Signature, SigningKey, VerifyingKey},
+    elliptic_curve::sec1::FromEncodedPoint,
+    EncodedPoint,
+};
 use serde::{Deserialize, Serialize};
 
 use super::{BcsSignable, CryptoError, CryptoHash, HasTypeName};
 use crate::doc_scalar;
 
-/// Static secp256k1 context for reuse.
-pub static SECP256K1: LazyLock<Secp256k1<All>> = LazyLock::new(secp256k1::Secp256k1::new);
-
 /// A secp256k1 secret key.
 #[derive(Eq, PartialEq)]
-pub struct Secp256k1SecretKey(pub secp256k1::SecretKey);
+pub struct Secp256k1SecretKey(pub SigningKey);
 
 /// A secp256k1 public key.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash)]
-pub struct Secp256k1PublicKey(pub secp256k1::PublicKey);
+#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone)]
+pub struct Secp256k1PublicKey(pub VerifyingKey);
+
+impl Hash for Secp256k1PublicKey {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.to_encoded_point(true).as_bytes().hash(state);
+    }
+}
 
 /// Secp256k1 public/secret key pair.
 #[derive(Debug, PartialEq, Eq)]
@@ -34,17 +45,33 @@ pub struct Secp256k1KeyPair {
 
 /// A secp256k1 signature.
 #[derive(Eq, PartialEq, Copy, Clone)]
-pub struct Secp256k1Signature(pub secp256k1::ecdsa::Signature);
+pub struct Secp256k1Signature(pub Signature);
 
 impl Secp256k1PublicKey {
     /// A fake public key used for testing.
     #[cfg(with_testing)]
     pub fn test_key(seed: u8) -> Self {
         use rand::SeedableRng;
-
         let mut rng = rand::rngs::StdRng::seed_from_u64(seed as u64);
-        let secp = secp256k1::Secp256k1::signing_only();
-        Self(secp.generate_keypair(&mut rng).1)
+        let sk = k256::SecretKey::random(&mut rng);
+        Self(sk.public_key().into())
+    }
+
+    /// Returns the bytes of the public key in compressed representation.
+    pub fn as_bytes(&self) -> Vec<u8> {
+        self.0.to_encoded_point(true).as_bytes().to_vec()
+    }
+
+    /// Decodes the bytes into the public key.
+    /// Expects the bytes to be of compressed representation.
+    ///
+    /// Panics if the encoding can't be done in a constant time.
+    pub fn from_bytes(bytes: &[u8]) -> Self {
+        Self(
+            k256::PublicKey::from_encoded_point(&EncodedPoint::from_bytes(bytes).unwrap())
+                .expect("Decode in constant time.")
+                .into(),
+        )
     }
 }
 
@@ -61,7 +88,7 @@ impl Serialize for Secp256k1SecretKey {
     {
         // This is only used for JSON configuration.
         assert!(serializer.is_human_readable());
-        serializer.serialize_str(&hex::encode(self.0.secret_bytes()))
+        serializer.serialize_str(&hex::encode(self.0.to_bytes()))
     }
 }
 
@@ -74,7 +101,7 @@ impl<'de> Deserialize<'de> for Secp256k1SecretKey {
         assert!(deserializer.is_human_readable());
         let str = String::deserialize(deserializer)?;
         let bytes = hex::decode(&str).map_err(serde::de::Error::custom)?;
-        let sk = secp256k1::SecretKey::from_slice(&bytes).map_err(serde::de::Error::custom)?;
+        let sk = k256::ecdsa::SigningKey::from_slice(&bytes).map_err(serde::de::Error::custom)?;
         Ok(Secp256k1SecretKey(sk))
     }
 }
@@ -85,12 +112,10 @@ impl Serialize for Secp256k1PublicKey {
         S: serde::ser::Serializer,
     {
         if serializer.is_human_readable() {
-            serializer.serialize_str(&hex::encode(self.0.serialize()))
+            serializer.serialize_str(&hex::encode(self.as_bytes()))
         } else {
-            #[derive(Serialize)]
-            #[serde(rename = "Secp256k1PublicKey")]
-            struct PublicKey<'a>(&'a secp256k1::PublicKey);
-            PublicKey(&self.0).serialize(serializer)
+            let compact_pk = serde_utils::CompactPublicKey(self.as_bytes().try_into().unwrap());
+            serializer.serialize_newtype_struct("Secp256k1PublicKey", &compact_pk)
         }
     }
 }
@@ -103,14 +128,13 @@ impl<'de> Deserialize<'de> for Secp256k1PublicKey {
         if deserializer.is_human_readable() {
             let s = String::deserialize(deserializer)?;
             let value = hex::decode(s).map_err(serde::de::Error::custom)?;
-            let pk = secp256k1::PublicKey::from_slice(&value).map_err(serde::de::Error::custom)?;
-            Ok(Secp256k1PublicKey(pk))
+            Ok(Secp256k1PublicKey::from_bytes(&value))
         } else {
             #[derive(Deserialize)]
             #[serde(rename = "Secp256k1PublicKey")]
-            struct PublicKey(secp256k1::PublicKey);
-            let value = PublicKey::deserialize(deserializer)?;
-            Ok(Self(value.0))
+            struct PublicKey(serde_utils::CompactPublicKey);
+            let compact = PublicKey::deserialize(deserializer)?;
+            Ok(Secp256k1PublicKey::from_bytes(&compact.0 .0))
         }
     }
 }
@@ -119,8 +143,7 @@ impl FromStr for Secp256k1PublicKey {
     type Err = CryptoError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let pk = secp256k1::PublicKey::from_str(s).map_err(CryptoError::Secp256k1Error)?;
-        Ok(Secp256k1PublicKey(pk))
+        hex::decode(s)?.as_slice().try_into()
     }
 }
 
@@ -128,21 +151,23 @@ impl TryFrom<&[u8]> for Secp256k1PublicKey {
     type Error = CryptoError;
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
-        let pk = secp256k1::PublicKey::from_slice(value).map_err(CryptoError::Secp256k1Error)?;
-        Ok(Secp256k1PublicKey(pk))
+        let pk = k256::PublicKey::from_encoded_point(&EncodedPoint::from_bytes(value).unwrap())
+            .expect("Decode in constant time.");
+        Ok(Secp256k1PublicKey(pk.into()))
     }
 }
 
 impl fmt::Display for Secp256k1PublicKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let s = hex::encode(self.0.serialize());
-        write!(f, "{}", s)
+        let str = hex::encode(self.0.to_encoded_point(true).to_bytes());
+        write!(f, "{}", str)
     }
 }
 
 impl fmt::Debug for Secp256k1PublicKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", hex::encode(&self.0.serialize()[0..9]))
+        let str = hex::encode(&self.0.to_encoded_point(true).to_bytes()[0..9]);
+        write!(f, "{}..", str)
     }
 }
 
@@ -157,10 +182,11 @@ impl Secp256k1KeyPair {
     /// Generates a new key pair from the given RNG. Use with care.
     #[cfg(with_getrandom)]
     pub fn generate_from<R: super::CryptoRng>(rng: &mut R) -> Self {
-        let (sk, pk) = SECP256K1.generate_keypair(rng);
+        let secret_key = Secp256k1SecretKey(SigningKey::random(rng));
+        let public_key = secret_key.public();
         Secp256k1KeyPair {
-            secret_key: Secp256k1SecretKey(sk),
-            public_key: Secp256k1PublicKey(pk),
+            secret_key,
+            public_key,
         }
     }
 }
@@ -168,7 +194,7 @@ impl Secp256k1KeyPair {
 impl Secp256k1SecretKey {
     /// Returns a public key for the given secret key.
     pub fn public(&self) -> Secp256k1PublicKey {
-        Secp256k1PublicKey(self.0.public_key(&SECP256K1))
+        Secp256k1PublicKey(*self.0.verifying_key())
     }
 
     /// Copies the key pair, **including the secret key**.
@@ -176,7 +202,7 @@ impl Secp256k1SecretKey {
     /// The `Clone` and `Copy` traits are deliberately not implemented for `Secp256k1SecretKey` to prevent
     /// accidental copies of secret keys.
     pub fn copy(&self) -> Self {
-        Self(self.0)
+        Self(self.0.clone())
     }
 }
 
@@ -187,9 +213,8 @@ impl Secp256k1Signature {
     where
         T: BcsSignable<'de>,
     {
-        let secp = secp256k1::Secp256k1::signing_only();
-        let message = Message::from_digest(CryptoHash::new(value).as_bytes().0);
-        let signature = secp.sign_ecdsa(&message, &secret.0);
+        let prehash = CryptoHash::new(value).as_bytes().0;
+        let (signature, _rid) = secret.0.sign_prehash_recoverable(&prehash).unwrap();
         Secp256k1Signature(signature)
     }
 
@@ -198,13 +223,8 @@ impl Secp256k1Signature {
     where
         T: BcsSignable<'de> + fmt::Debug,
     {
-        let message = Message::from_digest(CryptoHash::new(value).as_bytes().0);
-        SECP256K1
-            .verify_ecdsa(&message, &self.0, &author.0)
-            .map_err(|error| CryptoError::InvalidSignature {
-                error: error.to_string(),
-                type_name: T::type_name().to_string(),
-            })
+        let prehash = CryptoHash::new(value).as_bytes().0;
+        self.verify_inner::<T>(prehash, author)
     }
 
     pub fn verify_batch<'a, 'de, T, I>(value: &'a T, votes: I) -> Result<(), CryptoError>
@@ -212,19 +232,41 @@ impl Secp256k1Signature {
         T: BcsSignable<'de> + fmt::Debug,
         I: IntoIterator<Item = &'a (Secp256k1PublicKey, Secp256k1Signature)>,
     {
-        let message = Message::from_digest(CryptoHash::new(value).as_bytes().0);
+        let prehash = CryptoHash::new(value).as_bytes().0;
         for (author, signature) in votes {
-            SECP256K1
-                .verify_ecdsa(&message, &signature.0, &author.0)
-                .expect("Invalid signature");
+            signature.verify_inner::<T>(prehash, author)?;
         }
         Ok(())
     }
 
+    /// Returns the byte representation of the signature.
+    pub fn as_bytes(&self) -> [u8; 64] {
+        self.0.to_bytes().into()
+    }
+
+    fn verify_inner<'de, T>(
+        &self,
+        prehash: [u8; 32],
+        author: &Secp256k1PublicKey,
+    ) -> Result<(), CryptoError>
+    where
+        T: BcsSignable<'de> + fmt::Debug,
+    {
+        use k256::ecdsa::signature::hazmat::PrehashVerifier;
+
+        author
+            .0
+            .verify_prehash(&prehash, &self.0)
+            .map_err(|error| CryptoError::InvalidSignature {
+                error: error.to_string(),
+                type_name: T::type_name().to_string(),
+            })
+    }
+
     /// Creates a signature from the bytes.
-    /// Expects the signature to be serialized in compact form.
+    /// Expects the signature to be serialized in raw-bytes form.
     pub fn from_slice<A: AsRef<[u8]>>(bytes: A) -> Result<Self, CryptoError> {
-        let sig = secp256k1::ecdsa::Signature::from_compact(bytes.as_ref())
+        let sig = k256::ecdsa::Signature::from_slice(bytes.as_ref())
             .map_err(CryptoError::Secp256k1Error)?;
         Ok(Secp256k1Signature(sig))
     }
@@ -236,9 +278,9 @@ impl Serialize for Secp256k1Signature {
         S: serde::ser::Serializer,
     {
         if serializer.is_human_readable() {
-            serializer.serialize_str(&hex::encode(self.0.serialize_der()))
+            serializer.serialize_str(&hex::encode(self.as_bytes()))
         } else {
-            let compact = serde_utils::CompactSignature(self.0.serialize_compact());
+            let compact = serde_utils::CompactSignature(self.as_bytes());
             serializer.serialize_newtype_struct("Secp256k1Signature", &compact)
         }
     }
@@ -252,9 +294,7 @@ impl<'de> Deserialize<'de> for Secp256k1Signature {
         if deserializer.is_human_readable() {
             let s = String::deserialize(deserializer)?;
             let value = hex::decode(s).map_err(serde::de::Error::custom)?;
-            let sig =
-                secp256k1::ecdsa::Signature::from_der(&value).map_err(serde::de::Error::custom)?;
-            Ok(Secp256k1Signature(sig))
+            Self::from_slice(&value).map_err(serde::de::Error::custom)
         } else {
             #[derive(Deserialize)]
             #[serde(rename = "Secp256k1Signature")]
@@ -268,14 +308,14 @@ impl<'de> Deserialize<'de> for Secp256k1Signature {
 
 impl fmt::Display for Secp256k1Signature {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let s = hex::encode(self.0.serialize_der());
+        let s = hex::encode(self.as_bytes());
         write!(f, "{}", s)
     }
 }
 
 impl fmt::Debug for Secp256k1Signature {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", hex::encode(&self.0.serialize_der()[0..8]))
+        write!(f, "{}", hex::encode(&self.as_bytes()[0..9]))
     }
 }
 
@@ -293,9 +333,12 @@ mod serde_utils {
     #[serde_as]
     #[derive(Serialize, Deserialize)]
     #[serde(transparent)]
-    pub struct CompactSignature(
-        #[serde_as(as = "[_; 64]")] pub [u8; secp256k1::constants::COMPACT_SIGNATURE_SIZE],
-    );
+    pub struct CompactSignature(#[serde_as(as = "[_; 64]")] pub [u8; 64]);
+
+    #[serde_as]
+    #[derive(Serialize, Deserialize)]
+    #[serde(transparent)]
+    pub struct CompactPublicKey(#[serde_as(as = "[_; 33]")] pub [u8; 33]);
 }
 
 #[cfg(with_testing)]
@@ -348,5 +391,59 @@ mod tests {
         let s = serde_json::to_string(&key_in).unwrap();
         let key_out: Secp256k1SecretKey = serde_json::from_str(&s).unwrap();
         assert_eq!(key_out, key_in);
+    }
+
+    #[test]
+    fn test_signature_serialization() {
+        use crate::crypto::{
+            secp256k1::{Secp256k1KeyPair, Secp256k1Signature},
+            TestString,
+        };
+        let keypair = Secp256k1KeyPair::generate();
+        let sig = Secp256k1Signature::new(&TestString("hello".into()), &keypair.secret_key);
+        let s = serde_json::to_string(&sig).unwrap();
+        let sig2: Secp256k1Signature = serde_json::from_str(&s).unwrap();
+        assert_eq!(sig, sig2);
+
+        let s = bcs::to_bytes(&sig).unwrap();
+        let sig2: Secp256k1Signature = bcs::from_bytes(&s).unwrap();
+        assert_eq!(sig, sig2);
+    }
+
+    #[test]
+    fn public_key_from_str() {
+        use std::str::FromStr;
+
+        use crate::crypto::secp256k1::Secp256k1PublicKey;
+        let key = Secp256k1PublicKey::test_key(0);
+        let s = key.to_string();
+        let key2 = Secp256k1PublicKey::from_str(s.as_str()).unwrap();
+        assert_eq!(key, key2);
+    }
+
+    #[test]
+    fn bytes_repr_compact_public_key() {
+        use crate::crypto::secp256k1::Secp256k1PublicKey;
+        let key_in: Secp256k1PublicKey = Secp256k1PublicKey::test_key(0);
+        let bytes = key_in.as_bytes();
+        assert!(
+            bytes.len() == 33,
+            "::to_bytes() should return compressed representation"
+        );
+        let key_out = Secp256k1PublicKey::from_bytes(&bytes);
+        assert_eq!(key_in, key_out);
+    }
+
+    #[test]
+    fn human_readable_ser() {
+        use crate::crypto::{
+            secp256k1::{Secp256k1KeyPair, Secp256k1Signature},
+            TestString,
+        };
+        let key_pair = Secp256k1KeyPair::generate();
+        let sig = Secp256k1Signature::new(&TestString("hello".into()), &key_pair.secret_key);
+        let s = serde_json::to_string(&sig).unwrap();
+        let sig2: Secp256k1Signature = serde_json::from_str(&s).unwrap();
+        assert_eq!(sig, sig2);
     }
 }
