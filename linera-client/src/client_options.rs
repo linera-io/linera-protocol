@@ -640,80 +640,104 @@ pub enum ClientCommand {
         /// Number of initial (aka "root") chains to create in addition to the admin chain.
         num_other_initial_chains: u32,
 
+        /// Configure the resource control policy (notably fees) according to pre-defined
+        /// settings.
+        #[arg(long, default_value = "no-fees")]
+        policy_config: ResourceControlPolicyConfig,
+
         /// Set the base price for creating a block.
-        #[arg(long, default_value = "0")]
-        block_price: Amount,
+        /// (This will overwrite value from `--policy-config`)
+        #[arg(long)]
+        block_price: Option<Amount>,
 
         /// Set the price per unit of fuel.
-        #[arg(long, default_value = "0")]
-        fuel_unit_price: Amount,
+        /// (This will overwrite value from `--policy-config`)
+        #[arg(long)]
+        fuel_unit_price: Option<Amount>,
 
         /// Set the price per read operation.
-        #[arg(long, default_value = "0")]
-        read_operation_price: Amount,
+        /// (This will overwrite value from `--policy-config`)
+        #[arg(long)]
+        read_operation_price: Option<Amount>,
 
         /// Set the price per write operation.
-        #[arg(long, default_value = "0")]
-        write_operation_price: Amount,
+        /// (This will overwrite value from `--policy-config`)
+        #[arg(long)]
+        write_operation_price: Option<Amount>,
 
         /// Set the price per byte read.
-        #[arg(long, default_value = "0")]
-        byte_read_price: Amount,
+        /// (This will overwrite value from `--policy-config`)
+        #[arg(long)]
+        byte_read_price: Option<Amount>,
 
         /// Set the price per byte written.
-        #[arg(long, default_value = "0")]
-        byte_written_price: Amount,
+        /// (This will overwrite value from `--policy-config`)
+        #[arg(long)]
+        byte_written_price: Option<Amount>,
 
         /// Set the price per byte stored.
-        #[arg(long, default_value = "0")]
-        byte_stored_price: Amount,
+        /// (This will overwrite value from `--policy-config`)
+        #[arg(long)]
+        byte_stored_price: Option<Amount>,
 
         /// Set the base price of sending an operation from a block..
-        #[arg(long, default_value = "0")]
-        operation_price: Amount,
+        /// (This will overwrite value from `--policy-config`)
+        #[arg(long)]
+        operation_price: Option<Amount>,
 
         /// Set the additional price for each byte in the argument of a user operation.
-        #[arg(long, default_value = "0")]
-        operation_byte_price: Amount,
+        /// (This will overwrite value from `--policy-config`)
+        #[arg(long)]
+        operation_byte_price: Option<Amount>,
 
         /// Set the base price of sending a message from a block..
-        #[arg(long, default_value = "0")]
-        message_price: Amount,
+        /// (This will overwrite value from `--policy-config`)
+        #[arg(long)]
+        message_price: Option<Amount>,
 
         /// Set the additional price for each byte in the argument of a user message.
-        #[arg(long, default_value = "0")]
-        message_byte_price: Amount,
+        /// (This will overwrite value from `--policy-config`)
+        #[arg(long)]
+        message_byte_price: Option<Amount>,
 
         /// Set the maximum amount of fuel per block.
+        /// (This will overwrite value from `--policy-config`)
         #[arg(long)]
         maximum_fuel_per_block: Option<u64>,
 
         /// Set the maximum size of an executed block.
+        /// (This will overwrite value from `--policy-config`)
         #[arg(long)]
         maximum_executed_block_size: Option<u64>,
 
         /// Set the maximum size of decompressed contract or service bytecode, in bytes.
+        /// (This will overwrite value from `--policy-config`)
         #[arg(long)]
         maximum_bytecode_size: Option<u64>,
 
         /// Set the maximum size of data blobs, compressed bytecode and other binary blobs,
         /// in bytes.
+        /// (This will overwrite value from `--policy-config`)
         #[arg(long)]
         maximum_blob_size: Option<u64>,
 
         /// Set the maximum number of published blobs per block.
+        /// (This will overwrite value from `--policy-config`)
         #[arg(long)]
         maximum_published_blobs: Option<u64>,
 
         /// Set the maximum size of a block proposal, in bytes.
+        /// (This will overwrite value from `--policy-config`)
         #[arg(long)]
         maximum_block_proposal_size: Option<u64>,
 
         /// Set the maximum read data per block.
+        /// (This will overwrite value from `--policy-config`)
         #[arg(long)]
         maximum_bytes_read_per_block: Option<u64>,
 
         /// Set the maximum write data per block.
+        /// (This will overwrite value from `--policy-config`)
         #[arg(long)]
         maximum_bytes_written_per_block: Option<u64>,
 
@@ -1056,7 +1080,7 @@ pub enum NetCommand {
 
         /// Configure the resource control policy (notably fees) according to pre-defined
         /// settings.
-        #[arg(long, default_value = "default")]
+        #[arg(long, default_value = "no-fees")]
         policy_config: ResourceControlPolicyConfig,
 
         /// Force this wallet to generate keys using a PRNG and a given seed. USE FOR
@@ -1127,21 +1151,27 @@ pub enum NetCommand {
 
 #[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ResourceControlPolicyConfig {
-    Default,
+    NoFees,
+    Testnet,
+    #[cfg(with_testing)]
     OnlyFuel,
+    #[cfg(with_testing)]
     FuelAndBlock,
+    #[cfg(with_testing)]
     AllCategories,
-    Devnet,
 }
 
 impl ResourceControlPolicyConfig {
     pub fn into_policy(self) -> ResourceControlPolicy {
         match self {
-            ResourceControlPolicyConfig::Default => ResourceControlPolicy::default(),
+            ResourceControlPolicyConfig::NoFees => ResourceControlPolicy::no_fees(),
+            ResourceControlPolicyConfig::Testnet => ResourceControlPolicy::testnet(),
+            #[cfg(with_testing)]
             ResourceControlPolicyConfig::OnlyFuel => ResourceControlPolicy::only_fuel(),
+            #[cfg(with_testing)]
             ResourceControlPolicyConfig::FuelAndBlock => ResourceControlPolicy::fuel_and_block(),
+            #[cfg(with_testing)]
             ResourceControlPolicyConfig::AllCategories => ResourceControlPolicy::all_categories(),
-            ResourceControlPolicyConfig::Devnet => ResourceControlPolicy::devnet(),
         }
     }
 }

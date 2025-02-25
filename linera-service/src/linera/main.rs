@@ -41,7 +41,7 @@ use linera_core::{
 };
 use linera_execution::{
     committee::{Committee, ValidatorState},
-    Message, ResourceControlPolicy, SystemMessage,
+    Message, SystemMessage,
 };
 use linera_faucet_server::FaucetService;
 use linera_sdk::linera_base_types::ValidatorPublicKey;
@@ -1454,6 +1454,7 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
             initial_funding,
             start_timestamp,
             num_other_initial_chains,
+            policy_config,
             block_price,
             fuel_unit_price,
             read_operation_price,
@@ -1479,36 +1480,64 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
             let start_time = Instant::now();
             let committee_config: CommitteeConfig = util::read_json(committee_config_path)
                 .expect("Unable to read committee config file");
-            let maximum_fuel_per_block = maximum_fuel_per_block.unwrap_or(u64::MAX);
-            let maximum_bytes_read_per_block = maximum_bytes_read_per_block.unwrap_or(u64::MAX);
-            let maximum_bytes_written_per_block =
-                maximum_bytes_written_per_block.unwrap_or(u64::MAX);
-            let maximum_executed_block_size = maximum_executed_block_size.unwrap_or(u64::MAX);
-            let maximum_blob_size = maximum_blob_size.unwrap_or(u64::MAX);
-            let maximum_published_blobs = maximum_published_blobs.unwrap_or(u64::MAX);
-            let maximum_bytecode_size = maximum_bytecode_size.unwrap_or(u64::MAX);
-            let maximum_block_proposal_size = maximum_block_proposal_size.unwrap_or(u64::MAX);
-            let policy = ResourceControlPolicy {
-                block: *block_price,
-                fuel_unit: *fuel_unit_price,
-                read_operation: *read_operation_price,
-                write_operation: *write_operation_price,
-                byte_read: *byte_read_price,
-                byte_written: *byte_written_price,
-                byte_stored: *byte_stored_price,
-                operation_byte: *operation_byte_price,
-                operation: *operation_price,
-                message_byte: *message_byte_price,
-                message: *message_price,
-                maximum_fuel_per_block,
-                maximum_executed_block_size,
-                maximum_blob_size,
-                maximum_published_blobs,
-                maximum_bytecode_size,
-                maximum_block_proposal_size,
-                maximum_bytes_read_per_block,
-                maximum_bytes_written_per_block,
-            };
+            let mut policy = policy_config.into_policy();
+            if let Some(block_price) = block_price {
+                policy.block = *block_price;
+            }
+            if let Some(fuel_unit_price) = fuel_unit_price {
+                policy.fuel_unit = *fuel_unit_price;
+            }
+            if let Some(read_operation_price) = read_operation_price {
+                policy.read_operation = *read_operation_price;
+            }
+            if let Some(write_operation_price) = write_operation_price {
+                policy.write_operation = *write_operation_price;
+            }
+            if let Some(byte_read_price) = byte_read_price {
+                policy.byte_read = *byte_read_price;
+            }
+            if let Some(byte_written_price) = byte_written_price {
+                policy.byte_written = *byte_written_price;
+            }
+            if let Some(byte_stored_price) = byte_stored_price {
+                policy.byte_stored = *byte_stored_price;
+            }
+            if let Some(operation_price) = operation_price {
+                policy.operation = *operation_price;
+            }
+            if let Some(operation_byte_price) = operation_byte_price {
+                policy.operation_byte = *operation_byte_price;
+            }
+            if let Some(message_price) = message_price {
+                policy.message = *message_price;
+            }
+            if let Some(message_byte_price) = message_byte_price {
+                policy.message_byte = *message_byte_price;
+            }
+            if let Some(maximum_fuel_per_block) = maximum_fuel_per_block {
+                policy.maximum_fuel_per_block = *maximum_fuel_per_block;
+            }
+            if let Some(maximum_executed_block_size) = maximum_executed_block_size {
+                policy.maximum_executed_block_size = *maximum_executed_block_size;
+            }
+            if let Some(maximum_blob_size) = maximum_blob_size {
+                policy.maximum_blob_size = *maximum_blob_size;
+            }
+            if let Some(maximum_published_blobs) = maximum_published_blobs {
+                policy.maximum_published_blobs = *maximum_published_blobs;
+            }
+            if let Some(maximum_bytecode_size) = maximum_bytecode_size {
+                policy.maximum_bytecode_size = *maximum_bytecode_size;
+            }
+            if let Some(maximum_block_proposal_size) = maximum_block_proposal_size {
+                policy.maximum_block_proposal_size = *maximum_block_proposal_size;
+            }
+            if let Some(maximum_bytes_read_per_block) = maximum_bytes_read_per_block {
+                policy.maximum_bytes_read_per_block = *maximum_bytes_read_per_block;
+            }
+            if let Some(maximum_bytes_written_per_block) = maximum_bytes_written_per_block {
+                policy.maximum_bytes_written_per_block = *maximum_bytes_written_per_block;
+            }
             let timestamp = start_timestamp
                 .map(|st| {
                     let micros =
@@ -1625,7 +1654,7 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
                     binaries,
                     *no_build,
                     docker_image_name.clone(),
-                    policy_config.into_policy(),
+                    *policy_config,
                     *with_faucet,
                     *faucet_chain,
                     *faucet_port,
@@ -1658,7 +1687,7 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
                     *validators,
                     *shards,
                     *testing_prng_seed,
-                    policy_config.into_policy(),
+                    *policy_config,
                     path,
                     storage,
                     external_protocol.clone(),
