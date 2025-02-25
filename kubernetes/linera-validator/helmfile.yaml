@@ -31,7 +31,7 @@ releases:
       - writeToGrafanaCloud: {{ .Values.writeToGrafanaCloud }}
       - {{ env "LINERA_HELMFILE_VALUES_LINERA_CORE" | default "values-local.yaml.gotmpl" }}
     set:
-      - name: installCRDs
+      - name: crds.enabled
         value: "true"
   - name: scylla
     version: v1.13.0
@@ -67,6 +67,6 @@ releases:
     chart: jetstack/cert-manager
     timeout: 900
     set:
-      - name: installCRDs
+      - name: crds.enabled
         value: "true"
 
