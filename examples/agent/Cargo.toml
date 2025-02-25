@@ -8,7 +8,7 @@ edition = "2021"
 anyhow = "1.0.95"
 clap = { version = "4.5.26", features = ["derive"] }
 reqwest = { version = "0.11.24", default-features = false, features = [
-    "rustls-tls",
+  "rustls-tls",
 ] }
 rig-core = "0.8.0"
 serde = { version = "1.0.152", features = ["derive"] }

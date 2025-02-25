@@ -24,7 +24,7 @@
 
 * `brew install jq`
 * `cargo install cargo-rdme`
-* `cargo install cargo-sort`
+* `cargo install taplo-cli`
 * `cargo install cargo-all-features`
 * `cargo install cargo-machete`
 
@@ -51,7 +51,7 @@ Alternatively, we have added experimental Nix support (see `flake.nix`).
 
 * `sudo apt-get install jq`
 * `cargo install cargo-rdme`
-* `cargo install cargo-sort`
+* `cargo install taplo-cli`
 * `cargo install cargo-all-features`
 * `cargo install cargo-machete`
 
