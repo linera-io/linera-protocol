@@ -20,6 +20,12 @@ use serde::{Deserialize, Serialize};
 use super::{BcsSignable, CryptoError, CryptoHash, HasTypeName};
 use crate::doc_scalar;
 
+/// Length of secp256k1 compressed public key.
+const SECP256K1_PUBLIC_KEY_SIZE: usize = 33;
+
+/// Length of secp256k1 signature.
+const SECP256K1_SIGNATURE_SIZE: usize = 64;
+
 /// A secp256k1 secret key.
 #[derive(Eq, PartialEq)]
 pub struct Secp256k1SecretKey(pub SigningKey);
@@ -66,12 +72,21 @@ impl Secp256k1PublicKey {
     /// Expects the bytes to be of compressed representation.
     ///
     /// Panics if the encoding can't be done in a constant time.
-    pub fn from_bytes(bytes: &[u8]) -> Self {
-        Self(
-            k256::PublicKey::from_encoded_point(&EncodedPoint::from_bytes(bytes).unwrap())
-                .expect("Decode in constant time.")
-                .into(),
-        )
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, CryptoError> {
+        let encoded_point =
+            EncodedPoint::from_bytes(bytes).map_err(|_| CryptoError::IncorrectPublicKeySize {
+                scheme: "secp256k1".to_string(),
+                len: bytes.len(),
+                expected: SECP256K1_PUBLIC_KEY_SIZE,
+            })?;
+
+        match k256::PublicKey::from_encoded_point(&encoded_point).into_option() {
+            Some(public_key) => Ok(Self(public_key.into())),
+            None => {
+                let error = CryptoError::Secp256k1PointAtIfinity(hex::encode(bytes));
+                Err(error)
+            }
+        }
     }
 }
 
@@ -114,7 +129,12 @@ impl Serialize for Secp256k1PublicKey {
         if serializer.is_human_readable() {
             serializer.serialize_str(&hex::encode(self.as_bytes()))
         } else {
-            let compact_pk = serde_utils::CompactPublicKey(self.as_bytes().try_into().unwrap());
+            let compact_pk =
+                serde_utils::CompressedPublicKey(self.as_bytes().try_into().map_err(|_| {
+                    serde::ser::Error::custom(format!(
+                        "Invalid bytes for public key. Expected {SECP256K1_PUBLIC_KEY_SIZE} bytes."
+                    ))
+                })?);
             serializer.serialize_newtype_struct("Secp256k1PublicKey", &compact_pk)
         }
     }
@@ -128,13 +148,13 @@ impl<'de> Deserialize<'de> for Secp256k1PublicKey {
         if deserializer.is_human_readable() {
             let s = String::deserialize(deserializer)?;
             let value = hex::decode(s).map_err(serde::de::Error::custom)?;
-            Ok(Secp256k1PublicKey::from_bytes(&value))
+            Ok(Secp256k1PublicKey::from_bytes(&value).map_err(serde::de::Error::custom)?)
         } else {
             #[derive(Deserialize)]
             #[serde(rename = "Secp256k1PublicKey")]
-            struct PublicKey(serde_utils::CompactPublicKey);
+            struct PublicKey(serde_utils::CompressedPublicKey);
             let compact = PublicKey::deserialize(deserializer)?;
-            Ok(Secp256k1PublicKey::from_bytes(&compact.0 .0))
+            Ok(Secp256k1PublicKey::from_bytes(&compact.0 .0).map_err(serde::de::Error::custom)?)
         }
     }
 }
@@ -151,9 +171,7 @@ impl TryFrom<&[u8]> for Secp256k1PublicKey {
     type Error = CryptoError;
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
-        let pk = k256::PublicKey::from_encoded_point(&EncodedPoint::from_bytes(value).unwrap())
-            .expect("Decode in constant time.");
-        Ok(Secp256k1PublicKey(pk.into()))
+        Self::from_bytes(value)
     }
 }
 
@@ -240,7 +258,7 @@ impl Secp256k1Signature {
     }
 
     /// Returns the byte representation of the signature.
-    pub fn as_bytes(&self) -> [u8; 64] {
+    pub fn as_bytes(&self) -> [u8; SECP256K1_SIGNATURE_SIZE] {
         self.0.to_bytes().into()
     }
 
@@ -326,6 +344,8 @@ mod serde_utils {
     use serde::{Deserialize, Serialize};
     use serde_with::serde_as;
 
+    use super::{SECP256K1_PUBLIC_KEY_SIZE, SECP256K1_SIGNATURE_SIZE};
+
     /// Wrapper around compact signature serialization
     /// so that we can implement custom serializer for it that uses fixed length.
     // Serde treats arrays larger than 32 as variable length arrays, and adds the length as a prefix.
@@ -333,12 +353,12 @@ mod serde_utils {
     #[serde_as]
     #[derive(Serialize, Deserialize)]
     #[serde(transparent)]
-    pub struct CompactSignature(#[serde_as(as = "[_; 64]")] pub [u8; 64]);
+    pub struct CompactSignature(#[serde_as(as = "[_; 64]")] pub [u8; SECP256K1_SIGNATURE_SIZE]);
 
     #[serde_as]
     #[derive(Serialize, Deserialize)]
     #[serde(transparent)]
-    pub struct CompactPublicKey(#[serde_as(as = "[_; 33]")] pub [u8; 33]);
+    pub struct CompressedPublicKey(#[serde_as(as = "[_; 33]")] pub [u8; SECP256K1_PUBLIC_KEY_SIZE]);
 }
 
 #[cfg(with_testing)]
@@ -430,7 +450,7 @@ mod tests {
             bytes.len() == 33,
             "::to_bytes() should return compressed representation"
         );
-        let key_out = Secp256k1PublicKey::from_bytes(&bytes);
+        let key_out = Secp256k1PublicKey::from_bytes(&bytes).unwrap();
         assert_eq!(key_in, key_out);
     }
 
