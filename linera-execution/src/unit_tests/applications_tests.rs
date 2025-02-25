@@ -5,6 +5,7 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::BlockHeight,
     identifiers::{BytecodeId, ChainId, MessageId},
+    vm::VmRuntime,
 };
 
 use super::{
@@ -23,6 +24,7 @@ fn bytecode_id() -> BytecodeId {
     BytecodeId::new(
         CryptoHash::test_hash("contract"),
         CryptoHash::test_hash("service"),
+        VmRuntime::Wasm,
     )
 }
 

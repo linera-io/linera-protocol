@@ -17,6 +17,7 @@ use linera_base::{
     },
     ownership::{ChainOwnership, TimeoutConfig},
     time::Duration,
+    vm::VmRuntime,
 };
 use linera_core::{client::BlanketMessagePolicy, DEFAULT_GRACE_PERIOD};
 use linera_execution::{ResourceControlPolicy, WasmRuntime, WithWasmDefault as _};
@@ -779,6 +780,10 @@ pub enum ClientCommand {
         /// Path to the Wasm file for the application "service" bytecode.
         service: PathBuf,
 
+        /// The virtual machine runtime to use.
+        #[arg(long, default_value = "wasm")]
+        vm_runtime: VmRuntime,
+
         /// An optional chain ID to publish the bytecode. The default chain of the wallet
         /// is used otherwise.
         publisher: Option<ChainId>,
@@ -840,6 +845,10 @@ pub enum ClientCommand {
 
         /// Path to the Wasm file for the application "service" bytecode.
         service: PathBuf,
+
+        /// The virtual machine runtime to use.
+        #[arg(long, default_value = "wasm")]
+        vm_runtime: VmRuntime,
 
         /// An optional chain ID to publish the bytecode. The default chain of the wallet
         /// is used otherwise.
@@ -1261,6 +1270,10 @@ pub enum ProjectCommand {
         /// An optional chain ID to publish the bytecode. The default chain of the wallet
         /// is used otherwise.
         publisher: Option<ChainId>,
+
+        /// The virtual machine runtime to use.
+        #[arg(long, default_value = "wasm")]
+        vm_runtime: VmRuntime,
 
         /// The shared parameters as JSON string.
         #[arg(long)]

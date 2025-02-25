@@ -3513,6 +3513,7 @@ dependencies = [
  "cfg_aliases",
  "chrono",
  "custom_debug_derive",
+ "derive_more",
  "ed25519-dalek",
  "futures",
  "hex",
@@ -3702,6 +3703,7 @@ version = "0.14.0"
 dependencies = [
  "async-trait",
  "bcs",
+ "cfg-if",
  "cfg_aliases",
  "dashmap 5.5.3",
  "futures",

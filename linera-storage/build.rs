@@ -8,6 +8,7 @@ fn main() {
         with_wasmer: { all(any(feature = "web", not(target_arch = "wasm32")), feature = "wasmer") },
         with_wasmtime: { all(not(target_arch = "wasm32"), feature = "wasmtime") },
         with_wasm_runtime: { any(with_wasmer, with_wasmtime) },
+        with_revm: { feature = "revm" },
         web: { all(target_arch = "wasm32", feature = "web") },
     };
 }

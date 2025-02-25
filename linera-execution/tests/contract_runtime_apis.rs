@@ -20,6 +20,7 @@ use linera_base::{
         Owner,
     },
     ownership::ChainOwnership,
+    vm::VmRuntime,
 };
 use linera_execution::{
     test_utils::{
@@ -654,13 +655,14 @@ impl TransferTestEndpoint {
         ApplicationId::from(&Self::sender_application_description())
     }
 
-    /// Returns the [`ApplicationDescription`] used to represent a sender that's an application.
+    /// Returns the [`UserApplicationDescription`] used to represent a sender that's an application.
     fn sender_application_description() -> UserApplicationDescription {
         let contract_id = Self::sender_application_contract_blob().id().hash;
         let service_id = Self::sender_application_service_blob().id().hash;
+        let vm_runtime = VmRuntime::Wasm;
 
         UserApplicationDescription {
-            bytecode_id: BytecodeId::new(contract_id, service_id),
+            bytecode_id: BytecodeId::new(contract_id, service_id, vm_runtime),
             creation: MessageId {
                 chain_id: ChainId::root(1000),
                 height: BlockHeight(0),
@@ -698,6 +700,7 @@ impl TransferTestEndpoint {
             bytecode_id: BytecodeId::new(
                 CryptoHash::test_hash("recipient contract bytecode"),
                 CryptoHash::test_hash("recipient service bytecode"),
+                VmRuntime::Wasm,
             ),
             creation: MessageId {
                 chain_id: ChainId::root(2000),

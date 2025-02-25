@@ -30,6 +30,7 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::Amount,
     identifiers::{Account, AccountOwner, ApplicationId, ChainId},
+    vm::VmRuntime,
 };
 use linera_chain::data_types::{Medium, Origin};
 use linera_core::worker::{Notification, Reason};
@@ -1400,6 +1401,7 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
+    let vm_runtime = VmRuntime::Wasm;
     let (mut net, client_admin) = config.instantiate().await?;
 
     let client_a = net.make_client().await;
@@ -1539,6 +1541,7 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
             &chain_admin,
             contract_matching,
             service_matching,
+            vm_runtime,
         )
         .await?;
     let application_id_matching = node_service_admin
@@ -1691,6 +1694,7 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
+    let vm_runtime = VmRuntime::Wasm;
     let (mut net, client_amm) = config.instantiate().await?;
 
     let client0 = net.make_client().await;
@@ -1741,7 +1745,7 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
             fungible::FungibleTokenAbi,
             fungible::Parameters,
             fungible::InitialState
-        >(&chain_amm, contract_fungible, service_fungible).await?;
+        >(&chain_amm, contract_fungible, service_fungible, vm_runtime).await?;
 
     let params0 = fungible::Parameters::new("ZERO");
     let token0 = node_service_amm
@@ -1880,7 +1884,12 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
 
     // Create AMM application on Admin chain
     let bytecode_id = node_service_amm
-        .publish_bytecode::<AmmAbi, Parameters, ()>(&chain_amm, contract_amm, service_amm)
+        .publish_bytecode::<AmmAbi, Parameters, ()>(
+            &chain_amm,
+            contract_amm,
+            service_amm,
+            vm_runtime,
+        )
         .await?;
     let application_id_amm = node_service_amm
         .create_application(
