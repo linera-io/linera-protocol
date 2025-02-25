@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["AccountOwner","BlobType","ChainDescription","Destination","GenericApplicationId"],"struct":["Account","ApplicationId","BlobId","BytecodeId","ChainId","ChannelFullName","ChannelName","EventId","MessageId","Owner","StreamId","StreamName"],"type":["UserApplicationId"]};

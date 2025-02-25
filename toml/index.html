@@ -1,0 +1,110 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A serde-compatible TOML-parsing library"><title>toml - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="toml" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../toml/index.html">toml</a><span class="version">0.8.19</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#macros">Macros</a></li><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#functions">Functions</a></li><li><a href="#types">Type Aliases</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">toml</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/toml/lib.rs.html#1-181">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A <a href="https://serde.rs/">serde</a>-compatible <a href="https://github.com/toml-lang/toml">TOML</a>-parsing library</p>
+<p>TOML itself is a simple, ergonomic, and readable configuration format:</p>
+<div class="example-wrap"><pre class="language-toml"><code>[package]
+name = &quot;toml&quot;
+
+[dependencies]
+serde = &quot;1.0&quot;
+</code></pre></div>
+<p>The TOML format tends to be relatively common throughout the Rust community
+for configuration, notably being used by <a href="https://crates.io/">Cargo</a>, Rust’s package manager.</p>
+<h3 id="toml-values"><a class="doc-anchor" href="#toml-values">§</a>TOML values</h3>
+<p>A TOML document is represented with the <a href="type.Table.html" title="type toml::Table"><code>Table</code></a> type which maps <code>String</code> to the <a href="enum.Value.html" title="enum toml::Value"><code>Value</code></a> enum:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">pub enum </span>Value {
+    String(String),
+    Integer(i64),
+    Float(f64),
+    Boolean(bool),
+    Datetime(Datetime),
+    Array(Array),
+    Table(Table),
+}</code></pre></div>
+<h3 id="parsing-toml"><a class="doc-anchor" href="#parsing-toml">§</a>Parsing TOML</h3>
+<p>The easiest way to parse a TOML document is via the <a href="type.Table.html" title="type toml::Table"><code>Table</code></a> type:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>toml::Table;
+
+<span class="kw">let </span>value = <span class="string">"foo = 'bar'"</span>.parse::&lt;Table&gt;().unwrap();
+
+<span class="macro">assert_eq!</span>(value[<span class="string">"foo"</span>].as_str(), <span class="prelude-val">Some</span>(<span class="string">"bar"</span>));</code></pre></div>
+<p>The <a href="type.Table.html" title="type toml::Table"><code>Table</code></a> type implements a number of convenience methods and
+traits; the example above uses <a href="https://doc.rust-lang.org/1.81.0/core/str/traits/trait.FromStr.html" title="trait core::str::traits::FromStr"><code>FromStr</code></a> to parse a <a href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html" title="primitive str"><code>str</code></a> into a
+<a href="type.Table.html" title="type toml::Table"><code>Table</code></a>.</p>
+<h3 id="deserialization-and-serialization"><a class="doc-anchor" href="#deserialization-and-serialization">§</a>Deserialization and Serialization</h3>
+<p>This crate supports <a href="https://serde.rs/"><code>serde</code></a> 1.0 with a number of
+implementations of the <code>Deserialize</code>, <code>Serialize</code>, <code>Deserializer</code>, and
+<code>Serializer</code> traits. Namely, you’ll find:</p>
+<ul>
+<li><code>Deserialize for Table</code></li>
+<li><code>Serialize for Table</code></li>
+<li><code>Deserialize for Value</code></li>
+<li><code>Serialize for Value</code></li>
+<li><code>Deserialize for Datetime</code></li>
+<li><code>Serialize for Datetime</code></li>
+<li><code>Deserializer for de::Deserializer</code></li>
+<li><code>Serializer for ser::Serializer</code></li>
+<li><code>Deserializer for Table</code></li>
+<li><code>Deserializer for Value</code></li>
+</ul>
+<p>This means that you can use Serde to deserialize/serialize the
+<a href="type.Table.html" title="type toml::Table"><code>Table</code></a> type as well as <a href="enum.Value.html" title="enum toml::Value"><code>Value</code></a> and <a href="value/struct.Datetime.html" title="struct toml::value::Datetime"><code>Datetime</code></a> type in this crate. You can also
+use the <a href="struct.Deserializer.html" title="struct toml::Deserializer"><code>Deserializer</code></a>, <a href="struct.Serializer.html" title="struct toml::Serializer"><code>Serializer</code></a>, or <a href="type.Table.html" title="type toml::Table"><code>Table</code></a> type itself to act as
+a deserializer/serializer for arbitrary types.</p>
+<p>An example of deserializing with TOML is:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>serde::Deserialize;
+
+<span class="attr">#[derive(Deserialize)]
+</span><span class="kw">struct </span>Config {
+   ip: String,
+   port: <span class="prelude-ty">Option</span>&lt;u16&gt;,
+   keys: Keys,
+}
+
+<span class="attr">#[derive(Deserialize)]
+</span><span class="kw">struct </span>Keys {
+   github: String,
+   travis: <span class="prelude-ty">Option</span>&lt;String&gt;,
+}
+
+<span class="kw">let </span>config: Config = toml::from_str(<span class="string">r#"
+   ip = '127.0.0.1'
+
+   [keys]
+   github = 'xxxxxxxxxxxxxxxxx'
+   travis = 'yyyyyyyyyyyyyyyyy'
+"#</span>).unwrap();
+
+<span class="macro">assert_eq!</span>(config.ip, <span class="string">"127.0.0.1"</span>);
+<span class="macro">assert_eq!</span>(config.port, <span class="prelude-val">None</span>);
+<span class="macro">assert_eq!</span>(config.keys.github, <span class="string">"xxxxxxxxxxxxxxxxx"</span>);
+<span class="macro">assert_eq!</span>(config.keys.travis.as_ref().unwrap(), <span class="string">"yyyyyyyyyyyyyyyyy"</span>);</code></pre></div>
+<p>You can serialize types in a similar fashion:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>serde::Serialize;
+
+<span class="attr">#[derive(Serialize)]
+</span><span class="kw">struct </span>Config {
+   ip: String,
+   port: <span class="prelude-ty">Option</span>&lt;u16&gt;,
+   keys: Keys,
+}
+
+<span class="attr">#[derive(Serialize)]
+</span><span class="kw">struct </span>Keys {
+   github: String,
+   travis: <span class="prelude-ty">Option</span>&lt;String&gt;,
+}
+
+<span class="kw">let </span>config = Config {
+   ip: <span class="string">"127.0.0.1"</span>.to_string(),
+   port: <span class="prelude-val">None</span>,
+   keys: Keys {
+       github: <span class="string">"xxxxxxxxxxxxxxxxx"</span>.to_string(),
+       travis: <span class="prelude-val">Some</span>(<span class="string">"yyyyyyyyyyyyyyyyy"</span>.to_string()),
+   },
+};
+
+<span class="kw">let </span>toml = toml::to_string(<span class="kw-2">&amp;</span>config).unwrap();</code></pre></div>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="de/index.html" title="mod toml::de">de</a></div><div class="desc docblock-short">Deserializing TOML into Rust structures.</div></li><li><div class="item-name"><a class="mod" href="map/index.html" title="mod toml::map">map</a></div><div class="desc docblock-short">A map of <code>String</code> to <a href="enum.Value.html" title="enum toml::Value">Value</a>.</div></li><li><div class="item-name"><a class="mod" href="ser/index.html" title="mod toml::ser">ser</a></div><div class="desc docblock-short">Serializing Rust structures into TOML.</div></li><li><div class="item-name"><a class="mod" href="value/index.html" title="mod toml::value">value</a></div><div class="desc docblock-short">Definition of a TOML <a href="enum.Value.html" title="enum toml::Value">value</a></div></li></ul><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="macro" href="macro.toml.html" title="macro toml::toml">toml</a></div><div class="desc docblock-short">Construct a <a href="type.Table.html" title="type toml::Table"><code>Table</code></a> from TOML syntax.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Deserializer.html" title="struct toml::Deserializer">Deserializer</a></div><div class="desc docblock-short">Deserialization TOML document</div></li><li><div class="item-name"><a class="struct" href="struct.Serializer.html" title="struct toml::Serializer">Serializer</a></div><div class="desc docblock-short">Serialization for TOML documents.</div></li><li><div class="item-name"><a class="struct" href="struct.Spanned.html" title="struct toml::Spanned">Spanned</a></div><div class="desc docblock-short">A spanned value, indicating the range at which it is defined in the source.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.Value.html" title="enum toml::Value">Value</a></div><div class="desc docblock-short">Representation of a TOML value.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.from_str.html" title="fn toml::from_str">from_str</a></div><div class="desc docblock-short">Deserializes a string into a type.</div></li><li><div class="item-name"><a class="fn" href="fn.to_string.html" title="fn toml::to_string">to_string</a></div><div class="desc docblock-short">Serialize the given data structure as a String of TOML.</div></li><li><div class="item-name"><a class="fn" href="fn.to_string_pretty.html" title="fn toml::to_string_pretty">to_string_pretty</a></div><div class="desc docblock-short">Serialize the given data structure as a “pretty” String of TOML.</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.Table.html" title="type toml::Table">Table</a></div><div class="desc docblock-short">Type representing a TOML table, payload of the <code>Value::Table</code> variant.</div></li></ul></section></div></main></body></html>

@@ -1,0 +1,44 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Inject the instumentation that makes stack overflows deterministic, by introducing an upper bound of the stack size."><title>inject_stack_limiter in wasm_instrument - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="wasm_instrument" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../wasm_instrument/index.html">wasm_instrument</a><span class="version">0.4.0</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="index.html">wasm_instrument</a>::<wbr><a class="fn" href="#">inject_stack_limiter</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/wasm_instrument/stack_limiter/mod.rs.html#114-128">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn inject_stack_limiter(
+    module: <a class="struct" href="../parity_wasm/elements/module/struct.Module.html" title="struct parity_wasm::elements::module::Module">Module</a>,
+    stack_limit: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="../parity_wasm/elements/module/struct.Module.html" title="struct parity_wasm::elements::module::Module">Module</a>, &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>&gt;</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Inject the instumentation that makes stack overflows deterministic, by introducing
+an upper bound of the stack size.</p>
+<p>This pass introduces a global mutable variable to track stack height,
+and instruments all calls with preamble and postamble.</p>
+<p>Stack height is increased prior the call. Otherwise, the check would
+be made after the stack frame is allocated.</p>
+<p>The preamble is inserted before the call. It increments
+the global stack height variable with statically determined “stack cost”
+of the callee. If after the increment the stack height exceeds
+the limit (specified by the <code>rules</code>) then execution traps.
+Otherwise, the call is executed.</p>
+<p>The postamble is inserted after the call. The purpose of the postamble is to decrease
+the stack height by the “stack cost” of the callee function.</p>
+<p>Note, that we can’t instrument all possible ways to return from the function. The simplest
+example would be a trap issued by the host function.
+That means stack height global won’t be equal to zero upon the next execution after such trap.</p>
+<h2 id="thunks"><a class="doc-anchor" href="#thunks">§</a>Thunks</h2>
+<p>Because stack height is increased prior the call few problems arises:</p>
+<ul>
+<li>Stack height isn’t increased upon an entry to the first function, i.e. exported function.</li>
+<li>Start function is executed externally (similar to exported functions).</li>
+<li>It is statically unknown what function will be invoked in an indirect call.</li>
+</ul>
+<p>The solution for this problems is to generate a intermediate functions, called ‘thunks’, which
+will increase before and decrease the stack height after the call to original function, and
+then make exported function and table entries, start section to point to a corresponding thunks.</p>
+<h2 id="stack-cost"><a class="doc-anchor" href="#stack-cost">§</a>Stack cost</h2>
+<p>Stack cost of the function is calculated as a sum of it’s locals
+and the maximal height of the value stack.</p>
+<p>All values are treated equally, as they have the same size.</p>
+<p>The rationale is that this makes it possible to use the following very naive wasm executor:</p>
+<ul>
+<li>values are implemented by a union, so each value takes a size equal to the size of the largest
+possible value type this union can hold. (In MVP it is 8 bytes)</li>
+<li>each value from the value stack is placed on the native stack.</li>
+<li>each local variable and function argument is placed on the native stack.</li>
+<li>arguments pushed by the caller are copied into callee stack rather than shared between the
+frames.</li>
+<li>upon entry into the function entire stack frame is allocated.</li>
+</ul>
+</div></details></section></div></main></body></html>

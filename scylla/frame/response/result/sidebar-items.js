@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ColumnType","CqlValue"],"struct":["ColumnSpec","PartitionKeyIndex","Row","TableSpec"]};

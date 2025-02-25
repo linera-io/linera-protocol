@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"derive":["DeserializeRow","DeserializeValue","FromRow","FromUserType","IntoUserType","SerializeRow","SerializeValue","ValueList"]};

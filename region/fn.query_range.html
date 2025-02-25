@@ -1,0 +1,34 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Queries the OS for mapped regions that overlap with the specified range."><title>query_range in region - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="region" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../region/index.html">region</a><span class="version">3.0.2</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="index.html">region</a>::<wbr><a class="fn" href="#">query_range</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/region/query.rs.html#154-157">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn query_range&lt;T&gt;(address: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.pointer.html">*const T</a>, size: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="type" href="type.Result.html" title="type region::Result">Result</a>&lt;<a class="struct" href="struct.QueryIter.html" title="struct region::QueryIter">QueryIter</a>&gt;</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Queries the OS for mapped regions that overlap with the specified range.</p>
+<p>The implementation clamps any input that exceeds the boundaries of a
+process’ address space. Therefore it’s safe to, e.g., pass in
+<a href="https://doc.rust-lang.org/1.81.0/core/ptr/fn.null.html" title="fn core::ptr::null"><code>std::ptr::null</code></a> and <a href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html#method.max_value" title="associated function usize::max_value"><code>usize::max_value</code></a> to iterate the mapped memory
+pages of an entire process.</p>
+<p>If an error is encountered during iteration, the error will be the last item
+that is yielded. Thereafter the iterator becomes fused.</p>
+<p>A 2-byte range straddling a page boundary, will return both pages (or one
+region, if the pages share the same properties).</p>
+<p>This function only returns mapped regions. If required, unmapped regions can
+be manually identified by inspecting the potential gaps between two
+neighboring regions.</p>
+<h2 id="parameters"><a class="doc-anchor" href="#parameters">§</a>Parameters</h2>
+<ul>
+<li>The range is <code>[address, address + size)</code></li>
+<li>The address is rounded down to the closest page boundary.</li>
+<li>The size may not be zero.</li>
+<li>The size is rounded up to the closest page boundary, relative to the
+address.</li>
+</ul>
+<h2 id="errors"><a class="doc-anchor" href="#errors">§</a>Errors</h2>
+<ul>
+<li>If an interaction with the underlying operating system fails, an error
+will be returned.</li>
+<li>If size is zero, <a href="enum.Error.html#variant.InvalidParameter" title="variant region::Error::InvalidParameter"><code>Error::InvalidParameter</code></a> will be returned.</li>
+</ul>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>data = [<span class="number">0</span>; <span class="number">100</span>];
+<span class="kw">let </span>region = region::query_range(data.as_ptr(), data.len())<span class="question-mark">?
+  </span>.collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;&gt;()<span class="question-mark">?</span>;
+
+<span class="macro">assert_eq!</span>(region.len(), <span class="number">1</span>);
+<span class="macro">assert_eq!</span>(region[<span class="number">0</span>].protection(), region::Protection::READ_WRITE);</code></pre></div>
+</div></details></section></div></main></body></html>

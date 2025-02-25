@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["TINFL_LZ_DICT_SIZE"],"fn":["decompress"],"mod":["inflate_flags"],"struct":["DecompressorOxide"]};

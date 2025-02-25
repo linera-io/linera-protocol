@@ -1,0 +1,1 @@
+searchState.loadedDescShard("console_error_panic_hook", 0, "<code>console_error_panic_hook</code>\nA panic hook for use with <code>std::panic::set_hook</code> that logs …\nSet the <code>console.error</code> panic hook the first time this is …")

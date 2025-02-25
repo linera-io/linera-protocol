@@ -1,0 +1,352 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A trait to emulate dynamic typing."><title>Any in wasmer_types::lib::std::any - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="wasmer_types" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../../wasmer_types/index.html">wasmer_types</a><span class="version">4.4.0</span></h2></div><h2 class="location"><a href="#">Any</a></h2><div class="sidebar-elems"><section><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.type_id">type_id</a></li></ul><h3><a href="#implementations">Methods</a></h3><ul class="block method"><li><a href="#method.downcast">downcast</a></li><li><a href="#method.downcast-1">downcast</a></li><li><a href="#method.downcast-2">downcast</a></li><li><a href="#method.downcast_mut">downcast_mut</a></li><li><a href="#method.downcast_mut-1">downcast_mut</a></li><li><a href="#method.downcast_mut-2">downcast_mut</a></li><li><a href="#method.downcast_mut_unchecked">downcast_mut_unchecked</a></li><li><a href="#method.downcast_mut_unchecked-1">downcast_mut_unchecked</a></li><li><a href="#method.downcast_mut_unchecked-2">downcast_mut_unchecked</a></li><li><a href="#method.downcast_ref">downcast_ref</a></li><li><a href="#method.downcast_ref-1">downcast_ref</a></li><li><a href="#method.downcast_ref-2">downcast_ref</a></li><li><a href="#method.downcast_ref_unchecked">downcast_ref_unchecked</a></li><li><a href="#method.downcast_ref_unchecked-1">downcast_ref_unchecked</a></li><li><a href="#method.downcast_ref_unchecked-2">downcast_ref_unchecked</a></li><li><a href="#method.downcast_unchecked">downcast_unchecked</a></li><li><a href="#method.downcast_unchecked-1">downcast_unchecked</a></li><li><a href="#method.downcast_unchecked-2">downcast_unchecked</a></li><li><a href="#method.is">is</a></li><li><a href="#method.is-1">is</a></li><li><a href="#method.is-2">is</a></li></ul><h3><a href="#trait-implementations">Trait Implementations</a></h3><ul class="block trait-implementation"><li><a href="#impl-Debug-for-dyn+Any">Debug</a></li><li><a href="#impl-Debug-for-dyn+Any+%2B+Send">Debug</a></li><li><a href="#impl-Debug-for-dyn+Any+%2B+Send+%2B+Sync">Debug</a></li><li><a href="#impl-Pointee-for-dyn+Any">Pointee</a></li></ul><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In wasmer_types::lib::std::any</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="../../../index.html">wasmer_types</a>::<wbr><a href="../../index.html">lib</a>::<wbr><a href="../index.html">std</a>::<wbr><a href="index.html">any</a>::<wbr><a class="trait" href="#">Any</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#115">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub trait Any: 'static {
+    // Required method
+    fn <a href="#tymethod.type_id" class="fn">type_id</a>(&amp;self) -&gt; <a class="struct" href="struct.TypeId.html" title="struct wasmer_types::lib::std::any::TypeId">TypeId</a>;
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A trait to emulate dynamic typing.</p>
+<p>Most types implement <code>Any</code>. However, any type which contains a non-<code>'static</code> reference does not.
+See the <a href="index.html" title="mod wasmer_types::lib::std::any">module-level documentation</a> for more details.</p>
+</div></details><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.type_id" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.34.0">1.34.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#136">source</a></span><h4 class="code-header">fn <a href="#tymethod.type_id" class="fn">type_id</a>(&amp;self) -&gt; <a class="struct" href="struct.TypeId.html" title="struct wasmer_types::lib::std::any::TypeId">TypeId</a></h4></section></summary><div class="docblock"><p>Gets the <code>TypeId</code> of <code>self</code>.</p>
+<p>If called on a <code>dyn Any</code> trait object
+(or a trait object of a subtrait of <code>Any</code>),
+this returns the <code>TypeId</code> of the underlying
+concrete type, not that of <code>dyn Any</code> itself.</p>
+<h5 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::any::{Any, TypeId};
+
+<span class="kw">fn </span>is_string(s: <span class="kw-2">&amp;</span><span class="kw">dyn </span>Any) -&gt; bool {
+    TypeId::of::&lt;String&gt;() == s.type_id()
+}
+
+<span class="macro">assert_eq!</span>(is_string(<span class="kw-2">&amp;</span><span class="number">0</span>), <span class="bool-val">false</span>);
+<span class="macro">assert_eq!</span>(is_string(<span class="kw-2">&amp;</span><span class="string">"cookie monster"</span>.to_string()), <span class="bool-val">true</span>);</code></pre></div>
+</div></details></div><h2 id="implementations" class="section-header">Implementations<a href="#implementations" class="anchor">§</a></h2><div id="implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-dyn+Any" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#174">source</a><a href="#impl-dyn+Any" class="anchor">§</a><h3 class="code-header">impl dyn <a class="trait" href="trait.Any.html" title="trait wasmer_types::lib::std::any::Any">Any</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.is" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#195">source</a></span><h4 class="code-header">pub fn <a href="#method.is" class="fn">is</a>&lt;T&gt;(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a><div class="where">where
+    T: <a class="trait" href="trait.Any.html" title="trait wasmer_types::lib::std::any::Any">Any</a>,</div></h4></section></summary><div class="docblock"><p>Returns <code>true</code> if the inner type is the same as <code>T</code>.</p>
+<h5 id="examples-1"><a class="doc-anchor" href="#examples-1">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::any::Any;
+
+<span class="kw">fn </span>is_string(s: <span class="kw-2">&amp;</span><span class="kw">dyn </span>Any) {
+    <span class="kw">if </span>s.is::&lt;String&gt;() {
+        <span class="macro">println!</span>(<span class="string">"It's a string!"</span>);
+    } <span class="kw">else </span>{
+        <span class="macro">println!</span>(<span class="string">"Not a string..."</span>);
+    }
+}
+
+is_string(<span class="kw-2">&amp;</span><span class="number">0</span>);
+is_string(<span class="kw-2">&amp;</span><span class="string">"cookie monster"</span>.to_string());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.downcast_ref" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#227">source</a></span><h4 class="code-header">pub fn <a href="#method.downcast_ref" class="fn">downcast_ref</a>&lt;T&gt;(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a>&gt;<div class="where">where
+    T: <a class="trait" href="trait.Any.html" title="trait wasmer_types::lib::std::any::Any">Any</a>,</div></h4></section></summary><div class="docblock"><p>Returns some reference to the inner value if it is of type <code>T</code>, or
+<code>None</code> if it isn’t.</p>
+<h5 id="examples-2"><a class="doc-anchor" href="#examples-2">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::any::Any;
+
+<span class="kw">fn </span>print_if_string(s: <span class="kw-2">&amp;</span><span class="kw">dyn </span>Any) {
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(string) = s.downcast_ref::&lt;String&gt;() {
+        <span class="macro">println!</span>(<span class="string">"It's a string({}): '{}'"</span>, string.len(), string);
+    } <span class="kw">else </span>{
+        <span class="macro">println!</span>(<span class="string">"Not a string..."</span>);
+    }
+}
+
+print_if_string(<span class="kw-2">&amp;</span><span class="number">0</span>);
+print_if_string(<span class="kw-2">&amp;</span><span class="string">"cookie monster"</span>.to_string());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.downcast_mut" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#263">source</a></span><h4 class="code-header">pub fn <a href="#method.downcast_mut" class="fn">downcast_mut</a>&lt;T&gt;(&amp;mut self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a>&gt;<div class="where">where
+    T: <a class="trait" href="trait.Any.html" title="trait wasmer_types::lib::std::any::Any">Any</a>,</div></h4></section></summary><div class="docblock"><p>Returns some mutable reference to the inner value if it is of type <code>T</code>, or
+<code>None</code> if it isn’t.</p>
+<h5 id="examples-3"><a class="doc-anchor" href="#examples-3">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::any::Any;
+
+<span class="kw">fn </span>modify_if_u32(s: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>Any) {
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(num) = s.downcast_mut::&lt;u32&gt;() {
+        <span class="kw-2">*</span>num = <span class="number">42</span>;
+    }
+}
+
+<span class="kw">let </span><span class="kw-2">mut </span>x = <span class="number">10u32</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>s = <span class="string">"starlord"</span>.to_string();
+
+modify_if_u32(<span class="kw-2">&amp;mut </span>x);
+modify_if_u32(<span class="kw-2">&amp;mut </span>s);
+
+<span class="macro">assert_eq!</span>(x, <span class="number">42</span>);
+<span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span>s, <span class="string">"starlord"</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.downcast_ref_unchecked" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#296">source</a><h4 class="code-header">pub unsafe fn <a href="#method.downcast_ref_unchecked" class="fn">downcast_ref_unchecked</a>&lt;T&gt;(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a><div class="where">where
+    T: <a class="trait" href="trait.Any.html" title="trait wasmer_types::lib::std::any::Any">Any</a>,</div></h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>downcast_unchecked</code>)</span></div></span></summary><div class="docblock"><p>Returns a reference to the inner value as type <code>dyn T</code>.</p>
+<h5 id="examples-4"><a class="doc-anchor" href="#examples-4">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(downcast_unchecked)]
+
+</span><span class="kw">use </span>std::any::Any;
+
+<span class="kw">let </span>x: Box&lt;<span class="kw">dyn </span>Any&gt; = Box::new(<span class="number">1_usize</span>);
+
+<span class="kw">unsafe </span>{
+    <span class="macro">assert_eq!</span>(<span class="kw-2">*</span>x.downcast_ref_unchecked::&lt;usize&gt;(), <span class="number">1</span>);
+}</code></pre></div>
+<h5 id="safety"><a class="doc-anchor" href="#safety">§</a>Safety</h5>
+<p>The contained value must be of type <code>T</code>. Calling this method
+with the incorrect type is <em>undefined behavior</em>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.downcast_mut_unchecked" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#326">source</a><h4 class="code-header">pub unsafe fn <a href="#method.downcast_mut_unchecked" class="fn">downcast_mut_unchecked</a>&lt;T&gt;(&amp;mut self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a><div class="where">where
+    T: <a class="trait" href="trait.Any.html" title="trait wasmer_types::lib::std::any::Any">Any</a>,</div></h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>downcast_unchecked</code>)</span></div></span></summary><div class="docblock"><p>Returns a mutable reference to the inner value as type <code>dyn T</code>.</p>
+<h5 id="examples-5"><a class="doc-anchor" href="#examples-5">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(downcast_unchecked)]
+
+</span><span class="kw">use </span>std::any::Any;
+
+<span class="kw">let </span><span class="kw-2">mut </span>x: Box&lt;<span class="kw">dyn </span>Any&gt; = Box::new(<span class="number">1_usize</span>);
+
+<span class="kw">unsafe </span>{
+    <span class="kw-2">*</span>x.downcast_mut_unchecked::&lt;usize&gt;() += <span class="number">1</span>;
+}
+
+<span class="macro">assert_eq!</span>(<span class="kw-2">*</span>x.downcast_ref::&lt;usize&gt;().unwrap(), <span class="number">2</span>);</code></pre></div>
+<h5 id="safety-1"><a class="doc-anchor" href="#safety-1">§</a>Safety</h5>
+<p>The contained value must be of type <code>T</code>. Calling this method
+with the incorrect type is <em>undefined behavior</em>.</p>
+</div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-dyn+Any+%2B+Send" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#333">source</a><a href="#impl-dyn+Any+%2B+Send" class="anchor">§</a><h3 class="code-header">impl dyn <a class="trait" href="trait.Any.html" title="trait wasmer_types::lib::std::any::Any">Any</a> + <a class="trait" href="../marker/trait.Send.html" title="trait wasmer_types::lib::std::marker::Send">Send</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.is-1" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#354">source</a></span><h4 class="code-header">pub fn <a href="#method.is-1" class="fn">is</a>&lt;T&gt;(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a><div class="where">where
+    T: <a class="trait" href="trait.Any.html" title="trait wasmer_types::lib::std::any::Any">Any</a>,</div></h4></section></summary><div class="docblock"><p>Forwards to the method defined on the type <code>dyn Any</code>.</p>
+<h5 id="examples-6"><a class="doc-anchor" href="#examples-6">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::any::Any;
+
+<span class="kw">fn </span>is_string(s: <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>Any + Send)) {
+    <span class="kw">if </span>s.is::&lt;String&gt;() {
+        <span class="macro">println!</span>(<span class="string">"It's a string!"</span>);
+    } <span class="kw">else </span>{
+        <span class="macro">println!</span>(<span class="string">"Not a string..."</span>);
+    }
+}
+
+is_string(<span class="kw-2">&amp;</span><span class="number">0</span>);
+is_string(<span class="kw-2">&amp;</span><span class="string">"cookie monster"</span>.to_string());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.downcast_ref-1" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#378">source</a></span><h4 class="code-header">pub fn <a href="#method.downcast_ref-1" class="fn">downcast_ref</a>&lt;T&gt;(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a>&gt;<div class="where">where
+    T: <a class="trait" href="trait.Any.html" title="trait wasmer_types::lib::std::any::Any">Any</a>,</div></h4></section></summary><div class="docblock"><p>Forwards to the method defined on the type <code>dyn Any</code>.</p>
+<h5 id="examples-7"><a class="doc-anchor" href="#examples-7">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::any::Any;
+
+<span class="kw">fn </span>print_if_string(s: <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>Any + Send)) {
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(string) = s.downcast_ref::&lt;String&gt;() {
+        <span class="macro">println!</span>(<span class="string">"It's a string({}): '{}'"</span>, string.len(), string);
+    } <span class="kw">else </span>{
+        <span class="macro">println!</span>(<span class="string">"Not a string..."</span>);
+    }
+}
+
+print_if_string(<span class="kw-2">&amp;</span><span class="number">0</span>);
+print_if_string(<span class="kw-2">&amp;</span><span class="string">"cookie monster"</span>.to_string());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.downcast_mut-1" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#406">source</a></span><h4 class="code-header">pub fn <a href="#method.downcast_mut-1" class="fn">downcast_mut</a>&lt;T&gt;(&amp;mut self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a>&gt;<div class="where">where
+    T: <a class="trait" href="trait.Any.html" title="trait wasmer_types::lib::std::any::Any">Any</a>,</div></h4></section></summary><div class="docblock"><p>Forwards to the method defined on the type <code>dyn Any</code>.</p>
+<h5 id="examples-8"><a class="doc-anchor" href="#examples-8">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::any::Any;
+
+<span class="kw">fn </span>modify_if_u32(s: <span class="kw-2">&amp;mut </span>(<span class="kw">dyn </span>Any + Send)) {
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(num) = s.downcast_mut::&lt;u32&gt;() {
+        <span class="kw-2">*</span>num = <span class="number">42</span>;
+    }
+}
+
+<span class="kw">let </span><span class="kw-2">mut </span>x = <span class="number">10u32</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>s = <span class="string">"starlord"</span>.to_string();
+
+modify_if_u32(<span class="kw-2">&amp;mut </span>x);
+modify_if_u32(<span class="kw-2">&amp;mut </span>s);
+
+<span class="macro">assert_eq!</span>(x, <span class="number">42</span>);
+<span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span>s, <span class="string">"starlord"</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.downcast_ref_unchecked-1" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#431">source</a><h4 class="code-header">pub unsafe fn <a href="#method.downcast_ref_unchecked-1" class="fn">downcast_ref_unchecked</a>&lt;T&gt;(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a><div class="where">where
+    T: <a class="trait" href="trait.Any.html" title="trait wasmer_types::lib::std::any::Any">Any</a>,</div></h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>downcast_unchecked</code>)</span></div></span></summary><div class="docblock"><p>Forwards to the method defined on the type <code>dyn Any</code>.</p>
+<h5 id="examples-9"><a class="doc-anchor" href="#examples-9">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(downcast_unchecked)]
+
+</span><span class="kw">use </span>std::any::Any;
+
+<span class="kw">let </span>x: Box&lt;<span class="kw">dyn </span>Any&gt; = Box::new(<span class="number">1_usize</span>);
+
+<span class="kw">unsafe </span>{
+    <span class="macro">assert_eq!</span>(<span class="kw-2">*</span>x.downcast_ref_unchecked::&lt;usize&gt;(), <span class="number">1</span>);
+}</code></pre></div>
+<h5 id="safety-2"><a class="doc-anchor" href="#safety-2">§</a>Safety</h5>
+<p>Same as the method on the type <code>dyn Any</code>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.downcast_mut_unchecked-1" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#459">source</a><h4 class="code-header">pub unsafe fn <a href="#method.downcast_mut_unchecked-1" class="fn">downcast_mut_unchecked</a>&lt;T&gt;(&amp;mut self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a><div class="where">where
+    T: <a class="trait" href="trait.Any.html" title="trait wasmer_types::lib::std::any::Any">Any</a>,</div></h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>downcast_unchecked</code>)</span></div></span></summary><div class="docblock"><p>Forwards to the method defined on the type <code>dyn Any</code>.</p>
+<h5 id="examples-10"><a class="doc-anchor" href="#examples-10">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(downcast_unchecked)]
+
+</span><span class="kw">use </span>std::any::Any;
+
+<span class="kw">let </span><span class="kw-2">mut </span>x: Box&lt;<span class="kw">dyn </span>Any&gt; = Box::new(<span class="number">1_usize</span>);
+
+<span class="kw">unsafe </span>{
+    <span class="kw-2">*</span>x.downcast_mut_unchecked::&lt;usize&gt;() += <span class="number">1</span>;
+}
+
+<span class="macro">assert_eq!</span>(<span class="kw-2">*</span>x.downcast_ref::&lt;usize&gt;().unwrap(), <span class="number">2</span>);</code></pre></div>
+<h5 id="safety-3"><a class="doc-anchor" href="#safety-3">§</a>Safety</h5>
+<p>Same as the method on the type <code>dyn Any</code>.</p>
+</div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-dyn+Any+%2B+Send+%2B+Sync" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#465">source</a><a href="#impl-dyn+Any+%2B+Send+%2B+Sync" class="anchor">§</a><h3 class="code-header">impl dyn <a class="trait" href="trait.Any.html" title="trait wasmer_types::lib::std::any::Any">Any</a> + <a class="trait" href="../marker/trait.Send.html" title="trait wasmer_types::lib::std::marker::Send">Send</a> + <a class="trait" href="../marker/trait.Sync.html" title="trait wasmer_types::lib::std::marker::Sync">Sync</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.is-2" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.28.0">1.28.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#486">source</a></span><h4 class="code-header">pub fn <a href="#method.is-2" class="fn">is</a>&lt;T&gt;(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a><div class="where">where
+    T: <a class="trait" href="trait.Any.html" title="trait wasmer_types::lib::std::any::Any">Any</a>,</div></h4></section></summary><div class="docblock"><p>Forwards to the method defined on the type <code>Any</code>.</p>
+<h5 id="examples-11"><a class="doc-anchor" href="#examples-11">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::any::Any;
+
+<span class="kw">fn </span>is_string(s: <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>Any + Send + Sync)) {
+    <span class="kw">if </span>s.is::&lt;String&gt;() {
+        <span class="macro">println!</span>(<span class="string">"It's a string!"</span>);
+    } <span class="kw">else </span>{
+        <span class="macro">println!</span>(<span class="string">"Not a string..."</span>);
+    }
+}
+
+is_string(<span class="kw-2">&amp;</span><span class="number">0</span>);
+is_string(<span class="kw-2">&amp;</span><span class="string">"cookie monster"</span>.to_string());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.downcast_ref-2" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.28.0">1.28.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#510">source</a></span><h4 class="code-header">pub fn <a href="#method.downcast_ref-2" class="fn">downcast_ref</a>&lt;T&gt;(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a>&gt;<div class="where">where
+    T: <a class="trait" href="trait.Any.html" title="trait wasmer_types::lib::std::any::Any">Any</a>,</div></h4></section></summary><div class="docblock"><p>Forwards to the method defined on the type <code>Any</code>.</p>
+<h5 id="examples-12"><a class="doc-anchor" href="#examples-12">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::any::Any;
+
+<span class="kw">fn </span>print_if_string(s: <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>Any + Send + Sync)) {
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(string) = s.downcast_ref::&lt;String&gt;() {
+        <span class="macro">println!</span>(<span class="string">"It's a string({}): '{}'"</span>, string.len(), string);
+    } <span class="kw">else </span>{
+        <span class="macro">println!</span>(<span class="string">"Not a string..."</span>);
+    }
+}
+
+print_if_string(<span class="kw-2">&amp;</span><span class="number">0</span>);
+print_if_string(<span class="kw-2">&amp;</span><span class="string">"cookie monster"</span>.to_string());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.downcast_mut-2" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.28.0">1.28.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#538">source</a></span><h4 class="code-header">pub fn <a href="#method.downcast_mut-2" class="fn">downcast_mut</a>&lt;T&gt;(&amp;mut self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a>&gt;<div class="where">where
+    T: <a class="trait" href="trait.Any.html" title="trait wasmer_types::lib::std::any::Any">Any</a>,</div></h4></section></summary><div class="docblock"><p>Forwards to the method defined on the type <code>Any</code>.</p>
+<h5 id="examples-13"><a class="doc-anchor" href="#examples-13">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::any::Any;
+
+<span class="kw">fn </span>modify_if_u32(s: <span class="kw-2">&amp;mut </span>(<span class="kw">dyn </span>Any + Send + Sync)) {
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(num) = s.downcast_mut::&lt;u32&gt;() {
+        <span class="kw-2">*</span>num = <span class="number">42</span>;
+    }
+}
+
+<span class="kw">let </span><span class="kw-2">mut </span>x = <span class="number">10u32</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>s = <span class="string">"starlord"</span>.to_string();
+
+modify_if_u32(<span class="kw-2">&amp;mut </span>x);
+modify_if_u32(<span class="kw-2">&amp;mut </span>s);
+
+<span class="macro">assert_eq!</span>(x, <span class="number">42</span>);
+<span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span>s, <span class="string">"starlord"</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.downcast_ref_unchecked-2" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#559">source</a><h4 class="code-header">pub unsafe fn <a href="#method.downcast_ref_unchecked-2" class="fn">downcast_ref_unchecked</a>&lt;T&gt;(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a><div class="where">where
+    T: <a class="trait" href="trait.Any.html" title="trait wasmer_types::lib::std::any::Any">Any</a>,</div></h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>downcast_unchecked</code>)</span></div></span></summary><div class="docblock"><p>Forwards to the method defined on the type <code>Any</code>.</p>
+<h5 id="examples-14"><a class="doc-anchor" href="#examples-14">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(downcast_unchecked)]
+
+</span><span class="kw">use </span>std::any::Any;
+
+<span class="kw">let </span>x: Box&lt;<span class="kw">dyn </span>Any&gt; = Box::new(<span class="number">1_usize</span>);
+
+<span class="kw">unsafe </span>{
+    <span class="macro">assert_eq!</span>(<span class="kw-2">*</span>x.downcast_ref_unchecked::&lt;usize&gt;(), <span class="number">1</span>);
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.downcast_mut_unchecked-2" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#583">source</a><h4 class="code-header">pub unsafe fn <a href="#method.downcast_mut_unchecked-2" class="fn">downcast_mut_unchecked</a>&lt;T&gt;(&amp;mut self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a><div class="where">where
+    T: <a class="trait" href="trait.Any.html" title="trait wasmer_types::lib::std::any::Any">Any</a>,</div></h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>downcast_unchecked</code>)</span></div></span></summary><div class="docblock"><p>Forwards to the method defined on the type <code>Any</code>.</p>
+<h5 id="examples-15"><a class="doc-anchor" href="#examples-15">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(downcast_unchecked)]
+
+</span><span class="kw">use </span>std::any::Any;
+
+<span class="kw">let </span><span class="kw-2">mut </span>x: Box&lt;<span class="kw">dyn </span>Any&gt; = Box::new(<span class="number">1_usize</span>);
+
+<span class="kw">unsafe </span>{
+    <span class="kw-2">*</span>x.downcast_mut_unchecked::&lt;usize&gt;() += <span class="number">1</span>;
+}
+
+<span class="macro">assert_eq!</span>(<span class="kw-2">*</span>x.downcast_ref::&lt;usize&gt;().unwrap(), <span class="number">2</span>);</code></pre></div>
+</div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Box%3Cdyn+Any,+A%3E" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/boxed.rs.html#1776">source</a><a href="#impl-Box%3Cdyn+Any,+A%3E" class="anchor">§</a><h3 class="code-header">impl&lt;A&gt; <a class="struct" href="../boxed/struct.Box.html" title="struct wasmer_types::lib::std::boxed::Box">Box</a>&lt;dyn <a class="trait" href="trait.Any.html" title="trait wasmer_types::lib::std::any::Any">Any</a>, A&gt;<div class="where">where
+    A: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/alloc/trait.Allocator.html" title="trait core::alloc::Allocator">Allocator</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.downcast" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/alloc/boxed.rs.html#1796">source</a></span><h4 class="code-header">pub fn <a href="#method.downcast" class="fn">downcast</a>&lt;T&gt;(self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="../boxed/struct.Box.html" title="struct wasmer_types::lib::std::boxed::Box">Box</a>&lt;T, A&gt;, <a class="struct" href="../boxed/struct.Box.html" title="struct wasmer_types::lib::std::boxed::Box">Box</a>&lt;dyn <a class="trait" href="trait.Any.html" title="trait wasmer_types::lib::std::any::Any">Any</a>, A&gt;&gt;<div class="where">where
+    T: <a class="trait" href="trait.Any.html" title="trait wasmer_types::lib::std::any::Any">Any</a>,</div></h4></section></summary><div class="docblock"><p>Attempt to downcast the box to a concrete type.</p>
+<h5 id="examples-16"><a class="doc-anchor" href="#examples-16">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::any::Any;
+
+<span class="kw">fn </span>print_if_string(value: Box&lt;<span class="kw">dyn </span>Any&gt;) {
+    <span class="kw">if let </span><span class="prelude-val">Ok</span>(string) = value.downcast::&lt;String&gt;() {
+        <span class="macro">println!</span>(<span class="string">"String ({}): {}"</span>, string.len(), string);
+    }
+}
+
+<span class="kw">let </span>my_string = <span class="string">"Hello World"</span>.to_string();
+print_if_string(Box::new(my_string));
+print_if_string(Box::new(<span class="number">0i8</span>));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.downcast_unchecked" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/boxed.rs.html#1826">source</a><h4 class="code-header">pub unsafe fn <a href="#method.downcast_unchecked" class="fn">downcast_unchecked</a>&lt;T&gt;(self) -&gt; <a class="struct" href="../boxed/struct.Box.html" title="struct wasmer_types::lib::std::boxed::Box">Box</a>&lt;T, A&gt;<div class="where">where
+    T: <a class="trait" href="trait.Any.html" title="trait wasmer_types::lib::std::any::Any">Any</a>,</div></h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>downcast_unchecked</code>)</span></div></span></summary><div class="docblock"><p>Downcasts the box to a concrete type.</p>
+<p>For a safe alternative see <a href="../boxed/struct.Box.html#method.downcast" title="method wasmer_types::lib::std::boxed::Box::downcast"><code>downcast</code></a>.</p>
+<h5 id="examples-17"><a class="doc-anchor" href="#examples-17">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(downcast_unchecked)]
+
+</span><span class="kw">use </span>std::any::Any;
+
+<span class="kw">let </span>x: Box&lt;<span class="kw">dyn </span>Any&gt; = Box::new(<span class="number">1_usize</span>);
+
+<span class="kw">unsafe </span>{
+    <span class="macro">assert_eq!</span>(<span class="kw-2">*</span>x.downcast_unchecked::&lt;usize&gt;(), <span class="number">1</span>);
+}</code></pre></div>
+<h5 id="safety-4"><a class="doc-anchor" href="#safety-4">§</a>Safety</h5>
+<p>The contained value must be of type <code>T</code>. Calling this method
+with the incorrect type is <em>undefined behavior</em>.</p>
+</div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Box%3Cdyn+Any+%2B+Send,+A%3E" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/boxed.rs.html#1835">source</a><a href="#impl-Box%3Cdyn+Any+%2B+Send,+A%3E" class="anchor">§</a><h3 class="code-header">impl&lt;A&gt; <a class="struct" href="../boxed/struct.Box.html" title="struct wasmer_types::lib::std::boxed::Box">Box</a>&lt;dyn <a class="trait" href="trait.Any.html" title="trait wasmer_types::lib::std::any::Any">Any</a> + <a class="trait" href="../marker/trait.Send.html" title="trait wasmer_types::lib::std::marker::Send">Send</a>, A&gt;<div class="where">where
+    A: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/alloc/trait.Allocator.html" title="trait core::alloc::Allocator">Allocator</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.downcast-1" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/alloc/boxed.rs.html#1855">source</a></span><h4 class="code-header">pub fn <a href="#method.downcast-1" class="fn">downcast</a>&lt;T&gt;(self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="../boxed/struct.Box.html" title="struct wasmer_types::lib::std::boxed::Box">Box</a>&lt;T, A&gt;, <a class="struct" href="../boxed/struct.Box.html" title="struct wasmer_types::lib::std::boxed::Box">Box</a>&lt;dyn <a class="trait" href="trait.Any.html" title="trait wasmer_types::lib::std::any::Any">Any</a> + <a class="trait" href="../marker/trait.Send.html" title="trait wasmer_types::lib::std::marker::Send">Send</a>, A&gt;&gt;<div class="where">where
+    T: <a class="trait" href="trait.Any.html" title="trait wasmer_types::lib::std::any::Any">Any</a>,</div></h4></section></summary><div class="docblock"><p>Attempt to downcast the box to a concrete type.</p>
+<h5 id="examples-18"><a class="doc-anchor" href="#examples-18">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::any::Any;
+
+<span class="kw">fn </span>print_if_string(value: Box&lt;<span class="kw">dyn </span>Any + Send&gt;) {
+    <span class="kw">if let </span><span class="prelude-val">Ok</span>(string) = value.downcast::&lt;String&gt;() {
+        <span class="macro">println!</span>(<span class="string">"String ({}): {}"</span>, string.len(), string);
+    }
+}
+
+<span class="kw">let </span>my_string = <span class="string">"Hello World"</span>.to_string();
+print_if_string(Box::new(my_string));
+print_if_string(Box::new(<span class="number">0i8</span>));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.downcast_unchecked-1" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/boxed.rs.html#1885">source</a><h4 class="code-header">pub unsafe fn <a href="#method.downcast_unchecked-1" class="fn">downcast_unchecked</a>&lt;T&gt;(self) -&gt; <a class="struct" href="../boxed/struct.Box.html" title="struct wasmer_types::lib::std::boxed::Box">Box</a>&lt;T, A&gt;<div class="where">where
+    T: <a class="trait" href="trait.Any.html" title="trait wasmer_types::lib::std::any::Any">Any</a>,</div></h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>downcast_unchecked</code>)</span></div></span></summary><div class="docblock"><p>Downcasts the box to a concrete type.</p>
+<p>For a safe alternative see <a href="../boxed/struct.Box.html#method.downcast" title="method wasmer_types::lib::std::boxed::Box::downcast"><code>downcast</code></a>.</p>
+<h5 id="examples-19"><a class="doc-anchor" href="#examples-19">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(downcast_unchecked)]
+
+</span><span class="kw">use </span>std::any::Any;
+
+<span class="kw">let </span>x: Box&lt;<span class="kw">dyn </span>Any + Send&gt; = Box::new(<span class="number">1_usize</span>);
+
+<span class="kw">unsafe </span>{
+    <span class="macro">assert_eq!</span>(<span class="kw-2">*</span>x.downcast_unchecked::&lt;usize&gt;(), <span class="number">1</span>);
+}</code></pre></div>
+<h5 id="safety-5"><a class="doc-anchor" href="#safety-5">§</a>Safety</h5>
+<p>The contained value must be of type <code>T</code>. Calling this method
+with the incorrect type is <em>undefined behavior</em>.</p>
+</div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Box%3Cdyn+Any+%2B+Send+%2B+Sync,+A%3E" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/boxed.rs.html#1894">source</a><a href="#impl-Box%3Cdyn+Any+%2B+Send+%2B+Sync,+A%3E" class="anchor">§</a><h3 class="code-header">impl&lt;A&gt; <a class="struct" href="../boxed/struct.Box.html" title="struct wasmer_types::lib::std::boxed::Box">Box</a>&lt;dyn <a class="trait" href="trait.Any.html" title="trait wasmer_types::lib::std::any::Any">Any</a> + <a class="trait" href="../marker/trait.Send.html" title="trait wasmer_types::lib::std::marker::Send">Send</a> + <a class="trait" href="../marker/trait.Sync.html" title="trait wasmer_types::lib::std::marker::Sync">Sync</a>, A&gt;<div class="where">where
+    A: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/alloc/trait.Allocator.html" title="trait core::alloc::Allocator">Allocator</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.downcast-2" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.51.0">1.51.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/alloc/boxed.rs.html#1914">source</a></span><h4 class="code-header">pub fn <a href="#method.downcast-2" class="fn">downcast</a>&lt;T&gt;(self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="../boxed/struct.Box.html" title="struct wasmer_types::lib::std::boxed::Box">Box</a>&lt;T, A&gt;, <a class="struct" href="../boxed/struct.Box.html" title="struct wasmer_types::lib::std::boxed::Box">Box</a>&lt;dyn <a class="trait" href="trait.Any.html" title="trait wasmer_types::lib::std::any::Any">Any</a> + <a class="trait" href="../marker/trait.Send.html" title="trait wasmer_types::lib::std::marker::Send">Send</a> + <a class="trait" href="../marker/trait.Sync.html" title="trait wasmer_types::lib::std::marker::Sync">Sync</a>, A&gt;&gt;<div class="where">where
+    T: <a class="trait" href="trait.Any.html" title="trait wasmer_types::lib::std::any::Any">Any</a>,</div></h4></section></summary><div class="docblock"><p>Attempt to downcast the box to a concrete type.</p>
+<h5 id="examples-20"><a class="doc-anchor" href="#examples-20">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::any::Any;
+
+<span class="kw">fn </span>print_if_string(value: Box&lt;<span class="kw">dyn </span>Any + Send + Sync&gt;) {
+    <span class="kw">if let </span><span class="prelude-val">Ok</span>(string) = value.downcast::&lt;String&gt;() {
+        <span class="macro">println!</span>(<span class="string">"String ({}): {}"</span>, string.len(), string);
+    }
+}
+
+<span class="kw">let </span>my_string = <span class="string">"Hello World"</span>.to_string();
+print_if_string(Box::new(my_string));
+print_if_string(Box::new(<span class="number">0i8</span>));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.downcast_unchecked-2" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/boxed.rs.html#1944">source</a><h4 class="code-header">pub unsafe fn <a href="#method.downcast_unchecked-2" class="fn">downcast_unchecked</a>&lt;T&gt;(self) -&gt; <a class="struct" href="../boxed/struct.Box.html" title="struct wasmer_types::lib::std::boxed::Box">Box</a>&lt;T, A&gt;<div class="where">where
+    T: <a class="trait" href="trait.Any.html" title="trait wasmer_types::lib::std::any::Any">Any</a>,</div></h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>downcast_unchecked</code>)</span></div></span></summary><div class="docblock"><p>Downcasts the box to a concrete type.</p>
+<p>For a safe alternative see <a href="../boxed/struct.Box.html#method.downcast" title="method wasmer_types::lib::std::boxed::Box::downcast"><code>downcast</code></a>.</p>
+<h5 id="examples-21"><a class="doc-anchor" href="#examples-21">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(downcast_unchecked)]
+
+</span><span class="kw">use </span>std::any::Any;
+
+<span class="kw">let </span>x: Box&lt;<span class="kw">dyn </span>Any + Send + Sync&gt; = Box::new(<span class="number">1_usize</span>);
+
+<span class="kw">unsafe </span>{
+    <span class="macro">assert_eq!</span>(<span class="kw-2">*</span>x.downcast_unchecked::&lt;usize&gt;(), <span class="number">1</span>);
+}</code></pre></div>
+<h5 id="safety-6"><a class="doc-anchor" href="#safety-6">§</a>Safety</h5>
+<p>The contained value must be of type <code>T</code>. Calling this method
+with the incorrect type is <em>undefined behavior</em>.</p>
+</div></details></div></details></div><h2 id="trait-implementations" class="section-header">Trait Implementations<a href="#trait-implementations" class="anchor">§</a></h2><div id="trait-implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-Debug-for-dyn+Any" class="impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#151">source</a></span><a href="#impl-Debug-for-dyn+Any" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="../fmt/trait.Debug.html" title="trait wasmer_types::lib::std::fmt::Debug">Debug</a> for dyn <a class="trait" href="trait.Any.html" title="trait wasmer_types::lib::std::any::Any">Any</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.fmt" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#152">source</a><a href="#method.fmt" class="anchor">§</a><h4 class="code-header">fn <a href="../fmt/trait.Debug.html#tymethod.fmt" class="fn">fmt</a>(&amp;self, f: &amp;mut <a class="struct" href="../fmt/struct.Formatter.html" title="struct wasmer_types::lib::std::fmt::Formatter">Formatter</a>&lt;'_&gt;) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="struct" href="../fmt/struct.Error.html" title="struct wasmer_types::lib::std::fmt::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Formats the value using the given formatter. <a href="../fmt/trait.Debug.html#tymethod.fmt">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Debug-for-dyn+Any+%2B+Send" class="impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#161">source</a></span><a href="#impl-Debug-for-dyn+Any+%2B+Send" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="../fmt/trait.Debug.html" title="trait wasmer_types::lib::std::fmt::Debug">Debug</a> for dyn <a class="trait" href="trait.Any.html" title="trait wasmer_types::lib::std::any::Any">Any</a> + <a class="trait" href="../marker/trait.Send.html" title="trait wasmer_types::lib::std::marker::Send">Send</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.fmt-1" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#162">source</a><a href="#method.fmt-1" class="anchor">§</a><h4 class="code-header">fn <a href="../fmt/trait.Debug.html#tymethod.fmt" class="fn">fmt</a>(&amp;self, f: &amp;mut <a class="struct" href="../fmt/struct.Formatter.html" title="struct wasmer_types::lib::std::fmt::Formatter">Formatter</a>&lt;'_&gt;) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="struct" href="../fmt/struct.Error.html" title="struct wasmer_types::lib::std::fmt::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Formats the value using the given formatter. <a href="../fmt/trait.Debug.html#tymethod.fmt">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Debug-for-dyn+Any+%2B+Send+%2B+Sync" class="impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.28.0">1.28.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#168">source</a></span><a href="#impl-Debug-for-dyn+Any+%2B+Send+%2B+Sync" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="../fmt/trait.Debug.html" title="trait wasmer_types::lib::std::fmt::Debug">Debug</a> for dyn <a class="trait" href="trait.Any.html" title="trait wasmer_types::lib::std::any::Any">Any</a> + <a class="trait" href="../marker/trait.Send.html" title="trait wasmer_types::lib::std::marker::Send">Send</a> + <a class="trait" href="../marker/trait.Sync.html" title="trait wasmer_types::lib::std::marker::Sync">Sync</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.fmt-2" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#169">source</a><a href="#method.fmt-2" class="anchor">§</a><h4 class="code-header">fn <a href="../fmt/trait.Debug.html#tymethod.fmt" class="fn">fmt</a>(&amp;self, f: &amp;mut <a class="struct" href="../fmt/struct.Formatter.html" title="struct wasmer_types::lib::std::fmt::Formatter">Formatter</a>&lt;'_&gt;) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="struct" href="../fmt/struct.Error.html" title="struct wasmer_types::lib::std::fmt::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Formats the value using the given formatter. <a href="../fmt/trait.Debug.html#tymethod.fmt">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Pointee-for-dyn+Any" class="impl"><a class="src rightside" href="../../../../src/ptr_meta/impls.rs.html#4">source</a><a href="#impl-Pointee-for-dyn+Any" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="../../../../ptr_meta/trait.Pointee.html" title="trait ptr_meta::Pointee">Pointee</a> for dyn <a class="trait" href="trait.Any.html" title="trait wasmer_types::lib::std::any::Any">Any</a></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Metadata" class="associatedtype trait-impl"><a href="#associatedtype.Metadata" class="anchor">§</a><h4 class="code-header">type <a href="../../../../ptr_meta/trait.Pointee.html#associatedtype.Metadata" class="associatedtype">Metadata</a> = <a class="struct" href="../../../../ptr_meta/struct.DynMetadata.html" title="struct ptr_meta::DynMetadata">DynMetadata</a>&lt;dyn <a class="trait" href="trait.Any.html" title="trait wasmer_types::lib::std::any::Any">Any</a>&gt;</h4></section></summary><div class='docblock'>The type for metadata in pointers and references to <code>Self</code>.</div></details></div></details></div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><section id="impl-Any-for-T" class="impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#140">source</a></span><a href="#impl-Any-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="trait.Any.html" title="trait wasmer_types::lib::std::any::Any">Any</a> for T<div class="where">where
+    T: 'static + ?<a class="trait" href="../marker/trait.Sized.html" title="trait wasmer_types::lib::std::marker::Sized">Sized</a>,</div></h3></section></div><script src="../../../../trait.impl/core/any/trait.Any.js" async></script></section></div></main></body></html>

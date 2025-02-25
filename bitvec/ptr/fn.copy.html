@@ -1,0 +1,74 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Bit-wise `memcpy`"><title>copy in bitvec::ptr - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="bitvec" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../bitvec/index.html">bitvec</a><span class="version">1.0.1</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In bitvec::ptr</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../index.html">bitvec</a>::<wbr><a href="index.html">ptr</a>::<wbr><a class="fn" href="#">copy</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/bitvec/ptr.rs.html#50-74">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub unsafe fn copy&lt;T1, T2, O1, O2&gt;(
+    src: <a class="struct" href="struct.BitPtr.html" title="struct bitvec::ptr::BitPtr">BitPtr</a>&lt;<a class="struct" href="struct.Const.html" title="struct bitvec::ptr::Const">Const</a>, T1, O1&gt;,
+    dst: <a class="struct" href="struct.BitPtr.html" title="struct bitvec::ptr::BitPtr">BitPtr</a>&lt;<a class="struct" href="struct.Mut.html" title="struct bitvec::ptr::Mut">Mut</a>, T2, O2&gt;,
+    count: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>,
+)<div class="where">where
+    O1: <a class="trait" href="../order/trait.BitOrder.html" title="trait bitvec::order::BitOrder">BitOrder</a>,
+    O2: <a class="trait" href="../order/trait.BitOrder.html" title="trait bitvec::order::BitOrder">BitOrder</a>,
+    T1: <a class="trait" href="../store/trait.BitStore.html" title="trait bitvec::store::BitStore">BitStore</a>,
+    T2: <a class="trait" href="../store/trait.BitStore.html" title="trait bitvec::store::BitStore">BitStore</a>,</div></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="bit-wise-memcpy"><a class="doc-anchor" href="#bit-wise-memcpy">§</a>Bit-wise <code>memcpy</code></h2>
+<p>This copies bits from a region beginning at <code>src</code> into a region beginning at
+<code>dst</code>, each extending upwards in the address space for <code>count</code> bits.</p>
+<p>The two regions may overlap.</p>
+<p>If the two regions are known to <em>never</em> overlap, then <a href="fn.copy_nonoverlapping.html" title="fn bitvec::ptr::copy_nonoverlapping"><code>copy_nonoverlapping</code></a>
+can be used instead.</p>
+<h3 id="original"><a class="doc-anchor" href="#original">§</a>Original</h3>
+<p><a href="https://doc.rust-lang.org/1.81.0/core/intrinsics/fn.copy.html" title="fn core::intrinsics::copy"><code>ptr::copy</code></a></p>
+<h3 id="overlap-definition"><a class="doc-anchor" href="#overlap-definition">§</a>Overlap Definition</h3>
+<p><code>bitvec</code> defines region overlap only when the bit-pointers used to access them
+have the same <code>O: BitOrder</code> type parameter. When this parameter differs, the
+regions are always assumed to not overlap in real memory, because <code>bitvec</code> does
+not define the effects of different orderings mapping to the same locations.</p>
+<h3 id="safety"><a class="doc-anchor" href="#safety">§</a>Safety</h3>
+<p>In addition to the bit-ordering constraints, this inherits the restrictions of
+the original <code>ptr::copy</code>:</p>
+<ul>
+<li><code>src</code> must be valid to read the next <code>count</code> bits out of memory.</li>
+<li><code>dst</code> must be valid to write into the next <code>count</code> bits.</li>
+<li>Both <code>src</code> and <code>dst</code> must satisfy <a href="struct.BitPtr.html" title="struct bitvec::ptr::BitPtr"><code>BitPtr</code></a>’s non-null, well-aligned,
+requirements.</li>
+</ul>
+<h3 id="behavior"><a class="doc-anchor" href="#behavior">§</a>Behavior</h3>
+<p>This reads and writes each bit individually. It is incapable of optimizing its
+behavior to perform batched memory accesses that have better awareness of the
+underlying memory.</p>
+<p>The <a href="../slice/struct.BitSlice.html#method.copy_from_bitslice" title="method bitvec::slice::BitSlice::copy_from_bitslice"><code>BitSlice::copy_from_bitslice</code></a> method <em>is</em> able to perform this
+optimization. You should always prefer to use <code>BitSlice</code> if you are sensitive to
+performance.</p>
+<h3 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h3>
+<p>This example performs a simple copy across independent regions. You can see that
+it follows the ordering parameter for the source and destination regions as it
+walks each bit individually.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>bitvec::prelude::<span class="kw-2">*</span>;
+<span class="kw">use </span>bitvec::ptr <span class="kw">as </span>bv_ptr;
+
+<span class="kw">let </span>start = <span class="number">0b1011u8</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>end = <span class="number">0u16</span>;
+
+<span class="kw">let </span>src = BitPtr::&lt;<span class="kw">_</span>, <span class="kw">_</span>, Lsb0&gt;::from_ref(<span class="kw-2">&amp;</span>start);
+<span class="kw">let </span>dst = BitPtr::&lt;<span class="kw">_</span>, <span class="kw">_</span>, Msb0&gt;::from_mut(<span class="kw-2">&amp;mut </span>end);
+
+<span class="kw">unsafe </span>{
+  bv_ptr::copy(src, dst, <span class="number">4</span>);
+}
+<span class="macro">assert_eq!</span>(end, <span class="number">0b1101_0000_0000_0000</span>);</code></pre></div>
+<p>This can detect overlapping regions. Note again that overlap only exists when
+the ordering parameter is the same! Using bit-pointers that overlap in real
+memory with different ordering is not defined, and <code>bitvec</code> does not specify any
+result.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>bitvec::prelude::<span class="kw-2">*</span>;
+<span class="kw">use </span>bitvec::ptr <span class="kw">as </span>bv_ptr;
+
+<span class="kw">let </span><span class="kw-2">mut </span>x = <span class="number">0b1111_0010u8</span>;
+<span class="kw">let </span>src = BitPtr::&lt;<span class="kw">_</span>, <span class="kw">_</span>, Lsb0&gt;::from_mut(<span class="kw-2">&amp;mut </span>x);
+<span class="kw">let </span>dst = <span class="kw">unsafe </span>{ src.add(<span class="number">2</span>) };
+
+<span class="kw">unsafe </span>{
+  bv_ptr::copy(src.to_const(), dst, <span class="number">4</span>);
+}
+
+<span class="macro">assert_eq!</span>(x, <span class="number">0b1100_1010</span>);
+<span class="comment">// bottom nibble  ^^ ^^ moved here</span></code></pre></div>
+</div></details></section></div></main></body></html>

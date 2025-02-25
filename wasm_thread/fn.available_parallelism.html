@@ -1,0 +1,72 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Returns an estimate of the default amount of parallelism a program should use."><title>available_parallelism in wasm_thread - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="wasm_thread" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../wasm_thread/index.html">wasm_thread</a><span class="version">0.3.0</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="index.html">wasm_thread</a>::<wbr><a class="fn" href="#">available_parallelism</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><span class="since" title="Stable since Rust version 1.59.0">1.59.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/std/thread/mod.rs.html#1908">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn available_parallelism() -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/core/num/nonzero/struct.NonZero.html" title="struct core::num::nonzero::NonZero">NonZero</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>&gt;, <a class="struct" href="https://doc.rust-lang.org/1.81.0/std/io/error/struct.Error.html" title="struct std::io::error::Error">Error</a>&gt;</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Returns an estimate of the default amount of parallelism a program should use.</p>
+<p>Parallelism is a resource. A given machine provides a certain capacity for
+parallelism, i.e., a bound on the number of computations it can perform
+simultaneously. This number often corresponds to the amount of CPUs a
+computer has, but it may diverge in various cases.</p>
+<p>Host environments such as VMs or container orchestrators may want to
+restrict the amount of parallelism made available to programs in them. This
+is often done to limit the potential impact of (unintentionally)
+resource-intensive programs on other programs running on the same machine.</p>
+<h2 id="limitations"><a class="doc-anchor" href="#limitations">§</a>Limitations</h2>
+<p>The purpose of this API is to provide an easy and portable way to query
+the default amount of parallelism the program should use. Among other things it
+does not expose information on NUMA regions, does not account for
+differences in (co)processor capabilities or current system load,
+and will not modify the program’s global state in order to more accurately
+query the amount of available parallelism.</p>
+<p>Where both fixed steady-state and burst limits are available the steady-state
+capacity will be used to ensure more predictable latencies.</p>
+<p>Resource limits can be changed during the runtime of a program, therefore the value is
+not cached and instead recomputed every time this function is called. It should not be
+called from hot code.</p>
+<p>The value returned by this function should be considered a simplified
+approximation of the actual amount of parallelism available at any given
+time. To get a more detailed or precise overview of the amount of
+parallelism available to the program, you may wish to use
+platform-specific APIs as well. The following platform limitations currently
+apply to <code>available_parallelism</code>:</p>
+<p>On Windows:</p>
+<ul>
+<li>It may undercount the amount of parallelism available on systems with more
+than 64 logical CPUs. However, programs typically need specific support to
+take advantage of more than 64 logical CPUs, and in the absence of such
+support, the number returned by this function accurately reflects the
+number of logical CPUs the program can use by default.</li>
+<li>It may overcount the amount of parallelism available on systems limited by
+process-wide affinity masks, or job object limitations.</li>
+</ul>
+<p>On Linux:</p>
+<ul>
+<li>It may overcount the amount of parallelism available when limited by a
+process-wide affinity mask or cgroup quotas and <code>sched_getaffinity()</code> or cgroup fs can’t be
+queried, e.g. due to sandboxing.</li>
+<li>It may undercount the amount of parallelism if the current thread’s affinity mask
+does not reflect the process’ cpuset, e.g. due to pinned threads.</li>
+<li>If the process is in a cgroup v1 cpu controller, this may need to
+scan mountpoints to find the corresponding cgroup v1 controller,
+which may take time on systems with large numbers of mountpoints.
+(This does not apply to cgroup v2, or to processes not in a
+cgroup.)</li>
+</ul>
+<p>On all targets:</p>
+<ul>
+<li>It may overcount the amount of parallelism available when running in a VM
+with CPU usage limits (e.g. an overcommitted host).</li>
+</ul>
+<h2 id="errors"><a class="doc-anchor" href="#errors">§</a>Errors</h2>
+<p>This function will, but is not limited to, return errors in the following
+cases:</p>
+<ul>
+<li>If the amount of parallelism is not known for the target platform.</li>
+<li>If the program lacks permission to query the amount of parallelism made
+available to it.</li>
+</ul>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::{io, thread};
+
+<span class="kw">fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span>count = thread::available_parallelism()<span class="question-mark">?</span>.get();
+    <span class="macro">assert!</span>(count &gt;= <span class="number">1_usize</span>);
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+</div></details></section></div></main></body></html>

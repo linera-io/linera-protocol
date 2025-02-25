@@ -1,0 +1,173 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Define a GraphQL object with methods"><title>Object in async_graphql - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="async_graphql" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc attr"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../async_graphql/index.html">async_graphql</a><span class="version">7.0.2</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Attribute Macro <a href="index.html">async_graphql</a>::<wbr><a class="attr" href="#">Object</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/async_graphql_derive/lib.rs.html#53">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>#[Object]</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Define a GraphQL object with methods</p>
+<p><em><a href="https://async-graphql.github.io/async-graphql/en/define_complex_object.html">See also the Book</a>.</em></p>
+<p>All methods are converted to camelCase.</p>
+<h2 id="macro-attributes"><a class="doc-anchor" href="#macro-attributes">§</a>Macro attributes</h2><div><table><thead><tr><th>Attribute</th><th>description</th><th>Type</th><th>Optional</th></tr></thead><tbody>
+<tr><td>name</td><td>Object name</td><td>string</td><td>Y</td></tr>
+<tr><td>rename_fields</td><td>Rename all the fields according to the given case convention. The possible values are “lowercase”, “UPPERCASE”, “PascalCase”, “camelCase”, “snake_case”, “SCREAMING_SNAKE_CASE”.</td><td>string</td><td>Y</td></tr>
+<tr><td>rename_args</td><td>Rename all the arguments according to the given case convention. The possible values are “lowercase”, “UPPERCASE”, “PascalCase”, “camelCase”, “snake_case”, “SCREAMING_SNAKE_CASE”.</td><td>string</td><td>Y</td></tr>
+<tr><td>cache_control</td><td>Object cache control</td><td><a href="struct.CacheControl.html"><code>CacheControl</code></a></td><td>Y</td></tr>
+<tr><td>extends</td><td>Add fields to an entity that’s defined in another service</td><td>bool</td><td>Y</td></tr>
+<tr><td>shareable</td><td>Indicate that an object type’s field is allowed to be resolved by multiple subgraphs</td><td>bool</td><td>Y</td></tr>
+<tr><td>use_type_description</td><td>Specifies that the description of the type is on the type declaration. <a href=""><code>Description</code></a>(derive.Description.html)</td><td>bool</td><td>Y</td></tr>
+<tr><td>visible</td><td>If <code>false</code>, it will not be displayed in introspection. <em><a href="https://async-graphql.github.io/async-graphql/en/visibility.html">See also the Book</a>.</em></td><td>bool</td><td>Y</td></tr>
+<tr><td>visible</td><td>Call the specified function. If the return value is <code>false</code>, it will not be displayed in introspection.</td><td>string</td><td>Y</td></tr>
+<tr><td>inaccessible</td><td>Indicate that an object is not accessible from a supergraph when using Apollo Federation</td><td>bool</td><td>Y</td></tr>
+<tr><td>tag</td><td>Arbitrary string metadata that will be propagated to the supergraph when using Apollo Federation. This attribute is repeatable</td><td>string</td><td>Y</td></tr>
+<tr><td>serial</td><td>Resolve each field sequentially.</td><td>bool</td><td>Y</td></tr>
+<tr><td>concretes</td><td>Specify how the concrete type of the generic SimpleObject should be implemented.</td><td>ConcreteType</td><td>Y</td></tr>
+<tr><td>guard</td><td>Field of guard <em><a href="https://async-graphql.github.io/async-graphql/en/field_guard.html">See also the Book</a></em></td><td>string</td><td>Y</td></tr>
+</tbody></table>
+</div><h2 id="field-attributes"><a class="doc-anchor" href="#field-attributes">§</a>Field attributes</h2><div><table><thead><tr><th>Attribute</th><th>description</th><th>Type</th><th>Optional</th></tr></thead><tbody>
+<tr><td>skip</td><td>Skip this field</td><td>bool</td><td>Y</td></tr>
+<tr><td>name</td><td>Field name</td><td>string</td><td>Y</td></tr>
+<tr><td>desc</td><td>Field description</td><td>string</td><td>Y</td></tr>
+<tr><td>deprecation</td><td>Field deprecated</td><td>bool</td><td>Y</td></tr>
+<tr><td>deprecation</td><td>Field deprecation reason</td><td>string</td><td>Y</td></tr>
+<tr><td>cache_control</td><td>Field cache control</td><td><a href="struct.CacheControl.html"><code>CacheControl</code></a></td><td>Y</td></tr>
+<tr><td>external</td><td>Mark a field as owned by another service. This allows service A to use fields from service B while also knowing at runtime the types of that field.</td><td>bool</td><td>Y</td></tr>
+<tr><td>provides</td><td>Annotate the expected returned fieldset from a field on a base type that is guaranteed to be selectable by the gateway.</td><td>string</td><td>Y</td></tr>
+<tr><td>requires</td><td>Annotate the required input fieldset from a base type for a resolver. It is used to develop a query plan where the required fields may not be needed by the client, but the service may need additional information from other services.</td><td>string</td><td>Y</td></tr>
+<tr><td>shareable</td><td>Indicate that a field is allowed to be resolved by multiple subgraphs</td><td>bool</td><td>Y</td></tr>
+<tr><td>inaccessible</td><td>Indicate that a field is not accessible from a supergraph when using Apollo Federation</td><td>bool</td><td>Y</td></tr>
+<tr><td>tag</td><td>Arbitrary string metadata that will be propagated to the supergraph when using Apollo Federation. This attribute is repeatable</td><td>string</td><td>Y</td></tr>
+<tr><td>override_from</td><td>Mark the field as overriding a field currently present on another subgraph. It is used to migrate fields between subgraphs.</td><td>string</td><td>Y</td></tr>
+<tr><td>guard</td><td>Field of guard <em><a href="https://async-graphql.github.io/async-graphql/en/field_guard.html">See also the Book</a></em></td><td>string</td><td>Y</td></tr>
+<tr><td>visible</td><td>If <code>false</code>, it will not be displayed in introspection. <em><a href="https://async-graphql.github.io/async-graphql/en/visibility.html">See also the Book</a>.</em></td><td>bool</td><td>Y</td></tr>
+<tr><td>visible</td><td>Call the specified function. If the return value is <code>false</code>, it will not be displayed in introspection.</td><td>string</td><td>Y</td></tr>
+<tr><td>complexity</td><td>Custom field complexity. <em><a href="https://async-graphql.github.io/async-graphql/en/depth_and_complexity.html">See also the Book</a>.</em></td><td>bool</td><td>Y</td></tr>
+<tr><td>complexity</td><td>Custom field complexity.</td><td>string</td><td>Y</td></tr>
+<tr><td>derived</td><td>Generate derived fields <em><a href="https://async-graphql.github.io/async-graphql/en/derived_fields.html">See also the Book</a>.</em></td><td>object</td><td>Y</td></tr>
+<tr><td>flatten</td><td>Similar to serde (flatten)</td><td>boolean</td><td>Y</td></tr>
+</tbody></table>
+</div><h2 id="field-argument-attributes"><a class="doc-anchor" href="#field-argument-attributes">§</a>Field argument attributes</h2><div><table><thead><tr><th>Attribute</th><th>description</th><th>Type</th><th>Optional</th></tr></thead><tbody>
+<tr><td>name</td><td>Argument name</td><td>string</td><td>Y</td></tr>
+<tr><td>desc</td><td>Argument description</td><td>string</td><td>Y</td></tr>
+<tr><td>default</td><td>Use <code>Default::default</code> for default value</td><td>none</td><td>Y</td></tr>
+<tr><td>default</td><td>Argument default value</td><td>literal</td><td>Y</td></tr>
+<tr><td>default_with</td><td>Expression to generate default value</td><td>code string</td><td>Y</td></tr>
+<tr><td>validator</td><td>Input value validator <em><a href="https://async-graphql.github.io/async-graphql/en/input_value_validators.html">See also the Book</a></em></td><td>object</td><td>Y</td></tr>
+<tr><td>visible</td><td>If <code>false</code>, it will not be displayed in introspection. <em><a href="https://async-graphql.github.io/async-graphql/en/visibility.html">See also the Book</a>.</em></td><td>bool</td><td>Y</td></tr>
+<tr><td>visible</td><td>Call the specified function. If the return value is <code>false</code>, it will not be displayed in introspection.</td><td>string</td><td>Y</td></tr>
+<tr><td>inaccessible</td><td>Indicate that an argument is not accessible from a supergraph when using Apollo Federation</td><td>bool</td><td>Y</td></tr>
+<tr><td>tag</td><td>Arbitrary string metadata that will be propagated to the supergraph when using Apollo Federation. This attribute is repeatable</td><td>string</td><td>Y</td></tr>
+<tr><td>secret</td><td>Mark this field as a secret, it will not output the actual value in the log.</td><td>bool</td><td>Y</td></tr>
+<tr><td>key</td><td>Is entity key(for Federation)</td><td>bool</td><td>Y</td></tr>
+<tr><td>process_with</td><td>Upon successful parsing, invokes specified function. Its signature must be <code>fn(&amp;mut T)</code>.</td><td>code path</td><td>Y</td></tr>
+</tbody></table>
+</div><h2 id="derived-argument-attributes"><a class="doc-anchor" href="#derived-argument-attributes">§</a>Derived argument attributes</h2><div><table><thead><tr><th>Attribute</th><th>description</th><th>Type</th><th>Optional</th></tr></thead><tbody>
+<tr><td>name</td><td>Generated derived field name</td><td>string</td><td>N</td></tr>
+<tr><td>into</td><td>Type to derived an into</td><td>string</td><td>Y</td></tr>
+<tr><td>with</td><td>Function to apply to manage advanced use cases</td><td>string</td><td>Y</td></tr>
+</tbody></table>
+</div><h2 id="valid-field-return-types"><a class="doc-anchor" href="#valid-field-return-types">§</a>Valid field return types</h2>
+<ul>
+<li>Scalar values, such as <code>i32</code> and <code>bool</code>. <code>usize</code>, <code>isize</code>, <code>u128</code> and <code>i128</code> are not
+supported</li>
+<li><code>Vec&lt;T&gt;</code>, such as <code>Vec&lt;i32&gt;</code></li>
+<li>Slices, such as <code>&amp;[i32]</code></li>
+<li><code>Option&lt;T&gt;</code>, such as <code>Option&lt;i32&gt;</code></li>
+<li><code>BTree&lt;T&gt;</code>, <code>HashMap&lt;T&gt;</code>, <code>HashSet&lt;T&gt;</code>, <code>BTreeSet&lt;T&gt;</code>, <code>LinkedList&lt;T&gt;</code>, <code>VecDeque&lt;T&gt;</code></li>
+<li>GraphQL objects.</li>
+<li>GraphQL enums.</li>
+<li>References to any of the above types, such as <code>&amp;i32</code> or <code>&amp;Option&lt;String&gt;</code>.</li>
+<li><code>Result&lt;T, E&gt;</code>, such as <code>Result&lt;i32, E&gt;</code></li>
+</ul>
+<h2 id="context"><a class="doc-anchor" href="#context">§</a>Context</h2>
+<p>You can define a context as an argument to a method, and the context should be the first argument to the method.</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[Object]
+</span><span class="kw">impl </span>Query {
+    <span class="kw">async fn </span>value(<span class="kw-2">&amp;</span><span class="self">self</span>, ctx: <span class="kw-2">&amp;</span>Context&lt;<span class="lifetime">'_</span>&gt;) -&gt; { ... }
+}</code></pre></div>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Implements GraphQL Object for struct.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>async_graphql::<span class="kw-2">*</span>;
+
+<span class="kw">struct </span>Query {
+    value: i32,
+}
+
+<span class="attr">#[Object]
+</span><span class="kw">impl </span>Query {
+    <span class="doccomment">/// value
+    </span><span class="kw">async fn </span>value(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; i32 {
+        <span class="self">self</span>.value
+    }
+
+    <span class="doccomment">/// reference value
+    </span><span class="kw">async fn </span>value_ref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>i32 {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.value
+    }
+
+    <span class="doccomment">/// value with error
+    </span><span class="kw">async fn </span>value_with_error(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;i32&gt; {
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>.value)
+    }
+
+    <span class="kw">async fn </span>value_with_arg(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="attr">#[graphql(default = <span class="number">1</span>)] </span>a: i32) -&gt; i32 {
+        a
+    }
+}
+
+<span class="kw">let </span>schema = Schema::new(Query { value: <span class="number">10 </span>}, EmptyMutation, EmptySubscription);
+<span class="kw">let </span>res = schema.execute(<span class="string">r#"{
+    value
+    valueRef
+    valueWithError
+    valueWithArg1: valueWithArg
+    valueWithArg2: valueWithArg(a: 99)
+}"#</span>).<span class="kw">await</span>.into_result().unwrap().data;
+<span class="macro">assert_eq!</span>(res, <span class="macro">value!</span>({
+    <span class="string">"value"</span>: <span class="number">10</span>,
+    <span class="string">"valueRef"</span>: <span class="number">10</span>,
+    <span class="string">"valueWithError"</span>: <span class="number">10</span>,
+    <span class="string">"valueWithArg1"</span>: <span class="number">1</span>,
+    <span class="string">"valueWithArg2"</span>: <span class="number">99
+</span>}));</code></pre></div>
+<h2 id="examples-1"><a class="doc-anchor" href="#examples-1">§</a>Examples</h2>
+<p>Implements GraphQL Object for trait object.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>async_graphql::<span class="kw-2">*</span>;
+
+<span class="kw">trait </span>MyTrait: Send + Sync {
+    <span class="kw">fn </span>name(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>str;
+}
+
+<span class="attr">#[Object]
+</span><span class="kw">impl dyn </span>MyTrait + <span class="lifetime">'_ </span>{
+    <span class="attr">#[graphql(name = <span class="string">"name"</span>)]
+    </span><span class="kw">async fn </span>gql_name(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>str {
+        <span class="self">self</span>.name()
+    }
+}
+
+<span class="kw">struct </span>MyObj(String);
+
+<span class="kw">impl </span>MyTrait <span class="kw">for </span>MyObj {
+    <span class="kw">fn </span>name(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>str {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0
+    </span>}
+}
+
+<span class="kw">struct </span>Query;
+
+<span class="attr">#[Object]
+</span><span class="kw">impl </span>Query {
+    <span class="kw">async fn </span>objs(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;Box&lt;<span class="kw">dyn </span>MyTrait&gt;&gt; {
+        <span class="macro">vec!</span>[
+            Box::new(MyObj(<span class="string">"a"</span>.to_string())),
+            Box::new(MyObj(<span class="string">"b"</span>.to_string())),
+        ]
+    }
+}
+
+<span class="kw">let </span>schema = Schema::new(Query, EmptyMutation, EmptySubscription);
+<span class="kw">let </span>res = schema.execute(<span class="string">"{ objs { name } }"</span>).<span class="kw">await</span>.into_result().unwrap().data;
+<span class="macro">assert_eq!</span>(res, <span class="macro">value!</span>({
+    <span class="string">"objs"</span>: [
+        { <span class="string">"name"</span>: <span class="string">"a" </span>},
+        { <span class="string">"name"</span>: <span class="string">"b" </span>},
+    ]
+}));</code></pre></div>
+</div></details></section></div></main></body></html>

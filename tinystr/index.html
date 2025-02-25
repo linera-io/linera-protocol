@@ -1,0 +1,42 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="`tinystr` is a utility crate of the `ICU4X` project."><title>tinystr - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="tinystr" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../tinystr/index.html">tinystr</a><span class="version">0.7.6</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#macros">Macros</a></li><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#types">Type Aliases</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">tinystr</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/tinystr/lib.rs.html#5-113">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><code>tinystr</code> is a utility crate of the <a href="../icu/index.html"><code>ICU4X</code></a> project.</p>
+<p>It includes <a href="struct.TinyAsciiStr.html" title="struct tinystr::TinyAsciiStr"><code>TinyAsciiStr</code></a>, a core API for representing small ASCII-only bounded length strings.</p>
+<p>It is optimized for operations on strings of size 8 or smaller. When use cases involve comparison
+and conversion of strings for lowercase/uppercase/titlecase, or checking
+numeric/alphabetic/alphanumeric, <code>TinyAsciiStr</code> is the edge performance library.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tinystr::TinyAsciiStr;
+
+<span class="kw">let </span>s1: TinyAsciiStr&lt;<span class="number">4</span>&gt; = <span class="string">"tEsT"</span>.parse().expect(<span class="string">"Failed to parse."</span>);
+
+<span class="macro">assert_eq!</span>(s1, <span class="string">"tEsT"</span>);
+<span class="macro">assert_eq!</span>(s1.to_ascii_uppercase(), <span class="string">"TEST"</span>);
+<span class="macro">assert_eq!</span>(s1.to_ascii_lowercase(), <span class="string">"test"</span>);
+<span class="macro">assert_eq!</span>(s1.to_ascii_titlecase(), <span class="string">"Test"</span>);
+<span class="macro">assert!</span>(s1.is_ascii_alphanumeric());
+<span class="macro">assert!</span>(!s1.is_ascii_numeric());
+
+<span class="kw">let </span>s2 = TinyAsciiStr::&lt;<span class="number">8</span>&gt;::try_from_raw(<span class="kw-2">*</span><span class="string">b"New York"</span>)
+    .expect(<span class="string">"Failed to parse."</span>);
+
+<span class="macro">assert_eq!</span>(s2, <span class="string">"New York"</span>);
+<span class="macro">assert_eq!</span>(s2.to_ascii_uppercase(), <span class="string">"NEW YORK"</span>);
+<span class="macro">assert_eq!</span>(s2.to_ascii_lowercase(), <span class="string">"new york"</span>);
+<span class="macro">assert_eq!</span>(s2.to_ascii_titlecase(), <span class="string">"New york"</span>);
+<span class="macro">assert!</span>(!s2.is_ascii_alphanumeric());</code></pre></div>
+<h2 id="details"><a class="doc-anchor" href="#details">§</a>Details</h2>
+<p>When strings are of size 8 or smaller, the struct transforms the strings as <code>u32</code>/<code>u64</code> and uses
+bitmasking to provide basic string manipulation operations:</p>
+<ul>
+<li><code>is_ascii_numeric</code></li>
+<li><code>is_ascii_alphabetic</code></li>
+<li><code>is_ascii_alphanumeric</code></li>
+<li><code>to_ascii_lowercase</code></li>
+<li><code>to_ascii_uppercase</code></li>
+<li><code>to_ascii_titlecase</code></li>
+<li><code>PartialEq</code></li>
+</ul>
+<p><code>TinyAsciiStr</code> will fall back to <code>u8</code> character manipulation for strings of length greater than 8.</p>
+</div></details><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="macro" href="macro.tinystr.html" title="macro tinystr::tinystr">tinystr</a></div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.TinyAsciiStr.html" title="struct tinystr::TinyAsciiStr">TinyAsciiStr</a></div></li><li><div class="item-name"><a class="struct" href="struct.UnvalidatedTinyAsciiStr.html" title="struct tinystr::UnvalidatedTinyAsciiStr">UnvalidatedTinyAsciiStr</a></div><div class="desc docblock-short">A fixed-length bytes array that is expected to be an ASCII string but does not enforce that invariant.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.TinyStrError.html" title="enum tinystr::TinyStrError">TinyStrError</a></div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.TinyStr4.html" title="type tinystr::TinyStr4">TinyStr4</a></div><div class="desc docblock-short">These are temporary compatability reexports that will be removed
+in a future version.</div></li><li><div class="item-name"><a class="type" href="type.TinyStr8.html" title="type tinystr::TinyStr8">TinyStr8</a></div><div class="desc docblock-short">These are temporary compatability reexports that will be removed
+in a future version.</div></li><li><div class="item-name"><a class="type" href="type.TinyStr16.html" title="type tinystr::TinyStr16">TinyStr16</a></div><div class="desc docblock-short">These are temporary compatability reexports that will be removed
+in a future version.</div></li></ul></section></div></main></body></html>

@@ -1,0 +1,28 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Checks whether supplied `Option` variable is `Some` and if so, returns it."><title>return_some in stdext - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="stdext" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../stdext/index.html">stdext</a><span class="version">0.3.3</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="index.html">stdext</a>::<wbr><a class="macro" href="#">return_some</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/stdext/macros.rs.html#255-268">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><span class="macro">macro_rules!</span> return_some {
+    (<span class="macro-nonterminal">$var</span>:expr) =&gt; { ... };
+    (inner <span class="macro-nonterminal">$var</span>:expr) =&gt; { ... };
+}</pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Checks whether supplied <a href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option"><code>Option</code></a> variable is <code>Some</code>
+and if so, returns it.</p>
+<p>If variant is an <code>None</code>, nothing happens.</p>
+<p>This macro supports two forms:</p>
+<ul>
+<li><code>return_some!(Some(42));</code> - will return <code>Some(42)</code>.</li>
+<li><code>return_some!(inner Some(42));</code> - will return just <code>42</code>.</li>
+</ul>
+<h3 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code>
+<span class="kw">fn </span>choose_one(left: <span class="prelude-ty">Option</span>&lt;u8&gt;, right: <span class="prelude-ty">Option</span>&lt;u8&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;u8&gt; {
+    <span class="macro">return_some!</span>(left);
+    <span class="macro">return_some!</span>(right);
+    <span class="prelude-val">None
+</span>}
+
+<span class="kw">fn </span>choose_one_inner(left: <span class="prelude-ty">Option</span>&lt;u8&gt;, right: <span class="prelude-ty">Option</span>&lt;u8&gt;) -&gt; u8 {
+    <span class="macro">return_some!</span>(inner left);
+    <span class="macro">return_some!</span>(inner right);
+    <span class="macro">panic!</span>(<span class="string">"Both variables are bad"</span>)
+}
+
+<span class="macro">assert_eq!</span>(choose_one(<span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(<span class="number">10</span>)), <span class="prelude-val">Some</span>(<span class="number">10</span>));
+<span class="macro">assert_eq!</span>(choose_one_inner(<span class="prelude-val">Some</span>(<span class="number">1</span>), <span class="prelude-val">None</span>), <span class="number">1</span>);</code></pre></div>
+</div></details></section></div></main></body></html>

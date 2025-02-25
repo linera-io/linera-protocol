@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["AssertUnwindSafe","Location","PanicInfo","PanicMessage"],"trait":["RefUnwindSafe","UnwindSafe"]};

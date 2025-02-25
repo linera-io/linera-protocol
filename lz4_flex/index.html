@@ -1,0 +1,57 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Pure Rust, high performance implementation of LZ4 compression."><title>lz4_flex - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="lz4_flex" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../lz4_flex/index.html">lz4_flex</a><span class="version">0.11.3</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">lz4_flex</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/lz4_flex/lib.rs.html#1-111">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Pure Rust, high performance implementation of LZ4 compression.</p>
+<p>A detailed explanation of the algorithm can be found <a href="http://ticki.github.io/blog/how-lz4-works/">here</a>.</p>
+<h2 id="overview"><a class="doc-anchor" href="#overview">§</a>Overview</h2>
+<p>This crate provides two ways to use lz4. The first way is through the
+<a href="frame/struct.FrameDecoder.html"><code>frame::FrameDecoder</code></a>
+and
+<a href="frame/struct.FrameEncoder.html"><code>frame::FrameEncoder</code></a>
+types, which implement the <code>std::io::Read</code> and <code>std::io::Write</code> traits with the
+lz4 frame format. Unless you have a specific reason to the contrary, you
+should only use the lz4 frame format. Specifically, the lz4 frame format
+permits streaming compression or decompression.</p>
+<p>The second way is through the
+<a href="fn.decompress_size_prepended.html"><code>decompress_size_prepended</code></a>
+and
+<a href="fn.compress_prepend_size.html"><code>compress_prepend_size</code></a>
+functions. These functions provide access to the lz4 block format, and
+don’t support a streaming interface directly. You should only use these types
+if you know you specifically need the lz4 block format.</p>
+<h2 id="example-compress-data-on-stdin-with-frame-format"><a class="doc-anchor" href="#example-compress-data-on-stdin-with-frame-format">§</a>Example: compress data on <code>stdin</code> with frame format</h2>
+<p>This program reads data from <code>stdin</code>, compresses it and emits it to <code>stdout</code>.
+This example can be found in <code>examples/compress.rs</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io;
+<span class="kw">let </span>stdin = io::stdin();
+<span class="kw">let </span>stdout = io::stdout();
+<span class="kw">let </span><span class="kw-2">mut </span>rdr = stdin.lock();
+<span class="comment">// Wrap the stdout writer in a LZ4 Frame writer.
+</span><span class="kw">let </span><span class="kw-2">mut </span>wtr = lz4_flex::frame::FrameEncoder::new(stdout.lock());
+io::copy(<span class="kw-2">&amp;mut </span>rdr, <span class="kw-2">&amp;mut </span>wtr).expect(<span class="string">"I/O operation failed"</span>);
+wtr.finish().unwrap();</code></pre></div>
+<h2 id="example-decompress-data-on-stdin-with-frame-format"><a class="doc-anchor" href="#example-decompress-data-on-stdin-with-frame-format">§</a>Example: decompress data on <code>stdin</code> with frame format</h2>
+<p>This program reads data from <code>stdin</code>, decompresses it and emits it to <code>stdout</code>.
+This example can be found in <code>examples/decompress.rs</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io;
+<span class="kw">let </span>stdin = io::stdin();
+<span class="kw">let </span>stdout = io::stdout();
+<span class="comment">// Wrap the stdin reader in a LZ4 FrameDecoder.
+</span><span class="kw">let </span><span class="kw-2">mut </span>rdr = lz4_flex::frame::FrameDecoder::new(stdin.lock());
+<span class="kw">let </span><span class="kw-2">mut </span>wtr = stdout.lock();
+io::copy(<span class="kw-2">&amp;mut </span>rdr, <span class="kw-2">&amp;mut </span>wtr).expect(<span class="string">"I/O operation failed"</span>);</code></pre></div>
+<h2 id="example-block-format-roundtrip"><a class="doc-anchor" href="#example-block-format-roundtrip">§</a>Example: block format roundtrip</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>lz4_flex::block::{compress_prepend_size, decompress_size_prepended};
+<span class="kw">let </span>input: <span class="kw-2">&amp;</span>[u8] = <span class="string">b"Hello people, what's up?"</span>;
+<span class="kw">let </span>compressed = compress_prepend_size(input);
+<span class="kw">let </span>uncompressed = decompress_size_prepended(<span class="kw-2">&amp;</span>compressed).unwrap();
+<span class="macro">assert_eq!</span>(input, uncompressed);</code></pre></div>
+<h3 id="feature-flags"><a class="doc-anchor" href="#feature-flags">§</a>Feature Flags</h3>
+<ul>
+<li><code>safe-encode</code> uses only safe rust for encode. <em>enabled by default</em></li>
+<li><code>safe-decode</code> uses only safe rust for encode. <em>enabled by default</em></li>
+<li><code>frame</code> support for LZ4 frame format. <em>implies <code>std</code>, enabled by default</em></li>
+<li><code>std</code> enables dependency on the standard library. <em>enabled by default</em></li>
+</ul>
+<p>For maximum performance use <code>no-default-features</code>.</p>
+<p>For no_std support only the <a href="block/index.html"><code>block format</code></a> is supported.</p>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.compress"><code>pub use block::compress;</code></div></li><li><div class="item-name" id="reexport.compress-1"><code>pub use block::<a class="fn" href="block/fn.compress.html" title="fn lz4_flex::block::compress">compress</a>;</code></div></li><li><div class="item-name" id="reexport.compress_into"><code>pub use block::<a class="fn" href="block/fn.compress_into.html" title="fn lz4_flex::block::compress_into">compress_into</a>;</code></div></li><li><div class="item-name" id="reexport.compress_prepend_size"><code>pub use block::<a class="fn" href="block/fn.compress_prepend_size.html" title="fn lz4_flex::block::compress_prepend_size">compress_prepend_size</a>;</code></div></li><li><div class="item-name" id="reexport.decompress"><code>pub use block::decompress;</code></div></li><li><div class="item-name" id="reexport.decompress-1"><code>pub use block::<a class="fn" href="block/fn.decompress.html" title="fn lz4_flex::block::decompress">decompress</a>;</code></div></li><li><div class="item-name" id="reexport.decompress_into"><code>pub use block::<a class="fn" href="block/fn.decompress_into.html" title="fn lz4_flex::block::decompress_into">decompress_into</a>;</code></div></li><li><div class="item-name" id="reexport.decompress_size_prepended"><code>pub use block::<a class="fn" href="block/fn.decompress_size_prepended.html" title="fn lz4_flex::block::decompress_size_prepended">decompress_size_prepended</a>;</code></div></li></ul><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="block/index.html" title="mod lz4_flex::block">block</a></div><div class="desc docblock-short">LZ4 Block Format</div></li><li><div class="item-name"><a class="mod" href="frame/index.html" title="mod lz4_flex::frame">frame</a></div><div class="desc docblock-short">LZ4 Frame Format</div></li></ul></section></div></main></body></html>

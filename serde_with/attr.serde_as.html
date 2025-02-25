@@ -1,0 +1,128 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Convenience macro to use the `serde_as` system."><title>serde_as in serde_with - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="serde_with" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc attr"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../serde_with/index.html">serde_with</a><span class="version">3.12.0</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Attribute Macro <a href="index.html">serde_with</a>::<wbr><a class="attr" href="#">serde_as</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/serde_with_macros/lib.rs.html#603">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>#[serde_as]</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Convenience macro to use the <a href="https://docs.rs/serde_with/3.12.0/serde_with/guide/index.html"><code>serde_as</code></a> system.</p>
+<p>The <a href="https://docs.rs/serde_with/3.12.0/serde_with/guide/index.html"><code>serde_as</code></a> system is designed as a more flexible alternative to serde’s <code>with</code> annotation.
+The <code>#[serde_as]</code> attribute must be placed <em>before</em> the <code>#[derive]</code> attribute.
+Each field of a struct or enum can be annotated with <code>#[serde_as(...)]</code> to specify which
+transformations should be applied. <code>serde_as</code> is <em>not</em> supported on enum variants.
+This is in contrast to <code>#[serde(with = "...")]</code>.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>serde_with::{serde_as, DisplayFromStr, Map};
+
+<span class="attr">#[serde_as]
+#[derive(Serialize, Deserialize)]
+</span><span class="kw">struct </span>Data {
+    <span class="doccomment">/// Serialize into number
+    </span><span class="attr">#[serde_as(<span class="kw">as </span>= <span class="string">"_"</span>)]
+    </span>a: u32,
+
+    <span class="doccomment">/// Serialize into String
+    </span><span class="attr">#[serde_as(<span class="kw">as </span>= <span class="string">"DisplayFromStr"</span>)]
+    </span>b: u32,
+
+    <span class="doccomment">/// Serialize into a map from String to String
+    </span><span class="attr">#[serde_as(<span class="kw">as </span>= <span class="string">"Map&lt;DisplayFromStr, _&gt;"</span>)]
+    </span>c: Vec&lt;(u32, String)&gt;,
+}</code></pre></div>
+<h2 id="alternative-path-to-serde_with-crate"><a class="doc-anchor" href="#alternative-path-to-serde_with-crate">§</a>Alternative path to <code>serde_with</code> crate</h2>
+<p>If <code>serde_with</code> is not available at the default path, its path should be specified with the
+<code>crate</code> argument. See <a href="https://docs.rs/serde_with/3.12.0/serde_with/guide/serde_as/index.html#re-exporting-serde_as">re-exporting <code>serde_as</code></a> for more use case information.</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[serde_as(<span class="kw">crate </span>= <span class="string">"::some_other_lib::serde_with"</span>)]
+#[derive(Deserialize)]
+</span><span class="kw">struct </span>Data {
+    <span class="attr">#[serde_as(<span class="kw">as </span>= <span class="string">"_"</span>)]
+    </span>a: u32,
+}</code></pre></div>
+<h2 id="what-this-macro-does"><a class="doc-anchor" href="#what-this-macro-does">§</a>What this macro does</h2>
+<p>The <code>serde_as</code> macro only serves a convenience function.
+All the steps it performs, can easily be done manually, in case the cost of an attribute macro
+is deemed too high. The functionality can best be described with an example.</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[serde_as]
+#[derive(serde::Serialize)]
+</span><span class="kw">struct </span>Foo {
+    <span class="attr">#[serde_as(<span class="kw">as </span>= <span class="string">"Vec&lt;_&gt;"</span>)]
+    </span>bar: Vec&lt;u32&gt;,
+
+    <span class="attr">#[serde_as(<span class="kw">as </span>= <span class="string">"Option&lt;DisplayFromStr&gt;"</span>)]
+    </span>baz: <span class="prelude-ty">Option</span>&lt;u32&gt;,
+}</code></pre></div>
+<ol>
+<li>
+<p>All the placeholder type <code>_</code> will be replaced with <code>::serde_with::Same</code>.
+The placeholder type <code>_</code> marks all the places where the type’s <code>Serialize</code> implementation
+should be used. In the example, it means that the <code>u32</code> values will serialize with the
+<code>Serialize</code> implementation of <code>u32</code>. The <code>Same</code> type implements <code>SerializeAs</code> whenever the
+underlying type implements <code>Serialize</code> and is used to make the two traits compatible.</p>
+<p>If you specify a custom path for <code>serde_with</code> via the <code>crate</code> attribute, the path to the
+<code>Same</code> type will be altered accordingly.</p>
+</li>
+<li>
+<p>Wrap the type from the annotation inside a <code>::serde_with::As</code>.
+In the above example we now have something like <code>::serde_with::As::&lt;Vec&lt;::serde_with::Same&gt;&gt;</code>.
+The <code>As</code> type acts as the opposite of the <code>Same</code> type.
+It allows using a <code>SerializeAs</code> type whenever a <code>Serialize</code> is required.</p>
+</li>
+<li>
+<p>Translate the <code>*as</code> attributes into the serde equivalent ones.
+<code>#[serde_as(as = ...)]</code> will become <code>#[serde(with = ...)]</code>.
+Similarly, <code>serialize_as</code> is translated to <code>serialize_with</code>.</p>
+<p>The field attributes will be kept on the struct/enum such that other macros can use them
+too.</p>
+</li>
+<li>
+<p>It searches <code>#[serde_as(as = ...)]</code> if there is a type named <code>BorrowCow</code> under any path.
+If <code>BorrowCow</code> is found, the attribute <code>#[serde(borrow)]</code> is added to the field.
+If <code>#[serde(borrow)]</code> or <code>#[serde(borrow = "...")]</code> is already present, this step will be
+skipped.</p>
+</li>
+<li>
+<p>Restore the ability of accepting missing fields if both the field and the transformation are <code>Option</code>.</p>
+<p>An <code>Option</code> is detected by an exact text match.
+Renaming an import or type aliases can cause confusion here.
+The following variants are supported.</p>
+<ul>
+<li><code>Option</code></li>
+<li><code>std::option::Option</code>, with or without leading <code>::</code></li>
+<li><code>core::option::Option</code>, with or without leading <code>::</code></li>
+</ul>
+<p>If the field is of type <code>Option&lt;T&gt;</code> and the attribute <code>#[serde_as(as = "Option&lt;S&gt;")]</code> (also
+<code>deserialize_as</code>; for any <code>T</code>/<code>S</code>) then <code>#[serde(default)]</code> is applied to the field.</p>
+<p>This restores the ability of accepting missing fields, which otherwise often leads to confusing <a href="https://github.com/jonasbb/serde_with/issues/185">serde_with#185</a>.
+<code>#[serde(default)]</code> is not applied, if it already exists.
+It only triggers if both field and transformation are <code>Option</code>s.
+For example, using <code>#[serde_as(as = "NoneAsEmptyString")]</code> on <code>Option&lt;String&gt;</code> will not see
+any change.</p>
+<p>If the automatically applied attribute is undesired, the behavior can be suppressed by adding
+<code>#[serde_as(no_default)]</code>.</p>
+<p>This can be combined like <code>#[serde_as(as = "Option&lt;S&gt;", no_default)]</code>.</p>
+</li>
+</ol>
+<p>After all these steps, the code snippet will have transformed into roughly this.</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(serde::Serialize)]
+</span><span class="kw">struct </span>Foo {
+    <span class="attr">#[serde_as(<span class="kw">as </span>= <span class="string">"Vec&lt;_&gt;"</span>)]
+    #[serde(with = <span class="string">"::serde_with::As::&lt;Vec&lt;::serde_with::Same&gt;&gt;"</span>)]
+    </span>bar: Vec&lt;u32&gt;,
+
+    <span class="attr">#[serde_as(<span class="kw">as </span>= <span class="string">"Option&lt;DisplayFromStr&gt;"</span>)]
+    #[serde(default)]
+    #[serde(with = <span class="string">"::serde_with::As::&lt;Option&lt;DisplayFromStr&gt;&gt;"</span>)]
+    </span>baz: <span class="prelude-ty">Option</span>&lt;u32&gt;,
+}</code></pre></div>
+<h2 id="a-note-on-schemars-integration"><a class="doc-anchor" href="#a-note-on-schemars-integration">§</a>A note on <code>schemars</code> integration</h2>
+<p>When the <code>schemars_0_8</code> feature is enabled this macro will scan for
+<code>#[derive(JsonSchema)]</code> attributes and, if found, will add
+<code>#[schemars(with = "Schema&lt;T, ...&gt;")]</code> annotations to any fields with a
+<code>#[serde_as(as = ...)]</code> annotation. If you wish to override the default
+behavior here you can add <code>#[serde_as(schemars = true)]</code> or
+<code>#[serde_as(schemars = false)]</code>.</p>
+<p>Note that this macro will check for any of the following derive paths:</p>
+<ul>
+<li><code>JsonSchema</code></li>
+<li><code>schemars::JsonSchema</code></li>
+<li><code>::schemars::JsonSchema</code></li>
+</ul>
+<p>It will also work if the relevant derive is behind a <code>#[cfg_attr]</code> attribute
+and propagate the <code>#[cfg_attr]</code> to the various <code>#[schemars]</code> field attributes.</p>
+</div></details></section></div></main></body></html>
