@@ -7,7 +7,11 @@
 use std::sync::LazyLock;
 
 use custom_debug_derive::Debug;
-use futures::channel::mpsc;
+use futures::{
+    channel::mpsc::{self, UnboundedReceiver},
+    stream::FuturesUnordered,
+    StreamExt,
+};
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::{
     exponential_bucket_latencies, register_histogram_vec, MeasureLatency as _,
@@ -23,6 +27,7 @@ use oneshot::Sender;
 #[cfg(with_metrics)]
 use prometheus::HistogramVec;
 use reqwest::{header::HeaderMap, Client};
+use tokio::sync::RwLock;
 
 use crate::{
     system::{CreateApplicationResult, OpenChainConfig, Recipient},
@@ -62,7 +67,7 @@ where
     C::Extra: ExecutionRuntimeContext,
 {
     pub(crate) async fn load_contract(
-        &mut self,
+        &self,
         id: UserApplicationId,
     ) -> Result<(UserContractCode, UserApplicationDescription), ExecutionError> {
         #[cfg(with_metrics)]
@@ -77,7 +82,7 @@ where
     }
 
     pub(crate) async fn load_service(
-        &mut self,
+        &self,
         id: UserApplicationId,
     ) -> Result<(UserServiceCode, UserApplicationDescription), ExecutionError> {
         #[cfg(with_metrics)]
@@ -91,36 +96,49 @@ where
         Ok((code, description))
     }
 
-    // TODO(#1416): Support concurrent I/O.
-    pub(crate) async fn handle_request(
-        &mut self,
+    pub(crate) async fn request_handle(
         request: ExecutionRequest,
+        this: &RwLock<&mut Self>,
     ) -> Result<(), ExecutionError> {
         use ExecutionRequest::*;
         match request {
             #[cfg(not(web))]
-            LoadContract { id, callback } => callback.respond(self.load_contract(id).await?),
+            LoadContract { id, callback } => {
+                let response = this.read().await.load_contract(id).await?;
+                callback.respond(response);
+            }
+
             #[cfg(not(web))]
-            LoadService { id, callback } => callback.respond(self.load_service(id).await?),
+            LoadService { id, callback } => {
+                let response = this.read().await.load_service(id).await?;
+                callback.respond(response);
+            }
 
             ChainBalance { callback } => {
-                let balance = *self.system.balance.get();
+                let balance = *this.read().await.system.balance.get();
                 callback.respond(balance);
             }
 
             OwnerBalance { owner, callback } => {
-                let balance = self.system.balances.get(&owner).await?.unwrap_or_default();
+                let balance = this
+                    .read()
+                    .await
+                    .system
+                    .balances
+                    .get(&owner)
+                    .await
+                    .map(Option::unwrap_or_default)?;
                 callback.respond(balance);
             }
 
             OwnerBalances { callback } => {
-                let balances = self.system.balances.index_values().await?;
-                callback.respond(balances.into_iter().collect());
+                let balances = this.read().await.system.balances.index_values().await?;
+                callback.respond(balances);
             }
 
             BalanceOwners { callback } => {
-                let owners = self.system.balances.indices().await?;
-                callback.respond(owners);
+                let owners = this.read().await.system.balances.indices().await?;
+                callback.respond(owners)
             }
 
             Transfer {
@@ -132,7 +150,9 @@ where
                 callback,
             } => {
                 let mut execution_outcome = RawExecutionOutcome::default();
-                let message = self
+                let result = this
+                    .write()
+                    .await
                     .system
                     .transfer(
                         signer,
@@ -143,9 +163,10 @@ where
                     )
                     .await?;
 
-                if let Some(message) = message {
+                if let Some(message) = result {
                     execution_outcome.messages.push(message);
                 }
+
                 callback.respond(execution_outcome);
             }
 
@@ -159,7 +180,9 @@ where
             } => {
                 let owner = source.owner.ok_or(ExecutionError::OwnerIsNone)?;
                 let mut execution_outcome = RawExecutionOutcome::default();
-                let message = self
+                let message = this
+                    .read()
+                    .await
                     .system
                     .claim(
                         signer,
@@ -176,48 +199,54 @@ where
             }
 
             SystemTimestamp { callback } => {
-                let timestamp = *self.system.timestamp.get();
+                let timestamp = *this.read().await.system.timestamp.get();
                 callback.respond(timestamp);
             }
 
             ChainOwnership { callback } => {
-                let ownership = self.system.ownership.get().clone();
+                let ownership = this.read().await.system.ownership.get().clone();
                 callback.respond(ownership);
             }
 
             ContainsKey { id, key, callback } => {
-                let view = self.users.try_load_entry(&id).await?;
+                let view = this.read().await.users.try_load_entry(&id).await?;
+
                 let result = match view {
                     Some(view) => view.contains_key(&key).await?,
                     None => false,
                 };
+
                 callback.respond(result);
             }
 
             ContainsKeys { id, keys, callback } => {
-                let view = self.users.try_load_entry(&id).await?;
+                let view = this.read().await.users.try_load_entry(&id).await?;
+
                 let result = match view {
                     Some(view) => view.contains_keys(keys).await?,
                     None => vec![false; keys.len()],
                 };
+
                 callback.respond(result);
             }
 
             ReadMultiValuesBytes { id, keys, callback } => {
-                let view = self.users.try_load_entry(&id).await?;
+                let view = this.read().await.users.try_load_entry(&id).await?;
                 let values = match view {
                     Some(view) => view.multi_get(keys).await?,
                     None => vec![None; keys.len()],
                 };
+
                 callback.respond(values);
             }
 
             ReadValueBytes { id, key, callback } => {
-                let view = self.users.try_load_entry(&id).await?;
+                let view = this.read().await.users.try_load_entry(&id).await?;
                 let result = match view {
                     Some(view) => view.get(&key).await?,
                     None => None,
                 };
+
                 callback.respond(result);
             }
 
@@ -226,11 +255,12 @@ where
                 key_prefix,
                 callback,
             } => {
-                let view = self.users.try_load_entry(&id).await?;
+                let view = this.read().await.users.try_load_entry(&id).await?;
                 let result = match view {
                     Some(view) => view.find_keys_by_prefix(&key_prefix).await?,
                     None => Vec::new(),
                 };
+
                 callback.respond(result);
             }
 
@@ -239,11 +269,13 @@ where
                 key_prefix,
                 callback,
             } => {
-                let view = self.users.try_load_entry(&id).await?;
+                let view = this.read().await.users.try_load_entry(&id).await?;
+
                 let result = match view {
                     Some(view) => view.find_key_values_by_prefix(&key_prefix).await?,
                     None => Vec::new(),
                 };
+
                 callback.respond(result);
             }
 
@@ -252,8 +284,14 @@ where
                 batch,
                 callback,
             } => {
-                let mut view = self.users.try_load_entry_mut(&id).await?;
-                view.write_batch(batch).await?;
+                this.write()
+                    .await
+                    .users
+                    .try_load_entry_mut(&id)
+                    .await?
+                    .write_batch(batch)
+                    .await?;
+
                 callback.respond(());
             }
 
@@ -264,16 +302,24 @@ where
                 application_permissions,
                 callback,
             } => {
+                let mut write_actor = this.write().await;
+
                 let inactive_err = || SystemExecutionError::InactiveChain;
                 let config = OpenChainConfig {
                     ownership,
-                    admin_id: self.system.admin_id.get().ok_or_else(inactive_err)?,
-                    epoch: self.system.epoch.get().ok_or_else(inactive_err)?,
-                    committees: self.system.committees.get().clone(),
+                    admin_id: write_actor.system.admin_id.get().ok_or_else(inactive_err)?,
+                    epoch: write_actor.system.epoch.get().ok_or_else(inactive_err)?,
+                    committees: write_actor.system.committees.get().clone(),
                     balance,
                     application_permissions,
                 };
-                let messages = self.system.open_chain(config, next_message_id).await?;
+                let messages = write_actor
+                    .system
+                    .open_chain(config, next_message_id)
+                    .await?;
+
+                drop(write_actor);
+
                 callback.respond(messages)
             }
 
@@ -281,13 +327,15 @@ where
                 application_id,
                 callback,
             } => {
-                let app_permissions = self.system.application_permissions.get();
+                let mut write_actor = this.write().await;
+                let app_permissions = write_actor.system.application_permissions.get();
                 if !app_permissions.can_close_chain(&application_id) {
                     callback.respond(Err(ExecutionError::UnauthorizedApplication(application_id)));
                 } else {
-                    let chain_id = self.context().extra().chain_id();
-                    self.system.close_chain(chain_id).await?;
-                    callback.respond(Ok(()));
+                    let chain_id = write_actor.context().extra().chain_id();
+                    let _messsages = write_actor.system.close_chain(chain_id).await?;
+
+                    callback.respond(Ok(()))
                 }
             }
 
@@ -296,13 +344,17 @@ where
                 application_permissions,
                 callback,
             } => {
-                let app_permissions = self.system.application_permissions.get();
+                let mut write_actor = this.write().await;
+                let app_permissions = write_actor.system.application_permissions.get();
                 if !app_permissions.can_change_application_permissions(&application_id) {
                     callback.respond(Err(ExecutionError::UnauthorizedApplication(application_id)));
                 } else {
-                    self.system
+                    write_actor
+                        .system
                         .application_permissions
                         .set(application_permissions);
+                    drop(write_actor);
+
                     callback.respond(Ok(()));
                 }
             }
@@ -314,7 +366,9 @@ where
                 required_application_ids,
                 callback,
             } => {
-                let create_application_result = self
+                let create_application_result = this
+                    .write()
+                    .await
                     .system
                     .create_application(
                         next_message_id,
@@ -323,6 +377,7 @@ where
                         required_application_ids,
                     )
                     .await?;
+
                 callback.respond(Ok(create_application_result));
             }
 
@@ -344,18 +399,51 @@ where
                     .headers(headers)
                     .send()
                     .await?;
+
                 callback.respond(http::Response::from_reqwest(response).await?);
             }
 
             ReadBlobContent { blob_id, callback } => {
-                let blob = self.system.read_blob_content(blob_id).await?;
-                let is_new = self.system.blob_used(None, blob_id).await?;
+                let mut write_actor = this.write().await;
+                let blob = write_actor.system.read_blob_content(blob_id).await?;
+                let is_new = write_actor.system.blob_used(None, blob_id).await?;
+
+                drop(write_actor);
+
                 callback.respond((blob, is_new))
             }
 
             AssertBlobExists { blob_id, callback } => {
-                self.system.assert_blob_exists(blob_id).await?;
-                callback.respond(self.system.blob_used(None, blob_id).await?)
+                let mut write_actor = this.write().await;
+                write_actor.system.assert_blob_exists(blob_id).await?;
+                callback.respond(write_actor.system.blob_used(None, blob_id).await?)
+            }
+        }
+
+        Ok(())
+    }
+
+    pub(crate) async fn handle_requests(
+        &mut self,
+        execution_state_receiver: &mut UnboundedReceiver<ExecutionRequest>,
+    ) -> Result<(), ExecutionError> {
+        let this = tokio::sync::RwLock::with_max_readers(self, 4);
+        let mut tasks = FuturesUnordered::new();
+
+        loop {
+            tokio::select! {
+
+                biased;
+
+                Some(request) = execution_state_receiver.next() => {
+                    tasks.push(Self::request_handle(request, &this));
+                },
+
+                Some(res) = tasks.next() => {
+                    res?;
+                },
+
+                else => break,
             }
         }
 
