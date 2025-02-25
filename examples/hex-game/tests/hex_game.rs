@@ -7,7 +7,7 @@
 
 use hex_game::{HexAbi, Operation, Timeouts};
 use linera_sdk::{
-    base::{AccountSecretKey, Amount, ChainDescription, TimeDelta},
+    linera_base_types::{AccountSecretKey, Amount, ChainDescription, TimeDelta},
     test::{ActiveChain, QueryOutcome, TestValidator},
 };
 

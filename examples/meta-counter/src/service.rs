@@ -5,7 +5,7 @@
 
 use async_graphql::{Request, Response};
 use linera_sdk::{
-    base::{ApplicationId, WithServiceAbi},
+    linera_base_types::{ApplicationId, WithServiceAbi},
     Service, ServiceRuntime,
 };
 

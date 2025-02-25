@@ -3,7 +3,7 @@
 
 use async_graphql::{InputObject, SimpleObject, Union};
 use linera_sdk::{
-    base::{AccountOwner, Amount, ChainId, Owner},
+    linera_base_types::{AccountOwner, Amount, ChainId, Owner},
     views::{linera_views, MapView, RegisterView, RootView, ViewStorageContext},
 };
 use rfq::{RequestId, TokenPair, Tokens};

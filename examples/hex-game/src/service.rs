@@ -10,7 +10,8 @@ use std::sync::Arc;
 use async_graphql::{ComplexObject, Context, EmptySubscription, Request, Response, Schema};
 use hex_game::{Operation, Player};
 use linera_sdk::{
-    base::WithServiceAbi, graphql::GraphQLMutationRoot, views::View, Service, ServiceRuntime,
+    graphql::GraphQLMutationRoot, linera_base_types::WithServiceAbi, views::View, Service,
+    ServiceRuntime,
 };
 
 use self::state::HexState;

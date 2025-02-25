@@ -5,8 +5,8 @@
 
 use async_graphql::{InputObject, Request, Response, SimpleObject};
 use linera_sdk::{
-    base::{ChainId, ContractAbi, ServiceAbi, Timestamp},
     graphql::GraphQLMutationRoot,
+    linera_base_types::{ChainId, ContractAbi, ServiceAbi, Timestamp},
     views::{CustomSerialize, ViewError},
 };
 use serde::{Deserialize, Serialize};
@@ -132,7 +132,7 @@ impl CustomSerialize for Key {
 #[cfg(test)]
 mod tests {
     use linera_sdk::{
-        base::{ChainId, Timestamp},
+        linera_base_types::{ChainId, Timestamp},
         views::CustomSerialize,
     };
 

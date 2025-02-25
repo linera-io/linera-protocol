@@ -14,7 +14,7 @@ use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
 use base64::engine::{general_purpose::STANDARD_NO_PAD, Engine as _};
 use fungible::Account;
 use linera_sdk::{
-    base::{AccountOwner, WithServiceAbi},
+    linera_base_types::{AccountOwner, WithServiceAbi},
     views::View,
     DataBlobHash, Service, ServiceRuntime,
 };

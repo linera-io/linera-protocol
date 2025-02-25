@@ -10,7 +10,7 @@ use std::iter;
 use crowd_funding::{CrowdFundingAbi, InstantiationArgument, Operation};
 use fungible::FungibleTokenAbi;
 use linera_sdk::{
-    base::{AccountOwner, Amount, ApplicationId, Timestamp},
+    linera_base_types::{AccountOwner, Amount, ApplicationId, Timestamp},
     test::TestValidator,
 };
 

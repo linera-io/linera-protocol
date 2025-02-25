@@ -4,7 +4,7 @@
 #![cfg_attr(target_arch = "wasm32", no_main)]
 
 use linera_sdk::{
-    base::{ApplicationId, StreamName, WithContractAbi},
+    linera_base_types::{ApplicationId, StreamName, WithContractAbi},
     Contract, ContractRuntime, Resources,
 };
 use meta_counter::{Message, MetaCounterAbi, Operation};

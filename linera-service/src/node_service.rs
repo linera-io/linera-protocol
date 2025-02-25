@@ -37,7 +37,7 @@ use linera_execution::{
     system::{AdminOperation, Recipient, SystemChannel},
     Operation, Query, QueryOutcome, QueryResponse, SystemOperation,
 };
-use linera_sdk::base::BlobContent;
+use linera_sdk::linera_base_types::BlobContent;
 use linera_storage::Storage;
 use serde::{Deserialize, Serialize};
 use serde_json::json;

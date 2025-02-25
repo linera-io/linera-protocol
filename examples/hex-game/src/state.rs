@@ -6,7 +6,7 @@ use std::collections::BTreeSet;
 use async_graphql::SimpleObject;
 use hex_game::{Board, Clock, Timeouts};
 use linera_sdk::{
-    base::{ChainId, MessageId, Owner},
+    linera_base_types::{ChainId, MessageId, Owner},
     views::{linera_views, MapView, RegisterView, RootView, ViewStorageContext},
 };
 use serde::{Deserialize, Serialize};

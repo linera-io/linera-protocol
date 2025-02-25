@@ -6,7 +6,7 @@
 mod state;
 
 use linera_sdk::{
-    base::{ChainId, ChannelName, Destination, MessageId, WithContractAbi},
+    linera_base_types::{ChainId, ChannelName, Destination, MessageId, WithContractAbi},
     views::{RootView, View},
     Contract, ContractRuntime,
 };

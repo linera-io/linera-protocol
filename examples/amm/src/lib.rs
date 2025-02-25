@@ -5,8 +5,8 @@
 
 use async_graphql::{scalar, Request, Response};
 use linera_sdk::{
-    base::{AccountOwner, Amount, ContractAbi, ServiceAbi},
     graphql::GraphQLMutationRoot,
+    linera_base_types::{AccountOwner, Amount, ContractAbi, ServiceAbi},
 };
 pub use matching_engine::Parameters;
 use serde::{Deserialize, Serialize};

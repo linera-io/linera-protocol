@@ -16,8 +16,11 @@ use thiserror::Error;
 #[cfg(with_testing)]
 use super::mock_key_value_store::MockKeyValueStore;
 use crate::{
-    contract::wit::view_system_api::{self as contract_wit, WriteOperation},
-    service::wit::view_system_api as service_wit,
+    contract::wit::{
+        base_runtime_api::{self as contract_wit},
+        contract_runtime_api::{self, WriteOperation},
+    },
+    service::wit::base_runtime_api as service_wit,
     util::yield_once,
 };
 
@@ -344,7 +347,7 @@ impl WitInterface {
                     .map(WriteOperation::from)
                     .collect::<Vec<_>>();
 
-                contract_wit::write_batch(&batch_operations);
+                contract_runtime_api::write_batch(&batch_operations);
             }
             WitInterface::Service => panic!("Attempt to modify storage from a service"),
             #[cfg(with_testing)]

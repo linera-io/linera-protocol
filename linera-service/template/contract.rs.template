@@ -3,7 +3,7 @@
 mod state;
 
 use linera_sdk::{{
-    base::WithContractAbi,
+    linera_base_types::WithContractAbi,
     views::{{RootView, View}},
     Contract, ContractRuntime,
 }};

@@ -3,7 +3,6 @@
 
 //! Types and macros useful for writing an application service.
 
-mod conversions_from_wit;
 mod conversions_to_wit;
 #[cfg(not(with_testing))]
 mod runtime;

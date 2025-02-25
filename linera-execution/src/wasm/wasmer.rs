@@ -15,7 +15,7 @@ use wasm_instrument::{gas_metering, parity_wasm};
 
 use super::{
     module_cache::ModuleCache,
-    system_api::{ContractSystemApi, ServiceSystemApi, SystemApiData, ViewSystemApi, WriteBatch},
+    runtime_api::{BaseRuntimeApi, ContractRuntimeApi, RuntimeApiData, ServiceRuntimeApi},
     ContractEntrypoints, ServiceEntrypoints, WasmExecutionError,
 };
 use crate::{
@@ -47,13 +47,13 @@ static SERVICE_CACHE: LazyLock<Mutex<ModuleCache<wasmer::Module>>> = LazyLock::n
 /// Type representing a running [Wasmer](https://wasmer.io/) contract.
 pub(crate) struct WasmerContractInstance<Runtime> {
     /// The Wasmer instance.
-    instance: EntrypointInstance<SystemApiData<Runtime>>,
+    instance: EntrypointInstance<RuntimeApiData<Runtime>>,
 }
 
 /// Type representing a running [Wasmer](https://wasmer.io/) service.
 pub struct WasmerServiceInstance<Runtime> {
     /// The Wasmer instance.
-    instance: EntrypointInstance<SystemApiData<Runtime>>,
+    instance: EntrypointInstance<RuntimeApiData<Runtime>>,
 }
 
 impl WasmContractModule {
@@ -71,7 +71,7 @@ impl WasmContractModule {
 
 impl<Runtime> WasmerContractInstance<Runtime>
 where
-    Runtime: ContractRuntime + WriteBatch + Clone + Unpin + 'static,
+    Runtime: ContractRuntime + Clone + Unpin + 'static,
 {
     /// Prepares a runtime instance to call into the Wasm contract.
     pub fn prepare(
@@ -79,11 +79,11 @@ where
         contract_module: &wasmer::Module,
         runtime: Runtime,
     ) -> Result<Self, WasmExecutionError> {
-        let system_api_data = SystemApiData::new(runtime);
+        let system_api_data = RuntimeApiData::new(runtime);
         let mut instance_builder = InstanceBuilder::new(contract_engine, system_api_data);
 
-        ContractSystemApi::export_to(&mut instance_builder)?;
-        ViewSystemApi::export_to(&mut instance_builder)?;
+        BaseRuntimeApi::export_to(&mut instance_builder)?;
+        ContractRuntimeApi::export_to(&mut instance_builder)?;
 
         let instance = instance_builder.instantiate(contract_module)?;
 
@@ -106,18 +106,18 @@ impl WasmServiceModule {
 
 impl<Runtime> WasmerServiceInstance<Runtime>
 where
-    Runtime: ServiceRuntime + WriteBatch + Clone + Unpin + 'static,
+    Runtime: ServiceRuntime + Clone + Unpin + 'static,
 {
     /// Prepares a runtime instance to call into the Wasm service.
     pub fn prepare(
         service_module: &wasmer::Module,
         runtime: Runtime,
     ) -> Result<Self, WasmExecutionError> {
-        let system_api_data = SystemApiData::new(runtime);
+        let system_api_data = RuntimeApiData::new(runtime);
         let mut instance_builder = InstanceBuilder::new(SERVICE_ENGINE.clone(), system_api_data);
 
-        ServiceSystemApi::export_to(&mut instance_builder)?;
-        ViewSystemApi::export_to(&mut instance_builder)?;
+        BaseRuntimeApi::export_to(&mut instance_builder)?;
+        ServiceRuntimeApi::export_to(&mut instance_builder)?;
 
         let instance = instance_builder.instantiate(service_module)?;
 
@@ -234,7 +234,7 @@ pub fn add_metering(bytecode: Bytecode) -> anyhow::Result<Bytecode> {
     let instrumented_module = gas_metering::inject(
         parity_wasm::deserialize_buffer(&bytecode.bytes)?,
         gas_metering::host_function::Injector::new(
-            "linera:app/contract-system-api",
+            "linera:app/contract-runtime-api",
             "consume-fuel",
         ),
         &WasmtimeRules,
