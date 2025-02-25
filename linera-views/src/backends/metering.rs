@@ -158,7 +158,7 @@ impl KeyValueStoreMetrics {
         let entry2 = format!("{} delete latency", title_name);
         let delete_latency = register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let entry1 = format!("{}_read_value_number_none_cases", var_name);
+        let entry1 = format!("{}_read_value_none_cases", var_name);
         let entry2 = format!("{} read value number none cases", title_name);
         let read_value_none_cases = register_int_counter_vec(&entry1, &entry2, &[]);
 
