@@ -7,4 +7,5 @@ exec ./linera-server run \
   --storage scylladb:tcp:scylla-client.scylla.svc.cluster.local:9042 \
   --server /config/server.json \
   --shard $ORDINAL \
-  --genesis /config/genesis.json
+  --genesis /config/genesis.json \
+  --cross-chain-queue-size 100000
