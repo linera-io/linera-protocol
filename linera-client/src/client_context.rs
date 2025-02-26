@@ -8,20 +8,22 @@ use std::{collections::HashSet, sync::Arc};
 use async_trait::async_trait;
 use futures::Future;
 use linera_base::{
-    crypto::{AccountSecretKey, CryptoHash},
+    crypto::{AccountSecretKey, CryptoHash, ValidatorPublicKey},
     data_types::{BlockHeight, Timestamp},
-    identifiers::{Account, ChainId},
+    identifiers::{Account, ChainId, MessageId, Owner},
     ownership::ChainOwnership,
     time::{Duration, Instant},
 };
 use linera_chain::types::ConfirmedBlockCertificate;
 use linera_core::{
     client::{BlanketMessagePolicy, ChainClient, Client, MessagePolicy, PendingProposal},
-    data_types::ClientOutcome,
+    data_types::{ChainInfoQuery, ClientOutcome},
     join_set_ext::JoinSet,
-    node::CrossChainMessageDelivery,
+    node::{CrossChainMessageDelivery, ValidatorNodeProvider},
+    remote_node::RemoteNode,
     JoinSetExt,
 };
+use linera_execution::{Message, SystemMessage};
 use linera_rpc::node_provider::{NodeOptions, NodeProvider};
 use linera_storage::Storage;
 use thiserror_context::Context;
@@ -395,6 +397,86 @@ where
                 return Ok(certificates);
             }
         }
+    }
+
+    pub async fn assign_new_chain_to_key(
+        &mut self,
+        chain_id: ChainId,
+        message_id: MessageId,
+        owner: Owner,
+        validators: Option<Vec<(ValidatorPublicKey, String)>>,
+    ) -> Result<(), Error>
+    where
+        S: Storage + Clone + Send + Sync + 'static,
+    {
+        let node_provider = self.make_node_provider();
+        let client = self.client.clone_with(
+            node_provider.clone(),
+            "Temporary client for fetching the parent chain",
+            vec![message_id.chain_id, chain_id],
+            false,
+        );
+
+        // Take the latest committee we know of.
+        let admin_chain_id = self.wallet.genesis_admin_chain();
+        let query = ChainInfoQuery::new(admin_chain_id).with_committees();
+        let nodes: Vec<_> = if let Some(validators) = validators {
+            node_provider
+                .make_nodes_from_list(validators)?
+                .map(|(public_key, node)| RemoteNode { public_key, node })
+                .collect()
+        } else {
+            let info = client.local_node().handle_chain_info_query(query).await?;
+            let committee = info
+                .latest_committee()
+                .ok_or(error::Inner::ChainInfoResponseMissingCommittee)?;
+            node_provider
+                .make_nodes(committee)?
+                .map(|(public_key, node)| RemoteNode { public_key, node })
+                .collect()
+        };
+
+        // Download the parent chain.
+        let target_height = message_id.height.try_add_one()?;
+        client
+            .download_certificates(&nodes, message_id.chain_id, target_height)
+            .await
+            .context("downloading parent chain")?;
+
+        // The initial timestamp for the new chain is taken from the block with the message.
+        let certificate = client
+            .local_node()
+            .certificate_for(&message_id)
+            .await
+            .context("looking for `OpenChain` message")?;
+        let executed_block = certificate.block();
+        let message = executed_block
+            .message_by_id(&message_id)
+            .map(|msg| &msg.message);
+        let Some(Message::System(SystemMessage::OpenChain(config))) = message else {
+            tracing::error!(
+                "The message with the ID returned by the faucet is not OpenChain. \
+                Please make sure you are connecting to a genuine faucet."
+            );
+            return Err(error::Inner::InvalidOpenMessage(message.cloned()).into());
+        };
+
+        if !config.ownership.verify_owner(&owner) {
+            tracing::error!(
+                "The chain with the ID returned by the faucet is not owned by you. \
+            Please make sure you are connecting to a genuine faucet."
+            );
+            return Err(error::Inner::ChainOwnership.into());
+        }
+
+        self.wallet_mut()
+            .mutate(|w| {
+                w.assign_new_chain_to_owner(owner, chain_id, executed_block.header.timestamp)
+            })
+            .await
+            .map_err(|e| error::Inner::Persistence(Box::new(e)))?
+            .context("assigning new chain")?;
+        Ok(())
     }
 
     /// Applies the given function to the chain client.
