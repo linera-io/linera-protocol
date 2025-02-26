@@ -20,6 +20,9 @@ use serde::{Deserialize, Serialize};
 use super::{BcsSignable, CryptoError, CryptoHash, HasTypeName};
 use crate::doc_scalar;
 
+/// Name of the secp256k1 scheme.
+const SECP256K1_SCHEME_LABEL: &str = "secp256k1";
+
 /// Length of secp256k1 compressed public key.
 const SECP256K1_PUBLIC_KEY_SIZE: usize = 33;
 
@@ -64,8 +67,9 @@ impl Secp256k1PublicKey {
     }
 
     /// Returns the bytes of the public key in compressed representation.
-    pub fn as_bytes(&self) -> Vec<u8> {
-        self.0.to_encoded_point(true).as_bytes().to_vec()
+    pub fn as_bytes(&self) -> [u8; SECP256K1_PUBLIC_KEY_SIZE] {
+        // UNWRAP: We already have valid key so conversion should not fail.
+        self.0.to_encoded_point(true).as_bytes().try_into().unwrap()
     }
 
     /// Decodes the bytes into the public key.
@@ -75,7 +79,7 @@ impl Secp256k1PublicKey {
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, CryptoError> {
         let encoded_point =
             EncodedPoint::from_bytes(bytes).map_err(|_| CryptoError::IncorrectPublicKeySize {
-                scheme: "secp256k1".to_string(),
+                scheme: SECP256K1_SCHEME_LABEL,
                 len: bytes.len(),
                 expected: SECP256K1_PUBLIC_KEY_SIZE,
             })?;
@@ -83,7 +87,7 @@ impl Secp256k1PublicKey {
         match k256::PublicKey::from_encoded_point(&encoded_point).into_option() {
             Some(public_key) => Ok(Self(public_key.into())),
             None => {
-                let error = CryptoError::Secp256k1PointAtIfinity(hex::encode(bytes));
+                let error = CryptoError::Secp256k1PointAtInfinity(hex::encode(bytes));
                 Err(error)
             }
         }
@@ -129,12 +133,7 @@ impl Serialize for Secp256k1PublicKey {
         if serializer.is_human_readable() {
             serializer.serialize_str(&hex::encode(self.as_bytes()))
         } else {
-            let compact_pk =
-                serde_utils::CompressedPublicKey(self.as_bytes().try_into().map_err(|_| {
-                    serde::ser::Error::custom(format!(
-                        "Invalid bytes for public key. Expected {SECP256K1_PUBLIC_KEY_SIZE} bytes."
-                    ))
-                })?);
+            let compact_pk = serde_utils::CompressedPublicKey(self.as_bytes());
             serializer.serialize_newtype_struct("Secp256k1PublicKey", &compact_pk)
         }
     }
@@ -177,15 +176,14 @@ impl TryFrom<&[u8]> for Secp256k1PublicKey {
 
 impl fmt::Display for Secp256k1PublicKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let str = hex::encode(self.0.to_encoded_point(true).to_bytes());
+        let str = hex::encode(self.as_bytes());
         write!(f, "{}", str)
     }
 }
 
 impl fmt::Debug for Secp256k1PublicKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let str = hex::encode(&self.0.to_encoded_point(true).to_bytes()[0..9]);
-        write!(f, "{}..", str)
+        write!(f, "{}..", hex::encode(&self.as_bytes()[0..9]))
     }
 }
 
@@ -237,7 +235,7 @@ impl Secp256k1Signature {
         let (signature, _rid) = secret
             .0
             .sign_prehash(&prehash)
-            .expect("Failed to sign prehased data"); // NOTE: This is a critical error we don't control.
+            .expect("Failed to sign prehashed data"); // NOTE: This is a critical error we don't control.
         Secp256k1Signature(signature)
     }
 
@@ -338,7 +336,7 @@ impl fmt::Display for Secp256k1Signature {
 
 impl fmt::Debug for Secp256k1Signature {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", hex::encode(&self.as_bytes()[0..9]))
+        write!(f, "{}..", hex::encode(&self.as_bytes()[0..9]))
     }
 }
 
@@ -448,11 +446,11 @@ mod tests {
 
     #[test]
     fn bytes_repr_compact_public_key() {
-        use crate::crypto::secp256k1::Secp256k1PublicKey;
+        use crate::crypto::secp256k1::{Secp256k1PublicKey, SECP256K1_PUBLIC_KEY_SIZE};
         let key_in: Secp256k1PublicKey = Secp256k1PublicKey::test_key(0);
         let bytes = key_in.as_bytes();
         assert!(
-            bytes.len() == 33,
+            bytes.len() == SECP256K1_PUBLIC_KEY_SIZE,
             "::to_bytes() should return compressed representation"
         );
         let key_out = Secp256k1PublicKey::from_bytes(&bytes).unwrap();

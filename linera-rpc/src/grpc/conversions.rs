@@ -628,7 +628,7 @@ impl From<AccountPublicKey> for api::AccountPublicKey {
 impl From<ValidatorPublicKey> for api::ValidatorPublicKey {
     fn from(public_key: ValidatorPublicKey) -> Self {
         Self {
-            bytes: public_key.as_bytes(),
+            bytes: public_key.as_bytes().to_vec(),
         }
     }
 }

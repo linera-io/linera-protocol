@@ -52,7 +52,7 @@ pub enum CryptoError {
         "Byte slice has length {len} but a {scheme} `PublicKey` requires exactly {expected} bytes"
     )]
     IncorrectPublicKeySize {
-        scheme: String,
+        scheme: &'static str,
         len: usize,
         expected: usize,
     },
@@ -60,8 +60,8 @@ pub enum CryptoError {
     ParseIntError(#[from] ParseIntError),
     #[error("secp256k1 error: {0}")]
     Secp256k1Error(k256::ecdsa::Error),
-    #[error("could not parse public key: {0}: key point at inifinity.")]
-    Secp256k1PointAtIfinity(String),
+    #[error("could not parse public key: {0}: point at infinity")]
+    Secp256k1PointAtInfinity(String),
 }
 
 #[cfg(with_getrandom)]
