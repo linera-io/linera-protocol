@@ -5,14 +5,13 @@
 
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Amount, ApplicationPermissions, Resources, SendMessageRequest, TimeDelta},
+    data_types::{Amount, ApplicationPermissions, BlockHeight, Resources, SendMessageRequest, TimeDelta},
     identifiers::{
         Account, AccountOwner, ApplicationId, BytecodeId, ChainId, ChannelName, Destination,
         MessageId, Owner, StreamName,
     },
     ownership::{ChainOwnership, TimeoutConfig},
 };
-use linera_base_crate::data_types::BlockHeight;
 use linera_views::batch::WriteOperation;
 
 use super::wit::contract_runtime_api as wit_contract_api;

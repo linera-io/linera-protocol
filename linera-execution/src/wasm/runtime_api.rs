@@ -29,7 +29,7 @@ pub struct RuntimeApiData<Runtime> {
 impl<Runtime> RuntimeApiData<Runtime> {
     /// Creates a new [`RuntimeApiData`] using the provided `runtime` to execute the system APIs.
     pub fn new(runtime: Runtime) -> Self {
-        Self {
+        RuntimeApiData {
             runtime,
             active_promises: HashMap::new(),
             promise_counter: 0,
@@ -77,7 +77,7 @@ impl<Runtime> RuntimeApiData<Runtime> {
 #[derive(Default)]
 pub struct BaseRuntimeApi<Caller>(PhantomData<Caller>);
 
-#[linera_witty::wit_export(package = "linera:app")]
+#[wit_export(package = "linera:app")]
 impl<Caller, Runtime> BaseRuntimeApi<Caller>
 where
     Caller: Instance<UserData = RuntimeApiData<Runtime>>,
@@ -637,7 +637,7 @@ where
 #[derive(Default)]
 pub struct ServiceRuntimeApi<Caller>(PhantomData<Caller>);
 
-#[linera_witty::wit_export(package = "linera:app")]
+#[wit_export(package = "linera:app")]
 impl<Caller, Runtime> ServiceRuntimeApi<Caller>
 where
     Caller: Instance<UserData = RuntimeApiData<Runtime>>,

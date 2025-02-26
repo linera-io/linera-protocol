@@ -45,15 +45,13 @@ pub mod views;
 
 use std::fmt::Debug;
 
-extern crate linera_base as linera_base_crate;
-
 pub use bcs;
-pub use linera_base_crate::{
+pub use linera_base::{
     abi,
     data_types::{Resources, SendMessageRequest},
     ensure, http,
 };
-use linera_base_crate::{
+use linera_base::{
     abi::{ContractAbi, ServiceAbi, WithContractAbi, WithServiceAbi},
     crypto::CryptoHash,
     doc_scalar,
