@@ -423,6 +423,11 @@ where
     async fn create_network_actions(&self) -> Result<NetworkActions, WorkerError> {
         let mut heights_by_recipient = BTreeMap::<_, BTreeMap<_, _>>::new();
         let mut targets = self.chain.outboxes.indices().await?;
+
+        if let Some(limit) = self.config.network_actions_batch_limit {
+            targets.truncate(limit);
+        }
+
         if let Some(tracked_chains) = self.tracked_chains.as_ref() {
             let publishers = self
                 .chain
