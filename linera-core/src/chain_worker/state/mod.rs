@@ -32,6 +32,7 @@ use linera_execution::{
 };
 use linera_storage::{Clock as _, Storage};
 use linera_views::views::{ClonableView, ViewError};
+use rand::{prelude::SliceRandom as _, thread_rng};
 use tokio::sync::{oneshot, OwnedRwLockReadGuard, RwLock};
 
 #[cfg(test)]
@@ -425,7 +426,14 @@ where
         let mut targets = self.chain.outboxes.indices().await?;
 
         if let Some(limit) = self.config.network_actions_batch_limit {
-            targets.truncate(limit);
+            if limit > targets.len() / 2 {
+                let elements_to_discard = targets.len().saturating_sub(limit);
+                targets.partial_shuffle(&mut thread_rng(), elements_to_discard);
+                targets.drain(0..elements_to_discard);
+            } else {
+                targets.partial_shuffle(&mut thread_rng(), limit);
+                targets.truncate(limit);
+            }
         }
 
         if let Some(tracked_chains) = self.tracked_chains.as_ref() {
