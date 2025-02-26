@@ -76,7 +76,8 @@ impl ServerContext {
         )
         .with_allow_inactive_chains(false)
         .with_allow_messages_from_deprecated_epochs(false)
-        .with_grace_period(self.grace_period);
+        .with_grace_period(self.grace_period)
+        .with_network_actions_batch_limit(self.cross_chain_config.queue_size);
         (state, shard_id, shard.clone())
     }
 
