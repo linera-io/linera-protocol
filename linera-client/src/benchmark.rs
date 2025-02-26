@@ -24,6 +24,7 @@ use linera_execution::{
 use linera_rpc::node_provider::NodeProvider;
 use linera_sdk::abis::fungible;
 use linera_storage::Storage;
+use num_format::{Locale, ToFormattedString};
 use tokio::{runtime::Handle, task, time};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn, Instrument as _};
@@ -74,11 +75,13 @@ where
                 if recv_count == num_chains {
                     let elapsed = start.elapsed();
                     if let Some(bps) = bps {
+                        let tps = (bps * transactions_per_block).to_formatted_string(&Locale::en);
+                        let bps = bps.to_formatted_string(&Locale::en);
                         if elapsed > time::Duration::from_secs(1) {
                             warn!(
                                 "Failed to achieve {} BPS/{} TPS in {} ms",
                                 bps,
-                                bps * transactions_per_block,
+                                tps,
                                 elapsed.as_millis(),
                             );
                         } else {
@@ -86,7 +89,7 @@ where
                             info!(
                                 "Achieved {} BPS/{} TPS in {} ms",
                                 bps,
-                                bps * transactions_per_block,
+                                tps,
                                 elapsed.as_millis(),
                             );
                         }
