@@ -4858,6 +4858,7 @@ dependencies = [
  "anyhow",
  "async-graphql",
  "async-trait",
+ "base64ct",
  "bcs",
  "cargo_toml",
  "cfg_aliases",
