@@ -364,6 +364,13 @@ where
         self
     }
 
+    /// Returns an instance with a limit on the number of network actions created per batch.
+    #[instrument(level = "trace", skip(self))]
+    pub fn with_network_actions_batch_limit(mut self, limit: usize) -> Self {
+        self.chain_worker_config.network_actions_batch_limit = Some(limit);
+        self
+    }
+
     #[instrument(level = "trace", skip(self))]
     pub fn nickname(&self) -> &str {
         &self.nickname
