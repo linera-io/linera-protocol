@@ -27,6 +27,8 @@ pub struct ChainWorkerConfig {
     /// Blocks with a timestamp this far in the future will still be accepted, but the validator
     /// will wait until that timestamp before voting.
     pub grace_period: Duration,
+    /// The maximum number of network actions to include in a single batch.
+    pub network_actions_batch_limit: Option<usize>,
 }
 
 impl ChainWorkerConfig {
