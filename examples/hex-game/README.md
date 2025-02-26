@@ -64,7 +64,7 @@ OWNER_1="${INFO_1[3]}"
 OWNER_2="${INFO_2[3]}"
 ```
 
-Note that `linera -with-wallet 1` or `linera -w1` is equivalent to `linera --wallet
+Note that `linera --with-wallet 1` or `linera -w1` is equivalent to `linera --wallet
 "$LINERA_WALLET_1" --storage "$LINERA_STORAGE_1"`.
 
 ### Creating the Game Chain
