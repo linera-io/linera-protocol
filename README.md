@@ -119,7 +119,7 @@ linera query-balance "$CHAIN2"
 linera transfer 5 --from "$CHAIN1" --to "$CHAIN1:$ACCOUNT1"
 linera transfer 2 --from "$CHAIN1:$ACCOUNT1" --to "$CHAIN2:$ACCOUNT2"
 
-# Query user balances again.
+# Query user balances again
 linera query-balance "$CHAIN1:$ACCOUNT1"
 linera query-balance "$CHAIN2:$ACCOUNT2"
 
