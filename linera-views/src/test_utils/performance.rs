@@ -12,7 +12,7 @@ use crate::{
     test_utils::{add_prefix, get_random_key_values2},
 };
 
-// We generate about 2000 keys of length 11 with a key of length 10000
+// We generate about 200 keys of length 10 with a value of length 10000
 // The keys are of the form 0,x_1, ..., x_n with 0 <= x_i < 4 and n=10.
 
 /// A value to use for the keys
