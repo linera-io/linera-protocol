@@ -18,6 +18,10 @@ development = ["linera-sdk"]
 features = ["test", "wasmer"]
 targets = ["wasm32-unknown-unknown", "x86_64-unknown-linux-gnu"]
 
+[package.metadata.cargo-machete]
+# TODO(#3421): Remove the pinned version once the `linera-*` crates move to Rust Edition 2024
+ignored = ["base64ct"]
+
 [features]
 ethereum = ["async-trait", "linera-ethereum"]
 unstable-oracles = ["linera-core/unstable-oracles", "linera-execution/unstable-oracles"]
@@ -55,6 +59,9 @@ serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 wit-bindgen.workspace = true
+
+# TODO(#3421): Remove the pinned version once the `linera-*` crates move to Rust Edition 2024
+base64ct = "=1.6.0"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 async-graphql.workspace = true
