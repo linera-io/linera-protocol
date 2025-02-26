@@ -11,7 +11,7 @@ use crate::simple;
 pub struct CrossChainConfig {
     /// Number of cross-chain messages allowed before dropping them.
     #[arg(long = "cross-chain-queue-size", default_value = "1000")]
-    pub(crate) queue_size: usize,
+    pub queue_size: usize,
 
     /// Maximum number of retries for a cross-chain message.
     #[arg(long = "cross-chain-max-retries", default_value = "10")]
