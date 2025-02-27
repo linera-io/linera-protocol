@@ -780,8 +780,6 @@ pub enum OracleResponse {
     Assert,
     /// The block's validation round.
     Round(Option<u32>),
-    /// An event was read.
-    Event(EventId, Vec<u8>),
 }
 
 impl<'de> BcsHashable<'de> for OracleResponse {}
