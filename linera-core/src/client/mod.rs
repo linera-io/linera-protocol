@@ -1011,8 +1011,7 @@ where
             // For chains with any owner other than ourselves, we could be missing recent
             // certificates created by other owners. Further synchronize blocks from the network.
             // This is a best-effort that depends on network conditions.
-            let nodes = self.validator_nodes().await?;
-            info = self.synchronize_chain_state(&nodes, self.chain_id).await?;
+            info = self.synchronize_chain_state(self.chain_id).await?;
         }
 
         let result = self
@@ -1700,17 +1699,20 @@ where
 
     /// Downloads and processes any certificates we are missing for the given chain.
     #[instrument(level = "trace", skip_all)]
-    pub async fn synchronize_chain_state(
+    async fn synchronize_chain_state(
         &self,
-        validators: &[RemoteNode<P::Node>],
         chain_id: ChainId,
     ) -> Result<Box<ChainInfo>, ChainClientError> {
         #[cfg(with_metrics)]
         let _latency = metrics::SYNCHRONIZE_CHAIN_STATE_LATENCY.measure_latency();
 
-        let committee = self.local_committee().await?;
+        let (epoch, mut committees) = self.epoch_and_committees(chain_id).await?;
+        let committee = committees
+            .remove(&epoch.ok_or(LocalNodeError::InvalidChainInfoResponse)?)
+            .ok_or(LocalNodeError::InvalidChainInfoResponse)?;
+        let validators = self.make_nodes(&committee)?;
         communicate_with_quorum(
-            validators,
+            &validators,
             &committee,
             |_: &()| (),
             |remote_node| {
@@ -1749,6 +1751,9 @@ where
             .with_sent_certificate_hashes_in_range(range)
             .with_manager_values();
         let info = remote_node.handle_chain_info_query(query).await?;
+        if info.next_block_height < local_info.next_block_height {
+            return Ok(());
+        }
 
         let certificates: Vec<ConfirmedBlockCertificate> = remote_node
             .download_certificates(info.requested_sent_certificate_hashes)
@@ -2442,9 +2447,7 @@ where
     pub async fn synchronize_from_validators(&self) -> Result<Box<ChainInfo>, ChainClientError> {
         if self.chain_id != self.admin_id {
             // Synchronize the state of the admin chain from the network.
-            let local_committee = self.local_committee().await?;
-            let nodes = self.make_nodes(&local_committee)?;
-            self.synchronize_chain_state(&nodes, self.admin_id).await?;
+            self.synchronize_chain_state(self.admin_id).await?;
         }
         let info = self.prepare_chain().await?;
         self.find_received_certificates().await?;

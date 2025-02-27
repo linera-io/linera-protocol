@@ -168,7 +168,7 @@ pub trait Storage: Sized {
     /// Writes a vector of events.
     async fn write_events(
         &self,
-        events: impl IntoIterator<Item = (EventId, &[u8])> + Send,
+        events: impl IntoIterator<Item = (EventId, Vec<u8>)> + Send,
     ) -> Result<(), ViewError>;
 
     /// Loads the view of a chain state and checks that it is active.
@@ -409,6 +409,10 @@ where
         self.storage.read_blob(blob_id).await
     }
 
+    async fn get_event(&self, event_id: EventId) -> Result<Vec<u8>, ViewError> {
+        self.storage.read_event(event_id).await
+    }
+
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
         self.storage.contains_blob(blob_id).await
     }
@@ -420,6 +424,14 @@ where
     ) -> Result<(), ViewError> {
         let blobs = Vec::from_iter(blobs);
         self.storage.write_blobs(&blobs).await
+    }
+
+    #[cfg(with_testing)]
+    async fn add_events(
+        &self,
+        events: impl IntoIterator<Item = (EventId, Vec<u8>)> + Send,
+    ) -> Result<(), ViewError> {
+        self.storage.write_events(events).await
     }
 }
 

@@ -353,7 +353,7 @@ where
                 .events
                 .iter()
                 .flatten()
-                .map(|event| (event.id(chain_id), &event.value[..]));
+                .map(|event| (event.id(chain_id), event.value.clone()));
             self.state.storage.write_events(events).await?;
         }
 

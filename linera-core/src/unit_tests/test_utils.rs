@@ -797,11 +797,18 @@ where
     }
 
     /// Creates the root chain with the given `index`, and returns a client for it.
+    ///
+    /// Root chain 0 is the admin chain and needs to be initialized first, otherwise its balance
+    /// is automatically set to zero.
     pub async fn add_root_chain(
         &mut self,
         index: u32,
         balance: Amount,
     ) -> Result<ChainClient<NodeProvider<B::Storage>, B::Storage>, anyhow::Error> {
+        // Make sure the admin chain is initialized.
+        if self.genesis_storage_builder.accounts.is_empty() && index != 0 {
+            Box::pin(self.add_root_chain(0, Amount::ZERO)).await?;
+        }
         let description = ChainDescription::Root(index);
         let key_pair = AccountSecretKey::generate();
         let public_key = key_pair.public();

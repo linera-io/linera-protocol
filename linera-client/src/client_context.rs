@@ -238,23 +238,22 @@ where
     }
 
     fn make_chain_client(&self, chain_id: ChainId) -> Result<ChainClient<NodeProvider, S>, Error> {
-        let chain = self
-            .wallet
-            .get(chain_id)
-            .ok_or_else(|| error::Inner::NonexistentChain(chain_id))?;
-        let known_key_pairs = chain
-            .key_pair
-            .as_ref()
-            .map(|kp| kp.copy())
-            .into_iter()
-            .collect();
+        // We only create clients for chains we have in the wallet, or for the admin chain.
+        let chain = match self.wallet.get(chain_id) {
+            Some(chain) => chain.clone(),
+            None if chain_id == self.wallet.genesis_admin_chain() => {
+                UserChain::make_other(self.wallet.genesis_admin_chain(), Timestamp::from(0))
+            }
+            None => return Err(error::Inner::NonexistentChain(chain_id).into()),
+        };
+        let known_key_pairs = chain.key_pair.into_iter().collect();
         Ok(self.make_chain_client_internal(
             chain_id,
             known_key_pairs,
             chain.block_hash,
             chain.timestamp,
             chain.next_block_height,
-            chain.pending_proposal.clone(),
+            chain.pending_proposal,
         ))
     }
 
