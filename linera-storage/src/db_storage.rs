@@ -216,7 +216,7 @@ trait BatchExt {
     fn add_certificate(&mut self, certificate: &ConfirmedBlockCertificate)
         -> Result<(), ViewError>;
 
-    fn add_event(&mut self, event_id: EventId, value: &[u8]) -> Result<(), ViewError>;
+    fn add_event(&mut self, event_id: EventId, value: Vec<u8>) -> Result<(), ViewError>;
 }
 
 impl BatchExt for Batch {
@@ -248,11 +248,11 @@ impl BatchExt for Batch {
         Ok(())
     }
 
-    fn add_event(&mut self, event_id: EventId, value: &[u8]) -> Result<(), ViewError> {
+    fn add_event(&mut self, event_id: EventId, value: Vec<u8>) -> Result<(), ViewError> {
         #[cfg(with_metrics)]
         WRITE_EVENT_COUNTER.with_label_values(&[]).inc();
         let event_key = bcs::to_bytes(&BaseKey::Event(event_id))?;
-        self.put_key_value_bytes(event_key.to_vec(), value.to_vec());
+        self.put_key_value_bytes(event_key.to_vec(), value);
         Ok(())
     }
 }
@@ -809,15 +809,15 @@ where
 
     async fn read_event(&self, event_id: EventId) -> Result<Vec<u8>, ViewError> {
         let event_key = bcs::to_bytes(&BaseKey::Event(event_id.clone()))?;
-        let maybe_value = self.store.read_value::<Vec<u8>>(&event_key).await?;
+        let maybe_value = self.store.read_value_bytes(&event_key).await?;
         #[cfg(with_metrics)]
         READ_EVENT_COUNTER.with_label_values(&[]).inc();
-        maybe_value.ok_or_else(|| ViewError::not_found("value for event ID", event_id))
+        maybe_value.ok_or_else(|| ViewError::EventsNotFound(vec![event_id]))
     }
 
     async fn write_events(
         &self,
-        events: impl IntoIterator<Item = (EventId, &[u8])> + Send,
+        events: impl IntoIterator<Item = (EventId, Vec<u8>)> + Send,
     ) -> Result<(), ViewError> {
         let mut batch = Batch::new();
         for (event_id, value) in events {

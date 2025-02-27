@@ -423,6 +423,14 @@ Event:
         TYPENAME: StreamId
     - key: BYTES
     - value: BYTES
+EventId:
+  STRUCT:
+    - chain_id:
+        TYPENAME: ChainId
+    - stream_id:
+        TYPENAME: StreamId
+    - key:
+        SEQ: U8
 GenericApplicationId:
   ENUM:
     0:
@@ -699,6 +707,11 @@ OracleResponse:
       Round:
         NEWTYPE:
           OPTION: U32
+    5:
+      Event:
+        TUPLE:
+          - TYPENAME: EventId
+          - SEQ: U8
 Origin:
   STRUCT:
     - sender:

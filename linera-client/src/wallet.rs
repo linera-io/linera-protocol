@@ -213,6 +213,19 @@ pub struct UserChain {
     pub pending_proposal: Option<PendingProposal>,
 }
 
+impl Clone for UserChain {
+    fn clone(&self) -> Self {
+        Self {
+            chain_id: self.chain_id,
+            key_pair: self.key_pair.as_ref().map(AccountSecretKey::copy),
+            block_hash: self.block_hash,
+            timestamp: self.timestamp,
+            next_block_height: self.next_block_height,
+            pending_proposal: self.pending_proposal.clone(),
+        }
+    }
+}
+
 impl UserChain {
     /// Create a user chain that we own.
     pub fn make_initial<R: CryptoRng>(

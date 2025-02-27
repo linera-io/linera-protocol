@@ -48,6 +48,9 @@ test = [
 [dependencies]
 async-graphql.workspace = true
 async-trait = { workspace = true, optional = true }
+
+# TODO(#3421): Remove the pinned version once the `linera-*` crates move to Rust Edition 2024
+base64ct = "=1.6.0"
 bcs.workspace = true
 futures.workspace = true
 linera-base.workspace = true
@@ -59,9 +62,6 @@ serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 wit-bindgen.workspace = true
-
-# TODO(#3421): Remove the pinned version once the `linera-*` crates move to Rust Edition 2024
-base64ct = "=1.6.0"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 async-graphql.workspace = true
