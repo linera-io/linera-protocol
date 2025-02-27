@@ -1,11 +1,11 @@
-# Crowd-funding Example Application
+# Сrowdfunding Example Application
 
-This example application implements crowd-funding campaigns using fungible tokens in
+This example application implements crowdfunding campaigns using fungible tokens in
 the `fungible` application. This demonstrates how to compose applications together and
 how to instantiate applications where one chain has a special role.
 
 Once an application is built and its bytecode published on a Linera chain, the
-published bytecode can be used to create different instances. Each instance or crowd-funding
+published bytecode can be used to create different instances. Each instance or crowdfunding
 represents a different campaign.
 
 ## How It Works
@@ -13,7 +13,7 @@ represents a different campaign.
 The chain that created the campaign is called the "campaign chain". It is owned by the
 creator (and beneficiary) of the campaign.
 
-The goal of a crowd-funding campaign is to let people pledge any number of tokens from
+The goal of a crowdfunding campaign is to let people pledge any number of tokens from
 their own chain(s). If enough tokens are pledged before the campaign expires, the campaign is
 _successful_ and the creator can receive all the funds, including ones exceeding the funding
 target. Otherwise, the campaign is _unsuccessful_ and contributors should be refunded.
