@@ -75,6 +75,7 @@ serde_json.workspace = true
 tempfile = { workspace = true, optional = true }
 thiserror.workspace = true
 tracing = { workspace = true, features = ["log"] }
+url.workspace = true
 wasm-encoder = { workspace = true, optional = true }
 wasm-instrument = { workspace = true, optional = true, features = ["sign_ext"] }
 wasmparser = { workspace = true, optional = true }

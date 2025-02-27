@@ -4650,6 +4650,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "url",
  "wasm-encoder 0.24.1",
  "wasm-instrument",
  "wasmparser 0.101.1",
