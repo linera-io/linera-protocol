@@ -21,6 +21,7 @@ metadata:
 spec:
   serviceName: "shards"
   replicas: {{ .Values.numShards }}
+  podManagementPolicy: Parallel
   selector:
     matchLabels:
       app: shards
