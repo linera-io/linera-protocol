@@ -1,0 +1,17 @@
+[package]
+name = "how-to-perform-http-requests"
+version = "0.1.0"
+authors = ["Linera <contact@linera.io>"]
+edition = "2021"
+
+[dependencies]
+async-graphql.workspace = true
+linera-sdk.workspace = true
+
+[[bin]]
+name = "how_to_perform_http_requests_contract"
+path = "src/contract.rs"
+
+[[bin]]
+name = "how_to_perform_http_requests_service"
+path = "src/service.rs"
