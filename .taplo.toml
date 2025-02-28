@@ -1,4 +1,4 @@
-include = ["**/Cargo.toml", "examples/**/Cargo.toml"]
+include = ["**/Cargo.toml"]
 
 [formatting]
 reorder_keys = false
