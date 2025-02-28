@@ -160,7 +160,7 @@ where
     ///
     /// Cannot be used in fast blocks: A block using this call should be proposed by a regular
     /// owner, not a super owner.
-    pub fn http_request(&mut self, request: http::Request) -> http::Response {
+    pub fn http_request(&self, request: http::Request) -> http::Response {
         wit::perform_http_request(&request.into()).into()
     }
 
