@@ -8,6 +8,9 @@ edition = "2021"
 async-graphql.workspace = true
 linera-sdk.workspace = true
 
+[dev-dependencies]
+linera-sdk = { workspace = true, features = ["test"] }
+
 [[bin]]
 name = "how_to_perform_http_requests_contract"
 path = "src/contract.rs"

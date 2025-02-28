@@ -78,3 +78,6 @@ impl Service {
         Ok(response.body)
     }
 }
+
+#[path = "unit_tests/service.rs"]
+mod unit_tests;
