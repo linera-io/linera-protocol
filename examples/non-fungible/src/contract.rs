@@ -9,7 +9,7 @@ use std::collections::BTreeSet;
 
 use fungible::Account;
 use linera_sdk::{
-    base::{AccountOwner, WithContractAbi},
+    linera_base_types::{AccountOwner, WithContractAbi},
     views::{RootView, View},
     Contract, ContractRuntime, DataBlobHash,
 };

@@ -4,7 +4,7 @@
 /*! ABI of the Native Fungible Token Example Application */
 
 use async_graphql::SimpleObject;
-use linera_sdk::base::{AccountOwner, Amount};
+use linera_sdk::linera_base_types::{AccountOwner, Amount};
 use serde::{Deserialize, Serialize};
 
 pub const TICKER_SYMBOL: &str = "NAT";

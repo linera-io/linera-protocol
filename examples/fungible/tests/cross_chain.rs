@@ -9,7 +9,7 @@ use fungible::{
     Account, FungibleTokenAbi, InitialState, InitialStateBuilder, Operation, Parameters,
 };
 use linera_sdk::{
-    base::{AccountOwner, Amount},
+    linera_base_types::{AccountOwner, Amount},
     test::{Medium, MessageAction, TestValidator},
 };
 

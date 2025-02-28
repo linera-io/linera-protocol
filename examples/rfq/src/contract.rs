@@ -7,7 +7,7 @@ mod state;
 
 use fungible::{Account, FungibleTokenAbi};
 use linera_sdk::{
-    base::{
+    linera_base_types::{
         AccountOwner, Amount, ApplicationPermissions, ChainId, ChainOwnership, Owner,
         TimeoutConfig, WithContractAbi,
     },

@@ -14,7 +14,7 @@ mod entrypoints;
 mod module_cache;
 mod sanitizer;
 #[macro_use]
-mod system_api;
+mod runtime_api;
 #[cfg(with_wasmer)]
 mod wasmer;
 #[cfg(with_wasmtime)]
@@ -38,7 +38,7 @@ use {
 use self::sanitizer::sanitize;
 pub use self::{
     entrypoints::{ContractEntrypoints, ServiceEntrypoints},
-    system_api::{ContractSystemApi, ServiceSystemApi, SystemApiData, ViewSystemApi},
+    runtime_api::{BaseRuntimeApi, ContractRuntimeApi, RuntimeApiData, ServiceRuntimeApi},
 };
 use crate::{
     ContractSyncRuntimeHandle, ExecutionError, ServiceSyncRuntimeHandle, UserContractInstance,

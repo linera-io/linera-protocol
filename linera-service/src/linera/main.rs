@@ -44,7 +44,7 @@ use linera_execution::{
     Message, ResourceControlPolicy, SystemMessage,
 };
 use linera_faucet_server::FaucetService;
-use linera_sdk::base::ValidatorPublicKey;
+use linera_sdk::linera_base_types::ValidatorPublicKey;
 use linera_service::{
     cli_wrappers,
     node_service::NodeService,

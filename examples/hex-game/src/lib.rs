@@ -7,8 +7,8 @@ use std::iter;
 
 use async_graphql::{Enum, InputObject, Request, Response, SimpleObject};
 use linera_sdk::{
-    base::{Amount, ContractAbi, Owner, ServiceAbi, TimeDelta, Timestamp},
     graphql::GraphQLMutationRoot,
+    linera_base_types::{Amount, ContractAbi, Owner, ServiceAbi, TimeDelta, Timestamp},
 };
 use serde::{Deserialize, Serialize};
 

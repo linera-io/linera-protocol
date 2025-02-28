@@ -15,8 +15,8 @@ use std::{
 use anyhow::{ensure, Context, Result};
 use clap::Parser as _;
 use linera_execution::{
-    ContractEntrypoints, ContractSyncRuntimeHandle, ContractSystemApi, ServiceEntrypoints,
-    ServiceSyncRuntimeHandle, ServiceSystemApi, SystemApiData, ViewSystemApi,
+    BaseRuntimeApi, ContractEntrypoints, ContractRuntimeApi, ContractSyncRuntimeHandle,
+    RuntimeApiData, ServiceEntrypoints, ServiceRuntimeApi, ServiceSyncRuntimeHandle,
 };
 use linera_witty::wit_generation::{StubInstance, WitInterfaceWriter, WitWorldWriter};
 
@@ -50,24 +50,24 @@ fn run_operation(options: WitGeneratorOptions, mut operation: impl Operation) ->
     let contract_entrypoints = WitInterfaceWriter::new::<ContractEntrypoints<StubInstance>>();
     let service_entrypoints = WitInterfaceWriter::new::<ServiceEntrypoints<StubInstance>>();
 
-    let contract_system_api = WitInterfaceWriter::new::<
-        ContractSystemApi<StubInstance<SystemApiData<ContractSyncRuntimeHandle>>>,
+    let base_runtime_api = WitInterfaceWriter::new::<
+        BaseRuntimeApi<StubInstance<RuntimeApiData<ContractSyncRuntimeHandle>>>,
     >();
-    let service_system_api = WitInterfaceWriter::new::<
-        ServiceSystemApi<StubInstance<SystemApiData<ServiceSyncRuntimeHandle>>>,
+    let contract_runtime_api = WitInterfaceWriter::new::<
+        ContractRuntimeApi<StubInstance<RuntimeApiData<ContractSyncRuntimeHandle>>>,
     >();
-    let view_system_api = WitInterfaceWriter::new::<
-        ViewSystemApi<StubInstance<SystemApiData<ContractSyncRuntimeHandle>>>,
+    let service_runtime_api = WitInterfaceWriter::new::<
+        ServiceRuntimeApi<StubInstance<RuntimeApiData<ServiceSyncRuntimeHandle>>>,
     >();
 
     let contract_world = WitWorldWriter::new("linera:app", "contract")
         .export::<ContractEntrypoints<StubInstance>>()
-        .import::<ContractSystemApi<StubInstance<SystemApiData<ContractSyncRuntimeHandle>>>>()
-        .import::<ViewSystemApi<StubInstance<SystemApiData<ContractSyncRuntimeHandle>>>>();
+        .import::<ContractRuntimeApi<StubInstance<RuntimeApiData<ContractSyncRuntimeHandle>>>>()
+        .import::<BaseRuntimeApi<StubInstance<RuntimeApiData<ContractSyncRuntimeHandle>>>>();
     let service_world = WitWorldWriter::new("linera:app", "service")
         .export::<ServiceEntrypoints<StubInstance>>()
-        .import::<ServiceSystemApi<StubInstance<SystemApiData<ServiceSyncRuntimeHandle>>>>()
-        .import::<ViewSystemApi<StubInstance<SystemApiData<ContractSyncRuntimeHandle>>>>();
+        .import::<ServiceRuntimeApi<StubInstance<RuntimeApiData<ServiceSyncRuntimeHandle>>>>()
+        .import::<BaseRuntimeApi<StubInstance<RuntimeApiData<ContractSyncRuntimeHandle>>>>();
 
     operation.run_for_file(
         &options.base_directory.join("contract-entrypoints.wit"),
@@ -79,16 +79,16 @@ fn run_operation(options: WitGeneratorOptions, mut operation: impl Operation) ->
     )?;
 
     operation.run_for_file(
-        &options.base_directory.join("contract-system-api.wit"),
-        contract_system_api.generate_file_contents(),
+        &options.base_directory.join("base-runtime-api.wit"),
+        base_runtime_api.generate_file_contents(),
     )?;
     operation.run_for_file(
-        &options.base_directory.join("service-system-api.wit"),
-        service_system_api.generate_file_contents(),
+        &options.base_directory.join("contract-runtime-api.wit"),
+        contract_runtime_api.generate_file_contents(),
     )?;
     operation.run_for_file(
-        &options.base_directory.join("view-system-api.wit"),
-        view_system_api.generate_file_contents(),
+        &options.base_directory.join("service-runtime-api.wit"),
+        service_runtime_api.generate_file_contents(),
     )?;
 
     operation.run_for_file(

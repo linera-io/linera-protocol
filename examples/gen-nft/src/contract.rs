@@ -10,7 +10,7 @@ use std::collections::BTreeSet;
 use fungible::Account;
 use gen_nft::{GenNftAbi, Message, Nft, Operation, TokenId};
 use linera_sdk::{
-    base::{AccountOwner, WithContractAbi},
+    linera_base_types::{AccountOwner, WithContractAbi},
     views::{RootView, View},
     Contract, ContractRuntime,
 };

@@ -42,7 +42,7 @@ use linera_rpc::{
         GRPC_MAX_MESSAGE_SIZE,
     },
 };
-use linera_sdk::{base::Blob, views::ViewError};
+use linera_sdk::{linera_base_types::Blob, views::ViewError};
 use linera_storage::Storage;
 use prost::Message;
 use tokio::{select, task::JoinSet};
@@ -479,7 +479,8 @@ where
 
     #[instrument(skip_all, err(Display))]
     async fn upload_blob(&self, request: Request<BlobContent>) -> Result<Response<BlobId>, Status> {
-        let content: linera_sdk::base::BlobContent = request.into_inner().try_into()?;
+        let content: linera_sdk::linera_base_types::BlobContent =
+            request.into_inner().try_into()?;
         let blob = Blob::new(content);
         let id = blob.id();
         let result = self.0.storage.maybe_write_blobs(&[blob]).await;
@@ -699,7 +700,9 @@ mod proto_message_cap {
         data_types::{BlockExecutionOutcome, ExecutedBlock},
         types::{Certificate, ConfirmedBlock, ConfirmedBlockCertificate},
     };
-    use linera_sdk::base::{ChainId, TestString, ValidatorKeypair, ValidatorSignature};
+    use linera_sdk::linera_base_types::{
+        ChainId, TestString, ValidatorKeypair, ValidatorSignature,
+    };
 
     use super::{CertificatesBatchResponse, GrpcMessageLimiter};
 

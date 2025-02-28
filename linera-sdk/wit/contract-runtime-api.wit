@@ -1,0 +1,147 @@
+package linera:app;
+
+interface contract-runtime-api {
+    authenticated-signer: func() -> option<owner>;
+    get-message-id: func() -> option<message-id>;
+    message-is-bouncing: func() -> option<bool>;
+    authenticated-caller-id: func() -> option<application-id>;
+    send-message: func(message: send-message-request);
+    subscribe: func(chain: chain-id, channel: channel-name);
+    unsubscribe: func(chain: chain-id, channel: channel-name);
+    transfer: func(source: option<account-owner>, destination: account, amount: amount);
+    claim: func(source: account, destination: account, amount: amount);
+    consume-fuel: func(fuel: u64);
+    try-call-application: func(authenticated: bool, callee-id: application-id, argument: list<u8>) -> list<u8>;
+    emit: func(name: stream-name, key: list<u8>, value: list<u8>);
+    query-service: func(application-id: application-id, query: list<u8>) -> list<u8>;
+    open-chain: func(chain-ownership: chain-ownership, application-permissions: application-permissions, balance: amount) -> tuple<message-id, chain-id>;
+    close-chain: func() -> result<tuple<>, close-chain-error>;
+    change-application-permissions: func(application-permissions: application-permissions) -> result<tuple<>, change-application-permissions-error>;
+    create-application: func(bytecode-id: bytecode-id, parameters: list<u8>, argument: list<u8>, required-application-ids: list<application-id>) -> application-id;
+    validation-round: func() -> option<u32>;
+
+    write-batch: func(operations: list<write-operation>);
+
+    variant write-operation {
+        delete(list<u8>),
+        delete-prefix(list<u8>),
+        put(tuple<list<u8>, list<u8>>),
+    }
+
+    record block-height {
+        inner0: u64,
+    }
+
+    record crypto-hash {
+        part1: u64,
+        part2: u64,
+        part3: u64,
+        part4: u64,
+    }
+
+    record owner {
+        inner0: crypto-hash,
+    }
+
+    record account {
+        chain-id: chain-id,
+        owner: option<account-owner>,
+    }
+
+    variant account-owner {
+        user(owner),
+        application(application-id),
+    }
+
+    record amount {
+        inner0: u128,
+    }
+
+    record message-id {
+        chain-id: chain-id,
+        height: block-height,
+        index: u32,
+    }
+    
+    record bytecode-id {
+        contract-blob-hash: crypto-hash,
+        service-blob-hash: crypto-hash,
+    }
+
+    record application-id {
+        bytecode-id: bytecode-id,
+        creation: message-id,
+    }
+
+    variant destination {
+        recipient(chain-id),
+        subscribers(channel-name),
+    }
+
+    record resources {
+        fuel: u64,
+        read-operations: u32,
+        write-operations: u32,
+        bytes-to-read: u32,
+        bytes-to-write: u32,
+        messages: u32,
+        message-size: u32,
+        storage-size-delta: u32,
+    }
+
+    record send-message-request {
+        destination: destination,
+        authenticated: bool,
+        is-tracked: bool,
+        grant: resources,
+        message: list<u8>,
+    }
+
+    record chain-id {
+        inner0: crypto-hash,
+    }
+
+    record channel-name {
+        inner0: list<u8>,
+    }
+
+    record stream-name {
+        inner0: list<u8>,
+    }
+    
+    record time-delta {
+        inner0: u64,
+    }
+
+    record timeout-config {
+        fast-round-duration: option<time-delta>,
+        base-timeout: time-delta,
+        timeout-increment: time-delta,
+        fallback-duration: time-delta,
+    }
+    
+    record chain-ownership {
+        super-owners: list<owner>,
+        owners: list<tuple<owner, u64>>,
+        multi-leader-rounds: u32,
+        open-multi-leader-rounds: bool,
+        timeout-config: timeout-config,
+    }
+
+    record application-permissions {
+        execute-operations: option<list<application-id>>,
+        mandatory-applications: list<application-id>,
+        close-chain: list<application-id>,
+        change-application-permissions: list<application-id>,
+    }
+
+    enum change-application-permissions-error {
+        not-permitted,
+    }
+
+    enum close-chain-error {
+        not-permitted,
+    }
+
+    type u128 = tuple<u64, u64>;
+}
