@@ -17,7 +17,7 @@ use futures::{lock::Mutex, FutureExt as _, StreamExt};
 use linera_base::{
     crypto::{CryptoHash, CryptoRng},
     data_types::{ApplicationPermissions, Timestamp},
-    identifiers::{AccountOwner, ChainDescription, ChainId, MessageId, Owner},
+    identifiers::{AccountOwner, ChainDescription, ChainId, Owner},
     ownership::ChainOwnership,
 };
 use linera_client::{
@@ -33,18 +33,10 @@ use linera_client::{
     wallet::{UserChain, Wallet},
 };
 use linera_core::{
-    data_types::{ChainInfoQuery, ClientOutcome},
-    node::ValidatorNodeProvider,
-    remote_node::RemoteNode,
-    worker::Reason,
-    JoinSetExt as _,
+    data_types::ClientOutcome, node::ValidatorNodeProvider, worker::Reason, JoinSetExt as _,
 };
-use linera_execution::{
-    committee::{Committee, ValidatorState},
-    Message, SystemMessage,
-};
+use linera_execution::committee::{Committee, ValidatorState};
 use linera_faucet_server::FaucetService;
-use linera_sdk::linera_base_types::ValidatorPublicKey;
 use linera_service::{
     cli_wrappers,
     node_service::NodeService,
@@ -1011,7 +1003,8 @@ impl Runnable for Job {
                     "Linking chain {chain_id} to its corresponding key in the wallet, owned by \
                     {owner}",
                 );
-                Self::assign_new_chain_to_key(chain_id, message_id, owner, None, &mut context)
+                context
+                    .assign_new_chain_to_key(chain_id, message_id, owner, None)
                     .await?;
                 println!("{}", chain_id);
                 context.save_wallet().await?;
@@ -1123,14 +1116,14 @@ impl Runnable for Job {
                 println!("{}", outcome.message_id);
                 println!("{}", outcome.certificate_hash);
                 println!("{}", owner);
-                Self::assign_new_chain_to_key(
-                    outcome.chain_id,
-                    outcome.message_id,
-                    owner,
-                    Some(validators),
-                    &mut context,
-                )
-                .await?;
+                context
+                    .assign_new_chain_to_key(
+                        outcome.chain_id,
+                        outcome.message_id,
+                        owner,
+                        Some(validators),
+                    )
+                    .await?;
                 let admin_id = context.wallet().genesis_admin_chain();
                 let chains = with_other_chains
                     .into_iter()
@@ -1168,14 +1161,14 @@ impl Runnable for Job {
                 println!("{}", outcome.message_id);
                 println!("{}", outcome.certificate_hash);
                 println!("{}", owner);
-                Self::assign_new_chain_to_key(
-                    outcome.chain_id,
-                    outcome.message_id,
-                    owner,
-                    Some(validators),
-                    &mut context,
-                )
-                .await?;
+                context
+                    .assign_new_chain_to_key(
+                        outcome.chain_id,
+                        outcome.message_id,
+                        owner,
+                        Some(validators),
+                    )
+                    .await?;
                 if set_default {
                     context
                         .wallet_mut()
@@ -1203,81 +1196,6 @@ impl Runnable for Job {
 }
 
 impl Job {
-    async fn assign_new_chain_to_key<S>(
-        chain_id: ChainId,
-        message_id: MessageId,
-        owner: Owner,
-        validators: Option<Vec<(ValidatorPublicKey, String)>>,
-        context: &mut ClientContext<S, impl Persist<Target = Wallet>>,
-    ) -> anyhow::Result<()>
-    where
-        S: Storage + Clone + Send + Sync + 'static,
-    {
-        let node_provider = context.make_node_provider();
-        let client = context.client.clone_with(
-            node_provider.clone(),
-            "Temporary client for fetching the parent chain",
-            vec![message_id.chain_id, chain_id],
-            false,
-        );
-
-        // Take the latest committee we know of.
-        let admin_chain_id = context.wallet.genesis_admin_chain();
-        let query = ChainInfoQuery::new(admin_chain_id).with_committees();
-        let nodes: Vec<_> = if let Some(validators) = validators {
-            node_provider
-                .make_nodes_from_list(validators)?
-                .map(|(public_key, node)| RemoteNode { public_key, node })
-                .collect()
-        } else {
-            let info = client.local_node().handle_chain_info_query(query).await?;
-            let committee = info
-                .latest_committee()
-                .context("Invalid chain info response; missing latest committee")?;
-            node_provider
-                .make_nodes(committee)?
-                .map(|(public_key, node)| RemoteNode { public_key, node })
-                .collect()
-        };
-
-        // Download the parent chain.
-        let target_height = message_id.height.try_add_one()?;
-        client
-            .download_certificates(&nodes, message_id.chain_id, target_height)
-            .await
-            .context("Failed to download parent chain")?;
-
-        // The initial timestamp for the new chain is taken from the block with the message.
-        let certificate = client
-            .local_node()
-            .certificate_for(&message_id)
-            .await
-            .context("could not find OpenChain message")?;
-        let executed_block = certificate.block();
-        let Some(Message::System(SystemMessage::OpenChain(config))) = executed_block
-            .message_by_id(&message_id)
-            .map(|msg| &msg.message)
-        else {
-            bail!(
-                "The message with the ID returned by the faucet is not OpenChain. \
-                Please make sure you are connecting to a genuine faucet."
-            );
-        };
-        anyhow::ensure!(
-            config.ownership.verify_owner(&owner),
-            "The chain with the ID returned by the faucet is not owned by you. \
-            Please make sure you are connecting to a genuine faucet."
-        );
-        context
-            .wallet_mut()
-            .mutate(|w| {
-                w.assign_new_chain_to_owner(owner, chain_id, executed_block.header.timestamp)
-            })
-            .await?
-            .context("could not assign the new chain")?;
-        Ok(())
-    }
-
     /// Prints a warning message to explain that the wallet has been initialized using data from
     /// untrusted nodes, and gives instructions to verify that we are connected to the right
     /// network.
