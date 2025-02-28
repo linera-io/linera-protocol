@@ -2,7 +2,7 @@
 #
 # - `git_commit` is the hash of the current git commit — used for
 #   versioning information inside the binaries.
-# - `build_date` is the date and time when the docker image was
+# - `build_date` is the date and time at which the docker image was
 #   built
 # - `binaries` is the path to the directory containing the Linera
 #   binaries. Leave unset to build the binaries from scratch.
