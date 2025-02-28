@@ -151,6 +151,26 @@ static STATE_HASH_COMPUTATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(||
     )
 });
 
+#[cfg(with_metrics)]
+static NUM_INBOXES: LazyLock<HistogramVec> = LazyLock::new(|| {
+    register_histogram_vec(
+        "num_inboxes",
+        "Number of inboxes",
+        &[],
+        exponential_bucket_interval(1.0, 10000.0),
+    )
+});
+
+#[cfg(with_metrics)]
+static NUM_OUTBOXES: LazyLock<HistogramVec> = LazyLock::new(|| {
+    register_histogram_vec(
+        "num_outboxes",
+        "Number of outboxes",
+        &[],
+        exponential_bucket_interval(1.0, 10000.0),
+    )
+});
+
 /// The BCS-serialized size of an empty [`Block`].
 const EMPTY_BLOCK_SIZE: usize = 91;
 
@@ -388,6 +408,10 @@ where
         if outbox.queue.count() == 0 {
             self.outboxes.remove_entry(target)?;
         }
+        #[cfg(with_metrics)]
+        NUM_OUTBOXES
+            .with_label_values(&[])
+            .observe(self.outboxes.count().await? as f64);
         Ok(true)
     }
 
@@ -521,6 +545,10 @@ where
         if bundle.goes_to_inbox() {
             // Process the inbox bundle and update the inbox state.
             let mut inbox = self.inboxes.try_load_entry_mut(origin).await?;
+            #[cfg(with_metrics)]
+            NUM_INBOXES
+                .with_label_values(&[])
+                .observe(self.inboxes.count().await? as f64);
             let entry = BundleInInbox::new(origin.clone(), &bundle);
             let skippable = bundle.is_skippable();
             let newly_added = inbox
@@ -688,6 +716,10 @@ where
                 self.removed_unskippable_bundles.insert(&entry)?;
             }
         }
+        #[cfg(with_metrics)]
+        NUM_INBOXES
+            .with_label_values(&[])
+            .observe(self.inboxes.count().await? as f64);
         Ok(())
     }
 
@@ -1188,6 +1220,10 @@ where
                 *outbox_counters.entry(height).or_default() += 1;
             }
         }
+        #[cfg(with_metrics)]
+        NUM_OUTBOXES
+            .with_label_values(&[])
+            .observe(self.outboxes.count().await? as f64);
         Ok(())
     }
 
@@ -1236,6 +1272,10 @@ where
                 }
             }
         }
+        #[cfg(with_metrics)]
+        NUM_OUTBOXES
+            .with_label_values(&[])
+            .observe(self.outboxes.count().await? as f64);
         Ok(new_outbox_entries)
     }
 
