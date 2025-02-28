@@ -22,7 +22,7 @@ impl WithServiceAbi for Service {
 }
 
 impl linera_sdk::Service for Service {
-    type Parameters = ();
+    type Parameters = String;
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
         Service {

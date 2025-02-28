@@ -19,13 +19,16 @@ impl WithContractAbi for Contract {
 impl linera_sdk::Contract for Contract {
     type Message = ();
     type InstantiationArgument = ();
-    type Parameters = ();
+    type Parameters = String;
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
         Contract { runtime }
     }
 
-    async fn instantiate(&mut self, (): Self::InstantiationArgument) {}
+    async fn instantiate(&mut self, (): Self::InstantiationArgument) {
+        // Check that the global parameters can be deserialized correctly.
+        self.runtime.application_parameters();
+    }
 
     async fn execute_operation(&mut self, _operation: Self::Operation) -> Self::Response {}
 
