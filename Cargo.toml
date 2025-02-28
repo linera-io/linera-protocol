@@ -1,32 +1,32 @@
 [workspace]
 members = [
-  "linera-base",
-  "linera-chain",
-  "linera-client",
-  "linera-core",
-  "linera-ethereum",
-  "linera-execution",
-  "linera-explorer",
-  "linera-faucet",
-  "linera-faucet/client",
-  "linera-faucet/server",
-  "linera-indexer/example",
-  "linera-indexer/graphql-client",
-  "linera-indexer/lib",
-  "linera-indexer/plugins",
-  "linera-rpc",
-  "linera-sdk",
-  "linera-sdk-derive",
-  "linera-service",
-  "linera-service-graphql-client",
-  "linera-storage",
-  "linera-storage-service",
-  "linera-summary",
-  "linera-views",
-  "linera-views-derive",
-  "linera-witty",
-  "linera-witty-macros",
-  "linera-witty/test-modules",
+    "linera-base",
+    "linera-chain",
+    "linera-client",
+    "linera-core",
+    "linera-ethereum",
+    "linera-execution",
+    "linera-explorer",
+    "linera-faucet",
+    "linera-faucet/client",
+    "linera-faucet/server",
+    "linera-indexer/example",
+    "linera-indexer/graphql-client",
+    "linera-indexer/lib",
+    "linera-indexer/plugins",
+    "linera-rpc",
+    "linera-sdk",
+    "linera-sdk-derive",
+    "linera-service",
+    "linera-service-graphql-client",
+    "linera-storage",
+    "linera-storage-service",
+    "linera-summary",
+    "linera-views",
+    "linera-views-derive",
+    "linera-witty",
+    "linera-witty-macros",
+    "linera-witty/test-modules",
 ]
 exclude = ["examples", "scripts"]
 resolver = "2"
@@ -42,7 +42,7 @@ edition = "2021"
 [workspace.dependencies]
 alloy = { version = "0.9.2", default-features = false }
 alloy-primitives = { version = "0.8.18", default-features = false, features = [
-  "serde",
+    "serde",
 ] }
 alloy-signer-local = "0.9.2"
 alloy-sol-types = "0.8.18"
@@ -80,10 +80,10 @@ derive_more = "1.0.0"
 dirs = "5.0.1"
 dyn-clone = "1.0.17"
 ed25519-dalek = { version = "2.1.1", default-features = false, features = [
-  "batch",
-  "fast",
-  "serde",
-  "zeroize",
+    "batch",
+    "fast",
+    "serde",
+    "zeroize",
 ] }
 either = "1.10.0"
 flarch = "0.7.0"
@@ -107,15 +107,13 @@ insta = "1.36.1"
 is-terminal = "0.4.12"
 js-sys = "0.3.70"
 k256 = { version = "0.13.4", default-features = false, features = [
-  "ecdsa",
-  "pem",
-  "sha256",
-  "serde",
-  "arithmetic",
+    "ecdsa",
+    "pem",
+    "sha256",
+    "serde",
+    "arithmetic",
 ] }
 k8s-openapi = { version = "0.21.1", features = ["v1_28"] }
-k8s-openapi = { version = "0.21.1", features = ["v1_28"] }
-kube = "0.88.1"
 kube = "0.88.1"
 linked-hash-map = "0.5.6"
 log = "0.4.21"
@@ -125,7 +123,6 @@ num-format = "0.4.4"
 num-traits = "0.2.18"
 octocrab = "0.42.1"
 oneshot = "0.1.6"
-pathdiff = "0.2.1"
 pathdiff = "0.2.1"
 port-selector = "0.1.6"
 prettyplease = "0.2.16"
@@ -140,7 +137,7 @@ rand_chacha = { version = "0.3.1", default-features = false }
 rand_distr = { version = "0.4.3", default-features = false }
 rcgen = "0.12.1"
 reqwest = { version = "0.11.24", default-features = false, features = [
-  "rustls-tls",
+    "rustls-tls",
 ] }
 revm = "19.4.0"
 revm-interpreter = { version = "15.1.0", features = ["serde"] }
@@ -148,12 +145,11 @@ revm-precompile = "16.0.0"
 revm-primitives = "15.1.0"
 rocksdb = "0.21.0"
 ruzstd = "0.7.1"
-ruzstd = "0.7.1"
 scylla = "0.15.1"
 secp256k1 = { version = "0.30.0", default-features = false, features = [
-  "alloc",
-  "rand",
-  "serde",
+    "alloc",
+    "rand",
+    "serde",
 ] }
 semver = "1.0.22"
 serde = { version = "1.0.197", features = ["derive"] }
@@ -163,8 +159,8 @@ serde-wasm-bindgen = "0.6.5"
 serde_bytes = "0.11.14"
 serde_json = "1.0.114"
 serde_with = { version = "3", default-features = false, features = [
-  "alloc",
-  "macros",
+    "alloc",
+    "macros",
 ] }
 serde_yaml = "0.8.26"
 sha3 = "0.10.8"
@@ -175,7 +171,7 @@ syn = "2.0.52"
 tempfile = "3.10.1"
 test-case = "3.3.1"
 test-log = { version = "0.2.15", default-features = false, features = [
-  "trace",
+    "trace",
 ] }
 test-strategy = "0.3.1"
 thiserror = "1.0.65"
@@ -195,7 +191,7 @@ tower = "0.4.13"
 tower-http = "0.5.2"
 tracing = { version = "0.1.40", features = ["release_max_level_debug"] }
 tracing-subscriber = { version = "0.3.18", default-features = false, features = [
-  "env-filter",
+    "env-filter",
 ] }
 tracing-web = "0.1.3"
 trait-variant = "0.1.1"
@@ -208,15 +204,15 @@ wasm-instrument = "0.4.0"
 wasm_thread = "0.3.0"
 wasmer = { package = "linera-wasmer", version = "4.4.0-linera.6", default-features = false }
 wasmer-compiler-singlepass = { package = "linera-wasmer-compiler-singlepass", version = "4.4.0-linera.6", default-features = false, features = [
-  "std",
-  "unwind",
-  "avx",
+    "std",
+    "unwind",
+    "avx",
 ] }
 wasmparser = "0.101.1"
 wasmtime = { version = "25.0.0", default-features = false, features = [
-  "cranelift",
-  "runtime",
-  "std",
+    "cranelift",
+    "runtime",
+    "std",
 ] }
 wasmtimer = "0.2.0"
 web-sys = "0.3.69"

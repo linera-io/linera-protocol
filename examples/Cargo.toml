@@ -1,20 +1,20 @@
 [workspace]
 resolver = "2"
 members = [
-  "amm",
-  "counter",
-  "crowd-funding",
-  "ethereum-tracker",
-  "fungible",
-  "gen-nft",
-  "hex-game",
-  "llm",
-  "matching-engine",
-  "meta-counter",
-  "native-fungible",
-  "non-fungible",
-  "rfq",
-  "social",
+    "amm",
+    "counter",
+    "crowd-funding",
+    "ethereum-tracker",
+    "fungible",
+    "gen-nft",
+    "hex-game",
+    "llm",
+    "matching-engine",
+    "meta-counter",
+    "native-fungible",
+    "non-fungible",
+    "rfq",
+    "social",
 ]
 
 [workspace.dependencies]
@@ -28,7 +28,7 @@ candle-transformers = "0.4.1"
 futures = "0.3.24"
 futures-util = "0.3.26"
 getrandom = { version = "0.2.12", default-features = false, features = [
-  "custom",
+    "custom",
 ] }
 hex = "0.4.3"
 linera-sdk = { path = "../linera-sdk" }
@@ -41,10 +41,10 @@ serde = { version = "1.0.152", features = ["derive"] }
 serde_json = "1.0.93"
 sha3 = "0.10.8"
 test-log = { version = "0.2.15", default-features = false, features = [
-  "trace",
+    "trace",
 ] }
 tokenizers = { git = "https://github.com/christos-h/tokenizers", default-features = false, features = [
-  "unstable_wasm",
+    "unstable_wasm",
 ] }
 tokio = { version = "1.25.0", features = ["macros", "rt-multi-thread"] }
 

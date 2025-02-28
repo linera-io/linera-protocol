@@ -1,10 +1,10 @@
-include = ["Cargo.toml"]
+include = ["Cargo.toml", "examples/**/Cargo.toml"]
 
 [formatting]
 reorder_keys = false
+indent_string = "    "
 
 [[rule]]
-include = ["Cargo.toml"]
 keys = ["workspace.dependencies"]
 
 [rule.formatting]
