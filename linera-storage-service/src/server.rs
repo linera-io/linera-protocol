@@ -590,6 +590,10 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(UnboundedReceiverStream::new(rx)))
     }
 
+    // Encoding for this takes place in a pattern that mimics bcs serialization.
+    // just using simple numbers for Operation's 3 variants.
+    // simple length prefixed vectors.
+    // and a stack state based depth first de-serialization.
     #[instrument(target = "store_server", skip_all, err)]
     async fn process_write_batch(
         &self,
