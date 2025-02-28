@@ -464,7 +464,7 @@ where
         if !config.ownership.verify_owner(&owner) {
             tracing::error!(
                 "The chain with the ID returned by the faucet is not owned by you. \
-            Please make sure you are connecting to a genuine faucet."
+                Please make sure you are connecting to a genuine faucet."
             );
             return Err(error::Inner::ChainOwnership.into());
         }
