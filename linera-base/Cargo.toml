@@ -76,7 +76,12 @@ tracing-web = { optional = true, workspace = true }
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 chrono.workspace = true
 rand = { workspace = true, features = ["getrandom", "std", "std_rng"] }
-tokio = { workspace = true, features = ["process", "rt-multi-thread", "signal", "macros"] }
+tokio = { workspace = true, features = [
+    "process",
+    "rt-multi-thread",
+    "signal",
+    "macros",
+] }
 tokio-util.workspace = true
 prometheus.workspace = true
 port-selector.workspace = true
