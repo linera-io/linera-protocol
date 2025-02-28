@@ -32,7 +32,7 @@ where
     chain_balance: Mutex<Option<Amount>>,
     owner_balances: Mutex<Option<HashMap<AccountOwner, Amount>>>,
     query_application_handler: Mutex<Option<QueryApplicationHandler>>,
-    expected_http_requests: VecDeque<(http::Request, http::Response)>,
+    expected_http_requests: Mutex<VecDeque<(http::Request, http::Response)>>,
     url_blobs: Mutex<Option<HashMap<String, Vec<u8>>>>,
     blobs: Mutex<Option<HashMap<DataBlobHash, Vec<u8>>>>,
     scheduled_operations: Mutex<Vec<Vec<u8>>>,
@@ -63,7 +63,7 @@ where
             chain_balance: Mutex::new(None),
             owner_balances: Mutex::new(None),
             query_application_handler: Mutex::new(None),
-            expected_http_requests: VecDeque::new(),
+            expected_http_requests: Mutex::new(VecDeque::new()),
             url_blobs: Mutex::new(None),
             blobs: Mutex::new(None),
             scheduled_operations: Mutex::new(vec![]),
@@ -384,7 +384,10 @@ where
 
     /// Adds an expected `http_request` call, and the response it should return in the test.
     pub fn add_expected_http_request(&mut self, request: http::Request, response: http::Response) {
-        self.expected_http_requests.push_back((request, response));
+        self.expected_http_requests
+            .lock()
+            .unwrap()
+            .push_back((request, response));
     }
 
     /// Makes an HTTP `request` as an oracle and returns the HTTP response.
@@ -394,8 +397,8 @@ where
     ///
     /// Cannot be used in fast blocks: A block using this call should be proposed by a regular
     /// owner, not a super owner.
-    pub fn http_request(&mut self, request: http::Request) -> http::Response {
-        let maybe_request = self.expected_http_requests.pop_front();
+    pub fn http_request(&self, request: http::Request) -> http::Response {
+        let maybe_request = self.expected_http_requests.lock().unwrap().pop_front();
         let (expected_request, response) = maybe_request.expect("Unexpected HTTP request");
         assert_eq!(request, expected_request);
         response

@@ -35,27 +35,6 @@ impl<Application> ServiceRuntime<Application>
 where
     Application: Service,
 {
-    /// Loads a value from the `slot` cache or fetches it and stores it in the cache.
-    fn fetch_value_through_cache<T>(slot: &Mutex<Option<T>>, fetch: impl FnOnce() -> T) -> T
-    where
-        T: Clone,
-    {
-        let mut value = slot
-            .lock()
-            .expect("Mutex should never be poisoned because service runs in a single thread");
-
-        if value.is_none() {
-            *value = Some(fetch());
-        }
-
-        value.clone().expect("Value should be populated above")
-    }
-}
-
-impl<Application> ServiceRuntime<Application>
-where
-    Application: Service,
-{
     /// Creates a new [`ServiceRuntime`] instance for a service.
     pub(crate) fn new() -> Self {
         ServiceRuntime {
@@ -158,7 +137,7 @@ where
     ///
     /// Cannot be used in fast blocks: A block using this call should be proposed by a regular
     /// owner, not a super owner.
-    pub fn http_request(&mut self, request: http::Request) -> http::Response {
+    pub fn http_request(&self, request: http::Request) -> http::Response {
         base_wit::perform_http_request(&request.into()).into()
     }
 
@@ -212,5 +191,26 @@ where
     /// Fetches a blob of bytes from a given URL.
     pub fn fetch_url(&self, url: &str) -> Vec<u8> {
         service_wit::fetch_url(url)
+    }
+}
+
+impl<Application> ServiceRuntime<Application>
+where
+    Application: Service,
+{
+    /// Loads a value from the `slot` cache or fetches it and stores it in the cache.
+    fn fetch_value_through_cache<T>(slot: &Mutex<Option<T>>, fetch: impl FnOnce() -> T) -> T
+    where
+        T: Clone,
+    {
+        let mut value = slot
+            .lock()
+            .expect("Mutex should never be poisoned because service runs in a single thread");
+
+        if value.is_none() {
+            *value = Some(fetch());
+        }
+
+        value.clone().expect("Value should be populated above")
     }
 }
