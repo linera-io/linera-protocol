@@ -7,8 +7,10 @@ use colored::Colorize as _;
 use linera_base::{
     data_types::Amount, identifiers::ChainId, listen_for_shutdown_signals, time::Duration,
 };
-use linera_client::storage::{StorageConfig, StorageConfigNamespace};
-use linera_execution::ResourceControlPolicy;
+use linera_client::{
+    client_options::ResourceControlPolicyConfig,
+    storage::{StorageConfig, StorageConfigNamespace},
+};
 use linera_service::cli_wrappers::{
     local_net::{Database, LocalNetConfig, PathProvider, StorageConfigBuilder},
     ClientWrapper, FaucetService, LineraNet, LineraNetConfig, Network, NetworkConfig,
@@ -110,7 +112,7 @@ pub async fn handle_net_up_kubernetes(
     binaries: &Option<Option<PathBuf>>,
     no_build: bool,
     docker_image_name: String,
-    policy: ResourceControlPolicy,
+    policy_config: ResourceControlPolicyConfig,
     with_faucet: bool,
     faucet_chain: Option<u32>,
     faucet_port: NonZeroU16,
@@ -142,7 +144,7 @@ pub async fn handle_net_up_kubernetes(
         binaries: binaries.clone().into(),
         no_build,
         docker_image_name,
-        policy,
+        policy_config,
     };
     let (mut net, client) = config.instantiate().await?;
     let faucet_service = print_messages_and_create_faucet(
@@ -164,7 +166,7 @@ pub async fn handle_net_up_service(
     num_initial_validators: usize,
     num_shards: usize,
     testing_prng_seed: Option<u64>,
-    policy: ResourceControlPolicy,
+    policy_config: ResourceControlPolicyConfig,
     path: &Option<String>,
     storage: &Option<String>,
     external_protocol: String,
@@ -205,7 +207,7 @@ pub async fn handle_net_up_service(
         initial_amount: Amount::from_tokens(initial_amount),
         num_initial_validators,
         num_shards,
-        policy,
+        policy_config,
         storage_config_builder,
         path_provider,
     };

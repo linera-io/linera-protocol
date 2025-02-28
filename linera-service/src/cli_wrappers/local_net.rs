@@ -19,9 +19,11 @@ use linera_base::{
     command::{resolve_binary, CommandExt},
     data_types::Amount,
 };
-use linera_client::storage::{StorageConfig, StorageConfigNamespace};
+use linera_client::{
+    client_options::ResourceControlPolicyConfig,
+    storage::{StorageConfig, StorageConfigNamespace},
+};
 use linera_core::node::ValidatorNodeProvider;
-use linera_execution::ResourceControlPolicy;
 #[cfg(all(feature = "storage-service", with_testing))]
 use linera_storage_service::common::storage_service_test_endpoint;
 #[cfg(all(feature = "scylladb", with_testing))]
@@ -161,7 +163,7 @@ pub struct LocalNetConfig {
     pub initial_amount: Amount,
     pub num_initial_validators: usize,
     pub num_shards: usize,
-    pub policy: ResourceControlPolicy,
+    pub policy_config: ResourceControlPolicyConfig,
     pub storage_config_builder: StorageConfigBuilder,
     pub path_provider: PathProvider,
 }
@@ -258,7 +260,7 @@ impl LocalNetConfig {
             network,
             num_other_initial_chains: 2,
             initial_amount: Amount::from_tokens(1_000_000),
-            policy: ResourceControlPolicy::devnet(),
+            policy_config: ResourceControlPolicyConfig::Testnet,
             testing_prng_seed: Some(37),
             namespace: linera_views::random::generate_test_namespace(),
             num_initial_validators: 4,
@@ -294,7 +296,7 @@ impl LineraNetConfig for LocalNetConfig {
             .create_genesis_config(
                 self.num_other_initial_chains,
                 self.initial_amount,
-                self.policy,
+                self.policy_config,
             )
             .await
             .unwrap();

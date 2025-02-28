@@ -102,7 +102,7 @@ where
             .await?;
 
         let tracker = ResourceTracker::default();
-        let policy = ResourceControlPolicy::default();
+        let policy = ResourceControlPolicy::no_fees();
         let mut resource_controller = ResourceController {
             policy: Arc::new(policy),
             tracker,

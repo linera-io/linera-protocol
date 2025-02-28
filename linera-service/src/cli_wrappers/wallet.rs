@@ -17,6 +17,7 @@ use anyhow::{bail, ensure, Context, Result};
 use async_graphql::InputType;
 use async_tungstenite::tungstenite::{client::IntoClientRequest as _, http::HeaderValue};
 use futures::{SinkExt as _, Stream, StreamExt as _, TryStreamExt as _};
+use heck::ToKebabCase;
 use linera_base::{
     abi::ContractAbi,
     command::{resolve_binary, CommandExt},
@@ -24,12 +25,11 @@ use linera_base::{
     data_types::{Amount, Bytecode},
     identifiers::{Account, ApplicationId, BytecodeId, ChainId, MessageId, Owner},
 };
-use linera_client::wallet::Wallet;
+use linera_client::{client_options::ResourceControlPolicyConfig, wallet::Wallet};
 use linera_core::worker::Notification;
 use linera_execution::{
     committee::{Committee, Epoch},
     system::SystemChannel,
-    ResourceControlPolicy,
 };
 use linera_faucet::ClaimOutcome;
 use linera_faucet_client::Faucet;
@@ -236,29 +236,8 @@ impl ClientWrapper {
         &self,
         num_other_initial_chains: u32,
         initial_funding: Amount,
-        policy: ResourceControlPolicy,
+        policy_config: ResourceControlPolicyConfig,
     ) -> Result<()> {
-        let ResourceControlPolicy {
-            block,
-            fuel_unit,
-            read_operation,
-            write_operation,
-            byte_read,
-            byte_written,
-            byte_stored,
-            operation,
-            operation_byte,
-            message,
-            message_byte,
-            maximum_fuel_per_block,
-            maximum_executed_block_size,
-            maximum_blob_size,
-            maximum_published_blobs,
-            maximum_bytecode_size,
-            maximum_block_proposal_size,
-            maximum_bytes_read_per_block,
-            maximum_bytes_written_per_block,
-        } = policy;
         let mut command = self.command().await?;
         command
             .args([
@@ -268,46 +247,11 @@ impl ClientWrapper {
             .args(["--initial-funding", &initial_funding.to_string()])
             .args(["--committee", "committee.json"])
             .args(["--genesis", "genesis.json"])
-            .args(["--block-price", &block.to_string()])
-            .args(["--fuel-unit-price", &fuel_unit.to_string()])
-            .args(["--read-operation-price", &read_operation.to_string()])
-            .args(["--byte-read-price", &byte_read.to_string()])
-            .args(["--byte-written-price", &byte_written.to_string()])
-            .args(["--byte-stored-price", &byte_stored.to_string()])
-            .args(["--message-byte-price", &message_byte.to_string()])
-            .args(["--write-operation-price", &write_operation.to_string()])
-            .args(["--operation-price", &operation.to_string()])
-            .args(["--operation-byte-price", &operation_byte.to_string()])
-            .args(["--message-price", &message.to_string()])
             .args([
-                "--maximum-fuel-per-block",
-                &maximum_fuel_per_block.to_string(),
-            ])
-            .args([
-                "--maximum-executed-block-size",
-                &maximum_executed_block_size.to_string(),
-            ])
-            .args(["--maximum-blob-size", &maximum_blob_size.to_string()])
-            .args([
-                "--maximum-published-blobs",
-                &maximum_published_blobs.to_string(),
-            ])
-            .args([
-                "--maximum-bytecode-size",
-                &maximum_bytecode_size.to_string(),
-            ])
-            .args([
-                "--maximum-block-proposal-size",
-                &maximum_block_proposal_size.to_string(),
-            ])
-            .args([
-                "--maximum-bytes-read-per-block",
-                &maximum_bytes_read_per_block.to_string(),
-            ])
-            .args([
-                "--maximum-bytes-written-per-block",
-                &maximum_bytes_written_per_block.to_string(),
+                "--policy-config",
+                &policy_config.to_string().to_kebab_case(),
             ]);
+
         if let Some(seed) = self.testing_prng_seed {
             command.arg("--testing-prng-seed").arg(seed.to_string());
         }
