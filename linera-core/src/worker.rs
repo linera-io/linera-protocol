@@ -44,7 +44,7 @@ use tracing::{error, instrument, trace, warn, Instrument as _};
 #[cfg(with_metrics)]
 use {
     linera_base::prometheus_util::{
-        bucket_interval, register_histogram_vec, register_int_counter_vec,
+        exponential_bucket_interval, register_histogram_vec, register_int_counter_vec,
     },
     prometheus::{HistogramVec, IntCounterVec},
     std::sync::LazyLock,
@@ -68,7 +68,7 @@ static NUM_ROUNDS_IN_CERTIFICATE: LazyLock<HistogramVec> = LazyLock::new(|| {
         "num_rounds_in_certificate",
         "Number of rounds in certificate",
         &["certificate_value", "round_type"],
-        bucket_interval(0.1, 50.0),
+        exponential_bucket_interval(0.1, 50.0),
     )
 });
 
@@ -78,7 +78,7 @@ static NUM_ROUNDS_IN_BLOCK_PROPOSAL: LazyLock<HistogramVec> = LazyLock::new(|| {
         "num_rounds_in_block_proposal",
         "Number of rounds in block proposal",
         &["round_type"],
-        bucket_interval(0.1, 50.0),
+        exponential_bucket_interval(0.1, 50.0),
     )
 });
 

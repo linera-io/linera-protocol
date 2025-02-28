@@ -3,7 +3,7 @@
 
 use std::{
     borrow::Cow,
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     env,
     marker::PhantomData,
     mem,
@@ -26,7 +26,11 @@ use linera_base::{
 };
 use linera_client::wallet::Wallet;
 use linera_core::worker::Notification;
-use linera_execution::{system::SystemChannel, ResourceControlPolicy};
+use linera_execution::{
+    committee::{Committee, Epoch},
+    system::SystemChannel,
+    ResourceControlPolicy,
+};
 use linera_faucet::ClaimOutcome;
 use linera_faucet_client::Faucet;
 use serde::{de::DeserializeOwned, ser::Serialize};
@@ -1237,6 +1241,17 @@ impl NodeService {
             .parse()
             .context("could not parse bytecode ID")?;
         Ok(bytecode_id.with_abi())
+    }
+
+    pub async fn query_committees(&self, chain_id: &ChainId) -> Result<BTreeMap<Epoch, Committee>> {
+        let query = format!(
+            "query {{ chain(chainId:\"{chain_id}\") {{
+                executionState {{ system {{ committees }} }}
+            }} }}"
+        );
+        let mut response = self.query_node(query).await?;
+        let committees = response["chain"]["executionState"]["system"]["committees"].take();
+        Ok(serde_json::from_value(committees)?)
     }
 
     pub async fn query_node(&self, query: impl AsRef<str>) -> Result<Value> {

@@ -60,8 +60,8 @@ mod chain_tests;
 #[cfg(with_metrics)]
 use {
     linera_base::prometheus_util::{
-        bucket_interval, bucket_latencies, register_histogram_vec, register_int_counter_vec,
-        MeasureLatency,
+        exponential_bucket_interval, exponential_bucket_latencies, register_histogram_vec,
+        register_int_counter_vec, MeasureLatency,
     },
     prometheus::{HistogramVec, IntCounterVec},
 };
@@ -77,7 +77,7 @@ static BLOCK_EXECUTION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
         "block_execution_latency",
         "Block execution latency",
         &[],
-        bucket_latencies(50.0),
+        exponential_bucket_latencies(50.0),
     )
 });
 
@@ -87,7 +87,7 @@ static MESSAGE_EXECUTION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
         "message_execution_latency",
         "Message execution latency",
         &[],
-        bucket_latencies(2.5),
+        exponential_bucket_latencies(2.5),
     )
 });
 
@@ -97,7 +97,7 @@ static OPERATION_EXECUTION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
         "operation_execution_latency",
         "Operation execution latency",
         &[],
-        bucket_latencies(2.5),
+        exponential_bucket_latencies(2.5),
     )
 });
 
@@ -107,7 +107,7 @@ static WASM_FUEL_USED_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
         "wasm_fuel_used_per_block",
         "Wasm fuel used per block",
         &[],
-        bucket_interval(10.0, 500_000.0),
+        exponential_bucket_interval(10.0, 500_000.0),
     )
 });
 
@@ -117,7 +117,7 @@ static WASM_NUM_READS_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
         "wasm_num_reads_per_block",
         "Wasm number of reads per block",
         &[],
-        bucket_interval(0.1, 100.0),
+        exponential_bucket_interval(0.1, 100.0),
     )
 });
 
@@ -127,7 +127,7 @@ static WASM_BYTES_READ_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
         "wasm_bytes_read_per_block",
         "Wasm number of bytes read per block",
         &[],
-        bucket_interval(0.1, 10_000_000.0),
+        exponential_bucket_interval(0.1, 10_000_000.0),
     )
 });
 
@@ -137,7 +137,7 @@ static WASM_BYTES_WRITTEN_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
         "wasm_bytes_written_per_block",
         "Wasm number of bytes written per block",
         &[],
-        bucket_interval(0.1, 10_000_000.0),
+        exponential_bucket_interval(0.1, 10_000_000.0),
     )
 });
 
@@ -147,7 +147,7 @@ static STATE_HASH_COMPUTATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(||
         "state_hash_computation_latency",
         "Time to recompute the state hash",
         &[],
-        bucket_latencies(5.0),
+        exponential_bucket_latencies(5.0),
     )
 });
 

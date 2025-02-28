@@ -44,7 +44,8 @@ use linera_base::{
     doc_scalar, hex_debug, http,
     identifiers::{
         Account, AccountOwner, ApplicationId, BlobId, BytecodeId, ChainId, ChannelName,
-        Destination, GenericApplicationId, MessageId, Owner, StreamName, UserApplicationId,
+        Destination, EventId, GenericApplicationId, MessageId, Owner, StreamName,
+        UserApplicationId,
     },
     ownership::ChainOwnership,
     task,
@@ -392,12 +393,20 @@ pub trait ExecutionRuntimeContext {
 
     async fn get_blob(&self, blob_id: BlobId) -> Result<Blob, ViewError>;
 
+    async fn get_event(&self, event_id: EventId) -> Result<Vec<u8>, ViewError>;
+
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError>;
 
     #[cfg(with_testing)]
     async fn add_blobs(
         &self,
         blobs: impl IntoIterator<Item = Blob> + Send,
+    ) -> Result<(), ViewError>;
+
+    #[cfg(with_testing)]
+    async fn add_events(
+        &self,
+        events: impl IntoIterator<Item = (EventId, Vec<u8>)> + Send,
     ) -> Result<(), ViewError>;
 }
 
@@ -1052,6 +1061,7 @@ pub struct TestExecutionRuntimeContext {
     user_contracts: Arc<DashMap<UserApplicationId, UserContractCode>>,
     user_services: Arc<DashMap<UserApplicationId, UserServiceCode>>,
     blobs: Arc<DashMap<BlobId, Blob>>,
+    events: Arc<DashMap<EventId, Vec<u8>>>,
 }
 
 #[cfg(with_testing)]
@@ -1063,6 +1073,7 @@ impl TestExecutionRuntimeContext {
             user_contracts: Arc::default(),
             user_services: Arc::default(),
             blobs: Arc::default(),
+            events: Arc::default(),
         }
     }
 }
@@ -1123,6 +1134,14 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
             .clone())
     }
 
+    async fn get_event(&self, event_id: EventId) -> Result<Vec<u8>, ViewError> {
+        Ok(self
+            .events
+            .get(&event_id)
+            .ok_or_else(|| ViewError::EventsNotFound(vec![event_id]))?
+            .clone())
+    }
+
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
         Ok(self.blobs.contains_key(&blob_id))
     }
@@ -1134,6 +1153,18 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
     ) -> Result<(), ViewError> {
         for blob in blobs {
             self.blobs.insert(blob.id(), blob);
+        }
+
+        Ok(())
+    }
+
+    #[cfg(with_testing)]
+    async fn add_events(
+        &self,
+        events: impl IntoIterator<Item = (EventId, Vec<u8>)> + Send,
+    ) -> Result<(), ViewError> {
+        for (event_id, bytes) in events {
+            self.events.insert(event_id, bytes);
         }
 
         Ok(())

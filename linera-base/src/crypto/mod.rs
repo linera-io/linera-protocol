@@ -11,7 +11,6 @@ mod secp256k1;
 use std::{io, num::ParseIntError};
 
 use alloy_primitives::FixedBytes;
-use ed25519_dalek::{self as dalek};
 pub use hash::*;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -50,14 +49,19 @@ pub enum CryptoError {
     )]
     IncorrectHashSize(usize),
     #[error(
-        "Byte slice has length {0} but a `PublicKey` requires exactly {expected} bytes",
-        expected = dalek::PUBLIC_KEY_LENGTH,
+        "Byte slice has length {len} but a {scheme} `PublicKey` requires exactly {expected} bytes"
     )]
-    IncorrectPublicKeySize(usize),
+    IncorrectPublicKeySize {
+        scheme: &'static str,
+        len: usize,
+        expected: usize,
+    },
     #[error("Could not parse integer: {0}")]
     ParseIntError(#[from] ParseIntError),
     #[error("secp256k1 error: {0}")]
-    Secp256k1Error(::secp256k1::Error),
+    Secp256k1Error(k256::ecdsa::Error),
+    #[error("could not parse public key: {0}: point at infinity")]
+    Secp256k1PointAtInfinity(String),
 }
 
 #[cfg(with_getrandom)]

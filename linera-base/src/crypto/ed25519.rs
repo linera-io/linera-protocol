@@ -19,6 +19,9 @@ use super::{
 };
 use crate::{doc_scalar, identifiers::Owner};
 
+/// The label for the Ed25519 scheme.
+const ED25519_SCHEME_LABEL: &str = "Ed25519";
+
 /// An Ed25519 secret key.
 pub struct Ed25519SecretKey(pub(crate) dalek::SigningKey);
 
@@ -141,7 +144,11 @@ impl TryFrom<&[u8]> for Ed25519PublicKey {
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
         if value.len() != dalek::PUBLIC_KEY_LENGTH {
-            return Err(CryptoError::IncorrectPublicKeySize(value.len()));
+            return Err(CryptoError::IncorrectPublicKeySize {
+                scheme: ED25519_SCHEME_LABEL,
+                len: value.len(),
+                expected: dalek::PUBLIC_KEY_LENGTH,
+            });
         }
         let mut pubkey = [0u8; dalek::PUBLIC_KEY_LENGTH];
         pubkey.copy_from_slice(value);
