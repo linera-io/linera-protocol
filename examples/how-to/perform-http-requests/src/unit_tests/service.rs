@@ -7,6 +7,7 @@
 
 use std::sync::Arc;
 
+use assert_matches::assert_matches;
 use linera_sdk::{http, util::BlockingWait, Service as _, ServiceRuntime};
 
 use super::Service;
@@ -34,6 +35,26 @@ fn service_query_performs_http_request() {
     let response_bytes = extract_response_bytes(response);
 
     assert_eq!(response_bytes, http_response);
+}
+
+/// Tests if a failed HTTP request performed by a service query leads to a GraphQL error.
+#[test]
+fn service_query_returns_http_request_error() {
+    let mut service = create_service();
+    let runtime = Arc::get_mut(&mut service.runtime).expect("Runtime should not be shared");
+
+    runtime.add_expected_http_request(
+        http::Request::get(TEST_BASE_URL),
+        http::Response::unauthorized(),
+    );
+
+    let request = async_graphql::Request::new("query { performHttpRequest }");
+
+    let response = service.handle_query(request).blocking_wait();
+
+    let error = extract_error_string(response);
+
+    assert_eq!(error, "HTTP request failed with status code 401");
 }
 
 /// Creates a [`Service`] instance for testing.
@@ -69,4 +90,22 @@ fn extract_response_bytes(response: async_graphql::Response) -> Vec<u8> {
                 .expect("Invalid byte in response list: {number:#?}")
         })
         .collect()
+}
+
+/// Extracts the GraphQL error message from an [`async_graphql::Response`].
+fn extract_error_string(response: async_graphql::Response) -> String {
+    assert_matches!(response.data, async_graphql::Value::Null);
+
+    let mut errors = response.errors;
+
+    assert_eq!(
+        errors.len(),
+        1,
+        "Unexpected error list from service: {errors:#?}"
+    );
+
+    errors
+        .pop()
+        .expect("There should be exactly one error, as asserted above")
+        .message
 }

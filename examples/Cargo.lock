@@ -2871,6 +2871,7 @@ dependencies = [
 name = "how-to-perform-http-requests"
 version = "0.1.0"
 dependencies = [
+ "assert_matches",
  "async-graphql",
  "linera-sdk",
 ]
