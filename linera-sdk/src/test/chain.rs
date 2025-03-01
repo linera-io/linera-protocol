@@ -14,14 +14,17 @@ use std::{
 use cargo_toml::Manifest;
 use linera_base::{
     crypto::{AccountPublicKey, AccountSecretKey},
-    data_types::{Blob, BlockHeight, Bytecode, CompressedBytecode},
+    data_types::{Amount, Blob, BlockHeight, Bytecode, CompressedBytecode},
     identifiers::{ApplicationId, BytecodeId, ChainDescription, ChainId, MessageId},
     vm::VmRuntime,
 };
 use linera_chain::{types::ConfirmedBlockCertificate, ChainError, ChainExecutionContext};
 use linera_core::{data_types::ChainInfoQuery, worker::WorkerError};
 use linera_execution::{
-    system::{SystemExecutionError, SystemOperation, CREATE_APPLICATION_MESSAGE_INDEX},
+    system::{
+        SystemExecutionError, SystemOperation, SystemQuery, SystemResponse,
+        CREATE_APPLICATION_MESSAGE_INDEX,
+    },
     ExecutionError, Query, QueryOutcome, QueryResponse,
 };
 use linera_storage::Storage as _;
@@ -87,6 +90,24 @@ impl ActiveChain {
     /// Sets the [`AccountSecretKey`] to use for signing new blocks.
     pub fn set_key_pair(&mut self, key_pair: AccountSecretKey) {
         self.key_pair = key_pair
+    }
+
+    /// Reads the current shared balance available to all of the owners of this microchain.
+    pub async fn chain_balance(&self) -> Amount {
+        let query = Query::System(SystemQuery);
+
+        let QueryOutcome { response, .. } = self
+            .validator
+            .worker()
+            .query_application(self.id(), query)
+            .await
+            .expect("Failed to query chain's balance");
+
+        let QueryResponse::System(SystemResponse { balance, .. }) = response else {
+            panic!("Unexpected response from system application");
+        };
+
+        balance
     }
 
     /// Adds a block to this microchain.
