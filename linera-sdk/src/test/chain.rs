@@ -127,6 +127,13 @@ impl ActiveChain {
         self.try_add_block_with_blobs(block_builder, vec![]).await
     }
 
+    /// Tries to add a block to this microchain, writing some `blobs` to storage if needed.
+    ///
+    /// The `block_builder` parameter is a closure that should use the [`BlockBuilder`] parameter
+    /// to provide the block's contents.
+    ///
+    /// The blobs are either all written to storage, if executing the block fails due to a missing
+    /// blob, or none are written to storage if executing the block succeeds without the blobs.
     async fn try_add_block_with_blobs(
         &self,
         block_builder: impl FnOnce(&mut BlockBuilder),
