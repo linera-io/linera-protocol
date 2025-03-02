@@ -100,11 +100,11 @@ impl From<BytecodeId> for wit_contract_api::BytecodeId {
     }
 }
 
-impl From<VmRuntime> for wit_system_api::VmRuntime {
+impl From<VmRuntime> for wit_contract_api::VmRuntime {
     fn from(vm_runtime: VmRuntime) -> Self {
         match vm_runtime {
-            VmRuntime::Wasm => wit_system_api::VmRuntime::Wasm,
-            VmRuntime::Evm => wit_system_api::VmRuntime::Evm,
+            VmRuntime::Wasm => wit_contract_api::VmRuntime::Wasm,
+            VmRuntime::Evm => wit_contract_api::VmRuntime::Evm,
         }
     }
 }

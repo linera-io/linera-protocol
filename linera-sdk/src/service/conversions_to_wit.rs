@@ -51,11 +51,11 @@ impl From<BytecodeId> for wit_service_api::BytecodeId {
     }
 }
 
-impl From<VmRuntime> for wit_system_api::VmRuntime {
+impl From<VmRuntime> for wit_service_api::VmRuntime {
     fn from(vm_runtime: VmRuntime) -> Self {
         match vm_runtime {
-            VmRuntime::Wasm => wit_system_api::VmRuntime::Wasm,
-            VmRuntime::Evm => wit_system_api::VmRuntime::Evm,
+            VmRuntime::Wasm => wit_service_api::VmRuntime::Wasm,
+            VmRuntime::Evm => wit_service_api::VmRuntime::Evm,
         }
     }
 }
