@@ -9,6 +9,7 @@ use linera_base::{
     http,
     identifiers::{AccountOwner, ApplicationId, BytecodeId, ChainId, MessageId, Owner},
     ownership::{ChainOwnership, TimeoutConfig},
+    vm::VmRuntime,
 };
 
 use crate::{
@@ -71,7 +72,17 @@ macro_rules! impl_from_wit {
                 BytecodeId::new(
                     bytecode_id.contract_blob_hash.into(),
                     bytecode_id.service_blob_hash.into(),
+                    bytecode_id.vm_runtime.into(),
                 )
+            }
+        }
+
+        impl From<$wit_base_api::VmRuntime> for VmRuntime {
+            fn from(vm_runtime: $wit_base_api::VmRuntime) -> Self {
+                match vm_runtime {
+                    $wit_base_api::VmRuntime::Wasm => VmRuntime::Wasm,
+                    $wit_base_api::VmRuntime::Evm => VmRuntime::Evm,
+                }
             }
         }
 

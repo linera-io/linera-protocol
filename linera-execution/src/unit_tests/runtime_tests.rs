@@ -15,6 +15,7 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{BlockHeight, Timestamp},
     identifiers::{ApplicationId, BytecodeId, ChainDescription, MessageId},
+    vm::VmRuntime,
 };
 use linera_views::batch::Batch;
 
@@ -210,6 +211,7 @@ fn create_dummy_application_id() -> ApplicationId {
         bytecode_id: BytecodeId::new(
             CryptoHash::test_hash("contract"),
             CryptoHash::test_hash("service"),
+            VmRuntime::Wasm,
         ),
         creation: MessageId {
             chain_id,

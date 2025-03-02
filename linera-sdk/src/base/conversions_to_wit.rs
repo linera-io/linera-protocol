@@ -8,6 +8,7 @@ use linera_base::{
     data_types::{BlockHeight, Timestamp},
     http,
     identifiers::{AccountOwner, ApplicationId, BytecodeId, ChainId, MessageId, Owner},
+    vm::VmRuntime,
 };
 
 use crate::{
@@ -70,6 +71,16 @@ macro_rules! impl_to_wit {
                 $wit_base_api::BytecodeId {
                     contract_blob_hash: bytecode_id.contract_blob_hash.into(),
                     service_blob_hash: bytecode_id.service_blob_hash.into(),
+                    vm_runtime: bytecode_id.vm_runtime.into(),
+                }
+            }
+        }
+
+        impl From<VmRuntime> for $wit_base_api::VmRuntime {
+            fn from(vm_runtime: VmRuntime) -> Self {
+                match vm_runtime {
+                    VmRuntime::Wasm => $wit_base_api::VmRuntime::Wasm,
+                    VmRuntime::Evm => $wit_base_api::VmRuntime::Evm,
                 }
             }
         }

@@ -13,6 +13,7 @@ use linera_base::{
         MessageId, Owner, StreamName,
     },
     ownership::{ChainOwnership, TimeoutConfig},
+    vm::VmRuntime,
 };
 use linera_views::batch::WriteOperation;
 
@@ -94,6 +95,16 @@ impl From<BytecodeId> for wit_contract_api::BytecodeId {
         wit_contract_api::BytecodeId {
             contract_blob_hash: bytecode_id.contract_blob_hash.into(),
             service_blob_hash: bytecode_id.service_blob_hash.into(),
+            vm_runtime: bytecode_id.vm_runtime.into(),
+        }
+    }
+}
+
+impl From<VmRuntime> for wit_contract_api::VmRuntime {
+    fn from(vm_runtime: VmRuntime) -> Self {
+        match vm_runtime {
+            VmRuntime::Wasm => wit_contract_api::VmRuntime::Wasm,
+            VmRuntime::Evm => wit_contract_api::VmRuntime::Evm,
         }
     }
 }

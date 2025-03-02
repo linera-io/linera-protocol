@@ -8,6 +8,7 @@ use linera_base::{
     data_types::{Amount, BlockHeight},
     identifiers::{ApplicationId, BytecodeId, ChainId, MessageId, Owner},
     ownership::{ChangeApplicationPermissionsError, CloseChainError},
+    vm::VmRuntime,
 };
 
 use super::wit::contract_runtime_api as wit_contract_api;
@@ -34,7 +35,17 @@ impl From<wit_contract_api::BytecodeId> for BytecodeId {
         BytecodeId::new(
             bytecode_id.contract_blob_hash.into(),
             bytecode_id.service_blob_hash.into(),
+            bytecode_id.vm_runtime.into(),
         )
+    }
+}
+
+impl From<wit_contract_api::VmRuntime> for VmRuntime {
+    fn from(vm_runtime: wit_contract_api::VmRuntime) -> Self {
+        match vm_runtime {
+            wit_contract_api::VmRuntime::Wasm => VmRuntime::Wasm,
+            wit_contract_api::VmRuntime::Evm => VmRuntime::Evm,
+        }
     }
 }
 

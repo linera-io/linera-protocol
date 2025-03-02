@@ -7,6 +7,7 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::BlockHeight,
     identifiers::{ApplicationId, BytecodeId, ChainId, MessageId},
+    vm::VmRuntime,
 };
 
 use super::wit::service_runtime_api as wit_service_api;
@@ -45,6 +46,16 @@ impl From<BytecodeId> for wit_service_api::BytecodeId {
         wit_service_api::BytecodeId {
             contract_blob_hash: bytecode_id.contract_blob_hash.into(),
             service_blob_hash: bytecode_id.service_blob_hash.into(),
+            vm_runtime: bytecode_id.vm_runtime.into(),
+        }
+    }
+}
+
+impl From<VmRuntime> for wit_service_api::VmRuntime {
+    fn from(vm_runtime: VmRuntime) -> Self {
+        match vm_runtime {
+            VmRuntime::Wasm => wit_service_api::VmRuntime::Wasm,
+            VmRuntime::Evm => wit_service_api::VmRuntime::Evm,
         }
     }
 }

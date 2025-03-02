@@ -29,10 +29,16 @@ interface service-runtime-api {
     record bytecode-id {
         contract-blob-hash: crypto-hash,
         service-blob-hash: crypto-hash,
+        vm-runtime: vm-runtime,
     }
 
     record application-id {
         bytecode-id: bytecode-id,
         creation: message-id,
+    }
+
+    enum vm-runtime {
+        wasm,
+        evm,
     }
 }

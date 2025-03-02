@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#[cfg(with_testing)]
+use linera_base::vm::VmRuntime;
 use linera_base::{
     data_types::{Blob, BlockHeight, Bytecode},
     identifiers::ApplicationId,
@@ -43,7 +45,8 @@ async fn application_message_index() -> anyhow::Result<()> {
     let service = Bytecode::new(b"service".into());
     let contract_blob = Blob::new_contract_bytecode(contract.compress());
     let service_blob = Blob::new_service_bytecode(service.compress());
-    let bytecode_id = BytecodeId::new(contract_blob.id().hash, service_blob.id().hash);
+    let vm_runtime = VmRuntime::Wasm;
+    let bytecode_id = BytecodeId::new(contract_blob.id().hash, service_blob.id().hash, vm_runtime);
 
     let operation = SystemOperation::CreateApplication {
         bytecode_id,
