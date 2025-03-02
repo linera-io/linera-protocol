@@ -31,10 +31,10 @@ use thiserror::Error;
 #[cfg_attr(with_testing, derive(test_strategy::Arbitrary))]
 /// The virtual machine runtime
 pub enum VmRuntime {
-    /// The Wasm for the virtual machine
+    /// The Wasm virtual machine
     #[default]
     Wasm,
-    /// The Evm for the virtual machine
+    /// The Evm virtual machine
     Evm,
 }
 
@@ -52,7 +52,7 @@ impl FromStr for VmRuntime {
 
 scalar!(VmRuntime);
 
-/// Attempts to create an invalid [`VmRuntime`] instance from a string.
+/// Error caused by invalid VM runtimes
 #[derive(Clone, Debug, Error)]
 #[error("{0:?} is not a valid virtual machine runtime")]
 pub struct InvalidVmRuntime(String);

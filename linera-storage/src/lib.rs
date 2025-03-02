@@ -376,7 +376,7 @@ pub trait Storage: Sized {
                     } else {
                         panic!(
                             "An Evm runtime is required to load user applications. \
-                             Please enable the `revm` feature flags \
+                             Please enable the `revm` feature flag \
                              when compiling `linera-storage`."
                         );
                     }
