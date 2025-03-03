@@ -35,9 +35,9 @@ pub struct Ed25519Signature(pub dalek::Signature);
 
 impl Ed25519SecretKey {
     #[cfg(all(with_getrandom, with_testing))]
-    /// Generates a new key pair.
+    /// Generates a new key pair using the operating system's RNG.
     ///
-    /// Uses `OsRng` for that. If you want control over the RNG, use `generate_from`[Ed25519SecretKey::generate_from].
+    /// If you want control over the RNG, use `generate_from`[Ed25519SecretKey::generate_from].
     pub fn generate() -> Self {
         let mut rng = rand::rngs::OsRng;
         Self::generate_from(&mut rng)

@@ -75,7 +75,7 @@ impl AccountSecretKey {
         AccountPublicKey(self.0.public())
     }
 
-    /// Copy the secret key.
+    /// Copies the secret key.
     pub fn copy(&self) -> Self {
         AccountSecretKey(self.0.copy())
     }
@@ -141,7 +141,7 @@ impl FromStr for AccountPublicKey {
 
 impl Display for AccountPublicKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
+        self.0.fmt(f)
     }
 }
 
