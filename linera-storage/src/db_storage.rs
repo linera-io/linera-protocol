@@ -182,7 +182,7 @@ pub static LOAD_CHAIN_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
         "load_chain_latency",
         "The latency to load a chain state",
         &[],
-        exponential_bucket_latencies(1.0),
+        exponential_bucket_latencies(10.0),
     )
 });
 
