@@ -182,7 +182,7 @@ impl RfqState {
     ) {
         self.requests
             .insert(
-                &request_id.with_our_requested(false),
+                &request_id.with_we_requested(false),
                 RequestData {
                     state: RequestState::QuoteRequested(QuoteRequested { token_pair, amount }),
                 },
