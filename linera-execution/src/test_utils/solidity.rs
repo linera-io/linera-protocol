@@ -1,4 +1,9 @@
-use std::{fs::File, io::Write, path::Path, process::{Command, Stdio}};
+use std::{
+    fs::File,
+    io::Write,
+    path::Path,
+    process::{Command, Stdio},
+};
 
 use anyhow::Context;
 use tempfile::tempdir;
@@ -96,6 +101,6 @@ contract ExampleCounter {
 
 }
 "#
-        .to_string();
+    .to_string();
     get_bytecode(&source_code, "ExampleCounter")
 }

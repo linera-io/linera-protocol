@@ -5,9 +5,9 @@
 // items for the tests where they aren't used
 #![allow(unused_imports)]
 
+mod mock_application;
 #[cfg(with_revm)]
 pub mod solidity;
-mod mock_application;
 mod system_execution_state;
 
 use std::{collections::BTreeMap, sync::Arc, thread, vec};

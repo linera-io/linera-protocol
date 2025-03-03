@@ -12,7 +12,10 @@ use linera_base::{
 };
 use linera_execution::{
     revm::{EvmContractModule, EvmServiceModule},
-    test_utils::{create_dummy_user_application_description, SystemExecutionState, solidity::get_example_counter},
+    test_utils::{
+        create_dummy_user_application_description, solidity::get_example_counter,
+        SystemExecutionState,
+    },
     ExecutionRuntimeConfig, ExecutionRuntimeContext, Operation, OperationContext, Query,
     QueryContext, QueryResponse, ResourceControlPolicy, ResourceController, ResourceTracker,
     TransactionTracker,

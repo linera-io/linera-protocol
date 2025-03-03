@@ -10,7 +10,7 @@
 use std::{collections::BTreeMap, str::FromStr, sync::LazyLock, time::Duration};
 
 use fungible::{FungibleTokenAbi, InitialState};
-use linera_base::{data_types::Amount, identifiers::ChainId};
+use linera_base::{data_types::Amount, identifiers::ChainId, vm::VmRuntime};
 use linera_service::cli_wrappers::{
     local_net::{Database, LocalNetConfig, ProcessInbox},
     LineraNet, LineraNetConfig, Network,
@@ -60,6 +60,7 @@ async fn test_end_to_end_queries(config: impl LineraNetConfig) {
 
     // publishing an application
     let (contract, service) = client.build_example("fungible").await.unwrap();
+    let vm_runtime = VmRuntime::Wasm;
     let state = InitialState {
         accounts: BTreeMap::new(),
     };
@@ -68,6 +69,7 @@ async fn test_end_to_end_queries(config: impl LineraNetConfig) {
         .publish_and_create::<FungibleTokenAbi, fungible::Parameters, InitialState>(
             contract,
             service,
+            vm_runtime,
             &params,
             &state,
             &[],
