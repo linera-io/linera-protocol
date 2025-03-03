@@ -14,7 +14,7 @@ pub fn concat(ident: &Ident, suffix: &str) -> Ident {
     transform_non_keyword_ident(ident, |s: String| format!("{}{}", s, suffix))
 }
 
-/// Applies a string transformation (`transform`) to the input `Ident`-
+/// Applies a string transformation (`transform`) to the input `Ident`.
 /// However, it will not apply the transform to rust keywords.
 fn transform_non_keyword_ident<Transform>(ident: &Ident, transform: Transform) -> Ident
 where
