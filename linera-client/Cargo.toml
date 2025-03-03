@@ -18,6 +18,7 @@ benchmark = [
     "dep:linera-sdk",
     "dep:tokio-util",
     "dep:crossbeam-channel",
+    "dep:num-format",
 ]
 wasmer = [
     "linera-core/wasmer",
@@ -74,6 +75,7 @@ linera-storage.workspace = true
 linera-storage-service = { workspace = true, optional = true }
 linera-version.workspace = true
 linera-views.workspace = true
+num-format = { workspace = true, optional = true }
 rand.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -103,7 +105,9 @@ linera-rpc = { workspace = true, features = ["server", "simple-network"] }
 cfg_aliases.workspace = true
 
 [dev-dependencies]
-alloy = { workspace = true, default-features = false, features = [ "rpc-types-eth" ] }
+alloy = { workspace = true, default-features = false, features = [
+    "rpc-types-eth",
+] }
 amm.workspace = true
 anyhow.workspace = true
 base64.workspace = true
