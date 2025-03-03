@@ -312,7 +312,7 @@ impl Runnable for Job {
                     Some(owner) => chain_client.query_owner_balance(owner).await,
                     None => chain_client.query_balance().await,
                 };
-                context.update_and_save_wallet(&chain_client).await?;
+                context.update_wallet_from_client(&chain_client).await?;
                 let balance = result.context("Failed to synchronize from validators")?;
                 let time_total = time_start.elapsed();
                 info!(
@@ -328,7 +328,7 @@ impl Runnable for Job {
                 info!("Synchronizing chain information");
                 let time_start = Instant::now();
                 chain_client.synchronize_from_validators().await?;
-                context.update_and_save_wallet(&chain_client).await?;
+                context.update_wallet_from_client(&chain_client).await?;
                 let time_total = time_start.elapsed();
                 info!(
                     "Synchronized chain information in {} ms",
@@ -425,7 +425,7 @@ impl Runnable for Job {
                 let chain_client = context.make_chain_client(chain_id)?;
                 info!("Querying validators about chain {}", chain_id);
                 let result = chain_client.local_committee().await;
-                context.update_and_save_wallet(&chain_client).await?;
+                context.update_wallet_from_client(&chain_client).await?;
                 let committee = result.context("Failed to get local committee")?;
                 info!(
                     "Using the local set of validators: {:?}",
@@ -784,7 +784,7 @@ impl Runnable for Job {
                 join_set.spawn_task(listener);
                 while let Some(notification) = notifications.next().await {
                     if let Reason::NewBlock { .. } = notification.reason {
-                        context.update_and_save_wallet(&chain_client).await?;
+                        context.update_wallet_from_client(&chain_client).await?;
                     }
                     if raw {
                         println!("{}", serde_json::to_string(&notification)?);
@@ -1089,7 +1089,7 @@ impl Runnable for Job {
                         info!("Please try again at {}", timeout.timestamp)
                     }
                 }
-                context.update_and_save_wallet(&chain_client).await?;
+                context.update_wallet_from_client(&chain_client).await?;
                 info!(
                     "Pending block retried in {} ms",
                     start_time.elapsed().as_millis()

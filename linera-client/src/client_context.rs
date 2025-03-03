@@ -109,7 +109,7 @@ where
     }
 
     async fn update_wallet(&mut self, client: &ChainClient<NodeProvider, S>) -> Result<(), Error> {
-        self.update_and_save_wallet(client).await
+        self.update_wallet_from_client(client).await
     }
 }
 
@@ -305,20 +305,11 @@ where
             .map_err(|e| error::Inner::Persistence(Box::new(e)).into())
     }
 
-    async fn update_wallet_from_client(
+    pub async fn update_wallet_from_client(
         &mut self,
         client: &ChainClient<NodeProvider, S>,
     ) -> Result<(), Error> {
         self.wallet.as_mut().update_from_state(client).await;
-        self.save_wallet().await?;
-        Ok(())
-    }
-
-    pub async fn update_and_save_wallet(
-        &mut self,
-        client: &ChainClient<NodeProvider, S>,
-    ) -> Result<(), Error> {
-        self.update_wallet_from_client(client).await?;
         self.save_wallet().await
     }
 
@@ -497,7 +488,7 @@ where
         client.prepare_chain().await?;
         // Try applying f optimistically without validator notifications. Return if committed.
         let result = f(client).await;
-        self.update_and_save_wallet(client).await?;
+        self.update_wallet_from_client(client).await?;
         if let ClientOutcome::Committed(t) = result? {
             return Ok(t);
         }
@@ -510,7 +501,7 @@ where
             // Try applying f. Return if committed.
             client.prepare_chain().await?;
             let result = f(client).await;
-            self.update_and_save_wallet(client).await?;
+            self.update_wallet_from_client(client).await?;
             let timeout = match result? {
                 ClientOutcome::Committed(t) => return Ok(t),
                 ClientOutcome::WaitForTimeout(timeout) => timeout,
