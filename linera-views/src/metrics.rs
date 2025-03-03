@@ -22,7 +22,7 @@ pub static LOAD_VIEW_LATENCY: LazyLock<prometheus::HistogramVec> = LazyLock::new
         "load_view_latency",
         "Load view latency",
         &[],
-        exponential_bucket_latencies(5.0),
+        exponential_bucket_latencies(10.0),
     )
 });
 

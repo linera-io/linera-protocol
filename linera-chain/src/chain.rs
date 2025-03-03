@@ -77,7 +77,7 @@ static BLOCK_EXECUTION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
         "block_execution_latency",
         "Block execution latency",
         &[],
-        exponential_bucket_latencies(50.0),
+        exponential_bucket_latencies(100.0),
     )
 });
 
@@ -87,7 +87,7 @@ static MESSAGE_EXECUTION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
         "message_execution_latency",
         "Message execution latency",
         &[],
-        exponential_bucket_latencies(2.5),
+        exponential_bucket_latencies(50.0),
     )
 });
 
@@ -97,7 +97,7 @@ static OPERATION_EXECUTION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
         "operation_execution_latency",
         "Operation execution latency",
         &[],
-        exponential_bucket_latencies(2.5),
+        exponential_bucket_latencies(50.0),
     )
 });
 
@@ -107,7 +107,7 @@ static WASM_FUEL_USED_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
         "wasm_fuel_used_per_block",
         "Wasm fuel used per block",
         &[],
-        exponential_bucket_interval(10.0, 500_000.0),
+        exponential_bucket_interval(10.0, 1_000_000.0),
     )
 });
 
@@ -147,7 +147,7 @@ static STATE_HASH_COMPUTATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(||
         "state_hash_computation_latency",
         "Time to recompute the state hash",
         &[],
-        exponential_bucket_latencies(5.0),
+        exponential_bucket_latencies(10.0),
     )
 });
 
