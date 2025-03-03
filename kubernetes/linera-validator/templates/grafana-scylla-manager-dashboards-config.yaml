@@ -4,5 +4,7 @@ metadata:
   name: scylla-manager-dashboards-config
   labels:
     grafana_dashboard: "1"
+  annotations:
+    grafana_folder: "Scylla Manager"
 data:
     scylla-manager.2.2.json: {{ .Files.Get "grafana-dashboards/scylla-manager/scylla-manager.2.2.json" | quote | indent 4 }}
