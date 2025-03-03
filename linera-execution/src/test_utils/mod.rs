@@ -5,6 +5,8 @@
 // items for the tests where they aren't used
 #![allow(unused_imports)]
 
+#[cfg(with_revm)]
+pub mod solidity;
 mod mock_application;
 mod system_execution_state;
 
