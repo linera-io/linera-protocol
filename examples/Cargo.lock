@@ -4238,6 +4238,7 @@ dependencies = [
  "linera-sdk",
  "native-fungible",
  "serde",
+ "test-log",
  "tokio",
 ]
 
