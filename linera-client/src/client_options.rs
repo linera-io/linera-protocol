@@ -612,6 +612,11 @@ pub enum ClientCommand {
         /// provided fixed BPS rate.
         #[arg(long)]
         bps: Option<usize>,
+
+        /// If provided, will not close the chains after the benchmark is finished. This is useful
+        /// when running with many chains, as closing them all might take a while.
+        #[arg(long)]
+        keep_chains_open: bool,
     },
 
     /// Create genesis configuration for a Linera deployment.

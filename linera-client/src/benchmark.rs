@@ -52,6 +52,7 @@ where
         blocks_infos: Vec<(ChainId, Vec<Operation>, AccountSecretKey)>,
         committee: Committee,
         local_node: LocalNodeClient<S>,
+        keep_chains_open: bool,
     ) -> Result<(), Error> {
         let shutdown_notifier = CancellationToken::new();
         tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
@@ -143,6 +144,7 @@ where
                             sender,
                             committee,
                             local_node,
+                            keep_chains_open,
                         )
                         .await?;
 
@@ -179,6 +181,7 @@ where
         sender: crossbeam_channel::Sender<()>,
         committee: Committee,
         local_node: LocalNodeClient<S>,
+        keep_chains_open: bool,
     ) -> Result<(), Error> {
         let chain_id = chain_client.chain_id();
         info!(
@@ -237,7 +240,9 @@ where
             }
         }
 
-        Self::close_benchmark_chain(chain_client).await?;
+        if !keep_chains_open {
+            Self::close_benchmark_chain(chain_client).await?;
+        }
         info!("Exiting task...");
         Ok(())
     }
