@@ -82,7 +82,7 @@ pub struct Post {
     pub image_url: Option<String>,
     /// The total number of likes
     pub likes: u32,
-    /// Comments with there ChainId
+    /// Comments with their ChainId
     pub comments: Vec<Comment>,
 }
 

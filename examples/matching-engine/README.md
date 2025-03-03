@@ -8,7 +8,7 @@ the `fungible` application example on how to create two token applications.
 
 An order can be of two types:
 
-- Bid: For buying token 1 and paying in token 0, these are ordered in from the highest
+- Bid: For buying token 1 and paying in token 0, these are ordered from the highest
   bid (most preferable) to the lowest price.
 - Ask: For selling token 1, to be paid in token 0, these are ordered from the lowest
   (most preferable) to the highest price.
