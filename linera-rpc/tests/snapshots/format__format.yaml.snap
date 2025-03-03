@@ -19,6 +19,12 @@ AccountOwner:
       Application:
         NEWTYPE:
           TYPENAME: ApplicationId
+AccountPublicKey:
+  NEWTYPESTRUCT:
+    TYPENAME: Ed25519PublicKey
+AccountSignature:
+  NEWTYPESTRUCT:
+    TYPENAME: Ed25519Signature
 AdminOperation:
   ENUM:
     0:
@@ -148,9 +154,9 @@ BlockProposal:
     - content:
         TYPENAME: ProposalContent
     - public_key:
-        TYPENAME: Ed25519PublicKey
+        TYPENAME: AccountPublicKey
     - signature:
-        TYPENAME: Ed25519Signature
+        TYPENAME: AccountSignature
     - validated_block_certificate:
         OPTION:
           TYPENAME: LiteCertificate
@@ -1198,7 +1204,7 @@ ValidatorState:
     - network_address: STR
     - votes: U64
     - account_public_key:
-        TYPENAME: Ed25519PublicKey
+        TYPENAME: AccountPublicKey
 VersionInfo:
   STRUCT:
     - crate_version:
