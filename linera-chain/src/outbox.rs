@@ -1,6 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#[cfg(with_metrics)]
+use std::sync::LazyLock;
+
 use linera_base::data_types::{ArithmeticError, BlockHeight};
 #[cfg(with_testing)]
 use linera_views::context::{create_test_memory_context, MemoryContext};
@@ -14,6 +17,22 @@ use linera_views::{
 #[cfg(test)]
 #[path = "unit_tests/outbox_tests.rs"]
 mod outbox_tests;
+
+#[cfg(with_metrics)]
+use {
+    linera_base::prometheus_util::{exponential_bucket_interval, register_histogram_vec},
+    prometheus::HistogramVec,
+};
+
+#[cfg(with_metrics)]
+static OUTBOX_SIZE: LazyLock<HistogramVec> = LazyLock::new(|| {
+    register_histogram_vec(
+        "outbox_size",
+        "Outbox size",
+        &[],
+        exponential_bucket_interval(1.0, 10000.0),
+    )
+});
 
 /// The state of an outbox
 /// * An outbox is used to send messages to another chain.
@@ -49,6 +68,10 @@ where
         }
         self.next_height_to_schedule.set(height.try_add_one()?);
         self.queue.push_back(height);
+        #[cfg(with_metrics)]
+        OUTBOX_SIZE
+            .with_label_values(&[])
+            .observe(self.queue.count() as f64);
         Ok(true)
     }
 
@@ -66,6 +89,10 @@ where
             self.queue.delete_front();
             updates.push(h);
         }
+        #[cfg(with_metrics)]
+        OUTBOX_SIZE
+            .with_label_values(&[])
+            .observe(self.queue.count() as f64);
         Ok(updates)
     }
 }

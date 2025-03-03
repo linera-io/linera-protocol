@@ -1,6 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#[cfg(with_metrics)]
+use std::sync::LazyLock;
+
 use async_graphql::SimpleObject;
 use linera_base::{
     data_types::{ArithmeticError, BlockHeight},
@@ -23,6 +26,32 @@ use crate::{data_types::MessageBundle, ChainError, Origin};
 #[cfg(test)]
 #[path = "unit_tests/inbox_tests.rs"]
 mod inbox_tests;
+
+#[cfg(with_metrics)]
+use {
+    linera_base::prometheus_util::{exponential_bucket_interval, register_histogram_vec},
+    prometheus::HistogramVec,
+};
+
+#[cfg(with_metrics)]
+static INBOX_SIZE: LazyLock<HistogramVec> = LazyLock::new(|| {
+    register_histogram_vec(
+        "inbox_size",
+        "Inbox size",
+        &[],
+        exponential_bucket_interval(1.0, 10000.0),
+    )
+});
+
+#[cfg(with_metrics)]
+static REMOVED_BUNDLES: LazyLock<HistogramVec> = LazyLock::new(|| {
+    register_histogram_vec(
+        "removed_bundles",
+        "Number of bundles removed by anticipation",
+        &[],
+        exponential_bucket_interval(1.0, 10000.0),
+    )
+});
 
 /// The state of an inbox.
 /// * An inbox is used to track bundles received and executed locally.
@@ -191,6 +220,10 @@ where
                 }
             );
             self.added_bundles.delete_front();
+            #[cfg(with_metrics)]
+            INBOX_SIZE
+                .with_label_values(&[])
+                .observe(self.added_bundles.count() as f64);
             tracing::trace!("Skipping previously received bundle {:?}", previous_bundle);
         }
         // Reconcile the bundle with the next added bundle, or mark it as removed.
@@ -209,12 +242,20 @@ where
                     }
                 );
                 self.added_bundles.delete_front();
+                #[cfg(with_metrics)]
+                INBOX_SIZE
+                    .with_label_values(&[])
+                    .observe(self.added_bundles.count() as f64);
                 tracing::trace!("Consuming bundle {:?}", bundle);
                 true
             }
             None => {
                 tracing::trace!("Marking bundle as expected: {:?}", bundle);
                 self.removed_bundles.push_back(bundle.clone());
+                #[cfg(with_metrics)]
+                REMOVED_BUNDLES
+                    .with_label_values(&[])
+                    .observe(self.removed_bundles.count() as f64);
                 false
             }
         };
@@ -250,6 +291,10 @@ where
                         }
                     );
                     self.removed_bundles.delete_front();
+                    #[cfg(with_metrics)]
+                    REMOVED_BUNDLES
+                        .with_label_values(&[])
+                        .observe(self.removed_bundles.count() as f64);
                 } else {
                     // The receiver has already executed a later bundle from the same
                     // sender ahead of time so we should skip this one.
@@ -266,6 +311,10 @@ where
             None => {
                 // Otherwise, schedule the messages for execution.
                 self.added_bundles.push_back(bundle);
+                #[cfg(with_metrics)]
+                INBOX_SIZE
+                    .with_label_values(&[])
+                    .observe(self.added_bundles.count() as f64);
                 true
             }
         };
