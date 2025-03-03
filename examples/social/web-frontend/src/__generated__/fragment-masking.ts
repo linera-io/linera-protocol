@@ -8,9 +8,9 @@ export type FragmentType<TDocumentType extends DocumentTypeDecoration<any, any>>
   infer TType,
   any
 >
-  ? [TType] extends [{ ' $fragmentName'?: infer TKey }]
+  ? [TType] extends [{ '$fragmentName'?: infer TKey }]
     ? TKey extends string
-      ? { ' $fragmentRefs'?: { [key in TKey]: TType } }
+      ? { '$fragmentRefs'?: { [key in TKey]: TType } }
       : never
     : never
   : never;
