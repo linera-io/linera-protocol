@@ -613,10 +613,11 @@ pub enum ClientCommand {
         #[arg(long)]
         bps: Option<usize>,
 
-        /// If provided, will not close the chains after the benchmark is finished. This is useful
-        /// when running with many chains, as closing them all might take a while.
+        /// If provided, will close the chains after the benchmark is finished. Keep in mind that
+        /// closing the chains might take a while, and will increase the validator latency while
+        /// they're being closed.
         #[arg(long)]
-        keep_chains_open: bool,
+        close_chains: bool,
     },
 
     /// Create genesis configuration for a Linera deployment.

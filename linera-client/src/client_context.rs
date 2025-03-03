@@ -751,7 +751,7 @@ where
         Ok(certificates)
     }
 
-    /// Creates chains, and returns a map of exactly `num_chains` chain IDs
+    /// Creates chains if necessary, and returns a map of exactly `num_chains` chain IDs
     /// with key pairs, as well as a map of the chain clients.
     async fn make_benchmark_chains(
         &mut self,
@@ -764,7 +764,38 @@ where
         ),
         Error,
     > {
+        let mut benchmark_chains = HashMap::new();
+        let mut chain_clients = HashMap::new();
         let start = Instant::now();
+        for chain_id in self.wallet.owned_chain_ids() {
+            if benchmark_chains.len() == num_chains {
+                break;
+            }
+            // This should never panic, because `owned_chain_ids` only returns the owned chains that
+            // we have a key pair for.
+            let key_pair = self
+                .wallet
+                .get(chain_id)
+                .and_then(|chain| chain.key_pair.as_ref().map(|kp| kp.copy()))
+                .unwrap();
+            let chain_client = self.make_chain_client(chain_id)?;
+            let ownership = chain_client.chain_info().await?.manager.ownership;
+            if !ownership.owners.is_empty() || ownership.super_owners.len() != 1 {
+                continue;
+            }
+            benchmark_chains.insert(chain_client.chain_id(), key_pair);
+            chain_client.process_inbox().await?;
+            chain_clients.insert(chain_id, chain_client);
+        }
+        info!(
+            "Got {} chains from the wallet in {} ms",
+            benchmark_chains.len(),
+            start.elapsed().as_millis()
+        );
+
+        let chains_from_wallet = benchmark_chains.len();
+        let num_chains_to_create = num_chains - chains_from_wallet;
+
         let default_chain_id = self
             .wallet
             .default_chain()
@@ -772,17 +803,15 @@ where
         let operations_per_block = 900; // Over this we seem to hit the block size limits.
 
         let mut key_pairs = Vec::new();
-        for _ in (0..num_chains).step_by(operations_per_block) {
+        for _ in (0..num_chains_to_create).step_by(operations_per_block) {
             key_pairs.push(self.wallet.generate_key_pair());
         }
         let mut key_pairs_iter = key_pairs.into_iter();
         let admin_id = self.wallet.genesis_admin_chain();
         let default_chain_client = self.make_chain_client(default_chain_id)?;
 
-        let mut chain_clients = HashMap::new();
-        let mut benchmark_chains = HashMap::new();
-        for i in (0..num_chains).step_by(operations_per_block) {
-            let num_new_chains = operations_per_block.min(num_chains - i);
+        for i in (0..num_chains_to_create).step_by(operations_per_block) {
+            let num_new_chains = operations_per_block.min(num_chains_to_create - i);
             let key_pair = key_pairs_iter.next().unwrap();
 
             let certificate = Self::execute_open_chains_operations(
@@ -817,11 +846,13 @@ where
             }
         }
 
-        info!(
-            "Created {} chains in {} ms",
-            num_chains,
-            start.elapsed().as_millis()
-        );
+        if num_chains_to_create > 0 {
+            info!(
+                "Created {} chains in {} ms",
+                num_chains_to_create,
+                start.elapsed().as_millis()
+            );
+        }
 
         info!("Updating wallet from client");
         self.update_wallet_from_client(&default_chain_client)
@@ -831,7 +862,7 @@ where
             .retry_pending_outgoing_messages()
             .await
             .context("outgoing messages to create the new chains should be delivered")?;
-        info!("Processing inbox");
+        info!("Processing default chain inbox");
         default_chain_client.process_inbox().await?;
 
         Ok((benchmark_chains, chain_clients))
