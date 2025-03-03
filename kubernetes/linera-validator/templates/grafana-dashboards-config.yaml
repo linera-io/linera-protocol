@@ -1,8 +1,0 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: grafana-dashboards-config
-  labels:
-    grafana_dashboard: "1"
-data:
-  linera-general.json: {{ .Files.Get "grafana-dashboards/linera-general.json" | quote | indent 4 }}
