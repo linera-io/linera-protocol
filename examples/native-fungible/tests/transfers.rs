@@ -173,4 +173,8 @@ async fn assert_balances(
         chain.owner_balances(accounts_to_query).await,
         expected_query_response
     );
+    assert_eq!(
+        chain.all_owner_balances().await,
+        HashMap::from_iter(expected_balances)
+    );
 }
