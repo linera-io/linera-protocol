@@ -4907,6 +4907,7 @@ name = "linera-service"
 version = "0.14.0"
 dependencies = [
  "alloy",
+ "alloy-sol-types",
  "amm",
  "anyhow",
  "assert_matches",

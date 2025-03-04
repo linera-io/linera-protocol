@@ -24,6 +24,7 @@ ignored = ["base64ct"]
 
 [features]
 ethereum = ["async-trait", "linera-ethereum"]
+revm = ["linera-execution/revm"]
 unstable-oracles = [
     "linera-core/unstable-oracles",
     "linera-execution/unstable-oracles",

@@ -14,6 +14,7 @@ version.workspace = true
 [features]
 ethereum = []
 default = ["wasmer", "rocksdb", "storage-service"]
+revm = ["linera-execution/revm", "linera-storage/revm", "linera-sdk/revm", "dep:alloy-sol-types"]
 unstable-oracles = ["linera-core/unstable-oracles"]
 test = [
     "linera-base/test",
@@ -65,6 +66,7 @@ storage-service = ["linera-client/storage-service", "linera-storage-service"]
 
 [dependencies]
 anyhow.workspace = true
+alloy-sol-types = { workspace = true, optional = true }
 assert_matches.workspace = true
 async-graphql.workspace = true
 async-graphql-axum.workspace = true
