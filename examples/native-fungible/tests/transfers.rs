@@ -159,6 +159,15 @@ async fn assert_balances(
         .chain(missing_accounts.into_iter().map(|account| (account, None)))
         .collect::<HashMap<_, _>>();
 
+    for account in &accounts_to_query {
+        assert_eq!(
+            &chain.owner_balance(account).await,
+            expected_query_response
+                .get(account)
+                .expect("Missing balance amount for a test account")
+        );
+    }
+
     assert_eq!(
         chain.owner_balances(accounts_to_query).await,
         expected_query_response
