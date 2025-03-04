@@ -207,7 +207,7 @@ impl<'de> serde::de::Visitor<'de> for AccountFieldDiscriminatorVisitor {
         E: serde::de::Error,
     {
         match string {
-            "chain_id" => Ok(AccountFieldDiscriminator::ChainId),
+            "chain_id" | "chainId" => Ok(AccountFieldDiscriminator::ChainId),
             "owner" => Ok(AccountFieldDiscriminator::Owner),
             unknown_field => Err(E::unknown_field(unknown_field, &["chain_id", "owner"])),
         }
