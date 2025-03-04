@@ -158,6 +158,24 @@ impl ActiveChain {
         balances
     }
 
+    /// Reads a list of [`AccountOwner`]s that have a non-zero balance on this microchain.
+    pub async fn accounts(&self) -> Vec<AccountOwner> {
+        let chain_state = self
+            .validator
+            .worker()
+            .chain_state_view(self.id())
+            .await
+            .expect("Failed to read chain state");
+
+        chain_state
+            .execution_state
+            .system
+            .balances
+            .indices()
+            .await
+            .expect("Failed to list accounts on the chain")
+    }
+
     /// Adds a block to this microchain.
     ///
     /// The `block_builder` parameter is a closure that should use the [`BlockBuilder`] parameter
