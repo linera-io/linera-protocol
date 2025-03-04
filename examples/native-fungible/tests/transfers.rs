@@ -139,12 +139,28 @@ async fn assert_balances(
     chain: &ActiveChain,
     expected_balances: impl IntoIterator<Item = (AccountOwner, Amount)>,
 ) {
-    let expected_balances = expected_balances
-        .into_iter()
-        .map(|(account, balance)| (account, Some(balance)))
-        .collect::<HashMap<_, _>>();
-
+    let expected_balances = expected_balances.into_iter().collect::<HashMap<_, _>>();
     let accounts = expected_balances.keys().copied();
 
-    assert_eq!(chain.owner_balances(accounts).await, expected_balances);
+    let missing_accounts = ["missing1", "missing2"]
+        .into_iter()
+        .map(CryptoHash::test_hash)
+        .map(Owner)
+        .map(AccountOwner::from)
+        .collect::<Vec<_>>();
+
+    let accounts_to_query = accounts
+        .chain(missing_accounts.iter().copied())
+        .collect::<Vec<_>>();
+
+    let expected_query_response = expected_balances
+        .iter()
+        .map(|(&account, &balance)| (account, Some(balance)))
+        .chain(missing_accounts.into_iter().map(|account| (account, None)))
+        .collect::<HashMap<_, _>>();
+
+    assert_eq!(
+        chain.owner_balances(accounts_to_query).await,
+        expected_query_response
+    );
 }
