@@ -737,7 +737,7 @@ impl Runnable for Job {
                 transactions_per_block,
                 fungible_application_id,
                 bps,
-                keep_chains_open,
+                close_chains,
             } => {
                 assert!(num_chains > 0, "Number of chains must be greater than 0");
                 assert!(
@@ -765,14 +765,38 @@ impl Runnable for Job {
                     num_chains,
                     transactions_per_block,
                     bps,
-                    chain_clients,
+                    chain_clients.clone(),
                     epoch,
                     blocks_infos,
                     committee,
                     context.client.local_node().clone(),
-                    keep_chains_open,
+                    close_chains,
                 )
                 .await?;
+
+                if !close_chains {
+                    info!("Processing inbox for all chains...");
+                    let mut join_set = JoinSet::<Result<(), linera_client::Error>>::new();
+                    for chain_client in chain_clients.values() {
+                        let chain_client = chain_client.clone();
+                        join_set.spawn(async move {
+                            chain_client.process_inbox().await?;
+                            info!("Processed inbox for chain {:?}", chain_client.chain_id());
+                            Ok(())
+                        });
+                    }
+
+                    join_set
+                        .join_all()
+                        .await
+                        .into_iter()
+                        .collect::<Result<Vec<()>, _>>()?;
+
+                    info!("Updating wallet from chain clients...");
+                    for chain_client in chain_clients.values() {
+                        context.update_wallet_from_client(chain_client).await?;
+                    }
+                }
             }
 
             Watch { chain_id, raw } => {
