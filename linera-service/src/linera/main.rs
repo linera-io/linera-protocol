@@ -48,6 +48,12 @@ use linera_views::store::CommonStoreConfig;
 use serde_json::Value;
 use tokio::task::JoinSet;
 use tracing::{debug, error, info, warn, Instrument as _};
+#[cfg(feature = "benchmark")]
+use {
+    futures::{stream, TryStreamExt},
+    linera_client::benchmark::BenchmarkError,
+    linera_core::client::ChainClientError,
+};
 
 mod net_up_utils;
 
@@ -739,6 +745,7 @@ impl Runnable for Job {
                 bps,
                 close_chains,
                 health_check_endpoints,
+                wrap_up_max_in_flight,
             } => {
                 assert!(num_chains > 0, "Number of chains must be greater than 0");
                 assert!(
@@ -771,28 +778,33 @@ impl Runnable for Job {
                     blocks_infos,
                     committee,
                     context.client.local_node().clone(),
-                    close_chains,
                     health_check_endpoints,
                 )
                 .await?;
 
-                if !close_chains {
+                if close_chains {
+                    info!("Closing chains...");
+                    let stream = stream::iter(chain_clients.values().cloned())
+                        .map(|chain_client| async move {
+                            linera_client::benchmark::Benchmark::<S>::close_benchmark_chain(
+                                &chain_client,
+                            )
+                            .await?;
+                            info!("Closed chain {:?}", chain_client.chain_id());
+                            Ok::<(), BenchmarkError>(())
+                        })
+                        .buffer_unordered(wrap_up_max_in_flight);
+                    stream.try_collect::<Vec<_>>().await?;
+                } else {
                     info!("Processing inbox for all chains...");
-                    let mut join_set = JoinSet::<Result<(), linera_client::Error>>::new();
-                    for chain_client in chain_clients.values() {
-                        let chain_client = chain_client.clone();
-                        join_set.spawn(async move {
+                    let stream = stream::iter(chain_clients.values().cloned())
+                        .map(|chain_client| async move {
                             chain_client.process_inbox().await?;
                             info!("Processed inbox for chain {:?}", chain_client.chain_id());
-                            Ok(())
-                        });
-                    }
-
-                    join_set
-                        .join_all()
-                        .await
-                        .into_iter()
-                        .collect::<Result<Vec<()>, _>>()?;
+                            Ok::<(), ChainClientError>(())
+                        })
+                        .buffer_unordered(wrap_up_max_in_flight);
+                    stream.try_collect::<Vec<_>>().await?;
 
                     info!("Updating wallet from chain clients...");
                     for chain_client in chain_clients.values() {
