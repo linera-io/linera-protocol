@@ -14,13 +14,13 @@ use anyhow::{anyhow, Context};
 use async_graphql::SimpleObject;
 use custom_debug_derive::Debug;
 use linera_witty::{WitLoad, WitStore, WitType};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{de::Error as _, Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::{
     bcs_scalar,
     crypto::{BcsHashable, CryptoError, CryptoHash},
     data_types::BlockHeight,
-    doc_scalar, hex_debug,
+    doc_scalar, ensure, hex_debug,
     vm::VmRuntime,
 };
 
@@ -41,9 +41,7 @@ pub enum AccountOwner {
 }
 
 /// A system account.
-#[derive(
-    Debug, PartialEq, Eq, Hash, Copy, Clone, Serialize, Deserialize, WitLoad, WitStore, WitType,
-)]
+#[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, Serialize, WitLoad, WitStore, WitType)]
 pub struct Account {
     /// The chain of the account.
     pub chain_id: ChainId,
@@ -97,6 +95,121 @@ impl FromStr for Account {
             Ok(Account::owner(chain_id, owner))
         } else {
             Ok(Account::chain(chain_id))
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for Account {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_struct("Account", &["chain_id", "owner"], AccountVisitor)
+    }
+}
+
+/// A visitor for deserializing [`Account`] instances.
+struct AccountVisitor;
+
+impl<'de> serde::de::Visitor<'de> for AccountVisitor {
+    type Value = Account;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("an `Account` represented as a string or an object")
+    }
+
+    fn visit_seq<Accessor>(self, mut accessor: Accessor) -> Result<Self::Value, Accessor::Error>
+    where
+        Accessor: serde::de::SeqAccess<'de>,
+    {
+        let chain_id = accessor.next_element()?.ok_or_else(|| {
+            serde::de::Error::invalid_length(0, &"struct Account with 2 elements")
+        })?;
+
+        let owner = accessor.next_element()?.ok_or_else(|| {
+            serde::de::Error::invalid_length(1, &"struct Account with 2 elements")
+        })?;
+
+        Ok(Account { chain_id, owner })
+    }
+
+    fn visit_map<Accessor>(self, mut accessor: Accessor) -> Result<Self::Value, Accessor::Error>
+    where
+        Accessor: serde::de::MapAccess<'de>,
+    {
+        let mut chain_id = None;
+        let mut owner = None;
+
+        while let Some(key) = accessor.next_key()? {
+            match key {
+                AccountFieldDiscriminator::ChainId => {
+                    ensure!(
+                        chain_id.is_none(),
+                        Accessor::Error::duplicate_field("chain_id")
+                    );
+                    chain_id = Some(accessor.next_value()?);
+                }
+                AccountFieldDiscriminator::Owner => {
+                    ensure!(owner.is_none(), Accessor::Error::duplicate_field("owner"));
+                    owner = Some(accessor.next_value()?);
+                }
+            }
+        }
+
+        Ok(Account {
+            chain_id: chain_id.ok_or_else(|| Accessor::Error::missing_field("chain_id"))?,
+            owner: owner.flatten(),
+        })
+    }
+}
+
+/// Representation of the field tag of a serialized [`Account`].
+enum AccountFieldDiscriminator {
+    ChainId,
+    Owner,
+}
+
+impl<'de> Deserialize<'de> for AccountFieldDiscriminator {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_identifier(AccountFieldDiscriminatorVisitor)
+    }
+}
+
+/// A visitor for deserializing an [`AccountFieldDiscriminator`].
+struct AccountFieldDiscriminatorVisitor;
+
+impl<'de> serde::de::Visitor<'de> for AccountFieldDiscriminatorVisitor {
+    type Value = AccountFieldDiscriminator;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("a discriminator for `Account`'s fields")
+    }
+
+    fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        match value {
+            0 => Ok(AccountFieldDiscriminator::ChainId),
+            1 => Ok(AccountFieldDiscriminator::Owner),
+            invalid_index => Err(E::unknown_field(
+                &format!("field at index {invalid_index}"),
+                &["0 for `chain_id`", "1 for `owner`"],
+            )),
+        }
+    }
+
+    fn visit_str<E>(self, string: &str) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        match string {
+            "chain_id" => Ok(AccountFieldDiscriminator::ChainId),
+            "owner" => Ok(AccountFieldDiscriminator::Owner),
+            unknown_field => Err(E::unknown_field(unknown_field, &["chain_id", "owner"])),
         }
     }
 }
