@@ -13,7 +13,7 @@ use futures::FutureExt as _;
 use linera_base::{
     crypto::{AccountSecretKey, ValidatorKeypair, ValidatorSecretKey},
     data_types::{Amount, ApplicationPermissions, Timestamp},
-    identifiers::{ApplicationId, BytecodeId, ChainDescription, ChainId, MessageId, Owner},
+    identifiers::{ApplicationId, ChainDescription, ChainId, MessageId, ModuleId, Owner},
     ownership::ChainOwnership,
 };
 use linera_core::worker::WorkerState;
@@ -104,17 +104,17 @@ impl TestValidator {
     /// Creates a new [`TestValidator`] with a single microchain with the bytecode of the crate
     /// calling this method published on it.
     ///
-    /// Returns the new [`TestValidator`] and the [`BytecodeId`] of the published bytecode.
-    pub async fn with_current_bytecode<Abi, Parameters, InstantiationArgument>() -> (
+    /// Returns the new [`TestValidator`] and the [`ModuleId`] of the published module.
+    pub async fn with_current_module<Abi, Parameters, InstantiationArgument>() -> (
         TestValidator,
-        BytecodeId<Abi, Parameters, InstantiationArgument>,
+        ModuleId<Abi, Parameters, InstantiationArgument>,
     ) {
         let validator = TestValidator::new().await;
         let publisher = validator.new_chain().await;
 
-        let bytecode_id = publisher.publish_current_bytecode().await;
+        let module_id = publisher.publish_current_module().await;
 
-        (validator, bytecode_id)
+        (validator, module_id)
     }
 
     /// Creates a new [`TestValidator`] with the application of the crate calling this method
@@ -134,13 +134,13 @@ impl TestValidator {
         Parameters: Serialize,
         InstantiationArgument: Serialize,
     {
-        let (validator, bytecode_id) =
-            TestValidator::with_current_bytecode::<Abi, Parameters, InstantiationArgument>().await;
+        let (validator, module_id) =
+            TestValidator::with_current_module::<Abi, Parameters, InstantiationArgument>().await;
 
         let mut creator = validator.new_chain().await;
 
         let application_id = creator
-            .create_application(bytecode_id, parameters, instantiation_argument, vec![])
+            .create_application(module_id, parameters, instantiation_argument, vec![])
             .await;
 
         (validator, application_id, creator)

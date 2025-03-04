@@ -17,7 +17,7 @@ use linera_witty::{wit_export, Instance, RuntimeError};
 use tracing::log;
 
 use super::WasmExecutionError;
-use crate::{BaseRuntime, BytecodeId, ContractRuntime, ExecutionError, ServiceRuntime};
+use crate::{BaseRuntime, ContractRuntime, ExecutionError, ModuleId, ServiceRuntime};
 
 /// Common host data used as the `UserData` of the system API implementations.
 pub struct RuntimeApiData<Runtime> {
@@ -546,7 +546,7 @@ where
     /// parameters.
     fn create_application(
         caller: &mut Caller,
-        bytecode_id: BytecodeId,
+        module_id: ModuleId,
         parameters: Vec<u8>,
         argument: Vec<u8>,
         required_application_ids: Vec<ApplicationId>,
@@ -554,7 +554,7 @@ where
         caller
             .user_data_mut()
             .runtime
-            .create_application(bytecode_id, parameters, argument, required_application_ids)
+            .create_application(module_id, parameters, argument, required_application_ids)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 

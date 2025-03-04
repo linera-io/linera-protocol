@@ -12,8 +12,8 @@ use crate::{
     crypto::{AccountPublicKey, CryptoHash},
     data_types::{Amount, BlockHeight, Resources, SendMessageRequest, TimeDelta, Timestamp},
     identifiers::{
-        Account, AccountOwner, ApplicationId, BytecodeId, ChainId, ChannelName, Destination,
-        MessageId, Owner,
+        Account, AccountOwner, ApplicationId, ChainId, ChannelName, Destination, MessageId,
+        ModuleId, Owner,
     },
     ownership::{ChainOwnership, TimeoutConfig},
     vm::VmRuntime,
@@ -32,7 +32,7 @@ use crate::{
 #[test_case(ChainId(CryptoHash::test_hash("chain_id")); "of_chain_id")]
 #[test_case(message_id_test_case(); "of_message_id")]
 #[test_case(application_id_test_case(); "of_application_id")]
-#[test_case(bytecode_id_test_case(); "of_bytecode_id")]
+#[test_case(module_id_test_case(); "of_module_id")]
 #[test_case(ChannelName::from(b"channel name".to_vec()); "of_channel_name")]
 #[test_case(Destination::Recipient(ChainId::root(0)); "of_destination")]
 #[test_case(timeout_config_test_case(); "of_timeout_config")]
@@ -101,7 +101,7 @@ fn message_id_test_case() -> MessageId {
 /// Creates a dummy [`ApplicationId`] instance to use for the WIT roundtrip test.
 fn application_id_test_case() -> ApplicationId {
     ApplicationId {
-        bytecode_id: BytecodeId::new(
+        module_id: ModuleId::new(
             CryptoHash::test_hash("contract bytecode"),
             CryptoHash::test_hash("service bytecode"),
             VmRuntime::Wasm,
@@ -114,9 +114,9 @@ fn application_id_test_case() -> ApplicationId {
     }
 }
 
-/// Creates a dummy [`BytecodeId`] instance to use for the WIT roundtrip test.
-fn bytecode_id_test_case() -> BytecodeId {
-    BytecodeId::new(
+/// Creates a dummy [`ModuleId`] instance to use for the WIT roundtrip test.
+fn module_id_test_case() -> ModuleId {
+    ModuleId::new(
         CryptoHash::test_hash("another contract bytecode"),
         CryptoHash::test_hash("another service bytecode"),
         VmRuntime::Wasm,

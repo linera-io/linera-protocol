@@ -15,8 +15,8 @@ use linera_base::{
     },
     http,
     identifiers::{
-        Account, AccountOwner, ApplicationId, BytecodeId, ChainId, ChannelName, Destination,
-        MessageId, Owner, StreamName,
+        Account, AccountOwner, ApplicationId, ChainId, ChannelName, Destination, MessageId,
+        ModuleId, Owner, StreamName,
     },
     ownership::{ChainOwnership, ChangeApplicationPermissionsError, CloseChainError},
 };
@@ -25,7 +25,7 @@ use serde::Serialize;
 use crate::{Contract, DataBlobHash, KeyValueStore, ViewStorageContext};
 
 struct ExpectedCreateApplicationCall {
-    bytecode_id: BytecodeId,
+    module_id: ModuleId,
     parameters: Vec<u8>,
     argument: Vec<u8>,
     required_application_ids: Vec<ApplicationId>,
@@ -695,7 +695,7 @@ where
     /// Adds a new expected call to `create_application`.
     pub fn add_expected_create_application_call<Parameters, InstantiationArgument>(
         &mut self,
-        bytecode_id: BytecodeId,
+        module_id: ModuleId,
         parameters: &Parameters,
         argument: &InstantiationArgument,
         required_application_ids: Vec<ApplicationId>,
@@ -711,7 +711,7 @@ where
         );
         self.expected_create_application_calls
             .push_back(ExpectedCreateApplicationCall {
-                bytecode_id,
+                module_id,
                 parameters,
                 argument,
                 required_application_ids,
@@ -722,7 +722,7 @@ where
     /// Creates a new on-chain application, based on the supplied bytecode and parameters.
     pub fn create_application<Abi, Parameters, InstantiationArgument>(
         &mut self,
-        bytecode_id: BytecodeId,
+        module_id: ModuleId,
         parameters: &Parameters,
         argument: &InstantiationArgument,
         required_application_ids: Vec<ApplicationId>,
@@ -733,7 +733,7 @@ where
         InstantiationArgument: Serialize,
     {
         let ExpectedCreateApplicationCall {
-            bytecode_id: expected_bytecode_id,
+            module_id: expected_module_id,
             parameters: expected_parameters,
             argument: expected_argument,
             required_application_ids: expected_required_app_ids,
@@ -747,7 +747,7 @@ where
         let argument = serde_json::to_vec(argument).expect(
             "Failed to serialize `InstantiationArgument` type for a cross-application call",
         );
-        assert_eq!(bytecode_id, expected_bytecode_id);
+        assert_eq!(module_id, expected_module_id);
         assert_eq!(parameters, expected_parameters);
         assert_eq!(argument, expected_argument);
         assert_eq!(required_application_ids, expected_required_app_ids);

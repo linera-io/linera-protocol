@@ -14,12 +14,12 @@ use social::Operation;
 /// send a message to chain2 and see it received on chain1.
 #[tokio::test]
 async fn test_cross_chain_posting() {
-    let (validator, bytecode_id) =
-        TestValidator::with_current_bytecode::<social::SocialAbi, (), ()>().await;
+    let (validator, module_id) =
+        TestValidator::with_current_module::<social::SocialAbi, (), ()>().await;
     let mut chain1 = validator.new_chain().await;
 
     // Initialization is trivial for the social app
-    let application_id = chain1.create_application(bytecode_id, (), (), vec![]).await;
+    let application_id = chain1.create_application(module_id, (), (), vec![]).await;
 
     let chain2 = validator.new_chain().await;
 

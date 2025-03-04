@@ -43,9 +43,8 @@ use linera_base::{
     },
     doc_scalar, hex_debug, http,
     identifiers::{
-        Account, AccountOwner, ApplicationId, BlobId, BytecodeId, ChainId, ChannelName,
-        Destination, EventId, GenericApplicationId, MessageId, Owner, StreamName,
-        UserApplicationId,
+        Account, AccountOwner, ApplicationId, BlobId, ChainId, ChannelName, Destination, EventId,
+        GenericApplicationId, MessageId, ModuleId, Owner, StreamName, UserApplicationId,
     },
     ownership::ChainOwnership,
     task,
@@ -241,8 +240,8 @@ pub enum ExecutionError {
     ExecutedBlockTooLarge,
     #[error("Runtime failed to respond to application")]
     MissingRuntimeResponse,
-    #[error("Bytecode ID {0:?} is invalid")]
-    InvalidBytecodeId(BytecodeId),
+    #[error("Module ID {0:?} is invalid")]
+    InvalidModuleId(ModuleId),
     #[error("Owner is None")]
     OwnerIsNone,
     #[error("Application is not authorized to perform system operations on this chain: {0:}")]
@@ -752,7 +751,7 @@ pub trait ContractRuntime: BaseRuntime {
     /// Creates a new application on chain.
     fn create_application(
         &mut self,
-        bytecode_id: BytecodeId,
+        module_id: ModuleId,
         parameters: Vec<u8>,
         argument: Vec<u8>,
         required_application_ids: Vec<UserApplicationId>,

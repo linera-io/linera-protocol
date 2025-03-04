@@ -46,10 +46,10 @@ async fn application_message_index() -> anyhow::Result<()> {
     let contract_blob = Blob::new_contract_bytecode(contract.compress());
     let service_blob = Blob::new_service_bytecode(service.compress());
     let vm_runtime = VmRuntime::Wasm;
-    let bytecode_id = BytecodeId::new(contract_blob.id().hash, service_blob.id().hash, vm_runtime);
+    let module_id = ModuleId::new(contract_blob.id().hash, service_blob.id().hash, vm_runtime);
 
     let operation = SystemOperation::CreateApplication {
-        bytecode_id,
+        module_id,
         parameters: vec![],
         instantiation_argument: vec![],
         required_application_ids: vec![],
@@ -77,7 +77,7 @@ async fn application_message_index() -> anyhow::Result<()> {
         index: CREATE_APPLICATION_MESSAGE_INDEX,
     };
     let id = ApplicationId {
-        bytecode_id,
+        module_id,
         creation,
     };
     assert_eq!(new_application, Some((id, vec![])));

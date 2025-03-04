@@ -7,7 +7,7 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{BlockHeight, Timestamp},
     http,
-    identifiers::{AccountOwner, ApplicationId, BytecodeId, ChainId, MessageId, Owner},
+    identifiers::{AccountOwner, ApplicationId, ChainId, MessageId, ModuleId, Owner},
     vm::VmRuntime,
 };
 
@@ -66,12 +66,12 @@ macro_rules! impl_to_wit {
             }
         }
 
-        impl From<BytecodeId> for $wit_base_api::BytecodeId {
-            fn from(bytecode_id: BytecodeId) -> Self {
-                $wit_base_api::BytecodeId {
-                    contract_blob_hash: bytecode_id.contract_blob_hash.into(),
-                    service_blob_hash: bytecode_id.service_blob_hash.into(),
-                    vm_runtime: bytecode_id.vm_runtime.into(),
+        impl From<ModuleId> for $wit_base_api::ModuleId {
+            fn from(module_id: ModuleId) -> Self {
+                $wit_base_api::ModuleId {
+                    contract_blob_hash: module_id.contract_blob_hash.into(),
+                    service_blob_hash: module_id.service_blob_hash.into(),
+                    vm_runtime: module_id.vm_runtime.into(),
                 }
             }
         }
@@ -98,7 +98,7 @@ macro_rules! impl_to_wit {
         impl From<ApplicationId> for $wit_base_api::ApplicationId {
             fn from(application_id: ApplicationId) -> Self {
                 $wit_base_api::ApplicationId {
-                    bytecode_id: application_id.bytecode_id.into(),
+                    module_id: application_id.module_id.into(),
                     creation: application_id.creation.into(),
                 }
             }

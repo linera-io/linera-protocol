@@ -18,7 +18,7 @@ use linera_base::{
     data_types::{Amount, ApplicationPermissions, Bytecode, TimeDelta, UserApplicationDescription},
     ensure,
     hashed::Hashed,
-    identifiers::{ApplicationId, BytecodeId, ChainId, Owner, UserApplicationId},
+    identifiers::{ApplicationId, ChainId, ModuleId, Owner, UserApplicationId},
     ownership::{ChainOwnership, TimeoutConfig},
     vm::VmRuntime,
     BcsHexParseError,
@@ -558,23 +558,23 @@ where
         self.execute_system_operation(operation, chain_id).await
     }
 
-    /// Publishes a new application bytecode.
-    async fn publish_bytecode(
+    /// Publishes a new application module.
+    async fn publish_module(
         &self,
         chain_id: ChainId,
         contract: Bytecode,
         service: Bytecode,
         vm_runtime: VmRuntime,
-    ) -> Result<BytecodeId, Error> {
+    ) -> Result<ModuleId, Error> {
         self.apply_client_command(&chain_id, move |client| {
             let contract = contract.clone();
             let service = service.clone();
             async move {
                 let result = client
-                    .publish_bytecode(contract, service, vm_runtime)
+                    .publish_module(contract, service, vm_runtime)
                     .await
                     .map_err(Error::from)
-                    .map(|outcome| outcome.map(|(bytecode_id, _)| bytecode_id));
+                    .map(|outcome| outcome.map(|(module_id, _)| module_id));
                 (result, client)
             }
         })
@@ -602,7 +602,7 @@ where
     async fn create_application(
         &self,
         chain_id: ChainId,
-        bytecode_id: BytecodeId,
+        module_id: ModuleId,
         parameters: String,
         instantiation_argument: String,
         required_application_ids: Vec<UserApplicationId>,
@@ -614,7 +614,7 @@ where
             async move {
                 let result = client
                     .create_application_untyped(
-                        bytecode_id,
+                        module_id,
                         parameters,
                         instantiation_argument,
                         required_application_ids,

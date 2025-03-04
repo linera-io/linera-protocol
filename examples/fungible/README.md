@@ -3,8 +3,8 @@
 This example application implements fungible tokens. This demonstrates in particular
 cross-chain messages and how applications are instantiated and auto-deployed.
 
-Once this application is built and its bytecode published on a Linera chain, the
-published bytecode can be used to create multiple application instances, where each
+Once this application is built and its module published on a Linera chain, the
+published module can be used to create multiple application instances, where each
 instance represents a different fungible token.
 
 ## How It Works
@@ -27,7 +27,7 @@ Tokens can be transferred from an account to different destinations, such as:
 
 ### Setting Up
 
-The WebAssembly binaries for the bytecode can be built and published using [steps from the
+The WebAssembly binaries for the module can be built and published using [steps from the
 book](https://linera.dev/developers/getting_started.html),
 summarized below.
 
@@ -76,15 +76,15 @@ bytecode:
 ```bash
 (cd examples/fungible && cargo build --release --target wasm32-unknown-unknown)
 
-BYTECODE_ID=$(linera publish-bytecode \
+MODULE_ID=$(linera publish-module \
     examples/target/wasm32-unknown-unknown/release/fungible_{contract,service}.wasm)
 ```
 
-Here, we stored the new bytecode ID in a variable `BYTECODE_ID` to be reused it later.
+Here, we stored the new module ID in a variable `MODULE_ID` to be reused it later.
 
 ### Creating a Token
 
-In order to use the published bytecode to create a token application, the initial state must be
+In order to use the published module to create a token application, the initial state must be
 specified. This initial state is where the tokens are minted. After the token is created, no
 additional tokens can be minted and added to the application. The initial state is a JSON string
 that specifies the accounts that start with tokens.
@@ -103,7 +103,7 @@ for the account.
 The example below creates a token application on the default chain CHAIN_1 and gives the owner 100 tokens:
 
 ```bash
-APP_ID=$(linera create-application $BYTECODE_ID \
+APP_ID=$(linera create-application $MODULE_ID \
     --json-argument "{ \"accounts\": {
         \"User:$OWNER_1\": \"100.\"
     } }" \

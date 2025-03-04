@@ -190,11 +190,6 @@ A WebAssembly module's bytecode
 scalar Bytecode
 
 """
-A unique identifier for an application bytecode
-"""
-scalar BytecodeId
-
-"""
 A chain ID with a block height.
 """
 type ChainAndHeight {
@@ -710,6 +705,11 @@ The kind of outgoing message being sent
 """
 scalar MessageKind
 
+"""
+A unique identifier for an application module
+"""
+scalar ModuleId
+
 type MutationRoot {
 	"""
 	Processes the inbox and returns the lists of certificate hashes that were created, if any.
@@ -815,9 +815,9 @@ type MutationRoot {
 	"""
 	removeCommittee(chainId: ChainId!, epoch: Epoch!): CryptoHash!
 	"""
-	Publishes a new application bytecode.
+	Publishes a new application module.
 	"""
-	publishBytecode(chainId: ChainId!, contract: Bytecode!, service: Bytecode!, vmRuntime: VmRuntime!): BytecodeId!
+	publishModule(chainId: ChainId!, contract: Bytecode!, service: Bytecode!, vmRuntime: VmRuntime!): ModuleId!
 	"""
 	Publishes a new data blob.
 	"""
@@ -825,7 +825,7 @@ type MutationRoot {
 	"""
 	Creates a new application.
 	"""
-	createApplication(chainId: ChainId!, bytecodeId: BytecodeId!, parameters: String!, instantiationArgument: String!, requiredApplicationIds: [ApplicationId!]!): ApplicationId!
+	createApplication(chainId: ChainId!, moduleId: ModuleId!, parameters: String!, instantiationArgument: String!, requiredApplicationIds: [ApplicationId!]!): ApplicationId!
 	"""
 	Requests a `RegisterApplications` message from another chain so the application can be used
 	on this one.

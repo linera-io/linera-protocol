@@ -75,11 +75,11 @@ where
         }
         // Create description and register it.
         let UserApplicationId {
-            bytecode_id,
+            module_id,
             creation,
         } = application_id;
         let description = UserApplicationDescription {
-            bytecode_id,
+            module_id,
             parameters,
             creation,
             required_application_ids,

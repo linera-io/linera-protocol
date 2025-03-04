@@ -2,7 +2,7 @@
 
 This example application implements non-fungible tokens (NFTs), showcasing the creation and management of unique digital assets. It highlights cross-chain messages, demonstrating how NFTs can be minted, transferred, and claimed across different chains, emphasizing the instantiation and auto-deployment of applications within the Linera blockchain ecosystem.
 
-Once this application's bytecode is published on a Linera chain, that application will contain the registry of the different NFTs.
+Once this application's module is published on a Linera chain, that application will contain the registry of the different NFTs.
 
 Some portions of this are very similar to the `fungible` README, and we'll refer to it throughout. Bash commands will always be included here for testing purposes.
 
@@ -68,11 +68,11 @@ OWNER_2="${INFO_2[3]}"
 ```bash
 (cd examples/non-fungible && cargo build --release --target wasm32-unknown-unknown)
 
-BYTECODE_ID=$(linera publish-bytecode \
+MODULE_ID=$(linera publish-module \
     examples/target/wasm32-unknown-unknown/release/non_fungible_{contract,service}.wasm)
 ```
 
-Here, we stored the new bytecode ID in a variable `BYTECODE_ID` to be reused later.
+Here, we stored the new module ID in a variable `MODULE_ID` to be reused later.
 
 ### Creating an NFT
 
@@ -83,7 +83,7 @@ Refer to the [fungible app README](https://github.com/linera-io/linera-protocol/
 To create the NFT application, run the command below:
 
 ```bash
-APP_ID=$(linera create-application $BYTECODE_ID)
+APP_ID=$(linera create-application $MODULE_ID)
 ```
 
 This will store the application ID in a new variable `APP_ID`.

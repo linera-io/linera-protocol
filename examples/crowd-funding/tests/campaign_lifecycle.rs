@@ -25,7 +25,7 @@ async fn collect_pledges() {
     let target_amount = Amount::from_tokens(220);
     let pledge_amount = Amount::from_tokens(75);
 
-    let (validator, bytecode_id) = TestValidator::with_current_bytecode::<
+    let (validator, module_id) = TestValidator::with_current_module::<
         CrowdFundingAbi,
         ApplicationId<FungibleTokenAbi>,
         InstantiationArgument,
@@ -36,13 +36,13 @@ async fn collect_pledges() {
     let mut campaign_chain = validator.new_chain().await;
     let campaign_account = AccountOwner::from(campaign_chain.public_key());
 
-    let fungible_bytecode_id = fungible_publisher_chain
+    let fungible_module_id = fungible_publisher_chain
         .publish_bytecodes_in("../fungible")
         .await;
 
     let (token_id, backers) = fungible::create_with_accounts(
         &validator,
-        fungible_bytecode_id,
+        fungible_module_id,
         iter::repeat(initial_amount).take(3),
     )
     .await;
@@ -54,7 +54,7 @@ async fn collect_pledges() {
     };
     let campaign_id = campaign_chain
         .create_application(
-            bytecode_id,
+            module_id,
             token_id,
             campaign_state,
             vec![token_id.forget_abi()],
@@ -129,7 +129,7 @@ async fn cancel_successful_campaign() {
     let target_amount = Amount::from_tokens(220);
     let pledge_amount = Amount::from_tokens(75);
 
-    let (validator, bytecode_id) = TestValidator::with_current_bytecode::<
+    let (validator, module_id) = TestValidator::with_current_module::<
         CrowdFundingAbi,
         ApplicationId<FungibleTokenAbi>,
         InstantiationArgument,
@@ -140,13 +140,13 @@ async fn cancel_successful_campaign() {
     let mut campaign_chain = validator.new_chain().await;
     let campaign_account = AccountOwner::from(campaign_chain.public_key());
 
-    let fungible_bytecode_id = fungible_publisher_chain
+    let fungible_module_id = fungible_publisher_chain
         .publish_bytecodes_in("../fungible")
         .await;
 
     let (token_id, backers) = fungible::create_with_accounts(
         &validator,
-        fungible_bytecode_id,
+        fungible_module_id,
         iter::repeat(initial_amount).take(3),
     )
     .await;
@@ -158,7 +158,7 @@ async fn cancel_successful_campaign() {
     };
     let campaign_id = campaign_chain
         .create_application(
-            bytecode_id,
+            module_id,
             token_id,
             campaign_state,
             vec![token_id.forget_abi()],

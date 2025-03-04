@@ -51,16 +51,16 @@ OWNER_2="${INFO_2[3]}"
 ```
 
 Compile the `native-fungible` application WebAssembly binaries, and publish them as an application
-bytecode:
+module:
 
 ```bash
 (cd examples/native-fungible && cargo build --release --target wasm32-unknown-unknown)
 
-BYTECODE_ID="$(linera publish-bytecode \
+MODULE_ID="$(linera publish-module \
     examples/target/wasm32-unknown-unknown/release/native_fungible_{contract,service}.wasm)"
 ```
 
-Here, we stored the new bytecode ID in a variable `BYTECODE_ID` to be reused it later.
+Here, we stored the new module ID in a variable `MODULE_ID` to be reused it later.
 
 ### Creating a Token
 
@@ -69,7 +69,7 @@ Most of this can also be referred to the [fungible app README](https://github.co
 The app can't mint new native tokens, so the initial balance is taken from the chain balance.
 
 ```bash
-APP_ID=$(linera create-application $BYTECODE_ID \
+APP_ID=$(linera create-application $MODULE_ID \
     --json-argument "{ \"accounts\": {
         \"User:$OWNER_1\": \"100.\"
     } }" \

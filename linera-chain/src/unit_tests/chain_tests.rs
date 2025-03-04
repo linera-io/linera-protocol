@@ -13,7 +13,7 @@ use linera_base::{
         UserApplicationDescription,
     },
     hashed::Hashed,
-    identifiers::{ApplicationId, BytecodeId, ChainId, MessageId},
+    identifiers::{ApplicationId, ChainId, MessageId, ModuleId},
     ownership::ChainOwnership,
     vm::VmRuntime,
 };
@@ -69,10 +69,10 @@ fn make_app_description() -> (UserApplicationDescription, Blob, Blob) {
     let service_blob = Blob::new_service_bytecode(service.compress());
     let vm_runtime = VmRuntime::Wasm;
 
-    let bytecode_id = BytecodeId::new(contract_blob.id().hash, service_blob.id().hash, vm_runtime);
+    let module_id = ModuleId::new(contract_blob.id().hash, service_blob.id().hash, vm_runtime);
     (
         UserApplicationDescription {
-            bytecode_id,
+            module_id,
             creation: make_admin_message_id(BlockHeight(2)),
             required_application_ids: vec![],
             parameters: vec![],
