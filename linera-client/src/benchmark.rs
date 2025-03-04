@@ -56,6 +56,7 @@ where
     ) -> Result<(), Error> {
         let shutdown_notifier = CancellationToken::new();
         tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
+        let handle = Handle::current();
 
         // The bps control task will control the BPS from the threads. `crossbeam_channel` is used
         // for two reasons:
@@ -68,48 +69,51 @@ where
         // the desired BPS, the tasks would continue sending block proposals until the channel's
         // buffer is filled, which would cause us to not properly control the BPS rate.
         let (sender, receiver) = crossbeam_channel::bounded(0);
-        let bps_control_task = tokio::spawn(async move {
-            let mut recv_count = 0;
-            let mut start = time::Instant::now();
-            while let Ok(()) = receiver.recv() {
-                recv_count += 1;
-                if recv_count == num_chains {
-                    let elapsed = start.elapsed();
-                    if let Some(bps) = bps {
-                        let tps = (bps * transactions_per_block).to_formatted_string(&Locale::en);
-                        let bps = bps.to_formatted_string(&Locale::en);
-                        if elapsed > time::Duration::from_secs(1) {
-                            warn!(
-                                "Failed to achieve {} BPS/{} TPS in {} ms",
-                                bps,
-                                tps,
-                                elapsed.as_millis(),
-                            );
+        let bps_control_task = tokio::task::spawn_blocking(move || {
+            handle.block_on(async move {
+                let mut recv_count = 0;
+                let mut start = time::Instant::now();
+                while let Ok(()) = receiver.recv() {
+                    recv_count += 1;
+                    if recv_count == num_chains {
+                        let elapsed = start.elapsed();
+                        if let Some(bps) = bps {
+                            let tps =
+                                (bps * transactions_per_block).to_formatted_string(&Locale::en);
+                            let bps = bps.to_formatted_string(&Locale::en);
+                            if elapsed > time::Duration::from_secs(1) {
+                                warn!(
+                                    "Failed to achieve {} BPS/{} TPS in {} ms",
+                                    bps,
+                                    tps,
+                                    elapsed.as_millis(),
+                                );
+                            } else {
+                                time::sleep(time::Duration::from_secs(1) - elapsed).await;
+                                info!(
+                                    "Achieved {} BPS/{} TPS in {} ms",
+                                    bps,
+                                    tps,
+                                    elapsed.as_millis(),
+                                );
+                            }
                         } else {
-                            time::sleep(time::Duration::from_secs(1) - elapsed).await;
+                            let achieved_bps = num_chains as f64 / elapsed.as_secs_f64();
                             info!(
                                 "Achieved {} BPS/{} TPS in {} ms",
-                                bps,
-                                tps,
+                                achieved_bps,
+                                achieved_bps * transactions_per_block as f64,
                                 elapsed.as_millis(),
                             );
                         }
-                    } else {
-                        let achieved_bps = num_chains as f64 / elapsed.as_secs_f64();
-                        info!(
-                            "Achieved {} BPS/{} TPS in {} ms",
-                            achieved_bps,
-                            achieved_bps * transactions_per_block as f64,
-                            elapsed.as_millis(),
-                        );
+
+                        recv_count = 0;
+                        start = time::Instant::now();
                     }
-
-                    recv_count = 0;
-                    start = time::Instant::now();
                 }
-            }
 
-            info!("Exiting logging task...");
+                info!("Exiting logging task...");
+            })
         });
 
         let mut bps_remainder = bps.unwrap_or_default() % num_chains;
