@@ -132,6 +132,49 @@ async fn transfer_to_multiple_owners() {
     .await;
 }
 
+/// Tests if an account that was emptied out doesn't appear in balance queries.
+#[test_log::test(tokio::test)]
+async fn emptied_account_disappears_from_queries() {
+    let parameters = fungible::Parameters {
+        ticker_symbol: "NAT".to_owned(),
+    };
+    let initial_state = fungible::InitialStateBuilder::default().build();
+    let (validator, _application_id, recipient_chain) = TestValidator::with_current_application::<
+        FungibleTokenAbi,
+        _,
+        _,
+    >(parameters, initial_state)
+    .await;
+
+    let transfer_amount = Amount::from_tokens(100);
+    let funding_chain = validator.get_chain(&ChainId::root(0));
+
+    let owner = Owner::from(recipient_chain.public_key());
+    let account_owner = AccountOwner::from(owner);
+    let recipient = Recipient::Account(Account::owner(recipient_chain.id(), account_owner));
+
+    let transfer_certificate = funding_chain
+        .add_block(|block| {
+            block.with_native_token_transfer(None, recipient, transfer_amount);
+        })
+        .await;
+
+    recipient_chain
+        .add_block(|block| {
+            block.with_messages_from(&transfer_certificate);
+        })
+        .await;
+
+    recipient_chain
+        .add_block(|block| {
+            block.with_native_token_transfer(Some(owner), Recipient::Burn, transfer_amount);
+        })
+        .await;
+
+    assert_eq!(recipient_chain.owner_balance(&account_owner).await, None);
+    assert_balances(&recipient_chain, []).await;
+}
+
 /// Asserts that all the accounts in the [`ActiveChain`] have the `expected_balances`.
 async fn assert_balances(
     chain: &ActiveChain,
