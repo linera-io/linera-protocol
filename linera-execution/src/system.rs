@@ -11,7 +11,7 @@ use std::sync::LazyLock;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     fmt::{self, Display, Formatter},
-    iter,
+    iter, mem,
 };
 
 use async_graphql::Enum;
@@ -237,11 +237,6 @@ pub enum SystemMessage {
     },
     /// Notifies that a new application was created.
     ApplicationCreated,
-    /// Shares information about some applications to help the recipient use them.
-    /// Applications must be registered after their dependencies.
-    RegisterApplications {
-        applications: Vec<UserApplicationDescription>,
-    },
 }
 
 /// A query to the system state.
@@ -342,11 +337,10 @@ impl UserData {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct CreateApplicationResult {
     pub app_id: UserApplicationId,
-    pub blobs_to_register: Vec<BlobId>,
-    pub application_description: UserApplicationDescription,
+    pub txn_tracker: TransactionTracker,
 }
 
 #[derive(Error, Debug)]
@@ -640,25 +634,21 @@ where
                 instantiation_argument,
                 required_application_ids,
             } => {
-                let application_index = txn_tracker.next_application_index();
+                let txn_tracker_moved = mem::take(txn_tracker);
                 let CreateApplicationResult {
                     app_id,
-                    blobs_to_register,
-                    application_description,
+                    txn_tracker: txn_tracker_moved,
                 } = self
                     .create_application(
                         context.chain_id,
                         context.height,
-                        application_index,
                         bytecode_id,
                         parameters,
                         required_application_ids,
+                        txn_tracker_moved,
                     )
                     .await?;
-                self.record_bytecode_blobs(blobs_to_register, txn_tracker)
-                    .await?;
-                txn_tracker
-                    .add_created_blob(Blob::new_application_description(&application_description));
+                *txn_tracker = txn_tracker_moved;
                 new_application = Some((app_id, instantiation_argument));
             }
             PublishDataBlob { blob_hash } => {
@@ -797,7 +787,6 @@ where
         &mut self,
         context: MessageContext,
         message: SystemMessage,
-        txn_tracker: &mut TransactionTracker,
     ) -> Result<RawExecutionOutcome<SystemMessage, Amount>, SystemExecutionError> {
         let mut outcome = RawExecutionOutcome::default();
         use SystemMessage::*;
@@ -856,14 +845,6 @@ where
             }
             RemoveCommittee { epoch } => {
                 self.committees.get_mut().remove(&epoch);
-            }
-            RegisterApplications { applications } => {
-                for application in applications {
-                    self.check_and_record_bytecode_blobs(&application.bytecode_id, txn_tracker)
-                        .await?;
-                    self.check_required_applications(&application).await?;
-                    txn_tracker.add_created_blob(Blob::new_application_description(&application));
-                }
             }
             // These messages are executed immediately when cross-chain requests are received.
             Subscribe { .. } | Unsubscribe { .. } | OpenChain(_) => {}
@@ -1001,12 +982,12 @@ where
         &mut self,
         chain_id: ChainId,
         block_height: BlockHeight,
-        application_index: u32,
         bytecode_id: BytecodeId,
         parameters: Vec<u8>,
         required_application_ids: Vec<UserApplicationId>,
+        mut txn_tracker: TransactionTracker,
     ) -> Result<CreateApplicationResult, SystemExecutionError> {
-        let mut blobs_to_register = vec![];
+        let application_index = txn_tracker.next_application_index();
         for application_bytecode in required_application_ids
             .iter()
             .map(|app_id| &app_id.bytecode_id)
@@ -1016,12 +997,10 @@ where
                 self.check_bytecode_blobs(application_bytecode).await?;
             // We only remember to register the blobs that aren't recorded in `used_blobs`
             // already.
-            if !self.used_blobs.contains(&contract_bytecode_blob_id).await? {
-                blobs_to_register.push(contract_bytecode_blob_id);
-            }
-            if !self.used_blobs.contains(&service_bytecode_blob_id).await? {
-                blobs_to_register.push(service_bytecode_blob_id);
-            }
+            self.blob_used(Some(&mut txn_tracker), contract_bytecode_blob_id)
+                .await?;
+            self.blob_used(Some(&mut txn_tracker), service_bytecode_blob_id)
+                .await?;
         }
 
         let application_description = UserApplicationDescription {
@@ -1032,23 +1011,25 @@ where
             parameters,
             required_application_ids,
         };
-        self.check_required_applications(&application_description)
+        self.check_required_applications(&application_description, Some(&mut txn_tracker))
             .await?;
+
+        txn_tracker.add_created_blob(Blob::new_application_description(&application_description));
 
         Ok(CreateApplicationResult {
             app_id: UserApplicationId::from(&application_description),
-            blobs_to_register,
-            application_description,
+            txn_tracker,
         })
     }
 
     async fn check_required_applications(
         &mut self,
         application_description: &UserApplicationDescription,
+        mut txn_tracker: Option<&mut TransactionTracker>,
     ) -> Result<(), SystemExecutionError> {
         // Make sure that referenced applications ids have been registered.
         for required_id in &application_description.required_application_ids {
-            self.describe_application(*required_id).await?;
+            Box::pin(self.describe_application(*required_id, txn_tracker.as_deref_mut())).await?;
         }
         Ok(())
     }
@@ -1057,20 +1038,36 @@ where
     pub async fn describe_application(
         &mut self,
         id: UserApplicationId,
+        mut txn_tracker: Option<&mut TransactionTracker>,
     ) -> Result<UserApplicationDescription, SystemExecutionError> {
-        let blob_content = self
-            .read_blob_content(BlobId::new(
-                id.application_description_hash,
-                BlobType::ApplicationDescription,
-            ))
+        let blob_id = BlobId::new(
+            id.application_description_hash,
+            BlobType::ApplicationDescription,
+        );
+        let blob_content = self.read_blob_content(blob_id).await?;
+        self.blob_used(txn_tracker.as_deref_mut(), blob_id).await?;
+        let description: UserApplicationDescription = bcs::from_bytes(blob_content.bytes())?;
+
+        let (contract_bytecode_blob_id, service_bytecode_blob_id) =
+            self.check_bytecode_blobs(&description.bytecode_id).await?;
+        // We only remember to register the blobs that aren't recorded in `used_blobs`
+        // already.
+        self.blob_used(txn_tracker.as_deref_mut(), contract_bytecode_blob_id)
             .await?;
-        Ok(bcs::from_bytes(blob_content.bytes())?)
+        self.blob_used(txn_tracker.as_deref_mut(), service_bytecode_blob_id)
+            .await?;
+
+        self.check_required_applications(&description, txn_tracker)
+            .await?;
+
+        Ok(description)
     }
 
     /// Retrieves the recursive dependencies of applications and apply a topological sort.
     pub async fn find_dependencies(
         &mut self,
         mut stack: Vec<UserApplicationId>,
+        txn_tracker: &mut TransactionTracker,
     ) -> Result<Vec<UserApplicationId>, SystemExecutionError> {
         // What we return at the end.
         let mut result = Vec::new();
@@ -1095,7 +1092,7 @@ where
             seen.insert(id);
             // 2. Schedule all the (yet unseen) dependencies, then this entry for a second visit.
             stack.push(id);
-            let app = self.describe_application(id).await?;
+            let app = self.describe_application(id, Some(txn_tracker)).await?;
             for child in app.required_application_ids.iter().rev() {
                 if !seen.contains(child) {
                     stack.push(*child);
@@ -1110,14 +1107,15 @@ where
         &mut self,
         ids: Vec<UserApplicationId>,
         extra_registered_apps: &HashMap<UserApplicationId, UserApplicationDescription>,
+        txn_tracker: &mut TransactionTracker,
     ) -> Result<Vec<UserApplicationDescription>, SystemExecutionError> {
-        let ids_with_deps = self.find_dependencies(ids).await?;
+        let ids_with_deps = self.find_dependencies(ids, txn_tracker).await?;
         let mut result = Vec::new();
         for id in ids_with_deps {
             let description = if let Some(description) = extra_registered_apps.get(&id) {
                 description.clone()
             } else {
-                self.describe_application(id).await?
+                self.describe_application(id, Some(txn_tracker)).await?
             };
             result.push(description);
         }
@@ -1128,14 +1126,14 @@ where
     /// an oracle response for it.
     pub(crate) async fn blob_used(
         &mut self,
-        txn_tracker: Option<&mut TransactionTracker>,
+        maybe_txn_tracker: Option<&mut TransactionTracker>,
         blob_id: BlobId,
     ) -> Result<bool, SystemExecutionError> {
         if self.used_blobs.contains(&blob_id).await? {
             return Ok(false); // Nothing to do.
         }
         self.used_blobs.insert(&blob_id)?;
-        if let Some(txn_tracker) = txn_tracker {
+        if let Some(txn_tracker) = maybe_txn_tracker {
             txn_tracker.replay_oracle_response(OracleResponse::Blob(blob_id))?;
         }
         Ok(true)
@@ -1206,30 +1204,5 @@ where
         );
 
         Ok((contract_bytecode_blob_id, service_bytecode_blob_id))
-    }
-
-    async fn record_bytecode_blobs(
-        &mut self,
-        blob_ids: Vec<BlobId>,
-        txn_tracker: &mut TransactionTracker,
-    ) -> Result<(), SystemExecutionError> {
-        for blob_id in blob_ids {
-            self.blob_used(Some(txn_tracker), blob_id).await?;
-        }
-        Ok(())
-    }
-
-    async fn check_and_record_bytecode_blobs(
-        &mut self,
-        bytecode_id: &BytecodeId,
-        txn_tracker: &mut TransactionTracker,
-    ) -> Result<(), SystemExecutionError> {
-        let (contract_bytecode_blob_id, service_bytecode_blob_id) =
-            self.check_bytecode_blobs(bytecode_id).await?;
-        self.record_bytecode_blobs(
-            vec![contract_bytecode_blob_id, service_bytecode_blob_id],
-            txn_tracker,
-        )
-        .await
     }
 }

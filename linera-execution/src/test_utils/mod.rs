@@ -40,11 +40,15 @@ pub fn create_dummy_user_application_description(
     index: u32,
 ) -> (UserApplicationDescription, Blob, Blob) {
     let chain_id = ChainId::root(1);
+    let mut contract_bytes = b"contract".to_vec();
+    let mut service_bytes = b"service".to_vec();
+    contract_bytes.push(index as u8);
+    service_bytes.push(index as u8);
     let contract_blob = Blob::new_contract_bytecode(CompressedBytecode {
-        compressed_bytes: b"contract".to_vec(),
+        compressed_bytes: contract_bytes,
     });
     let service_blob = Blob::new_service_bytecode(CompressedBytecode {
-        compressed_bytes: b"service".to_vec(),
+        compressed_bytes: service_bytes,
     });
 
     (
@@ -113,11 +117,20 @@ pub trait RegisterMockApplication {
     async fn register_mock_application(
         &mut self,
         index: u32,
-    ) -> anyhow::Result<(UserApplicationId, MockApplication)> {
+    ) -> anyhow::Result<(UserApplicationId, MockApplication, [BlobId; 3])> {
         let (description, contract, service) = create_dummy_user_application_description(index);
+        let description_blob_id = Blob::new_application_description(&description).id();
+        let contract_blob_id = contract.id();
+        let service_blob_id = service.id();
 
-        self.register_mock_application_with(description, contract, service)
-            .await
+        let (app_id, application) = self
+            .register_mock_application_with(description, contract, service)
+            .await?;
+        Ok((
+            app_id,
+            application,
+            [description_blob_id, contract_blob_id, service_blob_id],
+        ))
     }
 
     /// Registers a new [`MockApplication`] associated with a [`UserApplicationDescription`] and

@@ -10,7 +10,8 @@ use assert_matches::assert_matches;
 use linera_base::{
     crypto::{AccountPublicKey, ValidatorPublicKey},
     data_types::{
-        Amount, ApplicationPermissions, Blob, BlockHeight, Resources, SendMessageRequest, Timestamp,
+        Amount, ApplicationPermissions, Blob, BlockHeight, OracleResponse, Resources,
+        SendMessageRequest, Timestamp,
     },
     identifiers::{
         Account, AccountOwner, ChainDescription, ChainId, Destination, MessageId, Owner,
@@ -41,13 +42,13 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
 
     let (app_id, app_desc, contract_blob, service_blob) =
         &create_dummy_user_application_registrations(1).await?[0];
+    let app_desc_blob = Blob::new_application_description(app_desc);
+    let app_desc_blob_id = app_desc_blob.id();
+    let contract_blob_id = contract_blob.id();
+    let service_blob_id = service_blob.id();
     view.context()
         .extra()
-        .add_blobs([
-            contract_blob.clone(),
-            service_blob.clone(),
-            Blob::new_application_description(app_desc),
-        ])
+        .add_blobs([contract_blob.clone(), service_blob.clone(), app_desc_blob])
         .await?;
 
     let context = create_dummy_operation_context();
@@ -60,7 +61,15 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
                 application_id: *app_id,
                 bytes: vec![],
             },
-            &mut TransactionTracker::new(0, 0, Some(Vec::new())),
+            &mut TransactionTracker::new(
+                0,
+                0,
+                Some(vec![
+                    OracleResponse::Blob(app_desc_blob_id),
+                    OracleResponse::Blob(contract_blob_id),
+                    OracleResponse::Blob(service_blob_id),
+                ]),
+            ),
             &mut controller,
         )
         .await;
@@ -79,8 +88,8 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
     state.description = Some(ChainDescription::Root(0));
     let mut view = state.into_view().await;
 
-    let (caller_id, caller_application) = view.register_mock_application(0).await?;
-    let (target_id, target_application) = view.register_mock_application(1).await?;
+    let (caller_id, caller_application, caller_blobs) = view.register_mock_application(0).await?;
+    let (target_id, target_application, target_blobs) = view.register_mock_application(1).await?;
 
     let owner = Owner::from(AccountPublicKey::test_key(0));
     let state_key = vec![];
@@ -143,7 +152,18 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
         ..create_dummy_operation_context()
     };
     let mut controller = ResourceController::default();
-    let mut txn_tracker = TransactionTracker::new(0, 0, Some(Vec::new()));
+    let mut txn_tracker = TransactionTracker::new(
+        0,
+        0,
+        Some(
+            caller_blobs
+                .iter()
+                .chain(target_blobs.iter())
+                .copied()
+                .map(OracleResponse::Blob)
+                .collect(),
+        ),
+    );
     view.execute_operation(
         context,
         Timestamp::from(0),
@@ -267,8 +287,8 @@ async fn test_simulated_session() -> anyhow::Result<()> {
     state.description = Some(ChainDescription::Root(0));
     let mut view = state.into_view().await;
 
-    let (caller_id, caller_application) = view.register_mock_application(0).await?;
-    let (target_id, target_application) = view.register_mock_application(1).await?;
+    let (caller_id, caller_application, caller_blobs) = view.register_mock_application(0).await?;
+    let (target_id, target_application, target_blobs) = view.register_mock_application(1).await?;
 
     caller_application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
@@ -323,7 +343,18 @@ async fn test_simulated_session() -> anyhow::Result<()> {
 
     let context = create_dummy_operation_context();
     let mut controller = ResourceController::default();
-    let mut txn_tracker = TransactionTracker::new(0, 0, Some(Vec::new()));
+    let mut txn_tracker = TransactionTracker::new(
+        0,
+        0,
+        Some(
+            caller_blobs
+                .iter()
+                .chain(target_blobs.iter())
+                .copied()
+                .map(OracleResponse::Blob)
+                .collect(),
+        ),
+    );
     view.execute_operation(
         context,
         Timestamp::from(0),
@@ -375,8 +406,8 @@ async fn test_simulated_session_leak() -> anyhow::Result<()> {
     state.description = Some(ChainDescription::Root(0));
     let mut view = state.into_view().await;
 
-    let (caller_id, caller_application) = view.register_mock_application(0).await?;
-    let (target_id, target_application) = view.register_mock_application(1).await?;
+    let (caller_id, caller_application, caller_blobs) = view.register_mock_application(0).await?;
+    let (target_id, target_application, target_blobs) = view.register_mock_application(1).await?;
 
     caller_application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
@@ -428,7 +459,18 @@ async fn test_simulated_session_leak() -> anyhow::Result<()> {
                 application_id: caller_id,
                 bytes: vec![],
             },
-            &mut TransactionTracker::new(0, 0, Some(Vec::new())),
+            &mut TransactionTracker::new(
+                0,
+                0,
+                Some(
+                    caller_blobs
+                        .iter()
+                        .chain(target_blobs.iter())
+                        .copied()
+                        .map(OracleResponse::Blob)
+                        .collect(),
+                ),
+            ),
             &mut controller,
         )
         .await;
@@ -444,7 +486,7 @@ async fn test_rejecting_block_from_finalize() -> anyhow::Result<()> {
     state.description = Some(ChainDescription::Root(0));
     let mut view = state.into_view().await;
 
-    let (id, application) = view.register_mock_application(0).await?;
+    let (id, application, blobs) = view.register_mock_application(0).await?;
 
     application.expect_call(ExpectedCall::execute_operation(
         move |_runtime, _context, _operation| Ok(vec![]),
@@ -466,7 +508,11 @@ async fn test_rejecting_block_from_finalize() -> anyhow::Result<()> {
                 application_id: id,
                 bytes: vec![],
             },
-            &mut TransactionTracker::new(0, 0, Some(Vec::new())),
+            &mut TransactionTracker::new(
+                0,
+                0,
+                Some(blobs.iter().copied().map(OracleResponse::Blob).collect()),
+            ),
             &mut controller,
         )
         .await;
@@ -482,10 +528,12 @@ async fn test_rejecting_block_from_called_applications_finalize() -> anyhow::Res
     state.description = Some(ChainDescription::Root(0));
     let mut view = state.into_view().await;
 
-    let (first_id, first_application) = view.register_mock_application(0).await?;
-    let (second_id, second_application) = view.register_mock_application(1).await?;
-    let (third_id, third_application) = view.register_mock_application(2).await?;
-    let (fourth_id, fourth_application) = view.register_mock_application(3).await?;
+    let (first_id, first_application, first_app_blobs) = view.register_mock_application(0).await?;
+    let (second_id, second_application, second_app_blobs) =
+        view.register_mock_application(1).await?;
+    let (third_id, third_application, third_app_blobs) = view.register_mock_application(2).await?;
+    let (fourth_id, fourth_application, fourth_app_blobs) =
+        view.register_mock_application(3).await?;
 
     first_application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
@@ -528,7 +576,20 @@ async fn test_rejecting_block_from_called_applications_finalize() -> anyhow::Res
                 application_id: first_id,
                 bytes: vec![],
             },
-            &mut TransactionTracker::new(0, 0, Some(Vec::new())),
+            &mut TransactionTracker::new(
+                0,
+                0,
+                Some(
+                    first_app_blobs
+                        .iter()
+                        .chain(second_app_blobs.iter())
+                        .chain(third_app_blobs.iter())
+                        .chain(fourth_app_blobs.iter())
+                        .copied()
+                        .map(OracleResponse::Blob)
+                        .collect(),
+                ),
+            ),
             &mut controller,
         )
         .await;
@@ -544,10 +605,12 @@ async fn test_sending_message_from_finalize() -> anyhow::Result<()> {
     state.description = Some(ChainDescription::Root(0));
     let mut view = state.into_view().await;
 
-    let (first_id, first_application) = view.register_mock_application(0).await?;
-    let (second_id, second_application) = view.register_mock_application(1).await?;
-    let (third_id, third_application) = view.register_mock_application(2).await?;
-    let (fourth_id, fourth_application) = view.register_mock_application(3).await?;
+    let (first_id, first_application, first_app_blobs) = view.register_mock_application(0).await?;
+    let (second_id, second_application, second_app_blobs) =
+        view.register_mock_application(1).await?;
+    let (third_id, third_application, third_app_blobs) = view.register_mock_application(2).await?;
+    let (fourth_id, fourth_application, fourth_app_blobs) =
+        view.register_mock_application(3).await?;
 
     let destination_chain = ChainId::from(ChainDescription::Root(1));
     let first_message = SendMessageRequest {
@@ -628,7 +691,20 @@ async fn test_sending_message_from_finalize() -> anyhow::Result<()> {
 
     let context = create_dummy_operation_context();
     let mut controller = ResourceController::default();
-    let mut txn_tracker = TransactionTracker::new(0, 0, Some(Vec::new()));
+    let mut txn_tracker = TransactionTracker::new(
+        0,
+        0,
+        Some(
+            first_app_blobs
+                .iter()
+                .chain(second_app_blobs.iter())
+                .chain(third_app_blobs.iter())
+                .chain(fourth_app_blobs.iter())
+                .copied()
+                .map(OracleResponse::Blob)
+                .collect(),
+        ),
+    );
     view.execute_operation(
         context,
         Timestamp::from(0),
@@ -701,8 +777,8 @@ async fn test_cross_application_call_from_finalize() -> anyhow::Result<()> {
     state.description = Some(ChainDescription::Root(0));
     let mut view = state.into_view().await;
 
-    let (caller_id, caller_application) = view.register_mock_application(0).await?;
-    let (target_id, _target_application) = view.register_mock_application(1).await?;
+    let (caller_id, caller_application, caller_blobs) = view.register_mock_application(0).await?;
+    let (target_id, _target_application, target_blobs) = view.register_mock_application(1).await?;
 
     caller_application.expect_call(ExpectedCall::execute_operation(
         move |_runtime, _context, _operation| Ok(vec![]),
@@ -725,7 +801,18 @@ async fn test_cross_application_call_from_finalize() -> anyhow::Result<()> {
                 application_id: caller_id,
                 bytes: vec![],
             },
-            &mut TransactionTracker::new(0, 0, Some(Vec::new())),
+            &mut TransactionTracker::new(
+                0,
+                0,
+                Some(
+                    caller_blobs
+                        .iter()
+                        .chain(target_blobs.iter())
+                        .copied()
+                        .map(OracleResponse::Blob)
+                        .collect(),
+                ),
+            ),
             &mut controller,
         )
         .await;
@@ -749,8 +836,8 @@ async fn test_cross_application_call_from_finalize_of_called_application() -> an
     state.description = Some(ChainDescription::Root(0));
     let mut view = state.into_view().await;
 
-    let (caller_id, caller_application) = view.register_mock_application(0).await?;
-    let (target_id, target_application) = view.register_mock_application(1).await?;
+    let (caller_id, caller_application, caller_blobs) = view.register_mock_application(0).await?;
+    let (target_id, target_application, target_blobs) = view.register_mock_application(1).await?;
 
     caller_application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
@@ -780,7 +867,18 @@ async fn test_cross_application_call_from_finalize_of_called_application() -> an
                 application_id: caller_id,
                 bytes: vec![],
             },
-            &mut TransactionTracker::new(0, 0, Some(Vec::new())),
+            &mut TransactionTracker::new(
+                0,
+                0,
+                Some(
+                    caller_blobs
+                        .iter()
+                        .chain(target_blobs.iter())
+                        .copied()
+                        .map(OracleResponse::Blob)
+                        .collect(),
+                ),
+            ),
             &mut controller,
         )
         .await;
@@ -803,8 +901,8 @@ async fn test_calling_application_again_from_finalize() -> anyhow::Result<()> {
     state.description = Some(ChainDescription::Root(0));
     let mut view = state.into_view().await;
 
-    let (caller_id, caller_application) = view.register_mock_application(0).await?;
-    let (target_id, target_application) = view.register_mock_application(1).await?;
+    let (caller_id, caller_application, caller_blobs) = view.register_mock_application(0).await?;
+    let (target_id, target_application, target_blobs) = view.register_mock_application(1).await?;
 
     caller_application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
@@ -834,7 +932,18 @@ async fn test_calling_application_again_from_finalize() -> anyhow::Result<()> {
                 application_id: caller_id,
                 bytes: vec![],
             },
-            &mut TransactionTracker::new(0, 0, Some(Vec::new())),
+            &mut TransactionTracker::new(
+                0,
+                0,
+                Some(
+                    caller_blobs
+                        .iter()
+                        .chain(target_blobs.iter())
+                        .copied()
+                        .map(OracleResponse::Blob)
+                        .collect(),
+                ),
+            ),
             &mut controller,
         )
         .await;
@@ -860,8 +969,8 @@ async fn test_cross_application_error() -> anyhow::Result<()> {
     state.description = Some(ChainDescription::Root(0));
     let mut view = state.into_view().await;
 
-    let (caller_id, caller_application) = view.register_mock_application(0).await?;
-    let (target_id, target_application) = view.register_mock_application(1).await?;
+    let (caller_id, caller_application, caller_blobs) = view.register_mock_application(0).await?;
+    let (target_id, target_application, target_blobs) = view.register_mock_application(1).await?;
 
     caller_application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
@@ -887,8 +996,12 @@ async fn test_cross_application_error() -> anyhow::Result<()> {
                 bytes: vec![],
             },
             &mut TransactionTracker::new(
-                0, 0,
-                Some(Vec::new())),
+                0, 0, Some(caller_blobs
+                        .iter()
+                        .chain(target_blobs.iter())
+                        .copied()
+                        .map(OracleResponse::Blob)
+                        .collect())),
             &mut controller,
         )
         .await,
@@ -906,7 +1019,7 @@ async fn test_simple_message() -> anyhow::Result<()> {
     state.description = Some(ChainDescription::Root(0));
     let mut view = state.into_view().await;
 
-    let (application_id, application) = view.register_mock_application(0).await?;
+    let (application_id, application, blobs) = view.register_mock_application(0).await?;
 
     let destination_chain = ChainId::from(ChainDescription::Root(1));
     let dummy_message = SendMessageRequest {
@@ -931,7 +1044,11 @@ async fn test_simple_message() -> anyhow::Result<()> {
 
     let context = create_dummy_operation_context();
     let mut controller = ResourceController::default();
-    let mut txn_tracker = TransactionTracker::new(0, 0, Some(Vec::new()));
+    let mut txn_tracker = TransactionTracker::new(
+        0,
+        0,
+        Some(blobs.iter().copied().map(OracleResponse::Blob).collect()),
+    );
     view.execute_operation(
         context,
         Timestamp::from(0),
@@ -977,8 +1094,8 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
     state.description = Some(ChainDescription::Root(0));
     let mut view = state.into_view().await;
 
-    let (caller_id, caller_application) = view.register_mock_application(0).await?;
-    let (target_id, target_application) = view.register_mock_application(1).await?;
+    let (caller_id, caller_application, caller_blobs) = view.register_mock_application(0).await?;
+    let (target_id, target_application, target_blobs) = view.register_mock_application(1).await?;
 
     caller_application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
@@ -1012,7 +1129,18 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
 
     let context = create_dummy_operation_context();
     let mut controller = ResourceController::default();
-    let mut txn_tracker = TransactionTracker::new(0, 0, Some(Vec::new()));
+    let mut txn_tracker = TransactionTracker::new(
+        0,
+        0,
+        Some(
+            caller_blobs
+                .iter()
+                .chain(target_blobs.iter())
+                .copied()
+                .map(OracleResponse::Blob)
+                .collect(),
+        ),
+    );
     view.execute_operation(
         context,
         Timestamp::from(0),
@@ -1065,9 +1193,9 @@ async fn test_message_from_deeper_call() -> anyhow::Result<()> {
     state.description = Some(ChainDescription::Root(0));
     let mut view = state.into_view().await;
 
-    let (caller_id, caller_application) = view.register_mock_application(0).await?;
-    let (middle_id, middle_application) = view.register_mock_application(1).await?;
-    let (target_id, target_application) = view.register_mock_application(2).await?;
+    let (caller_id, caller_application, caller_blobs) = view.register_mock_application(0).await?;
+    let (middle_id, middle_application, middle_blobs) = view.register_mock_application(1).await?;
+    let (target_id, target_application, target_blobs) = view.register_mock_application(2).await?;
 
     caller_application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
@@ -1109,7 +1237,19 @@ async fn test_message_from_deeper_call() -> anyhow::Result<()> {
 
     let context = create_dummy_operation_context();
     let mut controller = ResourceController::default();
-    let mut txn_tracker = TransactionTracker::new(0, 0, Some(Vec::new()));
+    let mut txn_tracker = TransactionTracker::new(
+        0,
+        0,
+        Some(
+            caller_blobs
+                .iter()
+                .chain(middle_blobs.iter())
+                .chain(target_blobs.iter())
+                .copied()
+                .map(OracleResponse::Blob)
+                .collect(),
+        ),
+    );
     view.execute_operation(
         context,
         Timestamp::from(0),
@@ -1174,11 +1314,13 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
     let mut view = state.into_view().await;
 
     // The entrypoint application, which sends a message and calls other applications
-    let (caller_id, caller_application) = view.register_mock_application(0).await?;
+    let (caller_id, caller_application, caller_blobs) = view.register_mock_application(0).await?;
     // An application that does not send any messages
-    let (silent_target_id, silent_target_application) = view.register_mock_application(1).await?;
+    let (silent_target_id, silent_target_application, silent_blobs) =
+        view.register_mock_application(1).await?;
     // An application that sends a message when handling a cross-application call
-    let (sending_target_id, sending_target_application) = view.register_mock_application(2).await?;
+    let (sending_target_id, sending_target_application, sending_blobs) =
+        view.register_mock_application(2).await?;
 
     // The first destination chain receives messages from the caller and the sending applications
     let first_destination_chain = ChainId::from(ChainDescription::Root(1));
@@ -1251,7 +1393,19 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
     // Execute the operation, starting the test scenario
     let context = create_dummy_operation_context();
     let mut controller = ResourceController::default();
-    let mut txn_tracker = TransactionTracker::new(0, 0, Some(Vec::new()));
+    let mut txn_tracker = TransactionTracker::new(
+        0,
+        0,
+        Some(
+            caller_blobs
+                .iter()
+                .chain(silent_blobs.iter())
+                .chain(sending_blobs.iter())
+                .copied()
+                .map(OracleResponse::Blob)
+                .collect(),
+        ),
+    );
     view.execute_operation(
         context,
         Timestamp::from(0),
@@ -1324,7 +1478,7 @@ async fn test_open_chain() -> anyhow::Result<()> {
         ..SystemExecutionState::new(Epoch::ZERO, ChainDescription::Root(0), ChainId::root(0))
     };
     let mut view = state.into_view().await;
-    let (application_id, application) = view.register_mock_application(0).await?;
+    let (application_id, application, blobs) = view.register_mock_application(0).await?;
 
     let context = OperationContext {
         height: BlockHeight(1),
@@ -1362,7 +1516,11 @@ async fn test_open_chain() -> anyhow::Result<()> {
         application_id,
         bytes: vec![],
     };
-    let mut txn_tracker = TransactionTracker::new(first_message_index, 0, Some(Vec::new()));
+    let mut txn_tracker = TransactionTracker::new(
+        first_message_index,
+        0,
+        Some(blobs.iter().copied().map(OracleResponse::Blob).collect()),
+    );
     view.execute_operation(
         context,
         Timestamp::from(0),
@@ -1427,7 +1585,7 @@ async fn test_close_chain() -> anyhow::Result<()> {
         ..SystemExecutionState::new(Epoch::ZERO, ChainDescription::Root(0), ChainId::root(0))
     };
     let mut view = state.into_view().await;
-    let (application_id, application) = view.register_mock_application(0).await?;
+    let (application_id, application, blobs) = view.register_mock_application(0).await?;
 
     // The application is not authorized to close the chain.
     let context = create_dummy_operation_context();
@@ -1451,7 +1609,11 @@ async fn test_close_chain() -> anyhow::Result<()> {
         context,
         Timestamp::from(0),
         operation,
-        &mut TransactionTracker::new(0, 0, Some(Vec::new())),
+        &mut TransactionTracker::new(
+            0,
+            0,
+            Some(blobs.iter().copied().map(OracleResponse::Blob).collect()),
+        ),
         &mut controller,
     )
     .await?;
@@ -1549,7 +1711,7 @@ async fn test_message_receipt_spending_chain_balance(
     .into_view()
     .await;
 
-    let (application_id, application) = view.register_mock_application(0).await?;
+    let (application_id, application, blobs) = view.register_mock_application(0).await?;
 
     let receiver_chain_account = None;
     let sender_chain_id = ChainId::root(2);
@@ -1568,7 +1730,11 @@ async fn test_message_receipt_spending_chain_balance(
 
     let context = create_dummy_message_context(authenticated_signer);
     let mut controller = ResourceController::default();
-    let mut txn_tracker = TransactionTracker::new(0, 0, Some(Vec::new()));
+    let mut txn_tracker = TransactionTracker::new(
+        0,
+        0,
+        Some(blobs.iter().copied().map(OracleResponse::Blob).collect()),
+    );
 
     let execution_result = view
         .execute_message(

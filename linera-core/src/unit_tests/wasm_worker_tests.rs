@@ -28,8 +28,9 @@ use linera_chain::{
     types::ConfirmedBlock,
 };
 use linera_execution::{
-    committee::Epoch, system::SystemOperation, test_utils::SystemExecutionState, Operation,
-    OperationContext, ResourceController, TransactionTracker, WasmContractModule, WasmRuntime,
+    committee::Epoch, system::SystemOperation, test_utils::SystemExecutionState,
+    ExecutionRuntimeContext, Operation, OperationContext, ResourceController, TransactionTracker,
+    WasmContractModule, WasmRuntime,
 };
 use linera_storage::{DbStorage, Storage};
 #[cfg(feature = "dynamodb")]
@@ -38,7 +39,11 @@ use linera_views::dynamo_db::DynamoDbStore;
 use linera_views::rocks_db::RocksDbStore;
 #[cfg(feature = "scylladb")]
 use linera_views::scylla_db::ScyllaDbStore;
-use linera_views::{memory::MemoryStore, views::CryptoHashView};
+use linera_views::{
+    context::Context,
+    memory::MemoryStore,
+    views::{CryptoHashView, View},
+};
 use test_case::test_case;
 
 use super::{init_worker_with_chains, make_certificate};
@@ -198,6 +203,7 @@ where
         parameters: parameters_bytes,
     };
     let application_description_blob = Blob::new_application_description(&application_description);
+    let application_description_blob_id = application_description_blob.id();
     let application_id = From::from(&application_description);
     let create_block = make_first_block(creator_chain.into())
         .with_timestamp(2)
@@ -229,7 +235,14 @@ where
     ));
     let create_certificate = make_certificate(&committee, &worker, create_block_proposal);
 
-    storage.write_blobs(&[application_description_blob]).await?;
+    storage
+        .write_blobs(&[application_description_blob.clone()])
+        .await?;
+    creator_state
+        .context()
+        .extra()
+        .add_blobs([application_description_blob])
+        .await?;
     let info = worker
         .fully_handle_certificate_with_notifications(create_certificate.clone(), &())
         .await
@@ -268,7 +281,11 @@ where
                 application_id,
                 bytes: user_operation,
             },
-            &mut TransactionTracker::new(0, 0, Some(Vec::new())),
+            &mut TransactionTracker::new(
+                0,
+                0,
+                Some(vec![OracleResponse::Blob(application_description_blob_id)]),
+            ),
             &mut controller,
         )
         .await?;
@@ -279,7 +296,7 @@ where
             events: vec![Vec::new()],
             blobs: vec![Vec::new()],
             state_hash: creator_state.crypto_hash().await?,
-            oracle_responses: vec![Vec::new()],
+            oracle_responses: vec![vec![OracleResponse::Blob(application_description_blob_id)]],
         }
         .with(run_block),
     ));

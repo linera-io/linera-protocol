@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use linera_base::{
-    data_types::{Amount, Blob, BlockHeight, Timestamp},
+    data_types::{Amount, Blob, BlockHeight, OracleResponse, Timestamp},
     identifiers::{Account, ChainDescription, ChainId},
 };
 use linera_execution::{
@@ -42,6 +42,9 @@ async fn test_fuel_for_counter_wasm_application(
         .await;
     let (app_desc, contract_blob, service_blob) = create_dummy_user_application_description(1);
     let app_id = From::from(&app_desc);
+    let app_desc_blob_id = Blob::new_application_description(&app_desc).id();
+    let contract_blob_id = contract_blob.id();
+    let service_blob_id = service_blob.id();
 
     let contract =
         WasmContractModule::from_file("tests/fixtures/counter_contract.wasm", wasm_runtime).await?;
@@ -87,12 +90,24 @@ async fn test_fuel_for_counter_wasm_application(
         account: None,
     };
 
-    for increment in &increments {
+    for (index, increment) in increments.iter().enumerate() {
         let account = Account {
             chain_id: ChainId::root(0),
             owner: None,
         };
-        let mut txn_tracker = TransactionTracker::new(0, 0, Some(Vec::new()));
+        let mut txn_tracker = TransactionTracker::new(
+            0,
+            0,
+            Some(if index == 0 {
+                vec![
+                    OracleResponse::Blob(app_desc_blob_id),
+                    OracleResponse::Blob(contract_blob_id),
+                    OracleResponse::Blob(service_blob_id),
+                ]
+            } else {
+                vec![]
+            }),
+        );
         view.execute_operation(
             context,
             Timestamp::from(0),

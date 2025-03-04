@@ -3,7 +3,6 @@
 
 //! Handle requests from the synchronous execution thread of user applications.
 
-use std::collections::BTreeMap;
 #[cfg(with_metrics)]
 use std::sync::LazyLock;
 
@@ -12,7 +11,7 @@ use futures::channel::mpsc;
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::{bucket_latencies, register_histogram_vec, MeasureLatency as _};
 use linera_base::{
-    data_types::{Amount, ApplicationPermissions, Blob, BlobContent, BlockHeight, Timestamp},
+    data_types::{Amount, ApplicationPermissions, BlobContent, BlockHeight, Timestamp},
     hex_debug, hex_vec_debug, http,
     identifiers::{Account, AccountOwner, BlobId, BlobType, ChainId, MessageId, Owner},
     ownership::ChainOwnership,
@@ -27,8 +26,8 @@ use crate::{
     system::{CreateApplicationResult, OpenChainConfig, Recipient},
     util::RespondExt,
     BytecodeId, ExecutionError, ExecutionRuntimeContext, ExecutionStateView, RawExecutionOutcome,
-    RawOutgoingMessage, SystemExecutionError, SystemMessage, UserApplicationDescription,
-    UserApplicationId, UserContractCode, UserServiceCode,
+    RawOutgoingMessage, SystemExecutionError, SystemMessage, TransactionTracker,
+    UserApplicationDescription, UserApplicationId, UserContractCode, UserServiceCode,
 };
 
 #[cfg(with_metrics)]
@@ -63,7 +62,7 @@ where
     pub(crate) async fn load_contract(
         &mut self,
         id: UserApplicationId,
-        blobs_cache: &BTreeMap<BlobId, Blob>,
+        txn_tracker: &mut TransactionTracker,
     ) -> Result<(UserContractCode, UserApplicationDescription), ExecutionError> {
         #[cfg(with_metrics)]
         let _latency = LOAD_CONTRACT_LATENCY.measure_latency();
@@ -71,12 +70,16 @@ where
             id.application_description_hash,
             BlobType::ApplicationDescription,
         );
-        let description = match blobs_cache.get(&blob_id) {
+        let description = match txn_tracker.get_blobs_cache().get(&blob_id) {
             Some(description) => {
                 let blob = description.clone();
                 bcs::from_bytes(blob.bytes())?
             }
-            None => self.system.describe_application(id).await?,
+            None => {
+                self.system
+                    .describe_application(id, Some(txn_tracker))
+                    .await?
+            }
         };
         let code = self
             .context()
@@ -89,10 +92,11 @@ where
     pub(crate) async fn load_service(
         &mut self,
         id: UserApplicationId,
+        txn_tracker: Option<&mut TransactionTracker>,
     ) -> Result<(UserServiceCode, UserApplicationDescription), ExecutionError> {
         #[cfg(with_metrics)]
         let _latency = LOAD_SERVICE_LATENCY.measure_latency();
-        let description = self.system.describe_application(id).await?;
+        let description = self.system.describe_application(id, txn_tracker).await?;
         let code = self
             .context()
             .extra()
@@ -111,11 +115,21 @@ where
             #[cfg(not(web))]
             LoadContract {
                 id,
-                blobs_cache,
                 callback,
-            } => callback.respond(self.load_contract(id, &blobs_cache).await?),
+                mut txn_tracker,
+            } => {
+                let (code, description) = self.load_contract(id, &mut txn_tracker).await?;
+                callback.respond((code, description, txn_tracker))
+            }
             #[cfg(not(web))]
-            LoadService { id, callback } => callback.respond(self.load_service(id).await?),
+            LoadService {
+                id,
+                callback,
+                mut txn_tracker,
+            } => {
+                let (code, description) = self.load_service(id, Some(&mut txn_tracker)).await?;
+                callback.respond((code, description, txn_tracker))
+            }
 
             ChainBalance { callback } => {
                 let balance = *self.system.balance.get();
@@ -324,21 +338,21 @@ where
             CreateApplication {
                 chain_id,
                 block_height,
-                application_index,
                 bytecode_id,
                 parameters,
                 required_application_ids,
                 callback,
+                txn_tracker,
             } => {
                 let create_application_result = self
                     .system
                     .create_application(
                         chain_id,
                         block_height,
-                        application_index,
                         bytecode_id,
                         parameters,
                         required_application_ids,
+                        txn_tracker,
                     )
                     .await?;
                 callback.respond(Ok(create_application_result));
@@ -387,16 +401,27 @@ pub enum ExecutionRequest {
     #[cfg(not(web))]
     LoadContract {
         id: UserApplicationId,
-        blobs_cache: BTreeMap<BlobId, Blob>,
         #[debug(skip)]
-        callback: Sender<(UserContractCode, UserApplicationDescription)>,
+        callback: Sender<(
+            UserContractCode,
+            UserApplicationDescription,
+            TransactionTracker,
+        )>,
+        #[debug(skip)]
+        txn_tracker: TransactionTracker,
     },
 
     #[cfg(not(web))]
     LoadService {
         id: UserApplicationId,
         #[debug(skip)]
-        callback: Sender<(UserServiceCode, UserApplicationDescription)>,
+        callback: Sender<(
+            UserServiceCode,
+            UserApplicationDescription,
+            TransactionTracker,
+        )>,
+        #[debug(skip)]
+        txn_tracker: TransactionTracker,
     },
 
     ChainBalance {
@@ -532,10 +557,11 @@ pub enum ExecutionRequest {
     CreateApplication {
         chain_id: ChainId,
         block_height: BlockHeight,
-        application_index: u32,
         bytecode_id: BytecodeId,
         parameters: Vec<u8>,
         required_application_ids: Vec<UserApplicationId>,
+        #[debug(skip)]
+        txn_tracker: TransactionTracker,
         #[debug(skip)]
         callback: Sender<Result<CreateApplicationResult, ExecutionError>>,
     },

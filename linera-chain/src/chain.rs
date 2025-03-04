@@ -355,7 +355,7 @@ where
     ) -> Result<UserApplicationDescription, ChainError> {
         self.execution_state
             .system
-            .describe_application(application_id)
+            .describe_application(application_id, None)
             .await
             .with_execution_context(ChainExecutionContext::DescribeApplication)
     }

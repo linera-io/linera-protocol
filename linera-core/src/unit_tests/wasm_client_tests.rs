@@ -573,7 +573,7 @@ where
 
     receiver.synchronize_from_validators().await.unwrap();
     receiver
-        .receive_certificate_and_update_validators(cert)
+        .receive_certificate_and_update_validators(cert.clone())
         .await
         .unwrap();
     let certs = receiver.process_inbox().await.unwrap().0;

@@ -106,6 +106,7 @@ where
             account: None,
         };
         let mut txn_tracker = TransactionTracker::new(next_message_index, next_message_index, None);
+        txn_tracker.add_created_blob(Blob::new_application_description(&application_description));
         self.run_user_action(
             application_id,
             chain_id,
@@ -210,9 +211,7 @@ where
         };
         let (execution_state_sender, mut execution_state_receiver) =
             futures::channel::mpsc::unbounded();
-        let (code, description) = self
-            .load_contract(application_id, txn_tracker.get_blobs_cache())
-            .await?;
+        let (code, description) = self.load_contract(application_id, txn_tracker).await?;
         let txn_tracker_moved = mem::take(txn_tracker);
         let contract_runtime_task = linera_base::task::Blocking::spawn(move |mut codes| {
             let runtime = ContractSyncRuntime::new(
@@ -311,10 +310,7 @@ where
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         match message {
             Message::System(message) => {
-                let outcome = self
-                    .system
-                    .execute_message(context, message, txn_tracker)
-                    .await?;
+                let outcome = self.system.execute_message(context, message).await?;
                 txn_tracker.add_system_outcome(outcome)?;
             }
             Message::User {
@@ -454,7 +450,7 @@ where
     ) -> Result<QueryOutcome<Vec<u8>>, ExecutionError> {
         let (execution_state_sender, mut execution_state_receiver) =
             futures::channel::mpsc::unbounded();
-        let (code, description) = self.load_service(application_id).await?;
+        let (code, description) = self.load_service(application_id, None).await?;
 
         let service_runtime_task = linera_base::task::Blocking::spawn(move |mut codes| {
             let mut runtime = ServiceSyncRuntime::new(execution_state_sender, context);

@@ -12,8 +12,8 @@ use custom_debug_derive::Debug;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{
-        Amount, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, OracleResponse,
-        Resources, SendMessageRequest, Timestamp,
+        Amount, ApplicationPermissions, ArithmeticError, BlockHeight, OracleResponse, Resources,
+        SendMessageRequest, Timestamp,
     },
     ensure, http,
     identifiers::{
@@ -401,15 +401,16 @@ impl SyncRuntimeInternal<UserContractInstance> {
             }
             #[cfg(not(web))]
             hash_map::Entry::Vacant(entry) => {
-                let blobs_cache = self.transaction_tracker.get_blobs_cache().clone();
-                let (code, description) = self
+                let txn_tracker_moved = mem::take(&mut self.transaction_tracker);
+                let (code, description, txn_tracker_moved) = self
                     .execution_state_sender
-                    .send_request(|callback| ExecutionRequest::LoadContract {
+                    .send_request(move |callback| ExecutionRequest::LoadContract {
                         id,
-                        blobs_cache,
                         callback,
+                        txn_tracker: txn_tracker_moved,
                     })?
                     .recv_response()?;
+                self.transaction_tracker = txn_tracker_moved;
 
                 let instance = code.instantiate(this)?;
 
@@ -528,10 +529,16 @@ impl SyncRuntimeInternal<UserServiceInstance> {
             }
             #[cfg(not(web))]
             hash_map::Entry::Vacant(entry) => {
-                let (code, description) = self
+                let txn_tracker_moved = mem::take(&mut self.transaction_tracker);
+                let (code, description, txn_tracker_moved) = self
                     .execution_state_sender
-                    .send_request(|callback| ExecutionRequest::LoadService { id, callback })?
+                    .send_request(move |callback| ExecutionRequest::LoadService {
+                        id,
+                        callback,
+                        txn_tracker: txn_tracker_moved,
+                    })?
                     .recv_response()?;
+                self.transaction_tracker = txn_tracker_moved;
 
                 let instance = code.instantiate(this)?;
                 Ok(entry
@@ -1455,34 +1462,27 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
     ) -> Result<UserApplicationId, ExecutionError> {
         let chain_id = self.inner().chain_id;
         let block_height = self.block_height()?;
-        let application_index = self.inner().transaction_tracker.next_application_index();
+
+        let txn_tracker_moved = mem::take(&mut self.inner().transaction_tracker);
 
         let CreateApplicationResult {
             app_id,
-            blobs_to_register,
-            application_description,
+            txn_tracker: txn_tracker_moved,
         } = self
             .inner()
             .execution_state_sender
-            .send_request(|callback| ExecutionRequest::CreateApplication {
+            .send_request(move |callback| ExecutionRequest::CreateApplication {
                 chain_id,
                 block_height,
-                application_index,
                 bytecode_id,
                 parameters,
                 required_application_ids,
                 callback,
+                txn_tracker: txn_tracker_moved,
             })?
             .recv_response()??;
-        for blob_id in blobs_to_register {
-            self.inner()
-                .transaction_tracker
-                .replay_oracle_response(OracleResponse::Blob(blob_id))?;
-        }
 
-        self.inner()
-            .transaction_tracker
-            .add_created_blob(Blob::new_application_description(&application_description));
+        self.inner().transaction_tracker = txn_tracker_moved;
 
         let (contract, context) = self.inner().prepare_for_call(self.clone(), true, app_id)?;
 

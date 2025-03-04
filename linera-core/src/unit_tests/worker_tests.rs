@@ -3806,7 +3806,8 @@ where
     let (application_id, application);
     {
         let mut chain = storage.load_chain(chain_id).await?;
-        (application_id, application) = chain.execution_state.register_mock_application(0).await?;
+        (application_id, application, _) =
+            chain.execution_state.register_mock_application(0).await?;
         chain.save().await?;
     }
 
@@ -3895,7 +3896,8 @@ where
     let (application_id, application);
     {
         let mut chain = storage.load_chain(chain_id).await?;
-        (application_id, application) = chain.execution_state.register_mock_application(0).await?;
+        (application_id, application, _) =
+            chain.execution_state.register_mock_application(0).await?;
         chain.save().await?;
     }
 
