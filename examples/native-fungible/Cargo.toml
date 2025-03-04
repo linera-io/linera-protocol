@@ -13,9 +13,12 @@ fungible.workspace = true
 linera-sdk.workspace = true
 serde.workspace = true
 
-[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-native-fungible = { workspace = true, features = ["test"] }
+[dev-dependencies]
 linera-sdk = { workspace = true, features = ["test", "wasmer"] }
+native-fungible = { workspace = true, features = ["test"] }
+test-log.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 tokio = { workspace = true }
 
 [[bin]]

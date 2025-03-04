@@ -6,6 +6,7 @@
 //! This allows manipulating a test microchain.
 
 use std::{
+    collections::HashMap,
     io,
     path::{Path, PathBuf},
     sync::Arc,
@@ -14,14 +15,17 @@ use std::{
 use cargo_toml::Manifest;
 use linera_base::{
     crypto::{AccountPublicKey, AccountSecretKey},
-    data_types::{Blob, BlockHeight, Bytecode, CompressedBytecode},
-    identifiers::{ApplicationId, BytecodeId, ChainDescription, ChainId, MessageId},
+    data_types::{Amount, Blob, BlockHeight, Bytecode, CompressedBytecode},
+    identifiers::{AccountOwner, ApplicationId, BytecodeId, ChainDescription, ChainId, MessageId},
     vm::VmRuntime,
 };
 use linera_chain::{types::ConfirmedBlockCertificate, ChainError, ChainExecutionContext};
 use linera_core::{data_types::ChainInfoQuery, worker::WorkerError};
 use linera_execution::{
-    system::{SystemExecutionError, SystemOperation, CREATE_APPLICATION_MESSAGE_INDEX},
+    system::{
+        SystemExecutionError, SystemOperation, SystemQuery, SystemResponse,
+        CREATE_APPLICATION_MESSAGE_INDEX,
+    },
     ExecutionError, Query, QueryOutcome, QueryResponse,
 };
 use linera_storage::Storage as _;
@@ -89,6 +93,103 @@ impl ActiveChain {
         self.key_pair = key_pair
     }
 
+    /// Reads the current shared balance available to all of the owners of this microchain.
+    pub async fn chain_balance(&self) -> Amount {
+        let query = Query::System(SystemQuery);
+
+        let QueryOutcome { response, .. } = self
+            .validator
+            .worker()
+            .query_application(self.id(), query)
+            .await
+            .expect("Failed to query chain's balance");
+
+        let QueryResponse::System(SystemResponse { balance, .. }) = response else {
+            panic!("Unexpected response from system application");
+        };
+
+        balance
+    }
+
+    /// Reads the current account balance on this microchain of an [`AccountOwner`].
+    pub async fn owner_balance(&self, owner: &AccountOwner) -> Option<Amount> {
+        let chain_state = self
+            .validator
+            .worker()
+            .chain_state_view(self.id())
+            .await
+            .expect("Failed to read chain state");
+
+        chain_state
+            .execution_state
+            .system
+            .balances
+            .get(owner)
+            .await
+            .expect("Failed to read owner balance")
+    }
+
+    /// Reads the current account balance on this microchain of all [`AccountOwner`]s.
+    pub async fn owner_balances(
+        &self,
+        owners: impl IntoIterator<Item = AccountOwner>,
+    ) -> HashMap<AccountOwner, Option<Amount>> {
+        let chain_state = self
+            .validator
+            .worker()
+            .chain_state_view(self.id())
+            .await
+            .expect("Failed to read chain state");
+
+        let mut balances = HashMap::new();
+
+        for owner in owners {
+            let balance = chain_state
+                .execution_state
+                .system
+                .balances
+                .get(&owner)
+                .await
+                .expect("Failed to read an owner's balance");
+
+            balances.insert(owner, balance);
+        }
+
+        balances
+    }
+
+    /// Reads a list of [`AccountOwner`]s that have a non-zero balance on this microchain.
+    pub async fn accounts(&self) -> Vec<AccountOwner> {
+        let chain_state = self
+            .validator
+            .worker()
+            .chain_state_view(self.id())
+            .await
+            .expect("Failed to read chain state");
+
+        chain_state
+            .execution_state
+            .system
+            .balances
+            .indices()
+            .await
+            .expect("Failed to list accounts on the chain")
+    }
+
+    /// Reads all the non-zero account balances on this microchain.
+    pub async fn all_owner_balances(&self) -> HashMap<AccountOwner, Amount> {
+        self.owner_balances(self.accounts().await)
+            .await
+            .into_iter()
+            .map(|(owner, balance)| {
+                (
+                    owner,
+                    balance.expect("`accounts` should only return accounts with non-zero balance"),
+                )
+            })
+            .collect()
+    }
+
     /// Adds a block to this microchain.
     ///
     /// The `block_builder` parameter is a closure that should use the [`BlockBuilder`] parameter
@@ -127,6 +228,13 @@ impl ActiveChain {
         self.try_add_block_with_blobs(block_builder, vec![]).await
     }
 
+    /// Tries to add a block to this microchain, writing some `blobs` to storage if needed.
+    ///
+    /// The `block_builder` parameter is a closure that should use the [`BlockBuilder`] parameter
+    /// to provide the block's contents.
+    ///
+    /// The blobs are either all written to storage, if executing the block fails due to a missing
+    /// blob, or none are written to storage if executing the block succeeds without the blobs.
     async fn try_add_block_with_blobs(
         &self,
         block_builder: impl FnOnce(&mut BlockBuilder),
