@@ -80,6 +80,17 @@ jobs:
       run: |
         cargo test --locked -p linera-execution --features wasmtime
 
+  metrics-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
+    - name: Run metrics tests
+      run: |
+        cargo test --locked -p linera-base --features metrics
+
   wasm-application-test:
     runs-on: ubuntu-latest
     timeout-minutes: 15
