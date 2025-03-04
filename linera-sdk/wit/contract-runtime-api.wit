@@ -10,38 +10,16 @@ interface contract-runtime-api {
     unsubscribe: func(chain: chain-id, channel: channel-name);
     transfer: func(source: option<account-owner>, destination: account, amount: amount);
     claim: func(source: account, destination: account, amount: amount);
-    consume-fuel: func(fuel: u64);
-    try-call-application: func(authenticated: bool, callee-id: application-id, argument: list<u8>) -> list<u8>;
-    emit: func(name: stream-name, key: list<u8>, value: list<u8>);
-    query-service: func(application-id: application-id, query: list<u8>) -> list<u8>;
     open-chain: func(chain-ownership: chain-ownership, application-permissions: application-permissions, balance: amount) -> tuple<message-id, chain-id>;
     close-chain: func() -> result<tuple<>, close-chain-error>;
     change-application-permissions: func(application-permissions: application-permissions) -> result<tuple<>, change-application-permissions-error>;
     create-application: func(bytecode-id: bytecode-id, parameters: list<u8>, argument: list<u8>, required-application-ids: list<application-id>) -> application-id;
+    try-call-application: func(authenticated: bool, callee-id: application-id, argument: list<u8>) -> list<u8>;
+    emit: func(name: stream-name, key: list<u8>, value: list<u8>);
+    query-service: func(application-id: application-id, query: list<u8>) -> list<u8>;
+    consume-fuel: func(fuel: u64);
     validation-round: func() -> option<u32>;
-
     write-batch: func(operations: list<write-operation>);
-
-    variant write-operation {
-        delete(list<u8>),
-        delete-prefix(list<u8>),
-        put(tuple<list<u8>, list<u8>>),
-    }
-
-    record block-height {
-        inner0: u64,
-    }
-
-    record crypto-hash {
-        part1: u64,
-        part2: u64,
-        part3: u64,
-        part4: u64,
-    }
-
-    record owner {
-        inner0: crypto-hash,
-    }
 
     record account {
         chain-id: chain-id,
@@ -57,10 +35,20 @@ interface contract-runtime-api {
         inner0: u128,
     }
 
-    record message-id {
-        chain-id: chain-id,
-        height: block-height,
-        index: u32,
+    record application-id {
+        bytecode-id: bytecode-id,
+        creation: message-id,
+    }
+
+    record application-permissions {
+        execute-operations: option<list<application-id>>,
+        mandatory-applications: list<application-id>,
+        close-chain: list<application-id>,
+        change-application-permissions: list<application-id>,
+    }
+
+    record block-height {
+        inner0: u64,
     }
 
     record bytecode-id {
@@ -69,14 +57,50 @@ interface contract-runtime-api {
         vm-runtime: vm-runtime,
     }
 
-    record application-id {
-        bytecode-id: bytecode-id,
-        creation: message-id,
+    record chain-id {
+        inner0: crypto-hash,
+    }
+
+    record chain-ownership {
+        super-owners: list<owner>,
+        owners: list<tuple<owner, u64>>,
+        multi-leader-rounds: u32,
+        open-multi-leader-rounds: bool,
+        timeout-config: timeout-config,
+    }
+
+    enum change-application-permissions-error {
+        not-permitted,
+    }
+
+    record channel-name {
+        inner0: list<u8>,
+    }
+
+    enum close-chain-error {
+        not-permitted,
+    }
+
+    record crypto-hash {
+        part1: u64,
+        part2: u64,
+        part3: u64,
+        part4: u64,
     }
 
     variant destination {
         recipient(chain-id),
         subscribers(channel-name),
+    }
+
+    record message-id {
+        chain-id: chain-id,
+        height: block-height,
+        index: u32,
+    }
+
+    record owner {
+        inner0: crypto-hash,
     }
 
     record resources {
@@ -98,14 +122,6 @@ interface contract-runtime-api {
         message: list<u8>,
     }
 
-    record chain-id {
-        inner0: crypto-hash,
-    }
-
-    record channel-name {
-        inner0: list<u8>,
-    }
-
     record stream-name {
         inner0: list<u8>,
     }
@@ -121,33 +137,16 @@ interface contract-runtime-api {
         fallback-duration: time-delta,
     }
 
-    record chain-ownership {
-        super-owners: list<owner>,
-        owners: list<tuple<owner, u64>>,
-        multi-leader-rounds: u32,
-        open-multi-leader-rounds: bool,
-        timeout-config: timeout-config,
-    }
-
-    record application-permissions {
-        execute-operations: option<list<application-id>>,
-        mandatory-applications: list<application-id>,
-        close-chain: list<application-id>,
-        change-application-permissions: list<application-id>,
-    }
-
-    enum change-application-permissions-error {
-        not-permitted,
-    }
-
-    enum close-chain-error {
-        not-permitted,
-    }
-
     type u128 = tuple<u64, u64>;
 
     enum vm-runtime {
         wasm,
         evm,
+    }
+
+    variant write-operation {
+        delete(list<u8>),
+        delete-prefix(list<u8>),
+        put(tuple<list<u8>, list<u8>>),
     }
 }
