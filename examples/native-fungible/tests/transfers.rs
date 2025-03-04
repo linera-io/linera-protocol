@@ -5,9 +5,11 @@
 
 //! Integration tests for Native Fungible Token transfers.
 
+use std::collections::HashMap;
+
 use fungible::{self, FungibleTokenAbi};
 use linera_sdk::{
-    linera_base_types::{Account, Amount, ChainId, CryptoHash, Owner},
+    linera_base_types::{Account, AccountOwner, Amount, ChainId, CryptoHash, Owner},
     test::{Recipient, TestValidator},
 };
 
@@ -79,5 +81,60 @@ async fn transfer_to_owner() {
     assert_eq!(
         recipient_chain.owner_balance(&owner.into()).await,
         Some(transfer_amount)
+    );
+}
+
+/// Tests if multiple accounts can receive tokens.
+#[test_log::test(tokio::test)]
+async fn transfer_to_multiple_owners() {
+    let parameters = fungible::Parameters {
+        ticker_symbol: "NAT".to_owned(),
+    };
+    let initial_state = fungible::InitialStateBuilder::default().build();
+    let (validator, _application_id, recipient_chain) = TestValidator::with_current_application::<
+        FungibleTokenAbi,
+        _,
+        _,
+    >(parameters, initial_state)
+    .await;
+
+    let number_of_owners = 10;
+    let transfer_amounts = (1..=number_of_owners).map(Amount::from_tokens);
+    let funding_chain = validator.get_chain(&ChainId::root(0));
+
+    let account_owners = (1..=number_of_owners)
+        .map(|index| Owner(CryptoHash::test_hash(format!("owner{index}"))))
+        .map(AccountOwner::from)
+        .collect::<Vec<_>>();
+
+    let recipients = account_owners
+        .iter()
+        .copied()
+        .map(|account_owner| Account::owner(recipient_chain.id(), account_owner))
+        .map(Recipient::Account);
+
+    let transfer_certificate = funding_chain
+        .add_block(|block| {
+            for (recipient, transfer_amount) in recipients.zip(transfer_amounts.clone()) {
+                block.with_native_token_transfer(None, recipient, transfer_amount);
+            }
+        })
+        .await;
+
+    recipient_chain
+        .add_block(|block| {
+            block.with_messages_from(&transfer_certificate);
+        })
+        .await;
+
+    let expected_balances = account_owners
+        .iter()
+        .copied()
+        .zip(transfer_amounts.map(Some))
+        .collect::<HashMap<_, _>>();
+
+    assert_eq!(
+        recipient_chain.owner_balances(account_owners).await,
+        expected_balances,
     );
 }
