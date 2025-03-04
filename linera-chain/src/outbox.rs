@@ -30,7 +30,7 @@ static OUTBOX_SIZE: LazyLock<HistogramVec> = LazyLock::new(|| {
         "outbox_size",
         "Outbox size",
         &[],
-        exponential_bucket_interval(1.0, 10000.0),
+        exponential_bucket_interval(1.0, 10_000.0),
     )
 });
 
