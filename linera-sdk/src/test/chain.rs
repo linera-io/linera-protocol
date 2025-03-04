@@ -15,7 +15,7 @@ use cargo_toml::Manifest;
 use linera_base::{
     crypto::{AccountPublicKey, AccountSecretKey},
     data_types::{Amount, Blob, BlockHeight, Bytecode, CompressedBytecode},
-    identifiers::{ApplicationId, BytecodeId, ChainDescription, ChainId, MessageId},
+    identifiers::{AccountOwner, ApplicationId, BytecodeId, ChainDescription, ChainId, MessageId},
     vm::VmRuntime,
 };
 use linera_chain::{types::ConfirmedBlockCertificate, ChainError, ChainExecutionContext};
@@ -108,6 +108,24 @@ impl ActiveChain {
         };
 
         balance
+    }
+
+    /// Reads the current account balance on this microchain of an [`AccountOwner`].
+    pub async fn owner_balance(&self, owner: &AccountOwner) -> Option<Amount> {
+        let chain_state = self
+            .validator
+            .worker()
+            .chain_state_view(self.id())
+            .await
+            .expect("Failed to read chain state");
+
+        chain_state
+            .execution_state
+            .system
+            .balances
+            .get(owner)
+            .await
+            .expect("Failed to read owner balance")
     }
 
     /// Adds a block to this microchain.
