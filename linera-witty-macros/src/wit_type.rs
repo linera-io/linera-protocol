@@ -54,7 +54,7 @@ pub fn discover_wit_name(attributes: &[Attribute], rust_name: &Ident) -> LitStr 
                 abort!(
                     meta,
                     "Failed to parse WIT type name attribute. \
-                    Expected `#[witrty(name = \"custom-wit-type-name\")]`."
+                    Expected `#[witty(name = \"custom-wit-type-name\")]`."
                 );
             });
 
