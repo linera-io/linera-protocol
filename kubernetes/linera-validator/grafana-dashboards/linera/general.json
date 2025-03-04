@@ -221,7 +221,7 @@
           "hide": false,
           "includeNullMetadata": true,
           "instant": false,
-          "legendFormat": "__auto",
+          "legendFormat": "{{method_name}}",
           "range": true,
           "refId": "A",
           "useBackend": false
