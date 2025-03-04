@@ -161,6 +161,17 @@ impl<'de> serde::de::Visitor<'de> for AccountVisitor {
             owner: owner.flatten(),
         })
     }
+
+    fn visit_str<E>(self, string: &str) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        string.parse().map_err(|error| {
+            E::custom(format!(
+                "Failed to parse `Account` from string {string:?}: {error}"
+            ))
+        })
+    }
 }
 
 /// Representation of the field tag of a serialized [`Account`].
