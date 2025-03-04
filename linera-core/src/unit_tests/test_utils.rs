@@ -17,7 +17,8 @@ use futures::{
 };
 use linera_base::{
     crypto::{
-        AccountPublicKey, AccountSecretKey, CryptoHash, ValidatorKeypair, ValidatorPublicKey,
+        AccountPublicKey, AccountSecretKey, CryptoHash, Ed25519SecretKey, ValidatorKeypair,
+        ValidatorPublicKey,
     },
     data_types::*,
     identifiers::{BlobId, ChainDescription, ChainId},
@@ -734,7 +735,7 @@ where
         let mut validators = Vec::new();
         for _ in 0..count {
             let validator_keypair = ValidatorKeypair::generate();
-            let account_secret = AccountSecretKey::generate();
+            let account_secret: AccountSecretKey = Ed25519SecretKey::generate().into();
             validators.push((validator_keypair.public_key, account_secret.public()));
             key_pairs.push((validator_keypair.secret_key, account_secret));
         }
@@ -810,7 +811,7 @@ where
             Box::pin(self.add_root_chain(0, Amount::ZERO)).await?;
         }
         let description = ChainDescription::Root(index);
-        let key_pair = AccountSecretKey::generate();
+        let key_pair = AccountSecretKey::from(Ed25519SecretKey::generate());
         let public_key = key_pair.public();
         // Remember what's in the genesis store for future clients to join.
         self.genesis_storage_builder

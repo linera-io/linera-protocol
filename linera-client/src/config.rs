@@ -9,8 +9,8 @@ use std::{
 
 use linera_base::{
     crypto::{
-        AccountPublicKey, AccountSecretKey, BcsSignable, CryptoHash, CryptoRng, ValidatorPublicKey,
-        ValidatorSecretKey,
+        AccountPublicKey, AccountSecretKey, BcsSignable, CryptoHash, CryptoRng, Ed25519SecretKey,
+        ValidatorPublicKey, ValidatorSecretKey,
     },
     data_types::{Amount, Timestamp},
     identifiers::{ChainDescription, ChainId},
@@ -182,7 +182,7 @@ impl<W: Deref<Target = Wallet>> WalletState<W> {
     }
 
     pub fn generate_key_pair(&mut self) -> AccountSecretKey {
-        AccountSecretKey::generate_from(&mut self.prng)
+        AccountSecretKey::from(Ed25519SecretKey::generate_from(&mut self.prng))
     }
 }
 

@@ -339,6 +339,19 @@ impl Secp256k1SecretKey {
     pub fn copy(&self) -> Self {
         Self(self.0.clone())
     }
+
+    /// Generates a new key pair.
+    #[cfg(all(with_getrandom, with_testing))]
+    pub fn generate() -> Self {
+        let mut rng = rand::rngs::OsRng;
+        Self::generate_from(&mut rng)
+    }
+
+    /// Generates a new key pair from the given RNG. Use with care.
+    #[cfg(with_getrandom)]
+    pub fn generate_from<R: super::CryptoRng>(rng: &mut R) -> Self {
+        Secp256k1SecretKey(SigningKey::random(rng))
+    }
 }
 
 impl Secp256k1Signature {
@@ -367,6 +380,9 @@ impl Secp256k1Signature {
         self.verify_inner::<T>(prehash, author)
     }
 
+    /// Verifies a batch of signatures.
+    ///
+    /// Returns an error on first failed signature.
     pub fn verify_batch<'a, 'de, T, I>(value: &'a T, votes: I) -> Result<(), CryptoError>
     where
         T: BcsSignable<'de> + fmt::Debug,

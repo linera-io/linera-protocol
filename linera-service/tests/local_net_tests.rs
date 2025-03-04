@@ -16,6 +16,7 @@ use std::{env, path::PathBuf, time::Duration};
 use anyhow::Result;
 use guard::INTEGRATION_TEST_GUARD;
 use linera_base::{
+    crypto::Secp256k1SecretKey,
     data_types::{Amount, BlockHeight},
     identifiers::{Account, AccountOwner, ChainId},
 };
@@ -172,7 +173,9 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
         net.remove_validator(i)?;
     }
 
-    let recipient = AccountOwner::User(Owner::from(AccountSecretKey::generate().public()));
+    let recipient = AccountOwner::User(Owner::from(
+        AccountSecretKey::from(Secp256k1SecretKey::generate()).public(),
+    ));
     client
         .transfer_with_accounts(
             Amount::from_tokens(5),

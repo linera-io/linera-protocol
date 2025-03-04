@@ -2,7 +2,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_base::{crypto::ValidatorKeypair, data_types::Amount};
+use linera_base::{
+    crypto::{Ed25519SecretKey, Secp256k1SecretKey, ValidatorKeypair},
+    data_types::Amount,
+};
 
 use super::*;
 use crate::{
@@ -93,9 +96,9 @@ fn test_hashes() {
 #[test]
 fn test_certificates() {
     let validator1_key_pair = ValidatorKeypair::generate();
-    let account1_secret = AccountSecretKey::generate();
+    let account1_secret: AccountSecretKey = Ed25519SecretKey::generate().into();
     let validator2_key_pair = ValidatorKeypair::generate();
-    let account2_secret = AccountSecretKey::generate();
+    let account2_secret: AccountSecretKey = Secp256k1SecretKey::generate().into();
     let validator3_key_pair = ValidatorKeypair::generate();
 
     let committee = Committee::make_simple(vec![

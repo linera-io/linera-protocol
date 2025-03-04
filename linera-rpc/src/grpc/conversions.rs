@@ -987,7 +987,10 @@ pub mod tests {
     use std::{borrow::Cow, fmt::Debug};
 
     use linera_base::{
-        crypto::{AccountSecretKey, BcsSignable, CryptoHash, ValidatorKeypair},
+        crypto::{
+            AccountSecretKey, BcsSignable, CryptoHash, Ed25519SecretKey, Secp256k1SecretKey,
+            ValidatorKeypair,
+        },
         data_types::{Amount, Blob, Round, Timestamp},
     };
     use linera_chain::{
@@ -1024,7 +1027,7 @@ pub mod tests {
 
     #[test]
     pub fn test_public_key() {
-        let account_key = AccountSecretKey::generate().public();
+        let account_key = AccountSecretKey::from(Ed25519SecretKey::generate()).public();
         round_trip_check::<_, api::AccountPublicKey>(account_key);
 
         let validator_key = ValidatorKeypair::generate().public_key;
@@ -1038,14 +1041,14 @@ pub mod tests {
             ValidatorSignature::new(&Foo("test".into()), &validator_key_pair.secret_key);
         round_trip_check::<_, api::ValidatorSignature>(validator_signature);
 
-        let account_key_pair = AccountSecretKey::generate();
+        let account_key_pair = AccountSecretKey::from(Ed25519SecretKey::generate());
         let account_signature = account_key_pair.sign(&Foo("test".into()));
         round_trip_check::<_, api::AccountSignature>(account_signature);
     }
 
     #[test]
     pub fn test_owner() {
-        let key_pair = AccountSecretKey::generate();
+        let key_pair = AccountSecretKey::from(Ed25519SecretKey::generate());
         let owner = Owner::from(key_pair.public());
         round_trip_check::<_, api::Owner>(owner);
     }
@@ -1232,7 +1235,7 @@ pub mod tests {
         )
         .lite_certificate()
         .cloned();
-        let key_pair = AccountSecretKey::generate();
+        let key_pair = AccountSecretKey::from(Secp256k1SecretKey::generate());
         let block_proposal = BlockProposal {
             content: ProposalContent {
                 block: get_block(),

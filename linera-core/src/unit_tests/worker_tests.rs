@@ -17,7 +17,10 @@ use std::{
 
 use assert_matches::assert_matches;
 use linera_base::{
-    crypto::{AccountPublicKey, AccountSecretKey, CryptoHash, ValidatorKeypair},
+    crypto::{
+        AccountPublicKey, AccountSecretKey, CryptoHash, Ed25519SecretKey, Secp256k1SecretKey,
+        ValidatorKeypair,
+    },
     data_types::*,
     hashed::Hashed,
     identifiers::{
@@ -90,7 +93,7 @@ where
     S: Storage + Clone + Send + Sync + 'static,
 {
     let validator_keypair = ValidatorKeypair::generate();
-    let account_secret = AccountSecretKey::generate();
+    let account_secret = AccountSecretKey::from(Ed25519SecretKey::generate());
     let committee = Committee::make_simple(vec![(
         validator_keypair.public_key,
         account_secret.public(),
@@ -397,7 +400,8 @@ fn direct_credit_message(recipient: ChainId, amount: Amount) -> OutgoingMessage 
 
 /// Creates `count` key pairs and returns them, sorted by the `Owner` created from their public key.
 fn generate_key_pairs(count: usize) -> Vec<AccountSecretKey> {
-    let mut key_pairs = iter::repeat_with(AccountSecretKey::generate)
+    let mut key_pairs = iter::repeat_with(Secp256k1SecretKey::generate)
+        .map(AccountSecretKey::from)
         .take(count)
         .collect::<Vec<_>>();
     key_pairs.sort_by_key(|key_pair| Owner::from(key_pair.public()));
@@ -427,7 +431,7 @@ async fn test_handle_block_proposal_bad_signature<B>(mut storage_builder: B) -> 
 where
     B: StorageBuilder,
 {
-    let sender_key_pair = AccountSecretKey::generate();
+    let sender_key_pair = AccountSecretKey::from(Ed25519SecretKey::generate());
     let (_, worker) = init_worker_with_chains(
         storage_builder.build().await?,
         vec![
@@ -447,7 +451,7 @@ where
     let block_proposal = make_first_block(ChainId::root(1))
         .with_simple_transfer(ChainId::root(2), Amount::from_tokens(5))
         .into_first_proposal(&sender_key_pair);
-    let unknown_key_pair = AccountSecretKey::generate();
+    let unknown_key_pair = AccountSecretKey::from(Ed25519SecretKey::generate());
     let mut bad_signature_block_proposal = block_proposal.clone();
     bad_signature_block_proposal.signature = unknown_key_pair.sign(&block_proposal.content);
     assert_matches!(
@@ -472,7 +476,7 @@ async fn test_handle_block_proposal_zero_amount<B>(mut storage_builder: B) -> an
 where
     B: StorageBuilder,
 {
-    let sender_key_pair = AccountSecretKey::generate();
+    let sender_key_pair = AccountSecretKey::from(Ed25519SecretKey::generate());
     let (_, worker) = init_worker_with_chains(
         storage_builder.build().await?,
         vec![
@@ -524,7 +528,7 @@ where
 {
     let storage = storage_builder.build().await?;
     let clock = storage_builder.clock();
-    let key_pair = AccountSecretKey::generate();
+    let key_pair = AccountSecretKey::from(Ed25519SecretKey::generate());
     let balance = Amount::from_tokens(5);
     let balances = vec![(ChainDescription::Root(1), key_pair.public().into(), balance)];
     let epoch = Epoch::ZERO;
@@ -592,7 +596,7 @@ async fn test_handle_block_proposal_unknown_sender<B>(mut storage_builder: B) ->
 where
     B: StorageBuilder,
 {
-    let sender_key_pair = AccountSecretKey::generate();
+    let sender_key_pair = AccountSecretKey::from(Ed25519SecretKey::generate());
     let (_, worker) = init_worker_with_chains(
         storage_builder.build().await?,
         vec![
@@ -609,7 +613,7 @@ where
         ],
     )
     .await;
-    let unknown_key = AccountSecretKey::generate();
+    let unknown_key = AccountSecretKey::from(Ed25519SecretKey::generate());
     let unknown_sender_block_proposal = make_first_block(ChainId::root(1))
         .with_simple_transfer(ChainId::root(2), Amount::from_tokens(5))
         .into_first_proposal(&unknown_key);
@@ -635,7 +639,7 @@ async fn test_handle_block_proposal_with_chaining<B>(mut storage_builder: B) -> 
 where
     B: StorageBuilder,
 {
-    let sender_key_pair = AccountSecretKey::generate();
+    let sender_key_pair = AccountSecretKey::from(Ed25519SecretKey::generate());
     let (committee, worker) = init_worker_with_chain(
         storage_builder.build().await?,
         ChainDescription::Root(1),
@@ -769,8 +773,8 @@ async fn test_handle_block_proposal_with_incoming_bundles<B>(
 where
     B: StorageBuilder,
 {
-    let sender_key_pair = AccountSecretKey::generate();
-    let recipient_key_pair = AccountSecretKey::generate();
+    let sender_key_pair = AccountSecretKey::from(Ed25519SecretKey::generate());
+    let recipient_key_pair = AccountSecretKey::from(Ed25519SecretKey::generate());
     let (committee, worker) = init_worker_with_chains(
         storage_builder.build().await?,
         vec![
@@ -1126,7 +1130,7 @@ async fn test_handle_block_proposal_exceed_balance<B>(mut storage_builder: B) ->
 where
     B: StorageBuilder,
 {
-    let sender_key_pair = AccountSecretKey::generate();
+    let sender_key_pair = AccountSecretKey::from(Ed25519SecretKey::generate());
     let (_, worker) = init_worker_with_chains(
         storage_builder.build().await?,
         vec![
@@ -1173,7 +1177,7 @@ async fn test_handle_block_proposal<B>(mut storage_builder: B) -> anyhow::Result
 where
     B: StorageBuilder,
 {
-    let sender_key_pair = AccountSecretKey::generate();
+    let sender_key_pair = AccountSecretKey::from(Ed25519SecretKey::generate());
     let (committee, worker) = init_worker_with_chains(
         storage_builder.build().await?,
         vec![(
@@ -1225,7 +1229,7 @@ async fn test_handle_block_proposal_replay<B>(mut storage_builder: B) -> anyhow:
 where
     B: StorageBuilder,
 {
-    let sender_key_pair = AccountSecretKey::generate();
+    let sender_key_pair = AccountSecretKey::from(Ed25519SecretKey::generate());
     let (_, worker) = init_worker_with_chains(
         storage_builder.build().await?,
         vec![
@@ -1267,7 +1271,7 @@ async fn test_handle_certificate_unknown_sender<B>(mut storage_builder: B) -> an
 where
     B: StorageBuilder,
 {
-    let sender_key_pair = AccountSecretKey::generate();
+    let sender_key_pair = AccountSecretKey::from(Ed25519SecretKey::generate());
     let (committee, worker) = init_worker_with_chains(
         storage_builder.build().await?,
         vec![(
@@ -1307,7 +1311,7 @@ async fn test_handle_certificate_with_open_chain<B>(mut storage_builder: B) -> a
 where
     B: StorageBuilder,
 {
-    let sender_key_pair = AccountSecretKey::generate();
+    let sender_key_pair = AccountSecretKey::from(Ed25519SecretKey::generate());
     let (committee, worker) = init_worker_with_chains(
         storage_builder.build().await?,
         vec![(
@@ -1385,8 +1389,8 @@ async fn test_handle_certificate_wrong_owner<B>(mut storage_builder: B) -> anyho
 where
     B: StorageBuilder,
 {
-    let sender_key_pair = AccountSecretKey::generate();
-    let chain_key_pair = AccountSecretKey::generate();
+    let sender_key_pair = AccountSecretKey::from(Ed25519SecretKey::generate());
+    let chain_key_pair = AccountSecretKey::from(Ed25519SecretKey::generate());
     let (committee, worker) = init_worker_with_chains(
         storage_builder.build().await?,
         vec![(
@@ -1432,7 +1436,7 @@ async fn test_handle_certificate_bad_block_height<B>(mut storage_builder: B) -> 
 where
     B: StorageBuilder,
 {
-    let sender_key_pair = AccountSecretKey::generate();
+    let sender_key_pair = AccountSecretKey::from(Ed25519SecretKey::generate());
     let (committee, worker) = init_worker_with_chains(
         storage_builder.build().await?,
         vec![
@@ -1482,7 +1486,7 @@ async fn test_handle_certificate_with_anticipated_incoming_bundle<B>(
 where
     B: StorageBuilder,
 {
-    let key_pair = AccountSecretKey::generate();
+    let key_pair = AccountSecretKey::from(Ed25519SecretKey::generate());
     let (committee, worker) = init_worker_with_chains(
         storage_builder.build().await?,
         vec![
@@ -1583,7 +1587,7 @@ async fn test_handle_certificate_receiver_balance_overflow<B>(
 where
     B: StorageBuilder,
 {
-    let sender_key_pair = AccountSecretKey::generate();
+    let sender_key_pair = AccountSecretKey::from(Ed25519SecretKey::generate());
     let (committee, worker) = init_worker_with_chains(
         storage_builder.build().await?,
         vec![
@@ -1652,7 +1656,7 @@ where
     B: StorageBuilder,
 {
     let storage = storage_builder.build().await?;
-    let key_pair = AccountSecretKey::generate();
+    let key_pair = AccountSecretKey::from(Ed25519SecretKey::generate());
     let owner = key_pair.public().into();
     let (committee, worker) =
         init_worker_with_chain(storage, ChainDescription::Root(1), owner, Amount::ONE).await;
@@ -1720,7 +1724,7 @@ async fn test_handle_cross_chain_request<B>(mut storage_builder: B) -> anyhow::R
 where
     B: StorageBuilder,
 {
-    let sender_key_pair = AccountSecretKey::generate();
+    let sender_key_pair = AccountSecretKey::from(Ed25519SecretKey::generate());
     let (committee, worker) = init_worker_with_chain(
         storage_builder.build().await?,
         ChainDescription::Root(2),
@@ -1799,7 +1803,7 @@ where
     B: StorageBuilder,
 {
     let storage = storage_builder.build().await?;
-    let sender_key_pair = AccountSecretKey::generate();
+    let sender_key_pair = AccountSecretKey::from(Ed25519SecretKey::generate());
     let (committee, worker) = init_worker(
         storage, /* is_client */ false, /* has_long_lived_services */ false,
     );
@@ -1838,7 +1842,7 @@ where
     B: StorageBuilder,
 {
     let storage = storage_builder.build().await?;
-    let sender_key_pair = AccountSecretKey::generate();
+    let sender_key_pair = AccountSecretKey::from(Ed25519SecretKey::generate());
     let (committee, worker) = init_worker(
         storage, /* is_client */ true, /* has_long_lived_services */ false,
     );
@@ -1888,8 +1892,8 @@ async fn test_handle_certificate_to_active_recipient<B>(
 where
     B: StorageBuilder,
 {
-    let sender_key_pair = AccountSecretKey::generate();
-    let recipient_key_pair = AccountSecretKey::generate();
+    let sender_key_pair = AccountSecretKey::from(Ed25519SecretKey::generate());
+    let recipient_key_pair = AccountSecretKey::from(Ed25519SecretKey::generate());
     let (committee, worker) = init_worker_with_chains(
         storage_builder.build().await?,
         vec![
@@ -2053,7 +2057,7 @@ async fn test_handle_certificate_to_inactive_recipient<B>(
 where
     B: StorageBuilder,
 {
-    let sender_key_pair = AccountSecretKey::generate();
+    let sender_key_pair = AccountSecretKey::from(Ed25519SecretKey::generate());
     let (committee, worker) = init_worker_with_chain(
         storage_builder.build().await?,
         ChainDescription::Root(1),
@@ -2097,14 +2101,14 @@ async fn test_handle_certificate_with_rejected_transfer<B>(
 where
     B: StorageBuilder,
 {
-    let sender_key_pair = AccountSecretKey::generate();
+    let sender_key_pair = AccountSecretKey::from(Ed25519SecretKey::generate());
     let sender = Owner::from(sender_key_pair.public());
     let sender_account = Account {
         chain_id: ChainId::root(1),
         owner: Some(AccountOwner::User(sender)),
     };
 
-    let recipient_key_pair = AccountSecretKey::generate();
+    let recipient_key_pair = AccountSecretKey::from(Ed25519SecretKey::generate());
     let recipient = Owner::from(sender_key_pair.public());
     let recipient_account = Account {
         chain_id: ChainId::root(2),
@@ -2341,7 +2345,7 @@ async fn run_test_chain_creation_with_committee_creation<B>(
 where
     B: StorageBuilder,
 {
-    let key_pair = AccountSecretKey::generate();
+    let key_pair = AccountSecretKey::from(Ed25519SecretKey::generate());
     let (committee, worker) = init_worker_with_chain(
         storage_builder.build().await?,
         ChainDescription::Root(0),
@@ -2693,8 +2697,12 @@ async fn test_transfers_and_committee_creation<B>(mut storage_builder: B) -> any
 where
     B: StorageBuilder,
 {
-    let owner0 = AccountSecretKey::generate().public().into();
-    let owner1 = AccountSecretKey::generate().public().into();
+    let owner0 = AccountSecretKey::from(Ed25519SecretKey::generate())
+        .public()
+        .into();
+    let owner1 = AccountSecretKey::from(Ed25519SecretKey::generate())
+        .public()
+        .into();
     let (committee, worker) = init_worker_with_chains(
         storage_builder.build().await?,
         vec![
@@ -2824,8 +2832,12 @@ async fn test_transfers_and_committee_removal<B>(mut storage_builder: B) -> anyh
 where
     B: StorageBuilder,
 {
-    let owner0 = AccountSecretKey::generate().public().into();
-    let owner1 = AccountSecretKey::generate().public().into();
+    let owner0 = AccountSecretKey::from(Ed25519SecretKey::generate())
+        .public()
+        .into();
+    let owner1 = AccountSecretKey::from(Ed25519SecretKey::generate())
+        .public()
+        .into();
     let (committee, worker) = init_worker_with_chains(
         storage_builder.build().await?,
         vec![
@@ -3016,7 +3028,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
     let (committee, worker) = init_worker(store, true, false);
     let committees = BTreeMap::from_iter([(Epoch::from(1), committee.clone())]);
 
-    let key_pair0 = AccountSecretKey::generate();
+    let key_pair0 = AccountSecretKey::from(Ed25519SecretKey::generate());
     let id0 = ChainId::root(0);
     let id1 = ChainId::root(1);
 
@@ -3521,7 +3533,7 @@ where
 {
     let storage = storage_builder.build().await?;
     let chain_id = ChainId::root(0);
-    let key_pair = AccountSecretKey::generate();
+    let key_pair = AccountSecretKey::from(Ed25519SecretKey::generate());
     let owner = key_pair.public().into();
     let description = ChainDescription::Root(0);
     let (committee, worker) =
@@ -3553,7 +3565,10 @@ where
     // But non-owners are not allowed to transfer the chain's funds.
     let proposal = make_child_block(&change_ownership_value)
         .with_transfer(None, Recipient::Burn, Amount::from_tokens(1))
-        .into_proposal_with_round(&AccountSecretKey::generate(), Round::MultiLeader(0));
+        .into_proposal_with_round(
+            &AccountSecretKey::from(Ed25519SecretKey::generate()),
+            Round::MultiLeader(0),
+        );
     let result = worker.handle_block_proposal(proposal).await;
     assert_matches!(result, Err(WorkerError::ChainError(error)) if matches!(&*error,
         ChainError::ExecutionError(error, _) if matches!(&**error,
@@ -3561,8 +3576,10 @@ where
     ))));
 
     // Without the transfer, a random key pair can propose a block.
-    let proposal = make_child_block(&change_ownership_value)
-        .into_proposal_with_round(&AccountSecretKey::generate(), Round::MultiLeader(0));
+    let proposal = make_child_block(&change_ownership_value).into_proposal_with_round(
+        &AccountSecretKey::from(Ed25519SecretKey::generate()),
+        Round::MultiLeader(0),
+    );
     let (executed_block, _) = worker
         .stage_block_execution(proposal.content.block.clone(), None)
         .await?;
@@ -3697,7 +3714,7 @@ where
     let storage = storage_builder.build().await?;
     let clock = storage_builder.clock();
     let chain_id = ChainId::root(1);
-    let key_pair = AccountSecretKey::generate();
+    let key_pair = AccountSecretKey::from(Ed25519SecretKey::generate());
     let balance = Amount::from_tokens(5);
     let balances = vec![(ChainDescription::Root(1), key_pair.public().into(), balance)];
     let (committee, worker) = init_worker_with_chains(storage, balances).await;
@@ -3771,7 +3788,7 @@ where
     let clock = storage_builder.clock();
     let chain_description = ChainDescription::Root(1);
     let chain_id = ChainId::from(chain_description);
-    let key_pair = AccountSecretKey::generate();
+    let key_pair = AccountSecretKey::from(Ed25519SecretKey::generate());
     let balance = Amount::ZERO;
 
     let (committee, worker) = init_worker(
@@ -3860,7 +3877,7 @@ where
     let clock = storage_builder.clock();
     let chain_description = ChainDescription::Root(1);
     let chain_id = ChainId::from(chain_description);
-    let key_pair = AccountSecretKey::generate();
+    let key_pair = AccountSecretKey::from(Ed25519SecretKey::generate());
     let balance = Amount::ZERO;
 
     let (committee, worker) = init_worker(

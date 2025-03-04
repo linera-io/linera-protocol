@@ -228,12 +228,11 @@ impl Clone for UserChain {
 
 impl UserChain {
     /// Create a user chain that we own.
-    pub fn make_initial<R: CryptoRng>(
-        rng: &mut R,
+    pub fn make_initial(
+        key_pair: AccountSecretKey,
         description: ChainDescription,
         timestamp: Timestamp,
     ) -> Self {
-        let key_pair = AccountSecretKey::generate_from(rng);
         Self {
             chain_id: description.into(),
             key_pair: Some(key_pair),

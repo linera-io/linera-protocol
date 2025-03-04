@@ -14,7 +14,10 @@ use std::{
 use anyhow::{bail, Context};
 use async_trait::async_trait;
 use futures::{stream::FuturesUnordered, FutureExt as _, StreamExt, TryFutureExt as _};
-use linera_base::{crypto::CryptoRng, listen_for_shutdown_signals};
+use linera_base::{
+    crypto::{CryptoRng, Ed25519SecretKey},
+    listen_for_shutdown_signals,
+};
 use linera_client::{
     config::{CommitteeConfig, GenesisConfig, ValidatorConfig, ValidatorServerConfig},
     persistent::{self, Persist},
@@ -288,7 +291,7 @@ fn make_server_config<R: CryptoRng>(
     options: ValidatorOptions,
 ) -> anyhow::Result<persistent::File<ValidatorServerConfig>> {
     let validator_keypair = ValidatorKeypair::generate_from(rng);
-    let account_secret = AccountSecretKey::generate_from(rng);
+    let account_secret = AccountSecretKey::from(Ed25519SecretKey::generate_from(rng));
     let public_key = validator_keypair.public_key;
     let network = ValidatorPublicNetworkConfig {
         protocol: options.external_protocol,

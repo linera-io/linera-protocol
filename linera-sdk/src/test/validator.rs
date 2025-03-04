@@ -11,7 +11,7 @@ use std::{num::NonZeroUsize, sync::Arc};
 use dashmap::DashMap;
 use futures::FutureExt as _;
 use linera_base::{
-    crypto::{AccountSecretKey, ValidatorKeypair, ValidatorSecretKey},
+    crypto::{AccountSecretKey, Ed25519SecretKey, ValidatorKeypair, ValidatorSecretKey},
     data_types::{Amount, ApplicationPermissions, Timestamp},
     identifiers::{ApplicationId, BytecodeId, ChainDescription, ChainId, MessageId, Owner},
     ownership::ChainOwnership,
@@ -70,7 +70,7 @@ impl TestValidator {
     /// Creates a new [`TestValidator`].
     pub async fn new() -> Self {
         let validator_keypair = ValidatorKeypair::generate();
-        let account_secret = AccountSecretKey::generate();
+        let account_secret = AccountSecretKey::from(Ed25519SecretKey::generate());
         let committee = Committee::make_simple(vec![(
             validator_keypair.public_key,
             account_secret.public(),
@@ -176,7 +176,7 @@ impl TestValidator {
     /// Creates a new microchain and returns the [`ActiveChain`] that can be used to add blocks to
     /// it.
     pub async fn new_chain(&self) -> ActiveChain {
-        let key_pair = AccountSecretKey::generate();
+        let key_pair = AccountSecretKey::from(Ed25519SecretKey::generate());
         let description = self
             .request_new_chain_from_admin_chain(key_pair.public().into())
             .await;
@@ -231,7 +231,7 @@ impl TestValidator {
 
     /// Creates the root admin microchain and returns the [`ActiveChain`] map with it.
     async fn create_admin_chain(&self) {
-        let key_pair = AccountSecretKey::generate();
+        let key_pair = AccountSecretKey::from(Ed25519SecretKey::generate());
         let description = ChainDescription::Root(0);
 
         self.worker()

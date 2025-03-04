@@ -8,7 +8,7 @@ use std::{num::NonZeroUsize, sync::Arc, time::Duration};
 use async_trait::async_trait;
 use futures::{lock::Mutex, FutureExt as _};
 use linera_base::{
-    crypto::{AccountPublicKey, AccountSecretKey},
+    crypto::{AccountPublicKey, AccountSecretKey, Secp256k1SecretKey},
     data_types::{Amount, BlockHeight, TimeDelta, Timestamp},
     identifiers::ChainId,
     ownership::{ChainOwnership, TimeoutConfig},
@@ -136,7 +136,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
             Duration::from_secs(1),
         )),
     };
-    let key_pair = AccountSecretKey::generate_from(&mut rng);
+    let key_pair = AccountSecretKey::from(Secp256k1SecretKey::generate_from(&mut rng));
     let owner = key_pair.public().into();
     context
         .update_wallet_for_new_chain(chain_id0, Some(key_pair), clock.current_time())
