@@ -5,7 +5,7 @@
 
 //! Integration tests for Native Fungible Token transfers.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use fungible::{self, FungibleTokenAbi};
 use linera_sdk::{
@@ -137,8 +137,10 @@ async fn assert_balances(
     chain: &ActiveChain,
     expected_balances: impl IntoIterator<Item = (AccountOwner, Amount)>,
 ) {
-    let expected_balances = expected_balances.into_iter().collect::<HashMap<_, _>>();
-    let accounts = expected_balances.keys().copied();
+    let expected_balances = expected_balances.into_iter().collect::<BTreeMap<_, _>>();
+    let accounts = expected_balances.keys().copied().collect::<Vec<_>>();
+
+    assert_eq!(chain.accounts().await, accounts);
 
     let missing_accounts = ["missing1", "missing2"]
         .into_iter()
@@ -148,6 +150,7 @@ async fn assert_balances(
         .collect::<Vec<_>>();
 
     let accounts_to_query = accounts
+        .into_iter()
         .chain(missing_accounts.iter().copied())
         .collect::<Vec<_>>();
 
