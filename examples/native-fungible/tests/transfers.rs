@@ -78,10 +78,7 @@ async fn transfer_to_owner() {
         })
         .await;
 
-    assert_eq!(
-        recipient_chain.owner_balance(&owner.into()).await,
-        Some(transfer_amount)
-    );
+    assert_balances(&recipient_chain, [(owner.into(), transfer_amount)]).await;
 }
 
 /// Tests if multiple accounts can receive tokens.
