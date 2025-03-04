@@ -176,6 +176,20 @@ impl ActiveChain {
             .expect("Failed to list accounts on the chain")
     }
 
+    /// Reads all the non-zero account balances on this microchain.
+    pub async fn all_owner_balances(&self) -> HashMap<AccountOwner, Amount> {
+        self.owner_balances(self.accounts().await)
+            .await
+            .into_iter()
+            .map(|(owner, balance)| {
+                (
+                    owner,
+                    balance.expect("`accounts` should only return accounts with non-zero balance"),
+                )
+            })
+            .collect()
+    }
+
     /// Adds a block to this microchain.
     ///
     /// The `block_builder` parameter is a closure that should use the [`BlockBuilder`] parameter
