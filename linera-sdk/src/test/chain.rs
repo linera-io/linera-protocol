@@ -6,6 +6,7 @@
 //! This allows manipulating a test microchain.
 
 use std::{
+    collections::HashMap,
     io,
     path::{Path, PathBuf},
     sync::Arc,
@@ -126,6 +127,35 @@ impl ActiveChain {
             .get(owner)
             .await
             .expect("Failed to read owner balance")
+    }
+
+    /// Reads the current account balance on this microchain of all [`AccountOwner`]s.
+    pub async fn owner_balances(
+        &self,
+        owners: impl IntoIterator<Item = AccountOwner>,
+    ) -> HashMap<AccountOwner, Option<Amount>> {
+        let chain_state = self
+            .validator
+            .worker()
+            .chain_state_view(self.id())
+            .await
+            .expect("Failed to read chain state");
+
+        let mut balances = HashMap::new();
+
+        for owner in owners {
+            let balance = chain_state
+                .execution_state
+                .system
+                .balances
+                .get(&owner)
+                .await
+                .expect("Failed to read an owner's balance");
+
+            balances.insert(owner, balance);
+        }
+
+        balances
     }
 
     /// Adds a block to this microchain.
