@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use fungible::{self, FungibleTokenAbi};
 use linera_sdk::{
     linera_base_types::{Account, AccountOwner, Amount, ChainId, CryptoHash, Owner},
-    test::{Recipient, TestValidator},
+    test::{ActiveChain, Recipient, TestValidator},
 };
 
 /// Tests if tokens from the shared chain balance can be sent to a different chain.
@@ -127,14 +127,24 @@ async fn transfer_to_multiple_owners() {
         })
         .await;
 
-    let expected_balances = account_owners
-        .iter()
-        .copied()
-        .zip(transfer_amounts.map(Some))
+    assert_balances(
+        &recipient_chain,
+        account_owners.into_iter().zip(transfer_amounts),
+    )
+    .await;
+}
+
+/// Asserts that all the accounts in the [`ActiveChain`] have the `expected_balances`.
+async fn assert_balances(
+    chain: &ActiveChain,
+    expected_balances: impl IntoIterator<Item = (AccountOwner, Amount)>,
+) {
+    let expected_balances = expected_balances
+        .into_iter()
+        .map(|(account, balance)| (account, Some(balance)))
         .collect::<HashMap<_, _>>();
 
-    assert_eq!(
-        recipient_chain.owner_balances(account_owners).await,
-        expected_balances,
-    );
+    let accounts = expected_balances.keys().copied();
+
+    assert_eq!(chain.owner_balances(accounts).await, expected_balances);
 }
