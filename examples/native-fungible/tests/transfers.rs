@@ -44,6 +44,7 @@ async fn chain_balance_transfers() {
         .await;
 
     assert_eq!(recipient_chain.chain_balance().await, transfer_amount);
+    assert_balances(&recipient_chain, []).await;
 }
 
 /// Tests if an individual account can receive tokens.
