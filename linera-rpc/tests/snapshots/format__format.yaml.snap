@@ -1028,12 +1028,6 @@ SystemMessage:
               TYPENAME: ChannelSubscription
     7:
       ApplicationCreated: UNIT
-    8:
-      RegisterApplications:
-        STRUCT:
-          - applications:
-              SEQ:
-                TYPENAME: UserApplicationDescription
 SystemOperation:
   ENUM:
     0:
@@ -1159,19 +1153,6 @@ TimeoutConfig:
         TYPENAME: TimeDelta
 Timestamp:
   NEWTYPESTRUCT: U64
-UserApplicationDescription:
-  STRUCT:
-    - bytecode_id:
-        TYPENAME: BytecodeId
-    - creator_chain_id:
-        TYPENAME: ChainId
-    - block_height:
-        TYPENAME: BlockHeight
-    - application_index: U32
-    - parameters: BYTES
-    - required_application_ids:
-        SEQ:
-          TYPENAME: ApplicationId
 ValidatedBlockCertificate:
   STRUCT:
     - value:
