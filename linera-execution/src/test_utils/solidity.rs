@@ -1,3 +1,8 @@
+// Copyright (c) Zefchain Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+//! Code for compiling solidity smart contracts for testing purposes.
+
 use std::{
     fs::File,
     io::Write,
