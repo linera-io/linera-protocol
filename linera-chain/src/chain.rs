@@ -157,7 +157,7 @@ static NUM_INBOXES: LazyLock<HistogramVec> = LazyLock::new(|| {
         "num_inboxes",
         "Number of inboxes",
         &[],
-        exponential_bucket_interval(1.0, 10000.0),
+        exponential_bucket_interval(1.0, 10_000.0),
     )
 });
 
@@ -167,7 +167,7 @@ static NUM_OUTBOXES: LazyLock<HistogramVec> = LazyLock::new(|| {
         "num_outboxes",
         "Number of outboxes",
         &[],
-        exponential_bucket_interval(1.0, 10000.0),
+        exponential_bucket_interval(1.0, 10_000.0),
     )
 });
 
